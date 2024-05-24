@@ -47,6 +47,7 @@ executable Generic
 library
     exposed-modules:  CSlash
                     , CSlash.Language.Syntax
+                    , CSlash.Language.Syntax.Binds
                     , CSlash.Language.Syntax.Decls
                     , CSlash.Language.Syntax.Extension
                     , CSlash.Language.Syntax.ImpExp
