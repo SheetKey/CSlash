@@ -31,6 +31,10 @@ type LIdP p = XRec p (IdP p)
 -- Type families for the HsImpExp type families
 
 -- -------------------------------------
+-- ImportDecl type families
+type family XCImportDecl       x
+
+-- -------------------------------------
 -- IE type families
 type family XIEVar x
 type family XIEModuleContents x
