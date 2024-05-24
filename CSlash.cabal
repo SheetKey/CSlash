@@ -31,7 +31,6 @@ executable Generic
 
     build-depends:    base ^>=4.18.2.0
                     , CSlash
-                    , CSlash.Language.Syntax
 
     hs-source-dirs:   app
     default-language: Haskell2010
@@ -46,7 +45,9 @@ executable Generic
                       -O2
 
 library
-    exposed-modules:  
+    exposed-modules:  CSlash
+                    , CSlash.Language.Syntax
+                    , CSlash.Language.Module.Name
 
     build-depends:    base ^>=4.18.2.0
 
