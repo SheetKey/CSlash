@@ -22,3 +22,19 @@ class MapXRec p where
 
 class WrapXRec p a where
   wrapXRec :: a -> XRec p a
+
+type family IdP p
+
+type LIdP p = XRec p (IdP p)
+
+-- =====================================================================
+-- Type families for the HsImpExp type families
+
+-- -------------------------------------
+-- IE type families
+type family XIEVar x
+type family XIEModuleContents x
+
+-- -------------------------------------
+-- IEWrappedName type families
+type family XIEName p
