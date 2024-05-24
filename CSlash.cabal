@@ -53,6 +53,7 @@ library
                     , CSlash.Language.Syntax.Extension
                     , CSlash.Language.Syntax.ImpExp
                     , CSlash.Language.Syntax.Module.Name
+                    , CSlash.Language.Syntax.Pat
 
     build-depends:    base ^>=4.18.2.0
                     , GHC
