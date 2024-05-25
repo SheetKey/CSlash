@@ -52,6 +52,7 @@ library
                     , CSlash.Language.Syntax.Expr
                     , CSlash.Language.Syntax.Extension
                     , CSlash.Language.Syntax.ImpExp
+                    , CSlash.Language.Syntax.Lit
                     , CSlash.Language.Syntax.Module.Name
                     , CSlash.Language.Syntax.Pat
 
