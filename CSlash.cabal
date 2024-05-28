@@ -59,6 +59,7 @@ library
                     , CSlash.Language.Syntax.Lit
                     , CSlash.Language.Syntax.Module.Name
                     , CSlash.Language.Syntax.Pat
+                    , CSlash.Langauge.Syntax.Type
 
                     , CSlash.Types.SourceText
 
