@@ -68,6 +68,8 @@ library
                     , CSlash.Types.Name.Reader
                     , CSlash.Types.SourceText
                     , CSlash.Types.SrcLoc
+                    , CSlash.Types.Unique
+
 
 
     build-depends:    base ^>=4.18.2.0
