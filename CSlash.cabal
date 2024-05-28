@@ -61,6 +61,7 @@ library
                     , CSlash.Language.Syntax.Pat
                     , CSlash.Langauge.Syntax.Type
 
+                    , CSlash.Types
                     , CSlash.Types.SourceText
 
 
