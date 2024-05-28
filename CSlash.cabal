@@ -62,6 +62,7 @@ library
                     , CSlash.Langauge.Syntax.Type
 
                     , CSlash.Types
+                    , CSlash.Types.Fixity
                     , CSlash.Types.SourceText
 
 
