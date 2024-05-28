@@ -69,7 +69,7 @@ library
                     , CSlash.Types.SourceText
                     , CSlash.Types.SrcLoc
                     , CSlash.Types.Unique
-
+                    , CSlash.Types.Unique.DSet
 
 
     build-depends:    base ^>=4.18.2.0
