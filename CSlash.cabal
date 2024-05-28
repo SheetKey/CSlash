@@ -63,6 +63,7 @@ library
 
                     , CSlash.Types
                     , CSlash.Types.Fixity
+                    , CSlash.Types.Name
                     , CSlash.Types.SourceText
 
 
