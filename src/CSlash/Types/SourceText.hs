@@ -1,8 +1,7 @@
-module CSlash.Types.SourceText where
+module CSlash.Types.SourceText
+  ( SourceText(..)
+  , IntegralLit(..)
+  , FractionalLit(..)
+  ) where
 
-import GHC.Data.FastString
-
-data SourceText
-  = SourceText FastString
-  | NoSourceText
-  deriving (Data, Show, Eq)
+import GHC.Types.SourceText
