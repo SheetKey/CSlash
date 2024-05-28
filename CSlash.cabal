@@ -46,6 +46,9 @@ executable Generic
 
 library
     exposed-modules:  CSlash
+
+                    , CSlash.Data.FastString
+
                     , CSlash.Language.Syntax
                     , CSlash.Language.Syntax.Binds
                     , CSlash.Language.Syntax.Decls
@@ -57,6 +60,7 @@ library
                     , CSlash.Language.Syntax.Pat
 
                     , CSlash.Types.SourceText
+
 
     build-depends:    base ^>=4.18.2.0
                     , GHC
