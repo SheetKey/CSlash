@@ -65,6 +65,7 @@ library
                     , CSlash.Types.Fixity
                     , CSlash.Types.Name
                     , CSlash.Types.Name.Occurrence
+                    , CSlash.Types.Name.Reader
                     , CSlash.Types.SourceText
 
 
