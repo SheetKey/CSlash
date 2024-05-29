@@ -3,6 +3,8 @@ module CSlash.Types.Name where
 import CSlash.Types.Name.Occurrence
 import CSlash.Types.Unique
 import CSlash.Types.SrcLoc
+import CSlash.Types.TyThing
+import CSlash.Unit.Types
 
 data Name = Name
   { n_sort :: NameSort
@@ -16,3 +18,5 @@ data NameSort
   | WiredIn Module TyThing BuiltInSyntax
   | Internal
   | System
+
+data BuiltInSyntax = BuiltInSyntax | UserSyntax
