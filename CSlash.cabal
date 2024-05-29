@@ -47,6 +47,8 @@ executable Generic
 library
     exposed-modules:  CSlash
 
+                    , CSlash.Cs.Extension
+
                     , CSlash.Data.FastString
 
                     , CSlash.Language.Syntax

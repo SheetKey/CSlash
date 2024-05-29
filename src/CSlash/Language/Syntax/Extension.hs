@@ -1,16 +1,6 @@
 module CSlash.Language.Syntax.Extension where
 
-data CsPass (c :: Pass) where
-  Ps :: CsPass 'Parsed
-  Rn :: CsPass 'Renamed
-  Tc :: CsPass 'Typechecked
 
-data Pass = Parsed | Renamed | Typechecked
-         deriving (Data)
-
-type Ps = Pass 'Parsed
-type Rn = Pass 'Renamed
-type Tc = Pass 'Typechecked
 
 type family XRec p a = r | r -> a
 
