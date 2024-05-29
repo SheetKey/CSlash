@@ -1,4 +1,11 @@
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE KindSignatures #-}
+
 module CSlash.Cs.Extension where
+
+import Data.Data
 
 data CsPass (c :: Pass) where
   Ps :: CsPass 'Parsed

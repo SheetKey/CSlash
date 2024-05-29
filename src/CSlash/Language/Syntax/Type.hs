@@ -1,3 +1,5 @@
+{-# LANGUAGE TypeFamilies #-}
+
 module CSlash.Language.Syntax.Type where
 
 import CSlash.Language.Syntax.Extension
@@ -18,7 +20,7 @@ data CsForAllTelescope pass = CsForAllInvis
 
 type LCsTyVarBndr pass = XRec pass (CsTyVarBndr pass)
 
-data CsTyVarBndr
+data CsTyVarBndr pass
   -- = UserTyVar (XUserTyVar pass) (LIdP pass)
   = KindedTyVar (XKindedTyVar pass) (LIdP pass) (LCsKind pass)
 

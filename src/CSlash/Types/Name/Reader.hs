@@ -6,7 +6,7 @@ import CSlash.Types.SrcLoc
 import CSlash.Types.Unique
 import CSlash.Types.Name
 import CSlash.Types.Name.Occurrence
-import CSlash.Unit.Module
+import CSlash.Unit.Types
 
 data RdrName
   = Unqual OccName

@@ -85,7 +85,7 @@ library
                       -Wall
                       -Wincomplete-uni-patterns
                       -Wincomplete-record-updates
-                      -Wpartial-fields
+                      -- -Wpartial-fields
                       -Werror=missing-home-modules
                       -Widentities
                       -Wredundant-constraints

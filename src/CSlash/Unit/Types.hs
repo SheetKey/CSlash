@@ -1,3 +1,8 @@
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE DeriveTraversable #-}
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+
 module CSlash.Unit.Types where
 
 import CSlash.Language.Syntax.Module.Name
@@ -5,6 +10,8 @@ import CSlash.Language.Syntax.Module.Name
 import CSlash.Data.FastString
 import CSlash.Types.Unique
 import CSlash.Types.Unique.DSet
+
+import Data.Data
 
 data GenModule unit = Module
   { moduleUnit :: !unit

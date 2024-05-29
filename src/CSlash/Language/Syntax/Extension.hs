@@ -1,8 +1,18 @@
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE TypeFamilyDependencies #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE KindSignatures #-}
+
 module CSlash.Language.Syntax.Extension where
 
-
+import Data.Kind (Type)
 
 type family XRec p a = r | r -> a
+
+type family Anno a = b
 
 class UnXRec p where
   unXRec :: XRec p a -> a
@@ -33,6 +43,9 @@ type family XTypeSig x
 type family XKindSig x
 type family XFixSig x
 
+-- FixitySig type families
+type family XFixitySig x
+
 -- =====================================================================
 -- Type families for the CsDecls extension points
 
@@ -47,6 +60,7 @@ type family XVar x
 type family XUnboundVar x
 type family XLitE x
 type family XLam x
+type family XApp x
 type family XTyLam x
 type family XTyApp x
 type family XPar x
@@ -56,7 +70,7 @@ type family XExplicitTuple x
 type family XExplicitSum x
 type family XCase x
 type family XIf x
-type family XExprWithTySig
+type family XExprWithTySig x
 
 -- -------------------------------------
 -- HsTupArg type families
@@ -86,7 +100,7 @@ type family XCsChar x
 type family XCsString x
 type family XCsInt x
 type family XCsDouble x
-type family XSigPag x
+type family XSigPat x
 
 -- =====================================================================
 -- Type families for the CsPat extension points

@@ -2,8 +2,10 @@ module CSlash.Language.Syntax (
   ModuleName(..), CsModule(..)
   ) where
 
-import CSlash.Language.Extension
-import CSlash.Language.Module.Name
+import CSlash.Language.Syntax.Extension
+import CSlash.Language.Syntax.Module.Name
+import CSlash.Language.Syntax.ImpExp
+import CSlash.Language.Syntax.Decls
 
 -- | Top-level structure of a module.
 data CsModule p = CsModule

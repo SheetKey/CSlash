@@ -1,7 +1,11 @@
+{-# LANGUAGE DeriveDataTypeable #-}
+
 module CSlash.Language.Syntax.ImpExp where
 
-import CSlash.Langauge.Syntax.Extension
+import CSlash.Language.Syntax.Extension
 import CSlash.Language.Syntax.Module.Name
+
+import Data.Data
 
 -- | Located Import Declaration
 type LImportDecl pass = XRec pass (ImportDecl pass)

@@ -1,5 +1,3 @@
-module CSlash.Types.Fixity
-  ( LexicalFixity(..)
-  ) where
+module CSlash.Types.Fixity (module X) where
 
-import GHC.Types.Fixity
+import GHC.Types.Fixity as X

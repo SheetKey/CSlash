@@ -1,6 +1,8 @@
 module CSlash.Language.Syntax.Pat where
 
 import CSlash.Language.Syntax.Extension
+import CSlash.Language.Syntax.Lit
+import CSlash.Language.Syntax.Type
 
 type LPat p = XRec p (Pat p)
 
@@ -18,4 +20,4 @@ data Pat p
   ------------ Literals ---------------
   | LitPat (XLitPat p) (CsLit p)
   ------------ With type signature ---------------
-  | SigPat (XSigPat p) (Lpat p) (CsPatSigType (NoTc p))
+  | SigPat (XSigPat p) (LPat p) (CsPatSigType (NoTc p))
