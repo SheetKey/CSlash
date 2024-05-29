@@ -1,0 +1,387 @@
+\documentclass[11pt]{amsart}
+
+\usepackage{./tt}
+
+\title{\cs Type System}
+
+\author{Will Veatch}
+\date{\today} 
+
+\begin{document}
+
+\maketitle 
+
+We define the System
+$F_{\omega}^{AL}$, the basis for the \cs language.
+System $F_{\omega}^{AL}$ is system $F_{\omega}$
+extended with affine and linear kinds.
+That is, we have
+have kinds $\star$ for unrestricted types, $\bullet$ for affine types,
+and $\circ$ for linear types, with the following subkinding relation:
+$\star\leq \bullet\leq\circ$.
+Alternatively, System $F_{\omega}^{AL}$ is System $F^{\circ}$, described in \cite{llt},
+extended with type functions and an affine kind.
+We take inspiration from \cite{pat,bobw}.
+
+
+% \begin{figure}[h]
+%   \centering
+  \begin{tabularx}{\linewidth}{X c}
+    $\kappa::= \star\mid\bullet\mid\circ\mid \kappa\Rightarrow\kappa$ & kinds \\
+    $\tau::= \alpha\mid \tau\tok\tau\mid \fak{\alpha}{\kappa}\tau
+    \mid\lam{\alpha:\kappa}\tau\mid\tau\ \tau$ & types \\
+    $e::= x\mid \lamk{\kappa}{x:\tau}e \mid e\ e
+    \mid \Lam{\alpha:\kappa}v \mid e[\tau]$
+    & expressions \\
+    $v::= \lamk{\kappa}{x:\tau}e\mid \Lam{\alpha:\kappa}v$ & values
+  \end{tabularx}
+%   \caption{\cs kinds, types, and terms}
+%   \label{fig:terms}
+% \end{figure}
+
+\begin{mathpar}
+  %% kinds
+  \inferrule*[right={[K-$\mathsf{Sub}_{1}$]}]
+  {\oftp\Gamma\tau\star}
+  {\oftp\Gamma\tau\bullet}
+  \and
+  \inferrule*[right={[K-$\mathsf{Sub}_{2}$]}]
+  {\oftp\Gamma\tau\bullet}
+  {\oftp\Gamma\tau\circ}
+  \and
+  \inferrule*[right={[$\Empty$]}]
+  {\ }
+  {\vdash\cdot}
+  \and
+  \inferrule*[right={[U-$\TExt$]}]
+  {
+    \vdash\Gamma
+    \and
+    \alpha\notin\Gamma
+  }
+  {\vdash\Gamma,\alpha:\kappa}
+  \and
+  \inferrule*[right={[U-$\TVar$]}]
+  {\alpha:\kappa\in\Gamma}
+  {\Gamma\vdash\alpha:\kappa}
+  \and
+  \inferrule*[right={[$\mathsf{All}$]}]
+  {
+    \oftp{\Gamma,\alpha:\kappa}\tau{\kappa'}
+  }
+  {\oftp\Gamma{\fak\alpha\kappa\tau}\kappa'}
+  \and
+  \inferrule*[right={[K-$\Arr$]}]
+  {
+    \oftp\Gamma{\tau_1}{\kappa_1}
+    \and
+    \oftp\Gamma{\tau_2}{\kappa_2}
+  }
+  {\oftp\Gamma{\tau_1\tok\tau_2}\kappa}
+  \and
+  \inferrule*[right={[K-$\mathsf{Lam}$]}]
+  {
+    \oftp{\Gamma,\alpha:\kappa_1}{\tau}{\kappa_2}
+  }
+  {\oftp\Gamma{\lam{\alpha:k_1}\tau}{\kappa_1\Rightarrow\kappa_2}}
+  \and
+  \inferrule*[right={[K-$\mathsf{App}$]}]
+  {
+    \oftp\Gamma{\tau_1}{\kappa_2\Rightarrow\kappa_1}
+    \and
+    \oftp\Gamma{\tau_2}{\kappa_2}
+  }
+  {\oftp\Gamma{\tau_1\tau_2}{\kappa_1}}
+  %% Weakening
+  \\
+  \inferrule*[right={[U-$\Weak$]}]
+  {
+    \oftp{\Gamma_1,\Gamma_2;\Delta;\Xi}{e}{\tau'}
+    \and
+    \oftp{\Gamma_1}\tau\star
+  }
+  {\oftp{\Gamma_1,x:\tau,\Gamma_2;\Delta;\Xi}{e}{\tau'}}
+  \and
+  \inferrule*[right={[A-$\Weak$]}]
+  {
+    \oftp{\Gamma;\Delta_1,\Delta_2;\Xi}{e}{\tau'}
+    \and
+    \oftp{\Gamma;\Delta_1}{\tau}\bullet
+  }
+  {\oftp{\Gamma;\Delta_1,x:\tau,\Delta_2;\Xi}{e}{\tau'}}
+  %% Contexts
+  \\
+  \inferrule*[right={[AU-$\Empty$]}]
+  {\cdot\Cup\cdot=\cdot}{}
+  \and
+  \inferrule*[right={[AU-$\mathsf{Left}$]}]
+  {
+    \Delta_1\Cup\Delta_2=\Delta
+    \and
+    x\notin\Delta
+  }
+  {\Delta_1,x:\tau\Cup\Delta_2=\Delta,x:\tau}
+  \and
+  \inferrule*[right={[AU-$\mathsf{Right}$]}]
+  {
+    \Delta_1\Cup\Delta_2=\Delta
+    \and
+    x\notin\Delta
+  }
+  {\Delta_1\Cup\Delta_2,x:\tau=\Delta,x:\tau}
+  \and
+  \inferrule*[right={[LU-$\Empty$]}]
+  {\cdot\Cup\cdot=\cdot}{}
+  \and
+  \inferrule*[right={[LU-$\mathsf{Left}$]}]
+  {
+    \Xi_1\Cup\Xi_2=\Xi
+    \and
+    x\notin\Xi
+  }
+  {\Xi_1,x:\tau\Cup\Xi_2=\Xi,x:\tau}
+  \and
+  \inferrule*[right={[LU-$\mathsf{Right}$]}]
+  {
+    \Xi_1\Cup\Xi_2=\Xi
+    \and
+    x\notin\Xi
+  }
+  {\Xi_1\Cup\Xi_2,x:\tau=\Xi,x:\tau}
+  %% Var
+  \\
+  \inferrule*[right={[U-$\Var$]}]
+  {x:\tau\in\Gamma}
+  {\oftp{\Gamma;\cdot;\cdot}x\tau}
+  \and
+  \inferrule*[right={[A-$\Var$]}]
+  {\oftp{\Gamma;x:\tau;\Xi}x\tau}{}
+  \and
+  \inferrule*[right={[L-$\Var$]}]
+  {\oftp{\Gamma;\Delta;x:\tau}x\tau}{}
+  %% Ext
+  \\
+  \inferrule*[right={[U-$\Ext$]}]
+  {
+    \oftp\Gamma\tau\star
+    \and
+    x\notin\Gamma;\Delta;\Xi
+  }
+  {[\Gamma;\Delta;\Xi],x:\tau\Supset\Gamma,x:\tau;\Delta;\Xi}
+  \and
+  \inferrule*[right={[A-$\Ext$]}]
+  {
+    \oftp\Gamma\tau\bullet
+    \and
+    x\notin\Gamma;\Delta;\Xi
+  }
+  {[\Gamma;\Delta;\Xi],x:\tau\Supset\Gamma;\Delta,x:\tau;\Xi}
+  \and
+  \inferrule*[right={[L-$\Ext$]}]
+  {
+    \oftp\Gamma\tau\circ
+    \and
+    x\notin\Gamma;\Delta;\Xi
+  }
+  {[\Gamma;\Delta;\Xi],x:\tau\Supset\Gamma;\Delta;\Xi,x:\tau}
+\end{mathpar}
+
+\begin{mathpar}
+  %% Functions
+  \inferrule*[right={[U-$\mathsf{Lam}$]}]
+  {
+    [\Gamma;\cdot;\cdot],x:\tau_1\Supset\Gamma';\Delta';\Xi'
+    \and
+    \oftp{\Gamma';\Delta';\Xi'}e{\tau_2}
+  }
+  {\oftp{\Gamma}{\lamk{\star}{x:\tau_1}e}{\tau_1\tou\tau_2}}
+  \and
+  \inferrule*[right={[A-$\mathsf{Lam}$]}]
+  {
+    [\Gamma;\Delta;\cdot],x:\tau_1\Supset\Gamma';\Delta';\Xi'
+    \and
+    \oftp{\Gamma';\Delta';\Xi'}{e}{\tau_2}
+  }
+  {\oftp{\Gamma;\Delta}{\lamk{\bullet}{x:\tau_1}e}{\tau_1\toa\tau_2}}
+  \and
+  \inferrule*[right={[L-$\mathsf{Lam}$]}]
+  {
+    [\Gamma;\Delta;\Xi],x:\tau_1\Supset\Gamma';\Delta';\Xi'
+    \and
+    \oftp{\Gamma';\Delta';\Xi'}{e}{\tau_2}
+  }
+  {\oftp{\Gamma;\Delta,\Xi}{\lamk{\circ}{x:\tau_1}e}{\tau_1\tol\tau_2}}
+  \and
+  \inferrule*[right={[$\mathsf{App}$]}]
+  {
+    \oftp{\Gamma;\Delta_1;\Xi_1}{e_1}{\tau_1\tok\tau_2}
+    \and
+    \oftp{\Gamma;\Delta_2;\Xi_2}{e_2}{\tau_1}
+    \and
+    \Delta_1\Cup\Delta_2=\Delta
+    \and
+    \Xi_1\Cup\Xi_2=\Xi
+  }
+  {\oftp{\Gamma;\Delta;\Xi}{e_1e_2}{\tau_2}}
+\end{mathpar}
+
+\begin{mathpar}
+  %% T functions
+  \inferrule*[right={[$\mathsf{TLam}$]}]
+  {
+    \oftp{\Gamma,\alpha:\kappa;\Delta;\Xi}{v}\tau
+  }
+  {\oftp{\Gamma;\Delta;\Xi}{\Lam{\alpha:\kappa}v}{\fak\alpha\kappa\tau}}
+  \and
+  \inferrule*[right={[$\mathsf{TApp}$]}]
+  {
+    \oftp{\Gamma;\Delta;\Xi}{e}{\fak\alpha\kappa\tau'}
+    \and
+    \oftp\Gamma\tau\kappa
+  }
+  {\oftp{\Gamma;\Delta;\Xi}{e[\tau]}{\tau'[\tau/\alpha]}}
+\end{mathpar}
+
+Evaluation rules:
+\begin{mathpar}
+  (\lamk{\kappa}{x:\tau}e)v\mapsto e[v/x]
+  \and
+  (\Lam{\alpha:\kappa}v)[\tau]\mapsto v[\tau/\alpha]
+  \and
+  \inferrule*
+  {e_1\mapsto e_1'}
+  {e_1 e_2\mapsto e_1' e_2}
+  \and
+  \inferrule*
+  {e\mapsto e'}
+  {ve\mapsto ve'}
+  \and
+  \inferrule*
+  {e\mapsto e'}
+  {e[\tau]\mapsto e'[\tau]}
+\end{mathpar}
+
+Existential types may be encoded in the current system.
+We (admissibly) adopt existential types as primitives.
+
+\begin{tabularx}{\linewidth}{X c}
+  $\tau::= \ldots \mid \tek\alpha\kappa\tau'$
+  & types \\
+  $e::= \ldots\mid\pack\tau{e}
+  \mid\unpack\tau{e}{e_{1}}{e_{2}}$
+  & expressions \\
+  $v::= \ldots\mid\pack\tau{v}$ & values
+\end{tabularx}
+
+\begin{mathpar}
+  %% existential
+  \inferrule*[right={[$\mathsf{Exts}$]}]
+  {
+    \oftp{\Gamma,\alpha:\kappa}{\tau'}{\kappa'}
+    \and
+    \kappa\leq\kappa'
+  }
+  {\oftp\Gamma{\tek\alpha\kappa\tau'}{\kappa'}}
+  \and
+  \inferrule*[right={[]}]
+  {
+    \oftp\Gamma{\tau}{\kappa}
+    \and
+    \oftp{\Gamma,\alpha:\kappa}{\tau'}{\star}
+    \and
+    \kappa\leq\star
+    \and
+    \oftp{\Gamma,\Gamma';\cdot;\cdot}{e}{\tau'[\tau/\alpha]}
+  }
+  {\oftp{\Gamma,\Gamma';\cdot;\cdot}{\pack{\tau}{e}}{\tek\alpha\kappa\tau'}}
+  \and
+  \inferrule*[right={[]}]
+  {
+    \oftp\Gamma{\tau}{\kappa}
+    \and
+    \oftp{\Gamma,\alpha:\kappa}{\tau'}{\bullet}
+    \and
+    \kappa\leq\bullet
+    \and
+    \oftp{\Gamma,\Gamma';\Delta;\cdot}{e}{\tau'[\tau/\alpha]}
+  }
+  {\oftp{\Gamma,\Gamma';\Delta;\cdot}{\pack{\tau}{e}}{\tek\alpha\kappa\tau'}}
+  \and
+  \inferrule*[right={[]}]
+  {
+    \oftp\Gamma{\tau}{\kappa}
+    \and
+    \oftp{\Gamma,\alpha:\kappa}{\tau'}{\circ}
+    \and
+    \kappa\leq\circ
+    \and
+    \oftp{\Gamma,\Gamma';\Delta;\Xi}{e}{\tau'[\tau/\alpha]}
+  }
+  {\oftp{\Gamma,\Gamma';\Delta;\Xi}{\pack{\tau}{e}}{\tek\alpha\kappa\tau'}}
+  \and
+  \inferrule*[right={[]}]
+  {
+    \oftp{\Gamma,\Gamma';\cdot;\cdot}{e_1}{\tek\alpha\kappa\tau'}
+    \and
+    \oftp{[\Gamma,\alpha:\kappa,\Gamma';\cdot;\cdot],x:\tau'}{e_2}{\tau_2}
+    \\
+    \oftp\Gamma{\tau_2}{\star}
+    \and
+    \oftp{\Gamma,\alpha:\kappa}{\tau'}{\kappa'}
+    \and
+    \kappa'\leq\star
+  }
+  {\oftp{\Gamma,\Gamma';\cdot;\cdot}{(\unpack\alpha{x}{e_1}{e_2})}{\tau_2}}
+  \and
+  \inferrule*[right={[]}]
+  {
+    \oftp{\Gamma,\Gamma';\Delta;\cdot}{e_1}{\tek\alpha\kappa\tau'}
+    \and
+    \oftp{[\Gamma,\alpha:\kappa,\Gamma';\Delta;\cdot],x:\tau'}{e_2}{\tau_2}
+    \\
+    \oftp\Gamma{\tau_2}{\bullet}
+    \and
+    \oftp{\Gamma,\alpha:\kappa}{\tau'}{\kappa'}
+    \and
+    \kappa'\leq\bullet
+  }
+  {\oftp{\Gamma,\Gamma';\Delta;\cdot}{(\unpack\alpha{x}{e_1}{e_2})}{\tau_2}}
+  \and
+  \inferrule*[right={[]}]
+  {
+    \oftp{\Gamma,\Gamma';\Delta;\Xi}{e_1}{\tek\alpha\kappa\tau'}
+    \and
+    \oftp{[\Gamma,\alpha:\kappa,\Gamma';\Delta;\Xi],x:\tau'}{e_2}{\tau_2}
+    \\
+    \oftp\Gamma{\tau_2}{\circ}
+    \and
+    \oftp{\Gamma,\alpha:\kappa}{\tau'}{\kappa'}
+    \and
+    \kappa'\leq \circ
+  }
+  {\oftp{\Gamma,\Gamma';\Delta;\Xi}{(\unpack\alpha{x}{e_1}{e_2})}{\tau_2}}
+\end{mathpar}
+
+Evaluation rules:
+\begin{mathpar}
+  \unpack\alpha{x}{(\pack\tau{v})}{e_{2}}\mapsto e_{2}[\tau,v/\alpha,x]
+  \and
+  \inferrule*
+  {e\mapsto e'}
+  {\pack\tau e\mapsto\pack\tau {e'}}
+  \and
+  \inferrule*
+  {e_1\mapsto e_1'}
+  {\unpack\alpha{x}{e_1}{e_2}\mapsto\unpack\alpha{x}{e_1'}{e_2}}
+\end{mathpar}
+
+
+
+\newpage
+
+
+
+\newpage
+\printbibliography
+
+\end{document}

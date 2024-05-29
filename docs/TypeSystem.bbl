@@ -1,0 +1,131 @@
+% $ biblatex auxiliary file $
+% $ biblatex bbl format version 3.2 $
+% Do not modify the above lines!
+%
+% This is an auxiliary file used by the 'biblatex' package.
+% This file may safely be deleted. It will be recreated by
+% biber as required.
+%
+\begingroup
+\makeatletter
+\@ifundefined{ver@biblatex.sty}
+  {\@latex@error
+     {Missing 'biblatex' package}
+     {The bibliography requires the 'biblatex' package.}
+      \aftergroup\endinput}
+  {}
+\endgroup
+
+
+\refsection{0}
+  \datalist[entry]{nty/global//global/global}
+    \entry{llt}{inproceedings}{}
+      \name{author}{3}{}{%
+        {{hash=05152a4cd8cda6043af157924ec33c8f}{%
+           family={Mazurak},
+           familyi={M\bibinitperiod},
+           given={Karl},
+           giveni={K\bibinitperiod}}}%
+        {{hash=a5bde218cb364be5605805f590496496}{%
+           family={Bb},
+           familyi={B\bibinitperiod},
+           given={Aa},
+           giveni={A\bibinitperiod}}}%
+        {{hash=a54b96e5e98f9cd4bb4cfe625c62a0a4}{%
+           family={Zdancewic},
+           familyi={Z\bibinitperiod},
+           given={S.},
+           giveni={S\bibinitperiod}}}%
+      }
+      \strng{namehash}{21a4303be9a28d18fed5d23d676b0888}
+      \strng{fullhash}{21a4303be9a28d18fed5d23d676b0888}
+      \strng{bibnamehash}{21a4303be9a28d18fed5d23d676b0888}
+      \strng{authorbibnamehash}{21a4303be9a28d18fed5d23d676b0888}
+      \strng{authornamehash}{21a4303be9a28d18fed5d23d676b0888}
+      \strng{authorfullhash}{21a4303be9a28d18fed5d23d676b0888}
+      \field{sortinit}{M}
+      \field{sortinithash}{4625c616857f13d17ce56f7d4f97d451}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{TLDI'10 - Proceedings of the 2010 ACM SIGPLAN Workshop on Types in Language Design and Implementation}
+      \field{month}{01}
+      \field{title}{Lightweight linear types in System F°}
+      \field{year}{2010}
+      \field{pages}{77\bibrangedash 88}
+      \range{pages}{12}
+      \verb{doi}
+      \verb 10.1145/1708016.1708027
+      \endverb
+    \endentry
+    \entry{bobw}{inproceedings}{}
+      \name{author}{1}{}{%
+        {{hash=aa92cf6cc2860bb348ae357165180b9c}{%
+           family={Morris},
+           familyi={M\bibinitperiod},
+           given={J.\bibnamedelimi Garrett},
+           giveni={J\bibinitperiod\bibinitdelim G\bibinitperiod}}}%
+      }
+      \list{publisher}{1}{%
+        {ACM}%
+      }
+      \strng{namehash}{aa92cf6cc2860bb348ae357165180b9c}
+      \strng{fullhash}{aa92cf6cc2860bb348ae357165180b9c}
+      \strng{bibnamehash}{aa92cf6cc2860bb348ae357165180b9c}
+      \strng{authorbibnamehash}{aa92cf6cc2860bb348ae357165180b9c}
+      \strng{authornamehash}{aa92cf6cc2860bb348ae357165180b9c}
+      \strng{authorfullhash}{aa92cf6cc2860bb348ae357165180b9c}
+      \field{sortinit}{M}
+      \field{sortinithash}{4625c616857f13d17ce56f7d4f97d451}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{booktitle}{Proceedings of the 21st ACM SIGPLAN International Conference on Functional Programming}
+      \field{month}{9}
+      \field{series}{ICFP’16}
+      \field{title}{The best of both worlds: linear functional programming without compromise}
+      \field{year}{2016}
+      \verb{doi}
+      \verb 10.1145/2951913.2951925
+      \endverb
+      \verb{urlraw}
+      \verb http://dx.doi.org/10.1145/2951913.2951925
+      \endverb
+      \verb{url}
+      \verb http://dx.doi.org/10.1145/2951913.2951925
+      \endverb
+    \endentry
+    \entry{pat}{inproceedings}{}
+      \name{author}{2}{}{%
+        {{hash=3d9cb3a68a8db34e132847082f58f638}{%
+           family={Tov},
+           familyi={T\bibinitperiod},
+           given={Jesse},
+           giveni={J\bibinitperiod}}}%
+        {{hash=4dc1f79ad8475b1ded53ea6ff72140ce}{%
+           family={Pucella},
+           familyi={P\bibinitperiod},
+           given={Riccardo},
+           giveni={R\bibinitperiod}}}%
+      }
+      \strng{namehash}{2dcb79853bf35e2ca4177273458b447f}
+      \strng{fullhash}{2dcb79853bf35e2ca4177273458b447f}
+      \strng{bibnamehash}{2dcb79853bf35e2ca4177273458b447f}
+      \strng{authorbibnamehash}{2dcb79853bf35e2ca4177273458b447f}
+      \strng{authornamehash}{2dcb79853bf35e2ca4177273458b447f}
+      \strng{authorfullhash}{2dcb79853bf35e2ca4177273458b447f}
+      \field{sortinit}{T}
+      \field{sortinithash}{9af77f0292593c26bde9a56e688eaee9}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{ACM SIGPLAN Notices}
+      \field{month}{01}
+      \field{title}{Practical Affine Types}
+      \field{volume}{46}
+      \field{year}{2011}
+      \verb{doi}
+      \verb 10.1145/1926385.1926436
+      \endverb
+    \endentry
+  \enddatalist
+\endrefsection
+\endinput
+
