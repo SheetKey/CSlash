@@ -66,6 +66,7 @@ library
 
                     , CSlash.Parser.Annotation
                     , CSlash.Parser.Errors.Basic
+                    , CSlash.Parser.Errors.Types
 
                     , CSlash.Types
                     , CSlash.Types.Fixity
