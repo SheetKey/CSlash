@@ -77,6 +77,8 @@ library
 
                     , CSlash.Unit.Types
 
+                    , CSlash.Utils.Outputable
+
     build-depends:    base ^>=4.18.2.0
                     , ghc
 
