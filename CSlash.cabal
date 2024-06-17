@@ -74,6 +74,7 @@ library
                     , CSlash.Types.TyThing
                     , CSlash.Types.Unique
                     , CSlash.Types.Unique.DSet
+                    , CSlash.Types.Unique.FM
 
                     , CSlash.Unit.Types
 
