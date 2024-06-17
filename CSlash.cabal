@@ -64,6 +64,8 @@ library
                     , CSlash.Language.Syntax.Pat
                     , CSlash.Language.Syntax.Type
 
+                    , CSlash.Parser.Annotation
+
                     , CSlash.Types
                     , CSlash.Types.Fixity
                     , CSlash.Types.Name
