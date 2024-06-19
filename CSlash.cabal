@@ -70,6 +70,7 @@ library
                     , CSlash.Parser.Lexer
 
                     , CSlash.Types
+                    , CSlash.Types.Error
                     , CSlash.Types.Fixity
                     , CSlash.Types.Name
                     , CSlash.Types.Name.Occurrence
