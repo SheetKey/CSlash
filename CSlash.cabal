@@ -68,6 +68,7 @@ library
                     , CSlash.Parser.Errors.Basic
                     , CSlash.Parser.Errors.Types
                     , CSlash.Parser.Lexer
+                    , CSlash.Parser.Types
 
                     , CSlash.Types
                     , CSlash.Types.Error
