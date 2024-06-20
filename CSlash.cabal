@@ -88,6 +88,7 @@ library
                     , CSlash.Utils.Error
                     , CSlash.Utils.Misc
                     , CSlash.Utils.Outputable
+                    , CSlash.Utils.Panic
 
     build-depends:    base ^>=4.18.2.0
                     , ghc
