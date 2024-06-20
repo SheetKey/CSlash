@@ -73,6 +73,8 @@ library
                     , CSlash.Parser.Lexer
                     , CSlash.Parser.Types
 
+                    , CSlash.Show
+
                     , CSlash.Types
                     , CSlash.Types.Error
                     , CSlash.Types.Fixity
