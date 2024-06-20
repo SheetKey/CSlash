@@ -29,7 +29,7 @@ executable slash
     -- Modules included in this executable, other than Main.
     -- other-modules:
 
-    build-depends:    base ^>=4.18.2.0
+    build-depends:    base >= 4.20
                     , CSlash
 
     hs-source-dirs:   app
@@ -94,8 +94,8 @@ library
                     , CSlash.Utils.Ppr
                     , CSlash.Utils.Ppr.Color
 
-    build-depends:    base ^>=4.18.2.0
-                    , ghc
+    build-depends:    base >= 4.20
+                    , ghc ^>= 9.10.1
                     , array
 
     build-tool-depends:   alex:alex 
