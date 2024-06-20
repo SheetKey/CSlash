@@ -91,6 +91,7 @@ library
                     , CSlash.Utils.Misc
                     , CSlash.Utils.Outputable
                     , CSlash.Utils.Panic
+                    , CSlash.Utils.Panic.Plain
                     , CSlash.Utils.Ppr
                     , CSlash.Utils.Ppr.Color
 
