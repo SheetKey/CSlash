@@ -91,6 +91,7 @@ library
                     , CSlash.Utils.Outputable
                     , CSlash.Utils.Panic
                     , CSlash.Utils.Ppr
+                    , CSlash.Utils.Ppr.Color
 
     build-depends:    base ^>=4.18.2.0
                     , ghc
