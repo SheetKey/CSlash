@@ -86,6 +86,7 @@ library
 
                     , CSlash.Unit.Types
 
+                    , CSlash.Utils.BufHandle
                     , CSlash.Utils.Error
                     , CSlash.Utils.Misc
                     , CSlash.Utils.Outputable
