@@ -53,6 +53,8 @@ library
                     , CSlash.Data.Maybe
                     , CSlash.Data.StringBuffer
 
+                    , CSlash.Exts
+
                     , CSlash.Language.Syntax
                     , CSlash.Language.Syntax.Binds
                     , CSlash.Language.Syntax.Decls
