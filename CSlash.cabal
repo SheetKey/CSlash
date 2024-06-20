@@ -50,6 +50,7 @@ library
                     , CSlash.Cs.Extension
 
                     , CSlash.Data.FastString
+                    , CSlash.Data.Maybe
                     , CSlash.Data.StringBuffer
 
                     , CSlash.Language.Syntax
