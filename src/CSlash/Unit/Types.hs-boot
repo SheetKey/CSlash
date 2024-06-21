@@ -1,4 +1,9 @@
+{-# LANGUAGE KindSignatures #-}
+
 module CSlash.Unit.Types where
+
+import CSlash.Language.Syntax.Module.Name (ModuleName)
+import Data.Kind (Type)
 
 data UnitId
 data GenModule (unit :: Type)
