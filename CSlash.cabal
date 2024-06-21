@@ -55,6 +55,8 @@ library
                     , CSlash.Data.Maybe
                     , CSlash.Data.StringBuffer
 
+                    , CSlash.Driver.Flags
+
                     , CSlash.Exts
 
                     , CSlash.Language.Syntax
