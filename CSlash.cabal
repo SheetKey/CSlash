@@ -106,6 +106,7 @@ library
                     , CSlash.Utils.Error
                     , CSlash.Utils.Exception
                     , CSlash.Utils.GlobalVars
+                    , CSlash.Utils.Logger
                     , CSlash.Utils.Misc
                     , CSlash.Utils.Outputable
                     , CSlash.Utils.Panic
