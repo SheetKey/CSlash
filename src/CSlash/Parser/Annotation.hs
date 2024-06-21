@@ -1,4 +1,4 @@
-module CSlash.Parser.Annotation where
+module CSlash.Parser.Annotation ( module X, EpToken(..) ) where
 
-data IsUnicodeSyntax = UnicodeSyntax | NormalSyntax
-  deriving (Show)
+import GHC.Parser.Annotation as X
+import GHC.Parser.Annotation (EpToken(..))
