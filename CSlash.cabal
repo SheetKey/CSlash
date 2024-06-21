@@ -93,6 +93,7 @@ library
                     , CSlash.Utils.BufHandle
                     , CSlash.Utils.Error
                     , CSlash.Utils.Exception
+                    , CSlash.Utils.GlobalVars
                     , CSlash.Utils.Misc
                     , CSlash.Utils.Outputable
                     , CSlash.Utils.Panic
