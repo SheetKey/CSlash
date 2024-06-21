@@ -47,6 +47,8 @@ executable slash
 library
     exposed-modules:  CSlash
 
+                    , CSlash.Builtin.Uniques
+
                     , CSlash.Cs.Extension
 
                     , CSlash.Data.FastString
