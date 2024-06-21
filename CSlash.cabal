@@ -73,6 +73,7 @@ library
                     , CSlash.Language.Syntax.Type
 
                     , CSlash.Parser.Annotation
+                    , CSlash.Parser.CharClass
                     , CSlash.Parser.Errors.Basic
                     , CSlash.Parser.Errors.Types
                     , CSlash.Parser.Lexer
