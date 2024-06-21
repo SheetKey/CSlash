@@ -51,6 +51,7 @@ library
 
                     , CSlash.Cs.Extension
 
+                    , CSlash.Data.Bag
                     , CSlash.Data.EnumSet
                     , CSlash.Data.FastString
                     , CSlash.Data.Maybe
