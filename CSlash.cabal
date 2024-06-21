@@ -1,6 +1,6 @@
 cabal-version:      2.4
 name:               CSlash
-version:            0.1.0.0
+version:            0.1.0
 
 -- A short (one-line) description of the package.
 -- synopsis:
@@ -107,6 +107,8 @@ library
                     , CSlash.Utils.Ppr
                     , CSlash.Utils.Ppr.Color
                     , CSlash.Utils.Word64
+
+                    , CSlash.Version
 
     build-depends:    base >= 4.20
                     , ghc ^>= 9.10.1
