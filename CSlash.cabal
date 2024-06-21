@@ -90,6 +90,7 @@ library
                     , CSlash.Types.Unique.DSet
                     , CSlash.Types.Unique.FM
 
+                    , CSlash.Unit.Module
                     , CSlash.Unit.Types
 
                     , CSlash.Utils.BufHandle
