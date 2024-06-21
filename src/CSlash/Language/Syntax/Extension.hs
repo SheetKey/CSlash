@@ -102,6 +102,10 @@ type family XCsInt x
 type family XCsDouble x
 type family XSigPat x
 
+-- -------------------------------------
+-- CsOverLit type families
+type family XOverLit  x
+
 -- =====================================================================
 -- Type families for the CsPat extension points
 
@@ -117,6 +121,10 @@ type family XLitPat x
 -- -------------------------------------
 -- HsPatSigType type families
 type family XCsPS x
+
+-- -------------------------------------
+-- CsTyPat type families
+type family XCsTP x
 
 -- -------------------------------------
 -- CsType type families
