@@ -104,6 +104,7 @@ library
                     , CSlash.Utils.Panic.Plain
                     , CSlash.Utils.Ppr
                     , CSlash.Utils.Ppr.Color
+                    , CSlash.Utils.Word64
 
     build-depends:    base >= 4.20
                     , ghc ^>= 9.10.1
