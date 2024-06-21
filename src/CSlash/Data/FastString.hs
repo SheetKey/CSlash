@@ -1,5 +1,3 @@
-module CSlash.Data.FastString
-  ( FastString(..)
-  ) where
+module CSlash.Data.FastString ( module X ) where
 
-import GHC.Data.FastString
+import GHC.Data.FastString as X
