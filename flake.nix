@@ -2,7 +2,7 @@
   description = "A Haskell project template.";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
 
     # Example of adding or overriding a package:
@@ -20,7 +20,7 @@
       let
         pkgs = nixpkgs.legacyPackages.${system};
 
-        haskellPackages = pkgs.haskellPackages;
+        haskellPackages = pkgs.haskell.packages.ghc910;
 
         packageName = "CSlash";
 
@@ -38,6 +38,15 @@
             # gi-gtk-declarative = pkgs.haskell.lib.dontCheck haskellPackages.gi-gtk-declarative;
 
             #example = haskellPackages.callCabal2nix "example" example-input { };
+
+            # ghc = pkgs.haskellPackages.ghc_9_10_1.override {
+            #   ghc-boot = haskellPackages.ghc_9_10_1;
+            #   ghc-heap = haskellPackages.ghc-heap_9_10_1;
+            #   template-haskell = haskellPackages.template-haskell_2_22_0_0.override {
+            #     ghc-boot-th = haskellPackages.ghc-boot-th_9_10_1;
+            #   };
+            # };
+            #base = haskellPackages.base_4_20_0_0;
           };
 
         defaultPackage = self.packages.${system}.${packageName};
