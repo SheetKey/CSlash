@@ -78,6 +78,7 @@ library
                     , CSlash.Show
 
                     , CSlash.Types
+                    , CSlash.Types.Basic
                     , CSlash.Types.Error
                     , CSlash.Types.Fixity
                     , CSlash.Types.Name
