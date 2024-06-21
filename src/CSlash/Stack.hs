@@ -1,3 +1,3 @@
 module CSlash.Stack ( module X ) where
 
-import GHC.Stack
+import GHC.Stack as X
