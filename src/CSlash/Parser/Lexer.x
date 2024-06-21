@@ -1,18 +1,43 @@
 {
+{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE MultiWayIf #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE UnboxedTuples #-}
+{-# LANGUAGE UnboxedSums #-}
+{-# LANGUAGE UnliftedNewtypes #-}
+{-# LANGUAGE PatternSynonyms #-}
+
+{-# OPTIONS_GHC -funbox-strict-fields #-}
+{-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}  
+  
 module CSlash.Parser.Lexer where
+
+import qualified GHC.Data.Strict as Strict
+
+-- base
+import Data.Word
+import Debug.Trace (trace)
+
+-- compiler
+import CSlash.Data.StringBuffer
+import CSlash.Data.FastString
 
 import CSlash.Parser.Annotation
 import CSlash.Parser.Errors.Basic
 import CSlash.Parser.Errors.Types
+
+import CSlash.Types.Error
 import CSlash.Types.SourceText
+import CSlash.Types.SrcLoc
 import CSlash.Types.Unique.FM
+
 import CSlash.Utils.Outputable
-import CSlash.Data.StringBuffer
   
 }
 
 -- As in GHC
-%encoding "latin-1" 
+%encoding "utf8" 
 
 -- -----------------------------------------------------------------------------
 -- Alex "Character set macros"
@@ -24,12 +49,12 @@ $white_no_nl = $whitechar # \n
 $tab = \t
 
 $ascdigit = 0-9
-$descdigit = $ascdigit
+$decdigit = $ascdigit
 $digit = [$ascdigit]
 
 $special = [\(\)\,\;\[\]\`\{\}]
 $ascsymbol = [\!\#\$\%\&\*\+\.\/\<\=\>\?\@\\\^\|\-\~\:]
-$unisymbol
+$unisymbol = \x04
 $symbol = [$ascsymbol $unisymbol] # [$special \_\"\']
 
 $unilarge = \x01
@@ -160,8 +185,8 @@ $unigraphic / { isSmartQuote } { smart_quote_error }
   @floating_point { tok_frac 0 tok_float }
   @negative @floating_point / { negLitPred } { tok_frac 0 tok_float }
   0[xX] @numspc @hex_floating_point { tok_frac 0 tok_hex_float }
-  @negative 0[xX] @numspc @hex_floating_point { negLitPred }
-                                              { tok_frac 0 tok_hex_float }
+  @negative 0[xX] @numspc @hex_floating_point / { negLitPred }
+                                                { tok_frac 0 tok_hex_float }
 }
 
 <0> {
@@ -273,7 +298,7 @@ reservedWordsFM = listToUFM $
 
 reservedSymsFM :: UniqFM FastString (Token, IsUnicodeSyntax)
 reservedSymsFM = listToUFM $
-  map (\ (x, y, z) -> (mkFastString x, (y, z))
+  map (\ (x, y, z) -> (mkFastString x, (y, z)))
       [ (":", ITcolon, NormalSyntax)
       , ("=", ITequal, NormalSyntax)
       , ("\\", ITlam, NormalSyntax)
@@ -311,7 +336,7 @@ skip_one_varid :: (FastString -> Token) -> Action
 skip_one_varid f span buf len _buf2
   = return (L span $! f (lexemeToFastString (stepOn buf) (len-1)))
 
-skip_one_varid_src :: (SrouceText -> FastString -> Token) -> Action
+skip_one_varid_src :: (SourceText -> FastString -> Token) -> Action
 skip_one_varid_src f span buf len _buf2
   = return (L span $! f (SrouceText $ lexemeToFastString (stepOn buf) (len-1))
                         (lexemeToFastString (stepOn buf) (len-1)))
@@ -341,7 +366,7 @@ pop_and act span buf len buf2 = do
   _ <- popLexState
   act span buf len buf2
 
-followedByOpeningToken :: AlexAccPred ExtsBitMap
+followedByOpeningToken :: AlexAccPred ExtsBitmap
 followedByOpeningToken _ _ _ (AI _ buf) = followedByOpeningToken' buf
 
 precededByClosingToken :: AlexAccPred ExtsBitmap
@@ -358,7 +383,7 @@ followedByOpeningToken' buf
         ('_', _) -> True
         (c, _) -> isAlphaNum c
 
-precededByClosingToken' :: StringBuffer -> Book
+precededByClosingToken' :: StringBuffer -> Bool
 precededByClosingToken' buf =
   case prevChar buf '\n' of
     ')' -> True
@@ -381,7 +406,7 @@ with_op_ws :: (OpWs -> Action) -> Action
 with_op_ws act span buf len buf2 = act (get_op_ws buf buf2) span buf len buf2
 
 {-# INLINE nextCharIs #-}
-nextCharIs :: StringBuffer -> (Char -> Book) -> Book
+nextCharIs :: StringBuffer -> (Char -> Bool) -> Bool
 nextCharIs buf p = not (atEnd buf) && p (currentChar buf)
 
 {-# INLINE nextCharIsNot #-}
@@ -389,10 +414,10 @@ nextCharIsNot :: StringBuffer -> (Char -> Bool) -> Bool
 nextCharIsNot buf p = not (nextCharIs buf p)
 
 notFollowedBy :: Char -> AlexAccPred ExtsBitmap
-notfollowedBy char _ _ _ (AI _ buf)
+notFollowedBy char _ _ _ (AI _ buf)
   = nextCharIsNot buf (== char)
 
-notFollowedBySymbol :: AlexAccPred ExtsBitmpa
+notFollowedBySymbol :: AlexAccPred ExtsBitmap
 notFollowedBySymbol _ _ _ (AI _ buf)
   = nextCharIsNot buf (`elem` "!#$%&*+./<=>?@\\^|-~")
 
@@ -755,7 +780,7 @@ lex_string_helper s start = do
           '\\' -> do
             setInput i1
             c' <- lex_escape
-                     lex_string_helper (c':s) start
+            lex_string_helper (c':s) start
           c | isAny c -> do
             setInput i1
             lex_string_helper (c:s) start
@@ -1139,7 +1164,7 @@ alexGetChar inp = case alexGetByte inp of
                     Just (b, i) -> c `seq` Just (c, i)
                       where c = unsafeChr $ fromIntegral b
 
-alexGetByte :: AlexInpute -> Maybe (Word8, AlexInput)
+alexGetByte :: AlexInput -> Maybe (Word8, AlexInput)
 alexGetByte (AI loc s)
   | atEnd s = Nothing
   | otherwise = byte `seq` loc' `seq` s' `seq`
@@ -1184,10 +1209,10 @@ mkParserOpts
   :: DiagOpts
   -> Bool      -- keep regular comment tokens
   -> ParserOpts
-mkParserOpts diag_opts rawTokStream =
+mkParserOpts diag_opts !rawTokStream =
   ParserOpts
   { pDiagOpts = diag_opts
-  , pRawTokStream = !rawTokStream
+  , pRawTokStream = rawTokStream
   }
 
 initParserState :: ParserOpts -> StringBuffer -> RealSrcLoc -> PState
@@ -1302,7 +1327,7 @@ getPsMessages p =
   in (ws', errors p)
 
 getContext :: P [LayoutContext]
-getContext P $ \ s@PState { context = ctx } -> POk s ctx
+getContext = P $ \ s@PState{ context = ctx } -> POk s ctx
 
 setContext :: [LayoutContext] -> P ()
 setContext ctx = P $ \s -> POk s{context=ctx} ()
@@ -1364,7 +1389,7 @@ lexer :: Bool -> (Located Token -> P a) -> P a
 lexer queueComments cont = do
   (L span tok) <- lexToken
   if (queueComments && isComment tok)
-    then queueComments (L psRealSpan span) tok) >> lexer queueComments cont
+    then queueComments (L (psRealSpan span) tok) >> lexer queueComments cont
     else cont (L (mkSrcSpanPs span) tok)
 
 lexerDbg :: Bool -> (Located Token -> P a) -> P a
@@ -1385,7 +1410,7 @@ lexToken = do
       return (L span ITeof)
     AlexError (AI loc2 buf) ->
       reportLexError (psRealLoc loc1) (psRealLoc loc2) buf
-        (\ k srcLoc - mkPlainErrorMsgEnvelope srcLoc $ PsErrLexer LexError k)
+        (\ k srcLoc -> mkPlainErrorMsgEnvelope srcLoc $ PsErrLexer LexError k)
     AlexSkip inp2 _ -> do
       setInput inp2
       lexToken
@@ -1418,7 +1443,7 @@ lexTokenStream
   -> StringBuffer
   -> RealSrcLoc
   -> ParseResult [Located Token]
-lexTokenStream opts buf loc = unP go initState { options opts' }
+lexTokenStream opts buf loc = unP go initState { options = opts' }
   where
     opts' = opts { pRawTokStream = True }
     initState = initParserState opts' buf loc
