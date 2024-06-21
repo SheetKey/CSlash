@@ -1,3 +1,5 @@
+{-# LANGUAGE TypeFamilies #-}
+
 module CSlash.Language.Syntax.Pat where
 
 import CSlash.Language.Syntax.Extension
@@ -21,3 +23,7 @@ data Pat p
   | LitPat (XLitPat p) (CsLit p)
   ------------ With type signature ---------------
   | SigPat (XSigPat p) (LPat p) (CsPatSigType (NoTc p))
+
+data CsConPatTyArg p = CsConPatTyArg !(XConPatTyArg p) (CsTyPat p)
+
+type family XConPatTyArg p
