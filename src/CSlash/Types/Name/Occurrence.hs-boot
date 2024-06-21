@@ -7,6 +7,6 @@ data OccName
 class HasOccName name where
   occName :: name -> OccName
 
-occNameFs :: OccName -> FastString
+occNameFS :: OccName -> FastString
 
-mkvarOccFS :: FastString -> OccName
+mkVarOccFS :: FastString -> OccName
