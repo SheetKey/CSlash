@@ -51,6 +51,7 @@ library
 
                     , CSlash.Cs.Extension
 
+                    , CSlash.Data.EnumSet
                     , CSlash.Data.FastString
                     , CSlash.Data.Maybe
                     , CSlash.Data.StringBuffer
