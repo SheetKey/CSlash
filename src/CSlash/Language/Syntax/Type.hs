@@ -13,6 +13,13 @@ data CsPatSigType pass = CsPS
   , csps_body :: LCsType pass
   }
 
+data CsTyPat pass = CsTP
+  { cstp_ext :: XCsTP pass
+  , cstp_body :: LCsType pass
+  }
+
+type LCsTyPat pass = XRec pass (CsTyPat pass)
+
 data CsForAllTelescope pass = CsForAllInvis
   { csf_xinvis :: XCsForAllInvis pass
   , csf_invis_bndr :: LCsTyVarBndr pass
@@ -42,3 +49,14 @@ data CsArrow pass
   = CsArrow !(XCsArrow pass) !(LCsKind pass)
 
 type family XCsArrow x
+
+data CsArg p tm ty
+  = CsValArg !(XValArg p) tm
+  | CsTypeArg !(XTypeArg p) ty
+  | CsArgPar !(XArgPar p)
+
+type family XValArg p
+type family XTypeArg p
+type family XArgPar p
+
+type LCsTypeArg p = CsArg p (LCsType p) (LCsKind p)
