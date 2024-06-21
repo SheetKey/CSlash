@@ -77,6 +77,8 @@ library
 
                     , CSlash.Show
 
+                    , CSlash.Stack
+
                     , CSlash.Types
                     , CSlash.Types.Basic
                     , CSlash.Types.Error
