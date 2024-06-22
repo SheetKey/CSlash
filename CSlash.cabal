@@ -105,6 +105,7 @@ library
                     , CSlash.Types.Unique.DFM
                     , CSlash.Types.Unique.DSet
                     , CSlash.Types.Unique.FM
+                    , CSlash.Types.Unique.Map
                     , CSlash.Types.Unique.Set
 
                     , CSlash.Unit.Module
