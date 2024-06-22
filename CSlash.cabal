@@ -88,6 +88,7 @@ library
                     , CSlash.Types.Basic
                     , CSlash.Types.Error
                     , CSlash.Types.Fixity
+                    , CSlash.Types.Hint
                     , CSlash.Types.Name
                     , CSlash.Types.Name.Occurrence
                     , CSlash.Types.Name.Reader
