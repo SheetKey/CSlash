@@ -92,6 +92,7 @@ library
                     , CSlash.Types.Hint
                     , CSlash.Types.Hint.Ppr
                     , CSlash.Types.Name
+                    , CSlash.Types.Name.Env
                     , CSlash.Types.Name.Occurrence
                     , CSlash.Types.Name.Reader
                     , CSlash.Types.SourceText
