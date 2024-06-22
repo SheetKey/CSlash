@@ -122,6 +122,9 @@ library
                     , ghc ^>= 9.10.1
                     , array
                     , filepath
+                    , directory
+                    , containers
+                    , time
 
     build-tool-depends:   alex:alex 
                         , happy:happy
