@@ -99,6 +99,7 @@ library
                     , CSlash.Types.Unique
                     , CSlash.Types.Unique.DSet
                     , CSlash.Types.Unique.FM
+                    , CSlash.Types.Unique.Set
 
                     , CSlash.Unit.Module
                     , CSlash.Unit.Module.Warnings
