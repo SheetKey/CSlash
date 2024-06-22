@@ -99,6 +99,7 @@ library
                     , CSlash.Types.SrcLoc
                     , CSlash.Types.TyThing
                     , CSlash.Types.Unique
+                    , CSlash.Types.Unique.DFM
                     , CSlash.Types.Unique.DSet
                     , CSlash.Types.Unique.FM
                     , CSlash.Types.Unique.Set
