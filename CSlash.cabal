@@ -49,6 +49,7 @@ library
 
                     , CSlash.Builtin.Uniques
 
+                    , CSlash.Cs.Doc
                     , CSlash.Cs.Extension
 
                     , CSlash.Data.Bag
