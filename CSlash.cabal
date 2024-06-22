@@ -108,6 +108,8 @@ library
                     , CSlash.Types.Unique.Map
                     , CSlash.Types.Unique.Set
 
+                    , CSlash.Unicode
+
                     , CSlash.Unit.Module
                     , CSlash.Unit.Module.Env
                     , CSlash.Unit.Module.Imported
