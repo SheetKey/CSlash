@@ -54,6 +54,7 @@ library
                     , CSlash.Data.Bag
                     , CSlash.Data.EnumSet
                     , CSlash.Data.FastString
+                    , CSlash.Data.Graph.Directed
                     , CSlash.Data.Maybe
                     , CSlash.Data.StringBuffer
 
