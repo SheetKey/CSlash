@@ -104,6 +104,7 @@ library
                     , CSlash.Types.Unique.Set
 
                     , CSlash.Unit.Module
+                    , CSlash.Unit.Module.Env
                     , CSlash.Unit.Module.Imported
                     , CSlash.Unit.Module.Warnings
                     , CSlash.Unit.Types
