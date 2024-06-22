@@ -90,6 +90,7 @@ library
                     , CSlash.Types.Basic
                     , CSlash.Types.Error
                     , CSlash.Types.Fixity
+                    , CSlash.Types.GREInfo
                     , CSlash.Types.Hint
                     , CSlash.Types.Hint.Ppr
                     , CSlash.Types.Name
