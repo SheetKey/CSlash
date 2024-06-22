@@ -114,6 +114,7 @@ library
                     , CSlash.Unit.Module.Warnings
                     , CSlash.Unit.Types
 
+                    , CSlash.Utils.Binary
                     , CSlash.Utils.BufHandle
                     , CSlash.Utils.Constants
                     , CSlash.Utils.Error
