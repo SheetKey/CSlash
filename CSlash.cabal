@@ -59,6 +59,7 @@ library
                     , CSlash.Data.FiniteMap
                     , CSlash.Data.Graph.Directed
                     , CSlash.Data.Maybe
+                    , CSlash.Data.Strict
                     , CSlash.Data.StringBuffer
 
                     , CSlash.Driver.Flags
