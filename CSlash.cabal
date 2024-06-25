@@ -112,6 +112,7 @@ library
 
                     , CSlash.Unicode
 
+                    , CSlash.Unit.Home
                     , CSlash.Unit.Module
                     , CSlash.Unit.Module.Env
                     , CSlash.Unit.Module.Imported
