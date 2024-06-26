@@ -122,6 +122,7 @@ library
                     , CSlash.Utils.Binary
                     , CSlash.Utils.BufHandle
                     , CSlash.Utils.Constants
+                    , CSlash.Utils.Encoding
                     , CSlash.Utils.Error
                     , CSlash.Utils.Exception
                     , CSlash.Utils.Fingerprint
