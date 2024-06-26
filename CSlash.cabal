@@ -54,6 +54,7 @@ library
 
                     , CSlash.Data.Bag
                     , CSlash.Data.EnumSet
+                    , CSlash.Data.FastMutInt
                     , CSlash.Data.FastString
                     , CSlash.Data.FastString.Env
                     , CSlash.Data.FiniteMap
