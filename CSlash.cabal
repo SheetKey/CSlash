@@ -109,7 +109,8 @@ library
                     , CSlash.Types.Unique.FM
                     , CSlash.Types.Unique.Map
                     , CSlash.Types.Unique.Set
-
+                    , CSlash.Types.Var
+                    
                     , CSlash.Unicode
 
                     , CSlash.Unit.Home
