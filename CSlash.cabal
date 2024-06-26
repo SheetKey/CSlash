@@ -144,6 +144,7 @@ library
                     , containers
                     , time
                     , deepseq
+                    , bytestring
 
     build-tool-depends:   alex:alex 
                         , happy:happy
