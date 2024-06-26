@@ -127,6 +127,7 @@ library
                     , CSlash.Utils.Exception
                     , CSlash.Utils.Fingerprint
                     , CSlash.Utils.GlobalVars
+                    , CSlash.Utils.Lexeme
                     , CSlash.Utils.Logger
                     , CSlash.Utils.Misc
                     , CSlash.Utils.Outputable
