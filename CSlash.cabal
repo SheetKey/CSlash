@@ -151,6 +151,7 @@ library
                     , time
                     , deepseq
                     , bytestring
+                    , exceptions
 
     build-tool-depends:   alex:alex 
                         , happy:happy
