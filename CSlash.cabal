@@ -47,6 +47,7 @@ executable slash
 library
     exposed-modules:  CSlash
 
+                    , CSlash.Builtin.Names
                     , CSlash.Builtin.Uniques
 
                     , CSlash.Conc
