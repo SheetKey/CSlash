@@ -61,6 +61,7 @@ library
                     , CSlash.Data.FastString.Env
                     , CSlash.Data.FiniteMap
                     , CSlash.Data.Graph.Directed
+                    , CSlash.Data.List.Infinite
                     , CSlash.Data.Maybe
                     , CSlash.Data.Strict
                     , CSlash.Data.StringBuffer
