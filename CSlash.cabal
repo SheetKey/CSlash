@@ -49,6 +49,8 @@ library
 
                     , CSlash.Builtin.Uniques
 
+                    , CSlash.Conc
+
                     , CSlash.Cs.Doc
                     , CSlash.Cs.Extension
 
