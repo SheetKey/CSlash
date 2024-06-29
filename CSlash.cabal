@@ -55,6 +55,7 @@ library
                     , CSlash.Cs.Doc
                     , CSlash.Cs.Expr
                     , CSlash.Cs.Extension
+                    , CSlash.Cs.Pat
 
                     , CSlash.Data.Bag
                     , CSlash.Data.EnumSet
