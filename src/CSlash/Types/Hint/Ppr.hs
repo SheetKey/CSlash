@@ -2,10 +2,12 @@
 
 {-# OPTIONS_GHC -Wno-orphans #-} -- instance Outputable CSlashHint
 
-module GHC.Types.Hint.Ppr (
+module CSlash.Types.Hint.Ppr (
   perhapsAsPat
   -- also, and more interesting: instance Outputable GhcHint
   ) where
+
+import Prelude hiding ((<>))
 
 import CSlash.Parser.Errors.Basic
 import CSlash.Types.Hint
@@ -14,6 +16,7 @@ import CSlash.Types.Name
 import CSlash.Types.Name.Reader (RdrName,ImpDeclSpec (..), rdrNameOcc, rdrNameSpace)
 import CSlash.Types.SrcLoc (SrcSpan(..), srcSpanStartLine)
 import CSlash.Unit.Types
+import CSlash.Unit.Module.Imported
 import CSlash.Utils.Outputable
 
 import Data.List (intersperse)
@@ -25,9 +28,6 @@ instance Outputable CSlashHint where
       -> ppr m
     SuggestUseSpaces
       -> text "Please use spaces instead."
-    SuggestUseWhitespaceAfter sym
-      -> text "Add whitespace after the"
-           <+> quotes (pprOperatorWhitespaceSymbol sym) <> char '.'
     SuggestUseWhitespaceAround sym _occurrence
       -> text "Add whitespace around" <+> quotes (text sym) <> char '.'
     SuggestParentheses
@@ -46,24 +46,24 @@ instance Outputable CSlashHint where
             in hsep [ text "Consider giving"
                     , nameList
                     , text "a type signature"]
-    SuggestAddInlineOrNoInlinePragma lhs_id rule_act
-      -> vcat [ text "Add an INLINE[n] or NOINLINE[n] pragma for" <+> quotes (ppr lhs_id)
-              , whenPprDebug (ppr (idInlineActivation lhs_id) $$ ppr rule_act)
-              ]
+    -- SuggestAddInlineOrNoInlinePragma lhs_id rule_act
+    --   -> vcat [ text "Add an INLINE[n] or NOINLINE[n] pragma for" <+> quotes (ppr lhs_id)
+    --           , whenPprDebug (ppr (idInlineActivation lhs_id) $$ ppr rule_act)
+    --           ]
     SuggestIncreaseSimplifierIterations
       -> text "Set limit with -fconstraint-solver-iterations=n; n=0 for no limit"
     SuggestQualifiedAfterModuleName
       -> text "Place" <+> quotes (text "qualified")
           <+> text "after the module name."
-    SuggestFixOrphanInst { isFamilyInstance = mbFamFlavor }
-      -> vcat [ text "Move the instance declaration to the module of the" <+> what <+> text "or of the type, or"
-              , text "wrap the type with a newtype and declare the instance on the new type."
-              ]
-      where
-        what = case mbFamFlavor of
-          Nothing                  -> text "class"
-          Just  SynFamilyInst      -> text "type family"
-          Just (DataFamilyInst {}) -> text "data family"
+    -- SuggestFixOrphanInst { isFamilyInstance = mbFamFlavor }
+    --   -> vcat [ text "Move the instance declaration to the module of the" <+> what <+> text "or of the type, or"
+    --           , text "wrap the type with a newtype and declare the instance on the new type."
+    --           ]
+    --   where
+    --     what = case mbFamFlavor of
+    --       Nothing                  -> text "class"
+    --       Just  SynFamilyInst      -> text "type family"
+    --       Just (DataFamilyInst {}) -> text "data family"
     SuggestAddStandaloneKindSignature name
       -> text "Add a standalone kind signature for" <+> quotes (ppr name)
     SuggestMoveToDeclarationSite what rdr_name
@@ -87,9 +87,9 @@ instance Outputable CSlashHint where
         , text "(any upper bound you could choose might fail unpredictably with"
         , text " minor updates to CSlash, so disabling the check is recommended if"
         , text " you're sure that type checking should terminate)" ]
-    SuggestEtaReduceAbsDataTySyn tc
-      -> text "If possible, eta-reduce the type synonym" <+> ppr_tc <+> text "so that it is nullary."
-        where ppr_tc = quotes (ppr $ tyConName tc)
+    -- SuggestEtaReduceAbsDataTySyn tc
+    --   -> text "If possible, eta-reduce the type synonym" <+> ppr_tc <+> text "so that it is nullary."
+    --     where ppr_tc = quotes (ppr $ tyConName tc)
     SuggestAnonymousWildcard
       -> text "Use an anonymous wildcard" <+> quotes (text "_")
     SuggestExplicitQuantification tv
