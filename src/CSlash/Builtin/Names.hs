@@ -1,8 +1,9 @@
-import CSlash.Builtin.Names
+module CSlash.Builtin.Names
   ( Unique, Uniquable(..), hasKey,
     module CSlash.Builtin.Names
   ) where
 
+import CSlash.Types.Unique
 import CSlash.Data.List.Infinite (Infinite (..))
 import qualified CSlash.Data.List.Infinite as Inf
 
