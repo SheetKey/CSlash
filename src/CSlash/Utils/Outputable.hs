@@ -10,14 +10,12 @@
 {-# LANGUAGE FlexibleContexts #-}
 
 module CSlash.Utils.Outputable (
-  -- * Type classes
   Outputable(..), OutputableBndr(..), OutputableP(..),
   BindingSite(..),  JoinPointHood(..), isJoinPoint,
 
   IsOutput(..), IsLine(..), IsDoc(..),
   HLine, HDoc,
 
-  -- * Pretty printing combinators
   SDoc, runSDoc, PDoc(..),
   docToSDoc,
   interppSP, interpp'SP, interpp'SP',
@@ -34,7 +32,9 @@ module CSlash.Utils.Outputable (
   arrow, lollipop, larrow, darrow, arrowt, larrowt, arrowtt, larrowtt,
   lambda,
   lparen, rparen, lbrack, rbrack, lbrace, rbrace, underscore,
-  blankLine, forAllLit, bullet,
+  blankLine, forAllLit,
+  uKindLit, aKindLit, lKindLit,
+  bullet,
   ($+$),
   cat, fcat,
   hang, hangNotEmpty, punctuate, punctuateFinal,
@@ -46,7 +46,6 @@ module CSlash.Utils.Outputable (
 
   coloured, keyword,
 
-  -- * Converting 'SDoc' into strings and outputting it
   printSDoc, printSDocLn,
   bufLeftRenderSDoc,
   pprCode,
@@ -57,7 +56,7 @@ module CSlash.Utils.Outputable (
   pprDebugAndThen,
 
   pprInfixVar, pprPrefixVar,
-  pprHsChar, pprHsString, 
+  pprCsChar, pprCsString, 
 
   primFloatSuffix, primCharSuffix, primDoubleSuffix,
   primInt8Suffix, primWord8Suffix,
@@ -76,7 +75,6 @@ module CSlash.Utils.Outputable (
 
   pprModuleName,
 
-  -- * Controlling the style in which output is printed
   PprStyle(..), NamePprCtx(..),
   QueryQualifyName, QueryQualifyModule, QueryQualifyPackage, QueryPromotionTick,
   PromotedItem(..), IsEmptyOrSingleton(..), isListEmptyOrSingleton,
@@ -121,6 +119,7 @@ import CSlash.Utils.GlobalVars ( unsafeHasPprDebug )
 import CSlash.Utils.Misc (lastMaybe)
 
 import Data.Char
+import qualified Data.Map as M
 import Data.Int
 import Data.String
 import Data.Word
@@ -149,9 +148,6 @@ data Depth
 data Coloured
   = Uncoloured
   | Coloured
-
--- -----------------------------------------------------------------------------
--- Printing original names
 
 data NamePprCtx = QueryQualify {
     queryQualifyName    :: QueryQualifyName,
@@ -203,7 +199,6 @@ instance Outputable QualifyName where
 reallyAlwaysQualifyNames :: QueryQualifyName
 reallyAlwaysQualifyNames _ _ = NameNotInScope2
 
--- | NB: This won't ever show package IDs
 alwaysQualifyNames :: QueryQualifyName
 alwaysQualifyNames m _ = NameQual (moduleName m)
 
@@ -657,6 +652,15 @@ rbrace     = char '}'
 forAllLit :: SDoc
 forAllLit = unicodeSyntax (char '∀') (text "forall")
 
+uKindLit :: SDoc
+uKindLit = unicodeSyntax (char '★') (text "UK")
+
+aKindLit :: SDoc
+aKindLit = unicodeSyntax (char '○') (text "AK")
+
+lKindLit :: SDoc
+lKindLit = unicodeSyntax (char '●') (text "LK")
+
 bullet :: SDoc
 bullet = unicode (char '•') (char '*')
 
@@ -674,9 +678,7 @@ unicode unicode plain = sdocOption sdocCanUseUnicode $ \case
    False -> plain
 
 nest :: Int -> SDoc -> SDoc
--- ^ Indent 'SDoc' some specified amount
 ($+$) :: SDoc -> SDoc -> SDoc
--- ^ Join two 'SDoc' together vertically
 
 {-# INLINE CONLIKE nest #-}
 nest n d    = SDoc $ Pretty.nest n . runSDoc d
@@ -758,10 +760,6 @@ coloured col sdoc = sdocOption sdocShouldUseColor $ \case
 
 keyword :: SDoc -> SDoc
 keyword = coloured Col.colBold
-
------------------------------------------------------------------------
--- The @Outputable@ class
------------------------------------------------------------------------
 
 class Outputable a where
     ppr :: a -> SDoc
@@ -887,6 +885,9 @@ instance Outputable FastString where
 deriving newtype instance Outputable NonDetFastString
 deriving newtype instance Outputable LexicalFastString
 
+instance (Outputable key, Outputable elt) => Outputable (M.Map key elt) where
+  ppr m = ppr (M.toList m)
+
 instance Outputable ModuleName where
   ppr = pprModuleName
 
@@ -895,10 +896,6 @@ pprModuleName (ModuleName nm) =
     docWithStyle (ztext (zEncodeFS nm)) (\_ -> ftext nm)
 {-# SPECIALIZE pprModuleName :: ModuleName -> SDoc #-}
 {-# SPECIALIZE pprModuleName :: ModuleName -> HLine #-} 
-
------------------------------------------------------------------------
--- The @OutputableP@ class
------------------------------------------------------------------------
 
 class OutputableP env a where
    pdoc :: env -> a -> SDoc
@@ -925,14 +922,6 @@ instance OutputableP env SDoc where
 
 instance OutputableP env Void where
     pdoc _ = \ case
-
-{-
-************************************************************************
-*                                                                      *
-\subsection{The @OutputableBndr@ class}
-*                                                                      *
-************************************************************************
--}
 
 class Outputable a => OutputableBndr a where
    pprBndr :: BindingSite -> a -> SDoc
@@ -963,20 +952,12 @@ instance Outputable JoinPointHood where
   ppr NotJoinPoint      = text "NotJoinPoint"
   ppr (JoinPoint arity) = text "JoinPoint" <> parens (ppr arity)
 
-{-
-************************************************************************
-*                                                                      *
-\subsection{Random printing helpers}
-*                                                                      *
-************************************************************************
--}
-
-pprHsChar :: Char -> SDoc
-pprHsChar c | c > '\x10ffff' = char '\\' <> text (show (fromIntegral (ord c) :: Word32))
+pprCsChar :: Char -> SDoc
+pprCsChar c | c > '\x10ffff' = char '\\' <> text (show (fromIntegral (ord c) :: Word32))
             | otherwise      = text (show c)
 
-pprHsString :: FastString -> SDoc
-pprHsString fs = vcat (map text (showMultiLineString (unpackFS fs)))
+pprCsString :: FastString -> SDoc
+pprCsString fs = vcat (map text (showMultiLineString (unpackFS fs)))
 
 primCharSuffix, primFloatSuffix, primDoubleSuffix,
   primIntSuffix, primWordSuffix,
@@ -1006,7 +987,7 @@ pprPrimInt, pprPrimWord,
   pprPrimInt32, pprPrimWord32,
   pprPrimInt64, pprPrimWord64
   :: Integer -> SDoc
-pprPrimChar c   = pprHsChar c <> primCharSuffix
+pprPrimChar c   = pprCsChar c <> primCharSuffix
 pprPrimInt i    = integer i   <> primIntSuffix
 pprPrimWord w   = word    w   <> primWordSuffix
 pprPrimInt8 i   = integer i   <> primInt8Suffix
@@ -1039,14 +1020,6 @@ pprFilePathString path = doubleQuotes $ text (escape (normalise path))
       escape (x:xs)    = x:escape xs
 {-# SPECIALIZE pprFilePathString :: FilePath -> SDoc #-}
 {-# SPECIALIZE pprFilePathString :: FilePath -> HLine #-}
-
-{-
-************************************************************************
-*                                                                      *
-\subsection{Other helper functions}
-*                                                                      *
-************************************************************************
--}
 
 pprWithCommas :: (a -> SDoc)
               -> [a]        
@@ -1092,14 +1065,6 @@ quotedListWithNor xs = quotedList xs
 quotedListWithAnd :: [SDoc] -> SDoc
 quotedListWithAnd xs@(_:_:_) = quotedList (init xs) <+> text "and" <+> quotes (last xs)
 quotedListWithAnd xs = quotedList xs
-
-{-
-************************************************************************
-*                                                                      *
-\subsection{Printing numbers verbally}
-*                                                                      *
-************************************************************************
--}
 
 intWithCommas :: Integral a => a -> SDoc
 intWithCommas n
