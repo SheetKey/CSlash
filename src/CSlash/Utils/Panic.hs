@@ -1,6 +1,9 @@
 {-# LANGUAGE LambdaCase #-}
 
-module CSlash.Utils.Panic where
+module CSlash.Utils.Panic
+  ( module CSlash.Utils.Panic
+  , module CSlash.Utils.Panic.Plain
+  ) where
 
 import CSlash.Stack
 
@@ -63,6 +66,9 @@ showCsException ctx = showPlainCsException . \case
 
 throwCsException :: CsException -> a
 throwCsException = Exception.throw
+
+throwCsExceptionIO :: CsException -> IO a
+throwCsExceptionIO = Exception.throwIO
 
 pprPanic :: HasCallStack => String -> SDoc -> a
 pprPanic s doc = panicDoc s (doc $$ callStackDoc)
