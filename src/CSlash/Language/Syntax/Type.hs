@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TypeFamilies #-}
 
 module CSlash.Language.Syntax.Type where
@@ -20,9 +21,14 @@ data CsTyPat pass = CsTP
 
 type LCsTyPat pass = XRec pass (CsTyPat pass)
 
+data CsSigType pass = CsSig
+  { sig_ext :: XCsSig pass
+  , sig_body :: LCsType pass
+  }
+
 data CsForAllTelescope pass = CsForAllInvis
   { csf_xinvis :: XCsForAllInvis pass
-  , csf_invis_bndr :: LCsTyVarBndr pass
+  , csf_invis_bndrs :: [LCsTyVarBndr pass]
   }
 
 type LCsTyVarBndr pass = XRec pass (CsTyVarBndr pass)
