@@ -13,11 +13,12 @@ type LCsExpr p = XRec p (CsExpr p)
 data CsExpr p
   = CsVar (XVar p) (LIdP p)
   | CsUnboundVar (XUnboundVar p) RdrName
-  | CsLit (XLitE p) (CsLit p) (CsLit p)
+  | CsLit (XLitE p) (CsLit p)
   | CsLam (XLam p) (MatchGroup p (LCsExpr p))
   | CsApp (XApp p) (LCsExpr p) (LCsExpr p)
   | CsTyLam (XTyLam p) (MatchGroup p (LCsExpr p))
   | CsTyApp (XTyApp p) (LCsExpr p) (LCsExpr p)
+  | OpApp (XOpApp p) (LCsExpr p) (LCsExpr p) (LCsExpr p)
   | CsPar (XPar p) (LCsExpr p)
   | SectionL (XSectionL p) (LCsExpr p) (LCsExpr p)
   | SectionR (XSectionR p) (LCsExpr p) (LCsExpr p)
@@ -25,6 +26,7 @@ data CsExpr p
   | ExplicitSum (XExplicitSum p) ConTag SumWidth (LCsExpr p)
   | CsCase (XCase p) (LCsExpr p) (MatchGroup p (LCsExpr p))
   | CsIf (XIf p) (LCsExpr p) (LCsExpr p) (LCsExpr p)
+  | CsMultiIf (XMultiIf p) [LGRHS p (LCsExpr p)]
   | ExprWithTySig (XExprWithTySig p) (LCsExpr p) (LCsType (NoTc p))
 
 data CsTupArg id
@@ -46,15 +48,10 @@ data Match p body = Match
   }
 
 data CsMatchContext fn
-  = FunRhs
-    { mc_fun :: fn
-    , mc_fixity :: LexicalFixity
-    }
-  | TFunRhs
-    { mc_tfun :: fn
-    , mc_tfixity :: LexicalFixity
-    }
+  = LamAlt
+  | TLamAlt
   | CaseAlt
+  | MultiIfAlt
 
 data GRHSs p body
   = GRHSs
@@ -72,3 +69,4 @@ type LStmt id body = XRec id (StmtLR id id body)
 type GuardLStmt id = LStmt id (LCsExpr id)
 
 data StmtLR idL idR body
+  = GuardBodyStmt (XGuardBodyStmt idL idR body) body
