@@ -10,23 +10,20 @@ module CSlash.Types.Hint
   , isBareSymbol
   ) where
 
-import CSlashLanguage.Syntax.Expr (LHsExpr)
+import CSlash.Language.Syntax.Expr (LCsExpr)
 import CSlash.Language.Syntax (LPat, LIdP)
 
 import qualified Data.List.NonEmpty as NE
 
 import CSlash.Unit.Module (ModuleName, Module)
 import CSlash.Unit.Module.Imported (ImportedModsVal)
-import CSlash.Hs.Extension (GhcTc, GhcRn)
-import CSlash.Core.Coercion
-import CSlash.Core.FamInstEnv (FamFlavor)
-import CSlash.Core.TyCon (TyCon)
-import CSlash.Core.Type (Type)
+import CSlash.Cs.Extension (Tc, Rn)
 import CSlash.Types.Fixity (LexicalFixity(..))
 import CSlash.Types.Name (Name, NameSpace, OccName (occNameFS), isSymOcc, nameOccName)
 import CSlash.Types.Name.Reader (RdrName (Unqual), ImpDeclSpec)
 import CSlash.Types.SrcLoc (SrcSpan)
 import CSlash.Types.Basic (Activation, RuleName)
+import CSlash.Types.Var
 import CSlash.Parser.Errors.Basic
 import CSlash.Utils.Outputable
 import CSlash.Data.FastString (fsLit, FastString)
@@ -40,19 +37,17 @@ data AvailableBindings
 data CSlashHint
   = forall a. (Outputable a, Typeable a) => UnknownHint a
   | SuggestUseSpaces
-  | SuggestUseWhitespaceAfter !OperatorWhitespaceSymbol
+  --  | SuggestUseWhitespaceAfter !OperatorWhitespaceSymbol
   | SuggestUseWhitespaceAround !String !OperatorWhitespaceOccurrence
   | SuggestParentheses
   | SuggestIncreaseMaxPmCheckModels
   | SuggestAddTypeSignatures AvailableBindings
-  | SuggestBindToWildcard !(LHsExpr GhcTc)
-  | SuggestAddInlineOrNoInlinePragma !Var !Activation
-  | SuggestAddToHSigExportList !Name !(Maybe Module)
+  | SuggestBindToWildcard !(LCsExpr Tc)
+  --  | SuggestAddInlineOrNoInlinePragma !Var !Activation
   | SuggestIncreaseSimplifierIterations
   | SuggestQualifiedAfterModuleName
-  | SuggestFixOrphanInst { isFamilyInstance :: Maybe FamFlavor }
+  --  | SuggestFixOrphanInst { isFamilyInstance :: Maybe FamFlavor }
   | SuggestAddStandaloneKindSignature Name
-  | SuggestDumpSlices
   | SuggestMoveToDeclarationSite
       SDoc
       RdrName
@@ -60,7 +55,7 @@ data CSlashHint
   | ImportSuggestion OccName ImportSuggestion
   | SuggestRenameTypeVariable
   | SuggestIncreaseReductionDepth
-  | SuggestEtaReduceAbsDataTySyn TyCon
+  --  | SuggestEtaReduceAbsDataTySyn TyCon
   | SuggestAnonymousWildcard
   | SuggestExplicitQuantification RdrName
 
