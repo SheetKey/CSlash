@@ -1,5 +1,7 @@
 module CSlash.Driver.Flags
-  ( GeneralFlag(..)
+  ( DumpFlag(..)
+  , getDumpFlagFrom
+  , GeneralFlag(..)
 
   , WarningGroup(..)
   , warningGroupName
@@ -25,6 +27,16 @@ import CSlash.Data.EnumSet as EnumSet
 import Control.Monad (guard)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Maybe (fromMaybe,mapMaybe)
+
+data DumpFlag
+  = DumpFlag_NOT_IMPLEMENTED
+  deriving (Eq, Show, Enum)
+
+getDumpFlagFrom
+  :: (a -> Int)
+  -> (a -> EnumSet DumpFlag)
+  -> DumpFlag -> a -> Bool
+getDumpFlagFrom = error "'getDumpFlagFrom' not implemented"
 
 data GeneralFlag
    = Opt_DumpToFile
@@ -81,7 +93,6 @@ data WarningFlag =
    | Opt_WarnPrepositiveQualifiedModule          
    | Opt_WarnUnusedPackages                      
    | Opt_WarnCompatUnqualifiedImports            
-   | Opt_WarnOperatorWhitespaceExtConflict       
    | Opt_WarnOperatorWhitespace                  
    | Opt_WarnMissingKindSignatures               
    | Opt_WarnMissingPolyKindSignatures           
@@ -136,7 +147,6 @@ warnFlagNames wflag = case wflag of
   Opt_WarnPrepositiveQualifiedModule              -> "prepositive-qualified-module" :| []
   Opt_WarnUnusedPackages                          -> "unused-packages" :| []
   Opt_WarnCompatUnqualifiedImports                -> "compat-unqualified-imports" :| []
-  Opt_WarnOperatorWhitespaceExtConflict           -> "operator-whitespace-ext-conflict" :| []
   Opt_WarnOperatorWhitespace                      -> "operator-whitespace" :| []
   Opt_WarnUnicodeBidirectionalFormatCharacters    -> "unicode-bidirectional-format-characters" :| []
 
@@ -210,7 +220,6 @@ standardWarnings
         Opt_WarnTabs,
         Opt_WarnUnrecognisedWarningFlags,
         Opt_WarnInaccessibleCode,
-        Opt_WarnOperatorWhitespaceExtConflict,
         Opt_WarnUnicodeBidirectionalFormatCharacters
       ]
 
