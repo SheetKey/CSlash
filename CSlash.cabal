@@ -55,6 +55,7 @@ library
                     , CSlash.Cs.Doc
                     , CSlash.Cs.Expr
                     , CSlash.Cs.Extension
+                    , CSlash.Cs.Kind
                     , CSlash.Cs.Lit
                     , CSlash.Cs.Pat
                     , CSlash.Cs.Type

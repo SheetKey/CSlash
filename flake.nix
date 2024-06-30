@@ -57,6 +57,8 @@
             cabal-install
             haskell-language-server
             haskellPackages.implicit-hie
+            alex
+            happy
           ];
           inputsFrom = builtins.attrValues self.packages.${system};
         };
