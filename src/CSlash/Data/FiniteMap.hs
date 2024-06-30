@@ -1,3 +1,3 @@
 module CSlash.Data.FiniteMap ( module X ) where
 
-import GHC.Data.FiniteMap
+import GHC.Data.FiniteMap as X
