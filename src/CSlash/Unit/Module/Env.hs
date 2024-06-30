@@ -1,4 +1,4 @@
-module GHC.Unit.Module.Env
+module CSlash.Unit.Module.Env
    ( ModuleEnv
    , elemModuleEnv, extendModuleEnv, extendModuleEnvList
    , extendModuleEnvList_C, plusModuleEnv_C
