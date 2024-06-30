@@ -63,6 +63,7 @@ type family XLam x
 type family XApp x
 type family XTyLam x
 type family XTyApp x
+type family XOpApp x
 type family XPar x
 type family XSectionL x
 type family XSectionR x
@@ -70,6 +71,7 @@ type family XExplicitTuple x
 type family XExplicitSum x
 type family XCase x
 type family XIf x
+type family XMultiIf x
 type family XExprWithTySig x
 
 -- -------------------------------------
@@ -92,6 +94,10 @@ type family XCGRHSs x b
 -- -------------------------------------
 -- GRHS type families
 type family XCGRHS x b
+
+-- -------------------------------------
+-- StmtLR type families
+type family XGuardBodyStmt x x' b
 
 -- =====================================================================
 -- Type families for the CsLit extension points
@@ -117,6 +123,10 @@ type family XLitPat x
 
 -- =====================================================================
 -- Type families for the CsTypes type families
+
+-- -------------------------------------
+-- HsSigType type families
+type family XCsSig x
 
 -- -------------------------------------
 -- HsPatSigType type families
