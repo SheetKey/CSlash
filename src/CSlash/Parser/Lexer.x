@@ -13,18 +13,29 @@
   
 module CSlash.Parser.Lexer where
 
-import qualified GHC.Data.Strict as Strict
+import qualified CSlash.Data.Strict as Strict
 
 -- base
+import Data.Char
+import Data.List (stripPrefix, isInfixOf, partition)
 import Data.Word
 import Debug.Trace (trace)
+
+import Control.Monad
+import Control.Applicative
 
 -- compiler
 import CSlash.Data.StringBuffer
 import CSlash.Data.FastString
+import CSlash.Data.EnumSet as EnumSet
+import CSlash.Data.Maybe
+
+import CSlash.Driver.Flags
 
 import CSlash.Parser.Annotation
+import CSlash.Parser.CharClass
 import CSlash.Parser.Errors.Basic
+import CSlash.Parser.Errors.Ppr
 import CSlash.Parser.Errors.Types
 
 import CSlash.Types.Error
@@ -32,7 +43,10 @@ import CSlash.Types.SourceText
 import CSlash.Types.SrcLoc
 import CSlash.Types.Unique.FM
 
+import CSlash.Utils.Error
+import CSlash.Utils.Misc
 import CSlash.Utils.Outputable
+import CSlash.Utils.Panic
   
 }
 
@@ -83,7 +97,8 @@ $docsym = [\| \^ \* \$]
 @varid = $small $idchar*
 @conid = $large $idchar*
 
-@varsym = $symbol+
+@varsym = ($symbol # \:) $symbol*
+@consym = \: $symbol+
 
 @numspc = _*
 @decimal = $decdigit(@numspc $decdigit)*
@@ -101,6 +116,7 @@ $docsym = [\| \^ \* \$]
 @qvarid = @qual @varid
 @qconid = @qual @conid
 @qvarsym = @qual @varsym
+@qconsym = @qual @consym
 
 @floating_point = @numspc @decimal \. @decimal @exponent? | @numspc @decimal @exponent
 @hex_floating_point = @numspc @hexadecimal \. @hexadecimal @bin_exponent? | @numspc @hexadecimal @bin_exponent
@@ -154,8 +170,6 @@ $unigraphic / { isSmartQuote } { smart_quote_error }
 <0> {
   \( { special IToparen }
   \) { special ITcparen }
-  \[ { special ITobrack }
-  \] { special ITcbrack }
   \, { special ITcomma }
   \` { special ITbackquote }
 }
@@ -169,7 +183,9 @@ $unigraphic / { isSmartQuote } { smart_quote_error }
 
 <0> {
   @qvarsym { idtoken qvarsym }
+  @qconsym { idtoken qconsym }
   @varsym { with_op_ws varsym }
+  @consym { with_op_ws consym }
 }
 
 <0> {
@@ -255,9 +271,11 @@ data Token
   | ITvarid FastString
   | ITconid FastString
   | ITvarsym FastString
+  | ITconsym FastString
   | ITqvarid (FastString, FastString)
-  | ITqconit (FastString, FastString)
+  | ITqconid (FastString, FastString)
   | ITqvarsym (FastString, FastString)
+  | ITqconsym (FastString, FastString)
 
   | ITchar SourceText Char
   | ITstring SourceText FastString
@@ -304,8 +322,8 @@ reservedSymsFM = listToUFM $
       , ("\\", ITlam, NormalSyntax)
       , ("\\\\", ITbiglam, NormalSyntax)
       , ("|", ITvbar, NormalSyntax)
-      , ("<-" ITlarrow, NormalSyntax)
-      , ("->", ITrarrow, NoramalSyntax)
+      , ("<-", ITlarrow, NormalSyntax)
+      , ("->", ITrarrow, NormalSyntax)
       , ("=>", ITdarrow, NormalSyntax)
 
       , ("★", ITstar, UnicodeSyntax)
@@ -324,13 +342,13 @@ special :: Token -> Action
 special tok span _buf _len _buf2 = return (L span tok)
 
 token :: Token -> Action
-token tok span _buf _len _buf2 = return (L span t)
+token tok span _buf _len _buf2 = return (L span tok)
 
 layout_token :: Token -> Action
-layout_token tok span _buf _len _buf2 = pushLexState layout >> return (L span t)
+layout_token tok span _buf _len _buf2 = pushLexState layout >> return (L span tok)
 
 idtoken :: (StringBuffer -> Int -> Token) -> Action
-idtoken f span buf len _buf2 = return (L space $! (f buf len))
+idtoken f span buf len _buf2 = return (L span $! (f buf len))
 
 skip_one_varid :: (FastString -> Token) -> Action
 skip_one_varid f span buf len _buf2
@@ -338,7 +356,7 @@ skip_one_varid f span buf len _buf2
 
 skip_one_varid_src :: (SourceText -> FastString -> Token) -> Action
 skip_one_varid_src f span buf len _buf2
-  = return (L span $! f (SrouceText $ lexemeToFastString (stepOn buf) (len-1))
+  = return (L span $! f (SourceText $ lexemeToFastString (stepOn buf) (len-1))
                         (lexemeToFastString (stepOn buf) (len-1)))
 
 skip_two_varid :: (FastString -> Token) -> Action
@@ -429,6 +447,9 @@ ifCurrentChar :: Char -> AlexAccPred ExtsBitmap
 ifCurrentChar char _ (AI _ buf) _ _
   = nextCharIs buf (== char)
 
+isNormalComment :: AlexAccPred ExtsBitmap
+isNormalComment bits _ _ (AI _ buf) = nextCharIsNot buf (== '#')
+
 afterOptionalSpace :: StringBuffer -> (StringBuffer -> Bool) -> Bool
 afterOptionalSpace buf p
   = if nextCharIs buf (== ' ')
@@ -450,14 +471,14 @@ lineCommentToken span buf len buf2 = do
   b <- isRawTokenStream
   if b then do
          lt <- getLastLocIncludingComments
-         strtoken (\s -> ITlineComments s lt) span buf len buf2
+         strtoken (\s -> ITlineComment s lt) span buf len buf2
        else lexToken
 
 nested_comment :: Action
 nested_comment span buf len _buf2 = do
   l <- getLastLocIncludingComments
   let endComment input (L _ comment)
-        = commentEnd lexToken input (Nothing, ITblockComment comment l) buf span
+        = commentEnd lexToken input (ITblockComment comment l) buf span
   input <- getInput
   let start_decorator = reverse $ lexemeToString buf len
   nested_comment_logic endComment start_decorator input span
@@ -533,7 +554,7 @@ splitQualName orig_buf len parens = split orig_buf orig_buf
       where
         (c, buf') = nextChar buf
     found_dot buf
-        | isUpper c = split buf' but
+        | isUpper c = split buf' buf
         | otherwise = done buf
       where
         (c, buf') = nextChar buf
@@ -564,30 +585,14 @@ conid buf len = ITconid $! lexemeToFastString buf len
 qvarsym :: StringBuffer -> Int -> Token
 qvarsym buf len = ITqvarsym $! splitQualName buf len False
 
-errSuffixAt :: PsSpan -> P a
-errSuffixAt span = do
-    input <- getInput
-    failLocMsgP start (go input start)
-                      (\ srcSpan -> mkPlainErrorMsgEnvelope srcSpan $ PsErrSuffixAT)
-  where
-    start = psRealLoc (psSpanStart span)
-    go inp loc
-      | Just (c, i) <- alexGetChar inp
-      , let next = advanceSrcLoc loc c =
-          if c == ' '
-          then go i next
-          else next
-      | otherwise = loc
+qconsym :: StringBuffer -> Int -> Token
+qconsym buf len = ITqconsym $! splitQualName buf len False
 
 varsym :: OpWs -> Action
 varsym opws@OpWsPrefix = sym $ \ span s ->
-  let warnExtConflict errtok = do
-        addPsMessage (mkSrcSpanPs span) (PsWarnOperatorWhiteSpaceExtConflict errtok)
-        return (ITvarsym s)
-  in
   if | s == fsLit "-" -> return ITprefixminus
      | otherwise -> do
-         warnOperatorWhiteSpace opws span s
+         warnOperatorWhitespace opws span s
          return (ITvarsym s)
 varsym opws@OpWsSuffix = sym $ \ span s -> do
   warnOperatorWhitespace opws span s
@@ -597,6 +602,11 @@ varsym opws@OpWsTightInfix = sym $ \ span s -> do
   return (ITvarsym s)
 varsym OpWsLooseInfix = sym $ \ _ s -> do
   return (ITvarsym s)
+
+consym :: OpWs -> Action
+consym opws = sym $ \ span s -> do
+  warnOperatorWhitespace opws span s
+  return (ITconsym s)
 
 warnOperatorWhitespace :: OpWs -> PsSpan -> FastString -> P ()
 warnOperatorWhitespace opws span s =
@@ -645,7 +655,7 @@ tok_num
 tok_num = tok_integral $ \case
     st@(SourceText (unconsFS -> Just ('-', _))) -> itint st (const True)
     st@(SourceText _) -> itint st (const False)
-    st@NoSourceText -> inint st (< 0)
+    st@NoSourceText -> itint st (< 0)
   where
     itint :: SourceText -> (Integer -> Bool) -> Integer -> Token
     itint !st is_negative !val = ITinteger ((IL st $! is_negative val) val)
@@ -683,7 +693,7 @@ readFractionalLit :: String -> FractionalLit
 readFractionalLit = readFractionalLitX readSignificandExponentPair Base10
 
 readHexFractionalLit :: String -> FractionalLit
-readHexFractionalLit = readFractionalLitX readHexSignificandExponenetPair Base2
+readHexFractionalLit = readFractionalLitX readHexSignificandExponentPair Base2
 
 readFractionalLitX
   :: (String -> (Integer, Integer))
@@ -750,9 +760,9 @@ lex_string_tok :: Action
 lex_string_tok span buf _len _buf2 = do
   lexed <- lex_string
   (AI end bufEnd) <- getInput
-  let tok = ITstring (SourceText src) (unsafeMkByteString s)
+  let tok = ITstring (SourceText src) (mkFastString lexed)
       src = lexemeToFastString buf (cur bufEnd - cur buf)
-  return $ L (mkPsSpan (psSpan Start span) end) tok
+  return $ L (mkPsSpan (psSpanStart span) end) tok
 
 lex_string :: P String
 lex_string = do
@@ -812,7 +822,7 @@ lex_char_tok span buf _len _buf2 = do
     Nothing -> lit_error i1
     Just ('\\', i2@(AI end2 _)) -> do
       setInput i2
-      lit_ch <- lex_excape
+      lit_ch <- lex_escape
       i3 <- getInput
       mc <- getCharOrFail i3
       if mc == '\''
@@ -856,7 +866,7 @@ lex_escape = do
     '\''-> return '\''
     smart_double_quote | isDoubleSmartQuote smart_double_quote ->
       add_smart_quote_error smart_double_quote loc
-    smart_single_quote | isSingleQuote smart_single_quote ->
+    smart_single_quote | isSingleSmartQuote smart_single_quote ->
       add_smart_quote_error smart_single_quote loc
     '^'   -> do i1 <- getInput
                 c <- getCharOrFail i1
@@ -885,8 +895,16 @@ lex_escape = do
                        return escape_char
                      [] -> lit_error i0
 
-readNum :: (Char -> Bool) -> Int -> (Char -> Int) -> Int -> P Char
-readNum is_digit base conv i = do
+readNum :: (Char -> Bool) -> Int -> (Char -> Int) -> P Char
+readNum is_digit base conv = do
+  i <- getInput
+  c <- getCharOrFail i
+  if is_digit c
+    then readNum2 is_digit base conv (conv c)
+    else lit_error i
+
+readNum2 :: (Char -> Bool) -> Int -> (Char -> Int) -> Int -> P Char
+readNum2 is_digit base conv i = do
   input <- getInput
   read i input
   where read i input = do
@@ -1044,7 +1062,7 @@ data PState = PState
   , options :: ParserOpts
   , errors :: Messages PsMessage
   , warnings :: Messages PsMessage
-  , tab_first :: Strict.Maybe RealSrcSpac
+  , tab_first :: Strict.Maybe RealSrcSpan
   , tab_count :: !Word
   , last_tk :: Strict.Maybe (PsLocated Token)
   , prev_loc :: PsSpan
@@ -1055,7 +1073,7 @@ data PState = PState
   , lex_state :: [Int]
   , srcfiles :: [FastString]
 
-  , eof_pos :: Strict.Maybe (Strict.Pair RealSrcSpac RealSrcSpan)
+  , eof_pos :: Strict.Maybe (Strict.Pair RealSrcSpan RealSrcSpan)
   , header_comments :: Strict.Maybe [LEpaComment]
   , comment_q :: [LEpaComment]
   }
@@ -1079,11 +1097,11 @@ thenP :: P a -> (a -> P b) -> P b
 (P m) `thenP` k = P $ \ s ->
   case m s of
     POk s1 a -> (unP (k a)) s1
-    PFailed s 1 -> PFailed s1
+    PFailed s1 -> PFailed s1
 
 failMsgP :: (SrcSpan -> MsgEnvelope PsMessage) -> P a
 failMsgP f = do
-  pState <- getPSate
+  pState <- getPState
   addFatalError (f (mkSrcSpanPs (last_loc pState)))
 
 failLocMsgP :: RealSrcLoc -> RealSrcLoc -> (SrcSpan -> MsgEnvelope PsMessage) -> P a
@@ -1093,13 +1111,30 @@ failLocMsgP loc1 loc2 f =
 getPState :: P PState
 getPState = P $ \ s -> POk s s
 
+getRealSrcLoc :: P RealSrcLoc
+getRealSrcLoc = P $ \ s@PState{loc=loc} -> POk s (psRealLoc loc)
+
+setEofPos :: RealSrcSpan -> RealSrcSpan -> P ()
+setEofPos span gap = P $ \ s ->
+  POk s{ eof_pos = Strict.Just (span `Strict.And` gap) } ()
+
 setLastToken :: PsSpan -> Int -> P ()
-setLastToken lec len = P $ \ s ->
+setLastToken loc len = P $ \ s ->
   POk s
   { last_loc = loc
   , last_len = len
   } ()
-  
+
+setLastTk :: PsLocated Token -> P ()
+setLastTk tk@(L l _) = P $ \ s ->
+  if isPointRealSpan (psRealSpan l)
+    then POk s{ last_tk = Strict.Just tk } ()
+    else POk s{ last_tk = Strict.Just tk
+              , prev_loc = l } ()
+
+setLastComment :: PsLocated Token -> P ()
+setLastComment (L l _) = P $ \ s -> POk s{ prev_loc = l } ()
+
 getLastLocIncludingComments :: P PsSpan
 getLastLocIncludingComments = P $ \ s@(PState { prev_loc = prev_loc }) ->
   POk s prev_loc
@@ -1169,7 +1204,7 @@ alexGetByte (AI loc s)
   | atEnd s = Nothing
   | otherwise = byte `seq` loc' `seq` s' `seq`
                 Just (byte, (AI loc' s'))
-  where (c, s') = nexChar s
+  where (c, s') = nextChar s
         loc' = advancePsLoc loc c
         byte = adjustChar c
 
@@ -1183,7 +1218,7 @@ alexGetChar' (AI loc s)
         loc' = advancePsLoc loc c
 
 getInput :: P AlexInput
-getInpute = P $ \ s@PState { loc = l, buffer = b } -> POk s (AI l b)
+getInput = P $ \ s@PState { loc = l, buffer = b } -> POk s (AI l b)
 
 setInput :: AlexInput -> P ()
 setInput (AI l b) = P $ \ s -> POk s { loc = l, buffer = b} ()
@@ -1199,7 +1234,7 @@ pushLexState ls = P $ \ s@PState{ lex_state = l } -> POk s{ lex_state = ls : l }
 popLexState :: P Int
 popLexState = P $ \ s@PState { lex_state = ls : l } -> POk s { lex_state = l } ls
 
-getLextState :: P Int
+getLexState :: P Int
 getLexState = P $ \ s@PState { lex_state = ls : _ } -> POk s ls
 
 type ExtsBitmap = Word64
@@ -1220,7 +1255,7 @@ initParserState options buf loc =
   PState
   { buffer = buf
   , options = options
-  , erros = emptyMessages
+  , errors = emptyMessages
   , warnings = emptyMessages
   , tab_first = Strict.Nothing
   , tab_count = 0
@@ -1255,7 +1290,7 @@ instance MonadP P where
   addFatalError err
     = addError err >> P PFailed
   isRawTokenStream
-    = P $ \ s -> let b = pRawTokenStream s
+    = P $ \ s -> let b = pRawTokStream $ options s
                  in b `seq` POk s b
   allocateCommentsP ss = P $ \s ->
     if null (comment_q s) then POk s emptyComments else  -- fast path
@@ -1284,7 +1319,7 @@ getCommentsFor _ = return emptyComments
 
 getPriorCommentsFor :: (MonadP m) => SrcSpan -> m EpAnnComments
 getPriorCommentsFor (RealSrcSpan l _) = allocatePriorCommentsP l
-getPriorCOmmentsFor _ = return emptyCOmments
+getPriorCOmmentsFor _ = return emptyComments
 
 getFinalCommentsFor :: (MonadP m) => SrcSpan -> m EpAnnComments
 getFinalCommentsFor (RealSrcSpan l _) = allocateFinalCommentsP l
@@ -1389,7 +1424,7 @@ lexer :: Bool -> (Located Token -> P a) -> P a
 lexer queueComments cont = do
   (L span tok) <- lexToken
   if (queueComments && isComment tok)
-    then queueComments (L (psRealSpan span) tok) >> lexer queueComments cont
+    then queueComment (L (psRealSpan span) tok) >> lexer queueComments cont
     else cont (L (mkSrcSpanPs span) tok)
 
 lexerDbg :: Bool -> (Located Token -> P a) -> P a
@@ -1491,7 +1526,7 @@ splitPriorComments
 splitPriorComments span prior_comments =
   let cmp :: RealSrcSpan -> LEpaComment -> Bool
       cmp later (L l c)
-        = srcSpanStartLine later - srcSPanEndLine (anchor l) == 1
+        = srcSpanStartLine later - srcSpanEndLine (anchor l) == 1
           && srcSpanEndLine (ac_prior_tok c) /= srcSpanStartLine (anchor l)
       go :: [LEpaComment] -> RealSrcSpan -> [LEpaComment]
          -> ([LEpaComment], [LEpaComment])
@@ -1508,7 +1543,7 @@ allocatePriorComments
   -> (Strict.Maybe [LEpaComment], [LEpaComment], [LEpaComment])
 allocatePriorComments span comment_q mheader_comments =
   let cmp (L l _) = anchor l <= span
-      (newAns, after) = partition cmp comment_q
+      (newAnns, after) = partition cmp comment_q
       comment_q' = after
       (prior_comments, decl_comments) = splitPriorComments span newAnns
   in case mheader_comments of
