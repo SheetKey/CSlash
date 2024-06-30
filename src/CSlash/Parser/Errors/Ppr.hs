@@ -1,7 +1,24 @@
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE LambdaCase #-}
+
 module CSlash.Parser.Errors.Ppr where
 
+import Prelude hiding ((<>))
+
+import CSlash.Data.FastString
+import CSlash.Cs.Expr
 import CSlash.Types.Error
+import CSlash.Types.SrcLoc
+import CSlash.Types.Hint.Ppr (perhapsAsPat)
+import CSlash.Types.Name.Reader (opIsAt, rdrNameOcc)
+import CSlash.Types.Name.Occurrence (isSymOcc, occNameFS, varName)
+import CSlash.Parser.Errors.Basic
 import CSlash.Parser.Errors.Types
+import CSlash.Utils.Outputable
+import CSlash.Utils.Misc
+import CSlash.Builtin.Names (allNameStringList)
+
+import Data.List.NonEmpty (NonEmpty((:|)))
 
 instance Diagnostic PsMessage where
   type DiagnosticOpts PsMessage = NoDiagnosticOpts
@@ -32,7 +49,7 @@ instance Diagnostic PsMessage where
                  then text ""
                  else text ", and in" <+> speakNOf (fromIntegral (tc - 1)) (text "further location"))
              <> text "."
-    PsWarnOperatorWhitespace
+    PsWarnOperatorWhitespace sym occ_type
       -> let mk_msg occ_type_str =
                   text "The" <+> text occ_type_str <+> text "use of a" <+> quotes (ftext sym)
                     <+> text "might be repurposed as special syntax"
@@ -70,7 +87,7 @@ instance Diagnostic PsMessage where
                 (ppr v)
     PsErrTupleSectionInPat
       -> mkSimpleDecorated $ text "Tuple section in pattern context"
-    PsErrOpFewArgs _ op
+    PsErrOpFewArgs op
       -> mkSimpleDecorated $
            text "Operator applied to too few arguments:" <+> ppr op
     PsErrImportQualifiedTwice
@@ -132,8 +149,8 @@ instance Diagnostic PsMessage where
                     <+> tc'
                     <+> hsep (map text (takeList tparms allNameStringList))
                     <+> equals_or_where) ] ]
-           where
-             tc' = ppr $ filterCTuple tc
+          where
+            tc' = ppr tc
     PsErrInPat s details
       -> let msg  = parse_error_in_pat
              body = case details of
@@ -144,7 +161,7 @@ instance Diagnostic PsMessage where
                              , text "Type applications in patterns are only allowed on data constructors."
                              ]
                    | otherwise -> ppr s
-                 PEIP_OtherPatDetails (ParseContext (Just fun) _)
+                 PEIP_OtherPatDetails (ParseContext (Just fun))
                   -> ppr s <+> text "In a function binding for the"
                                      <+> quotes (ppr fun)
                                      <+> text "operator."
@@ -163,3 +180,10 @@ instance Diagnostic PsMessage where
                 , text "'" <> text [looks_like_char] <> text "' (" <> text looks_like_char_name <> text ")" <> comma
                 , text "but it is not" ]
 
+pp_unexpected_fun_app :: Outputable a => SDoc -> a -> SDoc
+pp_unexpected_fun_app e a =
+  text "Unexpected " <> e <> text " in function application:"
+  $$ nest 4 (ppr a)
+
+parse_error_in_pat :: SDoc
+parse_error_in_pat = text "Parse error in pattern:"
