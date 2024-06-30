@@ -1,3 +1,6 @@
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE BangPatterns #-}
+
 module CSlash.Types.Name.Env (
         NameEnv,
 
@@ -39,7 +42,7 @@ import CSlash.Types.Unique.DFM
 import CSlash.Types.Unique.Map
 import CSlash.Data.Maybe
 
-depAnal :: forall node.
+depAnal :: forall node .
            (node -> [Name])
         -> (node -> [Name])
         -> [node]
