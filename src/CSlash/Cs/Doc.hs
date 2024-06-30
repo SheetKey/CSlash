@@ -1,3 +1,9 @@
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE StandaloneDeriving #-}
+
 module CSlash.Cs.Doc
   ( WithCsDocIdentifiers(..)
   ) where
@@ -6,6 +12,7 @@ import CSlash.Utils.Binary
 import CSlash.Utils.Outputable
 import CSlash.Types.SrcLoc
 import CSlash.Language.Syntax.Extension
+import CSlash.Cs.Extension
 
 import Control.DeepSeq
 import Data.Data
@@ -23,7 +30,7 @@ instance (NFData (IdP pass), NFData a) => NFData (WithCsDocIdentifiers a pass) w
 instance Outputable a => Outputable (WithCsDocIdentifiers a pass) where
   ppr (WithCsDocIdentifiers s _ids) = ppr s
 
-instance Binary a => (WithCsDocIdentifiers a Rn) where
+instance Binary a => Binary (WithCsDocIdentifiers a Rn) where
   put_ bh (WithCsDocIdentifiers s ids) = do
     put_ bh s
     put_ bh $ BinLocated <$> ids
