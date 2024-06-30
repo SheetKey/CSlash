@@ -19,7 +19,9 @@ data CsKind pass
 
 type LCsContext pass = XRec pass (CsContext pass)
 
-type CsContext pass = [CsKdRel pass]
+type CsContext pass = [LCsKdRel pass]
+
+type LCsKdRel pass = XRec pass (CsKdRel pass)
 
 data CsKdRel pass
   = CsKdLT (XKdLT pass) (LCsKind pass) (LCsKind pass)
