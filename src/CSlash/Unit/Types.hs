@@ -13,9 +13,18 @@ import CSlash.Language.Syntax.Module.Name
 import CSlash.Data.FastString
 import CSlash.Types.Unique
 import CSlash.Types.Unique.DSet
+import CSlash.Utils.Encoding
+import CSlash.Utils.Fingerprint
 import CSlash.Utils.Outputable
+import CSlash.Utils.Misc
 
+import Control.DeepSeq
 import Data.Data
+import Data.List (sortBy)
+import Data.Function
+import Data.Bifunctor
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Char8 as BS.Char8
 
 data GenModule unit = Module
   { moduleUnit :: !unit
@@ -25,8 +34,22 @@ data GenModule unit = Module
 
 type Module = GenModule Unit
 
+moduleUnitId :: Module -> UnitId
+moduleUnitId = toUnitId . moduleUnit
+
+type InstalledModule = GenModule UnitId
+
+mkModule :: u -> ModuleName -> GenModule u
+mkModule = Module
+
+instance NFData (GenModule a) where
+  rnf (Module unit name) = unit `seq` name `seq` ()
+
 instance Outputable Module where
   ppr = pprModule
+
+instance Outputable InstalledModule where
+  ppr (Module p n) = ppr p <> char ':' <> pprModuleName n
 
 pprInstantiatedUnit :: InstantiatedUnit -> SDoc
 pprInstantiatedUnit uid =
@@ -109,6 +132,11 @@ instance IsUnitId u => Uniquable (GenUnit u) where
 instance Ord Unit where
   nm1 `compare` nm2 = stableUnitCmp nm1 nm2
 
+instance Data Unit where
+  toConstr _ = abstractConstr "Unit"
+  gunfold _ _ = error "gunfold"
+  dataTypeOf _ = mkNoRepType "Unit"
+
 stableUnitCmp :: Unit -> Unit -> Ordering
 stableUnitCmp p1 p2 = unitFS p1 `lexicalCompareFS` unitFS p2
 
@@ -123,6 +151,59 @@ pprUnit HoleUnit = ftext holeFS
 instance Show Unit where
   show = unitString
 
+unitFreeModuleHoles :: GenUnit u -> UniqDSet ModuleName
+unitFreeModuleHoles (VirtUnit x) = instUnitHoles x
+unitFreeModuleHoles (RealUnit _) = emptyUniqDSet
+unitFreeModuleHoles HoleUnit = emptyUniqDSet
+
+moduleFreeHoles :: GenModule (GenUnit u) -> UniqDSet ModuleName
+moduleFreeHoles (Module HoleUnit name) = unitUniqDSet name
+moduleFreeHoles (Module u _) = unitFreeModuleHoles u
+
+mkInstantiatedUnit :: IsUnitId u => u -> GenInstantiations u -> GenInstantiatedUnit u
+mkInstantiatedUnit cid insts =
+  InstantiatedUnit
+  { instUnitInstanceOf = cid
+  , instUnitInsts = sorted_insts
+  , instUnitHoles = unionManyUniqDSets (map (moduleFreeHoles.snd) insts)
+  , instUnitFS = fs
+  , instUnitKey = getUnique fs
+  }
+  where
+    fs = mkInstantiatedUnitHash cid sorted_insts
+    sorted_insts = sortBy (stableModuleNameCmp `on` fst) insts
+
+mkVirtUnit :: IsUnitId u => u -> [(ModuleName, GenModule (GenUnit u))] -> GenUnit u
+mkVirtUnit uid [] = RealUnit $ Definite uid
+mkVirtUnit uid insts = VirtUnit $ mkInstantiatedUnit uid insts
+
+mkInstantiatedUnitHash
+  :: IsUnitId u => u
+  -> [(ModuleName, GenModule (GenUnit u))]
+  -> FastString
+mkInstantiatedUnitHash cid sorted_holes =
+    mkFastStringByteString
+  . fingerprintUnitId (bytesFS (unitFS cid))
+  $ hashInstantiations sorted_holes
+
+hashInstantiations :: IsUnitId u => [(ModuleName, GenModule (GenUnit u))] -> Fingerprint
+hashInstantiations sorted_holes =
+    fingerprintByteString
+  . BS.concat $ do
+      (m, b) <- sorted_holes
+      [ bytesFS (moduleNameFS m), BS.Char8.singleton ' ',
+        bytesFS (unitFS (moduleUnit b)), BS.Char8.singleton ':',
+        bytesFS (moduleNameFS (moduleName b)), BS.Char8.singleton '\n']
+
+fingerprintUnitId :: BS.ByteString -> Fingerprint -> BS.ByteString
+fingerprintUnitId prefix (Fingerprint a b)
+  = BS.concat
+  $ [ prefix
+    , BS.Char8.singleton '-'
+    , BS.Char8.pack (toBase62Padded a)
+    , BS.Char8.pack (toBase62Padded b)
+    ]
+
 unitUnique :: IsUnitId u => GenUnit u -> Unique
 unitUnique (VirtUnit x) = instUnitKey x
 unitUnique (RealUnit (Definite x)) = getUnique (unitFS x)
@@ -133,6 +214,31 @@ fsToUnit = RealUnit . Definite . UnitId
 
 unitString :: IsUnitId u => u -> String
 unitString = unpackFS . unitFS
+
+stringToUnit :: String -> Unit
+stringToUnit = fsToUnit . mkFastString
+
+mapGenUnit :: IsUnitId v => (u -> v) -> GenUnit u -> GenUnit v
+mapGenUnit f = go
+  where
+    go gu = case gu of
+      HoleUnit -> HoleUnit
+      RealUnit d -> RealUnit (fmap f d)
+      VirtUnit i ->
+        VirtUnit $ mkInstantiatedUnit
+            (f (instUnitInstanceOf i))
+            (fmap (second (fmap go)) (instUnitInsts i))
+
+mapInstantiations
+  :: IsUnitId v => (u -> v)
+  -> GenInstantiations u
+  -> GenInstantiations v
+mapInstantiations f = map (second (fmap (mapGenUnit f)))
+
+toUnitId :: Unit -> UnitId
+toUnitId (RealUnit (Definite iuid)) = iuid
+toUnitId (VirtUnit indef) = instUnitInstanceOf indef
+toUnitId HoleUnit = error "Hole unit"
 
 newtype Definite unit = Definite { unDefinite :: unit }
   deriving (Functor)
