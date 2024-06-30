@@ -77,6 +77,7 @@ library
                     , CSlash.Exts
 
                     , CSlash.Language.Syntax
+                    , CSlash.Language.Syntax.Basic
                     , CSlash.Language.Syntax.Binds
                     , CSlash.Language.Syntax.Decls
                     , CSlash.Language.Syntax.Expr
