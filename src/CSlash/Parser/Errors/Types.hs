@@ -29,12 +29,11 @@ data PsMessage
   = PsUnknownMessage (UnknownDiagnostic (DiagnosticOpts PsMessage))
   | PsWarnBidirectionalFormatChars (NonEmpty (PsLoc, Char, String))
   | PsWarnTab !Word
-  | PsWarnOperatorWhitespaceExtConflict !OperatorWhitespaceSymbol
-  | PsWarnOperatorWhitespace !FastString !OperatorWhitespaceSymbol
+  | PsWarnOperatorWhitespace !FastString !OperatorWhitespaceOccurrence
   | PsErrEmptyLambda
-  | PsErrPrimStringInvalidChar
   | PsErrMissingBlock
   | PsErrLexer !LexErr !LexErrKind
+  | PsErrParse !String !PsErrParseDetails
   | PsErrUnexpectedQualifiedConstructor !RdrName
   | PsErrTupleSectionInPat
   | PsErrOpFewArgs !RdrName
@@ -100,6 +99,7 @@ data LexErrKind
 
 data LexErr
   = LexError
+  | LexNumEscapeRange
   | LexStringCharLit
   | LexStringCharLitEOF
   | LexUnterminatedComment
