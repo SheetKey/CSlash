@@ -2,6 +2,8 @@
 
 module CSlash.Utils.Panic.Plain where
 
+import System.IO.Unsafe (unsafeDupablePerformIO)
+
 import CSlash.Stack
 import CSlash.Utils.Constants
 import CSlash.Utils.Exception as Exception
@@ -45,6 +47,20 @@ showPlainCsException =
         showString "panic! (then 'impossible' happened)\n"
       . showString ("  CSlash version " ++ cProjectVersion ++ ":\n\t")
       . s . showString "\n"
+
+panic :: HasCallStack => String -> a
+panic x = unsafeDupablePerformIO $ do
+  stack <- ccsToStrings =<< getCurrentCCS x
+  let doc = unlines $ fmap ("  "++) $ lines (prettyCallStack callStack)
+  if null stack
+    then Exception.throw (PlainPanic (x ++ '\n' : doc))
+    else Exception.throw (PlainPanic (x ++ '\n' : renderStack stack))
+
+sorry :: HasCallStack => String -> a
+sorry x = Exception.throw (PlainSorry x)
+
+pgmError :: HasCallStack => String -> a
+pgmError x = Exception.throw (PlainProgramError x)
 
 assertPanic' :: HasCallStack => a
 assertPanic' =
