@@ -44,77 +44,28 @@ module CSlash.Unit.Module.Warnings
    )
 where
 
-import GHC.Prelude
+import CSlash.Data.FastString (FastString, mkFastString, unpackFS)
+import CSlash.Types.SourceText
+import CSlash.Types.Name.Occurrence
+import CSlash.Types.Name.Env
+import CSlash.Types.Name (Name)
+import CSlash.Types.SrcLoc
+import CSlash.Types.Unique
+import CSlash.Types.Unique.Set
+import CSlash.Cs.Doc
+import CSlash.Cs.Extension
+import CSlash.Parser.Annotation
 
-import GHC.Data.FastString (FastString, mkFastString, unpackFS)
-import GHC.Types.SourceText
-import GHC.Types.Name.Occurrence
-import GHC.Types.Name.Env
-import GHC.Types.Name (Name)
-import GHC.Types.SrcLoc
-import GHC.Types.Unique
-import GHC.Types.Unique.Set
-import GHC.Hs.Doc
-import GHC.Hs.Extension
-import GHC.Parser.Annotation
+import CSlash.Utils.Outputable
+import CSlash.Utils.Binary
+import CSlash.Unicode
 
-import GHC.Utils.Outputable
-import GHC.Utils.Binary
-import GHC.Unicode
-
-import Language.Haskell.Syntax.Extension
+import CSlash.Language.Syntax.Extension
 
 import Data.Data
 import Data.List (isPrefixOf)
 import GHC.Generics ( Generic )
 import Control.DeepSeq
-
-
-{-
-Note [Warning categories]
-~~~~~~~~~~~~~~~~~~~~~~~~~
-See GHC Proposal 541 for the design of the warning categories feature:
-https://github.com/ghc-proposals/ghc-proposals/blob/master/proposals/0541-warning-pragmas-with-categories.rst
-
-A WARNING pragma may be annotated with a category such as "x-partial" written
-after the 'in' keyword, like this:
-
-    {-# WARNING in "x-partial" head "This function is partial..." #-}
-
-This is represented by the 'Maybe (Located WarningCategory)' field in
-'WarningTxt'.  The parser will accept an arbitrary string as the category name,
-then the renamer (in 'rnWarningTxt') will check it contains only valid
-characters, so we can generate a nicer error message than a parse error.
-
-The corresponding warnings can then be controlled with the -Wx-partial,
--Wno-x-partial, -Werror=x-partial and -Wwarn=x-partial flags.  Such a flag is
-distinguished from an 'unrecognisedWarning' by the flag parser testing
-'validWarningCategory'.  The 'x-' prefix means we can still usually report an
-unrecognised warning where the user has made a mistake.
-
-A DEPRECATED pragma may not have a user-defined category, and is always treated
-as belonging to the special category 'deprecations'.  Similarly, a WARNING
-pragma without a category belongs to the 'deprecations' category.
-Thus the '-Wdeprecations' flag will enable all of the following:
-
-    {-# WARNING in "deprecations" foo "This function is deprecated..." #-}
-    {-# WARNING foo "This function is deprecated..." #-}
-    {-# DEPRECATED foo "This function is deprecated..." #-}
-
-The '-Wwarnings-deprecations' flag is supported for backwards compatibility
-purposes as being equivalent to '-Wdeprecations'.
-
-The '-Wextended-warnings' warning group collects together all warnings with
-user-defined categories, so they can be enabled or disabled
-collectively. Moreover they are treated as being part of other warning groups
-such as '-Wdefault' (see 'warningGroupIncludesExtendedWarnings').
-
-'DynFlags' and 'DiagOpts' each contain a set of enabled and a set of fatal
-warning categories, just as they do for the finite enumeration of 'WarningFlag's
-built in to GHC.  These are represented as 'WarningCategorySet's to allow for
-the possibility of them being infinite.
-
--}
 
 data InWarningCategory
   = InWarningCategory
@@ -142,9 +93,8 @@ validWarningCategory cat@(WarningCategory c) =
     s = unpackFS c
     is_allowed c = isAlphaNum c || c == '\'' || c == '-'
 
-
-data WarningCategorySet =
-    FiniteWarningCategorySet   (UniqSet WarningCategory)
+data WarningCategorySet
+  = FiniteWarningCategorySet   (UniqSet WarningCategory)
   | CofiniteWarningCategorySet (UniqSet WarningCategory)
 
 emptyWarningCategorySet :: WarningCategorySet
@@ -175,17 +125,17 @@ data WarningTxt pass
    = WarningTxt
       (Maybe (LocatedE InWarningCategory))
       SourceText
-      [LocatedE (WithHsDocIdentifiers StringLiteral pass)]
+      [LocatedE (WithCsDocIdentifiers StringLiteral pass)]
    | DeprecatedTxt
       SourceText
-      [LocatedE (WithHsDocIdentifiers StringLiteral pass)]
+      [LocatedE (WithCsDocIdentifiers StringLiteral pass)]
   deriving Generic
 
 warningTxtCategory :: WarningTxt pass -> WarningCategory
 warningTxtCategory (WarningTxt (Just (L _ (InWarningCategory _  _ (L _ cat)))) _ _) = cat
 warningTxtCategory _ = defaultWarningCategory
 
-warningTxtMessage :: WarningTxt p -> [LocatedE (WithHsDocIdentifiers StringLiteral p)]
+warningTxtMessage :: WarningTxt p -> [LocatedE (WithCsDocIdentifiers StringLiteral p)]
 warningTxtMessage (WarningTxt _ _ m) = m
 warningTxtMessage (DeprecatedTxt _ m) = m
 
@@ -196,7 +146,7 @@ warningTxtSame w1 w2
   && same_type
   where
     literal_message :: WarningTxt p -> [StringLiteral]
-    literal_message = map (hsDocString . unLoc) . warningTxtMessage
+    literal_message = map (csDocString . unLoc) . warningTxtMessage
     same_type | DeprecatedTxt {} <- w1, DeprecatedTxt {} <- w2 = True
               | WarningTxt {} <- w1, WarningTxt {} <- w2       = True
               | otherwise                                      = False
@@ -206,11 +156,10 @@ deriving instance Eq InWarningCategory
 deriving instance (Eq (IdP pass)) => Eq (WarningTxt pass)
 deriving instance (Data pass, Data (IdP pass)) => Data (WarningTxt pass)
 
-type instance Anno (WarningTxt (GhcPass pass)) = SrcSpanAnnP
+type instance Anno (WarningTxt (CsPass pass)) = SrcSpanAnnP
 
 instance Outputable InWarningCategory where
   ppr (InWarningCategory _ _ wt) = text "in" <+> doubleQuotes (ppr wt)
-
 
 instance Outputable (WarningTxt pass) where
     ppr (WarningTxt mcat lsrc ws)
@@ -220,13 +169,12 @@ instance Outputable (WarningTxt pass) where
         where
           ctg_doc = maybe empty (\ctg -> ppr ctg) mcat
 
-
     ppr (DeprecatedTxt lsrc  ds)
       = case lsrc of
           NoSourceText   -> pp_ws ds
           SourceText src -> ftext src <+> pp_ws ds <+> text "#-}"
 
-pp_ws :: [LocatedE (WithHsDocIdentifiers StringLiteral pass)] -> SDoc
+pp_ws :: [LocatedE (WithCsDocIdentifiers StringLiteral pass)] -> SDoc
 pp_ws [l] = ppr $ unLoc l
 pp_ws ws
   = text "["
@@ -236,10 +184,10 @@ pp_ws ws
 
 pprWarningTxtForMsg :: WarningTxt p -> SDoc
 pprWarningTxtForMsg (WarningTxt _ _ ws)
-                     = doubleQuotes (vcat (map (ftext . sl_fs . hsDocString . unLoc) ws))
+                     = doubleQuotes (vcat (map (ftext . sl_fs . csDocString . unLoc) ws))
 pprWarningTxtForMsg (DeprecatedTxt _ ds)
                      = text "Deprecated:" <+>
-                       doubleQuotes (vcat (map (ftext . sl_fs . hsDocString . unLoc) ds))
+                       doubleQuotes (vcat (map (ftext . sl_fs . csDocString . unLoc) ds))
 
 data Warnings pass
   = WarnSome (DeclWarnOccNames pass) 
