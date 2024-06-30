@@ -1,7 +1,7 @@
 module CSlash.Unit.Module.Imported
   ( ImportedMods
-  , ImportedBy (..)
-  , ImportedModsVal (..)
+  , ImportedBy(..)
+  , ImportedModsVal(..)
   , importedByUser
   ) where
 
