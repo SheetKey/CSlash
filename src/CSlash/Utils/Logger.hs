@@ -1,21 +1,18 @@
 {-# LANGUAGE RankNTypes #-}
 
-module GHC.Utils.Logger
+module CSlash.Utils.Logger
     ( Logger
     , HasLogger (..)
     , ContainsLogger (..)
 
     , initLogger
     , LogAction
-    , LogJsonAction
     , DumpAction
     , TraceAction
     , DumpFormat (..)
 
     , popLogHook
     , pushLogHook
-    , popJsonLogHook
-    , pushJsonLogHook
     , popDumpHook
     , pushDumpHook
     , popTraceHook
@@ -34,11 +31,9 @@ module GHC.Utils.Logger
 
     , putLogMsg
     , defaultLogAction
-    , defaultLogJsonAction
     , defaultLogActionHPrintDoc
     , defaultLogActionHPutStrDoc
     , logMsg
-    , logJsonMsg
     , logDumpMsg
 
     , defaultDumpAction
@@ -63,7 +58,6 @@ import CSlash.Types.SrcLoc
 
 import qualified CSlash.Utils.Ppr as Pretty
 import CSlash.Utils.Outputable
-import CSlash.Utils.Json
 import CSlash.Utils.Panic
 
 import CSlash.Data.EnumSet (EnumSet)
@@ -88,7 +82,6 @@ data LogFlags = LogFlags
   , log_default_dump_context :: SDocContext
   , log_dump_flags           :: !(EnumSet DumpFlag) 
   , log_show_caret           :: !Bool               
-  , log_diagnostics_as_json  :: !Bool               
   , log_show_warn_groups     :: !Bool               
   , log_enable_timestamps    :: !Bool               
   , log_dump_to_file         :: !Bool               
@@ -107,7 +100,6 @@ defaultLogFlags = LogFlags
   , log_default_dump_context = defaultSDocContext
   , log_dump_flags           = EnumSet.empty
   , log_show_caret           = True
-  , log_diagnostics_as_json  = False
   , log_show_warn_groups     = True
   , log_enable_timestamps    = True
   , log_dump_to_file         = False
@@ -144,11 +136,6 @@ type LogAction = LogFlags
               -> SDoc
               -> IO ()
 
-type LogJsonAction = LogFlags
-                   -> MessageClass
-                   -> JsonDoc
-                   -> IO ()
-
 type DumpAction = LogFlags
                -> PprStyle
                -> DumpFlag
@@ -170,7 +157,6 @@ type DumpCache = MVar (Map FilePath (MVar ()))
 
 data Logger = Logger
     { log_hook   :: [LogAction -> LogAction]
-    , json_log_hook :: [LogJsonAction -> LogJsonAction]
     , dump_hook  :: [DumpAction -> DumpAction]
     , trace_hook :: forall a. [TraceAction a -> TraceAction a]
     , generated_dumps :: DumpCache
@@ -192,7 +178,6 @@ initLogger = do
     dumps <- newMVar Map.empty
     return $ Logger
         { log_hook        = []
-        , json_log_hook   = []
         , dump_hook       = []
         , trace_hook      = []
         , generated_dumps = dumps
@@ -202,9 +187,6 @@ initLogger = do
 
 putLogMsg :: Logger -> LogAction
 putLogMsg logger = foldr ($) defaultLogAction (log_hook logger)
-
-putJsonLogMsg :: Logger -> LogJsonAction
-putJsonLogMsg logger = foldr ($) defaultLogJsonAction (json_log_hook logger)
 
 putDumpFile :: Logger -> DumpAction
 putDumpFile logger =
@@ -224,14 +206,6 @@ popLogHook :: Logger -> Logger
 popLogHook logger = case log_hook logger of
     []   -> panic "popLogHook: empty hook stack"
     _:hs -> logger { log_hook = hs }
-
-pushJsonLogHook :: (LogJsonAction -> LogJsonAction) -> Logger -> Logger
-pushJsonLogHook h logger = logger { json_log_hook = h:json_log_hook logger }
-
-popJsonLogHook :: Logger -> Logger
-popJsonLogHook logger = case json_log_hook logger of
-    []   -> panic "popJsonLogHook: empty hook stack"
-    _:hs -> logger { json_log_hook = hs}
 
 pushDumpHook :: (DumpAction -> DumpAction) -> Logger -> Logger
 pushDumpHook h logger = logger { dump_hook = h:dump_hook logger }
@@ -271,50 +245,9 @@ makeThreadSafe logger = do
            $ pushTraceHook trc
            $ logger
 
-defaultLogJsonAction :: LogJsonAction
-defaultLogJsonAction logflags msg_class jsdoc =
-  case msg_class of
-      MCOutput                     -> printOut msg
-      MCDump                       -> printOut (msg $$ blankLine)
-      MCInteractive                -> putStrSDoc msg
-      MCInfo                       -> printErrs msg
-      MCFatal                      -> printErrs msg
-      MCDiagnostic SevIgnore _ _   -> pure () -- suppress the message
-      MCDiagnostic _sev _rea _code -> printErrs msg
-  where
-    printOut   = defaultLogActionHPrintDoc  logflags False stdout
-    printErrs  = defaultLogActionHPrintDoc  logflags False stderr
-    putStrSDoc = defaultLogActionHPutStrDoc logflags False stdout
-    msg = renderJSON jsdoc
-
-jsonLogAction :: LogAction
-jsonLogAction _ (MCDiagnostic SevIgnore _ _) _ _ = return () -- suppress the message
-jsonLogAction logflags msg_class srcSpan msg
-  =
-    defaultLogActionHPutStrDoc logflags True stdout
-      (withPprStyle PprCode (doc $$ text ""))
-    where
-      str = renderWithContext (log_default_user_context logflags) msg
-      doc = renderJSON $
-              JSObject [ ( "span", spanToDumpJSON srcSpan )
-                       , ( "doc" , JSString str )
-                       , ( "messageClass", json msg_class )
-                       ]
-      spanToDumpJSON :: SrcSpan -> JsonDoc
-      spanToDumpJSON s = case s of
-                 (RealSrcSpan rss _) -> JSObject [ ("file", json file)
-                                                , ("startLine", json $ srcSpanStartLine rss)
-                                                , ("startCol", json $ srcSpanStartCol rss)
-                                                , ("endLine", json $ srcSpanEndLine rss)
-                                                , ("endCol", json $ srcSpanEndCol rss)
-                                                ]
-                   where file = unpackFS $ srcSpanFile rss
-                 UnhelpfulSpan _ -> JSNull
-
 defaultLogAction :: LogAction
 defaultLogAction logflags msg_class srcSpan msg
-  | log_dopt Opt_D_dump_json logflags = jsonLogAction logflags msg_class srcSpan msg
-  | otherwise = case msg_class of
+  = case msg_class of
       MCOutput                     -> printOut msg
       MCDump                       -> printOut (msg $$ blankLine)
       MCInteractive                -> putStrSDoc msg
@@ -397,7 +330,7 @@ withDumpFileHandle dumps logflags flag action = do
 
 chooseDumpFile :: LogFlags -> Maybe Ways -> DumpFlag -> Maybe FilePath
 chooseDumpFile logflags ways flag
-    | log_dump_to_file logflags || forced_to_file
+    | log_dump_to_file logflags
     = Just $ setDir (getPrefix ++ way_infix ++ dump_suffix)
 
     | otherwise
@@ -409,9 +342,7 @@ chooseDumpFile logflags ways flag
       Just ws
         | null ws || null (waysTag ws) -> ""
         | otherwise -> waysTag ws ++ "."
-    (forced_to_file, dump_suffix) = case flag of
-        Opt_D_th_dec_file -> (True, "th.hs")
-        _                 -> (False, default_suffix)
+    dump_suffix = default_suffix
 
     default_suffix = map (\c -> if c == '_' then '-' else c) $
       let str = show flag
@@ -437,9 +368,6 @@ defaultTraceAction logflags title doc x =
 
 logMsg :: Logger -> MessageClass -> SrcSpan -> SDoc -> IO ()
 logMsg logger mc loc msg = putLogMsg logger (logFlags logger) mc loc msg
-
-logJsonMsg :: ToJson a => Logger -> MessageClass -> a -> IO ()
-logJsonMsg logger mc d = putJsonLogMsg logger (logFlags logger) mc  (json d)
 
 logDumpFile :: Logger -> PprStyle -> DumpFlag -> String -> DumpFormat -> SDoc -> IO ()
 logDumpFile logger = putDumpFile logger (logFlags logger)
