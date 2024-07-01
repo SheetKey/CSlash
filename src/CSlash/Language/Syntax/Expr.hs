@@ -1,6 +1,7 @@
 module CSlash.Language.Syntax.Expr where
 
 import CSlash.Language.Syntax.Extension
+import CSlash.Language.Syntax.Basic
 import CSlash.Language.Syntax.Lit
 import CSlash.Language.Syntax.Pat
 import CSlash.Language.Syntax.Type
