@@ -1,6 +1,8 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE MagicHash #-}
 
+{-# OPTIONS_GHC -Wno-orphans #-} -- orphans for GHC defined types
+
 module CSlash.Types.Unique (
         Unique, Uniquable(..),
         uNIQUE_BITS,
@@ -26,7 +28,7 @@ module CSlash.Types.Unique (
     ) where
 
 import CSlash.Utils.Outputable
-import CSlash.Utils.Word64 (intToWord64, word64ToInt)
+import CSlash.Utils.Word64 (word64ToInt)
 
 import CSlash.Exts (indexCharOffAddr#, Char(..), Int(..))
 
