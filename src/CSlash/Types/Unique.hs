@@ -30,7 +30,7 @@ module CSlash.Types.Unique (
 import CSlash.Utils.Outputable
 import CSlash.Utils.Word64 (word64ToInt)
 
-import CSlash.Exts (indexCharOffAddr#, Char(..), Int(..))
+import GHC.Exts (indexCharOffAddr#, Char(..), Int(..))
 
 import Data.Word ( Word64 )
 

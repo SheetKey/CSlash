@@ -133,7 +133,7 @@ import Data.Void
 
 import CSlash.Show
 import CSlash.Utils.Exception
-import CSlash.Exts (oneShot)
+import GHC.Exts (oneShot)
 
 data PprStyle
   = PprUser NamePprCtx Depth Coloured
