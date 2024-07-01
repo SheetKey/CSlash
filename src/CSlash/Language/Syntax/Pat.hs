@@ -5,12 +5,9 @@ module CSlash.Language.Syntax.Pat where
 import CSlash.Language.Syntax.Extension
 import CSlash.Language.Syntax.Lit
 import CSlash.Language.Syntax.Type
+import CSlash.Language.Syntax.Basic
 
 type LPat p = XRec p (Pat p)
-
-type ConTag = Int
-
-type SumWidth = Int
 
 data Pat p
   ------------ Simple patterns ---------------
