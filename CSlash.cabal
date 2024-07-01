@@ -116,6 +116,7 @@ library
                     , CSlash.Types.Name.Reader
                     , CSlash.Types.SourceText
                     , CSlash.Types.SrcLoc
+                    , CSlash.Types.Tickish
                     , CSlash.Types.TyThing
                     , CSlash.Types.Unique
                     , CSlash.Types.Unique.DFM
