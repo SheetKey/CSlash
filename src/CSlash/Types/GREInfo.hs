@@ -18,8 +18,8 @@ import qualified Data.List.NonEmpty as NonEmpty
 data GREInfo
     = Vanilla
     | UnboundGRE
-    | IAmTyCon    !(TyConFlavour Name)
-    | IAmConLike  !ConInfo
+    | IAmTyCon !(TyConFlavor Name)
+    | IAmConLike !ConInfo
     deriving Data
 
 instance NFData GREInfo where
