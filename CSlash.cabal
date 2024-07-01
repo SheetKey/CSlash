@@ -53,6 +53,7 @@ library
                     , CSlash.Conc
 
                     , CSlash.Cs
+                    , CSlash.Cs.Binds
                     , CSlash.Cs.Decls
                     , CSlash.Cs.Doc
                     , CSlash.Cs.Expr
