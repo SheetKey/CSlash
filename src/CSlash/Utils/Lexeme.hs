@@ -3,16 +3,15 @@ module CSlash.Utils.Lexeme
   , isLexDConSym
   , isLexTyConSym
   , isLexVarSym
+  , isLexKdSym
   ) where
 
 import qualified GHC.Utils.Lexeme as X
 
 import CSlash.Data.FastString
-import Data.Char
-import qualified Data.Set as Set
 
 isLexSym :: FastString -> Bool
-isLexSym cs = isLexDConSym cs || isLexVarSym cs
+isLexSym cs = isLexDConSym cs || isLexVarSym cs || isLexKdSym cs
 
 isLexDConSym :: FastString -> Bool
 isLexDConSym = X.isLexConSym
@@ -22,3 +21,8 @@ isLexTyConSym = isLexVarSym
 
 isLexVarSym :: FastString -> Bool
 isLexVarSym = X.isLexVarSym
+
+isLexKdSym :: FastString -> Bool
+isLexKdSym  cs = case unpackFS cs of
+  [c] -> c == '★' || c == '●' || c == '○'
+  _ -> False
