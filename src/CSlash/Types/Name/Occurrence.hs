@@ -184,6 +184,7 @@ isValOcc _ = False
 
 isSymOcc :: OccName -> Bool
 isSymOcc (OccName ns s) = case ns of
-  TcClsName -> isLexSym s
   VarName -> isLexSym s
   TvName -> isLexSym s
+  KvName -> isLexKdSym s
+  TcClsName -> isLexSym s
