@@ -52,6 +52,7 @@ library
 
                     , CSlash.Conc
 
+                    , CSlash.Cs
                     , CSlash.Cs.Doc
                     , CSlash.Cs.Expr
                     , CSlash.Cs.Extension
