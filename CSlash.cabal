@@ -114,6 +114,7 @@ library
                     , CSlash.Types.Name.Env
                     , CSlash.Types.Name.Occurrence
                     , CSlash.Types.Name.Reader
+                    , CSlash.Types.Name.Set
                     , CSlash.Types.SourceText
                     , CSlash.Types.SrcLoc
                     , CSlash.Types.Tickish
