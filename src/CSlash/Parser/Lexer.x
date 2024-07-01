@@ -9,8 +9,8 @@
 {-# LANGUAGE PatternSynonyms #-}
 
 {-# OPTIONS_GHC -funbox-strict-fields #-}
-{-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}  
-  
+{-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
+
 module CSlash.Parser.Lexer where
 
 import qualified CSlash.Data.Strict as Strict
