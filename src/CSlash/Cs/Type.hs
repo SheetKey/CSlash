@@ -1,3 +1,5 @@
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -5,7 +7,10 @@
 {-# LANGUAGE UndecidableInstances #-}
 
 module CSlash.Cs.Type
-  ( CsType(..)
+  ( CsArrow(..)
+  , pprCsArrow
+  
+  , CsType(..)
   , CsForAllTelescope(..), CsTyVarBndr(..), LCsTyVarBndr
   , CsPatSigType(..)
   , CsTyPat(..)
@@ -20,8 +25,59 @@ import CSlash.Language.Syntax.Extension
 import CSlash.Cs.Extension
 import CSlash.Cs.Kind
 import CSlash.Types.SrcLoc
+import CSlash.Types.Name
 import CSlash.Parser.Annotation
 import CSlash.Utils.Outputable
+
+import Data.Data
+
+type instance XCsForAllInvis (CsPass _) = EpAnnForallTy
+
+type EpAnnForallTy = EpAnn (AddEpAnn, AddEpAnn)
+
+type instance XCsPS Ps = EpAnnCO
+type instance XCsPS Rn = CsPSRn
+type instance XCsPS Tc = CsPSRn
+
+type instance XCsTP Ps = NoExtField
+type instance XCsTP Rn = CsTyPatRn
+type instance XCsTP Tc = DataConCantHappen
+
+data CsPSRn = CsPSRn
+  { csps_nwcs :: [Name]
+  , csps_imp_tvs :: [Name]
+  }
+  deriving Data
+
+data CsTyPatRn = CsTPRn
+  { cstp_nwcs :: [Name]
+  , cstp_imp_tvs :: [Name]
+  , cstp_exp_tvs :: [Name]
+  }
+  deriving Data
+
+type instance XCsSig (CsPass _) = NoExtField
+
+type instance XKindedTyVar (CsPass _) = [AddEpAnn]
+
+type instance XForAllTy (CsPass _) = NoExtField
+type instance XTyVar (CsPass _) = [AddEpAnn]
+type instance XAppTy (CsPass _) = NoExtField
+type instance XFunTy (CsPass _) = NoExtField
+type instance XTupleTy (CsPass _) = AnnParen
+type instance XSumTy (CsPass _) = AnnParen
+type instance XParTy (CsPass _) = AnnParen
+type instance XKdSig (CsPass _) = [AddEpAnn]
+
+data EpArrow
+  = EpU !(EpToken "-★>")
+  | EpA !(EpToken "-●>")
+  | EpL !(EpToken "-○>")
+  deriving Data
+
+type instance XCsArrow Ps = EpArrow
+type instance XCsArrow Rn = NoExtField
+type instance XCsArrow Tc = NoExtField
 
 instance (OutputableBndrId p) => Outputable (CsArrow (CsPass p)) where
   ppr arr = parens (pprCsArrow arr)
