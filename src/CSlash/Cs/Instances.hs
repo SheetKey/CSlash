@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -5,27 +6,45 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 {-# OPTIONS_GHC -O0 #-}
 
-module CSlash.Cs.Instance where
+module CSlash.Cs.Instances where
 
-import Data.Data
+import Data.Data hiding (Fixity)
 
-import CSlash.Hs.Extension
-import CSlash.Hs.Binds
-import CSlash.Hs.Decls
-import CSlash.Hs.Expr
-import CSlash.Hs.Lit
-import CSlash.Hs.Type
-import CSlash.Hs.Pat
-import CSlash.Hs.ImpExp
+import CSlash.Cs.Extension
+import CSlash.Cs.Binds
+import CSlash.Cs.Decls
+import CSlash.Cs.Expr
+import CSlash.Cs.Lit
+import CSlash.Cs.Type
+import CSlash.Cs.Kind
+import CSlash.Cs.Pat
+import CSlash.Cs.ImpExp
 import CSlash.Parser.Annotation
+
+deriving instance Data (CsBindLR Ps Ps)
+deriving instance Data (CsBindLR Ps Rn)
+deriving instance Data (CsBindLR Rn Rn)
+deriving instance Data (CsBindLR Tc Tc)
 
 deriving instance Data (Sig Ps)
 deriving instance Data (Sig Rn)
 deriving instance Data (Sig Tc)
 
+deriving instance Data (FixitySig Ps)
+deriving instance Data (FixitySig Rn)
+deriving instance Data (FixitySig Tc)
+
 deriving instance Data (CsDecl Ps)
 deriving instance Data (CsDecl Rn)
 deriving instance Data (CsDecl Tc)
+
+deriving instance Data (CsExpr Ps)
+deriving instance Data (CsExpr Rn)
+deriving instance Data (CsExpr Tc)
+
+deriving instance Data (CsTupArg Ps)
+deriving instance Data (CsTupArg Rn)
+deriving instance Data (CsTupArg Tc)
 
 deriving instance Data (MatchGroup Ps (LocatedA (CsExpr Ps)))
 deriving instance Data (MatchGroup Rn (LocatedA (CsExpr Rn)))
@@ -47,6 +66,8 @@ deriving instance Data (StmtLR Ps Ps (LocatedA (CsExpr Ps)))
 deriving instance Data (StmtLR Ps Rn (LocatedA (CsExpr Rn)))
 deriving instance Data (StmtLR Rn Rn (LocatedA (CsExpr Rn)))
 deriving instance Data (StmtLR Tc Tc (LocatedA (CsExpr Tc)))
+
+deriving instance Data fn => Data (CsMatchContext fn)
 
 deriving instance Data (CsLit Ps)
 deriving instance Data (CsLit Rn)
@@ -79,6 +100,14 @@ deriving instance Data (CsTyVarBndr Tc)
 deriving instance Data (CsType Ps)
 deriving instance Data (CsType Rn)
 deriving instance Data (CsType Tc)
+
+deriving instance Data (CsKind Ps)
+deriving instance Data (CsKind Rn)
+deriving instance Data (CsKind Tc)
+
+deriving instance Data (CsKdRel Ps)
+deriving instance Data (CsKdRel Rn)
+deriving instance Data (CsKdRel Tc)
 
 deriving instance Data (CsArrow Ps)
 deriving instance Data (CsArrow Rn)
