@@ -70,4 +70,4 @@ type LStmt id body = XRec id (StmtLR id id body)
 type GuardLStmt id = LStmt id (LCsExpr id)
 
 data StmtLR idL idR body
-  = GuardBodyStmt (XGuardBodyStmt idL idR body) body
+  = GuardBodyStmt (XGuardBodyStmt idL idR body) body -- GHC BodyStmt
