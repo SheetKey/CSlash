@@ -1,3 +1,6 @@
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeFamilies #-}
 
 module CSlash.Cs
@@ -23,8 +26,11 @@ import CSlash.Cs.Lit
 import CSlash.Cs.Pat
 import CSlash.Cs.Type
 
+import CSlash.Cs.Instances
+
 import CSlash.Utils.Outputable
 import CSlash.Types.SrcLoc
+import CSlash.Parser.Annotation
 
 import Data.Data
 
@@ -55,8 +61,7 @@ instance Outputable (CsModule Ps) where
                 , csmodExports = exports
                 , csmodImports = imports
                 , csmodDecls = decls })
-    = pprMaybeWithDoc mbDoc $
-      vcat
+    = vcat
       [ case exports of
           Nothing -> pp_header (text "where")
           Just es -> vcat
