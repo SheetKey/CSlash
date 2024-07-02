@@ -15,10 +15,10 @@ data CsBindLR idL idR
     , fun_id :: LIdP idL
     , fun_matches :: MatchGroup idR (LCsExpr idR)
     }
-  | TySynBind
-    { tysyn_ext :: XTySynBind idL idR
-    , tysyn_id :: LIdP idL
-    , tysyn_rhs :: LCsType idR
+  | TyFunBind
+    { tyfun_ext :: XTyFunBind idL idR
+    , tyfun_id :: LIdP idL
+    , tyfun_rhs :: LCsType idR
     }
   | VarBind
     { var_ext :: XVarBind idL idR
