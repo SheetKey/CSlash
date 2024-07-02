@@ -3,7 +3,10 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module CSlash.Cs.Kind where
+module CSlash.Cs.Kind
+  ( module CSlash.Language.Syntax.Kind
+  , module CSlash.Cs.Kind
+  ) where
 
 import CSlash.Language.Syntax.Extension
 import CSlash.Language.Syntax.Kind
@@ -11,6 +14,18 @@ import CSlash.Cs.Extension
 import CSlash.Types.SrcLoc
 import CSlash.Parser.Annotation
 import CSlash.Utils.Outputable
+
+type instance XUKd (CsPass _) = NoExtField
+type instance XAKd (CsPass _) = NoExtField
+type instance XLKd (CsPass _) = NoExtField
+type instance XKdVar (CsPass _) = [AddEpAnn]
+type instance XFunKd (CsPass _) = NoExtField
+type instance XQualKd (CsPass _) = NoExtField
+type instance XParKd (CsPass _) = NoExtField
+
+-- type instance XKdLT Ps = EpToken "<"
+type instance XKdLT (CsPass _) = NoExtField
+type instance XKdLTEQ (CsPass _) = NoExtField
 
 instance (OutputableBndrId p) => Outputable (CsKind (CsPass p)) where
   ppr kind = pprCsKind kind
@@ -68,3 +83,5 @@ ppr_kdrel (CsKdLTEQ _ kd1 kd2)
 type instance Anno (CsKind (CsPass p)) = SrcSpanAnnA
 
 type instance Anno (CsKdRel (CsPass p)) = SrcSpanAnnA
+
+type instance Anno [LocatedA (CsKdRel (CsPass p))] = SrcSpanAnnL
