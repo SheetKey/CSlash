@@ -10,11 +10,6 @@ import Data.Data
 -- | Located Import Declaration
 type LImportDecl pass = XRec pass (ImportDecl pass)
 
-data ImportDeclQualifiedStyle
-  = QualifiedPost
-  | NotQualified
-  deriving (Eq, Data)
-
 data ImportListInterpretation = Exactly | EverythingBut
   deriving (Eq, Data)
 
@@ -22,7 +17,6 @@ data ImportListInterpretation = Exactly | EverythingBut
 data ImportDecl pass = ImportDecl
   { ideclExt :: XCImportDecl pass
   , ideclName :: XRec pass ModuleName
-  , ideclQualified :: ImportDeclQualifiedStyle
   , ideclAs :: Maybe (XRec pass ModuleName)
   , ideclImportList :: Maybe (ImportListInterpretation, XRec pass [LIE pass])
   }
