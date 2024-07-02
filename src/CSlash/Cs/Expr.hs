@@ -1,3 +1,5 @@
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE LambdaCase #-}
@@ -22,10 +24,109 @@ import CSlash.Cs.Pat
 import CSlash.Parser.Annotation
 import CSlash.Types.Basic
 import CSlash.Types.SrcLoc
+import CSlash.Types.Fixity
 import CSlash.Utils.Outputable
 import CSlash.Utils.Panic
 
+import Data.Data hiding (Fixity(..))
+
+data EpAnnCsCase = EpAnnCsCase
+  { csCaseAnnCase :: EpaLocation
+  , csCaseAnnOf :: EpaLocation
+  , csCaseAnnsRest :: [AddEpAnn]
+  }
+  deriving Data
+
+data EpAnnUnboundVar = EpAnnUnboundVar
+  { csUnboundBackquotes :: (EpaLocation, EpaLocation)
+  , csUnboundHole :: EpaLocation
+  }
+  deriving Data
+
+type instance XVar (CsPass _) = NoExtField
+
+type instance XUnboundVar Ps = Maybe EpAnnUnboundVar
+type instance XUnboundVar Rn = NoExtField
+type instance XUnboundVar Tc = DataConCantHappen
+
+type instance XLitE (CsPass _) = NoExtField
+type instance XLam (CsPass _) = [AddEpAnn]
+type instance XApp (CsPass _) = NoExtField
+
+type instance XTyLam (CsPass _) = [AddEpAnn]
+type instance XTyApp (CsPass _) = NoExtField
+
+type instance XAppTy Ps = NoExtField
+type instance XAppTy Rn = NoExtField
+type instance XAppTy Ps = NoExtField -- should be Type
+
+type instance XOpApp Ps = [AddEpAnn]
+type instance XOpApp Rn = Fixity
+type instance XOpApp Tc = DataConCantHappen
+
+type instance XSectionL Ps = NoExtField
+type instance XSectionR Ps = NoExtField
+type instance XSectionL Rn = NoExtField
+type instance XSectionR Rn = NoExtField
+type instance XSectionL Tc = DataConCantHappen
+type instance XSectionR Tc = DataConCantHappen
+
+type instance XPar Ps = (EpToken "(", EpToken ")")
+type instance XPar Rn = NoExtField
+type instance XPar Tc = NoExtField
+
+type instance XExplicitTuple Ps = [AddEpAnn]
+type instance XExplicitTuple Rn = NoExtField
+type instance XExplicitTuple Tc = NoExtField
+
+type instance XExplicitSum Ps = AnnExplicitSum
+type instance XExplicitSum Rn = NoExtField
+type instance XExplicitSum Tc = NoExtField -- should be [Type]
+
+type instance XCase Ps = EpAnnCsCase
+type instance XCase Rn = CsMatchContextRn
+type instance XCase Tc = CsMatchContextRn
+
+type instance XIf Ps = AnnsIf
+type instance XIf Rn = NoExtField
+type instance XIf Tc = NoExtField
+
+type instance XMultiIf Ps = [AddEpAnn]
+type instance XMultiIf Rn = NoExtField
+type instance XMultiIf Tc = NoExtField -- should be Type
+
+type instance XExprWithTySig Ps = [AddEpAnn]
+type instance XExprWithTySig Rn = NoExtField
+type instance XExprWithTySig Tc = NoExtField
+
 type instance Anno (StmtLR Rn Rn (LocatedA (body Rn))) = SrcSpanAnnA
+
+data AnnExplicitSum = AnnExplicitSum
+  { aesOpen :: EpaLocation
+  , aesBarsBefore :: [EpaLocation]
+  , aesBarsAfter :: [EpaLocation]
+  , aesClose :: EpaLocation
+  }
+  deriving Data
+
+instance NoAnn AnnExplicitSum where
+  noAnn = AnnExplicitSum noAnn noAnn noAnn noAnn
+
+data AnnsIf = AnnsIf
+  { aiIf :: EpaLocation
+  , iaThen :: EpaLocation
+  , aiElse :: EpaLocation
+  }
+  deriving Data
+
+instance NoAnn AnnsIf where
+  noAnn = AnnsIf noAnn noAnn noAnn
+
+type instance XPresent (CsPass _) = NoExtField
+
+type instance XMissing Ps = EpAnn Bool
+type instance XMissing Rn = NoExtField
+type instance XMissing Tc = NoExtField -- should be Scaled Type
 
 instance (OutputableBndrId p) => Outputable (CsExpr (CsPass p)) where
   ppr expr = pprExpr expr
@@ -205,11 +306,46 @@ isAtomicCsExpr (CsUnboundVar{}) = True
 isAtomicCsExpr (CsLit{}) = True
 isAtomicCsExpr _ = False
 
+type instance XMG Ps b = Origin
+type instance XMG Rn b = Origin
+type instance XMG Tc b = MatchGroupTc
+
+data MatchGroupTc = MatchGroupTc
+  { mg_arg_tys :: [()]
+  , mg_res_ty :: ()
+  , mk_origin :: Origin
+  }
+  deriving Data
+
+type instance XCMatch (CsPass _) b = [AddEpAnn]
+
+instance (OutputableBndrId pr, Outputable body)
+  => Outputable (Match (CsPass pr) body) where
+  ppr = pprMatch
+
+type instance XCGRHSs (CsPass _) _ = EpAnnComments
+
+data GrhsAnn = GrhsAnn
+  { ga_vbar :: Maybe EpaLocation
+  , ga_sep :: AddEpAnn
+  }
+  deriving Data
+
+instance NoAnn GrhsAnn where
+  noAnn = GrhsAnn Nothing noAnn
+
+type instance XCGRHS (CsPass _) _ = EpAnn GrhsAnn
+
 pprMatches
   :: (OutputableBndrId idR, Outputable body)
   => MatchGroup (CsPass idR) body
   -> SDoc
 pprMatches MG{ mg_alts = matches } = vcat (map pprMatch (map unLoc (unLoc matches)))
+
+pprFunBind
+  :: (OutputableBndrId idR)
+  => MatchGroup (CsPass idR) (LCsExpr (CsPass idR)) -> SDoc
+pprFunBind matches = pprMatches matches
 
 pprMatch
   :: (OutputableBndrId idR, Outputable body)
@@ -250,6 +386,10 @@ pp_rhs ctxt rhs = matchSeparator ctxt <+> pprDeeper (ppr rhs)
 matchSeparator :: CsMatchContext fn -> SDoc
 matchSeparator _ = text "->"
 
+type instance XGuardBodyStmt (CsPass _) Ps b = NoExtField
+type instance XGuardBodyStmt (CsPass _) Rn b = NoExtField
+type instance XGuardBodyStmt (CsPass _) Tc b = NoExtField -- should be Type
+
 instance (OutputableBndrId pl, OutputableBndrId pr,
            Anno (StmtLR (CsPass pl) (CsPass pr) body) ~ SrcSpanAnnA,
            Outputable body)
@@ -263,6 +403,9 @@ pprStmt
       Outputable body)
   => (StmtLR (CsPass idL) (CsPass idR) body) -> SDoc
 pprStmt (GuardBodyStmt _ expr) = ppr expr
+
+type CsMatchContextPs = CsMatchContext (LIdP Ps)
+type CsMatchContextRn = CsMatchContext (LIdP Rn)
 
 instance Outputable fn => Outputable (CsMatchContext fn) where
   ppr LamAlt = text "LamAlt"
