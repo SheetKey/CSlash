@@ -1,7 +1,10 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE FlexibleInstances #-}
 
-module CSlash.Cs.Lit where
+module CSlash.Cs.Lit
+  ( module CSlash.Language.Syntax.Lit
+  , module CSlash.Cs.Lit
+  ) where
 
 import CSlash.Language.Syntax.Lit
 import CSlash.Language.Syntax.Extension
@@ -12,6 +15,8 @@ import CSlash.Utils.Outputable
 
 type instance XCsChar (CsPass _) = SourceText
 type instance XCsString (CsPass _) = SourceText
+type instance XCsInt (CsPass _) = NoExtField
+type instance XCsDouble (CsPass _) = NoExtField
 
 csLitNeedsParens :: PprPrec -> CsLit x -> Bool
 csLitNeedsParens p = go
