@@ -54,7 +54,7 @@ data CsType pass
 data CsArrow pass
   = CsArrow !(XCsArrow pass) !(LCsKind pass)
 
-type family XCsArrow x
+type family XCsArrow x -- XExplicitMult in ghc
 
 data CsArg p tm ty
   = CsValArg !(XValArg p) tm
