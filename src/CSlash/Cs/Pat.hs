@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -21,6 +22,38 @@ import CSlash.Types.Basic
 import CSlash.Types.SrcLoc
 import CSlash.Parser.Annotation
 import CSlash.Utils.Outputable
+
+import Data.Data
+
+type instance XWildPat Ps = NoExtField
+type instance XWildPat Rn = NoExtField
+type instance XWildPat Tc = NoExtField -- should be Type
+
+type instance XVarPat (CsPass _) = NoExtField
+
+type instance XTuplePat Ps = [AddEpAnn]
+type instance XTuplePat Rn = NoExtField
+type instance XTuplePat Tc = NoExtField -- should be [Type]
+
+type instance XSumPat Ps = EpAnnSumPat
+type instance XSumPat Rn = NoExtField
+type instance XSumPat Tc = NoExtField -- should be [Type]
+
+type instance XLitPat (CsPass _) = NoExtField
+
+type instance XSigPat Ps = [AddEpAnn]
+type instance XSigPat Rn = NoExtField
+type instance XSigPat Tc = NoExtField -- should be Type
+
+data EpAnnSumPat = EpAnnSumPat
+  { sumPatParens :: [AddEpAnn]
+  , sumPatVbarsBefore :: [EpaLocation]
+  , sumPatVBarsAfter :: [EpaLocation]
+  }
+  deriving Data
+
+instance NoAnn EpAnnSumPat where
+  noAnn = EpAnnSumPat [] [] []
 
 instance Outputable (CsTyPat p) => Outputable (CsConPatTyArg p) where
   ppr (CsConPatTyArg _ ty) = ppr ty
