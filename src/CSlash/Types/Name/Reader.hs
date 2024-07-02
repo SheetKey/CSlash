@@ -24,6 +24,7 @@ data RdrName
   | Qual ModuleName OccName
   | Orig Module OccName
   | Exact Name
+  deriving Data
 
 instance HasOccName RdrName where
   occName = rdrNameOcc
