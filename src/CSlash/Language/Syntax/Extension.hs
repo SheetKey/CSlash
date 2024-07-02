@@ -1,3 +1,6 @@
+{-# LANGUAGE EmptyDataDeriving #-}
+{-# LANGUAGE EmptyCase #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
@@ -10,6 +13,19 @@
 module CSlash.Language.Syntax.Extension where
 
 import Data.Kind (Type)
+import Data.Data
+
+data NoExtField = NoExtField
+  deriving (Data, Eq, Ord)
+
+noExtField :: NoExtField
+noExtField = NoExtField
+
+data DataConCantHappen
+  deriving (Data, Eq, Ord)
+
+dataConCantHappen :: DataConCantHappen -> a
+dataConCantHappen x = case x of {}
 
 type family XRec p a = r | r -> a
 
@@ -36,7 +52,7 @@ type family XValBinds x x'
 
 -- CsBindLR type families
 type family XFunBind x x'
-type family XTySynBind x x'
+type family XTyFunBind x x'
 type family XVarBind x x'
 
 -- Sig type families
