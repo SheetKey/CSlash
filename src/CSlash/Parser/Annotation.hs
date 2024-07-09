@@ -442,6 +442,24 @@ data NameAnn
       nann_mclose    :: Maybe EpaLocation,
       nann_trailing  :: [TrailingAnn]
       }
+  | NameAnnUnArrow {
+      nann_mopen     :: Maybe EpaLocation,
+      nann_name      :: EpaLocation,
+      nann_mclose    :: Maybe EpaLocation,
+      nann_trailing  :: [TrailingAnn]
+      }
+  | NameAnnAffArrow {
+      nann_mopen     :: Maybe EpaLocation,
+      nann_name      :: EpaLocation,
+      nann_mclose    :: Maybe EpaLocation,
+      nann_trailing  :: [TrailingAnn]
+      }
+  | NameAnnLinArrow {
+      nann_mopen     :: Maybe EpaLocation,
+      nann_name      :: EpaLocation,
+      nann_mclose    :: Maybe EpaLocation,
+      nann_trailing  :: [TrailingAnn]
+      }
   -- Used for an item with a leading @'@. The annotation for
   -- unquoted item is stored in 'nann_quoted'.
   | NameAnnQuote {
@@ -903,6 +921,12 @@ instance Outputable NameAnn where
     = text "NameAnnOnly" <+> ppr a <+> ppr o <+> ppr c <+> ppr t
   ppr (NameAnnRArrow u o n c t)
     = text "NameAnnRArrow" <+> ppr u <+> ppr o <+> ppr n <+> ppr c <+> ppr t
+  ppr (NameAnnUnArrow o n c t)
+    = text "NameAnnUnArrow" <+> ppr o <+> ppr n <+> ppr c <+> ppr t
+  ppr (NameAnnAffArrow o n c t)
+    = text "NameAnnAffArrow" <+> ppr o <+> ppr n <+> ppr c <+> ppr t
+  ppr (NameAnnLinArrow o n c t)
+    = text "NameAnnLinArrow" <+> ppr o <+> ppr n <+> ppr c <+> ppr t
   ppr (NameAnnQuote q n t)
     = text "NameAnnQuote" <+> ppr q <+> ppr n <+> ppr t
   ppr (NameAnnTrailing t)
