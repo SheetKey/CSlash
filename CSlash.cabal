@@ -93,6 +93,7 @@ library
                     , CSlash.Language.Syntax.Pat
                     , CSlash.Language.Syntax.Type
 
+                    , CSlash.Parse
                     , CSlash.Parser.Annotation
                     , CSlash.Parser.CharClass
                     , CSlash.Parser.Errors.Basic
