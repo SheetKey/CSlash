@@ -75,6 +75,7 @@ import qualified Data.Semigroup as Semi
   ':' { L _ ITcolon }
   '=' { L _ ITequal }
   '\\' { L _ ITlam }
+  '\\\\' { L _ ITdlam }
   '|' { L _ ITvbar }
   '<-' { L _ ITlarrow }
   '->' { L _ ITrarrow }
@@ -496,7 +497,7 @@ tyop :: { LocatedN RdrName }
 atype :: { LCsType Ps }
   : ntgtycon {% amsA' (sL1 $1 (CsTyVar [] $1)) }
   | tyvar %shift {% amsA' (sL1 $1 (CsTyVar [] $1)) }
-  | '\\' tyargpats '->' type { mkCsTyLamTy (comb2 $1 $>)
+  | '\\\\' tyargpats '->' type { mkCsTyLamTy (comb2 $1 $>)
                                  (sLLl $1 $>
                                   [sLLa $1 $> $ Match
                                                 { m_ext = []
