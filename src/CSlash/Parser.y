@@ -826,7 +826,7 @@ argpat :: { LPat Ps }
 
 argpats :: { [LPat Ps] }
   : argpat argpats { $1 : $2 }
-  | {- empty -} { [] }
+  | argpat { [$1] }
 
 apat :: { LPat Ps }
   : aexp {% (checkPattern <=< runPV) (unECP $1) }
@@ -835,8 +835,8 @@ tyargpat :: { LPat Ps }
   : atypat { $1 }
 
 tyargpats :: { [LPat Ps] }
-  : argpat argpats { $1 : $2 }
-  | {- empty -} { [] }
+  : tyargpat tyargpats { $1 : $2 }
+  | tyargpat { [$1] }
 
 atypat :: { LPat Ps }
   : atype {% checkTyPattern $1 }
