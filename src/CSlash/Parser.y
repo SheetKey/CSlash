@@ -1044,7 +1044,7 @@ qvar :: { LocatedN RdrName }
                              (NameAnn NameParens (glAA $1) (glAA $2) (glAA $3) []) }
   
 qvarid :: { LocatedN RdrName }
-  : varid { $1 }
+  : varid %shift { $1 } -- conflict with kvrel
   | QVARID { sL1n $1 $! mkQual varName (getQVARID $1) }
 
 varid :: { LocatedN RdrName }
