@@ -157,7 +157,10 @@ $unigraphic / { isSmartQuote } { smart_quote_error }
 -- layout keywords are let, where, do, of (as in case ... of ...)
 <layout, layout_if> \n ;
 
-<layout_if> () { pop }
+<layout_if> {
+  \| / { notFollowedBySymbol } { new_layout_context True dontGenerateSemic ITvbar }
+  () { pop }
+}
 
 <layout> () { new_layout_context generateSemic ITvocurly }
 
@@ -242,6 +245,8 @@ data Token
   | ITof
   | ITqualified
   | ITthen
+  | ITtype
+  | ITwhere
 
   | ITforall
 
@@ -252,10 +257,15 @@ data Token
   | ITlarrow
   | ITrarrow
   | ITdarrow
+  | ITarrowU
+  | ITarrowA
+  | ITarrowL
   | ITprefixminus
+  | ITtightinfixat
   | ITstar
-  | ITcirc
   | ITbullet
+  | ITcirc
+  | ITdot
 
   | ITbiglam
 
@@ -312,6 +322,8 @@ reservedWordsFM = listToUFM $
       , ("of", ITof)
       , ("qualified", ITqualified)
       , ("then", ITthen)
+      , ("type", ITtype)
+      , ("where", ITwhere)
       ]
 
 reservedSymsFM :: UniqFM FastString (Token, IsUnicodeSyntax)
@@ -325,10 +337,13 @@ reservedSymsFM = listToUFM $
       , ("<-", ITlarrow, NormalSyntax)
       , ("->", ITrarrow, NormalSyntax)
       , ("=>", ITdarrow, NormalSyntax)
+      , ("-★>", ITarrowU, UnicodeSyntax)
+      , ("-●>", ITarrowA, UnicodeSyntax)
+      , ("-○>", ITarrowL, UnicodeSyntax)
 
       , ("★", ITstar, UnicodeSyntax)
-      , ("○", ITcirc, UnicodeSyntax)
       , ("●", ITbullet, UnicodeSyntax)
+      , ("○", ITcirc, UnicodeSyntax)
 
       , ("∀", ITforall, UnicodeSyntax)
       ]
@@ -591,17 +606,23 @@ qconsym buf len = ITqconsym $! splitQualName buf len False
 varsym :: OpWs -> Action
 varsym opws@OpWsPrefix = sym $ \ span s ->
   if | s == fsLit "-" -> return ITprefixminus
+     | s == fsLit "." -> return ITdot
      | otherwise -> do
          warnOperatorWhitespace opws span s
          return (ITvarsym s)
-varsym opws@OpWsSuffix = sym $ \ span s -> do
-  warnOperatorWhitespace opws span s
-  return (ITvarsym s)
-varsym opws@OpWsTightInfix = sym $ \ span s -> do
-  warnOperatorWhitespace opws span s
-  return (ITvarsym s)
-varsym OpWsLooseInfix = sym $ \ _ s -> do
-  return (ITvarsym s)
+varsym opws@OpWsSuffix = sym $ \ span s ->
+  if | s == fsLit "." -> return ITdot
+     | otherwise -> do
+        warnOperatorWhitespace opws span s
+        return (ITvarsym s)
+varsym opws@OpWsTightInfix = sym $ \ span s ->
+  if | s == fsLit "@" -> return ITtightinfixat
+     | s == fsLit "." -> return ITdot
+     | otherwise -> do warnOperatorWhitespace opws span s
+                       return (ITvarsym s)
+varsym OpWsLooseInfix = sym $ \ _ s ->
+  if | s == fsLit "." -> return ITdot
+     | otherwise -> return (ITvarsym s)
 
 consym :: OpWs -> Action
 consym opws = sym $ \ span s -> do
@@ -731,6 +752,8 @@ maybe_layout t = f t
     f ITof = pushLexState layout
     f ITlet = pushLexState layout
     f ITif = pushLexState layout_if
+    f ITwhere = pushLexState layout
+    -- f ITtype = pushLexState layout
     f _ = return ()
 
 new_layout_context :: Bool -> Token -> Action
