@@ -343,13 +343,13 @@ namespace_spec :: { Located NamespaceSpecifier }
 -----------------------------------------------------------------------------
 -- Top-Level Declarations
 
-topdecls :: { OrdList (LCsDecl Ps) }
-  : topdecls_semi topdecl { $1 `snocOL` $2 }
+-- topdecls :: { OrdList (LCsDecl Ps) }
+--   : topdecls_semi topdecl { $1 `snocOL` $2 }
 
-topdecls_semi :: { OrdList (LCsDecl Ps) }
-  : topdecls_semi topdecl semis1 {% do t <- amsAl $2 (comb2 $2 $3) (reverse $ unLoc $3)
-                                       return ($1 `snocOL` t) }
-  | {- empty -} { nilOL }
+-- topdecls_semi :: { OrdList (LCsDecl Ps) }
+--   : topdecls_semi topdecl semis1 {% do t <- amsAl $2 (comb2 $2 $3) (reverse $ unLoc $3)
+--                                        return ($1 `snocOL` t) }
+--   | {- empty -} { nilOL }
 
 topdecls_cs :: { OrdList (LCsDecl Ps) }
   : topdecls_cs_semi topdecl_cs { $1 `snocOL` $2 }
@@ -414,10 +414,10 @@ binds :: { Located (CsLocalBinds Ps) }
 -----------------------------------------------------------------------------
 -- Type signatures
 
-sigktype :: { LCsSigType Ps }
-  : sigtype { $1 }
-  | ctype ':' kind {$ amsA' (sLL $1 $> $ mkCsImplicitSigType $
-                             sLLa $1 $> $ CsKindSig [mu AnnColon $2] $1 $3) }
+-- sigktype :: { LCsSigType Ps }
+--   : sigtype { $1 }
+--   | ctype ':' kind {$ amsA' (sLL $1 $> $ mkCsImplicitSigType $
+--                              sLLa $1 $> $ CsKindSig [mu AnnColon $2] $1 $3) }
 
 sigtype :: { LCsSigType Ps }
   : ctype { csTypeToCsSigType $1 }
@@ -897,11 +897,11 @@ gen_qcon :: { Located RdrName }
   | '(' qconsym ')' {% amsr (sLL $1 $> (unLoc $2))
                             (NameAnn NameParens (glAA $1) (glAA $2) (glAA $3) []) }
 
-con :: { LocatedN RdrName }
-  : conid { $1 }
-  | '(' consym ')' {% amsr (sLL $1 $> (unLoc $2))
-                           (NameAnn NameParens (glAA $1) (glAA $2) (glAA $3) []) }
-  | sysdcon { L (getLoc $1) $ nameRdrName (dataConName (unLoc $1)) }
+-- con :: { LocatedN RdrName }
+--   : conid { $1 }
+--   | '(' consym ')' {% amsr (sLL $1 $> (unLoc $2))
+--                            (NameAnn NameParens (glAA $1) (glAA $2) (glAA $3) []) }
+--   | sysdcon { L (getLoc $1) $ nameRdrName (dataConName (unLoc $1)) }
 
 sysdcon_nolist :: { LocatedN DataCon }
   : '(' commas ')' {% amsr (sLL $1 $> $ tupleDataCon (snd $2 + 1))
@@ -926,10 +926,10 @@ qconop :: { LocatedN RdrName }
 ----------------------------------------------------------------------------
 -- Type constructors
 
-gtycon :: { LocatedN RdrName }
-  : ntgtycon { $1 }
-  | '(' ')' {% amsr (sLL $1 $> $ getRdrName unitTyCon)
-                    (NameAnnOnly NameParens (glAA $1) (glAA $2) []) }
+-- gtycon :: { LocatedN RdrName }
+--   : ntgtycon { $1 }
+--   | '(' ')' {% amsr (sLL $1 $> $ getRdrName unitTyCon)
+--                     (NameAnnOnly NameParens (glAA $1) (glAA $2) []) }
 
 ntgtycon :: { LocatedN RdrName }
   : oqtycon { $1 }
@@ -975,10 +975,10 @@ tyconsym :: { LocatedN RdrName }
   : CONSYM { sL1n $1 $! mkUnqual tcClsName (getCONSYM $1) }
   | VARSYM { sL1n $1 $! mkUnqual tcClsName (getVARSYM $1) }
 
-otycon :: { LocatedN RdrName }
-  : tycon { $1 }
-  | '(' tyconsym ')' {% amsr (sLL $1 $> (unLoc $2))
-                             (NameAnn NameParens (glAA $1) (glAA $2) (glAA $3) []) }
+-- otycon :: { LocatedN RdrName }
+--   : tycon { $1 }
+--   | '(' tyconsym ')' {% amsr (sLL $1 $> (unLoc $2))
+--                              (NameAnn NameParens (glAA $1) (glAA $2) (glAA $3) []) }
 
 -----------------------------------------------------------------------------
 -- Operators
