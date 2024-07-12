@@ -203,15 +203,9 @@ export_subspec :: { Located ([AddEpAnn], ImpExpSubSpec) }
   : {- empty -} { sL0 ([], ImpExpAbs) }
 
 qcname_ext :: { LocatedA ImpExpQcSpec }
-  : qcname { sL1a $1 (ImpExpQcName $1) }
-  | 'type' qcname {% do n <- mkTypeImpExp $2
-                        return $ sLLa $1 $> (ImpExpQcType (glAA $1) n) }
-
-qcname :: { LocatedN RdrName }
-  : qvar { $1 }
-
--- qcname_body :: { LocatedN RdrName }
---   : vocurly qcname close { $2 }
+  : g_qvar_sp { sL1a $1 (ImpExpQcName $ unknownToVar <$> $1) }
+  | g_qvar { sL1a $1 (ImpExpQcName $ unknownToVar <$> $1) }
+  | 'type' g_qvar { sLLa $1 $> (ImpExpQcType (glAA $1) (unknownToTcCls <$> $1)) }
 
 -----------------------------------------------------------------------------
 -- Import Declarations
@@ -348,7 +342,8 @@ topdecl :: { LCsDecl Ps }
 -- Type declarations (toplevel)
 --
 ty_decl :: { LCsBind Ps }
-  : 'type' var '=' ctype {% mkTyFunBind (comb2 $1 $4) $2 $4 [mj AnnType $1, mj AnnEqual $3] }
+  : 'type' g_var '=' ctype {% mkTyFunBind (comb2 $1 $4) (unknownToTcCls <$> $2) $4
+                                          [mj AnnType $1, mj AnnEqual $3] }
 
 -----------------------------------------------------------------------------
 -- Nested declarations
@@ -438,7 +433,8 @@ context1 :: { LCsContext Ps }
   | kvrel { [$1] }
 
 kvrel :: { LCsKdRel Ps }
-  : varid VARSYM varid {% mkKvRel $1 $2 $3 }
+    -- Note that we do not set the 'NameSpace' of $2 here, that is left to 'mkKvRel'
+  : g_varid g_varsym g_varid {% mkKvRel (unknownToKv <$> $1) $2 (unknownToKv <$> $3) }
 
 type :: { LCsType Ps }
   : btype %shift { $1 }
@@ -457,24 +453,57 @@ btype :: { LCsType Ps }
 
 infixtype :: { forall b. DisambTD b => PV (LocatedA b) }
   : ftype %shift { $1 }
-  | ftype tyop infixtype { $1 >>= \ $1 ->
+  | ftype qop infixtype { $1 >>= \ $1 ->
                            $3 >>= \ $3 ->
-                             let (op, prom) = $2
-                             in mkCsOpTyPV prom $1 op $3 }
+                             mkCsOpTyPV $1 $2 $3 }
 
 ftype :: { forall b. DisambTD b => PV (LocatedA b) }
   : atype { mkCsAppTyHeadPV $1 }
-  | tyop { failOpFewArgs (fst $1) }
+  | qop %shift { failOpFewArgs (fst $1) }
   | ftype atype { $1 >>= \ $1 -> mkCsTyAppTyPV $1 $2 }
 
-tyop :: { LocatedN RdrName }
-  : qtyconop { $1 }
-  | tyvarop { $1 }
+
+{- Note [a_atype and aexp]
+   ~~~~~~~~~~~~~~~~~~~~~~~
+
+In haskell,
+type synonyms are upper case and
+type constructor symbols are arbitrary.
+
+In CSlash, type constructors and data constructors
+are like haskell data cons:
+they must be capitalized or start with ':',
+while type funcitons (synonyms) and regular functions
+are lowercase and cannot start with ':'.
+
+Additionally, we have type application without PREFIX_AT.
+
+Together these cause ambiguity:
+'atype' want to parse 'g_qvar', 'g_qcon',  '(' ')', and '(' commas ')'
+but aexp also does.
+But fexp has fexp aexp and fexp atype.
+Thus, we remove these from atype and create a new rule
+a_atype, ambiguous atype.
+atype is used in fexp, while a_atype is used elsewhere.
+Type application involving a g_qvar, g_qcno, or tuple
+is parsed as an aexp, but the namespace is UNKNOWN_NS.
+The namespace is fixed in a later stage.
+
+-}
+
+a_atype :: { LCsType Ps }
+  : atype { $1 }
+  | systycon_no_unit {% amsA' (sL1 $1 (CsTyVar [] $1)) }
+  | g_qvar {% amsA' (sL1 $1 (CsTyVar [] (unknownToTv <$> $1))) }
+  | g_qcon {% amsA' (sL1 $1 (CsTyVar [] (unknownToTcCls <$> $1))) }
+  | '(' ')' {% amsA' (sLL $1 $> $
+                       CsTupleTy (AnnParen AnnParens (glR $1) (glR $2)) []) }
 
 atype :: { LCsType Ps }
-  : ntgtycon {% amsA' (sL1 $1 (CsTyVar [] $1)) }
-  | tyvar %shift {% amsA' (sL1 $1 (CsTyVar [] $1)) }
-  | '\\\\' tyargpats '->' type { mkCsTyLamTy (comb2 $1 $>)
+  -- : systycon_no_unit {% amsA' (sL1 $1 (CsTyVar [] $1)) }
+  -- | g_qvar %shift {% amsA' (sL1 $1 (CsTyVar [] (unknownToTv <$> $1))) }
+  -- | g_qcon {% amsA' (sL1 $1 (CsTyVar [] (unknownToTcCls <$> $1))) }
+  : '\\\\' tyargpats '->' type { mkCsTyLamTy (comb2 $1 $>)
                                  (sLLl $1 $>
                                   [sLLa $1 $> $ Match
                                                 { m_ext = []
@@ -487,14 +516,12 @@ atype :: { LCsType Ps }
                                                                               (mu AnnRarrow $3))
                                                                      emptyComments) }])
                                  [mj AnnLam $1] }
-  | '(' ')' {% amsA' . sLL $1 $> =<< (mkTupleSyntaxTy (glR $1) [] (glR $>)) }
+  -- | '(' ')' {% amsA' (sLL $1 $> $
+  --                       CsTupleTy (AnnParen AnnParens (glR $1) (glR $2)) [])}
   | '(' comma_types2 ')' {% amsA' (sLL $1 $> $
-                                     CsTupleTy (AnnParen AnnParens (glAA $1) (glAA $2)) $2) }
+                                     CsTupleTy (AnnParen AnnParens (glR $1) (glR $2)) $2) }
   | '(' bar_types2 ')' {% amsA' (sLL $1 $> $ CsSumTy (AnnParen AnnParens (glAA $1) (glAA $2)) $2) }
   | '(' ktype ')' {% amsA' (sLL $1 $> $ CsParTy (AnnParen AnnParens (glAA $1) (glAA $3)) $2) }
-  -- This is an error that we handle in the renamer
-  | QVARID {% let qname = mkQual tvName (getQVARID $1)
-              in amsA' (sL1 $1 (CsTyVar p[ (sL1n $1 $ qname)))) }
 
 comma_types2 :: { [LCsType Ps] }
   : ktype ',' ktype {% do h <- addTrailingCommaA $1 (gl $2)
@@ -517,10 +544,12 @@ tv_bndrs1 :: { [LCsTyVarBndr Ps] }
   | {- empty -} { [] }
 
 tv_bndr :: { LCsTyVarBndr Ps }
-  : tyvar ':' kind {% amsA' (sLL $1 $> (KindedTyVar [mu AnnColon] $1 $3)) }
+  : g_var ':' kind {% amsA' (sLL $1 $> (KindedTyVar [mu AnnColon] (unknownToTv <$> $1) $3)) }
 
+-- tv_bndr_no_braces in GHC
 tv_bndr_parens :: { LCsTyVarBndr Ps }
-  : '(' tyvar ':' kind ')' {% amsA' (sLL $1 $> (KindedTyVar [mop $1, mu AnnColon, mcp $5] $2 $4)) }
+  : '(' g_var ':' kind ')' {% amsA' (sLL $1 $> (KindedTyVar [mop $1, mu AnnColon, mcp $5]
+                                                            (unknownToTv <$> $2) $4)) }
 
 -----------------------------------------------------------------------------
 -- Kinds
@@ -533,7 +562,7 @@ akind :: { LCsKind Ps }
   : U_KIND { sL1a $1 (CsUKd noExtField) }
   | A_KIND { sL1a $1 (CsAKd noExtField) }
   | L_KIND { sL1a $1 (CsAKd noExtField) }
-  | varid {% amsA' (sL1 $1 (CsKdVar [] $1)) }
+  | g_varid {% amsA' (sL1 $1 (CsKdVar [] (unknownToKv <$> $1))) }
   | '(' kind ')' {% amsA' (sLL $1 $> $ CsParKd (AnnParen AnnParens (glAA $1) (glAA $3)) $2) }
 
 -----------------------------------------------------------------------------
@@ -544,22 +573,29 @@ akind :: { LCsKind Ps }
 
 decl :: { LCsDecl Ps }
   : sigdecl { $1 }
-  | var '=' exp {% amsA' $ sLL $1 $> $ ValD noExtField $
-                     FunBind (mj AnnEqual $2) $1 $3 }
-                -- {% runPV (unECP $2) >>= \ ($2 :: LCsExpr Ps) ->
-                --      mkFunBind (comb2 $1 $>) $1 $3 (mj AnnEqual $2) }
+  | g_var_sp '=' exp {% amsA' $ sLL $1 $> $ ValD noExtField $
+                          FunBind (mj AnnEqual $2) (unknownToVar <$> $1) $3 }
+  | g_var '=' exp {% amsA' $ sLL $1 $> $ ValD noExtField $
+                       FunBind (mj AnnEqual $2) (unknownToVar <$> $1) $3 }
 
 sigdecl :: { LCsDecl Ps }
-  : var ':' sigtype {% amsA' $ sLL $1 $> $ SigD noExtField $
-                         TypeSig (AnnSig (mu AnnColon $2) []) $1 $3 }
+  : g_var ':' sigtype {% amsA' $ sLL $1 $> $ SigD noExtField $
+                           TypeSig (AnnSig (mu AnnColon $2) []) (unknownToVar <$> $1) $3 }
 
-  | infix prec namespace_spec op
+  | infix prec namespace_spec infix_decl_op
       {% do mbPrecAnn <- traverse (\ l2 -> do checkPrecP l2 $4
                                               pure (mj AnnVal l2)) $2
-            let (fixText, fixPrec) = (fst $ unLoc l2, snd $ unLoc l2)
+            let (fixText, fixPrec) = (fst $ unLoc $2, snd $ unLoc $2)
+                opWithNS = case $3 of
+                             NoNamespaceSpecifier
+                               | isConOccFS (rdrNameOcc $4) -> unknownToData <$> $4
+                               | otherwise -> unknownToVar <$> $4
+                             TypeNamespaceSpecifier
+                               | isConOccFS (rdrNameOcc $4) -> unknownToTcCls <$> $4
+                               | otherwise -> unknownToTv <$> $4
             amsA' (sLL $1 $> $ SigD noExtField
                    (FixSig (mj AnnInfix $1 : maybeToList mbPrecAnn fixText)
-                           (FixitySig (unLoc $3) (unLoc $4) (Fixity fixPrec (unLoc $1))))) }
+                           (FixitySig (unLoc $3) (unLoc opWithNS) (Fixity fixPrec (unLoc $1))))) }
 
 -----------------------------------------------------------------------------
 -- Expressions
@@ -569,12 +605,16 @@ exp :: { ECP }
 
 infixexp :: { ECP }
   : exp10 { $1 }
+  | infixexp qop_sp exp10 { ECP $
+                            superInfixOp $
+                            unECP $1 >>= \ $1 ->
+                              unECP $3 >>= \ $3 ->
+                              (mkCsOpAppPV (comb2 $1 $3) $1 $2 $3) }
   | infixexp qop exp10 { ECP $
                          superInfixOp $
-                         $2 >>= \ $2 ->
                          unECP $1 >>= \ $1 ->
-                         unECP $3 >>= \ $3 ->
-                         (mkCsOpAppPV (comb2 $1 $3) $1 $2 $3) }
+                           unECP $3 >>= \ $3 ->
+                           (mkCsOpAppPV (comb2 $1 $3) $1 $2 $3) }
 
 exp10 :: { ECP }
   : fexp %shift { $1 }
@@ -594,8 +634,12 @@ fexp :: { ECP }
   | aexp { $1 }
 
 aexp :: { ECP }
-  : qvar TIGHT_INFIX_AT aexp { ECP $ unECP $3 >>= \ $3 ->
-                                     mkCsAsPatPV (comb2 $1 $>) $1 (epTok $2) $3 }
+  : g_qvar_sp TIGHT_INFIX_AT aexp { ECP $ unECP $3 >>= \ $3 ->
+                                     mkCsAsPatPV (comb2 $1 $>)
+                                                 (unknownToVar <$> $1) (epTok $2) $3 }
+  | g_qvar TIGHT_INFIX_AT aexp { ECP $ unECP $3 >>= \ $3 ->
+                                  mkCsAsPatPV (comb2 $1 $>)
+                                              (unknownToVar <$> $1) (epTok $2) $3 }
   | PREFIX_MINUS aexp { ECP $ unECP $2 >>= \ $2 ->
                               mkCsNegAppPV (comb2 $1 $>) $2 [mj AnnMinus $1] }
   | 'let' binds 'in' exp { ECP $ unECP $4 >>= \ $4 ->
@@ -654,8 +698,10 @@ aexp1 :: { ECP }
   : aexp2 { $1 }
 
 aexp2 :: { ECP }
-  : qvar { ECP $ mkCsVarPV $! $1 }
-  | qcon { ECP $ mkCsVarPV $! $1 }
+  : g_qvar_sp { ECP $ mkCsVarPV $! (unknownToVar <$> $1) }
+  | g_qvar { ECP $ mkCsVarPV $! $1 }
+  | g_qcon { ECP $ mkCsVarPV $! $1 } -- 'gen_qcon' in GHC
+  | sysdcon { ECP $ mkCsVarPV $! $1 }
   | literal { ECP $ mkCsLitPV $! $1 }
   | INTEGER { ECP $ mkCsOverLitPV (sL1a $1 $ mkCsIntegral (getINTEGER $1)) }
   | RATIONAL { ECP $ mkCsOverLitPV (sL1a $1 $ mkCsFractional (getRATIONAL $1)) }
@@ -670,15 +716,24 @@ aexp2 :: { ECP }
 
 texp :: { ECP }
   : exp { $1 }
+  | infixexp qop_sp {% runPV (unECP $1) >>= \ $1 ->
+                          runPV (rejectPragmaPV $1) >>
+                          runPV $2 >>= \ $2 ->
+                          return $ ecpFromExp $
+                          sLLa $1 $> $ SectionL noExtField $1 (n2l $2) }
   | infixexp qop {% runPV (unECP $1) >>= \ $1 ->
-                    runPV (rejectPragmaPV $1) >>
-                    runPV $2 >>= \ $2 ->
-                    return $ ecpFromExp $
-                    sLLa $1 $> $ SectionL noExtField $1 (n2l $2) }
-  | qopm infixexp { ECP $ superInfixOp $
-                          unECP $2 >>= \ $2 ->
+                       runPV (rejectPragmaPV $1) >>
+                       runPV $2 >>= \ $2 ->
+                       return $ ecpFromExp $
+                       sLLa $1 $> $ SectionL noExtField $1 (n2l $2) }
+  | qop_sp infixexp { ECP $ superInfixOp $
+                        unECP $2 >>= \ $2 ->
                           $1 >>= \ $1 ->
                           mkCsSectionR_PV (comb2 $1 $>) (n2l $1) $2 }
+  | qop infixexp { ECP $ superInfixOp $
+                     unECP $2 >>= \ $2 ->
+                       $1 >>= \ $1 ->
+                       mkCsSectionR_PV (comb2 $1 $>) (n2l $1) $2 }
 
 tup_exprs :: { forall b. DisambECP b => PV (SumOrTuple b) }
   : texp commas_tup_tail { unECP $1 >>= \ $1 ->
@@ -865,57 +920,24 @@ qual :: { forall b. DisambECP b => PV (LStmt Ps (LocatedA b)) }
 -----------------------------------------
 -- Data constructors
 
-qcon :: { LocatedN RdrName }
-  : gen_qcon { $1 }
-  | sysdcon { L (getLoc $1) $ nameRdrName (dataConName (unLoc $1)) }
-
-gen_qcon :: { Located RdrName }
-  : qconid { $1 }
-  | '(' qconsym ')' {% amsr (sLL $1 $> (unLoc $2))
-                            (NameAnn NameParens (glAA $1) (glAA $2) (glAA $3) []) }
-
--- con :: { LocatedN RdrName }
---   : conid { $1 }
---   | '(' consym ')' {% amsr (sLL $1 $> (unLoc $2))
---                            (NameAnn NameParens (glAA $1) (glAA $2) (glAA $3) []) }
---   | sysdcon { L (getLoc $1) $ nameRdrName (dataConName (unLoc $1)) }
-
-sysdcon_nolist :: { LocatedN DataCon }
-  : '(' commas ')' {% amsr (sLL $1 $> $ tupleDataCon (snd $2 + 1))
-                           (NameAnnCommas NameParens (glAA $1) (map srcSpan2e (fst $2))
-                                          (glAA $3) []) }
-
-sysdcon :: { LocatedN DataCon }
-  : sysdcon_nolist { $1 }
-  | '(' ')' {% amsr (sLL $1 $> unitDataCon)
-                    (NameAnnOnly NameParens (glAA $1) (glAA $2) []) }
-
-conop :: { LocatedN RdrName }
-  : consym { $1 }
-  | '`' conid '`' {$ amsr (sLL $1 $> (unLoc $2))
-                          (NameAnn NameBackquotes (glAA $1) (glAA $2) (glAA $3) []) }
-
-qconop :: { LocatedN RdrName }
-  : qconsym { $1 }
-  | '`' qconid '`' {% amsr (sLL $1 $> (unLoc $2))
-                           (NameAnn NameBackquotes (glAA $1) (glAA $2) (glAA $3) []) }
+-- ambiguous in aexp: could be data or type constructor
+a_sysdcon :: { LocatedN RdrName }
+  : '(' commas ')' {% amsr (sLL $1 $> $ undefined)
+                           (NameAnnCommas NameParens (glAA $1)
+                                          (map srcSpan2e (fst $2)) (glAA $3) []) }
+  | '(' ')' {% amsr (sLL $1 $> undefined) (NameAnnOnly NameParens (glAA $1) (glAA $2) []) }
 
 ----------------------------------------------------------------------------
 -- Type constructors
 
--- gtycon :: { LocatedN RdrName }
---   : ntgtycon { $1 }
---   | '(' ')' {% amsr (sLL $1 $> $ getRdrName unitTyCon)
---                     (NameAnnOnly NameParens (glAA $1) (glAA $2) []) }
-
-ntgtycon :: { LocatedN RdrName }
-  : oqtycon { $1 }
-  | '(' commas ')' {% do n <- mkTupleSyntaxTycon (snd $2 + 1)
+systycon_no_unit :: { LocatedN RdrName }
+  : '(' commas ')' {% do n <- mkTupleSyntaxTycon (snd $2 + 1)
                          amsr (sLL $1 $> n) (NameAnnCommas NameParens (glAA $1)
                                                            (map srcSpan2e (fst $2))
                                                            (glAA $3) []) }
   | '(' bars ')' {% amsr (sLL $1 $> $ (getRdrName (sumTyCon (snd $2 + 1))))
-                         (NameAnnBars NameParens (glAA $1) (map srcSpan2e (fst $2)) (glAA $3) []) }
+                         (NameAnnBars NameParens (glAA $1)
+                                      (map srcSpan2e (fst $2)) (glAA $3) []) }
   | '(' ARR_U ')' {% amsr (sLL $1 $> $ getRdrName unrestrictedFunTyCon)
                           (NameAnnUnArrow (Just $ glAA $1) (glAA $2)
                                           (Just $ glAA $3) []) }
@@ -926,138 +948,143 @@ ntgtycon :: { LocatedN RdrName }
                           (NameAnnLinArrow (Just $ glAA $1) (glAA $2)
                                            (Just $ glAA $3) []) }
 
-oqtycon :: { LocatedN RdrName }
-  : qtycon { $1 }
-  | '(' qtyconsym ')' {% amsr (sLL $1 $> (unLoc $2))
+-----------------------------------------------------------------------------
+-- Generic Constructors
+
+g_qcon :: { LocatedN RdrName }
+  : g_qconid { $1 }
+  | '(' g_qconsym ')' {% amsr (sLL $1 $> (unLoc $2))
                               (NameAnn NameParens (glAA $1) (glAA $2) (glAA $3) []) }
 
-qtyconop :: { LocatedN RdrName }
-  : qtyconsym %shift { $1 }
-  | '`' qtycon '`' {% amsr (sLL $1 $> (unLoc $2))
-                           (NameAnn NameBackquotes (glAA $1) (glAA $2) (glAA $3) []) }
+g_con :: { LocatedN RdrName }
+  : g_conid { $1 }
+  | '(' g_consym ')' {% amsr (sLL $1 $> (unLoc $2))
+                             (NameAnn NameParens (glAA $1) (glAA $2) (glAA $3) []) }
 
-qtycon :: { LocatedN RdrName }
-  : QCONID { sL1n $1 $! mkQual tcClsName (getQCONID $1) }
-  | tycon { $1 }
+g_qconid :: { LocatedN RdrName }
+  : g_conid { $1 }
+  | QCONID { sL1n $1 $! mkQual UNKNOWN_NS (getQCONID $1) }
 
-tycon :: { LocatedN RdrName }
-  : CONID { sL1n $1 $! mkUnqual tcClsName (getCONID $1) }
+g_conid :: { LocatedN RdrName }
+  : CONID { sL1n $1 $! mkUnqual UNKNOWN_NS (getCONID $1) }
 
-qtyconsym :: { LocatedN RdrName }
-  : QCONSYM { sL1n $1 $! mkQual tcClsName (getQCONSYM $1) }
-  | QVARSYM { sL1n $1 $! mkQual tcClsName (getQVARSYM $1) }
-  | tyconsym { $1 }
+g_qconsym :: { LocatedN RdrName }
+  : g_consym { $1 }
+  | QCONSYM { sL1n $1 $ mkQual UNKNOWN_NS (getQCONSYM $1) }
 
-tyconsym :: { LocatedN RdrName }
-  : CONSYM { sL1n $1 $! mkUnqual tcClsName (getCONSYM $1) }
-  | VARSYM { sL1n $1 $! mkUnqual tcClsName (getVARSYM $1) }
-
--- otycon :: { LocatedN RdrName }
---   : tycon { $1 }
---   | '(' tyconsym ')' {% amsr (sLL $1 $> (unLoc $2))
---                              (NameAnn NameParens (glAA $1) (glAA $2) (glAA $3) []) }
+g_consym :: { LocatedN RdrName }
+  : CONSYM { sL1n $1 $ mkUnqual UNKNOWN_NS (getCONSYM $1) }
 
 -----------------------------------------------------------------------------
--- Operators
+-- Generic Operators
+-- See Generic Variables section for explanation of differences with GHC.
 
-op :: { LocatedN RdrName }
-  : varop { $1 }
-  | conop { $1 }
-  | ARR_U {% amsr (sLL $1 $> $ getRdrName unrestrictedFunTyCon)
-                  (NameAnnUnArrow Nothing (glAA $1) Nothing []) }
-  | ARR_A {% amsr (sLL $1 $> $ getRdrName affineFunTyCon)
-                  (NameAnnAffArrow Nothing (glAA $1) Nothing []) }
-  | ARR_L {% amsr (sLL $1 $> $ getRdrName linearFunTyCon)
-                  (NameAnnLinArrow Nothing (glAA $1) Nothing []) }
+infix_decl_op :: { LocatedN RdrName } 
+  : g_varop_sp { $1 }
+  | g_varop { $1 }
+  | g_conop { $1 }
+  -- | ARR_U {% amsr (sLL $1 $> $ getRdrName unrestrictedFunTyCon)
+  --                 (NameAnnUnArrow Nothing (glAA $1) Nothing []) }
+  -- | ARR_A {% amsr (sLL $1 $> $ getRdrName affineFunTyCon)
+  --                 (NameAnnAffArrow Nothing (glAA $1) Nothing []) }
+  -- | ARR_L {% amsr (sLL $1 $> $ getRdrName linearFunTyCon)
+  --                 (NameAnnLinArrow Nothing (glAA $1) Nothing []) }
 
-varop :: { LocatedN RdrName }
-  : varsym { $1 }
-  | '`' varid '`' {% amsr (sLL $1 $> (unLoc $2))
-                          (NameAnn NameBackquotes (glAA $1) (glAA $2) (glAA $3) []) }
+g_varop_sp :: { LocatedN RdrName }
+  : g_varsym_sp { $1 }
 
-qop :: { forall b. DisambInfixOp b => PV (LocatedN b) }
-  : qvarop { mkCsVarOpPV $1 }
-  | qconop { mkCsConOpPV $1 }
-
-qopm :: { forall b. DisambInfixOp b => PV (LocatedN b) }
-  : qvaropm { mkCsVarOpPV $1 }
-  | qconop { mkCsConOpPV $1 }
-
-qvarop :: { LocatedN RdrName }
-  : qvarsym { $1 }
-  | '`' qvarid '`' {% amsr (sLL $1 $> (unLoc $2))
-                           (NameAnn NameBackquotes (glAA $1) (glAA $2) (glAA $3) []) }
-
-qvaropm :: { LocatedN RdrName }
-  : qvarsym { $1 }
-  | '`' qvarid '`' {% amsr (sLL $1 $> (unLoc $2))
-                           (NameAnn NameBackquotes (glAA $1) (glAA $2) (glAA $3) []) }
-
------------------------------------------------------------------------------
--- Type variables
-
-tyvar :: { LocatedN RdrName }
-  : tyvarid { $1 }
-
-tyvarop :: { LocatedN RdrName }
-  : '`' tyvarid '`' {% amsr (sLL $1 $> (unLoc $2))
+g_varop :: { LocatedN RdrName }
+  : g_varsym { $1 }
+  | '`' g_varid '`' {% amsr (sLL $1 $> (unLoc $2))
                             (NameAnn NameBackquotes (glAA $1) (glAA $2) (glAA $3) []) }
 
-tyvarid :: { LocatedN RdrName }
-  : VARID { sL1n $1 $! mkUnqual tvName (getVARID $1) }
+-- not generic: 'mkCsVarOpPV' and 'mkCsCopOpPV' must set the namespace
+qop_sp :: { forall b. DisambInfixOp b => PV (LocatedN b) }
+  : g_qvarop_sp { mkCsVarOpPV $1 }
+
+-- not generic: 'mkCsVarOpPV' and 'mkCsCopOpPV' must set the namespace
+qop :: { forall b. DisambInfixOp b => PV (LocatedN b) }
+  : g_qvarop { mkCsVarOpPV $1 }
+  | g_qconop { mkCsConOpPV $1 }
+
+g_qvarop_sp :: { LocatedN RdrName }
+  : g_qvarsym_sp { $1 }
+
+g_qvarop :: { LocatedN RdrName }
+  : g_qvarsym { $1 }
+  | '`' g_qvarid '`' {% amsr (sLL $1 $> (unLoc $2))
+                             (NameAnn NameBackquotes (glAA $1) (glAA $2) (glAA $3) []) }
+
+g_qconop :: { Located RdrName }
+  : g_qconsym %shift { $1 }
+  | '`' g_qconid '`' {% amsr (sLL $1 $> (unLoc $2))
+                            (NameAnn NameBackquotes (glAA $1) (glAA $2) (glAA $3) []) }
+
+g_conop :: { Located RdrName }
+  : g_consym %shift { $1 }
+  | '`' g_conid '`' {% amsr (sLL $1 $> (unLoc $2))
+                            (NameAnn NameBackquotes (glAA $1) (glAA $2) (glAA $3) []) }
 
 -----------------------------------------------------------------------------
--- Variables
+-- Generic Variables
+-- We have more ambiguity with names than GHC caused by:
+-- - Type application with no '@'
+-- - lowercase names for type synonyms
+-- - type level lambdas that bind a var name the same way as lambdas
+--
+-- We use the 'UNKNOWN_NS' 'NameSpace'
+-- Consumers of vars must change this namespace based on context
+--
+-- Followed by '_sp' really denotes value level var.
+-- '_sp' include '.' as a symbol while NO '_sp' does not include '.'
+-- I.e., '.' is not a valid name for a type level function, since '.'
+-- is used in type signatures for 'forall' quantification.
 
-var :: { LocatedN RdrName }
-  : varid { $1 }
-  | '(' varsym ')' {% amsr (sLL $1 $> (unLoc $2))
-                           (NameAnn NameParens (glAA $1) (glAA $2) (glAA $3) []) }
+g_var_sp :: { LocatedN RdrName }
+  : '(' g_varsym_sp ')' {% amsr (sLL $1 $> (unLoc $2))
+                                (NameAnn NameParens (glAA $1) (glAA $2) (glAA $3) []) }
 
-qvar :: { LocatedN RdrName }
-  : qvarid { $1 }
-  | '(' varsym ')' {% amsr (sLL $1 $> (unLoc $2))
-                           (NameAnn NameParens (glAA $1) (glAA $2) (glAA $3) []) }
-  | '(' qvarsym1 ')' {% amsr (sLL $1 $> (unLoc $2))
+g_var :: { LocatedN RdrName }
+  : g_varid %shift { $1 }
+  | '(' g_varsym ')' {% amsr (sLL $1 $> (unLoc $2))
                              (NameAnn NameParens (glAA $1) (glAA $2) (glAA $3) []) }
-  
-qvarid :: { LocatedN RdrName }
-  : varid %shift { $1 } -- conflict with kvrel
-  | QVARID { sL1n $1 $! mkQual varName (getQVARID $1) }
 
-varid :: { LocatedN RdrName }
-  : VARID { sL1n $1 $! mkUnqual varName (getVARID $1) }
+g_qvar_sp :: { LocatedN RdrName }
+  : '(' g_varsym_sp ')' {% amsr (sLL $1 $> (unLoc $2))
+                                (NameAnn NameParens (glAA $1) (glAA $2) (glAA $3) []) }
 
-qvarsym :: { LocatedN RdrName }
-  : varsym { $1 }
-  | qvarsym1 { $1 }
+g_qvar :: { LocatedN RdrName }
+  : g_qvarid { $1 }
+  | '(' g_varsym ')' {% amsr (sLL $1 $> (unLoc $2))
+                             (NameAnn NameParens (glAA $1) (glAA $2) (glAA $3) []) }
+  | '(' g_qvarsym1 ')' {% amsr (sLL $1 $> (unLoc $2))
+                               (NameAnn NameParens (glAA $1) (glAA $2) (glAA $3) []) }
 
-qvarsym1 :: { LocatedN RdrName }
-  : QVARSYM { sL1n $1 $ mkQual varName (getQVARSYM $1) }
+g_qvarid :: { LocatedN RdrName }
+  : g_varid %shift { $1 }
+  | QVARID { sL1n $1 $! mkQual UNKNOWN_NS (getQVARID $1) }
 
-varsym :: {LocatedN RdrName }
-  : VARSYM { sL1n $1 $ mkUnqual varName (getVARSYM $1) }
-  | special_sym { sL1n $1 $ mkUnqual varName (unLoc $1) }
+g_varid :: { LocatedN RdrName }
+  : VARID { sL1n $1 $! mkUnqual UNKNOWN_NS (getVARID $1) }
 
-special_sym :: { Located FastString }
+g_qvarsym_sp :: { LocatedN RdrName }
+  : g_varsym_sp { $1 }
+
+g_qvarsym :: { LocatedN RdrName }
+  : g_varsym %shift { $1 }
+  | g_qvarsym1 %shift { $1 }
+
+g_qvarsym1 :: { LocatedN RdrName }
+  : QVARSYM { sL1n $1 $ mkQual UNKNOWN_NS (getQVARSYM $1) }
+
+g_varsym_sp :: { LocatedN RdrName }
+  : g_special_sym { sL1n $1 $ mkUnqual UNKNOWN_NS (unLoc $1) }
+
+g_varsym :: { LocatedN RdrName }
+  : VARSYM { sL1n $1 $ mkUnqual UNKNOWN_NS (getVARSYM $1) }
+
+g_special_sym :: { Located FastString }
   : '.' { sL1 $1 (fsLit ".") }
-
------------------------------------------------------------------------------
--- Data constructors
-
-qconid :: { LocatedN RdrName }
-  : conid { $1 }
-  | QCONID { sL1n $1 $! mkQual dataName (getQCONID $1) }
-
-conid :: { LocatedN RdrName }
-  : CONID { sL1n $1 $ mkUnqual dataName (getCONID $1) }
-
-qconsym :: { LocatedN RdrName }
-  : consym { $1 }
-  | QCONSYM { sL1n $1 $ mkQual dataName (getQCONSYM $1) }
-
-consym :: { LocatedN RdrName }
-  : CONSYM { sL1n $1 $ mkUnqual dataName (getCONSYM $1) }
 
 -----------------------------------------------------------------------------
 -- Literals
