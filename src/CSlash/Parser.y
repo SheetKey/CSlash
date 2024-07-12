@@ -484,6 +484,8 @@ but aexp also does.
 But fexp has fexp aexp and fexp atype.
 Thus, we remove these from atype and create a new rule
 a_atype, ambiguous atype.
+Also, we turn the sysdcon rule into
+a_sysdcon, which does not set the namespace.
 atype is used in fexp, while a_atype is used elsewhere.
 Type application involving a g_qvar, g_qcno, or tuple
 is parsed as an aexp, but the namespace is UNKNOWN_NS.
@@ -701,7 +703,7 @@ aexp2 :: { ECP }
   : g_qvar_sp { ECP $ mkCsVarPV $! (unknownToVar <$> $1) }
   | g_qvar { ECP $ mkCsVarPV $! $1 }
   | g_qcon { ECP $ mkCsVarPV $! $1 } -- 'gen_qcon' in GHC
-  | sysdcon { ECP $ mkCsVarPV $! $1 }
+  | a_sysdcon { ECP $ mkCsVarPV $! $1 }
   | literal { ECP $ mkCsLitPV $! $1 }
   | INTEGER { ECP $ mkCsOverLitPV (sL1a $1 $ mkCsIntegral (getINTEGER $1)) }
   | RATIONAL { ECP $ mkCsOverLitPV (sL1a $1 $ mkCsFractional (getRATIONAL $1)) }
