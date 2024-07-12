@@ -14,7 +14,7 @@ module CSlash.Cs
   , module CSlash.Cs.Type
 
   , CsModule(..), AnnsModule(..)
-  , CsParsedModule(..), -- XModulePs(..)
+  , CsParsedModule(..), XModulePs(..)
   ) where
   
 import CSlash.Language.Syntax
@@ -34,15 +34,15 @@ import CSlash.Parser.Annotation
 
 import Data.Data
 
--- data XModulePs = XModulePs
---   { csmodAnn :: EpAnn AnnsModule
---   , csmodLayout :: EpLayout
---   }
---   deriving (Data)
+data XModulePs = XModulePs
+  { csmodAnn :: EpAnn AnnsModule
+  , csmodLayout :: EpLayout
+  }
+  deriving (Data)
 
--- type instance XCModule Ps = XModulePs
--- type instance XCModule GhcRn = DataConCantHappen
--- type instance XCModule GhcTc = DataConCantHappen
+type instance XCModule Ps = XModulePs
+type instance XCModule Rn = DataConCantHappen
+type instance XCModule Tc = DataConCantHappen
 
 type instance Anno ModuleName = SrcSpanAnnA
 
