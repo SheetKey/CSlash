@@ -116,11 +116,13 @@ data AnnsIf = AnnsIf
   { aiIf :: EpaLocation
   , iaThen :: EpaLocation
   , aiElse :: EpaLocation
+  , aiThenSemi :: Maybe EpaLocation
+  , aiElseSemi :: Maybe EpaLocation
   }
   deriving Data
 
 instance NoAnn AnnsIf where
-  noAnn = AnnsIf noAnn noAnn noAnn
+  noAnn = AnnsIf noAnn noAnn noAnn noAnn noAnn
 
 type instance XPresent (CsPass _) = NoExtField
 
