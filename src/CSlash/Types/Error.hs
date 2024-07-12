@@ -46,7 +46,7 @@ module CSlash.Types.Error
    , defaultDiagnosticOpts
    , NoDiagnosticOpts(..)
 
-   , CSlashHint (..)
+   , CsHint (..)
    , AvailableBindings(..)
    , noHints
 
