@@ -7,24 +7,28 @@ import CSlash.Language.Syntax.Kind
 
 import CSlash.Types.Fixity
 
+type LCsBind id = XRec id (CsBindLR id id)
+
 type CsBind id = CsBindLR id id
 
 data CsBindLR idL idR
-  = FunBind
+  = FunBind -- for all top level binds, not just functions
     { fun_ext :: XFunBind idL idR
     , fun_id :: LIdP idL
-    , fun_matches :: MatchGroup idR (LCsExpr idR)
+    , fun_body :: (LCsExpr idR)
     }
-  | TyFunBind
+  | TyFunBind -- for all type synonyms, not just type functions
     { tyfun_ext :: XTyFunBind idL idR
     , tyfun_id :: LIdP idL
-    , tyfun_rhs :: LCsType idR
+    , tyfun_body :: LCsType idR
     }
-  | VarBind
-    { var_ext :: XVarBind idL idR
-    , var_id :: IdP idL
-    , var_rhs :: LCsExpr idR
+  | TCVarBind -- only introduced by typechecker
+    { tcvar_ext :: XTCVarBind idL idR
+    , tcvar_id :: IdP idL
+    , tcvar_rhs :: LCsExpr idR
     }
+
+data LCsSig p = XRec p (Sig p)
 
 data Sig pass
   = TypeSig (XTypeSig pass) (LIdP pass) (LCsType pass)
