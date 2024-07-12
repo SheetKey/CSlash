@@ -50,17 +50,33 @@ deriving instance Data (MatchGroup Ps (LocatedA (CsExpr Ps)))
 deriving instance Data (MatchGroup Rn (LocatedA (CsExpr Rn)))
 deriving instance Data (MatchGroup Tc (LocatedA (CsExpr Tc)))
 
+deriving instance Data (MatchGroup Ps (LocatedA (CsType Ps)))
+deriving instance Data (MatchGroup Rn (LocatedA (CsType Rn)))
+deriving instance Data (MatchGroup Tc (LocatedA (CsType Tc)))
+
 deriving instance Data (Match Ps (LocatedA (CsExpr Ps)))
 deriving instance Data (Match Rn (LocatedA (CsExpr Rn)))
 deriving instance Data (Match Tc (LocatedA (CsExpr Tc)))
+
+deriving instance Data (Match Ps (LocatedA (CsType Ps)))
+deriving instance Data (Match Rn (LocatedA (CsType Rn)))
+deriving instance Data (Match Tc (LocatedA (CsType Tc)))
 
 deriving instance Data (GRHSs Ps (LocatedA (CsExpr Ps)))
 deriving instance Data (GRHSs Rn (LocatedA (CsExpr Rn)))
 deriving instance Data (GRHSs Tc (LocatedA (CsExpr Tc)))
 
+deriving instance Data (GRHSs Ps (LocatedA (CsType Ps)))
+deriving instance Data (GRHSs Rn (LocatedA (CsType Rn)))
+deriving instance Data (GRHSs Tc (LocatedA (CsType Tc)))
+
 deriving instance Data (GRHS Ps (LocatedA (CsExpr Ps)))
 deriving instance Data (GRHS Rn (LocatedA (CsExpr Rn)))
 deriving instance Data (GRHS Tc (LocatedA (CsExpr Tc)))
+
+deriving instance Data (GRHS Ps (LocatedA (CsType Ps)))
+deriving instance Data (GRHS Rn (LocatedA (CsType Rn)))
+deriving instance Data (GRHS Tc (LocatedA (CsType Tc)))
 
 deriving instance Data (StmtLR Ps Ps (LocatedA (CsExpr Ps)))
 deriving instance Data (StmtLR Ps Rn (LocatedA (CsExpr Rn)))
@@ -84,6 +100,10 @@ deriving instance Data (CsSigType Tc)
 deriving instance Data (CsPatSigType Ps)
 deriving instance Data (CsPatSigType Rn)
 deriving instance Data (CsPatSigType Tc)
+
+deriving instance Data (CsPatSigKind Ps)
+deriving instance Data (CsPatSigKind Rn)
+deriving instance Data (CsPatSigKind Tc)
 
 deriving instance Data (CsTyPat Ps)
 deriving instance Data (CsTyPat Rn)
