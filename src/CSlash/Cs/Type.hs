@@ -21,6 +21,7 @@ module CSlash.Cs.Type
 import Prelude hiding ((<>))
 
 import CSlash.Language.Syntax.Type
+import CSlash.Language.Syntax.Expr
 import CSlash.Language.Syntax.Extension
 import CSlash.Cs.Extension
 import CSlash.Cs.Kind
@@ -61,6 +62,7 @@ type instance XCsSig (CsPass _) = NoExtField
 type instance XKindedTyVar (CsPass _) = [AddEpAnn]
 
 type instance XForAllTy (CsPass _) = NoExtField
+type instance XQualTy (CsPass _) = NoExtField
 type instance XTyVar (CsPass _) = [AddEpAnn]
 type instance XAppTy (CsPass _) = NoExtField
 type instance XFunTy (CsPass _) = NoExtField
@@ -68,6 +70,7 @@ type instance XTupleTy (CsPass _) = AnnParen
 type instance XSumTy (CsPass _) = AnnParen
 type instance XParTy (CsPass _) = AnnParen
 type instance XKdSig (CsPass _) = [AddEpAnn]
+type instance XTyLamTy (CsPass _) = [AddEpAnn]
 
 data EpArrow
   = EpU !(EpToken "-★>")
@@ -149,3 +152,6 @@ type instance Anno (CsTyVarBndr (CsPass p)) = SrcSpanAnnA
 type instance Anno (CsTyVarBndr Ps) = SrcSpanAnnA
 type instance Anno (CsTyVarBndr Rn) = SrcSpanAnnA
 type instance Anno (CsTyVarBndr Tc) = SrcSpanAnnA
+type instance Anno [LocatedA (Match (CsPass p) (LocatedA (CsType (CsPass p))))] = SrcSpanAnnL
+type instance Anno (Match (CsPass p) (LocatedA (CsType (CsPass p)))) = SrcSpanAnnA
+type instance Anno (GRHS (CsPass p) (LocatedA (CsType (CsPass p)))) = EpAnnCO
