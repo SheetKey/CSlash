@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -12,8 +13,21 @@ import CSlash.Language.Syntax.Extension
 import CSlash.Language.Syntax.Kind
 import CSlash.Cs.Extension
 import CSlash.Types.SrcLoc
+import CSlash.Types.Name
 import CSlash.Parser.Annotation
 import CSlash.Utils.Outputable
+
+import Data.Data
+
+type instance XCsPSK Ps = EpAnnCO
+type instance XCsPSK Rn = CsPSKRn
+type instance XCsPSK Tc = CsPSKRn
+
+data CsPSKRn = CsPSKRn
+  { cspsk_nwcs :: [Name]
+  , cspsk_imp_kvs :: [Name]
+  }
+  deriving Data
 
 type instance XUKd (CsPass _) = NoExtField
 type instance XAKd (CsPass _) = NoExtField
