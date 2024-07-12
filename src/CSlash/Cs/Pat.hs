@@ -45,6 +45,10 @@ type instance XSigPat Ps = [AddEpAnn]
 type instance XSigPat Rn = NoExtField
 type instance XSigPat Tc = NoExtField -- should be Type
 
+type instance XKdSigPat Ps = [AddEpAnn]
+type instance XKdSigPat Rn = NoExtField
+type instance XKdSigPat Tc = NoExtField -- should be Kind?
+
 data EpAnnSumPat = EpAnnSumPat
   { sumPatParens :: [AddEpAnn]
   , sumPatVbarsBefore :: [EpaLocation]
