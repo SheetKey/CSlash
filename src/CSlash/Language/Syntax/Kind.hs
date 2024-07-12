@@ -4,13 +4,18 @@ import CSlash.Language.Syntax.Extension
 
 type LCsKind pass = XRec pass (CsKind pass)
 
+data CsPatSigKind pass = CsPSK
+  { cspsk_ext :: XCsPSK pass
+  , cspsk_body :: LCsKind pass
+  }
+
 data CsKind pass
   = CsUKd (XUKd pass)
   | CsAKd (XAKd pass)
   | CsLKd (XLKd pass)
   | CsKdVar (XKdVar pass) (LIdP pass)
   | CsFunKd (XFunKd pass) (LCsKind pass) (LCsKind pass)
-  | CsQualKd
+  | CsQualKd -- should be removed (don't want or have standalone kind sigs)
     { csk_xqual :: XQualKd pass
     , csk_ctxt :: LCsContext pass
     , csk_body :: LCsKind pass
