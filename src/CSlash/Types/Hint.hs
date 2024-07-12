@@ -1,7 +1,7 @@
 {-# LANGUAGE ExistentialQuantification #-}
 
 module CSlash.Types.Hint 
-  ( CSlashHint(..)
+  ( CsHint(..)
   , AvailableBindings(..)
   , InstantiationSuggestion(..)
   , ImportSuggestion(..)
@@ -34,7 +34,7 @@ data AvailableBindings
   = NamedBindings  (NE.NonEmpty Name)
   | UnnamedBinding
 
-data CSlashHint
+data CsHint
   = forall a. (Outputable a, Typeable a) => UnknownHint a
   | SuggestUseSpaces
   --  | SuggestUseWhitespaceAfter !OperatorWhitespaceSymbol
