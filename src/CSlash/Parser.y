@@ -874,7 +874,7 @@ tyargpats :: { [LPat Ps] }
   | tyargpat { [$1] }
 
 atypat :: { LPat Ps }
-  : atype {% checkTyPattern $1 }
+  : a_atype {% checkTyPattern $1 }
 
 -----------------------------------------------------------------------------
 -- Statement sequences
