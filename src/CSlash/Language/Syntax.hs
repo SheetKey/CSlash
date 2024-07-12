@@ -23,7 +23,8 @@ import CSlash.Language.Syntax.Extension
 
 -- | Top-level structure of a module.
 data CsModule p = CsModule
-  { csmodName :: XRec p ModuleName -- unlike haskell, require module names
+  { csmodExt :: XCModule p
+  , csmodName :: XRec p ModuleName -- unlike haskell, require module names
   , csmodExports :: Maybe (XRec p [LIE p])
   , csmodImports :: [LImportDecl p]
   , csmodDecls :: [LCsDecl p]
