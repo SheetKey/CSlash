@@ -30,18 +30,18 @@ import CSlash.Utils.Outputable
 
 import Data.Data
 
-type instance XFunBind (CsPass pL) Ps = NoExtField
+type instance XFunBind (CsPass pL) Ps = AddEpAnn
 type instance XFunBind (CsPass pL) Rn = NameSet
 type instance XFunBind (CsPass pL) Tc = [CsTickish]
 
-type instance XTyFunBind (CsPass pL) Ps = NoExtField
+type instance XTyFunBind (CsPass pL) Ps = [AddEpAnn]
 type instance XTyFunBind (CsPass pL) Rn = NameSet
 type instance XTyFunBind (CsPass pL) Tc = [CsTickish]
 
-type instance XVarBind (CsPass pL) (CsPass pR) = XVarBindCs pL pR
-type family XVarBindCs pL pR where
-  XVarBindCs 'Typechecked 'Typechecked = NoExtField
-  XVarBindCs _ _ = DataConCantHappen
+type instance XTCVarBind (CsPass pL) (CsPass pR) = XTCVarBindCs pL pR
+type family XTCVarBindCs pL pR where
+  XTCVarBindCs 'Typechecked 'Typechecked = NoExtField
+  XTCVarBindCs _ _ = DataConCantHappen
 
 instance (OutputableBndrId pl, OutputableBndrId pr)
   => Outputable (CsBindLR (CsPass pl) (CsPass pr)) where
@@ -51,11 +51,11 @@ ppr_monobind :: forall idL idR.
                 (OutputableBndrId idL, OutputableBndrId idR)
              => CsBindLR (CsPass idL) (CsPass idR) -> SDoc
 ppr_monobind (FunBind { fun_id = fun
-                     , fun_matches = matches
-                     , fun_ext = ticks })
+                      , fun_body = body
+                      , fun_ext = ticks })
   = pprTicks empty ticksDoc
     $$ whenPprDebug (pprBndr LetBind (unLoc fun))
-    $$ pprFunBind matches
+    $$ ppr body
     $$ whenPprDebug (pprIfTc @idR $ wrapDoc)
   where
     ticksDoc :: SDoc
@@ -68,7 +68,7 @@ ppr_monobind (FunBind { fun_id = fun
     wrapDoc :: SDoc
     wrapDoc = empty
 ppr_monobind (TyFunBind _ _ _) = text "TyFunBind ppr non implemented"
-ppr_monobind (VarBind { var_id = var, var_rhs = rhs })
+ppr_monobind (TCVarBind { tcvar_id = var, tcvar_rhs = rhs })
   = sep [pprBndr CasePatBind var, nest 2 $ equals <+> pprExpr (unLoc rhs)]
 
 pprTicks :: SDoc -> SDoc -> SDoc
