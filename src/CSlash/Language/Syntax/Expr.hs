@@ -18,7 +18,7 @@ data CsExpr p
   | CsLam (XLam p) (MatchGroup p (LCsExpr p))
   | CsApp (XApp p) (LCsExpr p) (LCsExpr p)
   | CsTyLam (XTyLam p) (MatchGroup p (LCsExpr p))
-  | CsTyApp (XTyApp p) (LCsExpr p) (LCsExpr p)
+  --  | CsTyApp (XTyApp p) (LCsExpr p) (LCsExpr p)
   | OpApp (XOpApp p) (LCsExpr p) (LCsExpr p) (LCsExpr p)
   | CsPar (XPar p) (LCsExpr p)
   | SectionL (XSectionL p) (LCsExpr p) (LCsExpr p)
@@ -53,6 +53,7 @@ data CsMatchContext fn
   | TLamAlt
   | CaseAlt
   | MultiIfAlt
+  | TyLamTyAlt
 
 data GRHSs p body
   = GRHSs
@@ -63,7 +64,7 @@ data GRHSs p body
 type LGRHS id body = XRec id (GRHS id body)
 
 data GRHS p body
-  = GRHS (XCGRHS p body) [GuardLStmt p] body -- list of GuardLStmt empty for CaseAlt
+  = GRHS (XCGRHS p body) [GuardLStmt p] body
 
 type LStmt id body = XRec id (StmtLR id id body)
 
