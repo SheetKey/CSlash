@@ -53,7 +53,7 @@ type family XValBinds x x'
 -- CsBindLR type families
 type family XFunBind x x'
 type family XTyFunBind x x'
-type family XVarBind x x'
+type family XTCVarBind x x'
 
 -- Sig type families
 type family XTypeSig x
@@ -69,6 +69,11 @@ type family XFixitySig x
 -- CsDecl type families
 type family XValD x
 type family XSigD x
+
+-- =====================================================================
+-- Type families for the HsModule extension points
+
+type family XCModule x
 
 -- =====================================================================
 -- Type families for the CsExpr extension points
@@ -124,6 +129,7 @@ type family XCsString x
 type family XCsInt x
 type family XCsDouble x
 type family XSigPat x
+type family XKdSigPat x
 
 -- -------------------------------------
 -- CsOverLit type families
@@ -142,7 +148,7 @@ type family XLitPat x
 -- Type families for the CsTypes type families
 
 -- -------------------------------------
--- HsSigType type families
+-- CsSigType type families
 type family XCsSig x
 
 -- -------------------------------------
@@ -156,6 +162,7 @@ type family XCsTP x
 -- -------------------------------------
 -- CsType type families
 type family XForAllTy x
+type family XQualTy x
 type family XTyVar x
 type family XAppTy x
 type family XFunTy x
@@ -163,6 +170,8 @@ type family XTupleTy x
 type family XSumTy x
 type family XParTy x
 type family XKdSig x
+type family XTyLamTy x
+type family XTyAppTy x
 
 -- ---------------------------------------------------------------------
 -- CsForAllTelescope type families
@@ -201,6 +210,10 @@ type family XParKd x
 
 type family XKdLT x
 type family XKdLTEQ x
+
+-- -------------------------------------
+-- CsPatSigKind type families
+type family XCsPSK x
 
 -- =====================================================================
 -- Misc
