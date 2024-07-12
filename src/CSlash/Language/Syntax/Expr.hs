@@ -18,7 +18,7 @@ data CsExpr p
   | CsLam (XLam p) (MatchGroup p (LCsExpr p))
   | CsApp (XApp p) (LCsExpr p) (LCsExpr p)
   | CsTyLam (XTyLam p) (MatchGroup p (LCsExpr p))
-  --  | CsTyApp (XTyApp p) (LCsExpr p) (LCsExpr p)
+  | CsTyApp (XTyApp p) (LCsExpr p) (LCsExpr p)
   | OpApp (XOpApp p) (LCsExpr p) (LCsExpr p) (LCsExpr p)
   | CsPar (XPar p) (LCsExpr p)
   | SectionL (XSectionL p) (LCsExpr p) (LCsExpr p)
