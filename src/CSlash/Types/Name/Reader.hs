@@ -26,6 +26,31 @@ data RdrName
   | Exact Name
   deriving Data
 
+unknownToVar :: RdrName -> RdrName
+unknownToVar (Unqual (OccName UNKNOWN_NS fs)) = Unqual (OccName VarName fs)
+unknownToVar (Qual mn (OccName UNKNOWN_NS fs)) = Qual mn (OccName VarName fs)
+unknownToVar _ = error "unknownToVar"
+
+unknownToTv :: RdrName -> RdrName
+unknownToTv (Unqual (OccName UNKNOWN_NS fs)) = Unqual (OccName TvName fs)  
+unknownToTv (Qual mn (OccName UNKNOWN_NS fs)) = Qual mn (OccName TvName fs)
+unknownToTv _ = error "unknownToVar"
+
+unknownToKv :: RdrName -> RdrName
+unknownToKv (Unqual (OccName UNKNOWN_NS fs)) = Unqual (OccName KvName fs)  
+unknownToKv (Qual mn (OccName UNKNOWN_NS fs)) = Qual mn (OccName KvName fs)
+unknownToKv _ = error "unknownToVar"
+
+unknownToData :: RdrName -> RdrName
+unknownToData (Unqual (OccName UNKNOWN_NS fs)) = Unqual (OccName DataName fs)  
+unknownToData (Qual mn (OccName UNKNOWN_NS fs)) = Qual mn (OccName DataName fs)
+unknownToData _ = error "unknownToVar"
+
+unknownToTcCls :: RdrName -> RdrName
+unknownToTcCls (Unqual (OccName UNKNOWN_NS fs)) = Unqual (OccName TcClsName fs)  
+unknownToTcCls (Qual mn (OccName UNKNOWN_NS fs)) = Qual mn (OccName TcClsName fs)
+unknownToTcCls _ = error "unknownToVar"
+
 instance HasOccName RdrName where
   occName = rdrNameOcc
 
