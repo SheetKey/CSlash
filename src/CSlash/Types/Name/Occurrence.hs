@@ -25,6 +25,8 @@ data NameSpace
   | TvName
   | KvName
   | TcClsName
+  | DataName
+  | UNKNOWN_NS
   deriving Eq
 
 instance Ord NameSpace where
@@ -35,6 +37,8 @@ instance Uniquable NameSpace where
   getUnique TvName = tvNSUnique
   getUnique KvName = kvNSUnique
   getUnique TcClsName = tcNSUnique
+  getUnique DataName = dataNSUnique
+  getUnique UNKNOWN_NS = unknownNSUnique
 
 varName :: NameSpace
 varName = VarName
@@ -50,6 +54,9 @@ tcName = TcClsName
 
 tcClsName :: NameSpace
 tcClsName = TcClsName
+
+dataName :: NameSpace
+dataName = DataName
 
 pprNameSpace :: NameSpace -> SDoc
 pprNameSpace VarName = text "variable"
@@ -178,6 +185,10 @@ isTcOcc :: OccName -> Bool
 isTcOcc (OccName TcClsName _) = True
 isTcOcc _ = False
 
+isDataOcc :: OccName -> Bool
+isDataOcc (OccName DataName _) = True
+isDataOcc _ = False
+
 isValOcc :: OccName -> Bool
 isValOcc (OccName VarName _) = True
 isValOcc _ = False
@@ -188,3 +199,6 @@ isSymOcc (OccName ns s) = case ns of
   TvName -> isLexSym s
   KvName -> isLexKdSym s
   TcClsName -> isLexSym s
+
+isConOccFS :: OccName -> Bool
+isConOccFS (OccName _ s) = isLexCon s
