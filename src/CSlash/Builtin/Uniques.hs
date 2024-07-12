@@ -36,3 +36,9 @@ kvNSUnique = mkUnique 'k' 0
 
 tcNSUnique :: Unique
 tcNSUnique = mkUnique 'c' 0
+
+dataNSUnique :: Unique
+dataNSUnique = mkUnique 'd' 0
+
+unknownNSUnique :: Unique
+unknownNSUnique = mkUnique 'u' 0
