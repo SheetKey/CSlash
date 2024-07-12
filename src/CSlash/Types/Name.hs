@@ -24,7 +24,7 @@ module CSlash.Types.Name
 
     isSystemName, isInternalName, isExternalName,
     isTyVarName, isTyConName,
-    -- isDataConName,
+    isDataConName,
     isValName, isVarName,
     -- isDynLinkName, isFieldName,
     isWiredInName, isWiredIn, isBuiltInSyntax, isTupleTyConName,
@@ -223,8 +223,8 @@ isKdVarName name = isKvOcc (nameOccName name)
 isTyConName :: Name -> Bool
 isTyConName name = isTcOcc (nameOccName name)
 
--- isDataConName :: Name -> Bool
--- isDataConName name = isDataOcc (nameOccName name)
+isDataConName :: Name -> Bool
+isDataConName name = isDataOcc (nameOccName name)
 
 isValName :: Name -> Bool
 isValName name = isValOcc (nameOccName name)
