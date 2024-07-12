@@ -59,8 +59,8 @@ data CsType pass
   | CsKindSig (XKdSig pass) (LCsType pass) (LCsKind pass)
     -- function from type to type
   | CsTyLamTy (XTyLamTy pass) (MatchGroup pass (LCsType pass))
-    -- type applied to a type
-  | CsTyAppTy (XTyAppTy pass) (LCsType pass) (LCsType pass)
+  --    -- type applied to a type
+  --  | CsTyAppTy (XTyAppTy pass) (LCsType pass) (LCsType pass)
 
 data CsArrow pass
   = CsArrow !(XCsArrow pass) !(LCsKind pass)
