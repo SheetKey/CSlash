@@ -3,7 +3,6 @@ module CSlash.Parser
   ( parseModule, parseImport
   , parseDeclaration, parseExpression
   , parseTypeSignature
-  , parseIdentifier
   , parseType
   ) where
 
@@ -124,31 +123,9 @@ import qualified Data.Semigroup as Semi
 %name parseDeclaration topdecl
 %name parseExpression exp
 %name parseTypeSignature sigdecl
-%name parseIdentifier identifier
 %name parseType ktype
 %%
 
------------------------------------------------------------------------------
--- Identifiers; one of the entry points
-
-identifier :: { LocatedN RdrName }
-  : qvar { $1 }
-  | qcon { $1 }
-  | qvarop { $1 }
-  | qconop { $1 }
-  | '(' ARR_U ')' {% amsr (sLL $1 $> $ getRdrName unrestrictedFunTyCon)
-                          (NameAnnUnArrow (Just $ glAA $1) (glAA $2) (Just $ glAA $3) []) }
-  | ARR_U {% amsr (sLL $1 $> $ getRdrName unrestrictedFunTyCon)
-                  (NameAnnUnArrow Nothing (glAA $1) Nothing []) }
-  | '(' ARR_A ')' {% amsr (sLL $1 $> $ getRdrName affineFunTyCon)
-                          (NameAnnAffArrow (Just $ glAA $1) (glAA $2) (Just $ glAA $3) []) }
-  | ARR_A {% amsr (sLL $1 $> $ getRdrName affineFunTyCon)
-                  (NameAnnAffArrow Nothing (glAA $1) Nothing []) }
-  | '(' ARR_L ')' {% amsr (sLL $1 $> $ getRdrName linearFunTyCon)
-                          (NameAnnLinArrow (Just $ glAA $1) (glAA $2) (Just $ glAA $3) []) }
-  | ARR_L {% amsr (sLL $1 $> $ getRdrName linearFunTyCon)
-                  (NameAnnLinArrow Nothing (glAA $1) Nothing []) }
-    
 -----------------------------------------------------------------------------
 -- Module Header
 
