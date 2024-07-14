@@ -53,6 +53,7 @@ library
 
                     , CSlash.Conc
 
+                    , CSlash.Core.DataCon
                     , CSlash.Core.Kind
                     , CSlash.Core.Type.Rep
 
