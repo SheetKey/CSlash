@@ -52,6 +52,7 @@ library
 
                     , CSlash.Conc
 
+                    , CSlash.Core.Kind
                     , CSlash.Core.Type.Rep
 
                     , CSlash.Cs
