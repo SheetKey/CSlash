@@ -111,6 +111,8 @@ library
 
                     , CSlash.Stack
 
+                    , CSlash.Tc.Types.Origin
+
                     , CSlash.Types
                     , CSlash.Types.Basic
                     , CSlash.Types.Error
