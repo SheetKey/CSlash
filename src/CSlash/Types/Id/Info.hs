@@ -20,7 +20,7 @@ data IdDetails
 
 type TickBoxOpId = Int
 
-data TickBoxOp = TickBox Module {-# UNPACK #-} !TickBoxId
+data TickBoxOp = TickBox Module {-# UNPACK #-} !TickBoxOpId
 
 instance Outputable TickBoxOp where
-  ppr (TickBox mod n) = text "tixk" <+> ppr (mod, n)
+  ppr (TickBox mod n) = text "tick" <+> ppr (mod, n)
