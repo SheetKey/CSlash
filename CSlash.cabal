@@ -52,6 +52,8 @@ library
 
                     , CSlash.Conc
 
+                    , CSlash.Core.Type.Rep
+
                     , CSlash.Cs
                     , CSlash.Cs.Binds
                     , CSlash.Cs.Decls
