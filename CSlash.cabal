@@ -112,6 +112,7 @@ library
                     , CSlash.Stack
 
                     , CSlash.Tc.Types.Origin
+                    , CSlash.Tc.Utils.TcType
 
                     , CSlash.Types
                     , CSlash.Types.Basic
