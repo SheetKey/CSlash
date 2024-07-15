@@ -110,6 +110,8 @@ library
                     , CSlash.Parser.PostProcess
                     , CSlash.Parser.Types
 
+                    , CSlash.Settings.Constants
+
                     , CSlash.Show
 
                     , CSlash.Stack
