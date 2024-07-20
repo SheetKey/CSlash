@@ -129,6 +129,7 @@ library
                     , CSlash.Types.Hint
                     , CSlash.Types.Hint.Ppr
                     , CSlash.Types.Id
+                    , CSlash.Types.Id.Make
                     , CSlash.Types.Id.Info
                     , CSlash.Types.Name
                     , CSlash.Types.Name.Env
