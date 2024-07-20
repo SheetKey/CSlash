@@ -57,6 +57,7 @@ library
                     , CSlash.Core.DataCon
                     , CSlash.Core.Kind
                     , CSlash.Core.TyCon
+                    , CSlash.Core.Type
                     , CSlash.Core.Type.Ppr
                     , CSlash.Core.Type.Rep
 
