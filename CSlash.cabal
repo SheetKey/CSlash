@@ -149,6 +149,7 @@ library
                     , CSlash.Types.Unique.Map
                     , CSlash.Types.Unique.Set
                     , CSlash.Types.Var
+                    , CSlash.Types.Var.Env
                     
                     , CSlash.Unicode
 
