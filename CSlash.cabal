@@ -61,6 +61,7 @@ library
                     , CSlash.Core.Type
                     , CSlash.Core.Type.Ppr
                     , CSlash.Core.Type.Rep
+                    , CSlash.Core.Type.Subst
 
                     , CSlash.Cs
                     , CSlash.Cs.Binds
