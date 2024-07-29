@@ -59,6 +59,7 @@ library
                     , CSlash.Core.Kind
                     , CSlash.Core.TyCon
                     , CSlash.Core.Type
+                    , CSlash.Core.Type.FVs
                     , CSlash.Core.Type.Ppr
                     , CSlash.Core.Type.Rep
                     , CSlash.Core.Type.Subst
