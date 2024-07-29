@@ -150,6 +150,7 @@ library
                     , CSlash.Types.Unique.Set
                     , CSlash.Types.Var
                     , CSlash.Types.Var.Env
+                    , CSlash.Types.Var.Set
                     
                     , CSlash.Unicode
 
