@@ -137,6 +137,7 @@ library
                     , CSlash.Types.Id
                     , CSlash.Types.Id.Make
                     , CSlash.Types.Id.Info
+                    , CSlash.Types.Literal
                     , CSlash.Types.Name
                     , CSlash.Types.Name.Env
                     , CSlash.Types.Name.Occurrence
