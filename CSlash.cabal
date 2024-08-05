@@ -79,6 +79,7 @@ library
                     , CSlash.Cs.Lit
                     , CSlash.Cs.Pat
                     , CSlash.Cs.Type
+                    , CSlash.Cs.Utils
 
                     , CSlash.Data.Bag
                     , CSlash.Data.EnumSet
