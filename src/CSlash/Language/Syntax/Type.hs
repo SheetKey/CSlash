@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TypeFamilies #-}
 
@@ -6,8 +7,9 @@ module CSlash.Language.Syntax.Type where
 import {-# SOURCE #-} CSlash.Language.Syntax.Expr
 
 import CSlash.Language.Syntax.Extension
-
 import CSlash.Language.Syntax.Kind
+
+import Data.Data (Data)
 
 type LCsType pass = XRec pass (CsType pass)
 
@@ -22,6 +24,8 @@ data CsTyPat pass = CsTP
   }
 
 type LCsTyPat pass = XRec pass (CsTyPat pass)
+
+type LCsSigType pass = XRec pass (CsSigType pass)
 
 data CsSigType pass = CsSig
   { sig_ext :: XCsSig pass
@@ -55,6 +59,7 @@ data CsType pass
   | CsFunTy (XFunTy pass) (CsArrow pass) (LCsType pass) (LCsType pass)
   | CsTupleTy (XTupleTy pass) [LCsType pass]
   | CsSumTy (XSumTy pass) [LCsType pass]
+  | CsOpTy (XOpTy pass) (LCsType pass) (LIdP pass) (LCsType pass)
   | CsParTy (XParTy pass) (LCsType pass)
   | CsKindSig (XKdSig pass) (LCsType pass) (LCsKind pass)
     -- function from type to type
@@ -66,6 +71,11 @@ data CsArrow pass
   = CsArrow !(XCsArrow pass) !(LCsKind pass)
 
 type family XCsArrow x -- XExplicitMult in ghc
+
+data CsConDetails tyarg arg
+  = PrefixCon [tyarg] [arg]
+  | InfixCon arg arg
+  deriving Data
 
 data CsArg p tm ty
   = CsValArg !(XValArg p) tm
