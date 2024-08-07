@@ -1,4 +1,4 @@
-module CSlash.Type.Var where
+module CSlash.Types.Var where
 
 import {-# SOURCE #-} CSlash.Types.Name
 
