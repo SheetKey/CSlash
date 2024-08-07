@@ -1,6 +1,7 @@
 module CSlash.Core.Type.Rep where
 
+import {-# SOURCE #-} CSlash.Core.TyCon (TyCon)
+
 data Type
 
-data Scaled a
-scaledThing :: Scaled a -> a
+mkNakedTyConTy :: TyCon -> Type
