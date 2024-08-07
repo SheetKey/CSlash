@@ -10,6 +10,8 @@ import CSlash.Stack
 import CSlash.Utils.Outputable
 import CSlash.Utils.Misc
 import CSlash.Utils.Panic.Plain
+import CSlash.Utils.Constants
+
 import CSlash.Utils.Exception as Exception
 
 import Data.Typeable ( cast )
@@ -83,3 +85,13 @@ prettyCallStackDoc :: CallStack -> SDoc
 prettyCallStackDoc cs =
   hang (text "Call stack:")
        4 (vcat $ map text $ lines (prettyCallStack cs))
+
+assertPprPanic :: HasCallStack => SDoc -> a
+assertPprPanic msg = withFrozenCallStack (pprPanic "ASSERT failed!" msg)
+
+assertPpr :: HasCallStack => Bool -> SDoc -> a -> a
+{-# INLINE assertPpr #-}
+assertPpr cond msg a =
+  if debugIsOn && not cond
+  then withFrozenCallStack (assertPprPanic msg)
+  else a
