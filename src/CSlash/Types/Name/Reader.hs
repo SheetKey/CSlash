@@ -63,17 +63,41 @@ rdrNameOcc (Exact name) = nameOccName name
 rdrNameSpace :: RdrName -> NameSpace
 rdrNameSpace = occNameSpace . rdrNameOcc
 
+mkRdrUnqual :: OccName -> RdrName
+mkRdrUnqual occ = Unqual occ
+
 mkUnqual :: NameSpace -> FastString -> RdrName
 mkUnqual sp n = Unqual (mkOccNameFS sp n)
+
+getRdrName :: NamedThing thing => thing -> RdrName
+getRdrName name = nameRdrName (getName name)
+
+nameRdrName :: Name -> RdrName
+nameRdrName name = Exact name
 
 nukeExact :: Name -> RdrName
 nukeExact n
   | isExternalName n = Orig (nameModule n) (nameOccName n)
   | otherwise = Unqual (nameOccName n)
 
+isRdrDataCon :: RdrName -> Bool
+isRdrDataCon rn = isDataOcc (rdrNameOcc rn)
+
+isRdrTc :: RdrName -> Bool
+isRdrTc rn = isTcOcc (rdrNameOcc rn)
+
+isRdrUnknown :: RdrName -> Bool
+isRdrUnknown rn = isUnknownOcc (rdrNameOcc rn)
+
 isExact_maybe :: RdrName -> Maybe Name
 isExact_maybe (Exact n) = Just n
 isExact_maybe _ = Nothing
+
+{- *********************************************************************
+*                                                                      *
+            Instances
+*                                                                      *
+********************************************************************* -}
 
 instance Outputable RdrName where
   ppr (Exact name) = ppr name
