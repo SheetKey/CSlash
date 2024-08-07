@@ -10,18 +10,21 @@ module CSlash.Cs.Type
   ( CsArrow(..)
   , pprCsArrow
   
-  , CsType(..)
+  , CsType(..), LCsType
   , CsForAllTelescope(..), CsTyVarBndr(..), LCsTyVarBndr
   , CsPatSigType(..)
   , CsTyPat(..)
-  , CsSigType(..)
+  , CsSigType(..), LCsSigType
+
+  , CsConDetails(..)
+
   , module CSlash.Cs.Type
   ) where
 
 import Prelude hiding ((<>))
 
 import CSlash.Language.Syntax.Type
-import CSlash.Language.Syntax.Expr
+import {-# SOURCE #-} CSlash.Language.Syntax.Expr
 import CSlash.Language.Syntax.Extension
 import CSlash.Cs.Extension
 import CSlash.Cs.Kind
@@ -61,6 +64,14 @@ type instance XCsSig (CsPass _) = NoExtField
 
 type instance XKindedTyVar (CsPass _) = [AddEpAnn]
 
+mkCsPatSigType :: EpAnnCO -> LCsType Ps -> CsPatSigType Ps
+mkCsPatSigType ann x = CsPS { csps_ext = ann
+                            , csps_body = x }
+
+mkCsTyPat :: LCsType Ps -> CsTyPat Ps
+mkCsTyPat x = CsTP { cstp_ext = noExtField
+                   , cstp_body = x }
+
 type instance XForAllTy (CsPass _) = NoExtField
 type instance XQualTy (CsPass _) = NoExtField
 type instance XTyVar (CsPass _) = [AddEpAnn]
@@ -68,6 +79,7 @@ type instance XAppTy (CsPass _) = NoExtField
 type instance XFunTy (CsPass _) = NoExtField
 type instance XTupleTy (CsPass _) = AnnParen
 type instance XSumTy (CsPass _) = AnnParen
+type instance XOpTy (CsPass _) = [AddEpAnn]
 type instance XParTy (CsPass _) = AnnParen
 type instance XKdSig (CsPass _) = [AddEpAnn]
 type instance XTyLamTy (CsPass _) = [AddEpAnn]
@@ -88,6 +100,29 @@ instance (OutputableBndrId p) => Outputable (CsArrow (CsPass p)) where
 pprCsArrow :: (OutputableBndrId p) => CsArrow (CsPass p) -> SDoc
 pprCsArrow (CsArrow _ kind) = ppr kind
 
+
+{- *********************************************************************
+*                                                                      *
+                Building types
+*                                                                      *
+********************************************************************* -}
+
+mkCsOpTy
+  :: (Anno (IdCsP p) ~ SrcSpanAnnN)
+  => LCsType (CsPass p)
+  -> LocatedN (IdP (CsPass p))
+  -> LCsType (CsPass p)
+  -> CsType (CsPass p)
+mkCsOpTy ty1 op ty2 = CsOpTy noAnn ty1 op ty2
+
+mkCsAppTy :: LCsType (CsPass p) -> LCsType (CsPass p) -> LCsType (CsPass p)
+mkCsAppTy t1 t2 = addCLocA t1 t2 (CsAppTy noExtField t1 t2)
+
+{- *********************************************************************
+*                                                                      *
+            Pretty printing
+*                                                                      *
+********************************************************************* -}
 -- class OutputableBndrFlag p where
 --   pprTyVarBndr :: OutputableBndrId p => CsTyVarBndr (CsPass p) -> SDoc
 
