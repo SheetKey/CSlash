@@ -47,26 +47,25 @@ module CSlash.Types.Name
 
 import Prelude hiding ((<>))
 
-import CSlash.Data.Maybe
-import CSlash.Data.FastString
+import {-# SOURCE #-} CSlash.Types.TyThing (TyThing)
+
 import CSlash.Types.Name.Occurrence
-import CSlash.Types.SrcLoc
-import CSlash.Types.TyThing
-import CSlash.Types.Unique
-import CSlash.Unit.Home
-import CSlash.Unit.Types
 import CSlash.Unit.Module
+import CSlash.Unit.Home
+import CSlash.Types.SrcLoc
+import CSlash.Types.Unique
 import CSlash.Utils.Misc
+import CSlash.Data.Maybe
+import CSlash.Utils.Binary
+import CSlash.Data.FastString
 import CSlash.Utils.Outputable
 import CSlash.Utils.Panic
-import CSlash.Utils.Binary
-import CSlash.Builtin.Uniques (isTupleTyConUnique, isSumTyConUnique)
-
 import Data.List ( intersperse )
 
 import Control.DeepSeq
 import Data.Data
 import qualified Data.Semigroup as S
+import CSlash.Builtin.Uniques (isTupleTyConUnique, isSumTyConUnique)
 
 data Name = Name
   { n_sort :: NameSort
