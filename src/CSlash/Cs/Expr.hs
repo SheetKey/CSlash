@@ -1,6 +1,9 @@
+{-# LANGUAGE TypeFamilyDependencies #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE UndecidableInstances #-}
@@ -29,6 +32,26 @@ import CSlash.Utils.Outputable
 import CSlash.Utils.Panic
 
 import Data.Data hiding (Fixity(..))
+import qualified Data.Kind
+
+type instance SyntaxExpr (CsPass p) = SyntaxExprCs p
+  
+type family SyntaxExprCs (p :: Pass) = (r :: Data.Kind.Type) | r -> p where
+  SyntaxExprCs 'Parsed = NoExtField
+  SyntaxExprCs 'Renamed = SyntaxExprRn
+  SyntaxExprCs 'Typechecked = SyntaxExprTc
+
+data SyntaxExprRn = SyntaxExprRn (CsExpr Rn)
+                  | NoSyntaxExprRn
+
+data SyntaxExprTc = SyntaxExprTc
+                  | NoSyntaxExprTc
+
+noSyntaxExpr :: forall p. IsPass p => SyntaxExpr (CsPass p)
+noSyntaxExpr = case csPass @p of
+  Ps -> noExtField
+  Rn -> NoSyntaxExprRn
+  Tc -> NoSyntaxExprTc
 
 data EpAnnCsCase = EpAnnCsCase
   { csCaseAnnCase :: EpaLocation
@@ -49,6 +72,7 @@ type instance XUnboundVar Ps = Maybe EpAnnUnboundVar
 type instance XUnboundVar Rn = NoExtField
 type instance XUnboundVar Tc = DataConCantHappen
 
+type instance XOverLitE (CsPass _) = NoExtField
 type instance XLitE (CsPass _) = NoExtField
 type instance XLam (CsPass _) = [AddEpAnn]
 type instance XApp (CsPass _) = NoExtField
@@ -70,6 +94,10 @@ type instance XSectionL Rn = NoExtField
 type instance XSectionR Rn = NoExtField
 type instance XSectionL Tc = DataConCantHappen
 type instance XSectionR Tc = DataConCantHappen
+
+type instance XNegApp Ps = [AddEpAnn]
+type instance XNegApp Rn = NoExtField
+type instance XNegApp Tc = NoExtField
 
 type instance XPar Ps = (EpToken "(", EpToken ")")
 type instance XPar Rn = NoExtField
@@ -95,10 +123,20 @@ type instance XMultiIf Ps = [AddEpAnn]
 type instance XMultiIf Rn = NoExtField
 type instance XMultiIf Tc = NoExtField -- should be Type
 
+type instance XLet Ps = (EpToken "let", EpToken "in")
+type instance XLet Rn = NoExtField
+type instance XLet Tc = NoExtField
+
 type instance XExprWithTySig Ps = [AddEpAnn]
 type instance XExprWithTySig Rn = NoExtField
 type instance XExprWithTySig Tc = NoExtField
 
+type instance XEmbTy Ps = NoExtField
+type instance XEmbTy Rn = NoExtField
+type instance XEmbTy Tc = DataConCantHappen
+
+type instance Anno [LocatedA ((StmtLR (CsPass pl) (CsPass pr) (LocatedA (body (CsPass pr)))))]
+  = SrcSpanAnnL
 type instance Anno (StmtLR Rn Rn (LocatedA (body Rn))) = SrcSpanAnnA
 
 data AnnExplicitSum = AnnExplicitSum
@@ -114,7 +152,7 @@ instance NoAnn AnnExplicitSum where
 
 data AnnsIf = AnnsIf
   { aiIf :: EpaLocation
-  , iaThen :: EpaLocation
+  , aiThen :: EpaLocation
   , aiElse :: EpaLocation
   , aiThenSemi :: Maybe EpaLocation
   , aiElseSemi :: Maybe EpaLocation
@@ -324,6 +362,9 @@ type instance XCMatch (CsPass _) b = [AddEpAnn]
 instance (OutputableBndrId pr, Outputable body)
   => Outputable (Match (CsPass pr) body) where
   ppr = pprMatch
+
+csLMatchPats :: LMatch (CsPass id) body -> [LPat (CsPass id)]
+csLMatchPats (L _ (Match { m_pats = pats })) = pats
 
 type instance XCGRHSs (CsPass _) _ = EpAnnComments
 
