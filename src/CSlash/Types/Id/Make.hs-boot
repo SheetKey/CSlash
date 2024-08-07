@@ -4,4 +4,4 @@ import CSlash.Types.Name (Name)
 import CSlash.Types.Var (Id)
 import {-# SOURCE #-} CSlash.Core.DataCon (DataCon)
 
-mkDataConWordId :: Name -> DataCon -> Id
+mkDataConWorkId :: Name -> DataCon -> Id
