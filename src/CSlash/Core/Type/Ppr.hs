@@ -6,7 +6,7 @@ import CSlash.Types.Var
 
 import CSlash.Utils.Outputable
 import CSlash.Utils.Misc
-import CSlash.Type.Basic
+import CSlash.Types.Basic
 
 
 pprType :: Type -> SDoc
@@ -33,3 +33,8 @@ pprType = undefined -- pprPrecType topPrec
 --   where
 --     env' = tidyFreeTyVars env free_tvs
 --     free_tvs = tyVarsOfTypeWellScoped ty
+
+pprTyVar :: TypeVar -> SDoc
+pprTyVar tv = parens (ppr tv <+> colon <+> ppr kind)
+  where
+    kind = varKind tv
