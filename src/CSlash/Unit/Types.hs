@@ -261,6 +261,12 @@ instance Outputable UnitId where
 pprUnitId :: UnitId -> SDoc
 pprUnitId (UnitId fs) = sdocOption sdocUnitIdForUser ($ fs)
 
+primUnitId :: UnitId
+primUnitId = UnitId (fsLit "cslash-prim")
+
+primUnit :: Unit
+primUnit = RealUnit (Definite primUnitId)
+
 mainUnitId :: UnitId
 mainUnitId = UnitId (fsLit "main")
 
