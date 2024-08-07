@@ -47,6 +47,10 @@ type LIdP p = XRec p (IdP p)
 -- =====================================================================
 -- Type families for the CsBinds extension points
 
+-- CsLocalBindsLR type families
+type family XCsValBinds x x'
+type family XEmptyLocalBinds x x'
+
 -- CsValBindsLR type families
 type family XValBinds x x'
 
@@ -80,12 +84,14 @@ type family XCModule x
 
 type family XVar x
 type family XUnboundVar x
+type family XOverLitE x
 type family XLitE x
 type family XLam x
 type family XApp x
 type family XTyLam x
 type family XTyApp x
 type family XOpApp x
+type family XNegApp x
 type family XPar x
 type family XSectionL x
 type family XSectionR x
@@ -94,7 +100,9 @@ type family XExplicitSum x
 type family XCase x
 type family XIf x
 type family XMultiIf x
+type family XLet x
 type family XExprWithTySig x
+type family XEmbTy x
 
 -- -------------------------------------
 -- HsTupArg type families
@@ -139,10 +147,14 @@ type family XOverLit  x
 -- Type families for the CsPat extension points
 
 type family XWildPat x
+type family XAsPat x
+type family XParPat x
 type family XVarPat x
 type family XTuplePat x
 type family XSumPat x
+type family XConPat x
 type family XLitPat x
+type family XNPat x
 
 -- =====================================================================
 -- Type families for the CsTypes type families
@@ -168,6 +180,7 @@ type family XAppTy x
 type family XFunTy x
 type family XTupleTy x
 type family XSumTy x
+type family XOpTy x
 type family XParTy x
 type family XKdSig x
 type family XTyLamTy x
