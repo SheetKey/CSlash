@@ -1,6 +1,34 @@
-module CSlash.Tc.Utils.TcType where
+module CSlash.Tc.Utils.TcType
+  ( TcType
+  , TcTyVar
 
-import CSlash.Tc.Types.Origin
+  , TcLevel(..)
+
+  , TcTyVarDetails(..), pprTcTyVarDetails
+  , MetaDetails, MetaInfo
+  ) where
+
+import Prelude hiding ((<>))
+
+import CSlash.Core.Type.Rep
+import CSlash.Types.Var
+import CSlash.Core.TyCon
+
+import {-# SOURCE #-} CSlash.Tc.Types.Origin
+  ( SkolemInfo )
+
+import CSlash.Types.Name as Name
+import CSlash.Types.Name.Env
+import CSlash.Types.Name.Set
+import CSlash.Builtin.Names
+
+import CSlash.Data.Maybe
+import CSlash.Types.Basic
+import CSlash.Utils.Misc
+import CSlash.Utils.Outputable
+import CSlash.Utils.Panic
+
+import Data.IORef (IORef)
 
 type TcType = Type
 
@@ -28,3 +56,6 @@ instance Outputable MetaDetails
 instance Outputable MetaInfo
 
 newtype TcLevel = TcLevel Int deriving (Eq, Ord)
+
+instance Outputable TcLevel where
+  ppr (TcLevel us) = ppr us
