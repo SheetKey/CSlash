@@ -8,7 +8,11 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE BangPatterns #-}
 
-module CSlash.Parser.PostProcess where
+module CSlash.Parser.PostProcess
+  ( SumOrTuple(..)
+
+  , module CSlash.Parser.PostProcess
+  ) where
 
 import CSlash.Cs
 import CSlash.Core.TyCon
