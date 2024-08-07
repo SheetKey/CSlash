@@ -1,15 +1,37 @@
 module CSlash.Language.Syntax.Binds where
 
+import {-# SOURCE #-} CSlash.Language.Syntax.Expr
+  ( LCsExpr, MatchGroup, GRHSs )
+
 import CSlash.Language.Syntax.Extension
-import CSlash.Language.Syntax.Expr
 import CSlash.Language.Syntax.Type
 import CSlash.Language.Syntax.Kind
 
 import CSlash.Types.Fixity
+import CSlash.Data.Bag (Bag)
+
+type CsLocalBinds id = CsLocalBindsLR id id
+
+type LCsLocalBinds id = XRec id (CsLocalBinds id)
+
+data CsLocalBindsLR idL idR
+  = CsValBinds (XCsValBinds idL idR)
+               (CsValBindsLR idL idR)
+  | EmptyLocalBinds (XEmptyLocalBinds idL idR)
+
+data CsValBindsLR idL idR
+  = ValBinds (XValBinds idL idR)
+             (LCsBindsLR idL idR) [LSig idR]
+
+-- ---------------------------------------------------------------------
 
 type LCsBind id = XRec id (CsBindLR id id)
 
 type CsBind id = CsBindLR id id
+
+type LCsBindsLR idL idR = Bag (LCsBindLR idL idR)
+
+type LCsBindLR idL idR = XRec idL (CsBindLR idL idR)
 
 data CsBindLR idL idR
   = FunBind -- for all top level binds, not just functions
@@ -28,7 +50,7 @@ data CsBindLR idL idR
     , tcvar_rhs :: LCsExpr idR
     }
 
-data LCsSig p = XRec p (Sig p)
+data LSig p = XRec p (Sig p)
 
 data Sig pass
   = TypeSig (XTypeSig pass) (LIdP pass) (LCsType pass)
