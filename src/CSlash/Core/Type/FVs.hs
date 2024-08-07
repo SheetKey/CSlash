@@ -1,13 +1,8 @@
 module CSlash.Core.Type.FVs where
 
-import {-# SOURCE #-} CSlash.Core.Type ( partitionInvisibleTypes, coreView, rewriterView )
-
-import CSlash.Builtin.Types.Prim ( funTyFlagTyCon )
-
 import Data.Monoid as DM ( Endo(..), Any(..) )
 import CSlash.Core.Type.Rep
 import CSlash.Core.TyCon
-import CSlash.Utils.FV
 
 import CSlash.Types.Var
 import CSlash.Types.Unique.FM
@@ -31,7 +26,7 @@ import CSlash.Utils.Panic
 ********************************************************************* -}
 
 runTyVars :: Endo TyVarSet -> TyVarSet
-{-# INLINE runTyCoVars #-}
+{-# INLINE runTyVars #-}
 runTyVars f = appEndo f emptyVarSet
 
 {- *********************************************************************
@@ -41,10 +36,13 @@ runTyVars f = appEndo f emptyVarSet
 ********************************************************************* -}
 
 shallowTyVarsOfType :: Type -> TyVarSet
-shallowTyVarsOfType ty = runTyCoVars (shallow_ty ty)
+shallowTyVarsOfType ty = runTyVars (shallow_ty ty)
 
 shallowTyVarsOfTypes :: [Type] -> TyVarSet
-shallowTyVarsOfTypes tys = runTyCoVars (shallow_tys tys)
+shallowTyVarsOfTypes tys = runTyVars (shallow_tys tys)
+
+shallowTyVarsOfTyVarEnv :: TyVarEnv Type -> TyVarSet
+shallowTyVarsOfTyVarEnv tys = shallowTyVarsOfTypes (nonDetEltsUFM tys)
 
 shallow_ty :: Type -> Endo TyVarSet
 shallow_tys :: [Type] -> Endo TyVarSet
@@ -61,4 +59,4 @@ shallowTvFolder = TypeFolder { tf_view = noView
         do_it acc | v `elemVarSet` is = acc
                   | v `elemVarSet` acc = acc
                   | otherwise = acc `extendVarSet` v
-    do_bndr is tv _ = extendVarSet is tcv
+    do_bndr is tv _ = extendVarSet is tv
