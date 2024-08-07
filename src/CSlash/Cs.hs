@@ -6,12 +6,17 @@
 module CSlash.Cs
   ( module CSlash.Language.Syntax
   , module CSlash.Cs.Doc
+  , module CSlash.Cs.Binds
   , module CSlash.Cs.Expr
   , module CSlash.Cs.Extension
   , module CSlash.Cs.Kind
   , module CSlash.Cs.Lit
   , module CSlash.Cs.Pat
   , module CSlash.Cs.Type
+  , module CSlash.Cs.Utils
+  , module CSlash.Cs.ImpExp
+
+  , module CSlash.Parser.Annotation
 
   , CsModule(..), AnnsModule(..)
   , CsParsedModule(..), XModulePs(..)
@@ -19,12 +24,15 @@ module CSlash.Cs
   
 import CSlash.Language.Syntax
 import CSlash.Cs.Doc
+import CSlash.Cs.Binds
 import CSlash.Cs.Expr
 import CSlash.Cs.Extension
 import CSlash.Cs.Kind
 import CSlash.Cs.Lit
 import CSlash.Cs.Pat
 import CSlash.Cs.Type
+import CSlash.Cs.Utils
+import CSlash.Cs.ImpExp
 
 import CSlash.Cs.Instances
 
