@@ -1,5 +1,9 @@
 module CSlash.Core.Kind where
 
+import CSlash.Utils.Outputable 
+
 data Kind
 
-type Mult = Kind
+instance Outputable Kind
+
+pprKind :: Kind -> SDoc
