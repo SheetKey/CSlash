@@ -1,11 +1,17 @@
+{-# LANGUAGE BangPatterns #-}
+
 module CSlash.Core.Kind.Subst where
 
+import {-# SOURCE #-} CSlash.Core ( CoreExpr )
+import {-# SOURCE #-} CSlash.Core.Ppr ()
+
+import CSlash.Core.Type.Rep
 import CSlash.Core.Kind
 import CSlash.Core.Kind.FVs
 
 import CSlash.Types.Var
 import CSlash.Types.Var.Set
-pimport CSlash.Types.Var.Env
+import CSlash.Types.Var.Env
 
 import CSlash.Utils.Constants (debugIsOn)
 import CSlash.Utils.Misc
@@ -39,11 +45,17 @@ isEmptySubst :: Subst -> Bool
 isEmptySubst (Subst _ id_env tv_env kv_env)
   = isEmptyVarEnv id_env && isEmptyVarEnv tv_env && isEmptyVarEnv kv_env
 
-isEmptyTvSubst :: Subst -> Bool
-isEmptyTvSubst (Subst _ _ tv_env _) = isEmptyVarEnv tv_env
-
 isEmptyKvSubst :: Subst -> Bool
 isEmptyKvSubst (Subst _ _ _ kv_env) = isEmptyVarEnv kv_env
+
+instance Outputable Subst where
+  ppr (Subst in_scope ids tvs kvs)
+      =  text "<InScope =" <+> in_scope_doc
+      $$ text "IdSubst    =" <+> ppr ids
+      $$ text "TvSubst    =" <+> ppr tvs
+      $$ text "KvSubst    =" <+> ppr kvs
+    where
+      in_scope_doc = pprVarSet (getInScopeVars in_scope) (braces . fsep . map ppr)
 
 {- **********************************************************************
 *                                                                       *
@@ -60,6 +72,20 @@ isValidKdSubst (Subst in_scope _ _ kenv) =
 checkValidKdSubst :: HasDebugCallStack => Subst -> [Kind] -> a -> a
 checkValidKdSubst subst@(Subst in_scope _ _ kenv) kds a
   = assertPpr (isValidKdSubst subst)
+              (text "in_scope" <+> ppr in_scope $$
+               text "kenv" <+> ppr kenv $$
+               text "kenvFVs" <+> ppr (shallowKdVarsOfKdVarEnv kenv) $$
+               text "kds" <+> ppr kds) $
+    assertPpr kdsFVsInScope
+              (text "in_scope" <+> ppr in_scope $$
+               text "kenv" <+> ppr kenv $$
+               text "kds" <+> ppr kds $$
+               text "needInScope" <+> ppr needInScope)
+              a
+  where
+    substDomain = nonDetKeysUFM kenv
+    needInScope = shallowKdVarsOfKinds kds `delListFromUniqSet_Directly` substDomain
+    kdsFVsInScope = needInScope `varSetInScope` in_scope
 
 substKd :: HasDebugCallStack => Subst -> Kind -> Kind
 substKd subst kd
@@ -77,7 +103,7 @@ subst_kd subst kd
             !res' = go res
         in kd { kft_arg = arg', kft_res = res' }
     go (KdContext rels) = KdContext $ go_rel <$> rels
-    go UKd = Ukd
+    go UKd = UKd
     go AKd = AKd
     go LKd = LKd
 
@@ -87,6 +113,6 @@ subst_kd subst kd
 substKdVar :: Subst -> KindVar -> Kind
 substKdVar (Subst _ _ _ kenv) kv
   = assert (isKdVar kv) $
-    case loopupVarEnv kenv kv of
+    case lookupVarEnv kenv kv of
       Just kd -> kd
       Nothing -> KdVarKd kv
