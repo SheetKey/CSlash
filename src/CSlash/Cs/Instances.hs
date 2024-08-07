@@ -21,6 +21,16 @@ import CSlash.Cs.Pat
 import CSlash.Cs.ImpExp
 import CSlash.Parser.Annotation
 
+instance Data (CsLocalBindsLR Ps Ps)
+instance Data (CsLocalBindsLR Ps Rn)
+instance Data (CsLocalBindsLR Rn Rn)
+instance Data (CsLocalBindsLR Tc Tc)
+
+-- deriving instance Data (CsValBindsLR Ps Ps)
+-- deriving instance Data (CsValBindsLR Ps Rn)
+-- deriving instance Data (CsValBindsLR Rn Rn)
+-- deriving instance Data (CsValBindsLR Tc Tc)
+
 deriving instance Data (CsBindLR Ps Ps)
 deriving instance Data (CsBindLR Ps Rn)
 deriving instance Data (CsBindLR Rn Rn)
@@ -85,13 +95,29 @@ deriving instance Data (StmtLR Tc Tc (LocatedA (CsExpr Tc)))
 
 deriving instance Data fn => Data (CsMatchContext fn)
 
+deriving instance Data SyntaxExprRn
+deriving instance Data SyntaxExprTc
+
 deriving instance Data (CsLit Ps)
 deriving instance Data (CsLit Rn)
 deriving instance Data (CsLit Tc)
 
+deriving instance Data (CsOverLit Ps)
+deriving instance Data (CsOverLit Rn)
+deriving instance Data (CsOverLit Tc)
+
+deriving instance Data OverLitRn
+deriving instance Data OverLitTc
+
 deriving instance Data (Pat Ps)
 deriving instance Data (Pat Rn)
 deriving instance Data (Pat Tc)
+
+deriving instance Data ConPatTc
+
+deriving instance Data (CsConPatTyArg Ps)
+deriving instance Data (CsConPatTyArg Rn)
+deriving instance Data (CsConPatTyArg Tc)
 
 deriving instance Data (CsSigType Ps)
 deriving instance Data (CsSigType Rn)
