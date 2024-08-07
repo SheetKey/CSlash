@@ -1,12 +1,30 @@
 module CSlash.Core.Type
-  (
+  ( Type, ForAllTyFlag(..) -- , FunTyFlag(..)
+  , Var, TypeVar, isTyVar, ForAllTyBinder
+  , KnotTied
+
+  , mkTyVarTy, mkTyVarTys
+
+  , mkAppTy, mkAppTys
+
+  , mkTyConApp, mkTyConTy
+
+  , binderVar, binderVars
+
+  , coreView
   ) where
 
 import CSlash.Types.Basic
 
-import CSlash.Core.TyCo.Rep
+import CSlash.Core.Type.Rep
+import CSlash.Core.Type.Subst
+import CSlash.Core.Type.FVs
+
+import CSlash.Core.Kind.Subst
 
 import CSlash.Types.Var
+import CSlash.Types.Var.Env
+import CSlash.Types.Var.Set
 import CSlash.Types.Unique.Set
 
 import CSlash.Core.TyCon
@@ -71,6 +89,21 @@ expand_syn tvs rhs arg_tys
         rhs' = substTy subst rhs
     go subst (tv:tvs) (ty:tys) = go (extendTvSubst subst tv ty) tvs tys
     go _ (_:_) [] = pprPanic "expand_syn" (ppr tvs $$ ppr rhs $$ ppr arg_tys)
+
+{- *********************************************************************
+*                                                                      *
+                      AppTy
+*                                                                      *
+********************************************************************* -}
+
+mkAppTy :: Type -> Type -> Type
+mkAppTy (TyConApp tc tys) ty2 = mkTyConApp tc (tys ++ [ty2])
+mkAppTy ty1 ty2 = AppTy ty1 ty2
+
+mkAppTys :: Type -> [Type] -> Type
+mkAppTys ty1 [] = ty1
+mkAppTys (TyConApp tc tys1) tys2 = mkTyConApp tc (tys1 ++ tys2)
+mkAppTys ty1 tys2 = foldl' AppTy ty1 tys2
 
 {- *********************************************************************
 *                                                                      *
