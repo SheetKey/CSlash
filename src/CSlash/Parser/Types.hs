@@ -3,27 +3,27 @@
 {-# LANGUAGE DataKinds #-}
 
 module CSlash.Parser.Types
-  ( PatBuilder(..) )
+  ( SumOrTuple(..)
+  , PatBuilder(..) )
   where
 
-import CSlash.Cs.Extension
-
-import CSlash.Parser.Annotation
-
-import CSlash.Types.Name.Reader
-
-import CSlash.Language.Syntax.Extension
-import CSlash.Language.Syntax.Type
-import CSlash.Language.Syntax.Pat
-import CSlash.Language.Syntax.Lit
+import CSlash.Types.Basic
 import CSlash.Types.SrcLoc
+import CSlash.Types.Name.Reader
 import CSlash.Cs.Extension
-import CSlash.Cs.Type
-import CSlash.Cs.Pat
 import CSlash.Cs.Lit
+import CSlash.Cs.Pat
+import CSlash.Cs.Type
+import CSlash.Utils.Outputable as Outputable
+import CSlash.Data.OrdList
+
+import Data.Foldable
 import CSlash.Parser.Annotation
-import CSlash.Utils.Outputable
 import CSlash.Language.Syntax
+
+data SumOrTuple b
+  = Sum ConTag Arity (LocatedA b) [EpaLocation] [EpaLocation]
+  | Tuple [Either (EpAnn Bool) (LocatedA b)]
 
 data PatBuilder p
   = PatBuilderPat (Pat p)
