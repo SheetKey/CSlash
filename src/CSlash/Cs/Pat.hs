@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -7,47 +8,84 @@
 
 module CSlash.Cs.Pat
   ( Pat(..), LPat
+  , EpAnnSumPat(..)
+  , ConPatTc(..)
+  , ConLikeP
+
+  , CsConPatDetails
+  , CsConPatTyArg(..)
 
   , patNeedsParens
 
   , pprParendLPat
   ) where
 
-import CSlash.Language.Syntax.Extension
 import CSlash.Language.Syntax.Pat
-import CSlash.Cs.Extension
+
+import CSlash.Cs.Binds
 import CSlash.Cs.Lit
+import CSlash.Language.Syntax.Extension
+import CSlash.Parser.Annotation
+import CSlash.Cs.Extension
 import CSlash.Cs.Type
 import CSlash.Types.Basic
 import CSlash.Types.SrcLoc
-import CSlash.Parser.Annotation
-import CSlash.Utils.Outputable
 
+import CSlash.Utils.Outputable
+import CSlash.Types.Name.Reader (RdrName)
+import CSlash.Core.ConLike
+import CSlash.Core.Type
+import CSlash.Core.Kind
+import CSlash.Types.Name (Name)
 import Data.Data
 
 type instance XWildPat Ps = NoExtField
 type instance XWildPat Rn = NoExtField
-type instance XWildPat Tc = NoExtField -- should be Type
+type instance XWildPat Tc = Type
 
 type instance XVarPat (CsPass _) = NoExtField
 
+type instance XAsPat Ps = EpToken "@"
+type instance XAsPat Rn = NoExtField
+type instance XAsPat Tc = NoExtField
+
+type instance XParPat Ps = (EpToken "(", EpToken ")")
+type instance XParPat Rn = NoExtField
+type instance XParPat Tc = NoExtField
+
 type instance XTuplePat Ps = [AddEpAnn]
 type instance XTuplePat Rn = NoExtField
-type instance XTuplePat Tc = NoExtField -- should be [Type]
+type instance XTuplePat Tc = [Type]
 
 type instance XSumPat Ps = EpAnnSumPat
 type instance XSumPat Rn = NoExtField
-type instance XSumPat Tc = NoExtField -- should be [Type]
+type instance XSumPat Tc = [Type]
+
+type instance XConPat Ps = [AddEpAnn]
+type instance XConPat Rn = NoExtField
+type instance XConPat Tc = ConPatTc 
 
 type instance XLitPat (CsPass _) = NoExtField
 
+type instance XNPat Ps = [AddEpAnn]
+type instance XNPat Rn = [AddEpAnn]
+type instance XNPat Tc = Type
+
 type instance XSigPat Ps = [AddEpAnn]
 type instance XSigPat Rn = NoExtField
-type instance XSigPat Tc = NoExtField -- should be Type
+type instance XSigPat Tc = Type
 
 type instance XKdSigPat Ps = [AddEpAnn]
 type instance XKdSigPat Rn = NoExtField
-type instance XKdSigPat Tc = NoExtField -- should be Kind?
+type instance XKdSigPat Tc = Kind
+
+type instance ConLikeP Ps = RdrName
+type instance ConLikeP Rn = Name
+type instance ConLikeP Tc = ConLike
+
+type instance XConPatTyArg Ps = NoExtField
+type instance XConPatTyArg Rn = NoExtField
+type instance XConPatTyArg Tc = NoExtField
 
 data EpAnnSumPat = EpAnnSumPat
   { sumPatParens :: [AddEpAnn]
@@ -58,6 +96,8 @@ data EpAnnSumPat = EpAnnSumPat
 
 instance NoAnn EpAnnSumPat where
   noAnn = EpAnnSumPat [] [] []
+
+data ConPatTc = ConPatTc
 
 instance Outputable (CsTyPat p) => Outputable (CsConPatTyArg p) where
   ppr (CsConPatTyArg _ ty) = ppr ty
@@ -102,3 +142,5 @@ pprPat (LitPat _ s) = ppr s
 pprPat (SigPat _ pat ty) = ppr pat <+> colon <+> ppr ty
 
 type instance Anno (Pat (CsPass p)) = SrcSpanAnnA
+type instance Anno (CsOverLit (CsPass p)) = EpAnnCO
+type instance Anno ConLike = SrcSpanAnnN
