@@ -158,7 +158,7 @@ $unigraphic / { isSmartQuote } { smart_quote_error }
 <layout, layout_if> \n ;
 
 <layout_if> {
-  \| / { notFollowedBySymbol } { new_layout_context True dontGenerateSemic ITvbar }
+  \| / { notFollowedBySymbol } { new_layout_context dontGenerateSemic ITvbar }
   () { pop }
 }
 
