@@ -397,7 +397,7 @@ decllistone :: { Located (AnnList, Located (OrdList (LCsDecl Ps))) }
                      in L (gl d) ( AnnList (Just $ glR d) Nothing Nothing (fst $ unLoc d) []
                                   , sL1 d $ snd $ unLoc d ) }
 
-bind :: { Located (CsLocalBindl Ps) }
+bind :: { Located (CsLocalBinds Ps) }
   : decllistone {% do { val_bind <- cvBindGroup (unLoc $ snd $ unLoc $1)
                       ; !cs <- getCommentsFor (gl $1)
                       ; return (sL1 $1 $ CsValBinds (fixValbindsAnn $ EpAnn
@@ -783,7 +783,7 @@ commas_tup_tail :: { forall b. DisambECP b => PV (SrcSpan, [Either (EpAnn Bool) 
                                       (tail $ fst $1)
                         in return ((head $ fst $1, cos ++ $2)) }
 
-tup_tail :: { forall b. DisambECP b => PV [Either (EpAnn BOol) (LocatedA b)] }
+tup_tail :: { forall b. DisambECP b => PV [Either (EpAnn Bool) (LocatedA b)] }
   : texp commas_tup_tail { unECP $1 >>= \ $1 ->
                            $2 >>= \ $2 -> do
                              { t <- amsA $1 [AddCommaAnn (srcSpan2e $ fst $2)]
@@ -853,13 +853,13 @@ ralt :: { forall b. DisambECP b => PV (Located [LGRHS Ps (LocatedA b)]) }
                                                       (comb2 $1 $2) $2)) }
   | gdpats { $1 >>= \ gdpats -> return $ sL1 gdpats (reverse (unLoc gdpats)) }
 
-gdpats :: { forall b . DisambEcp b => PV (Located [LGRHS Ps (LocatedA b)]) }
+gdpats :: { forall b . DisambECP b => PV (Located [LGRHS Ps (LocatedA b)]) }
   : gdpats gdpat { $1 >>= \ gdpats ->
                    $2 >>= \ gdpat ->
                    return $ sLL gdpats gdpat ( gdpat : unLoc gdpats) }
   | gdpat { $1 >>= \ gdpat -> return $ sL1 gdpat [gdpat] }
 
-ifgdpats :: { Located ([AddEpAnn], [LGRDS Ps (LCsExpr Ps)]) }
+ifgdpats :: { Located ([AddEpAnn], [LGRHS Ps (LCsExpr Ps)]) }
   : gdpats close {% runPV $1 >>= \ $1 -> return $ sL1 $1 ([], unLoc $1) }
 
 gdpat :: { forall b. DisambECP b => PV (LGRHS Ps (LocatedA b)) }
