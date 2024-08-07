@@ -3,7 +3,7 @@ module CSlash.Types.RepType where
 import CSlash.Types.Basic (Arity, RepArity)
 import CSlash.Core.DataCon
 import CSlash.Core.TyCon
-import CSlash.Core.TyCo.Rep
+import CSlash.Core.Type.Rep
 import CSlash.Core.Type
 
 import CSlash.Utils.Misc
@@ -25,8 +25,8 @@ unwrapType ty = inner_ty
 countFunRepArgs :: Arity -> Type -> RepArity
 countFunRepArgs 0 _ = 0
 countFunRepArgs n ty
-  | FunTy _ arg res <- unwrapType ty
+  | FunTy _ _arg res <- unwrapType ty
   = 1                                 -- (length (typePrimRep arg) `max` 1)
     + countFunRepArgs (n - 1) res
   | otherwise
-  = pprPanic "countFunRepArgs arity greater than type can handle" (ppr (n, ty, typePrimRep ty))
+  = pprPanic "countFunRepArgs arity greater than type can handle" (ppr (n, ty))
