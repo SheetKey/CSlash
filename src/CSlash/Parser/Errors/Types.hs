@@ -17,6 +17,7 @@ import CSlash.Types.SrcLoc
 
 import CSlash.Parser.Errors.Basic
 import CSlash.Parser.Types
+import CSlash.Parser.Annotation
 
 import CSlash.Language.Syntax.Expr
 import CSlash.Language.Syntax.Type
@@ -45,11 +46,15 @@ data PsMessage
   | PsErrLambdaInPat 
   | PsErrCaseInPat
   | PsErrLetInPat
+  | PsErrArrowExprInPat !(CsExpr Ps)
   | PsErrInvalidInfixHole
+  | PsErrAtInPatPos
+  | PsErrUnexpectedAsPat
   | PsErrCaseInFunAppExpr !(LCsExpr Ps)
   | PsErrLambdaInFunAppExpr !(LCsExpr Ps)
   | PsErrLetInFunAppExpr !(LCsExpr Ps)
   | PsErrIfInFunAppExpr !(LCsExpr Ps)
+  | PsErrMalformedTyDecl !(LocatedN RdrName)
   | PsErrParseErrorOnInput !OccName
   | PsErrInvalidTypeSignature !PsInvalidTypeSignature !(LCsExpr Ps)
   | PsErrUnexpectedTypeInDecl !(LCsType Ps)
@@ -59,6 +64,7 @@ data PsMessage
                               !SDoc
   | PsErrInPat !(PatBuilder Ps) !PsErrInPatDetails
   | PsErrUnicodeCharLooksLike Char Char String
+  | PsErrParseRightOpSectionInPat !RdrName !(PatBuilder Ps)
   deriving Generic
 
 data PsErrParseDetails = PsErrParseDetails
