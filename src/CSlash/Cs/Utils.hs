@@ -1,14 +1,24 @@
-module CSlash.Cs.Utils where
+{-# LANGUAGE ConstraintKinds #-}
 
-import CSlash.Hs.Decls
-import CSlash.Hs.Binds
-import CSlash.Hs.Expr
-import CSlash.Hs.Pat
-import CSlash.Hs.Type
-import CSlash.Hs.Lit
+module CSlash.Cs.Utils
+  ( mkMatchGroup, mkLamMatchGroup, mkCsIf
+
+  , missingTupArg
+
+  , mkNPat
+
+  , csTypeToCsSigType
+  ) where
+
+import CSlash.Cs.Decls
+import CSlash.Cs.Binds
+import CSlash.Cs.Expr
+import CSlash.Cs.Pat
+import CSlash.Cs.Type
+import CSlash.Cs.Lit
 import CSlash.Language.Syntax.Decls
 import CSlash.Language.Syntax.Extension
-import CSlash.Hs.Extension
+import CSlash.Cs.Extension
 import CSlash.Parser.Annotation
 
 import CSlash.Core.DataCon
@@ -62,3 +72,32 @@ mkMatchGroup
   -> MatchGroup (CsPass p) (LocatedA (body (CsPass p)))
 mkMatchGroup origin matches = MG { mg_ext = origin
                                  , mg_alts = matches }
+
+mkLamMatchGroup
+  :: AnnoBody p body
+  => Origin
+  -> LocatedL [LocatedA (Match (CsPass p) (LocatedA (body (CsPass p))))]
+  -> MatchGroup (CsPass p) (LocatedA (body (CsPass p)))
+mkLamMatchGroup origin (L l matches)
+  = mkMatchGroup origin (L l $ map fixCtxt matches)
+  where
+    fixCtxt (L a match) = L a match{ m_ctxt = LamAlt }
+
+mkCsIf :: LCsExpr Ps -> LCsExpr Ps -> LCsExpr Ps -> AnnsIf -> CsExpr Ps
+mkCsIf c a b anns = CsIf anns c a b
+
+mkNPat :: LocatedAn NoEpAnns (CsOverLit Ps) -> Maybe (SyntaxExpr Ps) -> [AddEpAnn] -> Pat Ps
+mkNPat lit neg anns = NPat anns lit neg noSyntaxExpr
+
+missingTupArg :: EpAnn Bool -> CsTupArg Ps
+missingTupArg ann = Missing ann
+
+{- *********************************************************************
+*                                                                      *
+        LCsSigType
+*                                                                      *
+********************************************************************* -}
+
+csTypeToCsSigType :: LCsType Ps -> LCsSigType Ps
+csTypeToCsSigType lty@(L loc ty) =
+  L (l2l loc) $ CsSig noExtField lty
