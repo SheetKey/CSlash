@@ -168,7 +168,7 @@ class (HasDefaultDiagnosticOpts (DiagnosticOpts a)) => Diagnostic a where
   type DiagnosticOpts a
   diagnosticMessage :: DiagnosticOpts a -> a -> DecoratedSDoc
   diagnosticReason  :: a -> DiagnosticReason
-  diagnosticHints   :: a -> [CSlashHint]
+  diagnosticHints   :: a -> [CsHint]
   diagnosticCode    :: a -> Maybe DiagnosticCode
 
 data UnknownDiagnostic opts where
@@ -211,7 +211,7 @@ instance Outputable DiagnosticHint where
 data DiagnosticMessage = DiagnosticMessage
   { diagMessage :: !DecoratedSDoc
   , diagReason  :: !DiagnosticReason
-  , diagHints   :: [CSlashHint]
+  , diagHints   :: [CsHint]
   }
 
 instance Diagnostic DiagnosticMessage where
@@ -221,19 +221,19 @@ instance Diagnostic DiagnosticMessage where
   diagnosticHints   = diagHints
   diagnosticCode _  = Nothing
 
-noHints :: [CSlashHint]
+noHints :: [CsHint]
 noHints = mempty
 
-mkPlainDiagnostic :: DiagnosticReason -> [CSlashHint] -> SDoc -> DiagnosticMessage
+mkPlainDiagnostic :: DiagnosticReason -> [CsHint] -> SDoc -> DiagnosticMessage
 mkPlainDiagnostic rea hints doc = DiagnosticMessage (mkSimpleDecorated doc) rea hints
 
-mkPlainError :: [CSlashHint] -> SDoc -> DiagnosticMessage
+mkPlainError :: [CsHint] -> SDoc -> DiagnosticMessage
 mkPlainError hints doc = DiagnosticMessage (mkSimpleDecorated doc) ErrorWithoutFlag hints
 
-mkDecoratedDiagnostic :: DiagnosticReason -> [CSlashHint] -> [SDoc] -> DiagnosticMessage
+mkDecoratedDiagnostic :: DiagnosticReason -> [CsHint] -> [SDoc] -> DiagnosticMessage
 mkDecoratedDiagnostic rea hints docs = DiagnosticMessage (mkDecorated docs) rea hints
 
-mkDecoratedError :: [CSlashHint] -> [SDoc] -> DiagnosticMessage
+mkDecoratedError :: [CsHint] -> [SDoc] -> DiagnosticMessage
 mkDecoratedError hints docs = DiagnosticMessage (mkDecorated docs) ErrorWithoutFlag hints
 
 data DiagnosticReason
