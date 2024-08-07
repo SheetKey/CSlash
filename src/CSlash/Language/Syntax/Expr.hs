@@ -1,3 +1,5 @@
+{-# LANGUAGE TypeFamilies #-}
+
 module CSlash.Language.Syntax.Expr where
 
 import CSlash.Language.Syntax.Extension
@@ -5,21 +7,28 @@ import CSlash.Language.Syntax.Basic
 import CSlash.Language.Syntax.Lit
 import CSlash.Language.Syntax.Pat
 import CSlash.Language.Syntax.Type
+import CSlash.Language.Syntax.Binds
 
 import CSlash.Types.Fixity
 import CSlash.Types.Name.Reader
 
 type LCsExpr p = XRec p (CsExpr p)
 
+type family SyntaxExpr p
+
 data CsExpr p
   = CsVar (XVar p) (LIdP p)
   | CsUnboundVar (XUnboundVar p) RdrName
+  | CsOverLit (XOverLitE p) (CsOverLit p)
   | CsLit (XLitE p) (CsLit p)
   | CsLam (XLam p) (MatchGroup p (LCsExpr p))
   | CsApp (XApp p) (LCsExpr p) (LCsExpr p)
   | CsTyLam (XTyLam p) (MatchGroup p (LCsExpr p))
   | CsTyApp (XTyApp p) (LCsExpr p) (LCsExpr p)
   | OpApp (XOpApp p) (LCsExpr p) (LCsExpr p) (LCsExpr p)
+  -- this could change to BinOp:
+  -- we can parse prefix occurence as a binary operator (maybe a bad idea)
+  | NegApp (XNegApp p) (LCsExpr p) (SyntaxExpr p)
   | CsPar (XPar p) (LCsExpr p)
   | SectionL (XSectionL p) (LCsExpr p) (LCsExpr p)
   | SectionR (XSectionR p) (LCsExpr p) (LCsExpr p)
@@ -28,7 +37,9 @@ data CsExpr p
   | CsCase (XCase p) (LCsExpr p) (MatchGroup p (LCsExpr p))
   | CsIf (XIf p) (LCsExpr p) (LCsExpr p) (LCsExpr p)
   | CsMultiIf (XMultiIf p) [LGRHS p (LCsExpr p)]
-  | ExprWithTySig (XExprWithTySig p) (LCsExpr p) (LCsType (NoTc p))
+  | CsLet (XLet p) (CsLocalBinds p) (LCsExpr p)
+  | ExprWithTySig (XExprWithTySig p) (LCsExpr p) (LCsSigType (NoTc p))
+  | CsEmbTy (XEmbTy p) (LCsType (NoTc p)) -- for cstylam and cstyapp
 
 data CsTupArg id
   = Present (XPresent id) (LCsExpr id)
