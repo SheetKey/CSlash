@@ -1,6 +1,6 @@
 {-# LANGUAGE LambdaCase #-}
 
-{-# OPTIONS_GHC -Wno-orphans #-} -- instance Outputable CSlashHint
+{-# OPTIONS_GHC -Wno-orphans #-} -- instance Outputable CsHint
 
 module CSlash.Types.Hint.Ppr (
   perhapsAsPat
@@ -22,7 +22,7 @@ import CSlash.Utils.Outputable
 import Data.List (intersperse)
 import qualified Data.List.NonEmpty as NE
 
-instance Outputable CSlashHint where
+instance Outputable CsHint where
   ppr = \case
     UnknownHint m
       -> ppr m
