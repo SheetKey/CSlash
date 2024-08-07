@@ -58,6 +58,32 @@ tcClsName = TcClsName
 dataName :: NameSpace
 dataName = DataName
 
+isDataConNameSpace :: NameSpace -> Bool
+isDataConNameSpace DataName = True
+isDataConNameSpace _ = False
+
+isTcClsNameSpace :: NameSpace -> Bool
+isTcClsNameSpace TcClsName = True
+isTcClsNameSpace _ = False
+
+isTvNameSpace :: NameSpace -> Bool
+isTvNameSpace TvName = True
+isTvNameSpace _ = False
+
+isKvNameSpace :: NameSpace -> Bool
+isKvNameSpace KvName = True
+isKvNameSpace _ = False
+
+isVarNameSpace :: NameSpace -> Bool
+isVarNameSpace TvName = True
+isVarNameSpace KvName = True
+isVarNameSpace VarName = True
+isVarNameSpace _ = False
+
+isUnknownNameSpace :: NameSpace -> Bool
+isUnknownNameSpace UNKNOWN_NS = True
+isUnknownNameSpace _ = False
+
 pprNameSpace :: NameSpace -> SDoc
 pprNameSpace VarName = text "variable"
 pprNameSpace TvName = text "type variable"
@@ -123,6 +149,12 @@ mkVarOcc s = mkOccName varName s
 
 mkVarOccFS :: FastString -> OccName
 mkVarOccFS fs = mkOccNameFS varName fs
+
+mkDataOcc :: String -> OccName
+mkDataOcc = mkOccName dataName
+
+mkDataOccFS :: FastString -> OccName
+mkDataOccFS = mkOccNameFS dataName
 
 mkTyVarOcc :: String -> OccName
 mkTyVarOcc = mkOccName tvName
@@ -193,6 +225,10 @@ isValOcc :: OccName -> Bool
 isValOcc (OccName VarName _) = True
 isValOcc _ = False
 
+isUnknownOcc :: OccName -> Bool
+isUnknownOcc (OccName UNKNOWN_NS _) = True
+isUnknownOcc _ = False
+
 isSymOcc :: OccName -> Bool
 isSymOcc (OccName ns s) = case ns of
   VarName -> isLexSym s
@@ -202,3 +238,21 @@ isSymOcc (OccName ns s) = case ns of
 
 isConOccFS :: OccName -> Bool
 isConOccFS (OccName _ s) = isLexCon s
+
+{- *********************************************************************
+*                                                                      *
+            Predicates and taking them apart
+*                                                                      *
+********************************************************************* -}
+
+setOccNameSpace :: NameSpace -> OccName -> OccName
+setOccNameSpace sp (OccName _ occ) = OccName sp occ
+
+{- *********************************************************************
+*                                                                      *
+            Making system names
+*                                                                      *
+********************************************************************* -}
+
+mkDataConWorkerOcc :: OccName -> OccName
+mkDataConWorkerOcc datacon_occ = setOccNameSpace varName datacon_occ
