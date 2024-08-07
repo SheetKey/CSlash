@@ -16,7 +16,7 @@ import Prelude hiding ((<>))
 
 import CSlash.Language.Syntax.Binds
 
-import {-# SOURCE #-} CSlash.Cs.Expr (pprExpr, pprFunBind)
+import {-# SOURCE #-} CSlash.Cs.Expr (pprExpr, pprLExpr, pprFunBind)
 
 import CSlash.Language.Syntax.Extension
 import CSlash.Cs.Extension
@@ -29,6 +29,11 @@ import CSlash.Parser.Annotation
 import CSlash.Utils.Outputable
 
 import Data.Data
+
+type instance XCsValBinds (CsPass pL) (CsPass pR) = EpAnn AnnList
+type instance XEmptyLocalBinds (CsPass pL) (CsPass pR) = NoExtField
+
+type instance XValBinds (CsPass pL) (CsPass pR) = AnnSortKey BindTag
 
 type instance XFunBind (CsPass pL) Ps = AddEpAnn
 type instance XFunBind (CsPass pL) Rn = NameSet
@@ -55,7 +60,7 @@ ppr_monobind (FunBind { fun_id = fun
                       , fun_ext = ticks })
   = pprTicks empty ticksDoc
     $$ whenPprDebug (pprBndr LetBind (unLoc fun))
-    $$ ppr body
+    $$ pprLExpr body
     $$ whenPprDebug (pprIfTc @idR $ wrapDoc)
   where
     ticksDoc :: SDoc
@@ -118,3 +123,14 @@ instance OutputableBndrId p => Outputable (FixitySig (CsPass p)) where
 
 pprVarSig :: (OutputableBndr id) => id -> SDoc -> SDoc
 pprVarSig var pp_ty = sep [ pprPrefixOcc var <+> colon, nest 2 pp_ty ]
+
+{- *********************************************************************
+*                                                                      *
+            Anno instances
+*                                                                      *
+********************************************************************* -}
+
+type instance Anno (CsBindLR (CsPass idL) (CsPass idR)) = SrcSpanAnnA
+type instance Anno (Sig (CsPass p)) = SrcSpanAnnA
+
+type instance Anno (FixitySig (CsPass p)) = SrcSpanAnnA
