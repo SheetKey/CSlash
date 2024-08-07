@@ -41,21 +41,21 @@ eqConLike x y = getUnique x == getUnique y
 
 instance Uniquable ConLike where
   getUnique (RealDataCon dc) = getUnique dc
-  getUnique (PatSynCon) = panic "getUnique PatSynCon"
+  getUnique (PatSynCon) = error "getUnique PatSynCon"
 
 instance NamedThing ConLike where
   getName (RealDataCon dc) = getName dc
-  getName (PatSynCon) = panic "getName PatSynCon"
+  getName (PatSynCon) = error "getName PatSynCon"
 
-instance Outputablle ConLike where
+instance Outputable ConLike where
   ppr (RealDataCon dc) = ppr dc
-  ppr (PatSynCon) = panic "ppr PatSynCon"
+  ppr (PatSynCon) = error "ppr PatSynCon"
 
-instance OutputbleBndr ConLike where
+instance OutputableBndr ConLike where
   pprInfixOcc (RealDataCon dc) = pprInfixOcc dc
-  pprInfixOcc (PatSynCon) = panic "pprInfixOcc PatSynCon"
+  pprInfixOcc (PatSynCon) = error "pprInfixOcc PatSynCon"
   pprPrefixOcc (RealDataCon dc) = pprPrefixOcc dc
-  pprInfixOcc (PatSynCon) = panic "pprPrefixOcc PatSynCon"
+  pprPrefixOcc (PatSynCon) = error "pprPrefixOcc PatSynCon"
 
 instance Data.Data ConLike where
   toConstr _ = abstractConstr "ConLike"
