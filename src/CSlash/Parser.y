@@ -284,7 +284,7 @@ importlist :: { ([AddEpAnn], OrdList (LIE Ps)) }
                         SnocOL hs t -> do
                           { t' <- addTrailingCommaA t (gl $2)
                           ; return ([], snocOL hs t') } }
-  | ',' { ([mk AnnComma $1], nilOL) }
+  | ',' { ([mj AnnComma $1], nilOL) }
 
 importlist1 :: { OrdList (LIE Ps) }
   : importlist1 ',' import {% let ls = $1
