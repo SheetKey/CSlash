@@ -208,9 +208,9 @@ export_subspec :: { Located ([AddEpAnn], ImpExpSubSpec) }
   : {- empty -} { sL0 ([], ImpExpAbs) }
 
 qcname_ext :: { LocatedA ImpExpQcSpec }
-  : g_qvar_sp { sL1a $1 (ImpExpQcName $ unknownToVar <$> $1) }
-  | g_qvar { sL1a $1 (ImpExpQcName $ unknownToVar <$> $1) }
-  | 'type' g_qvar { sLLa $1 $> (ImpExpQcTyVar (glAA $1) (unknownToTv <$> $1)) }
+  : g_qvar_sp { sL1a $1 (ImpExpQcName $ fmap unknownToVar $1) }
+  | g_qvar { sL1a $1 (ImpExpQcName $ fmap unknownToVar $1) }
+  | 'type' g_qvar { sLLa $1 $> (ImpExpQcTyVar (glAA $1) (fmap unknownToTv $1)) }
 
 -----------------------------------------------------------------------------
 -- Import Declarations
@@ -348,7 +348,7 @@ topdecl :: { LCsDecl Ps }
 -- Type declarations (toplevel)
 --
 ty_decl :: { LCsBind Ps }
-  : 'type' g_var '=' ctype {% mkTyFunBind (comb2 $1 $4) (unknownToTcCls <$> $2) $4
+  : 'type' g_var '=' ctype {% mkTyFunBind (comb2 $1 $4) (fmap unknownToTcCls $2) $4
                                           [mj AnnType $1, mj AnnEqual $3] }
 
 -----------------------------------------------------------------------------
@@ -455,7 +455,7 @@ context1 :: { LCsContext Ps }
 
 kvrel :: { LCsKdRel Ps }
     -- Note that we do not set the 'NameSpace' of $2 here, that is left to 'mkKvRel'
-  : g_varid g_varsym g_varid {% mkKvRel (unknownToKv <$> $1) $2 (unknownToKv <$> $3) }
+  : g_varid g_varsym g_varid {% mkKvRel (fmap unknownToKv $1) $2 (fmap unknownToKv $3) }
 
 type :: { LCsType Ps }
   : btype %shift { $1 }
@@ -517,15 +517,15 @@ The namespace is fixed in a later stage.
 a_atype :: { LCsType Ps }
   : atype { $1 }
   | systycon_no_unit {% amsA' (sL1 $1 (CsTyVar [] $1)) }
-  | g_qvar {% amsA' (sL1 $1 (CsTyVar [] (unknownToTv <$> $1))) }
-  | g_qcon {% amsA' (sL1 $1 (CsTyVar [] (unknownToTcCls <$> $1))) }
+  | g_qvar {% amsA' (sL1 $1 (CsTyVar [] (fmap unknownToTv $1))) }
+  | g_qcon {% amsA' (sL1 $1 (CsTyVar [] (fmap unknownToTcCls $1))) }
   | '(' ')' {% amsA' (sLL $1 $> $
                        CsTupleTy (AnnParen AnnParens (glR $1) (glR $2)) []) }
 
 atype :: { LCsType Ps }
   -- : systycon_no_unit {% amsA' (sL1 $1 (CsTyVar [] $1)) }
-  -- | g_qvar %shift {% amsA' (sL1 $1 (CsTyVar [] (unknownToTv <$> $1))) }
-  -- | g_qcon {% amsA' (sL1 $1 (CsTyVar [] (unknownToTcCls <$> $1))) }
+  -- | g_qvar %shift {% amsA' (sL1 $1 (CsTyVar [] (fmap unknownToTv $1))) }
+  -- | g_qcon {% amsA' (sL1 $1 (CsTyVar [] (fmap unknownToTcCls $1))) }
   : '\\\\' tyargpats '->' type { mkCsTyLamTy (comb2 $1 $>)
                                  (sLLl $1 $>
                                   [sLLa $1 $> $ Match
@@ -567,12 +567,12 @@ tv_bndrs1 :: { [LCsTyVarBndr Ps] }
   | {- empty -} { [] }
 
 tv_bndr :: { LCsTyVarBndr Ps }
-  : g_var ':' kind {% amsA' (sLL $1 $> (KindedTyVar [mu AnnColon] (unknownToTv <$> $1) $3)) }
+  : g_var ':' kind {% amsA' (sLL $1 $> (KindedTyVar [mu AnnColon] (fmap unknownToTv $1) $3)) }
 
 -- tv_bndr_no_braces in GHC
 tv_bndr_parens :: { LCsTyVarBndr Ps }
   : '(' g_var ':' kind ')' {% amsA' (sLL $1 $> (KindedTyVar [mop $1, mu AnnColon, mcp $5]
-                                                            (unknownToTv <$> $2) $4)) }
+                                                            (fmap unknownToTv $2) $4)) }
 
 -----------------------------------------------------------------------------
 -- Kinds
@@ -585,7 +585,7 @@ akind :: { LCsKind Ps }
   : U_KIND { sL1a $1 (CsUKd noExtField) }
   | A_KIND { sL1a $1 (CsAKd noExtField) }
   | L_KIND { sL1a $1 (CsAKd noExtField) }
-  | g_varid {% amsA' (sL1 $1 (CsKdVar [] (unknownToKv <$> $1))) }
+  | g_varid {% amsA' (sL1 $1 (CsKdVar [] (fmap unknownToKv $1))) }
   | '(' kind ')' {% amsA' (sLL $1 $> $ CsParKd (AnnParen AnnParens (glAA $1) (glAA $3)) $2) }
 
 -----------------------------------------------------------------------------
@@ -597,13 +597,13 @@ akind :: { LCsKind Ps }
 decl :: { LCsDecl Ps }
   : sigdecl { $1 }
   | g_var_sp '=' exp {% amsA' $ sLL $1 $> $ ValD noExtField $
-                          FunBind (mj AnnEqual $2) (unknownToVar <$> $1) $3 }
+                          FunBind (mj AnnEqual $2) (fmap unknownToVar $1) $3 }
   | g_var '=' exp {% amsA' $ sLL $1 $> $ ValD noExtField $
-                       FunBind (mj AnnEqual $2) (unknownToVar <$> $1) $3 }
+                       FunBind (mj AnnEqual $2) (fmap unknownToVar $1) $3 }
 
 sigdecl :: { LCsDecl Ps }
   : g_var ':' sigtype {% amsA' $ sLL $1 $> $ SigD noExtField $
-                           TypeSig (AnnSig (mu AnnColon $2) []) (unknownToVar <$> $1) $3 }
+                           TypeSig (AnnSig (mu AnnColon $2) []) (fmap unknownToVar $1) $3 }
 
   | infix prec namespace_spec infix_decl_op
       {% do { mbPrecAnn <- traverse (\ l2 -> do { checkPrecP l2 $4
@@ -611,11 +611,11 @@ sigdecl :: { LCsDecl Ps }
             ; let { (fixText, fixPrec) = (fst $ unLoc $2, snd $ unLoc $2)
                   ; opWithNS = case $3 of
                                  NoNamespaceSpecifier
-                                   | isConOccFS (rdrNameOcc $4) -> unknownToData <$> $4
-                                   | otherwise -> unknownToVar <$> $4
+                                   | isConOccFS (rdrNameOcc $4) -> fmap unknownToData $4
+                                   | otherwise -> fmap unknownToVar $4
                                  TypeNamespaceSpecifier
-                                   | isConOccFS (rdrNameOcc $4) -> unknownToTcCls <$> $4
-                                   | otherwise -> unknownToTv <$> $4 }
+                                   | isConOccFS (rdrNameOcc $4) -> fmap unknownToTcCls $4
+                                   | otherwise -> fmap unknownToTv $4 }
             ; amsA' (sLL $1 $> $ SigD noExtField
                      (FixSig (mj AnnInfix $1 : maybeToList mbPrecAnn fixText)
                              (FixitySig (unLoc $3) (unLoc opWithNS)
@@ -663,10 +663,10 @@ fexp :: { ECP }
 aexp :: { ECP }
   : g_qvar_sp TIGHT_INFIX_AT aexp { ECP $ unECP $3 >>= \ $3 ->
                                      mkCsAsPatPV (comb2 $1 $>)
-                                                 (unknownToVar <$> $1) (epTok $2) $3 }
+                                                 (fmap unknownToVar $1) (epTok $2) $3 }
   | g_qvar TIGHT_INFIX_AT aexp { ECP $ unECP $3 >>= \ $3 ->
                                   mkCsAsPatPV (comb2 $1 $>)
-                                              (unknownToVar <$> $1) (epTok $2) $3 }
+                                              (fmap unknownToVar $1) (epTok $2) $3 }
   | PREFIX_MINUS aexp { ECP $ unECP $2 >>= \ $2 ->
                               mkCsNegAppPV (comb2 $1 $>) $2 [mj AnnMinus $1] }
   | 'let' bind 'in' exp { ECP $ unECP $4 >>= \ $4 ->
@@ -725,7 +725,7 @@ aexp1 :: { ECP }
   : aexp2 { $1 }
 
 aexp2 :: { ECP }
-  : g_qvar_sp { ECP $ mkCsVarPV $! (unknownToVar <$> $1) }
+  : g_qvar_sp { ECP $ mkCsVarPV $! (fmap unknownToVar $1) }
   | g_qvar { ECP $ mkCsVarPV $! $1 }
   | g_qcon { ECP $ mkCsVarPV $! $1 } -- 'gen_qcon' in GHC
   | a_sysdcon { ECP $ mkCsVarPV $! $1 }
