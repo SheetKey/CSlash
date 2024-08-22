@@ -88,6 +88,14 @@ Our syntax requires ALL declaration to be 'name = expr',
 not 'name pats = expr'.
 -}
 
+cvBindGroup :: OrdList (LCsDecl Ps) -> P (CsValBinds Ps)
+cvBindGroup binding = do
+  (mbs, sigs) <- cvBindsAndSigs binding
+  return $ ValBinds NoAnnSoryKey mbs sigs
+
+cvBindsAndSigs :: OrdList (LCsDecl Ps) -> P (LCsBinds Ps, [LSig Ps])
+cvBindsAndSigs fb = return $ partitionBindsAndSigs $ fromOL fb
+
 {- **********************************************************************
 
   Utilities for conversion
