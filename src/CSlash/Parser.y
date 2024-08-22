@@ -1226,7 +1226,7 @@ sL1n :: HasLoc a => a -> b -> LocatedN b
 sL1n !x = L (noAnnSrcSpan $ getHasLoc x)
 
 {-# INLINE sLL #-}
-sLL :: (hasLoc a, HasLoc b) => a -> b -> c -> Located c
+sLL :: (HasLoc a, HasLoc b) => a -> b -> c -> Located c
 sLL !x !y = sL (comb2 x y)
 
 {-# INLINE sLLa #-}
@@ -1330,7 +1330,7 @@ acsA !l a = do
   !cs <- getCommentsFor (locA l)
   return $ reLoc (a l cs)
 
-ams1 :: MonadP => Located a -> b -> m (LocatedA b)
+ams1 :: MonadP m => Located a -> b -> m (LocatedA b)
 ams1 (L l a) b = do
   !cs <- getCommentsFor l
   return (L (EpANn (spanAsAnchor l) noAnn cs) b)
@@ -1397,7 +1397,7 @@ addTrailingVbarA la span = addTrailingAnnA la span AddVbarAnn
 addTrailingSemiA :: MonadP m => LocatedA a -> LocatedA a -> SrcSpan -> m (LocatedA a)
 addTrailingSemiA la span = addTrailingAnnA la span AddSemiAnn
 
-addTrailingCommaA :: MonadP m => LocatedA -> SrcSpan -> m (LocatedA a)
+addTrailingCommaA :: MonadP m => LocatedA a -> SrcSpan -> m (LocatedA a)
 addTrailingCommaA la span = addTrailingAnnA la span AddCommaAnn
 
 addTrailingAnnA
