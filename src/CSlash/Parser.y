@@ -200,7 +200,7 @@ export :: { LIE Ps }
                                     ; return $ reLoc $ sL span $ impExp } }
   | 'module' modid {% do { let { span = comb2 $1 $>
                                ; anchor = glR $1 }
-                         ; locImpExp <- return (sL span (IEModuleContents [mj AnnModule $1]) #2)
+                         ; locImpExp <- return (sL span (IEModuleContents [mj AnnModule $1]) $2)
                          ; return $ reLoc $ locImpExp } }
 
 -- included for forward compatibility
