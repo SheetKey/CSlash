@@ -32,9 +32,9 @@ data CsSigType pass = CsSig
   , sig_body :: LCsType pass
   }
 
-data CsForAllTelescope pass = CsForAllInvis
-  { csf_xinvis :: XCsForAllInvis pass
-  , csf_invis_bndrs :: [LCsTyVarBndr pass]
+data CsForAllTelescope pass = CsForAll
+  { csf_x :: XCsForAll pass
+  , csf_bndrs :: [LCsTyVarBndr pass]
   }
 
 type LCsTyVarBndr pass = XRec pass (CsTyVarBndr pass)
@@ -42,6 +42,7 @@ type LCsTyVarBndr pass = XRec pass (CsTyVarBndr pass)
 data CsTyVarBndr pass
   -- = UserTyVar (XUserTyVar pass) (LIdP pass)
   = KindedTyVar (XKindedTyVar pass) (LIdP pass) (LCsKind pass)
+  | ImpKindedTyVar (XImpKindedTyVar pass) (LIdP pass) (LCsKind pass)
 
 data CsType pass
   = CsForAllTy

@@ -35,9 +35,12 @@ import CSlash.Utils.Outputable
 
 import Data.Data
 
-type instance XCsForAllInvis (CsPass _) = EpAnnForallTy
+type instance XCsForAll (CsPass _) = EpAnnForallTy
 
 type EpAnnForallTy = EpAnn (AddEpAnn, AddEpAnn)
+
+mkCsForAllTele :: EpAnnForallTy -> [LCsTyVarBndr (CsPass p)] -> CsForallTelescope (CsPass p)
+mkCsForAllTele an bndrs = CsForAll { csf_x = an, csf_bndrs = bndrs }
 
 type instance XCsPS Ps = EpAnnCO
 type instance XCsPS Rn = CsPSRn
@@ -63,6 +66,7 @@ data CsTyPatRn = CsTPRn
 type instance XCsSig (CsPass _) = NoExtField
 
 type instance XKindedTyVar (CsPass _) = [AddEpAnn]
+type instance XImpKindedTyVar (CsPass _) = [AddEpAnn]
 
 mkCsPatSigType :: EpAnnCO -> LCsType Ps -> CsPatSigType Ps
 mkCsPatSigType ann x = CsPS { csps_ext = ann

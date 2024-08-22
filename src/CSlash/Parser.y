@@ -95,6 +95,8 @@ import qualified Data.Semigroup as Semi
 
   '/\\' { L _ ITbiglam }
 
+  REAL_OCURLY { L _ ITocurly }
+  REAL_CCURLY { L _ ITccurly }
   '{' { L _ ITvocurly }
   '}' { L _ ITvccurly }
   ';' { L _ ITvsemi }
@@ -419,11 +421,10 @@ sigtype :: { LCsSigType Ps }
 -- Types
 
 forall_telescope :: { Located (CsForAllTelescope Ps) }
-  : 'forall' tv_bndrs '.' {% do { hintExplicitForall $1
-                                ; acs (comb2 $1 $>) (\loc cs -> (L loc $
-                                    mkCsForAllInvisTele (EpAnn (glEE $1 $>)
-                                                               ( mu AnnForall $1
-                                                               , mu AnnDot $3) cs) $2)) } }
+  : 'forall' tv_bndrs '.' {% acs (comb2 $1 $>) (\loc cs -> (L loc $
+                                    mkCsForAllTele (EpAnn (glEE $1 $>)
+                                                          ( mu AnnForall $1
+                                                          , mu AnnDot $3) cs) $2)) }
 
 ktype :: { LCsType Ps }
   : ctype { $1 }
@@ -563,16 +564,21 @@ tv_bndrs :: { [LCsTyVarBndr Ps] }
   | tv_bndrs1 { $1 }
 
 tv_bndrs1 :: { [LCsTyVarBndr Ps] }
-  : tv_bndr_parens tv_bndrs { $1 : $2 }
+  : tv_bndr_parens tv_bndrs1 { $1 : $2 }
   | {- empty -} { [] }
 
 tv_bndr :: { LCsTyVarBndr Ps }
-  : g_var ':' kind {% amsA' (sLL $1 $> (KindedTyVar [mu AnnColon] (fmap unknownToTv $1) $3)) }
+  : g_var ':' kind {% amsA' (sLL $1 $> (KindedTyVar [mu AnnColon $2] (fmap unknownToTv $1) $3)) }
 
 -- tv_bndr_no_braces in GHC
 tv_bndr_parens :: { LCsTyVarBndr Ps }
   : '(' g_var ':' kind ')' {% amsA' (sLL $1 $> (KindedTyVar [mop $1, mu AnnColon, mcp $5]
                                                             (fmap unknownToTv $2) $4)) }
+  | REAL_OCURLY g_var ':' kind REAL_CCURLY
+           {% amsA' (sLL $1 $> (ImpKindedTyVar [ mu AnnOpenC $1
+                                               , mu AnnColon $3
+                                               , mu AnnCloseC $5 ]
+                                 (fmap unknownToTv $2) $4)) }
 
 -----------------------------------------------------------------------------
 -- Kinds

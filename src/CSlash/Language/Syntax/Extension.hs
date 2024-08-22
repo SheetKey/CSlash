@@ -188,12 +188,13 @@ type family XTyAppTy x
 
 -- ---------------------------------------------------------------------
 -- CsForAllTelescope type families
-type family XCsForAllInvis x
+type family XCsForAll x
 
 -- ---------------------------------------------------------------------
 -- CsTyVarBndr type families
 -- type family XUserTyVar   x
 type family XKindedTyVar x
+type family XImpKindedTyVar x
 
 -- =====================================================================
 -- Type families for the CsImpExp type families
