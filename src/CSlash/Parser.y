@@ -158,8 +158,8 @@ top :: { ( [TrailingAnn]
   : semis top1 { (reverse $1, $2) }
 
 top1 :: { ([LImportDecl Ps], [LCsDecl Ps]) }
-  : importdecls_semi topdecls_cs_semi { (reverse $1, cvTopDecls $2) }
-  | importdecls_semi topdecls_cs { (reverse $1, cvTopDecls $2) }
+  : importdecls_semi topdecls_cs_semi { (reverse $1, $2) }
+  | importdecls_semi topdecls_cs { (reverse $1, $2) }
   | importdecls { (reverse $1, []) }
 
 -----------------------------------------------------------------------------

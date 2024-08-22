@@ -78,6 +78,16 @@ mkTyFunBind loc name rhs annsIn = do
 
 *********************************************************************** -}
 
+{- cvTopDecls
+
+In GHC, this function looks for multiple definitions of the same function,
+i.e., different patterns, and converts them from multiple declarations
+to one function definition. Since we don't have this syntax,
+we don't make this conversion.
+Our syntax requires ALL declaration to be 'name = expr',
+not 'name pats = expr'.
+-}
+
 {- **********************************************************************
 
   Utilities for conversion
