@@ -1394,7 +1394,7 @@ epUniTok t@(L !l _) = EpUniTok (EpaSpan l) u
 addTrailingVbarA :: MonadP m => LocatedA a -> SrcSpan -> m (LocatedA a)
 addTrailingVbarA la span = addTrailingAnnA la span AddVbarAnn
 
-addTrailingSemiA :: MonadP m => LocatedA a -> LocatedA a -> SrcSpan -> m (LocatedA a)
+addTrailingSemiA :: MonadP m => LocatedA a -> SrcSpan -> m (LocatedA a)
 addTrailingSemiA la span = addTrailingAnnA la span AddSemiAnn
 
 addTrailingCommaA :: MonadP m => LocatedA a -> SrcSpan -> m (LocatedA a)
