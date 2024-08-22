@@ -306,7 +306,7 @@ import :: { OrdList (LIE Ps) }
 -- Fixity Declarations
 
 prec :: { Located (SourceText, Int) }
-  : INTEGER { Just (sL1 $1 (getINTEGERs $1, fromInteger (il_value (getINTEGER $1)))) }
+  : INTEGER { sL1 $1 (getINTEGERs $1, fromInteger (il_value (getINTEGER $1))) }
 
 infix :: { Located FixityDirection }
   : 'infix' { sL1 $1 InfixN }
