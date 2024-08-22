@@ -134,7 +134,7 @@ import qualified Data.Semigroup as Semi
 -- Module Header
 
 module :: { Located (CsModule Ps) }
-  : 'module' modid exports 'where' body
+  : 'module' modid maybeexports 'where' body
       {% fileSrcSpan >>= \ loc ->
          acsFinal (\cs eof -> (L loc (CsModule
                                        (XModulePs
@@ -165,9 +165,10 @@ top1 :: { ([LImportDecl Ps], [LCsDecl Ps]) }
 -----------------------------------------------------------------------------
 -- The Export List
 
-exports :: { (LocatedL [LIE Ps]) }
-  : '(' exportlist ')' {% amsr (sLL $1 $> (fromOL $ snd $2))
+maybeexports :: { Maybe (LocatedL [LIE Ps]) }
+  : '(' exportlist ')' {% fmap Just $ amsr (sLL $1 $> (fromOL $ snd $2))
                                (AnnList Nothing (Just $ mop $1) (Just $ mcp $3) (fst $2) []) }
+  | {- empty -} { Nothing }
 
 exportlist :: { ([AddEpAnn], OrdList (LIE Ps)) }
   : exportlist1 { ([], $1) }
