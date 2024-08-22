@@ -5,6 +5,8 @@
 
 module CSlash.Cs.Decls
   ( CsDecl(..), LCsDecl(..)
+
+  , partitionBindsAndSigs
   ) where
 
 import CSlash.Language.Syntax.Decls
@@ -23,3 +25,11 @@ instance (OutputableBndrId p) => Outputable (CsDecl (CsPass p)) where
   ppr (SigD _ sd) = ppr sd
 
 type instance Anno (CsDecl (CsPass _)) = SrcSpanAnnA
+
+partitionBindsAndSigs :: [LCsDecl Ps] -> (LCsBinds Ps, [LSig Ps])
+partitionBindsAndSigs [] = (emptyBag, [])
+partitionBindsAndSigs ((L l decl) : ds) =
+  let (bs, ss) = partitionBindsAndSigs ds in
+    case decl of
+      ValD _ b -> (L l b `consBag` bs, ss)
+      SigD _ s -> (bs, L l s : ss)
