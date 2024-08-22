@@ -15,8 +15,8 @@ import GHC.Exts
 import Data.Maybe (maybeToList)
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NE
-import qualified Prelude -- for happy-generated code
-import Prelude (Maybe(..), Either(..))
+-- import qualified Prelude -- for happy-generated code
+-- import Prelude (Maybe(..), Either(..))
 
 import CSlash.Cs
 
