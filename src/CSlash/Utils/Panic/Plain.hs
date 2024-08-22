@@ -75,3 +75,7 @@ assert cond a =
   if debugIsOn && not cond
   then withFrozenCallStack assertPanic'
   else a
+
+massert :: (HasCallStack, Applicative m) => Bool -> m ()
+{-# INLINE massert #-}
+massert cond = withFrozenCallStack (assert cond (pure ()))
