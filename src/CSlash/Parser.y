@@ -394,7 +394,7 @@ binds :: { Located (CsLocalBinds Ps) }
 -- right now just coppies of decllist and binds
 
 decllistone :: { Located (AnnList, Located (OrdList (LCsDecl Ps))) }
-  : '{' decl close { let d = sL1 $2 ([], unitOL $1)  
+  : '{' decl close { let d = sL1 $2 ([], unitOL $2)  
                      in L (gl d) ( AnnList (Just $ glR d) Nothing Nothing (fst $ unLoc d) []
                                   , sL1 d $ snd $ unLoc d ) }
 
