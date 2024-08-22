@@ -72,6 +72,10 @@ mkTyFunBind loc name rhs annsIn = do
 --   -> P (LCsBind Ps)
 -- mkFunBind loc name rhs annsIn = return (L loc (VarBind annsIn name rhs))
 
+fixValbindsAnn :: EpAnn AnnList -> EpAnn AnnList
+fixValbindsAnn (EpAnn anchor (AnnList ma o c r t) cs)
+  = (EpAnn (widenAnchor anchor (r ++ map trailingAnnToAddEpAnn t)) (AnnList ma o c r t) cs)
+
 {- **********************************************************************
 
   Converting to CsBinds, etc.
