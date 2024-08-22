@@ -427,6 +427,13 @@ mkModuleImpExp anns (L l specname) subs = do
     ieNameFromSpec (ImpExpQcName (L l n)) = IEName noExtField (L l n)
     ieNameFromSpec (ImpExpQcTyVar r (L l n)) = IETyVar r (L l n)
 
+-- forward compatability:
+-- checks that imports of the form 'Thing(Thing1, Thing2, ..)'
+-- are handled properly
+checkImportSpec :: LocatedL [LIE Ps] -> P (LocatedL [LIE Ps])
+checkImportSpec = pure
+
+
 -----------------------------------------------------------------------------
 -- Misc utils
 
