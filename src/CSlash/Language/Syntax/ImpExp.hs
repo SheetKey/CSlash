@@ -28,8 +28,10 @@ type LIE pass = XRec pass (IE pass)
 data IE pass
   = IEVar (XIEVar pass) (LIEWrappedName pass)
   | IEModuleContents (XIEModuleContents pass) (XRec pass ModuleName)
+  | IETyVar (XIETyVar pass) (LIEWrappedName pass) -- for type synonyms or type functions, Tv namespace. Should add another constructor for IECon/IETyCon
 
 data IEWrappedName p
   = IEName (XIEName p) (LIdP p)
+  | IEType (XIEType p) (LIdP p)
     
 type LIEWrappedName p = XRec p (IEWrappedName p)

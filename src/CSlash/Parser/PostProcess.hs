@@ -411,7 +411,21 @@ checkPrecP (L l (_, i)) op
 data ImpExpSubSpec = ImpExpAbs
 
 data ImpExpQcSpec = ImpExpQcName (LocatedN RdrName)
-                  | ImpExpQcType EpaLocation (LocatedN RdrName)
+                  | ImpExpQcTyVar EpaLocation (LocatedN RdrName)
+
+mkModuleImpExp :: [AddEpAnn] -> LocatedA ImpExpQcSpec -> ImpExpSubSpec -> P (IE Ps)
+mkModuleImpExp anns (L l specname) subs = do
+  case subs of
+    ImpExpAbs
+      | isVarNameSpace (rdrNameSpace name)
+        -> return $ IEVar noExtField (L l (ieNameFromSpec specname))
+      | isTvNameSpace (rdrNameSpace name)
+        -> return $ IETyVar noExtField (L l (ieNameFromSpec specname))
+      | otherwise -> panic "mkModuleImpExp
+  where
+    ieNameFromSpec :: ImpExpQcSpec -> IEWrappedName Ps
+    ieNameFromSpec (ImpExpQcName (L l n)) = IEName noExtField (L l n)
+    ieNameFromSpec (ImpExpQcTyVar r (L l n)) = IETyVar r (L l n)
 
 -----------------------------------------------------------------------------
 -- Misc utils

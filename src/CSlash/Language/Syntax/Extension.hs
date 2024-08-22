@@ -206,10 +206,12 @@ type family XCImportDecl       x
 -- IE type families
 type family XIEVar x
 type family XIEModuleContents x
+type family XIETyVar x
 
 -- -------------------------------------
 -- IEWrappedName type families
 type family XIEName p
+type family XIEType p
 
 -- =====================================================================
 -- Type families for the CsKind type families

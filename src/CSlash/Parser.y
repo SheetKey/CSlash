@@ -210,7 +210,7 @@ export_subspec :: { Located ([AddEpAnn], ImpExpSubSpec) }
 qcname_ext :: { LocatedA ImpExpQcSpec }
   : g_qvar_sp { sL1a $1 (ImpExpQcName $ unknownToVar <$> $1) }
   | g_qvar { sL1a $1 (ImpExpQcName $ unknownToVar <$> $1) }
-  | 'type' g_qvar { sLLa $1 $> (ImpExpQcType (glAA $1) (unknownToTcCls <$> $1)) }
+  | 'type' g_qvar { sLLa $1 $> (ImpExpQcTyVar (glAA $1) (unknownToTv <$> $1)) }
 
 -----------------------------------------------------------------------------
 -- Import Declarations

@@ -103,6 +103,7 @@ ppr_impdecl (ImportDecl { ideclExt = impExt
     ppr_ies ies = char '(' <+> interpp'SP ies <+> char ')'
 
 type instance XIEName (CsPass _) = NoExtField
+type instance XIEType (CsPass _) = EpaLocation
 
 type instance Anno (IEWrappedName (CsPass _)) = SrcSpanAnnA
 
@@ -115,6 +116,10 @@ type instance XIEVar Tc = NoExtField
 type instance XIEModuleContents Ps = [AddEpAnn]
 type instance XIEModuleContents Rn = NoExtField
 type instance XIEModuleContents Tc = NoExtField
+
+type instance XIETyVar Ps = NoExtField
+type instance XIETyVar Rn = NoExtField
+type instance XIETyVar Tc = NoExtField
 
 type instance Anno (LocatedA (IE (CsPass p))) = SrcSpanAnnA
 
