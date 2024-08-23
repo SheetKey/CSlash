@@ -300,7 +300,7 @@ importlist1 :: { OrdList (LIE Ps) }
 
 import :: { OrdList (LIE Ps) }
   : qcname_ext export_subspec {% fmap (unitOL . reLoc . (sLL $1 $>)) $
-                                mkModuleImpExp Nothing (fst $ unLoc $2) $1 (snd $ unLoc $2) }
+                                mkModuleImpExp (fst $ unLoc $2) $1 (snd $ unLoc $2) }
   | 'module' modid {% fmap (unitOL . reLoc) $
                      return (sLL $1 $> (IEModuleContents [mj AnnModule $1] $2)) }
 
