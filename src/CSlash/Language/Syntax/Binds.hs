@@ -19,6 +19,8 @@ data CsLocalBindsLR idL idR
                (CsValBindsLR idL idR)
   | EmptyLocalBinds (XEmptyLocalBinds idL idR)
 
+type CsValBinds id = CsValBindsLR id id
+
 data CsValBindsLR idL idR
   = ValBinds (XValBinds idL idR)
              (LCsBindsLR idL idR) [LSig idR]
