@@ -52,7 +52,7 @@ data CsBindLR idL idR
     , tcvar_rhs :: LCsExpr idR
     }
 
-data LSig p = XRec p (Sig p)
+type LSig p = XRec p (Sig p)
 
 data Sig pass
   = TypeSig (XTypeSig pass) (LIdP pass) (LCsType pass)
