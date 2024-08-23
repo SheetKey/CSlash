@@ -435,9 +435,14 @@ mkModuleImpExp anns (L l specname) subs = do
         -> return $ IETyVar noExtField (L l (ieNameFromSpec specname))
       | otherwise -> panic "mkModuleImpExp"
   where
+    name = ieNameVal specname
+
+    ieNameVal (ImpExpQcName ln) = unLoc ln
+    ieNameVal (ImpExpQcTyVar _ ln) = unLoc ln
+
     ieNameFromSpec :: ImpExpQcSpec -> IEWrappedName Ps
     ieNameFromSpec (ImpExpQcName (L l n)) = IEName noExtField (L l n)
-    ieNameFromSpec (ImpExpQcTyVar r (L l n)) = IETyVar r (L l n)
+    ieNameFromSpec (ImpExpQcTyVar r (L l n)) = IETyName r (L l n)
 
 -- forward compatability:
 -- checks that imports of the form 'Thing(Thing1, Thing2, ..)'
