@@ -212,7 +212,7 @@ type family XIETyVar x
 -- -------------------------------------
 -- IEWrappedName type families
 type family XIEName p
-type family XIEType p
+type family XIETyName p
 
 -- =====================================================================
 -- Type families for the CsKind type families

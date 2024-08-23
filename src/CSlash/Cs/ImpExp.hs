@@ -103,7 +103,7 @@ ppr_impdecl (ImportDecl { ideclExt = impExt
     ppr_ies ies = char '(' <+> interpp'SP ies <+> char ')'
 
 type instance XIEName (CsPass _) = NoExtField
-type instance XIEType (CsPass _) = EpaLocation
+type instance XIETyName (CsPass _) = EpaLocation
 
 type instance Anno (IEWrappedName (CsPass _)) = SrcSpanAnnA
 
