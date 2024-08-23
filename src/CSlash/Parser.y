@@ -447,12 +447,12 @@ context :: { LCsContext Ps }
   : context1 { L (getLoc $1) (reverse (unLoc $1)) }
 
 context1 :: { LCsContext Ps }
-  : '(' context ')' {% amsr (sLL $1 $> (unLoc $2))
-                            (NameAnn NameParens (glAA $1) (glAA $2) (glAA $3) []) }
-  | context ',' kvrel {% case unLoc $1 of
-                           (h:t) -> do { h' <- addTrailingCommA h (gl $2)
-                                       ; return (sLL $1 $> ($3 : (h':t))) } }
-  | kvrel { [$1] }
+  -- : '(' context ')' {% amsA' (sLL $1 $> $
+  --                             CsContext (Just $ AnnParen AnnParens (glAA $1) (glAA $3)) $2) }
+  : context1 ',' kvrel {% case unLoc $1 of
+                            (h:t) -> do { h' <- addTrailingCommaA h (gl $2)
+                                        ; return (sLLc $1 $> ($3 : (h':t))) } }
+  | kvrel { sL1a $1 [$1] }
 
 kvrel :: { LCsKdRel Ps }
     -- Note that we do not set the 'NameSpace' of $2 here, that is left to 'mkKvRel'
@@ -543,8 +543,8 @@ atype :: { LCsType Ps }
   -- | '(' ')' {% amsA' (sLL $1 $> $
   --                       CsTupleTy (AnnParen AnnParens (glR $1) (glR $2)) [])}
   | '(' comma_types2 ')' {% amsA' (sLL $1 $> $
-                                     CsTupleTy (AnnParen AnnParens (glR $1) (glR $2)) $2) }
-  | '(' bar_types2 ')' {% amsA' (sLL $1 $> $ CsSumTy (AnnParen AnnParens (glAA $1) (glAA $2)) $2) }
+                                     CsTupleTy (AnnParen AnnParens (glAA $1) (glAA $3)) $2) }
+  | '(' bar_types2 ')' {% amsA' (sLL $1 $> $ CsSumTy (AnnParen AnnParens (glAA $1) (glAA $3)) $2) }
   | '(' ktype ')' {% amsA' (sLL $1 $> $ CsParTy (AnnParen AnnParens (glAA $1) (glAA $3)) $2) }
 
 comma_types2 :: { [LCsType Ps] }
@@ -1242,6 +1242,10 @@ sLLa !x !y = sL (noAnnSrcSpan $ comb2 x y)
 {-# INLINE sLLl #-}
 sLLl :: (HasLoc a, HasLoc b) => a -> b -> c -> LocatedL c
 sLLl !x !y = sL (noAnnSrcSpan $ comb2 x y)
+
+{-# INLINE sLLc #-}
+sLLc :: (HasLoc a, HasLoc b) => a -> b -> c -> LocatedC c
+sLLc !x !y = sL (noAnnSrcSpan $ comb2 x y)
 
 {-# INLINE sLLAsl #-}
 sLLAsl :: (HasLoc a) => [a] -> Located b -> c -> Located c

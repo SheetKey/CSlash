@@ -98,4 +98,4 @@ type instance Anno (CsKind (CsPass p)) = SrcSpanAnnA
 
 type instance Anno (CsKdRel (CsPass p)) = SrcSpanAnnA
 
-type instance Anno [LocatedA (CsKdRel (CsPass p))] = SrcSpanAnnL
+type instance Anno [LocatedA (CsKdRel (CsPass p))] = SrcSpanAnnC
