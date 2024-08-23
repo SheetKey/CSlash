@@ -32,6 +32,6 @@ data IE pass
 
 data IEWrappedName p
   = IEName (XIEName p) (LIdP p)
-  | IETyName (XIETyName p) (LIdP p)
+  | IETyName (XIETyName p) (LIdP p) -- GHC IEType
     
 type LIEWrappedName p = XRec p (IEWrappedName p)
