@@ -7,6 +7,7 @@ module CSlash.Cs
   ( module CSlash.Language.Syntax
   , module CSlash.Cs.Doc
   , module CSlash.Cs.Binds
+  , module CSlash.Cs.Decls
   , module CSlash.Cs.Expr
   , module CSlash.Cs.Extension
   , module CSlash.Cs.Kind
@@ -25,6 +26,7 @@ module CSlash.Cs
 import CSlash.Language.Syntax
 import CSlash.Cs.Doc
 import CSlash.Cs.Binds
+import CSlash.Cs.Decls
 import CSlash.Cs.Expr
 import CSlash.Cs.Extension
 import CSlash.Cs.Kind
