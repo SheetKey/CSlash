@@ -25,7 +25,9 @@ data CsValBindsLR idL idR
 
 -- ---------------------------------------------------------------------
 
-type LCsBind id = XRec id (CsBindLR id id)
+type LCsBind id = LCsBindLR id id
+
+type LCsBinds id = LCsBindsLR id id
 
 type CsBind id = CsBindLR id id
 
