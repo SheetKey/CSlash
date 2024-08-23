@@ -39,7 +39,7 @@ type instance XCsForAll (CsPass _) = EpAnnForallTy
 
 type EpAnnForallTy = EpAnn (AddEpAnn, AddEpAnn)
 
-mkCsForAllTele :: EpAnnForallTy -> [LCsTyVarBndr (CsPass p)] -> CsForallTelescope (CsPass p)
+mkCsForAllTele :: EpAnnForallTy -> [LCsTyVarBndr (CsPass p)] -> CsForAllTelescope (CsPass p)
 mkCsForAllTele an bndrs = CsForAll { csf_x = an, csf_bndrs = bndrs }
 
 type instance XCsPS Ps = EpAnnCO
@@ -149,7 +149,7 @@ pprCsForAll
   :: (OutputableBndrId p)
   => CsForAllTelescope (CsPass p)
   -> SDoc
-pprCsForAll (CsForAllInvis {csf_invis_bndrs = qtvs})
+pprCsForAll (CsForAll {csf_bndrs = qtvs})
   | null qtvs = whenPprDebug (forAllLit <> dot)
   | otherwise = forAllLit <+> interppSP qtvs <> dot
 
