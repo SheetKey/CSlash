@@ -739,7 +739,7 @@ aexp2 :: { ECP }
   | INTEGER { ECP $ mkCsOverLitPV (sL1a $1 $ mkCsIntegral (getINTEGER $1)) }
   | RATIONAL { ECP $ mkCsOverLitPV (sL1a $1 $ mkCsFractional (getRATIONAL $1)) }
   | '(' texp ')' { ECP $ unECP $2 >>= \ $2 ->
-                         mkCsParPV (comb2 $1 $>) (epTok $1) $2 (epTOk $3) }
+                         mkCsParPV (comb2 $1 $>) (epTok $1) $2 (epTok $3) }
   | '(' tup_exprs ')' { ECP $ 2 >>= \ $2 ->
                               mkSumOrTuplePV (noAnnSrcSpan $ comb2 $1 $>) $2 [mop $1, mcp $3] }
   | '_' { ECP $ mkCsWildCardPV (getLoc $1) }
