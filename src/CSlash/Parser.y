@@ -461,13 +461,16 @@ kvrel :: { LCsKdRel Ps }
 type :: { LCsType Ps }
   : btype %shift { $1 }
   | btype ARR_U ctype {% amsA' (sLL $1 $> $ CsFunTy noExtField
-                                                    (CsArrow (epUniTok $2) (CsUKd noExtField))
+                                                    (CsArrow (EpU $ epUniTok $2)
+                                                             (sL1a $2 $ CsUKd noExtField))
                                                     $1 $3) }
   | btype ARR_A ctype {% amsA' (sLL $1 $> $ CsFunTy noExtField
-                                                    (CsArrow (epUniTok $2) (CsAKd noExtField))
+                                                    (CsArrow (EpA $ epUniTok $2)
+                                                             (sL1a $2 $ CsAKd noExtField))
                                                     $1 $3) }
   | btype ARR_L ctype {% amsA' (sLL $1 $> $ CsFunTy noExtField
-                                                    (CsArrow (epUniTok $2) (CsLKd noExtField))
+                                                    (CsArrow (EpL $ epUniTok $2)
+                                                             (sL1a $2 $ CsLKd noExtField))
                                                     $1 $3) }
 
 btype :: { LCsType Ps }

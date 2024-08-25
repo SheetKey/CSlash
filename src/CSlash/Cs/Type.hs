@@ -89,9 +89,9 @@ type instance XKdSig (CsPass _) = [AddEpAnn]
 type instance XTyLamTy (CsPass _) = [AddEpAnn]
 
 data EpArrow
-  = EpU !(EpToken "-★>")
-  | EpA !(EpToken "-●>")
-  | EpL !(EpToken "-○>")
+  = EpU !(EpUniToken "-U>" "-★>")
+  | EpA !(EpUniToken "-A>" "-●>")
+  | EpL !(EpUniToken "-L>" "-○>")
   deriving Data
 
 type instance XCsArrow Ps = EpArrow
