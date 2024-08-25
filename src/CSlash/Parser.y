@@ -479,7 +479,8 @@ btype :: { LCsType Ps }
 infixtype :: { forall b. DisambTD b => PV (LocatedA b) }
   : ftype %shift { $1 }
   | ftype qop infixtype { $1 >>= \ $1 ->
-                           $3 >>= \ $3 ->
+                           $2 >>= \ $2 ->
+                            $3 >>= \ $3 ->
                              mkCsOpTyPV $1 $2 $3 }
 
 ftype :: { forall b. DisambTD b => PV (LocatedA b) }
