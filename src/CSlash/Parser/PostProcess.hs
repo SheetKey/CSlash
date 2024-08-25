@@ -463,6 +463,12 @@ mkModuleImpExp anns (L l specname) subs = do
 checkImportSpec :: LocatedL [LIE Ps] -> P (LocatedL [LIE Ps])
 checkImportSpec = pure
 
+-----------------------------------------------------------------------------
+-- Warnings and failures
+
+failOpFewArgs :: MonadP m => LocatedN RdrName -> m a
+failOpFewArgs (L loc op) = addFatalError $ mkPlainErrorMsgEnvelope (locA loc)
+                                             (PsErrOpFewArgs op)
 
 -----------------------------------------------------------------------------
 -- Misc utils
