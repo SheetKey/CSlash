@@ -32,6 +32,7 @@ data PsMessage
   | PsWarnTab !Word
   | PsWarnOperatorWhitespace !FastString !OperatorWhitespaceOccurrence
   | PsErrEmptyLambda
+  | PsErrEmptyTyLamTy
   | PsErrMissingBlock
   | PsErrLexer !LexErr !LexErrKind
   | PsErrParse !String !PsErrParseDetails

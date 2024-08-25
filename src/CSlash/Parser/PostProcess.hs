@@ -89,6 +89,17 @@ fixValbindsAnn :: EpAnn AnnList -> EpAnn AnnList
 fixValbindsAnn (EpAnn anchor (AnnList ma o c r t) cs)
   = (EpAnn (widenAnchor anchor (r ++ map trailingAnnToAddEpAnn t)) (AnnList ma o c r t) cs)
 
+mkCsTyLamTy
+  :: SrcSpan
+  -> (LocatedL [LMatch Ps (LCsType Ps)])
+  -> [AddEpAnn]
+  -> P (LCsType Ps)
+mkCsTyLamTy l (L lm m) anns = do
+  !cs <- getCommentsFor l
+  let mg = mkTyLamTyMatchGroup FromSource (L lm m)
+  checkTyLamTyMatchGroup l mg
+  return $ L (EpAnn (spanAsAnchor l) noAnn cs) (CsTyLamTy anns mg)
+
 {- **********************************************************************
 
   Converting to CsBinds, etc.
@@ -299,6 +310,10 @@ class (b ~ (Body b) Ps, AnnoBody b) => DisambECP b where
 checkLamMatchGroup :: SrcSpan -> MatchGroup Ps (LCsExpr Ps) -> PV ()
 checkLamMatchGroup l (MG { mg_alts = (L _ (matches:_)) }) = do
   when (null (csLMatchPats matches)) $ addError $ mkPlainErrorMsgEnvelope l PsErrEmptyLambda
+
+checkTyLamTyMatchGroup :: SrcSpan -> MatchGroup Ps (LCsType Ps) -> P ()
+checkTyLamTyMatchGroup l (MG { mg_alts = (L _ (matches:_)) }) = do
+  when (null (csLMatchPats matches)) $ addError $ mkPlainErrorMsgEnvelope l PsErrEmptyTyLamTy
 
 instance DisambECP (CsExpr Ps) where
   type Body (CsExpr Ps) = CsExpr

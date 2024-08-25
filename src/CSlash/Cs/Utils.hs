@@ -1,7 +1,7 @@
 {-# LANGUAGE ConstraintKinds #-}
 
 module CSlash.Cs.Utils
-  ( mkMatchGroup, mkLamMatchGroup, mkCsIf
+  ( mkMatchGroup, mkLamMatchGroup, mkTyLamTyMatchGroup, mkCsIf
 
   , missingTupArg
 
@@ -82,6 +82,16 @@ mkLamMatchGroup origin (L l matches)
   = mkMatchGroup origin (L l $ map fixCtxt matches)
   where
     fixCtxt (L a match) = L a match{ m_ctxt = LamAlt }
+
+mkTyLamTyMatchGroup
+  :: AnnoBody p body
+  => Origin
+  -> LocatedL [LocatedA (Match (CsPass p) (LocatedA (body (CsPass p))))]
+  -> MatchGroup (CsPass p) (LocatedA (body (CsPass p)))
+mkTyLamTyMatchGroup origin (L l matches)
+  = mkMatchGroup origin (L l $ map fixCtxt matches)
+  where
+    fixCtxt (L a match) = L a match{ m_ctxt = TyLamTyAlt }
 
 mkCsIf :: LCsExpr Ps -> LCsExpr Ps -> LCsExpr Ps -> AnnsIf -> CsExpr Ps
 mkCsIf c a b anns = CsIf anns c a b

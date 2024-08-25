@@ -531,19 +531,19 @@ atype :: { LCsType Ps }
   -- : systycon_no_unit {% amsA' (sL1 $1 (CsTyVar [] $1)) }
   -- | g_qvar %shift {% amsA' (sL1 $1 (CsTyVar [] (fmap unknownToTv $1))) }
   -- | g_qcon {% amsA' (sL1 $1 (CsTyVar [] (fmap unknownToTcCls $1))) }
-  : '\\\\' tyargpats '->' type { mkCsTyLamTy (comb2 $1 $>)
-                                 (sLLl $1 $>
-                                  [sLLa $1 $> $ Match
-                                                { m_ext = []
-                                                , m_ctxt = TyLamTyAlt
-                                                , m_pats = L (listLocation $2) $2
-                                                , m_grhss = unguardedGRHSs
-                                                              (comb2 $3 $4) $4
-                                                              (EpAnn (glR $3)
-                                                                     (GrhsAnn Nothing
-                                                                              (mu AnnRarrow $3))
-                                                                     emptyComments) }])
-                                 [mj AnnLam $1] }
+  : '\\\\' tyargpats '->' type {% mkCsTyLamTy (comb2 $1 $>)
+                                  (sLLl $1 $>
+                                   [sLLa $1 $> $ Match
+                                                 { m_ext = []
+                                                 , m_ctxt = TyLamTyAlt
+                                                 , m_pats = L (listLocation $2) $2
+                                                 , m_grhss = unguardedGRHSs
+                                                               (comb2 $3 $4) $4
+                                                               (EpAnn (glR $3)
+                                                                      (GrhsAnn Nothing
+                                                                               (mu AnnRarrow $3))
+                                                                      emptyComments) }])
+                                  [mj AnnLam $1] }
   -- | '(' ')' {% amsA' (sLL $1 $> $
   --                       CsTupleTy (AnnParen AnnParens (glR $1) (glR $2)) [])}
   | '(' comma_types2 ')' {% amsA' (sLL $1 $> $
