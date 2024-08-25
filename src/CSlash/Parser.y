@@ -485,7 +485,7 @@ infixtype :: { forall b. DisambTD b => PV (LocatedA b) }
 
 ftype :: { forall b. DisambTD b => PV (LocatedA b) }
   : atype { mkCsAppTyHeadPV $1 }
-  | qop %shift { failOpFewArgs (fst $1) }
+  | qop %shift { $1 >>= \ $1 -> failOpFewArgs $1 }
   | ftype atype { $1 >>= \ $1 -> mkCsAppTyPV $1 $2 }
 
 
