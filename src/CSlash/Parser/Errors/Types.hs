@@ -65,6 +65,7 @@ data PsMessage
   | PsErrInPat !(PatBuilder Ps) !PsErrInPatDetails
   | PsErrUnicodeCharLooksLike Char Char String
   | PsErrParseRightOpSectionInPat !RdrName !(PatBuilder Ps)
+  | PsErrInvalidKindRelation !RdrName
   deriving Generic
 
 data PsErrParseDetails = PsErrParseDetails

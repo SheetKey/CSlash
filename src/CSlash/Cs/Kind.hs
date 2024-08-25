@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -38,8 +39,8 @@ type instance XQualKd (CsPass _) = NoExtField
 type instance XParKd (CsPass _) = NoExtField
 
 -- type instance XKdLT Ps = EpToken "<"
-type instance XKdLT (CsPass _) = NoExtField
-type instance XKdLTEQ (CsPass _) = NoExtField
+type instance XKdLT (CsPass _) = EpToken "<"
+type instance XKdLTEQ (CsPass _) = EpToken "<="
 
 instance (OutputableBndrId p) => Outputable (CsKind (CsPass p)) where
   ppr kind = pprCsKind kind

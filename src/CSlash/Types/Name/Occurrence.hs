@@ -174,6 +174,12 @@ mkTcOcc = mkOccName tcName
 mkTcOccFS :: FastString -> OccName
 mkTcOccFS = mkOccNameFS tcName
 
+mkUnknownOcc :: String -> OccName
+mkUnknownOcc = mkOccName UNKNOWN_NS
+
+mkUnknownOccFS :: FastString -> OccName
+mkUnknownOccFS = mkOccNameFS UNKNOWN_NS
+
 class HasOccName name where
   occName :: name -> OccName
 

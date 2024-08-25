@@ -212,7 +212,7 @@ export_subspec :: { Located ([AddEpAnn], ImpExpSubSpec) }
 qcname_ext :: { LocatedA ImpExpQcSpec }
   : g_qvar_sp { sL1a $1 (ImpExpQcName $ fmap unknownToVar $1) }
   | g_qvar { sL1a $1 (ImpExpQcName $ fmap unknownToVar $1) }
-  | 'type' g_qvar { sLLa $1 $> (ImpExpQcTyVar (glAA $1) (fmap unknownToTv $1)) }
+  | 'type' g_qvar { sLLa $1 $> (ImpExpQcTyVar (glAA $1) (fmap unknownToTv $2)) }
 
 -----------------------------------------------------------------------------
 -- Import Declarations
@@ -456,7 +456,7 @@ context1 :: { LCsContext Ps }
 
 kvrel :: { LCsKdRel Ps }
     -- Note that we do not set the 'NameSpace' of $2 here, that is left to 'mkKvRel'
-  : g_varid g_varsym g_varid {% mkKvRel (fmap unknownToKv $1) $2 (fmap unknownToKv $3) }
+  : kind g_varsym kind {% mkKvRel (comb2 $1 $3) $1 $2 $3 }
 
 type :: { LCsType Ps }
   : btype %shift { $1 }

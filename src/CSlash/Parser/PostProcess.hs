@@ -52,6 +52,19 @@ import qualified Data.Kind as K
 
 *********************************************************************** -}
 
+mkKvRel :: SrcSpan -> LCsKind Ps -> LocatedN RdrName -> LCsKind Ps -> P (LCsKdRel Ps)
+mkKvRel loc k1@(L l1 _) (L lr rel) k2@(L l2 _)
+  | rdrNameOcc rel == mkUnknownOcc "<"
+  = let cs = emptyComments Semi.<> comments l1 Semi.<> comments l2
+        loc' = EpAnn (spanAsAnchor loc) noAnn cs
+    in return $ L loc' (CsKdLT (EpTok $ entry lr) k1 k2)
+  | rdrNameOcc rel == mkUnknownOcc "<="
+  = let cs =  emptyComments Semi.<> comments l1 Semi.<> comments l2
+        loc' = EpAnn (spanAsAnchor loc) noAnn cs
+    in return $ L loc' (CsKdLT (EpTok $ entry lr) k1 k2)
+  | otherwise
+  = addFatalError $ mkPlainErrorMsgEnvelope (locA lr) $ PsErrInvalidKindRelation rel
+
 -- mkTySynonym in GHC
 mkTyFunBind
   :: SrcSpan
