@@ -1,0 +1,316 @@
+\ProvidesPackage{tt}
+
+% \documentclass[11pt]{amsart}
+
+\usepackage[letterpaper,left=125pt,right=125pt]{geometry}
+
+
+\usepackage[english]{babel}
+\usepackage{amsmath} 
+\usepackage{amssymb}  
+\usepackage{amsfonts}
+\usepackage{amsthm}  
+\usepackage{graphicx}
+\usepackage{mathpartir}
+\usepackage{xspace}
+\usepackage{mathtools}
+\usepackage{tikz-cd}
+\usetikzlibrary{calc,arrows}
+\usepackage{bbm}
+\usepackage{tabularx}
+
+% A TikZ style for curved arrows of a fixed height, due to AndréC.
+\tikzset{curve/.style={settings={#1},to path={(\tikztostart)
+    .. controls ($(\tikztostart)!\pv{pos}!(\tikztotarget)!\pv{height}!270:(\tikztotarget)$)
+    and ($(\tikztostart)!1-\pv{pos}!(\tikztotarget)!\pv{height}!270:(\tikztotarget)$)
+    .. (\tikztotarget)\tikztonodes}},
+    settings/.code={\tikzset{quiver/.cd,#1}
+        \def\pv##1{\pgfkeysvalueof{/tikz/quiver/##1}}},
+    quiver/.cd,pos/.initial=0.35,height/.initial=0}
+
+\usepackage[colorlinks,linkcolor=blue,citecolor=blue,urlcolor=blue]{hyperref} 
+
+
+\newtheorem{thm}{Theorem}[section] 
+
+\newtheorem{lem}[thm]{Lemma}
+\newtheorem{cor}[thm]{Corollary}
+\newtheorem{prop}[thm]{Proposition}
+\newtheorem{alg}[thm]{Algorithm}
+\newtheorem{axiom}[thm]{Axiom}
+
+
+\theoremstyle{definition}  
+\newtheorem{defn}[thm]{Definition}
+\newtheorem{conj}[thm]{Conjecture}
+\newtheorem{prob}[thm]{Problem}
+
+\theoremstyle{remark}      
+\newtheorem{exmp}[thm]{Example}  
+\newtheorem{rem}[thm]{Remark}
+\newtheorem{claim}[thm]{Claim}  
+\newtheorem{note}[thm]{Note}
+
+\numberwithin{equation}{section}
+
+\newcommand{\Parens}[1]{\Bigl(#1\Bigr)}
+
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\Q}{\mathbb{Q}}
+\newcommand{\N}{\mathbb{N}}
+\newcommand{\Z}{\mathbb{Z}}
+\newcommand{\I}{\mathbb{I}}
+\newcommand{\cI}{\textbf{I}}
+\newcommand{\C}{\mathbb{C}}
+\newcommand{\A}{\mathcal{A}}
+\newcommand{\LL}{\mathcal{L}}
+\newcommand{\RR}{\mathcal{R}}
+\newcommand{\J}{\mathcal{J}}
+
+\newcommand{\COMP}{\mathcal{C}}
+
+\newcommand{\Set}{\mathsf{Set}}
+\newcommand{\cSet}{\mathsf{cSet}}
+\newcommand{\Hom}{\text{Hom}}
+\newcommand{\Cat}{\mathcal{C}}
+\newcommand{\DCat}{\mathcal{D}}
+\newcommand{\scat}{\mathsf{Cat}}
+\newcommand{\grpd}{\mathsf{Grpd}}
+\newcommand{\op}{\text{op}}
+\newcommand{\cube}{\mathbb{C}_{\times}}
+\newcommand{\B}{\mathbb{B}}
+\newcommand{\E}{\mathcal{E}}
+\newcommand{\one}{\mathbbm{1}}
+\newcommand{\cone}{\textbf{1}}
+\newcommand{\two}{\textbf{2}}
+\newcommand{\three}{\textbf{3}}
+\newcommand{\four}{\textbf{4}}
+\newcommand{\inter}{\mathbb{I}}
+\newcommand{\parto}{\rightrightarrows}
+\newcommand{\mono}{\rightarrowtail}
+
+\newcommand{\cs}{C\textbackslash\xspace}
+\newcommand{\tok}{\overset{\kappa}{\to}}
+\newcommand{\tou}{\overset{\star}{\to}}
+\newcommand{\toa}{\overset{\bullet}{\to}}
+\newcommand{\tol}{\overset{\circ}{\to}}
+\newcommand{\fak}[2]{\forall\tmtp#1#2.\,}
+\newcommand{\tek}[2]{\exists\tmtp#1#2.\,}
+
+\newcommand{\pack}[2]{\mathsf{pack}(#1,#2)}
+\newcommand{\unpack}[4]{\mathsf{let}\,\mathsf{pack}(#1,#2)=#3\,\mathsf{in}\,#4}
+
+\DeclareMathOperator{\rank}{rank}
+\DeclareMathOperator{\dimension}{dim}
+\DeclareMathOperator{\dom}{dom}
+\DeclareMathOperator{\cod}{cod}
+\DeclareMathOperator{\ran}{ran}
+\DeclareMathOperator{\mul}{mul}
+\DeclareMathOperator{\colim}{colim}
+\DeclareMathOperator{\obj}{obj}
+\DeclareMathOperator{\morph}{morph}
+\DeclareMathOperator{\Ty}{Ty}
+\DeclareMathOperator{\Tm}{Tm}
+
+\newcommand{\U}{\ensuremath{\mathcal{U}}\xspace}
+\newcommand{\emptyt}{\ensuremath{\mathbf{0}}\xspace}
+\newcommand{\unit}{\ensuremath{\mathbf{1}}\xspace}
+\newcommand{\ttt}{\ensuremath{\star}\xspace}
+
+\newcommand{\rec}[1]{\mathsf{rec}_{#1}}
+\newcommand{\ind}[1]{\mathsf{ind}_{#1}}
+\newcommand{\indid}[1]{\ind{=_{#1}}} % (Martin-Lof) path induction principle for identity types
+\newcommand{\indidb}[1]{\ind{=_{#1}}'} % (Paulin-Mohring) based path induction principle for identity types
+\newcommand{\idfunc}[1][]{\ensuremath{\mathsf{id}_{#1}}\xspace}
+\newcommand{\id}[3][]{\ensuremath{#2 =_{#1} #3}\xspace}
+\newcommand{\inc}{\ensuremath{\mathsf{inc}}\xspace}
+
+\newcommand{\inlsym}{{\mathsf{inl}}}
+\newcommand{\inrsym}{{\mathsf{inr}}}
+\newcommand{\inl}{\ensuremath\inlsym\xspace}
+\newcommand{\inr}{\ensuremath\inrsym\xspace}
+
+\newcommand{\rform}{\textsc{form}}
+\newcommand{\rintro}{\textsc{intro}}
+\newcommand{\relim}{\textsc{elim}}
+\newcommand{\rcomp}{\textsc{comp}}
+\newcommand{\runiq}{\textsc{uniq}}
+\newcommand{\Weak}{\mathsf{Wkg}}
+\newcommand{\Vble}{\mathsf{Vble}}
+\newcommand{\Exch}{\mathsf{Exch}}
+\newcommand{\Subst}{\mathsf{Subst}}
+\newcommand{\Empty}{\mathsf{Empty}}
+\newcommand{\Ext}{\mathsf{Ext}}
+\newcommand{\TExt}{\mathsf{TExt}}
+\newcommand{\Var}{\mathsf{Var}}
+\newcommand{\TVar}{\mathsf{TVar}}
+\newcommand{\Arr}{\mathsf{Arr}}
+
+\newcommand{\refl}[1]{\ensuremath{\mathsf{refl}_{#1}}\xspace}
+
+\newcommand{\tup}[2]{(#1,#2)}
+\newcommand{\suc}{\mathsf{succ}}
+
+\newcommand{\CZ}{\textbf{0}}
+\newcommand{\CS}{\textbf{S}}
+\newcommand{\CT}{\textbf{C}}
+
+\newcommand{\emptyctx}{\ensuremath{\cdot}}
+\newcommand{\production}{\vcentcolon\vcentcolon=}
+\newcommand{\conv}{\downarrow}
+\newcommand{\ctx}{\ensuremath{\mathsf{ctx}}}
+\newcommand{\wfctx}[2]{#1\vdash #2\ \ctx} % this was changed to take two arguements, not one
+\newcommand{\Type}{\ensuremath{\mathsf{Type}}}
+\newcommand{\wftp}[2]{#1\vdash #2\ \Type}
+\newcommand{\oftp}[3]{#1 \vdash #2 : #3}
+\newcommand{\jdeq}{\equiv}
+\newcommand{\defeq}{\vcentcolon\equiv}
+\newcommand{\jdeqtp}[4]{#1 \vdash #2 \jdeq #3 : #4}
+\newcommand{\defeqtp}[4]{#1 \vdash #2 \defeq #3 : #4}
+\newcommand{\judg}[2]{#1 \vdash #2}
+\newcommand{\tmtp}[2]{#1 \mathord{:} #2}
+
+\newcommand{\fst}{\ensuremath{\mathsf{fst}}}
+\newcommand{\snd}{\ensuremath{\mathsf{snd}}}
+
+
+\newcommand{\formula}{\ensuremath{\mathsf{formula}}}
+\newcommand{\Sub}{\textbf{Sub}}
+\newcommand{\Cofibs}{\textbf{Cofibs}}
+\newcommand{\cofib}{\ensuremath{\mathsf{cofib}}}
+\newcommand{\jdcofibeqtp}[3]{#1 \vdash #2 \jdeq #3\ \cofib}
+\newcommand{\jdcofib}[2]{#1 \vdash #2\ \cofib}
+\newcommand{\jdcofibeq}[3]{#1 \vdash #2 \jdeq #3\ \cofib}
+\newcommand{\jdformula}[2]{#1 \vdash #2\ \formula}
+\newcommand{\jdsub}[3]{#1 \vdash_{#2} #3}
+\newcommand{\abort}{\ensuremath{\mathsf{abort}}}
+
+\newcommand{\Path}[2]{\ensuremath{\mathsf{Path}_{#1.#2}}}
+
+\newcommand{\ol}[1]{\overline{#1}}
+
+\newcommand{\kanfill}[2]{\ensuremath{\mathsf{fill}_{#1}^{#2}}}
+\newcommand{\kancomp}[2]{\ensuremath{\mathsf{com}_{#1}^{#2}}}
+\newcommand{\kancoe}[2]{\ensuremath{\mathsf{coe}_{#1}^{#2}}}
+\newcommand{\app}{\ensuremath{\mathsf{app}}}
+\newcommand{\ct}{% CONCATENATION
+  \mathchoice{\mathbin{\raisebox{0.5ex}{$\displaystyle\centerdot$}}}%
+             {\mathbin{\raisebox{0.5ex}{$\centerdot$}}}%
+             {\mathbin{\raisebox{0.25ex}{$\scriptstyle\,\centerdot\,$}}}%
+             {\mathbin{\raisebox{0.1ex}{$\scriptscriptstyle\,\centerdot\,$}}}
+}
+
+
+\newcommand{\Bool}{\ensuremath{\mathsf{Bool}}}
+\newcommand{\True}{\ensuremath{\mathsf{True}}}
+\newcommand{\False}{\ensuremath{\mathsf{False}}}
+\newcommand{\bif}[1]{\ensuremath{\mathsf{if}_{#1}}}
+\newcommand{\bneg}{\ensuremath{\mathsf{neg}}}
+\newcommand{\natpar}{\ensuremath{\mathsf{par}}}
+
+%%% Dependent products %%%
+\def\prdsym{\textstyle\prod}
+%% Call the macro like \prd{x,y:A}{p:x=y} with any number of
+%% arguments.  Make sure that whatever comes *after* the call doesn't
+%% begin with an open-brace, or it will be parsed as another argument.
+\makeatletter
+% Currently the macro is configured to produce
+%     {\textstyle\prod}(x:A) \; {\textstyle\prod}(y:B),{\ }
+% in display-math mode, and
+%     \prod_{(x:A)} \prod_{y:B}
+% in text-math mode.
+% \def\prd#1{\@ifnextchar\bgroup{\prd@parens{#1}}{%
+%     \@ifnextchar\sm{\prd@parens{#1}\@eatsm}{%
+%         \prd@noparens{#1}}}}
+\def\prd#1{\@ifnextchar\bgroup{\prd@parens{#1}}{%
+    \@ifnextchar\sm{\prd@parens{#1}\@eatsm}{%
+    \@ifnextchar\prd{\prd@parens{#1}\@eatprd}{%
+    \@ifnextchar\;{\prd@parens{#1}\@eatsemicolonspace}{%
+    \@ifnextchar\\{\prd@parens{#1}\@eatlinebreak}{%
+    \@ifnextchar\narrowbreak{\prd@parens{#1}\@eatnarrowbreak}{%
+      \prd@noparens{#1}}}}}}}}
+\def\prd@parens#1{\@ifnextchar\bgroup%
+  {\mathchoice{\@dprd{#1}}{\@tprd{#1}}{\@tprd{#1}}{\@tprd{#1}}\prd@parens}%
+  {\@ifnextchar\sm%
+    {\mathchoice{\@dprd{#1}}{\@tprd{#1}}{\@tprd{#1}}{\@tprd{#1}}\@eatsm}%
+    {\mathchoice{\@dprd{#1}}{\@tprd{#1}}{\@tprd{#1}}{\@tprd{#1}}}}}
+\def\@eatsm\sm{\sm@parens}
+\def\prd@noparens#1{\mathchoice{\@dprd@noparens{#1}}{\@tprd{#1}}{\@tprd{#1}}{\@tprd{#1}}}
+% Helper macros for three styles
+\def\lprd#1{\@ifnextchar\bgroup{\@lprd{#1}\lprd}{\@@lprd{#1}}}
+\def\@lprd#1{\mathchoice{{\textstyle\prod}}{\prod}{\prod}{\prod}({\textstyle #1})\;}
+\def\@@lprd#1{\mathchoice{{\textstyle\prod}}{\prod}{\prod}{\prod}({\textstyle #1}),\ }
+\def\tprd#1{\@tprd{#1}\@ifnextchar\bgroup{\tprd}{}}
+\def\@tprd#1{\mathchoice{{\textstyle\prod_{(#1)}}}{\prod_{(#1)}}{\prod_{(#1)}}{\prod_{(#1)}}}
+\def\dprd#1{\@dprd{#1}\@ifnextchar\bgroup{\dprd}{}}
+\def\@dprd#1{\prod_{(#1)}\,}
+\def\@dprd@noparens#1{\prod_{#1}\,}
+
+% Look through spaces and linebreaks
+\def\@eatnarrowbreak\narrowbreak{%
+  \@ifnextchar\prd{\narrowbreak\@eatprd}{%
+    \@ifnextchar\sm{\narrowbreak\@eatsm}{%
+      \narrowbreak}}}
+\def\@eatlinebreak\\{%
+  \@ifnextchar\prd{\\\@eatprd}{%
+    \@ifnextchar\sm{\\\@eatsm}{%
+      \\}}}
+\def\@eatsemicolonspace\;{%
+  \@ifnextchar\prd{\;\@eatprd}{%
+    \@ifnextchar\sm{\;\@eatsm}{%
+      \;}}}
+
+%%% Lambda abstractions.
+% Each variable being abstracted over is a separate argument.  If
+% there is more than one such argument, they *must* be enclosed in
+% braces.  Arguments can be untyped, as in \lam{x}{y}, or typed with a
+% colon, as in \lam{x:A}{y:B}. In the latter case, the colons are
+% automatically noticed and (with current implementation) the space
+% around the colon is reduced.  You can even give more than one variable
+% the same type, as in \lam{x,y:A}.
+\def\lam#1{{\lambda}\@lamarg#1:\@endlamarg\@ifnextchar\bgroup{.\,\lam}{.\,}}
+\def\@lamarg#1:#2\@endlamarg{\if\relax\detokenize{#2}\relax #1\else\@lamvar{\@lameatcolon#2},#1\@endlamvar\fi}
+\def\@lamvar#1,#2\@endlamvar{(#2\,{:}\,#1)}
+% \def\@lamvar#1,#2{{#2}^{#1}\@ifnextchar,{.\,{\lambda}\@lamvar{#1}}{\let\@endlamvar\relax}}
+\def\@lameatcolon#1:{#1}
+\let\lamt\lam
+% This version silently eats any typing annotation.
+\def\lamu#1{{\lambda}\@lamuarg#1:\@endlamuarg\@ifnextchar\bgroup{.\,\lamu}{.\,}}
+\def\@lamuarg#1:#2\@endlamuarg{#1}
+
+%%% MY Version of CALPITAL Lambda abstraction for path types
+\def\Lam#1{{\Lambda}\@lamarg#1:\@endlamarg\@ifnextchar\bgroup{.\,\Lam}{.\,}}
+
+%%% MY Version of \lam for kinds
+\def\lamk#1#2{{\lambda^{#1}}\@lamarg#2:\@endlamarg\@ifnextchar\bgroup{.\,\lamk}{.\,}}
+
+%%% Dependent sums %%%
+\def\smsym{\textstyle\sum}
+% Use in the same way as \prd
+\def\sm#1{\@ifnextchar\bgroup{\sm@parens{#1}}{%
+    \@ifnextchar\prd{\sm@parens{#1}\@eatprd}{%
+    \@ifnextchar\sm{\sm@parens{#1}\@eatsm}{%
+    \@ifnextchar\;{\sm@parens{#1}\@eatsemicolonspace}{%
+    \@ifnextchar\\{\sm@parens{#1}\@eatlinebreak}{%
+    \@ifnextchar\narrowbreak{\sm@parens{#1}\@eatnarrowbreak}{%
+        \sm@noparens{#1}}}}}}}}
+\def\sm@parens#1{\@ifnextchar\bgroup%
+  {\mathchoice{\@dsm{#1}}{\@tsm{#1}}{\@tsm{#1}}{\@tsm{#1}}\sm@parens}%
+  {\@ifnextchar\prd%
+    {\mathchoice{\@dsm{#1}}{\@tsm{#1}}{\@tsm{#1}}{\@tsm{#1}}\@eatprd}%
+    {\mathchoice{\@dsm{#1}}{\@tsm{#1}}{\@tsm{#1}}{\@tsm{#1}}}}}
+\def\@eatprd\prd{\prd@parens}
+\def\sm@noparens#1{\mathchoice{\@dsm@noparens{#1}}{\@tsm{#1}}{\@tsm{#1}}{\@tsm{#1}}}
+\def\lsm#1{\@ifnextchar\bgroup{\@lsm{#1}\lsm}{\@@lsm{#1}}}
+\def\@lsm#1{\mathchoice{{\textstyle\sum}}{\sum}{\sum}{\sum}({\textstyle #1})\;}
+\def\@@lsm#1{\mathchoice{{\textstyle\sum}}{\sum}{\sum}{\sum}({\textstyle #1}),\ }
+\def\tsm#1{\@tsm{#1}\@ifnextchar\bgroup{\tsm}{}}
+\def\@tsm#1{\mathchoice{{\textstyle\sum_{(#1)}}}{\sum_{(#1)}}{\sum_{(#1)}}{\sum_{(#1)}}}
+\def\dsm#1{\@dsm{#1}\@ifnextchar\bgroup{\dsm}{}}
+\def\@dsm#1{\sum_{(#1)}\,}
+\def\@dsm@noparens#1{\sum_{#1}\,}
+
+
+\usepackage[backend=biber,isbn=false,url=false]{biblatex} 
+
+%\addbibresource{./sources.bib} 

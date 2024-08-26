@@ -1,0 +1,297 @@
+\documentclass[11pt]{amsart}
+
+\usepackage{./tt}
+
+\title{$F_{\omega}^{CAL}$ Type System}
+
+\author{Will Veatch}
+\date{\today} 
+
+\begin{document}
+
+\maketitle 
+
+We define the System
+$F_{\omega}^{CAL}$.
+System $F_{\omega}^{CAL}$ is system $F_{\omega}^{AL}$
+extended with a comptime kind,
+in an attempt to type Zig's notion of comptime.
+That is, we have
+have kinds $\star$ for unrestricted types, $\bullet$ for affine types,
+and $\circ$ for linear types, with the following subkinding relation:
+$\star\leq \bullet\leq\circ$.
+We then add kind $\COMP$. Values of kind $\COMP$ are known at compile time.
+We have the following basic rules:
+$\star,\bullet,\circ : \COMP$.
+That is, types are values known at compile time.
+Additionally, an unrestricted type may be considered a comptime type.
+
+% \begin{figure}[h]
+%   \centering
+\begin{tabularx}{\linewidth}{X c}
+  $\kappa::= \star\mid\bullet\mid\circ\mid\COMP\mid \kappa\Rightarrow\kappa$ & kinds \\
+  $\tau::= \alpha\mid \tau\tok\tau\mid \fak{\alpha}{\kappa}\tau
+  \mid\lam{{x:A:\COMP}}\tau\mid\tau\ \tau$ & types \\
+  $e::= x\mid \lamk{\kappa}{x:\tau}e \mid e\ e
+  \mid \Lam{\alpha:\kappa}v \mid e[\tau]$
+  & expressions \\
+  $v::= \lamk{\kappa}{x:\tau}e\mid \Lam{\alpha:\kappa}v$ & values
+\end{tabularx}
+%   \caption{\cs kinds, types, and terms}
+%   \label{fig:terms}
+% \end{figure}
+
+We have contexts $\Psi;\Gamma;\Delta;\Xi$ in the following rules.
+Context $\Psi$ consists of variables of kind $\COMP$;
+$\Gamma$ consists of variables of kind $\star$;
+$\Delta$ consists of variables of kind $\bullet$,
+and $\Xi$ consists of variables of kind $\circ$.
+
+We may introduce a type $B:\star$ dependent on a variable $x:A:\COMP$.
+That is, the type $B$ may be dependent on a compile time known value.
+Typically, when we have $A:\COMP$,
+$A$ will be one of $\star,\bullet,\circ$.
+In this case $B$ is simply a type dependent on another type $x$.
+However, $A$ can vary, and gives compile time dependent types.
+Suppose we have $\N:\star$.
+We allow unrestricted types to be \emph{lifted},
+giving $\N:\COMP$.
+Then if the above $A$ is $\N$,
+$B$ is now a family of types depending on a compile time known natural number.
+
+\begin{mathpar}
+  %% kinds
+  \inferrule*[right={[K-$\mathsf{Sub}_{1}$]}]
+  {\oftp{\Psi;\Gamma}\tau\star}
+  {\oftp{\Psi;\Gamma}\tau\bullet}
+  \and
+  \inferrule*[right={[K-$\mathsf{Sub}_{2}$]}]
+  {\oftp{\Psi;\Gamma}\tau\bullet}
+  {\oftp{\Psi;\Gamma}\tau\circ}
+  \and 
+  \inferrule*
+  {\ }
+  {\star,\bullet,\circ:\COMP}
+  \and
+  \inferrule*[right={[Lifting]}]
+  {\oftp{\Psi}{A}{\star}}
+  {\oftp{\Psi}{A}{\COMP}}
+  \and
+  \inferrule*[right={[$\Empty$]}]
+  {\ }
+  {\vdash\cdot}
+  \and
+  \inferrule*[right={[$\TExt$]}]
+  {
+    \vdash\Psi
+    \and
+    \alpha\notin\Psi
+    \and
+    \oftp\Psi\kappa{\COMP}
+  }
+  {\vdash\Psi,\alpha:\kappa}
+  \and
+  \inferrule*[right={[U-$\TVar$]}]
+  {\alpha:\kappa\in\Gamma}
+  {\Gamma\vdash\alpha:\kappa}
+  \and
+  \inferrule*[right={[$\mathsf{All}$]}]
+  {
+    \oftp{\Gamma,\alpha:\kappa}\tau{\kappa'}
+  }
+  {\oftp\Gamma{\fak\alpha\kappa\tau}\kappa'}
+  \and
+  \inferrule*[right={[K-$\Arr$]}]
+  {
+    \oftp\Gamma{\tau_1}{\kappa_1}
+    \and
+    \oftp\Gamma{\tau_2}{\kappa_2}
+  }
+  {\oftp\Gamma{\tau_1\tok\tau_2}\kappa}
+  \and
+  \inferrule*[right={[K-$\mathsf{Lam}$]}]
+  {
+    \oftp{\Psi}{\kappa_1}{\COMP}
+    \and
+    \oftp{\Psi,A:\kappa_1;\Gamma}{\tau}{\kappa_2}
+  }
+  {\oftp{\Psi;\Gamma}{\lam{A:\kappa_1}\tau}{\kappa_1\Rightarrow\kappa_2}}
+  \and
+  \inferrule*[right={[K-$\mathsf{App}$]}]
+  {
+    \oftp\Gamma{\tau_1}{\kappa_2\Rightarrow\kappa_1}
+    \and
+    \oftp\Gamma{\tau_2}{\kappa_2}
+  }
+  {\oftp\Gamma{\tau_1\tau_2}{\kappa_1}}
+  %% Weakening
+  \\
+  \inferrule*[right={[U-$\Weak$]}]
+  {
+    \oftp{\Gamma_1,\Gamma_2;\Delta;\Xi}{e}{\tau'}
+    \and
+    \oftp{\Gamma_1}\tau\star
+  }
+  {\oftp{\Gamma_1,x:\tau,\Gamma_2;\Delta;\Xi}{e}{\tau'}}
+  \and
+  \inferrule*[right={[A-$\Weak$]}]
+  {
+    \oftp{\Gamma;\Delta_1,\Delta_2;\Xi}{e}{\tau'}
+    \and
+    \oftp{\Gamma;\Delta_1}{\tau}\bullet
+  }
+  {\oftp{\Gamma;\Delta_1,x:\tau,\Delta_2;\Xi}{e}{\tau'}}
+  %% Contexts
+  \\
+  \inferrule*[right={[AU-$\Empty$]}]
+  {\cdot\Cup\cdot=\cdot}{}
+  \and
+  \inferrule*[right={[AU-$\mathsf{Left}$]}]
+  {
+    \Delta_1\Cup\Delta_2=\Delta
+    \and
+    x\notin\Delta
+  }
+  {\Delta_1,x:\tau\Cup\Delta_2=\Delta,x:\tau}
+  \and
+  \inferrule*[right={[AU-$\mathsf{Right}$]}]
+  {
+    \Delta_1\Cup\Delta_2=\Delta
+    \and
+    x\notin\Delta
+  }
+  {\Delta_1\Cup\Delta_2,x:\tau=\Delta,x:\tau}
+  \and
+  \inferrule*[right={[LU-$\Empty$]}]
+  {\cdot\Cup\cdot=\cdot}{}
+  \and
+  \inferrule*[right={[LU-$\mathsf{Left}$]}]
+  {
+    \Xi_1\Cup\Xi_2=\Xi
+    \and
+    x\notin\Xi
+  }
+  {\Xi_1,x:\tau\Cup\Xi_2=\Xi,x:\tau}
+  \and
+  \inferrule*[right={[LU-$\mathsf{Right}$]}]
+  {
+    \Xi_1\Cup\Xi_2=\Xi
+    \and
+    x\notin\Xi
+  }
+  {\Xi_1\Cup\Xi_2,x:\tau=\Xi,x:\tau}
+  %% Var
+  \\
+  \inferrule*[right={[U-$\Var$]}]
+  {x:\tau\in\Gamma}
+  {\oftp{\Gamma;\cdot;\cdot}x\tau}
+  \and
+  \inferrule*[right={[A-$\Var$]}]
+  {\oftp{\Gamma;x:\tau;\Xi}x\tau}{}
+  \and
+  \inferrule*[right={[L-$\Var$]}]
+  {\oftp{\Gamma;\Delta;x:\tau}x\tau}{}
+  %% Ext
+  \\
+  \inferrule*[right={[U-$\Ext$]}]
+  {
+    \oftp\Gamma\tau\star
+    \and
+    x\notin\Gamma;\Delta;\Xi
+  }
+  {[\Gamma;\Delta;\Xi],x:\tau\Supset\Gamma,x:\tau;\Delta;\Xi}
+  \and
+  \inferrule*[right={[A-$\Ext$]}]
+  {
+    \oftp\Gamma\tau\bullet
+    \and
+    x\notin\Gamma;\Delta;\Xi
+  }
+  {[\Gamma;\Delta;\Xi],x:\tau\Supset\Gamma;\Delta,x:\tau;\Xi}
+  \and
+  \inferrule*[right={[L-$\Ext$]}]
+  {
+    \oftp\Gamma\tau\circ
+    \and
+    x\notin\Gamma;\Delta;\Xi
+  }
+  {[\Gamma;\Delta;\Xi],x:\tau\Supset\Gamma;\Delta;\Xi,x:\tau}
+\end{mathpar}
+
+\begin{mathpar}
+  %% Functions
+  \inferrule*[right={[U-$\mathsf{Lam}$]}]
+  {
+    [\Gamma;\cdot;\cdot],x:\tau_1\Supset\Gamma';\Delta';\Xi'
+    \and
+    \oftp{\Gamma';\Delta';\Xi'}e{\tau_2}
+  }
+  {\oftp{\Gamma}{\lamk{\star}{x:\tau_1}e}{\tau_1\tou\tau_2}}
+  \and
+  \inferrule*[right={[A-$\mathsf{Lam}$]}]
+  {
+    [\Gamma;\Delta;\cdot],x:\tau_1\Supset\Gamma';\Delta';\Xi'
+    \and
+    \oftp{\Gamma';\Delta';\Xi'}{e}{\tau_2}
+  }
+  {\oftp{\Gamma;\Delta}{\lamk{\bullet}{x:\tau_1}e}{\tau_1\toa\tau_2}}
+  \and
+  \inferrule*[right={[L-$\mathsf{Lam}$]}]
+  {
+    [\Gamma;\Delta;\Xi],x:\tau_1\Supset\Gamma';\Delta';\Xi'
+    \and
+    \oftp{\Gamma';\Delta';\Xi'}{e}{\tau_2}
+  }
+  {\oftp{\Gamma;\Delta,\Xi}{\lamk{\circ}{x:\tau_1}e}{\tau_1\tol\tau_2}}
+  \and
+  \inferrule*[right={[$\mathsf{App}$]}]
+  {
+    \oftp{\Gamma;\Delta_1;\Xi_1}{e_1}{\tau_1\tok\tau_2}
+    \and
+    \oftp{\Gamma;\Delta_2;\Xi_2}{e_2}{\tau_1}
+    \and
+    \Delta_1\Cup\Delta_2=\Delta
+    \and
+    \Xi_1\Cup\Xi_2=\Xi
+  }
+  {\oftp{\Gamma;\Delta;\Xi}{e_1e_2}{\tau_2}}
+\end{mathpar}
+
+\begin{mathpar}
+  %% T functions
+  \inferrule*[right={[$\mathsf{TLam}$]}]
+  {
+    \oftp{\Gamma,\alpha:\kappa;\Delta;\Xi}{v}\tau
+  }
+  {\oftp{\Gamma;\Delta;\Xi}{\Lam{\alpha:\kappa}v}{\fak\alpha\kappa\tau}}
+  \and
+  \inferrule*[right={[$\mathsf{TApp}$]}]
+  {
+    \oftp{\Gamma;\Delta;\Xi}{e}{\fak\alpha\kappa\tau'}
+    \and
+    \oftp\Gamma\tau\kappa
+  }
+  {\oftp{\Gamma;\Delta;\Xi}{e[\tau]}{\tau'[\tau/\alpha]}}
+\end{mathpar}
+
+Evaluation rules:
+\begin{mathpar}
+  (\lamk{\kappa}{x:\tau}e)v\mapsto e[v/x]
+  \and
+  (\Lam{\alpha:\kappa}v)[\tau]\mapsto v[\tau/\alpha]
+  \and
+  \inferrule*
+  {e_1\mapsto e_1'}
+  {e_1 e_2\mapsto e_1' e_2}
+  \and
+  \inferrule*
+  {e\mapsto e'}
+  {ve\mapsto ve'}
+  \and
+  \inferrule*
+  {e\mapsto e'}
+  {e[\tau]\mapsto e'[\tau]}
+\end{mathpar}
+
+
+\end{document}
