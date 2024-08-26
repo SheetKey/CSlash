@@ -34,7 +34,8 @@ import CSlash.Utils.Panic
 import qualified CSlash.Data.Strict as Strict
 
 import CSlash.Types.Name.Reader
-import CSlash.Types.Name.Occurrence (varName, tcClsName, tvName, kvName, occNameFS, mkVarOccFS)
+import CSlash.Types.Name.Occurrence
+  (varName, tcClsName, tvName, kvName, occNameFS, mkVarOccFS, isConOccFS)
 import CSlash.Types.SrcLoc
 import CSlash.Types.Basic
 import CSlash.Types.Error (CsHint(..))
