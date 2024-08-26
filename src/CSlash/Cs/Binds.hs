@@ -23,6 +23,7 @@ import CSlash.Cs.Extension
 import CSlash.Cs.Type
 import CSlash.Cs.Kind
 import CSlash.Types.Tickish
+import CSlash.Types.SourceText
 import CSlash.Types.SrcLoc
 import CSlash.Types.Name.Set
 import CSlash.Parser.Annotation
@@ -86,7 +87,7 @@ pprTicks pp_no_debug pp_when_debug
 
 type instance XTypeSig (CsPass p) = AnnSig
 type instance XKindSig (CsPass p) = AnnSig
-type instance XFixSig (CsPass p) = [AddEpAnn]
+type instance XFixSig (CsPass p) = ([AddEpAnn], SourceText)
 
 type instance XFixitySig Ps = NamespaceSpecifier
 type instance XFixitySig Rn = NamespaceSpecifier

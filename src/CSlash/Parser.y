@@ -619,19 +619,19 @@ sigdecl :: { LCsDecl Ps }
                            TypeSig (AnnSig (mu AnnColon $2) []) (fmap unknownToVar $1) $3 }
 
   | infix prec namespace_spec infix_decl_op
-      {% do { mbPrecAnn <- traverse (\ l2 -> do { checkPrecP l2 $4
-                                                ; pure (mj AnnVal l2) } ) $2
-            ; let { (fixText, fixPrec) = (fst $ unLoc $2, snd $ unLoc $2)
-                  ; opWithNS = case $3 of
+      {% do { checkPrecP $2 $4
+            ; let { precAnn = mj AnnVal $2
+                  ; (fixText, fixPrec) = (fst $ unLoc $2, snd $ unLoc $2)
+                  ; opWithNS = case unLoc $3 of
                                  NoNamespaceSpecifier
-                                   | isConOccFS (rdrNameOcc $4) -> fmap unknownToData $4
+                                   | isConOccFS (rdrNameOcc (unLoc $4)) -> fmap unknownToData $4
                                    | otherwise -> fmap unknownToVar $4
-                                 TypeNamespaceSpecifier
-                                   | isConOccFS (rdrNameOcc $4) -> fmap unknownToTcCls $4
+                                 TypeNamespaceSpecifier _
+                                   | isConOccFS (rdrNameOcc (unLoc $4)) -> fmap unknownToTcCls $4
                                    | otherwise -> fmap unknownToTv $4 }
             ; amsA' (sLL $1 $> $ SigD noExtField
-                     (FixSig (mj AnnInfix $1 : maybeToList mbPrecAnn fixText)
-                             (FixitySig (unLoc $3) (unLoc opWithNS)
+                     (FixSig (mj AnnInfix $1 : [precAnn], fixText)
+                             (FixitySig (unLoc $3) opWithNS
                                         (Fixity fixPrec (unLoc $1))))) } }
 
 -----------------------------------------------------------------------------
