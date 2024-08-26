@@ -606,9 +606,11 @@ akind :: { LCsKind Ps }
 
 decl :: { LCsDecl Ps }
   : sigdecl { $1 }
-  | g_var_sp '=' exp {% amsA' $ sLL $1 $> $ ValD noExtField $
+  | g_var_sp '=' exp {% runPV (unECP $3) >>= \ $3 ->
+                         amsA' $ sLL $1 $> $ ValD noExtField $
                           FunBind (mj AnnEqual $2) (fmap unknownToVar $1) $3 }
-  | g_var '=' exp {% amsA' $ sLL $1 $> $ ValD noExtField $
+  | g_var '=' exp {% runPV (unECP $3) >>= \ $3 ->
+                      amsA' $ sLL $1 $> $ ValD noExtField $
                        FunBind (mj AnnEqual $2) (fmap unknownToVar $1) $3 }
 
 sigdecl :: { LCsDecl Ps }
