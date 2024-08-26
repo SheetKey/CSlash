@@ -576,7 +576,7 @@ tv_bndr :: { LCsTyVarBndr Ps }
 
 -- tv_bndr_no_braces in GHC
 tv_bndr_parens :: { LCsTyVarBndr Ps }
-  : '(' g_var ':' kind ')' {% amsA' (sLL $1 $> (KindedTyVar [mop $1, mu AnnColon, mcp $5]
+  : '(' g_var ':' kind ')' {% amsA' (sLL $1 $> (KindedTyVar [mop $1, mu AnnColon $3, mcp $5]
                                                             (fmap unknownToTv $2) $4)) }
   | REAL_OCURLY g_var ':' kind REAL_CCURLY
            {% amsA' (sLL $1 $> (ImpKindedTyVar [ mu AnnOpenC $1
