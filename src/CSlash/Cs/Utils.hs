@@ -1,7 +1,9 @@
 {-# LANGUAGE ConstraintKinds #-}
 
 module CSlash.Cs.Utils
-  ( mkMatchGroup, mkLamMatchGroup, mkTyLamTyMatchGroup, mkCsIf
+  (
+    unguardedGRHSs, unguardedRHS
+  , mkMatchGroup, mkLamMatchGroup, mkTyLamTyMatchGroup, mkCsIf
 
   , missingTupArg
 
@@ -58,6 +60,24 @@ import qualified Data.Map.Strict as Map
         Some useful helpers for constructing syntax
 *                                                                      *
 ********************************************************************* -}
+
+unguardedGRHSs
+  :: Anno (GRHS (CsPass p) (LocatedA (body (CsPass p))))
+     ~ EpAnn NoEpAnns
+  => SrcSpan
+  -> LocatedA (body (CsPass p))
+  -> EpAnn GrhsAnn
+  -> GRHSs (CsPass p) (LocatedA (body (CsPass p)))
+unguardedGRHSs loc rhs an = GRHSs emptyComments (unguardedRHS an loc rhs)
+
+unguardedRHS
+  :: Anno (GRHS (CsPass p) (LocatedA (body (CsPass p))))
+     ~ EpAnn NoEpAnns
+  => EpAnn GrhsAnn
+  -> SrcSpan
+  -> LocatedA (body (CsPass p))
+  -> [LGRHS (CsPass p) (LocatedA (body (CsPass p)))]
+unguardedRHS an loc rhs = [L (noAnnSrcSpan loc) (GRHS an [] rhs)]
 
 type AnnoBody p body
   = ( XMG (CsPass p) (LocatedA (body (CsPass p))) ~ Origin

@@ -55,7 +55,7 @@ type LMatch id body = XRec id (Match id body)
 data Match p body = Match
   { m_ext :: XCMatch p body
   , m_ctxt :: CsMatchContext (LIdP (NoTc p))
-  , m_pats :: [LPat p]
+  , m_pats :: XRec p [LPat p]
   , m_grhss :: GRHSs p body
   }
 

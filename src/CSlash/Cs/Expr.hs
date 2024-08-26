@@ -364,7 +364,7 @@ instance (OutputableBndrId pr, Outputable body)
   ppr = pprMatch
 
 csLMatchPats :: LMatch (CsPass id) body -> [LPat (CsPass id)]
-csLMatchPats (L _ (Match { m_pats = pats })) = pats
+csLMatchPats (L _ (Match { m_pats = L _ pats })) = pats
 
 type instance XCGRHSs (CsPass _) _ = EpAnnComments
 
@@ -394,7 +394,7 @@ pprMatch
   :: (OutputableBndrId idR, Outputable body)
   => Match (CsPass idR) body
   -> SDoc
-pprMatch (Match{ m_pats = pats, m_ctxt = ctxt, m_grhss = grhss })
+pprMatch (Match{ m_pats = L _ pats, m_ctxt = ctxt, m_grhss = grhss })
   = sep [ sep (herald : map (nest 2 . pprParendLPat appPrec) other_pats)
         , nest 2 (pprGRHSs ctxt grhss) ]
   where
@@ -459,6 +459,7 @@ instance Outputable fn => Outputable (CsMatchContext fn) where
 type instance Anno (CsExpr (CsPass p)) = SrcSpanAnnA
 type instance Anno [LocatedA (Match (CsPass p) (LocatedA (CsExpr (CsPass p))))] = SrcSpanAnnL
 type instance Anno (Match (CsPass p) (LocatedA (CsExpr (CsPass p)))) = SrcSpanAnnA
+type instance Anno [LocatedA (Pat (CsPass p))] = EpaLocation
 type instance Anno (GRHS (CsPass p) (LocatedA (CsExpr (CsPass p)))) = EpAnnCO
 type instance Anno (StmtLR (CsPass pl) (CsPass pr) (LocatedA (body (CsPass pr)))) = SrcSpanAnnA
 
