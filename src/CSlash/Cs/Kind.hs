@@ -36,7 +36,7 @@ type instance XLKd (CsPass _) = NoExtField
 type instance XKdVar (CsPass _) = [AddEpAnn]
 type instance XFunKd (CsPass _) = NoExtField
 type instance XQualKd (CsPass _) = NoExtField
-type instance XParKd (CsPass _) = NoExtField
+type instance XParKd (CsPass _) = AnnParen
 
 -- type instance XKdLT Ps = EpToken "<"
 type instance XKdLT (CsPass _) = EpToken "<"
