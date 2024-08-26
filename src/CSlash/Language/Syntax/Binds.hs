@@ -57,7 +57,7 @@ data CsBindLR idL idR
 type LSig p = XRec p (Sig p)
 
 data Sig pass
-  = TypeSig (XTypeSig pass) (LIdP pass) (LCsType pass)
+  = TypeSig (XTypeSig pass) (LIdP pass) (LCsSigType pass)
   | KindSig (XKindSig pass) (LIdP pass) (LCsKind pass)
   | FixSig (XFixSig pass) (FixitySig pass)
 
