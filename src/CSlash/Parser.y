@@ -760,12 +760,12 @@ aexp2 :: { ECP }
 texp :: { ECP }
   : exp { $1 }
   | infixexp qop_sp {% runPV (unECP $1) >>= \ $1 ->
-                          runPV (rejectPragmaPV $1) >>
+                          --runPV (rejectPragmaPV $1) >>
                           runPV $2 >>= \ $2 ->
                           return $ ecpFromExp $
                           sLLa $1 $> $ SectionL noExtField $1 (n2l $2) }
   | infixexp qop {% runPV (unECP $1) >>= \ $1 ->
-                       runPV (rejectPragmaPV $1) >>
+                       --runPV (rejectPragmaPV $1) >>
                        runPV $2 >>= \ $2 ->
                        return $ ecpFromExp $
                        sLLa $1 $> $ SectionL noExtField $1 (n2l $2) }
