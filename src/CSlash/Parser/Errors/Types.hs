@@ -51,6 +51,7 @@ data PsMessage
   | PsErrLetInPat
   | PsErrArrowExprInPat !(CsExpr Ps)
   | PsErrInvalidInfixHole
+  | PsErrSemiColonsInCondExpr !(CsExpr Ps) !Bool (CsExpr Ps) !Bool !(CsExpr Ps)
   | PsErrAtInPatPos
   | PsErrUnexpectedAsPat
   | PsErrCaseInFunAppExpr !(LCsExpr Ps)

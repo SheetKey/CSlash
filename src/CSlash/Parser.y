@@ -716,7 +716,7 @@ aexp :: { ECP }
                                      [mj AnnTyLam $1] }
   | 'if' exp optSemi 'then' exp optSemi 'else' exp
       {% runPV (unECP $2) >>= \ ($2 :: LCsExpr Ps) ->
-           return $ ECP
+           return $ ECP $
              unECP $5 >>= \ $5 ->
              unECP $8 >>= \ $8 ->
              mkCsIfPV (comb2 $1 $>) $2 (snd $3) $5 (snd $6) $8

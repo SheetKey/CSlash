@@ -213,6 +213,27 @@ checkAPat loc e0 = do
 patFail :: SrcSpan -> PsMessage -> PV a
 patFail loc msg = addFatalError $ mkPlainErrorMsgEnvelope loc $ msg
 
+---------------------------------------------------------------------------
+-- Check Equation Syntax
+
+-- renamed from GHC checkDoAndIfThenElse since we want to check this but
+-- don't have do notation
+checkLayoutIfThenElse
+  :: (Outputable a, Outputable b, Outputable c)
+  => (a -> Bool -> b -> Bool -> c -> PsMessage)
+  -> LocatedA a
+  -> Bool
+  -> LocatedA b
+  -> Bool
+  -> LocatedA c
+  -> PV ()
+checkLayoutIfThenElse err guardExpr semiThen thenExpr semiElse elseExpr
+  | semiThen || semiElse
+  = let e = err (unLoc guardExpr) semiThen (unLoc thenExpr) semiElse (unLoc elseExpr)
+        loc = combineLocs (reLoc guardExpr) (reLoc elseExpr)
+    in addError (mkPlainErrorMsgEnvelope loc e)
+  | otherwise = return ()
+
 -- -------------------------------------------------------------------------
 -- Expression/command/pattern ambiguity.
 
@@ -297,7 +318,9 @@ class (b ~ (Body b) Ps, AnnoBody b) => DisambECP b where
   mkCsIfPV
     :: SrcSpan
     -> LCsExpr Ps
+    -> Bool        -- semicolon? (I.e., newline)
     -> LocatedA b
+    -> Bool        -- semicolon? (I.e., newline)
     -> LocatedA b
     -> AnnsIf
     -> PV (LocatedA b)
@@ -358,7 +381,8 @@ instance DisambECP (CsExpr Ps) where
   mkCsAppTypePV l e t = do
     checkExpBlockArguments e
     return $ L l (CsTyApp noExtField e (L (l2l t) $ CsEmbTy noExtField t))
-  mkCsIfPV l c a b anns = do
+  mkCsIfPV l c semi1 a semi2 b anns = do
+    checkLayoutIfThenElse PsErrSemiColonsInCondExpr c semi1 a semi2 b
     !cs <- getCommentsFor l
     return $ L (EpAnn (spanAsAnchor l) noAnn cs) (mkCsIf c a b anns)
   mkCsParPV l lpar e rpar = do
@@ -408,7 +432,7 @@ instance DisambECP (PatBuilder Ps) where
   mkCsAppTypePV l p t = do
     !cs <- getCommentsFor (locA l)
     return $ L (addCommentsToEpAnn l cs) (PatBuilderAppType p (mkCsTyPat t))
-  mkCsIfPV l _ _ _ _ = addFatalError $ mkPlainErrorMsgEnvelope l PsErrIfInPat
+  mkCsIfPV l _ _ _ _ _ _ = addFatalError $ mkPlainErrorMsgEnvelope l PsErrIfInPat
   mkCsParPV l lpar p rpar = return $ L (noAnnSrcSpan l) (PatBuilderPar lpar p rpar)
   mkCsVarPV v@(getLoc -> l) = return $ L (l2l l) (PatBuilderVar v)
   mkCsLitPV lit@(L l a) = do
