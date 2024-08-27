@@ -895,7 +895,8 @@ pats1 :: { [LPat Ps] }
   : pat { [$1] }
 
 bindpat :: { LPat Ps }
-  : exp {% checkPattern_details incompleteDoBlock (unECP $1) }
+  -- : exp {% checkPattern_details incompleteDoBlock (unECP $1) }
+  : pat { $1 }
 
 argpat :: { LPat Ps }
   : apat { $1 }
