@@ -818,7 +818,7 @@ guardquals1 :: { Located [LStmt Ps (LCsExpr Ps)] }
   : guardquals1 ',' qual {% runPV $3 >>= \ $3 ->
                             case unLoc $1 of
                               (h:t) -> do
-                                { h' <- addTrailingCommA h (gl $2)
+                                { h' <- addTrailingCommaA h (gl $2)
                                 ; return (sLL $1 $> ($3 : (h':t))) } }
   | qual {% runPV $1 >>= \ $1 -> return $ sL1 $1 [$1] }
 
