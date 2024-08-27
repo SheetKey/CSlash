@@ -3,7 +3,7 @@
 module CSlash.Cs.Utils
   (
     unguardedGRHSs, unguardedRHS
-  , mkMatchGroup, mkLamMatchGroup, mkTyLamTyMatchGroup, mkCsIf
+  , mkMatchGroup, mkLamMatchGroup, mkTyLamMatchGroup, mkTyLamTyMatchGroup, mkCsIf
 
   , missingTupArg
 
@@ -102,6 +102,16 @@ mkLamMatchGroup origin (L l matches)
   = mkMatchGroup origin (L l $ map fixCtxt matches)
   where
     fixCtxt (L a match) = L a match{ m_ctxt = LamAlt }
+
+mkTyLamMatchGroup
+  :: AnnoBody p body
+  => Origin
+  -> LocatedL [LocatedA (Match (CsPass p) (LocatedA (body (CsPass p))))]
+  -> MatchGroup (CsPass p) (LocatedA (body (CsPass p)))
+mkTyLamMatchGroup origin (L l matches)
+  = mkMatchGroup origin (L l $ map fixCtxt matches)
+  where
+    fixCtxt (L a match) = L a match{ m_ctxt = TyLamAlt }
 
 mkTyLamTyMatchGroup
   :: AnnoBody p body

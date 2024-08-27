@@ -401,7 +401,7 @@ pprMatch (Match{ m_pats = L _ pats, m_ctxt = ctxt, m_grhss = grhss })
     (herald, other_pats)
       = case ctxt of
           LamAlt -> (char '\\', pats)
-          TLamAlt -> (char '\\', pats)
+          TyLamAlt -> (char '\\', pats)
           _ -> case pats of
                  [] -> (empty, [])
                  [pat] -> (ppr pat, [])
@@ -452,7 +452,7 @@ type CsMatchContextRn = CsMatchContext (LIdP Rn)
 
 instance Outputable fn => Outputable (CsMatchContext fn) where
   ppr LamAlt = text "LamAlt"
-  ppr TLamAlt = text "TLamAlt"
+  ppr TyLamAlt = text "TyLamAlt"
   ppr CaseAlt = text "CaseAlt"
   ppr MultiIfAlt = text "MultiIfAlt"
 

@@ -277,6 +277,11 @@ class (b ~ (Body b) Ps, AnnoBody b) => DisambECP b where
     -> (LocatedL [LMatch Ps (LocatedA b)])
     -> [AddEpAnn]
     -> PV (LocatedA b)
+  mkCsTyLamPV
+    :: SrcSpan
+    -> (LocatedL [LMatch Ps (LocatedA b)])
+    -> [AddEpAnn]
+    -> PV (LocatedA b)
   type FunArg b
   superFunArg :: (DisambECP (FunArg b) => PV (LocatedA b)) -> PV (LocatedA b)
   mkCsAppPV
@@ -311,6 +316,10 @@ checkLamMatchGroup :: SrcSpan -> MatchGroup Ps (LCsExpr Ps) -> PV ()
 checkLamMatchGroup l (MG { mg_alts = (L _ (matches:_)) }) = do
   when (null (csLMatchPats matches)) $ addError $ mkPlainErrorMsgEnvelope l PsErrEmptyLambda
 
+checkTyLamMatchGroup :: SrcSpan -> MatchGroup Ps (LCsExpr Ps) -> PV ()
+checkTyLamMatchGroup l (MG { mg_alts = (L _ (matches:_)) }) = do
+  when (null (csLMatchPats matches)) $ addError $ mkPlainErrorMsgEnvelope l PsErrEmptyTyLam
+
 checkTyLamTyMatchGroup :: SrcSpan -> MatchGroup Ps (LCsType Ps) -> P ()
 checkTyLamTyMatchGroup l (MG { mg_alts = (L _ (matches:_)) }) = do
   when (null (csLMatchPats matches)) $ addError $ mkPlainErrorMsgEnvelope l PsErrEmptyTyLamTy
@@ -335,6 +344,11 @@ instance DisambECP (CsExpr Ps) where
     let mg = mkLamMatchGroup FromSource (L lm m)
     checkLamMatchGroup l mg
     return $ L (EpAnn (spanAsAnchor l) noAnn cs) (CsLam anns mg)
+  mkCsTyLamPV l (L lm m) anns = do
+    !cs <- getCommentsFor l
+    let mg = mkTyLamMatchGroup FromSource (L lm m)
+    checkTyLamMatchGroup l mg
+    return $ L (EpAnn (spanAsAnchor l) noAnn cs) (CsTyLam anns mg)
   type FunArg (CsExpr Ps) = CsExpr Ps
   superFunArg m = m
   mkCsAppPV l e1 e2 = do
@@ -386,6 +400,7 @@ instance DisambECP (PatBuilder Ps) where
     !cs <- getCommentsFor l
     return $ L (EpAnn (spanAsAnchor l) noAnn cs) $ PatBuilderOpApp p1 op p2 []
   mkCsLamPV l _ _ = addFatalError $ mkPlainErrorMsgEnvelope l PsErrLambdaInPat
+  mkCsTyLamPV l _ _ = addFatalError $ mkPlainErrorMsgEnvelope l PsErrTyLambdaInPat
   mkCsCasePV l _ _ _ = addFatalError $ mkPlainErrorMsgEnvelope l PsErrCaseInPat
   type FunArg (PatBuilder Ps) = PatBuilder Ps
   superFunArg m = m

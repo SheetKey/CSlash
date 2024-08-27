@@ -61,7 +61,7 @@ data Match p body = Match
 
 data CsMatchContext fn
   = LamAlt
-  | TLamAlt
+  | TyLamAlt
   | CaseAlt
   | MultiIfAlt
   | TyLamTyAlt

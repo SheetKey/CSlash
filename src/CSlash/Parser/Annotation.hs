@@ -143,7 +143,8 @@ data AnnKeywordId
     | AnnIn
     | AnnInfix -- ^ 'infix' or 'infixl' or 'infixr'
     | AnnInstance
-    | AnnLam
+    | AnnLam        -- ^ '\\'
+    | AnnTyLam      -- ^ '/\\'
     | AnnLarrow     -- ^ '<-'
     | AnnLarrowU    -- ^ '<-', unicode variant
     | AnnLet

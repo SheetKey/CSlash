@@ -32,6 +32,7 @@ data PsMessage
   | PsWarnTab !Word
   | PsWarnOperatorWhitespace !FastString !OperatorWhitespaceOccurrence
   | PsErrEmptyLambda
+  | PsErrEmptyTyLam
   | PsErrEmptyTyLamTy
   | PsErrMissingBlock
   | PsErrLexer !LexErr !LexErrKind
@@ -45,6 +46,7 @@ data PsMessage
   | PsErrPrecedenceOutOfRange !Int
   | PsErrIfInPat -- replaces PsErrIfThenElseInPat
   | PsErrLambdaInPat 
+  | PsErrTyLambdaInPat 
   | PsErrCaseInPat
   | PsErrLetInPat
   | PsErrArrowExprInPat !(CsExpr Ps)

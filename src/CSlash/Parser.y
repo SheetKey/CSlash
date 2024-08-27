@@ -645,14 +645,16 @@ infixexp :: { ECP }
   : exp10 { $1 }
   | infixexp qop_sp exp10 { ECP $
                             superInfixOp $
+                            $2 >>= \ $2 ->
                             unECP $1 >>= \ $1 ->
-                              unECP $3 >>= \ $3 ->
-                              (mkCsOpAppPV (comb2 $1 $3) $1 $2 $3) }
+                            unECP $3 >>= \ $3 ->
+                            (mkCsOpAppPV (comb2 $1 $3) $1 $2 $3) }
   | infixexp qop exp10 { ECP $
                          superInfixOp $
+                         $2 >>= \ $2 ->
                          unECP $1 >>= \ $1 ->
-                           unECP $3 >>= \ $3 ->
-                           (mkCsOpAppPV (comb2 $1 $3) $1 $2 $3) }
+                         unECP $3 >>= \ $3 ->
+                         (mkCsOpAppPV (comb2 $1 $3) $1 $2 $3) }
 
 exp10 :: { ECP }
   : fexp %shift { $1 }
@@ -703,7 +705,7 @@ aexp :: { ECP }
                                      (sLLl $1 $>
                                       [sLLa $1 $> $ Match
                                                     { m_ext = []
-                                                    , m_ctxt = TLamAlt
+                                                    , m_ctxt = TyLamAlt
                                                     , m_pats = L (listLocation $2) $2
                                                     , m_grhss = unguardedGRHSs
                                                                  (comb2 $3 $4) $4
