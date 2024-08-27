@@ -12,6 +12,8 @@ import Data.Data hiding (Fixity)
 
 data CsLit x
   = CsChar (XCsChar x) {- SourceText -} Char
+  -- Probably don't use the following three:
+  -- these should all be CsOverLit, at least during parsing.
   | CsString (XCsString x) {- SourceText -} FastString
   | CsInt (XCsInt x) IntegralLit
   | CsDouble (XCsDouble x) FractionalLit

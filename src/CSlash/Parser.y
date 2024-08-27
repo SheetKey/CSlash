@@ -745,6 +745,7 @@ aexp2 :: { ECP }
   | g_qcon { ECP $ mkCsVarPV $! $1 } -- 'gen_qcon' in GHC
   | a_sysdcon { ECP $ mkCsVarPV $! $1 }
   | literal { ECP $ mkCsLitPV $! $1 }
+  | STRING { ECP $ mkCsOverLitPV (sL1a $1 $ mkCsIsString (getSTRINGs $1) (getSTRING $1)) }
   | INTEGER { ECP $ mkCsOverLitPV (sL1a $1 $ mkCsIntegral (getINTEGER $1)) }
   | RATIONAL { ECP $ mkCsOverLitPV (sL1a $1 $ mkCsFractional (getRATIONAL $1)) }
   | '(' texp ')' { ECP $ unECP $2 >>= \ $2 ->
@@ -1137,7 +1138,7 @@ g_special_sym :: { Located FastString }
 
 literal :: { Located (CsLit Ps) }
   : CHAR { sL1 $1 $ CsChar (getCHARs $1) $ getCHAR $1 }
-  | STRING { sL1 $1 $ CsString (getSTRINGs $1) }
+--  | STRING { sL1 $1 $ CsString (getSTRINGs $1) }
 
 -----------------------------------------------------------------------------
 -- Layout
