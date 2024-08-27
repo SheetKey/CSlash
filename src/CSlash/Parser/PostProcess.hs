@@ -153,6 +153,12 @@ checkExpBlockArguments = checkExpr
 -- -------------------------------------------------------------------------
 -- Checking Patterns.
 
+checkPattern :: LocatedA (PatBuilder Ps) -> P (LPat Ps)
+checkPattern = runPV . checkLPat
+
+checkPattern_details :: ParseContext -> PV (LocatedA (PatBuilder Ps)) -> P (LPat Ps)
+checkPattern_details extraDetails pp = runPV_details extraDetails (pp >>= checkLPat)
+
 checkLPat :: LocatedA (PatBuilder Ps) -> PV (LPat Ps)
 checkLPat (L l@(EpAnn anc an _) p) = do
   (L l' p', cs) <- checkPat (EpAnn anc an emptyComments) emptyComments (L l p) [] []
