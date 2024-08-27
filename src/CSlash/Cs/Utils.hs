@@ -7,6 +7,8 @@ module CSlash.Cs.Utils
 
   , missingTupArg
 
+  , mkCsIntegral, mkCsFractional, mkCsIsString
+
   , mkNPat
 
   , csTypeToCsSigType
@@ -122,6 +124,15 @@ mkTyLamTyMatchGroup origin (L l matches)
   = mkMatchGroup origin (L l $ map fixCtxt matches)
   where
     fixCtxt (L a match) = L a match{ m_ctxt = TyLamTyAlt }
+
+mkCsIntegral :: IntegralLit -> CsOverLit Ps
+mkCsIntegral i = OverLit noExtField (CsIntegral i)
+
+mkCsFractional :: FractionalLit -> CsOverLit Ps
+mkCsFractional f = OverLit noExtField (CsFractional f)
+
+mkCsIsString :: SourceText -> FastString -> CsOverLit Ps
+mkCsIsString src s = OverLit noExtField (CsIsString src s)
 
 mkCsIf :: LCsExpr Ps -> LCsExpr Ps -> LCsExpr Ps -> AnnsIf -> CsExpr Ps
 mkCsIf c a b anns = CsIf anns c a b
