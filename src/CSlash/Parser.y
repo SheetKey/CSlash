@@ -889,7 +889,7 @@ gdpat :: { forall b. DisambECP b => PV (LGRHS Ps (LocatedA b)) }
                                              (unLoc $2) $4) }
 
 pat :: { LPat Ps }
-  : exp {% (checkPattern <=< runPV (unECP $1)) }
+  : exp {% (checkPattern <=< runPV) (unECP $1) }
 
 pats1 :: { [LPat Ps] }
   : pat { [$1] }
