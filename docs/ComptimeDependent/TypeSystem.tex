@@ -92,38 +92,38 @@ $B$ is now a family of types depending on a compile time known natural number.
   {\vdash\Psi,\alpha:\kappa}
   \and
   \inferrule*[right={[U-$\TVar$]}]
-  {\alpha:\kappa\in\Gamma}
-  {\Gamma\vdash\alpha:\kappa}
+  {\alpha:\kappa\in\Psi}
+  {\Psi\vdash\alpha:\kappa}
   \and
   \inferrule*[right={[$\mathsf{All}$]}]
   {
-    \oftp{\Gamma,\alpha:\kappa}\tau{\kappa'}
+    \oftp{\Psi,\alpha:\kappa}\tau{\kappa'}
   }
-  {\oftp\Gamma{\fak\alpha\kappa\tau}\kappa'}
+  {\oftp\Psi{\fak\alpha\kappa\tau}\kappa'}
   \and
   \inferrule*[right={[K-$\Arr$]}]
   {
-    \oftp\Gamma{\tau_1}{\kappa_1}
+    \oftp\Psi{\tau_1}{\kappa_1}
     \and
-    \oftp\Gamma{\tau_2}{\kappa_2}
+    \oftp\Psi{\tau_2}{\kappa_2}
   }
-  {\oftp\Gamma{\tau_1\tok\tau_2}\kappa}
+  {\oftp\Psi{\tau_1\tok\tau_2}\kappa}
   \and
   \inferrule*[right={[K-$\mathsf{Lam}$]}]
   {
     \oftp{\Psi}{\kappa_1}{\COMP}
     \and
-    \oftp{\Psi,A:\kappa_1;\Gamma}{\tau}{\kappa_2}
+    \oftp{\Psi,A:\kappa_1}{\tau}{\kappa_2}
   }
-  {\oftp{\Psi;\Gamma}{\lam{A:\kappa_1}\tau}{\kappa_1\Rightarrow\kappa_2}}
+  {\oftp{\Psi}{\lam{A:\kappa_1}\tau}{\kappa_1\Rightarrow\kappa_2}}
   \and
   \inferrule*[right={[K-$\mathsf{App}$]}]
   {
-    \oftp\Gamma{\tau_1}{\kappa_2\Rightarrow\kappa_1}
+    \oftp\Psi{\tau_1}{\kappa_2\Rightarrow\kappa_1}
     \and
-    \oftp\Gamma{\tau_2}{\kappa_2}
+    \oftp\Psi{\tau_2}{\kappa_2}
   }
-  {\oftp\Gamma{\tau_1\tau_2}{\kappa_1}}
+  {\oftp\Psi{\tau_1\tau_2}{\kappa_1}}
   %% Weakening
   \\
   \inferrule*[right={[U-$\Weak$]}]

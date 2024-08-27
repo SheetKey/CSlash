@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2023/nixos.org) (preloaded format=pdflatex 1980.1.1)  26 AUG 2024 19:21
+This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2023/nixos.org) (preloaded format=pdflatex 1980.1.1)  27 AUG 2024 16:50
 entering extended mode
  restricted \write18 enabled.
  file:line:error style messages enabled.
@@ -1232,6 +1232,48 @@ Overfull \hbox (49.8392pt too wide) in paragraph at lines 223--258
  []$ 
  []
 
+Runaway argument?
+{\mpr@hovbox {T}{ 
+./TypeSystem.tex:284: Paragraph ended before \mpr@fraction was complete.
+<to be read again> 
+                   \par 
+l.284   }
+         
+I suspect you've forgotten a `}', causing me to apply this
+control sequence to too much text. How can we recover?
+My plan is to forget the whole thing and hope for the best.
+
+./TypeSystem.tex:284: A <box> was supposed to be here.
+<to be read again> 
+                   \penalty 
+l.284   }
+         
+I was expecting to see \hbox or \vbox or \copy or \box or
+something like that. So you might find something missing in
+your output. But keep trying; you can fix this later.
+
+./TypeSystem.tex:284: Extra }, or forgotten $.
+\\mpr@inferrule@ ...fraction {\mpr@hovbox {T}{#2}}
+                                                  {\mpr@hovbox {B}{#3}}\fi \...
+l.284   }
+         
+I've deleted a group-closing symbol because it seems to be
+spurious, as in `$x}$'. But perhaps the } is legitimate and
+you forgot something else, as in `\hbox{$x}'. In such cases
+the way to recover is to insert both the forgotten and the
+deleted material, e.g., by typing `I$}'.
+
+./TypeSystem.tex:284: Extra }, or forgotten $.
+\\mpr@inferrule@ ...rName {#1}}\box 0}\fi \egroup 
+                                                  
+l.284   }
+         
+I've deleted a group-closing symbol because it seems to be
+spurious, as in `$x}$'. But perhaps the } is legitimate and
+you forgot something else, as in `\hbox{$x}'. In such cases
+the way to recover is to insert both the forgotten and the
+deleted material, e.g., by typing `I$}'.
+
 [3] (./TypeSystem.aux)
  ***********
 LaTeX2e <2023-11-01> patch level 1
@@ -1253,11 +1295,11 @@ Package logreq Info: Writing requests to 'TypeSystem.run.xml'.
 
  ) 
 Here is how much of TeX's memory you used:
- 31646 strings out of 474116
- 624960 string characters out of 5717523
+ 31649 strings out of 474116
+ 624999 string characters out of 5717523
  1951187 words of memory out of 5000000
- 53391 multiletter control sequences out of 15000+600000
- 569071 words of font info for 78 fonts, out of 8000000 for 9000
+ 53394 multiletter control sequences out of 15000+600000
+ 569673 words of font info for 80 fonts, out of 8000000 for 9000
  1302 hyphenation exceptions out of 8191
  113i,19n,121p,1155b,1775s stack positions out of 10000i,1000n,20000p,200000b,200000s
 </nix/store/z52hy8jvjaxzabb28qfqa6acnxkp5q31-texlive-combined-full-2023-final
@@ -1287,7 +1329,7 @@ mbined-full-2023-final-texmfdist/fonts/type1/public/amsfonts/cm/cmti9.pfb></nix
 ist/fonts/type1/public/amsfonts/symbols/msam10.pfb></nix/store/z52hy8jvjaxzabb2
 8qfqa6acnxkp5q31-texlive-combined-full-2023-final-texmfdist/fonts/type1/public/
 amsfonts/symbols/msbm10.pfb>
-Output written on TypeSystem.pdf (3 pages, 168584 bytes).
+Output written on TypeSystem.pdf (3 pages, 169601 bytes).
 PDF statistics:
  104 PDF objects out of 1000 (max. 8388607)
  66 compressed objects within 1 object stream
