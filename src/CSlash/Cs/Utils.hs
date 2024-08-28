@@ -15,6 +15,7 @@ module CSlash.Cs.Utils
 
   , mkBodyStmt
   , mkPsBindStmt
+  , mkLetStmt
   ) where
 
 import CSlash.Cs.Decls
@@ -152,6 +153,9 @@ mkPsBindStmt
   -> LocatedA (bodyR Ps)
   -> StmtLR Ps Ps (LocatedA (bodyR Ps))
 mkPsBindStmt ann pat body = BindStmt ann pat body
+
+mkLetStmt :: [AddEpAnn] -> CsLocalBinds Ps -> StmtLR Ps Ps (LocatedA b)
+mkLetStmt anns binds = LetStmt anns binds
 
 missingTupArg :: EpAnn Bool -> CsTupArg Ps
 missingTupArg ann = Missing ann

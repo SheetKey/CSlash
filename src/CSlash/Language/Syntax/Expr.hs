@@ -84,3 +84,4 @@ type GuardLStmt id = LStmt id (LCsExpr id)
 data StmtLR idL idR body
   = BindStmt (XBindStmt idL idR body) (LPat idL) body -- used in pattern guards
   | BodyStmt (XBodyStmt idL idR body) body
+  | LetStmt (XLetStmt idL idR body) (CsLocalBindsLR idL idR)
