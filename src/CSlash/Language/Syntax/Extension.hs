@@ -150,6 +150,7 @@ type family XWildPat x
 type family XAsPat x
 type family XParPat x
 type family XVarPat x
+type family XTyVarPat x
 type family XTuplePat x
 type family XSumPat x
 type family XConPat x

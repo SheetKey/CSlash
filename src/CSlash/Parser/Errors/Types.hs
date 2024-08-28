@@ -67,6 +67,7 @@ data PsMessage
                               [LCsTypeArg Ps]
                               !SDoc
   | PsErrInPat !(PatBuilder Ps) !PsErrInPatDetails
+  | PsErrInTyPat !(CsType Ps)
   | PsErrUnicodeCharLooksLike Char Char String
   | PsErrParseRightOpSectionInPat !RdrName !(PatBuilder Ps)
   | PsErrInvalidKindRelation !RdrName

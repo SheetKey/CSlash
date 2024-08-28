@@ -16,6 +16,7 @@ data Pat p
   ------------ Simple patterns ---------------
   = WildPat (XWildPat p)
   | VarPat (XVarPat p) (LIdP p)
+  | TyVarPat (XTyVarPat p) (LIdP p)
   | AsPat (XAsPat p) (LIdP p) (LPat p)
   | ParPat (XParPat p) (LPat p)
   ------------ Tuples, sums ---------------

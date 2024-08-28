@@ -44,6 +44,7 @@ type instance XWildPat Rn = NoExtField
 type instance XWildPat Tc = Type
 
 type instance XVarPat (CsPass _) = NoExtField
+type instance XTyVarPat (CsPass _) = NoExtField
 
 type instance XAsPat Ps = EpToken "@"
 type instance XAsPat Rn = NoExtField

@@ -153,6 +153,49 @@ checkExpBlockArguments = checkExpr
 -- -------------------------------------------------------------------------
 -- Checking Patterns.
 
+checkTyPattern :: LCsType Ps -> P (LPat Ps)
+checkTyPattern (L l@(EpAnn anc an _) t) = do
+  (L l' p, cs) <- checkTyPat (EpAnn anc an emptyComments) emptyComments (L l t)
+  return (L (addCommentsToEpAnn l' cs) p)
+
+checkTyPat
+  :: SrcSpanAnnA
+  -> EpAnnComments
+  -> LCsType Ps
+  -> P (LPat Ps, EpAnnComments)
+checkTyPat loc cs (L l (CsTyVar an id))
+  = pure (L l (TyVarPat noExtField id), cs)
+checkTyPat loc cs (L l (CsParTy an ty)) = do
+  p <- checkTyPattern ty
+  massert (ap_adornment an == AnnParens)
+  let lpar = EpTok $ ap_open an
+      rpar = EpTok $ ap_close an
+  return (L l (ParPat (lpar, rpar) p), cs)
+checkTyPat loc cs (L l (CsKindSig an ty kd)) = do
+  p <- checkVarTyPattern ty
+  return (L l (KdSigPat an p (CsPSK noAnn kd)), cs)
+checkTyPat loc _ ty
+  = addFatalError $ mkPlainErrorMsgEnvelope (locA loc) $ PsErrInTyPat (unLoc ty)
+
+checkVarTyPattern :: LCsType Ps -> P (LPat Ps)
+checkVarTyPattern (L l@(EpAnn anc an _) t) = do
+  (L l' p, cs) <- checkVarTyPat (EpAnn anc an emptyComments) emptyComments (L l t)
+  return (L (addCommentsToEpAnn l' cs) p)
+
+checkVarTyPat
+  :: SrcSpanAnnA
+  -> EpAnnComments
+  -> LCsType Ps
+  -> P (LPat Ps, EpAnnComments)
+checkVarTyPat loc cs (L l (CsTyVar an id)) = pure (L l (TyVarPat noExtField id), cs)
+checkVarTyPat loc cs (L l (CsParTy an ty)) = do
+  p <- checkVarTyPattern ty
+  let lpar = EpTok $ ap_open an
+      rpar = EpTok $ ap_close an
+  return (L l (ParPat (lpar, rpar) p), cs)
+checkVarTyPat loc _ ty
+  = addFatalError $ mkPlainErrorMsgEnvelope (locA loc) $ PsErrInTyPat (unLoc ty)
+
 checkPattern :: LocatedA (PatBuilder Ps) -> P (LPat Ps)
 checkPattern = runPV . checkLPat
 
