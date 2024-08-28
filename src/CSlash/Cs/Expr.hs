@@ -429,9 +429,9 @@ pp_rhs ctxt rhs = matchSeparator ctxt <+> pprDeeper (ppr rhs)
 matchSeparator :: CsMatchContext fn -> SDoc
 matchSeparator _ = text "->"
 
-type instance XGuardBodyStmt (CsPass _) Ps b = NoExtField
-type instance XGuardBodyStmt (CsPass _) Rn b = NoExtField
-type instance XGuardBodyStmt (CsPass _) Tc b = NoExtField -- should be Type
+type instance XBindStmt (CsPass _) Ps b = [AddEpAnn]
+type instance XBindStmt (CsPass _) Rn b = NoExtField
+type instance XBindStmt (CsPass _) Tc b = NoExtField -- should be Type
 
 instance (OutputableBndrId pl, OutputableBndrId pr,
            Anno (StmtLR (CsPass pl) (CsPass pr) body) ~ SrcSpanAnnA,
@@ -445,7 +445,10 @@ pprStmt
       Anno (StmtLR (CsPass idL) (CsPass idR) body) ~ SrcSpanAnnA,
       Outputable body)
   => (StmtLR (CsPass idL) (CsPass idR) body) -> SDoc
-pprStmt (GuardBodyStmt _ expr) = ppr expr
+pprStmt (BindStmt _ pat expr) = pprBindStmt pat expr
+
+pprBindStmt :: (Outputable pat, Outputable expr) => pat -> expr -> SDoc
+pprBindStmt pat expr = hsep [ ppr pat, larrow, ppr expr]
 
 type CsMatchContextPs = CsMatchContext (LIdP Ps)
 type CsMatchContextRn = CsMatchContext (LIdP Rn)

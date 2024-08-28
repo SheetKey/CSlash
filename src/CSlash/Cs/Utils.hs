@@ -12,6 +12,8 @@ module CSlash.Cs.Utils
   , mkNPat
 
   , csTypeToCsSigType
+
+  , mkPsBindStmt
   ) where
 
 import CSlash.Cs.Decls
@@ -139,6 +141,13 @@ mkCsIf c a b anns = CsIf anns c a b
 
 mkNPat :: LocatedAn NoEpAnns (CsOverLit Ps) -> Maybe (SyntaxExpr Ps) -> [AddEpAnn] -> Pat Ps
 mkNPat lit neg anns = NPat anns lit neg noSyntaxExpr
+
+mkPsBindStmt
+  :: [AddEpAnn]
+  -> LPat Ps
+  -> LocatedA (bodyR Ps)
+  -> StmtLR Ps Ps (LocatedA (bodyR Ps))
+mkPsBindStmt ann pat body = BindStmt ann pat body
 
 missingTupArg :: EpAnn Bool -> CsTupArg Ps
 missingTupArg ann = Missing ann

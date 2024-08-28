@@ -127,7 +127,7 @@ type family XCGRHS x b
 
 -- -------------------------------------
 -- StmtLR type families
-type family XGuardBodyStmt x x' b
+type family XBindStmt x x' b
 
 -- =====================================================================
 -- Type families for the CsLit extension points

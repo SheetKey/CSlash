@@ -956,7 +956,7 @@ atypat :: { LPat Ps }
 
 -- a special stmt used in guards
 qual :: { forall b. DisambECP b => PV (LStmt Ps (LocatedA b)) }
-  : bindpat '<-' exp { unECP $3 >>= \ $2 ->
+  : bindpat '<-' exp { unECP $3 >>= \ $3 ->
                        amsA' (sLL $1 $> $ mkPsBindStmt [mu AnnLarrow $2] $1 $3) }
   | exp { unECP $1 >>= \ $1 -> return $ sL1a $1 $ mkBodyStmt $1 }
   | 'let' bind { amsA' (sLL $1 $> $ mkLetStmt [mj AnnLet $1] (unLoc $2)) }
