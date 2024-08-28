@@ -13,6 +13,7 @@ module CSlash.Cs.Utils
 
   , csTypeToCsSigType
 
+  , mkBodyStmt
   , mkPsBindStmt
   ) where
 
@@ -141,6 +142,9 @@ mkCsIf c a b anns = CsIf anns c a b
 
 mkNPat :: LocatedAn NoEpAnns (CsOverLit Ps) -> Maybe (SyntaxExpr Ps) -> [AddEpAnn] -> Pat Ps
 mkNPat lit neg anns = NPat anns lit neg noSyntaxExpr
+
+mkBodyStmt :: LocatedA (bodyR Ps) -> StmtLR (CsPass idL) Ps (LocatedA (bodyR Ps))
+mkBodyStmt body = BodyStmt noExtField body
 
 mkPsBindStmt
   :: [AddEpAnn]

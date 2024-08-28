@@ -433,6 +433,8 @@ type instance XBindStmt (CsPass _) Ps b = [AddEpAnn]
 type instance XBindStmt (CsPass _) Rn b = NoExtField
 type instance XBindStmt (CsPass _) Tc b = NoExtField -- should be Type
 
+type instance XBodyStmt (CsPass _) (CsPass _) b = NoExtField
+
 instance (OutputableBndrId pl, OutputableBndrId pr,
            Anno (StmtLR (CsPass pl) (CsPass pr) body) ~ SrcSpanAnnA,
            Outputable body)
