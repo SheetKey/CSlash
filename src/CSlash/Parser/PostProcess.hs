@@ -695,3 +695,9 @@ mkLCsOpTy :: LCsType Ps -> LocatedN RdrName -> LCsType Ps -> LCsType Ps
 mkLCsOpTy x op y =
   let loc = locA x `combineSrcSpans` locA op `combineSrcSpans` locA y
   in L (noAnnSrcSpan loc) (mkCsOpTy x op y)
+
+-----------------------------------------------------------------------------
+-- Tuple punning
+
+mkTupleSyntaxTycon :: Int -> P RdrName
+mkTupleSyntaxTycon n = pure $ getRdrName (tupleTyCon n)
