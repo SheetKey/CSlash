@@ -23,21 +23,55 @@ Alternatively, System $F_{\omega}^{AL}$ is System $F^{\circ}$, described in \cit
 extended with type functions and an affine kind.
 We take inspiration from \cite{pat,bobw}.
 
-
 % \begin{figure}[h]
 %   \centering
-  \begin{tabularx}{\linewidth}{X c}
-    $\kappa::= \star\mid\bullet\mid\circ\mid \kappa\Rightarrow\kappa$ & kinds \\
-    $\tau::= \alpha\mid \tau\tok\tau\mid \fak{\alpha}{\kappa}\tau
-    \mid\lam{\alpha:\kappa}\tau\mid\tau\ \tau$ & types \\
-    $e::= x\mid \lamk{\kappa}{x:\tau}e \mid e\ e
-    \mid \Lam{\alpha:\kappa}v \mid e[\tau]$
-    & expressions \\
-    $v::= \lamk{\kappa}{x:\tau}e\mid \Lam{\alpha:\kappa}v$ & values
-  \end{tabularx}
+\begin{tabularx}{\linewidth}{X c}
+  $\kappa::= \star\mid\bullet\mid\circ\mid \kappa\Rightarrow\kappa$ & kinds \\
+  $\tau::= \alpha\mid \tau\tok\tau\mid \fak{\alpha}{\kappa}\tau
+  \mid\lam{\alpha:\kappa}\tau\mid\tau\ \tau$ & types \\
+  $e::= x\mid \lamk{\kappa}{x:\tau}e \mid e\ e
+  \mid \Lam{\alpha:\kappa}v \mid e[\tau]$
+  & expressions \\
+  $v::= \lamk{\kappa}{x:\tau}e\mid \Lam{\alpha:\kappa}v$ & values
+\end{tabularx}
 %   \caption{\cs kinds, types, and terms}
 %   \label{fig:terms}
 % \end{figure}
+
+\begin{rem}[Type and Data Constructors]
+  Type constructors, and even type functions,
+  do not need any kind constraints. Their kinds can simply be of the form
+  $k_{1}\Rightarrow\cdots\Rightarrow k_{n}$.
+  This is because the type constructor does not have any information about
+  then usage of variables passed to the data constructor for a given type.
+  Constraints likely must be present in data constructors.
+  This choice allows for better kind polymorphism.
+
+  Consider the \verb+Either+ type.
+  In our language we would have
+  \begin{center}
+    \verb+type Either+ $=\lam{a:\kappa_{1}}{b:\kappa_{2}}(a|b):\kappa_{3}$
+  \end{center}
+  We could add the constraints $\kappa_{1}\leq\kappa_{3},\kappa_{2}\leq\kappa_{3}$.
+  The constructors would then have the following type signatures:
+  \begin{center}
+    \verb+Left+ : $\kappa_1\leq \kappa_3,\kappa_2\leq\kappa_3\Rightarrow
+    \fak{a}{\kappa_1}\fak{b}{\kappa_2}a\tokn{4}($\verb+Either+ $a\ b):\kappa_3$ \\
+    \verb+Right+ : $\kappa_{1}\leq\kappa_{3},\kappa_{2}\leq\kappa_{3}\Rightarrow
+    \fak{a}{\kappa_1}\fak{b}{\kappa_2}b\tokn{4}($\verb+Either+ $a\ b):\kappa_{3}$
+  \end{center}
+  However, suppose $\kappa_{1}=\star$ and $\kappa_{2}=\circ$.
+  Then $($\verb+Either+ $a\ b):\circ$.
+  So $($\verb+Left+ $\ x):\_:\circ$ and $($\verb+Right+ $\ y):\_:\circ$.
+  However, it should be that $($\verb+Left+$\ x):\star$.
+  Thus, we do not constrain the type constructor, only the data constructors:
+  \begin{center}
+    \verb+Left+ : $\kappa_1\leq \kappa_3\Rightarrow
+    \fak{a}{\kappa_1}\fak{b}{\kappa_2}a\tokn{4}($\verb+Either+ $a\ b):\kappa_3$ \\
+    \verb+Right+ : $\kappa_{2}\leq\kappa_{3}\Rightarrow
+    \fak{a}{\kappa_1}\fak{b}{\kappa_2}b\tokn{4}($\verb+Either+ $a\ b):\kappa_{3}$
+  \end{center}
+\end{rem}
 
 \begin{mathpar}
   %% kinds

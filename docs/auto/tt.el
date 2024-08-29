@@ -57,6 +57,7 @@
     '("pack" 2)
     '("tek" 2)
     '("fak" 2)
+    '("tokn" 1)
     '("Parens" 1)
     "R"
     "Q"
@@ -169,6 +170,8 @@
     "lsm"
     "tsm"
     "dsm")
+   (LaTeX-add-environments
+    '("blockquote" LaTeX-env-args ["argument"] 0))
    (LaTeX-add-bibliographies
     "./sources")
    (LaTeX-add-amsthm-newtheorems
