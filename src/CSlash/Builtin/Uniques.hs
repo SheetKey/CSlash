@@ -3,9 +3,17 @@ module CSlash.Builtin.Uniques where
 import CSlash.Types.Basic
 import CSlash.Types.Unique
 
+import CSlash.Utils.Outputable
+import CSlash.Utils.Panic
+
 import CSlash.Utils.Word64 (word64ToInt)
 
-import Data.Bits ((.&.), shiftR)
+import Data.Bits ((.&.), (.|.), shiftR, shiftL)
+
+mkSumTyConUnique :: Arity -> Unique
+mkSumTyConUnique arity =
+  assertPpr (arity <= 0x3f) (ppr arity) $
+  mkUniqueInt 'z' (arity `shiftL` 8 .|. 0xfc)
 
 isSumTyConUnique :: Unique -> Maybe Arity
 isSumTyConUnique u =
@@ -14,6 +22,13 @@ isSumTyConUnique u =
     _ -> Nothing
   where
     (tag, n) = unpkUnique u
+
+mkSumDataConUnique :: ConTagZ -> Arity -> Unique
+mkSumDataConUnique alt arity
+  | alt >= arity
+  = panic ("mkSumDataConUnique: " ++ show alt ++ " >= " ++ show arity)
+  | otherwise
+  = mkUniqueInt 'z' (arity `shiftL` 8 + alt `shiftL` 2)
 
 mkTupleDataConUnique :: Arity -> Unique
 mkTupleDataConUnique a = mkUniqueInt '7' (3*a)

@@ -12,7 +12,7 @@ module CSlash.Types.Var
 
   , mkGlobalVar
 
-  , isTyVar, isKdVar
+  , isTypeVar, isTyVar, isKdVar
 
   , ForAllTyFlag(..)
 
@@ -285,6 +285,10 @@ mk_id name ty scope details info
             Predicates over variables
 *                                                                      *
 ********************************************************************* -}
+
+isTypeVar :: Var -> Bool
+isTypeVar (TyVar {}) = True
+isTypeVar _ = False
 
 isTyVar :: Var -> Bool
 isTyVar (TyVar {}) = True

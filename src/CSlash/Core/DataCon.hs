@@ -3,7 +3,9 @@ module CSlash.Core.DataCon where
 import CSlash.Language.Syntax.Basic
 import CSlash.Language.Syntax.Module.Name
 
+import CSlash.Builtin.Types.Prim (mkTemplateFunKindVars)
 import CSlash.Core.Type as Type
+import CSlash.Core.Kind
 import CSlash.Core.TyCon
 import {-# SOURCE #-} CSlash.Types.TyThing
 import CSlash.Types.SourceText
@@ -101,8 +103,9 @@ mkDataCon
   -> KnotTied TyCon
   -> ConTag
   -> Id
+  -> Type
   -> DataCon
-mkDataCon name declared_infix univ_tvs arg_tys res_type tycon tag work_id
+mkDataCon name declared_infix univ_tvs arg_tys res_type tycon tag work_id work_ty
   = con
   where
     con = MkData { dcName = name
@@ -113,13 +116,53 @@ mkDataCon name declared_infix univ_tvs arg_tys res_type tycon tag work_id
                  , dcResTy = res_type
                  , dcTyCon = tycon
                  , dcTag = tag
-                 , dcType = dataConType con
+                 , dcType = work_ty
                  , dcWorkId = work_id
                  , dcArity = length arg_tys
                  }
 
+mkDataConTy
+  :: [TypeVar]     -- ^ type arguments
+  -> [ForAllTyBinder] -- ^ bound type arguments
+  -> [Type]        -- ^ types of value arguments
+  -> TyCon         -- ^ the tycon we're constructing
+  -> Type
+mkDataConTy tyvars b_tyvars arg_tys tycon
+  = assert (binderVars b_tyvars == tyvars) dc_type
+  where
+    funKindVars = mkTemplateFunKindVars $ length arg_tys
+    funKinds = KdVarKd <$> funKindVars
+
+    types = Type.TyVarTy <$> tyvars
+    res_type = mkTyConApp tycon types
+    
+    arg_ty_kinds = (\ty -> case ty of
+                             Type.TyVarTy tv 
+                               | isTypeVar tv -> varKind tv
+                             _ -> panic "mkDataConType: arg_ty is not 'TyVarTy (TyVar _ _ _)'")
+                   <$> arg_tys
+    res_kind = case tyConResKind tycon of
+                 kd@(KdVarKd var)
+                   | isKdVar var -> kd
+                 UKd -> UKd
+                 AKd -> AKd
+                 LKd -> LKd
+                 _ -> panic "mkDataConType: 'tyConResKind tycon' is not valid"
+    arg_ty_constrs =  (`LTEQKd` res_kind) <$> arg_ty_kinds
+    fun_kind_constrs = concatMap (\ (kf, i) ->
+                                     let kds = take i arg_ty_kinds
+                                     in (`LTEQKd` kf) <$> kds)
+                       $ funKinds `zip` [0..]
+    full_constrs = KdContext $ arg_ty_constrs ++ fun_kind_constrs
+
+    dc_partial_type = foldr2 FunTy res_type funKinds arg_tys
+    dc_type = WithContext full_constrs $ foldr ForAllTy dc_partial_type b_tyvars
+
 dataConName :: DataCon -> Name
 dataConName = dcName
+
+dataConType :: DataCon -> Type
+dataConType = dcType
          
 dataConArity :: DataCon -> Arity
 dataConArity (MkData { dcArity = arity }) = arity
@@ -133,11 +176,3 @@ dataConFullSig (MkData { dcUnivTyVars = univ_tvs
                        , dcArgTys = arg_tys
                        , dcType = full_ty })
   = (univ_tvs, arg_tys, full_ty)
-
--- dataConWrapperType in GHC
--- This may need to change:
--- since we have no wrappers, the worker type is the dcType.
--- So we should be able to take the varType from the dcWorkId.
--- We should validate this when we get to implementing checkValidDataCon.
-dataConType :: DataCon -> Type
-dataConType (MkData { dcWorkId = var }) = varType var

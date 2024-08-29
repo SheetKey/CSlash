@@ -1,5 +1,5 @@
 module CSlash.Core.Type
-  ( Type, ForAllTyFlag(..) -- , FunTyFlag(..)
+  ( Type(..), ForAllTyFlag(..) -- , FunTyFlag(..)
   , Var, TypeVar, isTyVar, ForAllTyBinder
   , KnotTied
 

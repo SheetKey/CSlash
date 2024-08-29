@@ -48,7 +48,7 @@ import CSlash.Parser.Annotation
 import CSlash.Parser.Errors.Types
 import CSlash.Parser.Errors.Ppr ()
 
-import CSlash.Builtin.Types ()
+import CSlash.Builtin.Types (sumTyCon)
 
 import qualified Data.Semigroup as Semi
 }

@@ -71,24 +71,6 @@ mkSpecifiedTyConBinders tvs = map mkSpecifiedTyConBinder tvs
 mkTyConTy :: TyCon -> Type
 mkTyConTy tycon = tyConNullaryTy tycon
 
--- BAD
--- mkTyConKind :: [TyConBinder] -> Kind -> Kind
--- mkTyConKind bndrs res_kind = foldr mk res_kind bndrs
---   where
---     mk :: TyConBinder -> Kind -> Kind
---     mk (Bndr tv vis) k = case tv of
---                            TvVar { varKind = arg_k }
---                              | isCKind arg_k
---                              , isCKind k
---                                = FunKd FKF_C_C arg_k k
---                              | isCKind arg_k
---                                = FunKd FKF_C_K arg_k k
---                              | isCKind k
---                                = panic "mkTyConKind"
---                              | otherwise
---                                = FunKd FKF_K_K arg_k k
---                            _ -> panic "mkTyConKind"
-
 {- *********************************************************************
 *                                                                      *
                The TyCon type
@@ -99,12 +81,7 @@ data TyCon = TyCon
   { tyConUnique :: !Unique
   , tyConName :: !Name
   , tyConBinders :: [TyConBinder]
-  -- , tyConResKind :: Kind       -- This doesn't make sense due to kind constraints:
-                                  -- The result kind may depend on the kinds of
-                                  -- the type arguments:
-                                  -- a tuple containing a linear value should have
-                                  -- a linear kind regardless of the other fields.
-                                  -- To have kind polymorphism, this is not statically known.
+  , tyConResKind :: Kind -- Lin, Aff, Unr, or a variable
   -- , tyConHasClosedResKind :: Bool
   , tyConTyVars :: [TypeVar]
   , tyConKind :: Kind
@@ -190,14 +167,15 @@ type TyConRepName = Name
 *                                                                      *
 ********************************************************************* -}
 
-mkTyCon :: Name -> [TyConBinder] -> Kind -> TyConDetails -> TyCon
-mkTyCon name binders kind details
+mkTyCon :: Name -> [TyConBinder] -> Kind -> Kind -> TyConDetails -> TyCon
+mkTyCon name binders res_kind kind details
   = tc
   where
     tc = TyCon { tyConUnique = nameUnique name
                , tyConName = name
                , tyConBinders = binders
                , tyConTyVars = binderVars binders
+               , tyConResKind = res_kind
                , tyConKind = verifyTyConKind binders kind
                , tyConArity = length binders
                , tyConNullaryTy = mkNakedTyConTy tc
@@ -208,11 +186,12 @@ mkAlgTyCon
   :: Name
   -> [TyConBinder]
   -> Kind
+  -> Kind
   -> AlgTyConRhs
   -> AlgTyConFlav
   -> TyCon
-mkAlgTyCon name binders kind rhs parent
-  = mkTyCon name binders kind $
+mkAlgTyCon name binders res_kind kind rhs parent
+  = mkTyCon name binders res_kind kind $
     AlgTyCon { algTcRhs = rhs
              , algTcFlavor = parent }
 
@@ -220,11 +199,12 @@ mkTupleTyCon
   :: Name
   -> [TyConBinder]
   -> Kind
+  -> Kind
   -> DataCon
   -> AlgTyConFlav
   -> TyCon
-mkTupleTyCon name binders kind con parent
-  = mkTyCon name binders kind $
+mkTupleTyCon name binders res_kind kind con parent
+  = mkTyCon name binders res_kind kind $
     AlgTyCon { algTcRhs = TupleTyCon { data_con = con }
              , algTcFlavor = parent }
 
@@ -232,17 +212,18 @@ mkSumTyCon
   :: Name
   -> [TyConBinder]
   -> Kind
+  -> Kind
   -> [DataCon]
   -> AlgTyConFlav
   -> TyCon
-mkSumTyCon name binders kind cons parent
-  = mkTyCon name binders kind $
+mkSumTyCon name binders res_kind kind cons parent
+  = mkTyCon name binders res_kind kind $
     AlgTyCon { algTcRhs = mkSumTyConRhs cons
              , algTcFlavor = parent }
 
-mkPrimTyCon :: Name -> [TyConBinder] -> Kind -> TyCon
-mkPrimTyCon name binders kind
-  = mkTyCon name binders kind PrimTyCon
+mkPrimTyCon :: Name -> [TyConBinder] -> Kind -> Kind -> TyCon
+mkPrimTyCon name binders res_kind kind
+  = mkTyCon name binders res_kind kind PrimTyCon
 
 tyConDataCons :: TyCon -> [DataCon]
 tyConDataCons tycon = tyConDataCons_maybe tycon `orElse` []

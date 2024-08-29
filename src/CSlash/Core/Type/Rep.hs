@@ -37,6 +37,7 @@ data Type
     , ft_arg :: Type
     , ft_res :: Type
     }
+  | WithContext Kind Type -- this should occure at most once per type and always as the first cons
   deriving Data.Data
 
 instance Outputable Type where

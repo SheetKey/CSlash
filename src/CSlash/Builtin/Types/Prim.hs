@@ -57,6 +57,12 @@ mkTemplateKindVars i
       ]
     , mkKdVar (mk_kv_name i ('k' : show i)) )
 
+mkTemplateFunKindVars :: Int -> [KindVar]
+mkTemplateFunKindVars i
+  = [ mkKdVar (mk_kv_name u ('k' : 'f' : show u))
+    | u <- [0..(i-1)]
+    ]
+
 mk_kv_name :: Int -> String -> Name
 mk_kv_name u s = mkInternalName (mkAlphaTyVarUnique u)
                                 (mkTyVarOccFS (mkFastString s))
@@ -84,18 +90,14 @@ mkTemplateTyConBindersFrom i kinds
 mkTemplateTyConBinders :: [Kind] -> [TyConBinder]
 mkTemplateTyConBinders kds = mkTemplateTyConBindersFrom (length kds) kds
 
-mkTemplateTyConBindersKindRel :: (Kind -> Kind -> KdRel) -> Int -> ([TyConBinder], Kind)
-mkTemplateTyConBindersKindRel rel arity
+mkTemplateTyConBindersKind :: Int -> ([TyConBinder], Kind, Kind)
+mkTemplateTyConBindersKind arity
   = let (kind_vars, res_kind_var) = mkTemplateKindVars arity
         kinds = KdVarKd <$> kind_vars
         res_kind = KdVarKd res_kind_var
         tc_binders = mkTemplateTyConBinders kinds
-        tc_kind_constrs = KdContext $ (`rel` res_kind) <$> kinds
-        tc_kind = FunKd FKF_C_K tc_kind_constrs $ foldr (FunKd FKF_K_K) res_kind kinds
-    in (tc_binders, tc_kind)
-
-mkTemplateTyConBindersKindLTEQ :: Int -> ([TyConBinder], Kind)
-mkTemplateTyConBindersKindLTEQ = mkTemplateTyConBindersKindRel LTEQKd
+        tc_kind = foldr (FunKd FKF_K_K) res_kind kinds
+    in (tc_binders, res_kind, tc_kind)
 
 {- *********************************************************************
 *                                                                      *
@@ -108,18 +110,14 @@ Unlike GHC, we have a single function tycon "FUN" that has a kind.
 Its kind may be UKd, AKd, LKd, or a kdvarkd.
 For kind polymorphism, which we want, we have
   FUN : k1 <= k3, k2 <= k3 => k1 -> k2 -> k3
+
+NOTE: THIS ISN'T RIGHT!!! WE DO NOT NEED CONSTRAINTS HERE
 -}
 
 fUNTyConName :: Name
 fUNTyConName = mkPrimTc (fsLit "FUN") fUNTyConKey fUNTyCon
 
 fUNTyCon :: TyCon
-fUNTyCon = mkPrimTyCon fUNTyConName tc_bndrs tc_kind
+fUNTyCon = mkPrimTyCon fUNTyConName tc_bndrs res_kind tc_kind
   where
-    -- (kind_vars, res_kind_var) = mkTemplateKindVars 2
-    -- kinds = KdVarKd <$> kind_vars
-    -- res_kind = KdVarKd res_kind_var
-    -- tc_bndrs = mkTemplateTyConBinders kindvars
-    -- tc_kind_constrs = KdContext $ (`LTEQKd` res_kind) <$> kinds
-    -- tc_kind = FunKd FKF_C_K tc_kind_constrs $ foldr (FunKd FKF_K_K) res_kind kinds
-    (tc_bndrs, tc_kind) = mkTemplateTyConBindersKindLTEQ 2
+    (tc_bndrs, res_kind, tc_kind) = mkTemplateTyConBindersKind 2
