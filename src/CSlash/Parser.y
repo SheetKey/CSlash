@@ -450,9 +450,11 @@ context :: { LCsContext Ps }
   : context1 { L (getLoc $1) (reverse (unLoc $1)) }
 
 context1 :: { LCsContext Ps }
-  -- : '(' context ')' {% amsA' (sLL $1 $> $
-  --                             CsContext (Just $ AnnParen AnnParens (glAA $1) (glAA $3)) $2) }
-  : context1 ',' kvrel {% case unLoc $1 of
+  : '(' context ')' { case $2 of
+                        L (EpAnn l (AnnContext m oparens cparens) cs) ctxt ->
+                          L (EpAnn l (AnnContext m (glAA $1 : oparens) (glAA $3 : cparens)) cs)
+                            ctxt }
+  | context1 ',' kvrel {% case unLoc $1 of
                             (h:t) -> do { h' <- addTrailingCommaA h (gl $2)
                                         ; return (sLLc $1 $> ($3 : (h':t))) } }
   | kvrel { sL1a $1 [$1] }
