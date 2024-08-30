@@ -1064,12 +1064,12 @@ g_qvarop :: { LocatedN RdrName }
   | '`' g_qvarid '`' {% amsr (sLL $1 $> (unLoc $2))
                              (NameAnn NameBackquotes (glAA $1) (glAA $2) (glAA $3) []) }
 
-g_qconop :: { Located RdrName }
+g_qconop :: { LocatedN RdrName }
   : g_qconsym %shift { $1 }
   | '`' g_qconid '`' {% amsr (sLL $1 $> (unLoc $2))
                             (NameAnn NameBackquotes (glAA $1) (glAA $2) (glAA $3) []) }
 
-g_conop :: { Located RdrName }
+g_conop :: { LocatedN RdrName }
   : g_consym %shift { $1 }
   | '`' g_conid '`' {% amsr (sLL $1 $> (unLoc $2))
                             (NameAnn NameBackquotes (glAA $1) (glAA $2) (glAA $3) []) }
