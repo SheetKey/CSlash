@@ -30,6 +30,7 @@ import CSlash.Cs.Extension
 import CSlash.Cs.Kind
 import CSlash.Types.SrcLoc
 import CSlash.Types.Name
+import CSlash.Types.Name.Reader
 import CSlash.Parser.Annotation
 import CSlash.Utils.Outputable
 
@@ -92,6 +93,7 @@ data EpArrow
   = EpU !(EpUniToken "-U>" "-★>")
   | EpA !(EpUniToken "-A>" "-●>")
   | EpL !(EpUniToken "-L>" "-○>")
+  | EpVar !(LocatedN RdrName)
   deriving Data
 
 type instance XCsArrow Ps = EpArrow

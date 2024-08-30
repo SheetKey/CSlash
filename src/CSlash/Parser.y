@@ -49,7 +49,7 @@ import CSlash.Parser.Errors.Types
 import CSlash.Parser.Errors.Ppr ()
 
 import CSlash.Builtin.Types (sumTyCon)
-import CSlash.Builtin.Types.Prim (unrestrictedFUNTyCon, affineFUNTyCon, linearFUNTyCon)
+import CSlash.Builtin.Types.Prim (fUNTyCon, unrestrictedFUNTyCon, affineFUNTyCon, linearFUNTyCon)
 
 import qualified Data.Semigroup as Semi
 }
@@ -89,6 +89,7 @@ import qualified Data.Semigroup as Semi
   ARR_A { L _ ITarrowA }
   ARR_L { L _ ITarrowL }
   PREFIX_MINUS { L _ ITprefixminus }
+  SUFFIX_ARR { L _ ITsuffixarr }
   TIGHT_INFIX_AT { L _ ITtightinfixat }
   U_KIND { L _ ITstar }
   A_KIND { L _ ITbullet }
@@ -477,6 +478,12 @@ type :: { LCsType Ps }
                                                     (CsArrow (EpL $ epUniTok $2)
                                                              (sL1a $2 $ CsLKd noExtField))
                                                     $1 $3) }
+  | btype PREFIX_MINUS g_varid SUFFIX_ARR ctype
+                      {% do { kind <- amsA' $ sLL $2 $4 $ CsKdVar [] (fmap unknownToKv $3)
+                            ; amsA' (sLL $1 $> $ CsFunTy noExtField
+                                                   (CsArrow (EpVar $ fmap unknownToKv $3)
+                                                             kind)
+                                                   $1 $>) } }
 
 btype :: { LCsType Ps }
   : infixtype {% runPV $1 }
@@ -985,15 +992,33 @@ systycon_no_unit :: { LocatedN RdrName }
   | '(' bars ')' {% amsr (sLL $1 $> $ (getRdrName (sumTyCon (snd $2 + 1))))
                          (NameAnnBars NameParens (glAA $1)
                                       (map srcSpan2e (fst $2)) (glAA $3) []) }
-  | '(' ARR_U ')' {% amsr (sLL $1 $> $ getRdrName unrestrictedFUNTyCon)
-                          (NameAnnUnArrow (Just $ glAA $1) (glAA $2)
-                                          (Just $ glAA $3) []) }
-  | '(' ARR_A ')' {% amsr (sLL $1 $> $ getRdrName affineFUNTyCon)
-                          (NameAnnAffArrow (Just $ glAA $1) (glAA $2)
-                                           (Just $ glAA $3) []) }
-  | '(' ARR_L ')' {% amsr (sLL $1 $> $ getRdrName linearFUNTyCon)
-                          (NameAnnLinArrow (Just $ glAA $1) (glAA $2)
-                                           (Just $ glAA $3) []) }
+
+funtycon :: { LCsType Ps }
+  : '(' ARR_U ')' {% do { kind <- amsA' $ sL1 $2 $ CsUKd noExtField
+                        ; name <- amsA' $ sL1 $2 $ getRdrName unrestrictedFUNTyCon
+                        ; tyvar <- amsA' $ sL1 $2 $ CsTyVar [] name
+                        ; funty <- amsA' $ sL1 $2 $ CsKindSig [] tyvar kind
+                        ; amsA' $ sLL $1 $> $ CsParTy (AnnParen AnnParens (glR $1) (glR $>))
+                                                      funty } }
+  | '(' ARR_A ')' {% do { kind <- amsA' $ sL1 $2 $ CsUKd noExtField
+                        ; name <- amsA' $ sL1 $2 $ getRdrName affineFUNTyCon
+                        ; tyvar <- amsA' $ sL1 $2 $ CsTyVar [] name
+                        ; funty <- amsA' $ sL1 $2 $ CsKindSig [] tyvar kind
+                        ; amsA' $ sLL $1 $> $ CsParTy (AnnParen AnnParens (glR $1) (glR $>))
+                                                      funty } }
+  | '(' ARR_L ')' {% do { kind <- amsA' $ sL1 $2 $ CsUKd noExtField
+                        ; name <- amsA' $ sL1 $2 $ getRdrName linearFUNTyCon
+                        ; tyvar <- amsA' $ sL1 $2 $ CsTyVar [] name
+                        ; funty <- amsA' $ sL1 $2 $ CsKindSig [] tyvar kind
+                        ; amsA' $ sLL $1 $> $ CsParTy (AnnParen AnnParens (glR $1) (glR $>))
+                                                      funty } }
+  | '(' PREFIX_MINUS g_varid SUFFIX_ARR ')'
+                  {% do { kind <- amsA' $ sL1 $3 $ CsKdVar [] (fmap unknownToKv $3)
+                        ; name <- amsA' $ sLL $2 $4 $ getRdrName fUNTyCon
+                        ; tyvar <- amsA' $ sLL $2 $4 $ CsTyVar [] name
+                        ; funty <- amsA' $ sLL $2 $4 $ CsKindSig [] tyvar kind
+                        ; amsA' $ sLL $1 $> $ CsParTy (AnnParen AnnParens (glR $1) (glR $>))
+                                                      funty } }
 
 -----------------------------------------------------------------------------
 -- Generic Constructors
@@ -1030,12 +1055,6 @@ infix_decl_op :: { LocatedN RdrName }
   : g_varop_sp { $1 }
   | g_varop { $1 }
   | g_conop { $1 }
-  -- | ARR_U {% amsr (sLL $1 $> $ getRdrName unrestrictedFunTyCon)
-  --                 (NameAnnUnArrow Nothing (glAA $1) Nothing []) }
-  -- | ARR_A {% amsr (sLL $1 $> $ getRdrName affineFunTyCon)
-  --                 (NameAnnAffArrow Nothing (glAA $1) Nothing []) }
-  -- | ARR_L {% amsr (sLL $1 $> $ getRdrName linearFunTyCon)
-  --                 (NameAnnLinArrow Nothing (glAA $1) Nothing []) }
 
 g_varop_sp :: { LocatedN RdrName }
   : g_varsym_sp { $1 }

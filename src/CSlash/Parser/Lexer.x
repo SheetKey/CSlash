@@ -264,6 +264,7 @@ data Token
   | ITarrowA
   | ITarrowL
   | ITprefixminus
+  | ITsuffixarr
   | ITtightinfixat
   | ITstar
   | ITbullet
@@ -619,6 +620,7 @@ varsym opws@OpWsPrefix = sym $ \ span s ->
          return (ITvarsym s)
 varsym opws@OpWsSuffix = sym $ \ span s ->
   if | s == fsLit "." -> return ITdot
+     | s == fsLit ">" -> return ITsuffixarr
      | otherwise -> do
         warnOperatorWhitespace opws span s
         return (ITvarsym s)
