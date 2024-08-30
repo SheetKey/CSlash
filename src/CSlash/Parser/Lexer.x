@@ -162,7 +162,7 @@ $unigraphic / { isSmartQuote } { smart_quote_error }
   () { pop }
 }
 
-<layout> () { new_layout_context generateSemic ITvocurly }
+<layout> () { new_layout_context generateSemic ITolayout }
 
 <layout_left> () { do_layout_left }
 
@@ -272,11 +272,12 @@ data Token
 
   | ITbiglam
 
+  | ITolayout -- In GHC these are ITvocurly, ITvccurly, ITsemi
+  | ITclayout
+  | ITnewlinelayout
+
   | ITocurly
   | ITccurly
-  | ITvocurly
-  | ITvccurly
-  | ITvsemi
   | IToparen
   | ITcparen
   | ITcomma
@@ -744,10 +745,10 @@ do_bol span _str _len _buf2 = do
   case pos of
       LT -> do
           popContext
-          return (L span ITvccurly)
+          return (L span ITclayout)
       EQ | gen_semic -> do
           _ <- popLexState
-          return (L span ITvsemi)
+          return (L span ITnewlinelayout)
       _ -> do
           _ <- popLexState
           lexToken
@@ -780,7 +781,7 @@ do_layout_left :: Action
 do_layout_left span _buf _len _buf2 = do
   _ <- popLexState
   pushLexState bol
-  return (L span ITvccurly)
+  return (L span ITclayout)
 
 -- -----------------------------------------------------------------------------
 -- Strings & Chars

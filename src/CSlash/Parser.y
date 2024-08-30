@@ -97,11 +97,12 @@ import qualified Data.Semigroup as Semi
 
   '/\\' { L _ ITbiglam }
 
-  REAL_OCURLY { L _ ITocurly }
-  REAL_CCURLY { L _ ITccurly }
-  '{' { L _ ITvocurly }
-  '}' { L _ ITvccurly }
-  ';' { L _ ITvsemi }
+  OPEN_LAYOUT { L _ ITolayout }
+  CLOSE_LAYOUT { L _ ITclayout }
+  ';' { L _ ITnewlinelayout }
+
+  '{' { L _ ITocurly }
+  '}' { L _ ITccurly }
   '(' { L _ IToparen }
   ')' { L _ ITcparen }
   ',' { L _ ITcomma }
@@ -155,7 +156,7 @@ module :: { Located (CsModule Ps) }
 body :: { ( [TrailingAnn]
           , ([LImportDecl Ps], [LCsDecl Ps])
           , EpLayout ) }
-  : '{' top close { (fst $2, snd $2, EpVirtualBraces (getVOCURLY $1)) }
+  : open top close { (fst $2, snd $2, EpVirtualBraces (getOLAYOUT $1)) }
 
 top :: { ( [TrailingAnn]
          , ([LImportDecl Ps], [LCsDecl Ps]) ) }
@@ -382,7 +383,7 @@ decls :: { Located ([AddEpAnn], OrdList (LCsDecl Ps)) }
   | {- empty -} { noLoc ([], nilOL) }
 
 decllist :: { Located (AnnList, Located (OrdList (LCsDecl Ps))) }
-  : '{' decls close { L (gl $1) ( AnnList (Just $ glR $2) Nothing Nothing (fst $ unLoc $2) []
+  : open decls close { L (gl $1) ( AnnList (Just $ glR $2) Nothing Nothing (fst $ unLoc $2) []
                                 , sL1 $2 $ snd $ unLoc $2) }
 
 -- Binding groups other than those of class and instance declarations
@@ -398,7 +399,7 @@ binds :: { Located (CsLocalBinds Ps) }
 -- right now just coppies of decllist and binds
 
 decllistone :: { Located (AnnList, Located (OrdList (LCsDecl Ps))) }
-  : '{' decl close { let d = sL1 $2 ([], unitOL $2)  
+  : open decl close { let d = sL1 $2 ([], unitOL $2)  
                      in L (gl d) ( AnnList (Just $ glR d) Nothing Nothing (fst $ unLoc d) []
                                   , sL1 d $ snd $ unLoc d ) }
 
@@ -580,7 +581,7 @@ tv_bndr :: { LCsTyVarBndr Ps }
 tv_bndr_parens :: { LCsTyVarBndr Ps }
   : '(' g_var ':' kind ')' {% amsA' (sLL $1 $> (KindedTyVar [mop $1, mu AnnColon $3, mcp $5]
                                                             (fmap unknownToTv $2) $4)) }
-  | REAL_OCURLY g_var ':' kind REAL_CCURLY
+  | '{' g_var ':' kind '}'
            {% amsA' (sLL $1 $> (ImpKindedTyVar [ mu AnnOpenC $1
                                                , mu AnnColon $3
                                                , mu AnnCloseC $5 ]
@@ -827,10 +828,10 @@ guardquals1 :: { Located [LStmt Ps (LCsExpr Ps)] }
 -- Case alternatives
 
 altslist(PATS) :: { forall b. DisambECP b => PV (LocatedL [LMatch Ps (LocatedA b)]) }
-  : '{' alts(PATS) close { $2 >>= \ $2 -> amsr
+  : open alts(PATS) close { $2 >>= \ $2 -> amsr
                              (L (getLoc $2) (reverse (snd $ unLoc $2)))
                              (AnnList (Just $ glR $2) Nothing Nothing (fst $ unLoc $2) []) }
-  | '{' close { return $ noLocA [] }
+  | open close { return $ noLocA [] }
 
 alts(PATS) :: { forall b. DisambECP b => PV (Located ([AddEpAnn], [LMatch Ps (LocatedA b)])) }
   : alts1(PATS) { $1 >>= \ $1 -> return $
@@ -1144,8 +1145,11 @@ literal :: { Located (CsLit Ps) }
 -----------------------------------------------------------------------------
 -- Layout
 
+open :: { Located Token }
+  : OPEN_LAYOUT { $1 }
+
 close :: { () }
-  : '}' { () }
+  : CLOSE_LAYOUT { () }
   | error {% popContext }
 
 -----------------------------------------------------------------------------
@@ -1184,7 +1188,7 @@ getCHAR (L _ (ITchar _ x)) = x
 getSTRING (L _ (ITstring _ x)) = x
 getINTEGER (L _ (ITinteger x)) = x
 getRATIONAL (L _ (ITrational x)) = x
-getVOCURLY (L (RealSrcSpan l _) ITvocurly) = srcSpanStartCol l
+getOLAYOUT (L (RealSrcSpan l _) ITolayout) = srcSpanStartCol l
 
 getINTEGERs (L _ (ITinteger (IL src _ _))) = src
 getCHARs (L _ (ITchar src _)) = src
