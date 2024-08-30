@@ -121,3 +121,20 @@ fUNTyCon :: TyCon
 fUNTyCon = mkPrimTyCon fUNTyConName tc_bndrs res_kind tc_kind
   where
     (tc_bndrs, res_kind, tc_kind) = mkTemplateTyConBindersKind 2
+
+unrestrictedFUNTyCon :: TyCon
+unrestrictedFUNTyCon = _mkFUNTyCon UKd
+
+affineFUNTyCon :: TyCon
+affineFUNTyCon = _mkFUNTyCon AKd
+
+linearFUNTyCon :: TyCon
+linearFUNTyCon = _mkFUNTyCon LKd
+
+_mkFUNTyCon :: Kind -> TyCon
+_mkFUNTyCon res_kind = mkPrimTyCon fUNTyConName tc_bndrs res_kind tc_kind
+  where
+    (kind_vars, _) = mkTemplateKindVars 2
+    kinds = KdVarKd <$> kind_vars
+    tc_bndrs = mkTemplateTyConBinders kinds
+    tc_kind = foldr (FunKd FKF_K_K) res_kind kinds

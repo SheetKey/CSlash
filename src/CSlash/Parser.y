@@ -49,6 +49,7 @@ import CSlash.Parser.Errors.Types
 import CSlash.Parser.Errors.Ppr ()
 
 import CSlash.Builtin.Types (sumTyCon)
+import CSlash.Builtin.Types.Prim (unrestrictedFUNTyCon, affineFUNTyCon, linearFUNTyCon)
 
 import qualified Data.Semigroup as Semi
 }
@@ -982,13 +983,13 @@ systycon_no_unit :: { LocatedN RdrName }
   | '(' bars ')' {% amsr (sLL $1 $> $ (getRdrName (sumTyCon (snd $2 + 1))))
                          (NameAnnBars NameParens (glAA $1)
                                       (map srcSpan2e (fst $2)) (glAA $3) []) }
-  | '(' ARR_U ')' {% amsr (sLL $1 $> $ getRdrName unrestrictedFunTyCon)
+  | '(' ARR_U ')' {% amsr (sLL $1 $> $ getRdrName unrestrictedFUNTyCon)
                           (NameAnnUnArrow (Just $ glAA $1) (glAA $2)
                                           (Just $ glAA $3) []) }
-  | '(' ARR_A ')' {% amsr (sLL $1 $> $ getRdrName affineFunTyCon)
+  | '(' ARR_A ')' {% amsr (sLL $1 $> $ getRdrName affineFUNTyCon)
                           (NameAnnAffArrow (Just $ glAA $1) (glAA $2)
                                            (Just $ glAA $3) []) }
-  | '(' ARR_L ')' {% amsr (sLL $1 $> $ getRdrName linearFunTyCon)
+  | '(' ARR_L ')' {% amsr (sLL $1 $> $ getRdrName linearFUNTyCon)
                           (NameAnnLinArrow (Just $ glAA $1) (glAA $2)
                                            (Just $ glAA $3) []) }
 
