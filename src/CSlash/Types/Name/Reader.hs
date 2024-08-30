@@ -69,6 +69,9 @@ mkRdrUnqual occ = Unqual occ
 mkUnqual :: NameSpace -> FastString -> RdrName
 mkUnqual sp n = Unqual (mkOccNameFS sp n)
 
+mkQual :: NameSpace -> (FastString, FastString) -> RdrName
+mkQual sp (m, n) = Qual (mkModuleNameFS m) (mkOccNameFS sp n)
+
 getRdrName :: NamedThing thing => thing -> RdrName
 getRdrName name = nameRdrName (getName name)
 
