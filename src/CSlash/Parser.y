@@ -751,7 +751,7 @@ aexp2 :: { ECP }
   | RATIONAL { ECP $ mkCsOverLitPV (sL1a $1 $ mkCsFractional (getRATIONAL $1)) }
   | '(' texp ')' { ECP $ unECP $2 >>= \ $2 ->
                          mkCsParPV (comb2 $1 $>) (epTok $1) $2 (epTok $3) }
-  | '(' tup_exprs ')' { ECP $ 2 >>= \ $2 ->
+  | '(' tup_exprs ')' { ECP $ $2 >>= \ $2 ->
                               mkSumOrTuplePV (noAnnSrcSpan $ comb2 $1 $>) $2 [mop $1, mcp $3] }
   | '_' { ECP $ mkCsWildCardPV (getLoc $1) }
 
@@ -828,7 +828,7 @@ guardquals1 :: { Located [LStmt Ps (LCsExpr Ps)] }
 
 altslist(PATS) :: { forall b. DisambECP b => PV (LocatedL [LMatch Ps (LocatedA b)]) }
   : '{' alts(PATS) close { $2 >>= \ $2 -> amsr
-                             (sLL $1 $> (reverse (snd $ unLoc $2)))
+                             (L (getLoc $2) (reverse (snd $ unLoc $2)))
                              (AnnList (Just $ glR $2) Nothing Nothing (fst $ unLoc $2) []) }
   | '{' close { return $ noLocA [] }
 
@@ -1335,10 +1335,10 @@ acsFinal a = do
   !cs <- getCommentsFor l
   csf <- getFinalCommentsFor l
   meof <- getEofPos
-  let cs = case meof of
+  let ce = case meof of
              Strict.Nothing -> Nothing
              Strict.Just (pos `Strict.And` gap) -> Just (pos, gap)
-  return (a, (cs Semi.<> csf) ce)
+  return (a (cs Semi.<> csf) ce)
 
 acs :: (HasLoc l, MonadP m) => l -> (l -> EpAnnComments -> GenLocated l a) -> m (GenLocated l a)
 acs !l a = do
@@ -1356,7 +1356,7 @@ acsA !l a = do
 ams1 :: MonadP m => Located a -> b -> m (LocatedA b)
 ams1 (L l a) b = do
   !cs <- getCommentsFor l
-  return (L (EpANn (spanAsAnchor l) noAnn cs) b)
+  return (L (EpAnn (spanAsAnchor l) noAnn cs) b)
 
 amsA' :: (NoAnn t, MonadP m) => Located a -> m (GenLocated (EpAnn t) a)
 amsA' (L l a) = do
@@ -1438,7 +1438,7 @@ addTrailingAnnA (L anns a) ss ta =
 addTrailingDarrowC :: LocatedC a -> Located Token -> EpAnnComments -> LocatedC a
 addTrailingDarrowC (L (EpAnn lr (AnnContext _ o c) csc) a) lt cs =
   let u = if (isUnicode lt) then UnicodeSyntax else NormalSyntax
-  in L (EpAnn lr (AnnContext (Just (u, glAA lt)) o c) (cs Semi.<> csc)) 
+  in L (EpAnn lr (AnnContext (Just (u, glAA lt)) o c) (cs Semi.<> csc)) a
 
 -- -------------------------------------
 
