@@ -649,8 +649,10 @@ sigdecl :: { LCsDecl Ps }
 -- Expressions
 
 exp :: { ECP }
-  -- : infixexp ':' ctype 
-  : infixexp %shift { $1 }
+  : infixexp ':' ctype { ECP $ unECP $1 >>= \ $1 ->
+                               mkCsTySigPV (noAnnSrcSpan $ comb2 $1 $>) $1 $3
+                                           [(mu AnnColon $2)] }
+  | infixexp %shift { $1 }
 
 infixexp :: { ECP }
   : exp10 { $1 }
