@@ -35,7 +35,7 @@ import qualified CSlash.Data.Strict as Strict
 
 import CSlash.Types.Name.Reader
 import CSlash.Types.Name.Occurrence
-  (varName, tcClsName, tvName, kvName, occNameFS, mkVarOccFS, isConOccFS)
+  (varName, tcClsName, tvName, kvName, occNameFS, mkVarOccFS, isConOccFS, NameSpace(UNKNOWN_NS))
 import CSlash.Types.SrcLoc
 import CSlash.Types.Basic
 import CSlash.Types.Error (CsHint(..))
