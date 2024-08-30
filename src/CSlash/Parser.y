@@ -829,8 +829,7 @@ guardquals1 :: { Located [LStmt Ps (LCsExpr Ps)] }
 altslist(PATS) :: { forall b. DisambECP b => PV (LocatedL [LMatch Ps (LocatedA b)]) }
   : '{' alts(PATS) close { $2 >>= \ $2 -> amsr
                              (sLL $1 $> (reverse (snd $ unLoc $2)))
-                             (AnnList (Just $ glR $2) (Just $ moc $1)
-                                      (Just $ mcc $3) (fst $ unLoc $2) []) }
+                             (AnnList (Just $ glR $2) Nothing Nothing (fst $ unLoc $2) []) }
   | '{' close { return $ noLocA [] }
 
 alts(PATS) :: { forall b. DisambECP b => PV (Located ([AddEpAnn], [LMatch Ps (LocatedA b)])) }
