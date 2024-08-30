@@ -1298,7 +1298,7 @@ msemim :: Located e -> Maybe EpaLocation
 msemim !l = if isZeroWidthSpan (gl l) then Nothing else Just (srcSpan2e $ gl l)
 
 mu :: AnnKeywordId -> Located Token -> AddEpAnn
-mu !a lt@(L l t) = AddEpAnn (tuUnicodeAnn a lt) (srcSpan2e l)
+mu !a lt@(L l t) = AddEpAnn (toUnicodeAnn a lt) (srcSpan2e l)
 
 toUnicodeAnn :: AnnKeywordId -> Located Token -> AnnKeywordId
 toUnicodeAnn !a !t = if isUnicode t then unicodeAnn a else a
