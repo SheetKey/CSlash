@@ -96,6 +96,7 @@ library
                     , CSlash.Data.StringBuffer
 
                     , CSlash.Driver.Flags
+                    , CSlash.Driver.Main
 
                     , CSlash.Language.Syntax
                     , CSlash.Language.Syntax.Basic
