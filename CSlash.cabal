@@ -146,7 +146,9 @@ library
                     , CSlash.Types.Name.Occurrence
                     , CSlash.Types.Name.Reader
                     , CSlash.Types.Name.Set
+                    , CSlash.Types.PkgQual
                     , CSlash.Types.RepType
+                    , CSlash.Types.SourceFile
                     , CSlash.Types.SourceText
                     , CSlash.Types.SrcLoc
                     , CSlash.Types.Tickish
@@ -167,6 +169,8 @@ library
                     , CSlash.Unit.Module
                     , CSlash.Unit.Module.Env
                     , CSlash.Unit.Module.Imported
+                    , CSlash.Unit.Module.Location
+                    , CSlash.Unit.Module.ModSummary
                     , CSlash.Unit.Module.Warnings
                     , CSlash.Unit.Types
 
