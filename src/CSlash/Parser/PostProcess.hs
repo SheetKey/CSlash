@@ -153,28 +153,46 @@ checkExpBlockArguments = checkExpr
 -- -------------------------------------------------------------------------
 -- Checking Patterns.
 
-checkTyPattern :: LCsType Ps -> P (LPat Ps)
-checkTyPattern (L l@(EpAnn anc an _) t) = do
-  (L l' p, cs) <- checkTyPat (EpAnn anc an emptyComments) emptyComments (L l t)
+checkTyPattern :: Maybe (Located Token) -> LCsType Ps -> Maybe (Located Token) -> P (LPat Ps)
+checkTyPattern moc (L l@(EpAnn anc an _) t) mcc = do
+  (L l' p, cs) <- checkTyPat (EpAnn anc an emptyComments) emptyComments moc (L l t) mcc
   return (L (addCommentsToEpAnn l' cs) p)
 
 checkTyPat
   :: SrcSpanAnnA
   -> EpAnnComments
+  -> Maybe (Located Token)
+  -> LCsType Ps
+  -> Maybe (Located Token)
+  -> P (LPat Ps, EpAnnComments)
+checkTyPat loc cs moc ty mcc = case (moc, mcc) of
+  (Just oc, Just cc) -> do (p, cs') <- checkTyPat' loc cs ty
+                           let loc' = combineSrcSpans (getHasLoc oc) (getHasLoc cc)
+                               impPatAnn = EpAnnImpPat (EpTok $ EpaSpan $ getHasLoc oc)
+                                                       (EpTok $ EpaSpan $ getHasLoc cc)
+                           return ( L (EpAnn (spanAsAnchor loc') noAnn cs')
+                                      (ImpPat impPatAnn p)
+                                  , cs' )
+  (Nothing, Nothing) -> checkTyPat' loc cs ty
+  _ -> panic "checkTyPat"
+
+checkTyPat'
+  :: SrcSpanAnnA
+  -> EpAnnComments
   -> LCsType Ps
   -> P (LPat Ps, EpAnnComments)
-checkTyPat loc cs (L l (CsTyVar an id))
+checkTyPat' loc cs (L l (CsTyVar an id))
   = pure (L l (TyVarPat noExtField id), cs)
-checkTyPat loc cs (L l (CsParTy an ty)) = do
-  p <- checkTyPattern ty
+checkTyPat' loc cs (L l (CsParTy an ty)) = do
+  p <- checkTyPattern Nothing ty Nothing
   massert (ap_adornment an == AnnParens)
   let lpar = EpTok $ ap_open an
       rpar = EpTok $ ap_close an
   return (L l (ParPat (lpar, rpar) p), cs)
-checkTyPat loc cs (L l (CsKindSig an ty kd)) = do
+checkTyPat' loc cs (L l (CsKindSig an ty kd)) = do
   p <- checkVarTyPattern ty
   return (L l (KdSigPat an p (CsPSK noAnn kd)), cs)
-checkTyPat loc _ ty
+checkTyPat' loc _ ty
   = addFatalError $ mkPlainErrorMsgEnvelope (locA loc) $ PsErrInTyPat (unLoc ty)
 
 checkVarTyPattern :: LCsType Ps -> P (LPat Ps)

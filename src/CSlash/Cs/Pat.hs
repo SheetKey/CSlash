@@ -9,6 +9,7 @@
 module CSlash.Cs.Pat
   ( Pat(..), LPat
   , EpAnnSumPat(..)
+  , EpAnnImpPat(..)
   , ConPatTc(..)
   , ConLikeP
 
@@ -80,6 +81,8 @@ type instance XKdSigPat Ps = [AddEpAnn]
 type instance XKdSigPat Rn = NoExtField
 type instance XKdSigPat Tc = Kind
 
+type instance XImpPat (CsPass _) = EpAnnImpPat
+
 type instance ConLikeP Ps = RdrName
 type instance ConLikeP Rn = Name
 type instance ConLikeP Tc = ConLike
@@ -97,6 +100,12 @@ data EpAnnSumPat = EpAnnSumPat
 
 instance NoAnn EpAnnSumPat where
   noAnn = EpAnnSumPat [] [] []
+
+data EpAnnImpPat = EpAnnImpPat
+  { impPatOCurly :: EpToken "{"
+  , impPatCCurly :: EpToken "}"
+  }
+  deriving Data  
 
 data ConPatTc = ConPatTc
 

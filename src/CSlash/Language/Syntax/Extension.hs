@@ -140,6 +140,7 @@ type family XCsInt x
 type family XCsDouble x
 type family XSigPat x
 type family XKdSigPat x
+type family XImpPat x
 
 -- -------------------------------------
 -- CsOverLit type families

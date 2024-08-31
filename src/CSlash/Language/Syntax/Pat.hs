@@ -34,6 +34,8 @@ data Pat p
   ------------ With type signature ---------------
   | SigPat (XSigPat p) (LPat p) (CsPatSigType (NoTc p))
   | KdSigPat (XKdSigPat p) (LPat p) (CsPatSigKind (NoTc p))
+  ------------ Implicit (Type) parameters ---------------
+  | ImpPat (XImpPat p) (LPat p)
 
 type family ConLikeP x
 
