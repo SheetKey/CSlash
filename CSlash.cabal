@@ -133,6 +133,9 @@ library
                     , CSlash.Parser.Types
 
                     , CSlash.Platform
+                    , CSlash.Platform.ArchOS
+                    , CSlash.Platform.Constants
+                    , CSlash.Platform.Ways
 
                     , CSlash.Settings.Constants
 
