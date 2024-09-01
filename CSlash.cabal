@@ -104,6 +104,7 @@ library
 
                     , CSlash.Driver.Backend
                     , CSlash.Driver.Backend.Internal
+                    , CSlash.Driver.DynFlags
                     , CSlash.Driver.Flags
                     , CSlash.Driver.Main
 
