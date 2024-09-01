@@ -33,6 +33,10 @@ import GHC.Hs.Doc (LHsDoc)
 
 type instance Anno (ImportDecl (CsPass p)) = SrcSpanAnnA
 
+importDeclQualifiedStype :: Maybe EpaLocation -> (Maybe EpaLocation, ImportDeclQualifiedStyle)
+importDeclQualifiedStype mPost =
+  if isJust mPost then (mPost, QualifiedPost) else (Nothing, NotQualified)
+
 type instance XCImportDecl Ps = XImportDeclPass
 type instance XCImportDecl Rn = XImportDeclPass
 type instance XCImportDecl Tc = DataConCantHappen

@@ -255,6 +255,7 @@ importdecl :: { LImportDecl Ps }
                 ImportDecl { ideclExt = XImportDeclPass (EpAnn (spanAsAnchor loc) anns cs)
                                                         NoSourceText False
                            , ideclName = $2
+                           , ideclQualified = snd $ importDeclQualifiedStype mPostQual
                            , ideclAs = unLoc (snd $4)
                            , ideclImportList = unLoc $5 }) } }
 
