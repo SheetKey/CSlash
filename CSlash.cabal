@@ -62,6 +62,7 @@ library
                     , CSlash.Core.Kind
                     , CSlash.Core.Kind.FVs
                     , CSlash.Core.Kind.Subst
+                    , CSlash.Core.Opt.CallerCC.Types
                     , CSlash.Core.Ppr
                     , CSlash.Core.TyCon
                     , CSlash.Core.Type
