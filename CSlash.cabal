@@ -103,6 +103,7 @@ library
                     , CSlash.Data.StringBuffer
 
                     , CSlash.Driver.Backend
+                    , CSlash.Driver.Backend.Internal
                     , CSlash.Driver.Flags
                     , CSlash.Driver.Main
 
