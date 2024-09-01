@@ -52,6 +52,8 @@ library
                     , CSlash.Builtin.Types.Prim
                     , CSlash.Builtin.Uniques
 
+                    , CSlash.ByteOrder
+
                     , CSlash.Conc
 
                     , CSlash.Core
