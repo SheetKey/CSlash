@@ -137,6 +137,7 @@ library
                     , CSlash.Platform.Constants
                     , CSlash.Platform.Ways
 
+                    , CSlash.Settings
                     , CSlash.Settings.Constants
 
                     , CSlash.Show
