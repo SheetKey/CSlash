@@ -164,6 +164,7 @@ library
                     , CSlash.Types.Name.Reader
                     , CSlash.Types.Name.Set
                     , CSlash.Types.PkgQual
+                    , CSlash.Types.ProfAuto
                     , CSlash.Types.RepType
                     , CSlash.Types.SourceFile
                     , CSlash.Types.SourceText
