@@ -76,6 +76,7 @@ library
                     , CSlash.Cs.Binds
                     , CSlash.Cs.Decls
                     , CSlash.Cs.Doc
+                    , CSlash.Cs.Dump
                     , CSlash.Cs.Expr
                     , CSlash.Cs.Extension
                     , CSlash.Cs.ImpExp
