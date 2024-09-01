@@ -132,6 +132,8 @@ library
                     , CSlash.Parser.PostProcess
                     , CSlash.Parser.Types
 
+                    , CSlash.Platform
+
                     , CSlash.Settings.Constants
 
                     , CSlash.Show
