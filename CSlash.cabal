@@ -84,6 +84,7 @@ library
                     , CSlash.Cs.Kind
                     , CSlash.Cs.Lit
                     , CSlash.Cs.Pat
+                    , CSlash.Cs.Stats
                     , CSlash.Cs.Type
                     , CSlash.Cs.Utils
 
