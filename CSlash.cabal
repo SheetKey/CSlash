@@ -208,6 +208,7 @@ library
                     , CSlash.Utils.Panic.Plain
                     , CSlash.Utils.Ppr
                     , CSlash.Utils.Ppr.Color
+                    , CSlash.Utils.TmpFs
                     , CSlash.Utils.Word64
 
                     , CSlash.Version
