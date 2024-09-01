@@ -89,6 +89,7 @@ library
                     , CSlash.Cs.Utils
 
                     , CSlash.Data.Bag
+                    , CSlash.Data.Bool
                     , CSlash.Data.EnumSet
                     , CSlash.Data.FastMutInt
                     , CSlash.Data.FastString
