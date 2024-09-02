@@ -183,6 +183,7 @@ library
                     
                     , CSlash.Unicode
 
+                    , CSlash.Unit
                     , CSlash.Unit.Home
                     , CSlash.Unit.Module
                     , CSlash.Unit.Module.Env
