@@ -29,25 +29,271 @@ import Data.List.NonEmpty (NonEmpty(..))
 import Data.Maybe (fromMaybe,mapMaybe)
 
 data DumpFlag
-  = DumpFlag_NOT_IMPLEMENTED
+  = Opt_D_dump_parsed
+  | Opt_D_dump_parsed_ast
+  | Opt_D_dump_tc_trace               
+  | Opt_D_dump_rn_trace               
+  | Opt_D_dump_cs_trace               
+  | Opt_D_dump_tc                     
+  | Opt_D_dump_rn                     
+  | Opt_D_dump_rn_stats               
+  | Opt_D_verbose_core2core           
+  | Opt_D_dump_simpl_trace            
+  | Opt_D_dump_inlinings              
+  | Opt_D_dump_verbose_inlinings      
+  | Opt_D_dump_core_stats             
+  | Opt_D_dump_types                  
+  | Opt_D_dump_simpl_iterations       
+  | Opt_D_dump_ec_trace
+  | Opt_D_dump_if_trace
+  | Opt_D_dump_BCOs
+  | Opt_D_dump_ticked
+  | Opt_D_dump_rtti
+  | Opt_D_source_stats
+  | Opt_D_dump_hi
+  | Opt_D_dump_hi_diffs
+  | Opt_D_dump_mod_cycles             
+  | Opt_D_dump_mod_map
+  | Opt_D_dump_timings
+  | Opt_D_dump_debug
+  | Opt_D_ppr_debug
+  | Opt_D_no_debug_output
+  | Opt_D_dump_faststrings
+  | Opt_D_faststring_stats
+  | Opt_D_ipe_stats
   deriving (Eq, Show, Enum)
 
 getDumpFlagFrom
   :: (a -> Int)
   -> (a -> EnumSet DumpFlag)
   -> DumpFlag -> a -> Bool
-getDumpFlagFrom = error "'getDumpFlagFrom' not implemented"
+getDumpFlagFrom getVerbosity getFlags f x
+  = (f `EnumSet.member` getFlags x)
+  || (getVerbosity x >= 4 && enabledIfVerbose f)
+
+enabledIfVerbose :: DumpFlag -> Bool
+enabledIfVerbose Opt_D_dump_tc_trace               = False
+enabledIfVerbose Opt_D_dump_rn_trace               = False
+enabledIfVerbose Opt_D_dump_cs_trace               = False
+enabledIfVerbose Opt_D_dump_if_trace               = False
+enabledIfVerbose Opt_D_dump_tc                     = False
+enabledIfVerbose Opt_D_dump_rn                     = False
+enabledIfVerbose Opt_D_dump_rn_stats               = False
+enabledIfVerbose Opt_D_dump_hi_diffs               = False
+enabledIfVerbose Opt_D_verbose_core2core           = False
+enabledIfVerbose Opt_D_dump_simpl_trace            = False
+enabledIfVerbose Opt_D_dump_rtti                   = False
+enabledIfVerbose Opt_D_dump_inlinings              = False
+enabledIfVerbose Opt_D_dump_verbose_inlinings      = False
+enabledIfVerbose Opt_D_dump_core_stats             = False
+enabledIfVerbose Opt_D_dump_types                  = False
+enabledIfVerbose Opt_D_dump_simpl_iterations       = False
+enabledIfVerbose Opt_D_dump_ticked                 = False
+enabledIfVerbose Opt_D_dump_mod_cycles             = False
+enabledIfVerbose Opt_D_dump_mod_map                = False
+enabledIfVerbose Opt_D_dump_ec_trace               = False
+enabledIfVerbose _                                 = True
+
 
 data GeneralFlag
-   = Opt_DumpToFile
-   | Opt_DumpWithWays
-   | Opt_D_dump_minimal_imports
-   | Opt_DoAnnotationLinting
+  = Opt_DumpToFile                     -- ^ Append dump output to files instead of stdout.
+  | Opt_DumpWithWays                   -- ^ Use foo.ways.<dumpFlag> instead of foo.<dumpFlag>
+  | Opt_D_dump_minimal_imports
+  | Opt_DoBoundsChecking
 
-   | Opt_WarnIsError  
-   | Opt_ShowWarnGroups
-   | Opt_HideSourcePaths
-   deriving (Eq, Show, Enum)
+  | Opt_WarnIsError                    -- -Werror; makes warnings fatal
+  | Opt_ShowWarnGroups                 -- Show the group a warning belongs to
+  | Opt_HideSourcePaths                -- Hide module source/object paths
+
+  | Opt_PrintUnicodeSyntax
+  | Opt_PrintExpandedSynonyms
+  | Opt_PrintTypecheckerElaboration
+
+  -- optimisation opts
+  | Opt_CallArity
+  | Opt_Exitification
+  | Opt_LateDmdAnal
+  | Opt_KillAbsence
+  | Opt_KillOneShot
+  | Opt_FloatIn
+  | Opt_LocalFloatOut
+  | Opt_LocalFloatOutTopLevel 
+  | Opt_LateSpecialise
+  | Opt_Specialise
+  | Opt_SpecialiseAggressively
+  | Opt_CrossModuleSpecialise
+  | Opt_PolymorphicSpecialisation
+  | Opt_InlineGenerics
+  | Opt_InlineGenericsAggressively
+  | Opt_StaticArgumentTransformation
+  | Opt_CSE
+  | Opt_LiberateCase
+  | Opt_SpecConstr
+  | Opt_SpecConstrKeen
+  | Opt_SpecialiseIncoherents
+  | Opt_DoLambdaEtaExpansion
+  | Opt_DoCleverArgEtaExpansion
+  | Opt_IgnoreAsserts
+  | Opt_DoEtaReduction
+  | Opt_CaseMerge
+  | Opt_CaseFolding                    -- Constant folding through case-expressions
+  | Opt_DictsCheap
+  | Opt_LlvmFillUndefWithGarbage       -- Testing for undef bugs (hidden flag)
+  | Opt_IrrefutableTuples
+  | Opt_OmitYields
+  | Opt_Loopification                  -- See Note [Self-recursive tail calls]
+  | Opt_CfgBlocklayout             -- ^ Use the cfg based block layout algorithm.
+  | Opt_WeightlessBlocklayout         -- ^ Layout based on last instruction per block.
+  | Opt_CprAnal
+  | Opt_SolveConstantDicts
+  | Opt_AlignmentSanitisation
+  | Opt_CatchNonexhaustiveCases
+  | Opt_NumConstantFolding
+  | Opt_CoreConstantFolding
+  | Opt_FastPAPCalls
+
+  -- Inference flags
+  | Opt_DoTagInferenceChecks
+
+  -- PreInlining is on by default. The option is there just to see how
+  -- bad things get if you turn it off!
+  | Opt_SimplPreInlining
+
+  -- Interface files
+  | Opt_IgnoreInterfacePragmas
+  | Opt_OmitInterfacePragmas
+  | Opt_ExposeAllUnfoldings
+  | Opt_WriteInterface -- forces .hi files to be written even with -fno-code
+  | Opt_WriteHie -- generate .hie files
+
+  -- profiling opts
+  | Opt_AutoSccsOnIndividualCafs
+  | Opt_ProfCountEntries
+  | Opt_ProfLateInlineCcs
+  | Opt_ProfLateCcs
+  | Opt_ProfLateOverloadedCcs
+  | Opt_ProfLateoverloadedCallsCCs
+  | Opt_ProfManualCcs -- ^ Ignore manual SCC annotations
+
+  -- misc opts
+  | Opt_Pp
+  | Opt_ForceRecomp
+  | Opt_IgnoreOptimChanges
+  | Opt_IgnoreHpcChanges
+  | Opt_ExcessPrecision
+  | Opt_EagerBlackHoling
+  | Opt_NoCsMain
+  | Opt_SplitSections
+  | Opt_HideAllPackages
+  | Opt_HideAllPluginPackages
+  | Opt_PrintBindResult
+  | Opt_BreakOnException
+  | Opt_BreakOnError
+  | Opt_PrintEvldWithShow
+  | Opt_PrintBindContents
+  | Opt_GenManifest
+  | Opt_EmbedManifest
+  | Opt_SharedImplib
+  | Opt_InsertBreakpoints
+  | Opt_ValidateHie
+  | Opt_NoIt
+  | Opt_HelpfulErrors
+  | Opt_DeferTypeErrors
+  | Opt_DeferTypedHoles
+  | Opt_DeferOutOfScopeVariables
+  | Opt_PIC                         -- ^ @-fPIC@
+  | Opt_PIE                         -- ^ @-fPIE@
+  | Opt_PICExecutable               -- ^ @-pie@
+  | Opt_ExternalDynamicRefs
+  | Opt_Ticky
+  | Opt_Ticky_Allocd
+  | Opt_Ticky_LNE
+  | Opt_Ticky_Dyn_Thunk
+  | Opt_Ticky_Tag
+  | Opt_Ticky_AP                    -- ^ Use regular thunks even when we could use std ap thunks in order to get entry counts
+  | Opt_RPath
+  | Opt_RelativeDynlibPaths
+  | Opt_CompactUnwind               -- ^ @-fcompact-unwind@
+  | Opt_Hpc
+  | Opt_FamAppCache
+  | Opt_VersionMacros
+  | Opt_WholeArchiveCsLibs
+   -- copy all libs into a single folder prior to linking binaries
+   -- this should alleviate the excessive command line limit restrictions
+   -- on windows, by only requiring a single -L argument instead of
+   -- one for each dependency.  At the time of this writing, gcc
+   -- forwards all -L flags to the collect2 command without using a
+   -- response file and as such breaking apart.
+  | Opt_SingleLibFolder
+  | Opt_ExposeInternalSymbols
+  | Opt_KeepCAFs
+  | Opt_KeepGoing
+  | Opt_LinkRts
+
+  -- output style opts
+  | Opt_ErrorSpans -- Include full span info in error messages,
+                   -- instead of just the start position.
+  | Opt_DeferDiagnostics
+  | Opt_DiagnosticsAsJSON  -- ^ Dump diagnostics as JSON
+  | Opt_DiagnosticsShowCaret -- Show snippets of offending code
+  | Opt_PprCaseAsLet
+  | Opt_ShowHoleConstraints
+   --  -- Options relating to the display of valid hole fits
+   --  -- when generating an error message for a typed hole
+   --  -- See Note [Valid hole fits include ...] in GHC.Tc.Errors.Hole
+   -- | Opt_ShowValidHoleFits
+   -- | Opt_SortValidHoleFits
+   -- | Opt_SortBySizeHoleFits
+   -- | Opt_SortBySubsumHoleFits
+   -- | Opt_AbstractRefHoleFits
+   -- | Opt_UnclutterValidHoleFits
+   -- | Opt_ShowTypeAppOfHoleFits
+   -- | Opt_ShowTypeAppVarsOfHoleFits
+   -- | Opt_ShowDocsOfHoleFits
+   -- | Opt_ShowTypeOfHoleFits
+   -- | Opt_ShowProvOfHoleFits
+   -- | Opt_ShowMatchesOfHoleFits
+
+  | Opt_ShowLoadedModules
+  | Opt_HexWordLiterals
+
+  -- Suppress module id prefixes on variables.
+  | Opt_SuppressModulePrefixes
+  -- Suppress info such as arity and unfoldings on identifiers.
+  | Opt_SuppressIdInfo
+  -- Suppress separate type signatures in core, but leave types on
+  -- lambda bound vars
+  | Opt_SuppressUnfoldings
+  -- Suppress the details of even stable unfoldings
+  | Opt_SuppressTypeSignatures
+  -- Suppress unique ids on variables.
+  -- Except for uniques, as some simplifier phases introduce new
+  -- variables that have otherwise identical names.
+  | Opt_SuppressUniques
+  | Opt_SuppressTicks
+  | Opt_SuppressTimestamps -- ^ Suppress timestamps in dumps
+  | Opt_SuppressCoreSizes  -- ^ Suppress per binding Core size stats in dumps
+
+  -- Error message suppression
+  | Opt_ShowErrorContext
+
+  -- temporary flags
+  | Opt_AutoLinkPackages
+  | Opt_ImplicitImportQualified
+
+  -- keeping stuff
+  | Opt_KeepHiDiffs
+  | Opt_KeepHcFiles
+  | Opt_KeepSFiles
+  | Opt_KeepTmpFiles
+  | Opt_KeepRawTokenStream
+  | Opt_KeepLlvmFiles
+  | Opt_KeepHiFiles
+  | Opt_KeepOFiles
+
+  | Opt_BuildDynamicToo
+  | Opt_WriteIfSimplifiedCore
+  deriving (Eq, Show, Enum)
 
 data WarningFlag =
      Opt_WarnDuplicateExports
@@ -87,6 +333,7 @@ data WarningFlag =
    | Opt_WarnMissingExportedSignatures
    | Opt_WarnDeferredTypeErrors
    | Opt_WarnDeferredOutOfScopeVariables
+   | Opt_WarnMissingHomeModules
    | Opt_WarnPartialFields                       
    | Opt_WarnMissingExportList
    | Opt_WarnInaccessibleCode
@@ -98,6 +345,7 @@ data WarningFlag =
    | Opt_WarnMissingPolyKindSignatures           
    | Opt_WarnUnicodeBidirectionalFormatCharacters
    | Opt_WarnTermVariableCapture
+   | Opt_WarnInconsistentFlags
    deriving (Eq, Ord, Show, Enum, Bounded)
 
 warnFlagNames :: WarningFlag -> NonEmpty String
