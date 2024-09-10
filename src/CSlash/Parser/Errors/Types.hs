@@ -26,6 +26,9 @@ import CSlash.Language.Syntax.Pat
 -- ghc
 import GHC.Generics (Generic)
 
+type PsWarning = PsMessage
+type PsError = PsMessage
+
 data PsMessage
   = PsUnknownMessage (UnknownDiagnostic (DiagnosticOpts PsMessage))
   | PsWarnBidirectionalFormatChars (NonEmpty (PsLoc, Char, String))
