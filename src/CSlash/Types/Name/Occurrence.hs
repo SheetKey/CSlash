@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE MagicHash #-}
 
@@ -18,6 +19,7 @@ import qualified Data.Semigroup as S
 import GHC.Exts ( Int(I#), dataToTag# )
 
 import Control.DeepSeq
+import Data.Char
 import Data.Data
 
 data NameSpace
@@ -189,6 +191,9 @@ newtype OccEnv a = MkOccEnv (FastStringEnv (UniqFM NameSpace a))
 emptyOccEnv :: OccEnv a
 emptyOccEnv = MkOccEnv emptyFsEnv
 
+unitOccEnv :: OccName -> a -> OccEnv a
+unitOccEnv (OccName ns s) a = MkOccEnv $ unitFsEnv s (unitUFM ns a)
+
 extendOccEnv :: OccEnv a -> OccName -> a -> OccEnv a
 extendOccEnv (MkOccEnv as) (OccName ns s) a =
   MkOccEnv $ extendFsEnv_C plusUFM as s (unitUFM ns a)
@@ -262,3 +267,52 @@ setOccNameSpace sp (OccName _ occ) = OccName sp occ
 
 mkDataConWorkerOcc :: OccName -> OccName
 mkDataConWorkerOcc datacon_occ = setOccNameSpace varName datacon_occ
+
+{- *********************************************************************
+*                                                                      *
+            Tidying them up
+*                                                                      *
+********************************************************************* -}
+
+type TidyOccEnv = UniqFM FastString Int
+
+emptyTidyOccEnv :: TidyOccEnv
+emptyTidyOccEnv = emptyUFM
+
+initTidyOccEnv :: [OccName] -> TidyOccEnv
+initTidyOccEnv = foldl' add emptyUFM
+  where
+    add env (OccName _ fs) = addToUFM env fs 1
+
+delTidyOccEnvList :: TidyOccEnv -> [FastString] -> TidyOccEnv
+delTidyOccEnvList = delListFromUFM
+
+avoidClashesOccEnv :: TidyOccEnv -> [OccName] -> TidyOccEnv
+avoidClashesOccEnv env occs = go env emptyUFM occs
+  where
+    go env _ [] = env
+    go env seenOnce ((OccName _ fs) : occs)
+      | fs `elemUFM` env = go env seenOnce occs
+      | fs `elemUFM` seenOnce = go (addToUFM env fs 1) seenOnce occs
+      | otherwise = go env (addToUFM seenOnce fs ()) occs
+
+tidyOccName :: TidyOccEnv -> OccName -> (TidyOccEnv, OccName)
+tidyOccName env occ@(OccName occ_sp fs)
+  | not (fs `elemUFM` env)
+  = (addToUFM env fs 1, occ)
+  | otherwise
+  = case lookupUFM env base1 of
+      Nothing -> (addToUFM env base1 2, OccName occ_sp base1)
+      Just n -> find 1 n
+  where
+    base :: String
+    base = dropWhileEndLE isDigit (unpackFS fs)
+    base1 = mkFastString (base ++ "1")
+
+    find !k !n
+      = case elemUFM new_fs env of
+          True -> find (k+1 :: Int) (n+k)
+          False -> (new_env, OccName occ_sp new_fs)
+      where
+        new_fs = mkFastString (base ++ show n)
+        new_env = addToUFM (addToUFM env new_fs 1) base1 (n+1)
