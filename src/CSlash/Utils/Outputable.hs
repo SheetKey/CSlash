@@ -26,7 +26,7 @@ module CSlash.Utils.Outputable (
   isEmpty, nest,
   ptext,
   int, intWithCommas, integer, word64, word, float, double, rational, doublePrec,
-  parens, cparen, brackets, braces, quotes, quote, quoteIfPunsEnabled,
+  parens, cparen, brackets, braces, quotes, quote, -- quoteIfPunsEnabled,
   doubleQuotes, angleBrackets,
   semi, comma, colon, dcolon, space, equals, dot, vbar,
   arrow, lollipop, larrow, darrow, arrowt, larrowt, arrowtt, larrowtt,
@@ -303,29 +303,13 @@ data SDocContext = SDC
   , sdocPrintUnicodeSyntax          :: !Bool
   , sdocPrintCaseAsLet              :: !Bool
   , sdocPrintTypecheckerElaboration :: !Bool
-  , sdocPrintAxiomIncomps           :: !Bool
-  , sdocPrintExplicitKinds          :: !Bool
-  , sdocPrintExplicitCoercions      :: !Bool
-  , sdocPrintExplicitRuntimeReps    :: !Bool
-  , sdocPrintExplicitForalls        :: !Bool
-  , sdocPrintPotentialInstances     :: !Bool
-  , sdocPrintEqualityRelations      :: !Bool
   , sdocSuppressTicks               :: !Bool
   , sdocSuppressTypeSignatures      :: !Bool
-  , sdocSuppressTypeApplications    :: !Bool
   , sdocSuppressIdInfo              :: !Bool
-  , sdocSuppressCoercions           :: !Bool
-  , sdocSuppressCoercionTypes       :: !Bool
   , sdocSuppressUnfoldings          :: !Bool
-  , sdocSuppressVarKinds            :: !Bool
   , sdocSuppressUniques             :: !Bool
   , sdocSuppressModulePrefixes      :: !Bool
-  , sdocSuppressStgExts             :: !Bool
-  , sdocSuppressStgReps             :: !Bool
   , sdocErrorSpans                  :: !Bool
-  , sdocStarIsType                  :: !Bool
-  , sdocLinearTypes                 :: !Bool
-  , sdocListTuplePuns               :: !Bool
   , sdocPrintTypeAbbreviations      :: !Bool
   , sdocUnitIdForUser               :: !(FastString -> SDoc)
   }
@@ -351,29 +335,16 @@ defaultSDocContext = SDC
   , sdocPrintUnicodeSyntax          = False
   , sdocPrintCaseAsLet              = False
   , sdocPrintTypecheckerElaboration = False
-  , sdocPrintAxiomIncomps           = False
-  , sdocPrintExplicitKinds          = False
-  , sdocPrintExplicitCoercions      = False
-  , sdocPrintExplicitRuntimeReps    = False
-  , sdocPrintExplicitForalls        = False
-  , sdocPrintPotentialInstances     = False
-  , sdocPrintEqualityRelations      = False
   , sdocSuppressTicks               = False
   , sdocSuppressTypeSignatures      = False
-  , sdocSuppressTypeApplications    = False
   , sdocSuppressIdInfo              = False
-  , sdocSuppressCoercions           = False
-  , sdocSuppressCoercionTypes       = False
   , sdocSuppressUnfoldings          = False
-  , sdocSuppressVarKinds            = False
   , sdocSuppressUniques             = False
   , sdocSuppressModulePrefixes      = False
-  , sdocSuppressStgExts             = False
-  , sdocSuppressStgReps             = True
   , sdocErrorSpans                  = False
-  , sdocStarIsType                  = False
-  , sdocLinearTypes                 = False
-  , sdocListTuplePuns               = True
+  -- , sdocStarIsType                  = False
+  -- , sdocLinearTypes                 = False
+  -- , sdocListTuplePuns               = True
   , sdocPrintTypeAbbreviations      = True
   , sdocUnitIdForUser               = ftext
   }
@@ -382,11 +353,6 @@ traceSDocContext :: SDocContext
 traceSDocContext = defaultSDocContext
   { sdocPprDebug                    = unsafeHasPprDebug
   , sdocPrintTypecheckerElaboration = True
-  , sdocPrintExplicitKinds          = True
-  , sdocPrintExplicitCoercions      = True
-  , sdocPrintExplicitRuntimeReps    = True
-  , sdocPrintExplicitForalls        = True
-  , sdocPrintEqualityRelations      = True
   }
 
 withPprStyle :: PprStyle -> SDoc -> SDoc
@@ -600,11 +566,11 @@ cparen :: Bool -> SDoc -> SDoc
 {-# INLINE CONLIKE cparen #-}
 cparen b d = SDoc $ Pretty.maybeParens b . runSDoc d
 
-quoteIfPunsEnabled :: SDoc -> SDoc
-quoteIfPunsEnabled doc =
-  sdocOption sdocListTuplePuns $ \case
-    True -> quote doc
-    False -> doc
+-- quoteIfPunsEnabled :: SDoc -> SDoc
+-- quoteIfPunsEnabled doc =
+--   sdocOption sdocListTuplePuns $ \case
+--     True -> quote doc
+--     False -> doc
 
 quotes d = sdocOption sdocCanUseUnicode $ \case
    True  -> char '‘' <> d <> char '’'
