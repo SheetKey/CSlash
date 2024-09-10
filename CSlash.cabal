@@ -117,6 +117,7 @@ library
                     , CSlash.Driver.LlvmConfigCache
                     , CSlash.Driver.Main
                     , CSlash.Driver.Phases
+                    , CSlash.Driver.Session
 
                     , CSlash.Language.Syntax
                     , CSlash.Language.Syntax.Basic
