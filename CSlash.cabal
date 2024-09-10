@@ -119,6 +119,7 @@ library
                     , CSlash.Driver.Phases
                     , CSlash.Driver.Session
 
+                    , CSlash.Iface.Syntax
                     , CSlash.Language.Syntax
                     , CSlash.Language.Syntax.Basic
                     , CSlash.Language.Syntax.Binds
