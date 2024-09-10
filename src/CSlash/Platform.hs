@@ -2,7 +2,7 @@ module CSlash.Platform where
 
 -- import GHC.Read
 import CSlash.ByteOrder (ByteOrder(..))
--- import GHC.Platform.Constants
+import CSlash.Platform.Constants
 import CSlash.Platform.ArchOS
 import CSlash.Types.Basic (Alignment, alignmentOf)
 import CSlash.Utils.Panic.Plain
@@ -34,6 +34,7 @@ data Platform = Platform
 data PlatformWordSize
   = PW4
   | PW8
+  deriving (Eq, Ord)
 
 instance Show PlatformWordSize where
   show PW4 = "4"
