@@ -111,6 +111,7 @@ library
                     , CSlash.Driver.Env.KnotVars
                     , CSlash.Driver.Env.Types
                     , CSlash.Driver.Errors
+                    , CSlash.Driver.Errors.Ppr
                     , CSlash.Driver.Errors.Types
                     , CSlash.Driver.Flags
                     , CSlash.Driver.Main
