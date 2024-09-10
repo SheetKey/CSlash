@@ -116,6 +116,7 @@ library
                     , CSlash.Driver.Flags
                     , CSlash.Driver.LlvmConfigCache
                     , CSlash.Driver.Main
+                    , CSlash.Driver.Phases
 
                     , CSlash.Language.Syntax
                     , CSlash.Language.Syntax.Basic
