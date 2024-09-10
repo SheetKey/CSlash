@@ -225,6 +225,7 @@ library
                     , CSlash.Unit.Module.Imported
                     , CSlash.Unit.Module.Location
                     , CSlash.Unit.Module.ModDetails
+                    , CSlash.Unit.Module.ModIface
                     , CSlash.Unit.Module.ModSummary
                     , CSlash.Unit.Module.Warnings
                     , CSlash.Unit.Types
