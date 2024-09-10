@@ -108,6 +108,7 @@ library
                     , CSlash.Driver.Config.Parser
                     , CSlash.Driver.DynFlags
                     , CSlash.Driver.Env
+                    , CSlash.Driver.Env.KnotVars
                     , CSlash.Driver.Errors.Types
                     , CSlash.Driver.Flags
                     , CSlash.Driver.Main
