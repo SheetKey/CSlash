@@ -105,6 +105,7 @@ library
                     , CSlash.Driver.Backend
                     , CSlash.Driver.Backend.Internal
                     , CSlash.Driver.Config.Diagnostic
+                    , CSlash.Driver.Config.Parser
                     , CSlash.Driver.DynFlags
                     , CSlash.Driver.Errors.Types
                     , CSlash.Driver.Flags
