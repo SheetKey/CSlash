@@ -3,6 +3,8 @@
 
 module CSlash.Cs.Dump where
 
+import Prelude hiding ((<>))
+
 import CSlash.Cs
 
 import CSlash.Core.DataCon
@@ -40,7 +42,7 @@ showAstData bs ba a0 = blankLine $$ showAstData' a0
               `extQ` annotationModule
               `extQ` annotationAddEpAnn
               `extQ` annotationGrhsAnn
-              `extQ` annotationEpAnnHsCase
+              `extQ` annotationEpAnnCsCase
               `extQ` annotationAnnList
               `extQ` annotationEpAnnImportDecl
               `extQ` annotationAnnParen
@@ -72,7 +74,7 @@ showAstData bs ba a0 = blankLine $$ showAstData' a0
         string :: String -> SDoc
         string = text . normalize_newlines . show
 
-        fastString :: FastString -> SDo
+        fastString :: FastString -> SDoc
         fastString s = braces $
                        text "FastString:"
                        <+> text (normalize_newlines . show $ s)
@@ -87,7 +89,7 @@ showAstData bs ba a0 = blankLine $$ showAstData' a0
 
         list [] = brackets empty
         list [x] = brackets (showAstData' x)
-        list (x1 : x2 : xs) = (text "[" <> showAstData' y1) $$ go x2 xs
+        list (x1 : x2 : xs) = (text "[" <> showAstData' x1) $$ go x2 xs
           where
             go y [] = text "," <> showAstData' y <> text "]"
             go y1 (y2 : ys) = (text "," <> showAstData' y1) $$ go y2 ys
@@ -110,9 +112,9 @@ showAstData bs ba a0 = blankLine $$ showAstData' a0
 
         epaAnchor :: EpaLocation -> SDoc
         epaAnchor (EpaSpan s) = parens $ text "EpaSpan" <+> srcSpan s
-        epaAnchor (EpaDelta d cs) = case bs of
+        epaAnchor (EpaDelta d cs) = case ba of
           NoBlankEpAnnotations -> parens $ text "EpaDelta" <+> deltaPos d <+> showAstData' cs
-          BlannkEpAnnotations -> parens $ text "EpaDelta" <+> deltaPos d <+> text "blanked"
+          BlankEpAnnotations -> parens $ text "EpaDelta" <+> deltaPos d <+> text "blanked"
 
         deltaPos :: DeltaPos -> SDoc
         deltaPos (SameLine c) = parens $ text "SameLine" <+> ppr c
@@ -135,14 +137,19 @@ showAstData bs ba a0 = blankLine $$ showAstData' a0
         realSrcSpan :: RealSrcSpan -> SDoc
         realSrcSpan ss = case bs of
           BlankSrcSpan -> text "{ ss }"
-          NoBlankSrcSpan -> braces $ shar ' ' <> (ppr ss) <> char ' '
-          BlankSrcSpanFile -> braces $ char ' ' <> (pprUserSpan False ss) <> char ' '
+          NoBlankSrcSpan -> braces $ char ' ' <> (ppr ss) <> char ' '
+          BlankSrcSpanFile -> braces $ char ' ' <> (pprUserRealSpan False ss) <> char ' '
 
         annParen :: AnnParen -> SDoc
         annParen (AnnParen a o c) = case ba of
           BlankEpAnnotations -> parens $ text "blanked:" <+> text "AnnParen"
           NoBlankEpAnnotations -> parens $ text "AnnParen" $$
                                   vcat [ppr a, epaAnchor o, epaAnchor c]
+
+        addEpAnn :: AddEpAnn -> SDoc
+        addEpAnn (AddEpAnn a s) = case ba of
+          BlankEpAnnotations -> parens $ text "blanked:" <+> text "AddEpAnn"
+          NoBlankEpAnnotations -> parens $ text "AddEpAnn" <+> ppr a <+> epaAnchor s
 
         var :: Var -> SDoc
         var v = braces $ text "Var:" <+> ppr v
@@ -242,7 +249,7 @@ showAstData bs ba a0 = blankLine $$ showAstData' a0
         locatedAnn''
           :: forall a. (Data a, Typeable a)
           => SDoc -> EpAnn a -> SDoc
-        locatedAnnN tag ss = parens $
+        locatedAnn'' tag ss = parens $
           case cast ss of
             Just (ann :: EpAnn a) ->
               case ba of
