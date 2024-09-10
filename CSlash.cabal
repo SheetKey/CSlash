@@ -228,6 +228,7 @@ library
                     , CSlash.Unit.Module.ModIface
                     , CSlash.Unit.Module.ModSummary
                     , CSlash.Unit.Module.Warnings
+                    , CSlash.Unit.State
                     , CSlash.Unit.Types
 
                     , CSlash.Utils.Binary
