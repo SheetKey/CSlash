@@ -214,6 +214,7 @@ library
                     , CSlash.Unit.Database
                     , CSlash.Unit.Env
                     , CSlash.Unit.External
+                    , CSlash.Unit.Finder.Types
                     , CSlash.Unit.Home
                     , CSlash.Unit.Module
                     , CSlash.Unit.Module.Env
