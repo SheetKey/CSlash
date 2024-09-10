@@ -25,7 +25,7 @@ ppSourceStats
       , ("  ImpQual        ", imp_qual)
       , ("  ImpAs          ", imp_as)
       , ("  ImpAll         ", imp_all)
-      , ("  ImpPartial     ", imp_prtial)
+      , ("  ImpPartial     ", imp_partial)
       , ("  ImpHiding      ", imp_hiding)
       , ("FixityDecls      ", fixity_sigs)
       , ("TypeDecls        ", ty_bind_ds)
@@ -61,7 +61,7 @@ ppSourceStats
       = sum6 (map import_info imports)
 
     count_bind (FunBind {}) = (1, 0)
-    count_bind (TyFunBinds {}) = (0, 1)
+    count_bind (TyFunBind {}) = (0, 1)
     count_bind b = pprPanic "count_bind: Unhandled binder" (ppr b)
 
     count_sigs sigs = sum2 (map sig_info sigs)
