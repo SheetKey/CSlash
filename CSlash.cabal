@@ -219,6 +219,7 @@ library
                     , CSlash.Unit.Home.ModInfo
                     , CSlash.Unit.Info
                     , CSlash.Unit.Module
+                    , CSlash.Unit.Module.Deps
                     , CSlash.Unit.Module.Env
                     , CSlash.Unit.Module.Imported
                     , CSlash.Unit.Module.Location
