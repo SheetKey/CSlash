@@ -181,6 +181,7 @@ library
                     , CSlash.Types.Id.Info
                     , CSlash.Types.Literal
                     , CSlash.Types.Name
+                    , CSlash.Types.Name.Cache
                     , CSlash.Types.Name.Env
                     , CSlash.Types.Name.Occurrence
                     , CSlash.Types.Name.Reader
