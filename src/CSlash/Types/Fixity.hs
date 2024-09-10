@@ -53,6 +53,9 @@ maxPrecedence = 9
 minPrecedence :: Int
 minPrecedence = 0
 
+defaultFixity :: Fixity
+defaultFixity = Fixity maxPrecedence InfixL
+
 negateFixity :: Fixity
 negateFixity = Fixity 6 InfixL
 
