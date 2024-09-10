@@ -110,6 +110,7 @@ library
                     , CSlash.Driver.Env
                     , CSlash.Driver.Env.KnotVars
                     , CSlash.Driver.Env.Types
+                    , CSlash.Driver.Errors
                     , CSlash.Driver.Errors.Types
                     , CSlash.Driver.Flags
                     , CSlash.Driver.Main
