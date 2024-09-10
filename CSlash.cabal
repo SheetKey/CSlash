@@ -193,6 +193,7 @@ library
                     , CSlash.Types.SourceFile
                     , CSlash.Types.SourceText
                     , CSlash.Types.SrcLoc
+                    , CSlash.Types.Target
                     , CSlash.Types.Tickish
                     , CSlash.Types.TyThing
                     , CSlash.Types.Unique
