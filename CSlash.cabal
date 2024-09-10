@@ -221,6 +221,7 @@ library
                     , CSlash.Unit.Module
                     , CSlash.Unit.Module.Deps
                     , CSlash.Unit.Module.Env
+                    , CSlash.Unit.Module.Graph
                     , CSlash.Unit.Module.Imported
                     , CSlash.Unit.Module.Location
                     , CSlash.Unit.Module.ModSummary
