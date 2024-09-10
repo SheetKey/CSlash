@@ -274,7 +274,7 @@ csParse' mod_summary
                         { cpm_module = rdr_module
                         , cpm_src_files = srcs2
                         }
-              (warns, errs) <- getPsMessages pst
+                  (warns, errs) = getPsMessages pst
 
               logDiagnostics (CsPsMessage <$> warns)
               unless (isEmptyMessages errs) $ throwErrors (CsPsMessage <$> errs)
