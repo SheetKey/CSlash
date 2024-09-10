@@ -63,6 +63,17 @@ unsafeGetFreshLocalUnique (InScope set)
 
 {- *********************************************************************
 *                                                                      *
+                Tidying
+*                                                                      *
+********************************************************************* -}
+
+type TidyEnv = (TidyOccEnv, VarEnv Var)
+
+mkEmptyTidyEnv :: TidyOccEnv -> TidyEnv
+mkEmptyTidyEnv occ_env = (occ_env, emptyVarEnv)
+
+{- *********************************************************************
+*                                                                      *
    VarEnv
 *                                                                      *
 ********************************************************************* -}
