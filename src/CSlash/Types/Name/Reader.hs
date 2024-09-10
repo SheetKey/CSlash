@@ -127,6 +127,8 @@ instance Eq RdrName where
 
 type GlobalRdrEnv = GlobalRdrEnvX GREInfo
 
+type IfGlobalRdrEnv = GlobalRdrEnvX ()
+
 type GlobalRdrEnvX info = OccEnv [GlobalRdrEltX info]
 
 data GlobalRdrEltX info = GRE
