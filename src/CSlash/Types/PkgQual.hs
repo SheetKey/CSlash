@@ -30,4 +30,4 @@ instance Outputable PkgQual where
   ppr = \case
     NoPkgQual -> empty
     ThisPkg u -> doubleQuotes (ppr u)
-    OtherPkg u -> doubelQuotes (ppr u)
+    OtherPkg u -> doubleQuotes (ppr u)
