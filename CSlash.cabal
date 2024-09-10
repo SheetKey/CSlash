@@ -195,6 +195,7 @@ library
                     , CSlash.Types.SrcLoc
                     , CSlash.Types.Target
                     , CSlash.Types.Tickish
+                    , CSlash.Types.TypeEnv
                     , CSlash.Types.TyThing
                     , CSlash.Types.Unique
                     , CSlash.Types.Unique.DFM
