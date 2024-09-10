@@ -217,6 +217,7 @@ library
                     , CSlash.Unit.Finder.Types
                     , CSlash.Unit.Home
                     , CSlash.Unit.Home.ModInfo
+                    , CSlash.Unit.Info
                     , CSlash.Unit.Module
                     , CSlash.Unit.Module.Env
                     , CSlash.Unit.Module.Imported
