@@ -264,6 +264,7 @@ library
                     , deepseq
                     , bytestring
                     , exceptions
+                    , transformers
 
     build-tool-depends:   alex:alex 
                         , happy:happy
