@@ -363,16 +363,15 @@ pprName name@(Name {n_sort = sort, n_uniq = uniq, n_occ = occ})
     z_occ = ztext $ zEncodeFS $ occNameMangledFS occ
     normalDoc sty =
       getPprDebug $ \ debug ->
-      sdocOption sdocListTuplePuns $ \ listTuplePuns ->
-        handlePuns listTuplePuns (namePun_maybe name) $
-        case sort of
-          WiredIn mod _ builtin -> pprExternal debug sty uniq mod occ True builtin
-          External mod -> pprExternal debug sty uniq mod occ False UserSyntax
-          System -> pprSystem debug sty uniq occ
-          Internal -> pprInternal debug sty uniq occ
-    handlePuns :: Bool -> Maybe FastString -> SDoc -> SDoc
-    handlePuns True (Just pun) _ = ftext pun
-    handlePuns _ _ r = r
+      handlePuns (namePun_maybe name) $
+      case sort of
+        WiredIn mod _ builtin -> pprExternal debug sty uniq mod occ True builtin
+        External mod -> pprExternal debug sty uniq mod occ False UserSyntax
+        System -> pprSystem debug sty uniq occ
+        Internal -> pprInternal debug sty uniq occ
+    handlePuns :: Maybe FastString -> SDoc -> SDoc
+    handlePuns (Just pun) _ = ftext pun
+    handlePuns _ r = r
 {-# SPECIALIZE pprName :: Name -> SDoc #-}
 {-# SPECIALIZE pprName :: Name -> HLine #-}
 
