@@ -92,7 +92,7 @@ data ExportFlag
   | Exported
 
 instance Outputable Var where
-  ppr var = sdocOption sdocSuppressVarKinds $ \ supp_var_kinds ->
+  ppr var = 
     getPprDebug $ \ debug ->
     getPprStyle $ \ sty ->
     let ppr_var = case var of
@@ -105,7 +105,7 @@ instance Outputable Var where
             | debug
             -> brackets (ppr_id_scope s <> pprIdDetails d)
           _ -> empty
-    in if | debug && (not supp_var_kinds)
+    in if | debug
             -> parens (ppr (varName var) -- <+> ppr (varMultMaybe var)
                                          <+> ppr_var <+>
                        colon <+> ppr (varKindMaybe var))
