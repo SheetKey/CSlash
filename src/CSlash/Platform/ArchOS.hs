@@ -14,3 +14,4 @@ data Arch
 data OS
   = OSUnknown
   | OSLinux
+  deriving (Show, Eq, Ord)
