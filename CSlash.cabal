@@ -156,6 +156,7 @@ library
 
                     , CSlash.Settings
                     , CSlash.Settings.Constants
+                    , CSlash.Settings.Utils
 
                     , CSlash.Show
 
