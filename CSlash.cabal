@@ -114,6 +114,7 @@ library
                     , CSlash.Driver.Errors.Ppr
                     , CSlash.Driver.Errors.Types
                     , CSlash.Driver.Flags
+                    , CSlash.Driver.LlvmConfigCache
                     , CSlash.Driver.Main
 
                     , CSlash.Language.Syntax
