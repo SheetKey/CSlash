@@ -137,6 +137,8 @@ library
 
                     , CSlash.Linker.Types
 
+                    , CSlash.Llvm.Config
+
                     , CSlash.Parser
                     , CSlash.Parser.Annotation
                     , CSlash.Parser.CharClass
