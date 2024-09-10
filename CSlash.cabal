@@ -166,6 +166,7 @@ library
                     , CSlash.Tc.Utils.TcType
 
                     , CSlash.Types
+                    , CSlash.Types.Avail
                     , CSlash.Types.Basic
                     , CSlash.Types.Error
                     , CSlash.Types.Fixity
