@@ -170,6 +170,7 @@ library
                     , CSlash.Types.Basic
                     , CSlash.Types.CompleteMatch
                     , CSlash.Types.Error
+                    , CSlash.Types.Error.Codes
                     , CSlash.Types.Fixity
                     , CSlash.Types.Fixity.Env
                     , CSlash.Types.GREInfo
