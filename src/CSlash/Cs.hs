@@ -18,6 +18,7 @@ module CSlash.Cs
   , module CSlash.Cs.ImpExp
 
   , module CSlash.Parser.Annotation
+  , Fixity
 
   , CsModule(..), AnnsModule(..)
   , CsParsedModule(..), XModulePs(..)
@@ -42,7 +43,9 @@ import CSlash.Utils.Outputable
 import CSlash.Types.SrcLoc
 import CSlash.Parser.Annotation
 
-import Data.Data
+import CSlash.Types.Fixity (Fixity)
+
+import Data.Data hiding (Fixity)
 
 data XModulePs = XModulePs
   { csmodAnn :: EpAnn AnnsModule
