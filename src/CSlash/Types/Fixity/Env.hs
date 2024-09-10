@@ -13,7 +13,7 @@ data FixItem = FixItem OccName Fixity
 instance Outputable FixItem where
   ppr (FixItem occ fix) = ppr fix <+> ppr occ
 
-emptyFixityEnv :: FixitEnv
+emptyFixityEnv :: FixityEnv
 emptyFixityEnv = emptyNameEnv
 
 lookupFixity :: FixityEnv -> Name -> Fixity
