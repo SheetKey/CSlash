@@ -39,6 +39,8 @@ moduleUnitId = toUnitId . moduleUnit
 
 type InstalledModule = GenModule UnitId
 
+type InstantiatedModule = GenModule InstantiatedUnit
+
 mkModule :: u -> ModuleName -> GenModule u
 mkModule = Module
 
@@ -50,6 +52,9 @@ instance Outputable Module where
 
 instance Outputable InstalledModule where
   ppr (Module p n) = ppr p <> char ':' <> pprModuleName n
+
+instance Outputable InstantiatedUnit where
+  ppr = pprInstantiatedUnit
 
 pprInstantiatedUnit :: InstantiatedUnit -> SDoc
 pprInstantiatedUnit uid =
