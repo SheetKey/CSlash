@@ -213,6 +213,7 @@ library
                     , CSlash.Unit
                     , CSlash.Unit.Database
                     , CSlash.Unit.Env
+                    , CSlash.Unit.External
                     , CSlash.Unit.Home
                     , CSlash.Unit.Module
                     , CSlash.Unit.Module.Env
