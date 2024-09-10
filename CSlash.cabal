@@ -203,6 +203,7 @@ library
                     , CSlash.Types.Unique.FM
                     , CSlash.Types.Unique.Map
                     , CSlash.Types.Unique.Set
+                    , CSlash.Types.Unique.Supply
                     , CSlash.Types.Var
                     , CSlash.Types.Var.Env
                     , CSlash.Types.Var.Set
