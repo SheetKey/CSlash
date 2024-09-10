@@ -3,6 +3,7 @@
 module CSlash.Unit.Module
   ( module CSlash.Unit.Types
   , module CSlash.Language.Syntax.Module.Name
+  , module CSlash.Unit.Module.Location
   , module CSlash.Unit.Module.Env
 
   , isHoleModule
@@ -12,6 +13,7 @@ module CSlash.Unit.Module
 
 import CSlash.Unit.Types
 import CSlash.Language.Syntax.Module.Name
+import CSlash.Unit.Module.Location
 import CSlash.Unit.Module.Env
 
 moduleStableString :: Module -> String
