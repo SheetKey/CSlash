@@ -189,6 +189,7 @@ library
                     , CSlash.Types.PkgQual
                     , CSlash.Types.ProfAuto
                     , CSlash.Types.RepType
+                    , CSlash.Types.SourceError
                     , CSlash.Types.SourceFile
                     , CSlash.Types.SourceText
                     , CSlash.Types.SrcLoc
