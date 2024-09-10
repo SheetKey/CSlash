@@ -23,7 +23,7 @@ import CSlash.Types.ProfAuto
 import CSlash.Types.SrcLoc
 import CSlash.Unit.Module
 import CSlash.Unit.Module.Warnings
--- import GHC.Utils.CliOption
+import CSlash.Utils.CliOption
 -- import GHC.SysTools.Terminal ( stderrSupportsAnsiColors )
 -- import GHC.UniqueSubdir (uniqueSubdir)
 import CSlash.Utils.Outputable
@@ -31,16 +31,16 @@ import CSlash.Utils.Panic
 import CSlash.Utils.TmpFs
 
 -- import qualified GHC.Types.FieldLabel as FieldLabel
-import qualified CSlash.Utils.Ppr.Colour as Col
+import qualified CSlash.Utils.Ppr.Color as Col
 import qualified CSlash.Data.EnumSet as EnumSet
 
 import CSlash.Core.Opt.CallerCC.Types
 
 import Control.Monad (msum, (<=<))
-import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Except (ExceptT)
-import Control.Monad.Trans.Reader (ReaderT)
-import Control.Monad.Trans.Writer (WriterT)
+-- import Control.Monad.Trans.Class (lift)
+-- import Control.Monad.Trans.Except (ExceptT)
+-- import Control.Monad.Trans.Reader (ReaderT)
+-- import Control.Monad.Trans.Writer (WriterT)
 import Data.Word
 import System.IO
 import System.IO.Error (catchIOError)
@@ -61,7 +61,7 @@ data DynFlags = DynFlags
   , cslLink :: CslLink
   , backend :: !Backend
 
-  , cslNameVersion :: {-# UNPACK #-} !CslNameVersion
+  , csNameVersion :: {-# UNPACK #-} !CsNameVersion
   , fileSettings :: {-# UNPACK #-} !FileSettings
   , targetPlatform :: Platform
   , toolSettings :: {-# UNPACK #-} !ToolSettings
@@ -208,6 +208,12 @@ data DynFlags = DynFlags
   , iniqueIncrement :: Int
   }
 
+class HasDynFlags m where
+  getDynFlags :: m DynFlags
+
+class ContainsDynFlags t where
+  extractDynFlags :: t -> DynFlags
+
 newtype FlushOut = FlushOut (IO ())
 
 defaultFlushOut :: FlushOut
@@ -238,6 +244,32 @@ data CslLink
   | LinkMergedObj
   deriving (Eq, Show)
 
+data PackageArg
+  = PackageArg String
+  | UnitIdArg Unit
+  deriving (Eq, Show)
+
+instance Outputable PackageArg where
+  ppr (PackageArg pn) = text "package" <+> text pn
+  ppr (UnitIdArg uid) = text "unit" <+> ppr uid
+
+data ModRenaming = ModRenaming
+  { modRenamingWithImplicit :: Bool
+  , modRenamings :: [(ModuleName, ModuleName)]
+  }
+  deriving (Eq)
+
+instance Outputable ModRenaming where
+  ppr (ModRenaming b rns) = ppr b <+> parens (ppr rns)
+
+newtype IgnorePackageFlag = IgnorePackage String
+  deriving (Eq)
+
+data PackageFlag
+  = ExposePackage String PackageArg ModRenaming
+  | HidePackage String
+  deriving (Eq)
+
 data PackageDBFlag
   = PackageDB PkgDbRef
   | NoUserPackageDB
@@ -249,6 +281,14 @@ data DynLibLoader
   = Deployable
   | SystemDependent
   deriving Eq
+
+data RtsOptsEnabled
+  = RtsOptsNone
+  | RtsOptsIgnore
+  | RtsOptsIgnoreAll
+  | RtsOptsSaftOnly
+  | RtsOptsAll
+  deriving (Show)
 
 data PkgDbRef
   = GlobalPkgDb
@@ -263,5 +303,43 @@ data IncludeSpecs = IncludeSpecs
   }
   deriving Show
 
-wopt :: WarningFlag -> DynFlag -> Bool
+dopt :: DumpFlag -> DynFlags -> Bool
+dopt = getDumpFlagFrom verbosity dumpFlags
+
+gopt :: GeneralFlag -> DynFlags -> Bool
+gopt Opt_PIC dflags
+  | dynamicNow dflags = True
+gopt Opt_ExternalDynamicRefs dflags
+  | dynamicNow dflags = True
+gopt Opt_SplitSections dflags
+  | dynamicNow dflags = False
+gopt f dflags = f `EnumSet.member` generalFlags dflags
+
+wopt :: WarningFlag -> DynFlags -> Bool
 wopt f dflags = f `EnumSet.member` warningFlags dflags
+
+initSDocContext :: DynFlags -> PprStyle -> SDocContext
+initSDocContext dflags style = SDC
+  { sdocStyle                       = style
+  , sdocColScheme                   = colScheme dflags
+  , sdocLastColour                  = Col.colReset
+  , sdocShouldUseColor              = overrideWith (canUseColor dflags) (useColor dflags)
+  , sdocDefaultDepth                = pprUserLength dflags
+  , sdocLineLength                  = pprCols dflags
+  , sdocCanUseUnicode               = useUnicode dflags
+  , sdocPrintErrIndexLinks          = overrideWith (canUseErrorLinks dflags) (useErrorLinks dflags)
+  , sdocHexWordLiterals             = gopt Opt_HexWordLiterals dflags
+  , sdocPprDebug                    = dopt Opt_D_ppr_debug dflags
+  , sdocPrintUnicodeSyntax          = gopt Opt_PrintUnicodeSyntax dflags
+  , sdocPrintCaseAsLet              = gopt Opt_PprCaseAsLet dflags
+  , sdocPrintTypecheckerElaboration = gopt Opt_PrintTypecheckerElaboration dflags
+  , sdocSuppressTicks               = gopt Opt_SuppressTicks dflags
+  , sdocSuppressTypeSignatures      = gopt Opt_SuppressTypeSignatures dflags
+  , sdocSuppressIdInfo              = gopt Opt_SuppressIdInfo dflags
+  , sdocSuppressUnfoldings          = gopt Opt_SuppressUnfoldings dflags
+  , sdocSuppressUniques             = gopt Opt_SuppressUniques dflags
+  , sdocSuppressModulePrefixes      = gopt Opt_SuppressModulePrefixes dflags
+  , sdocErrorSpans                  = gopt Opt_ErrorSpans dflags
+  , sdocPrintTypeAbbreviations      = True
+  , sdocUnitIdForUser               = ftext
+  }
