@@ -9,9 +9,9 @@ data FileSettings = FileSettings
   , fileSettings_globalPackageDatabase :: FilePath
   }
 
-data CslNameVersion = CslNameVersion
-  { cslNameVersion_programName :: String
-  , cslNameVersion_projectVersion :: String
+data CsNameVersion = CsNameVersion
+  { csNameVersion_programName :: String
+  , csNameVersion_projectVersion :: String
   }
 
 data ToolSettings = ToolSettings
