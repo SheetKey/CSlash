@@ -1,5 +1,7 @@
 module CSlash.Core.Opt.CallerCC.Types where
 
+import Prelude hiding ((<>))
+
 import Data.Word (Word8)
 import Data.Maybe
 
@@ -16,7 +18,7 @@ import Data.Char
 
 import CSlash.Language.Syntax.Module.Name
 
-data NamePatterrn
+data NamePattern
   = PChar Char NamePattern
   | PWildcard NamePattern
   | PEnd
