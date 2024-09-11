@@ -25,6 +25,9 @@ data HomeModLinkable = HomeModLinkable
 
 type HomePackageTable = DModuleNameEnv HomeModInfo
 
+emptyHomePackageTable :: HomePackageTabel
+emptyHomePackageTable = emptyUDFM
+
 pprHPT :: HomePackageTable -> SDoc
 pprHPT hpt = pprUDFM hpt $ \hms ->
   vcat [ ppr (mi_module (hm_iface hm))
