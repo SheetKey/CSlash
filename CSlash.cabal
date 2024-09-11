@@ -119,6 +119,8 @@ library
                     , CSlash.Driver.Phases
                     , CSlash.Driver.Session
 
+                    , CSlash.HandleEncoding
+                    
                     , CSlash.Iface.Syntax
                     , CSlash.Iface.Type
 
