@@ -214,6 +214,8 @@ class HasDynFlags m where
 class ContainsDynFlags t where
   extractDynFlags :: t -> DynFlags
 
+type FatalMessager = String -> IO ()
+
 newtype FlushOut = FlushOut (IO ())
 
 defaultFlushOut :: FlushOut

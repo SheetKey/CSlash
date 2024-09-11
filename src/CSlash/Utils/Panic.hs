@@ -14,6 +14,7 @@ import CSlash.Utils.Constants
 
 import CSlash.Utils.Exception as Exception
 
+import qualified Control.Monad.Catch as MC
 import Data.Typeable ( cast )
 
 data CsException
@@ -71,6 +72,9 @@ throwCsException = Exception.throw
 
 throwCsExceptionIO :: CsException -> IO a
 throwCsExceptionIO = Exception.throwIO
+
+handleCsException :: ExceptionMonad m => (CsException -> m a) -> m a -> m a
+handleCsException = MC.handle
 
 pprPanic :: HasCallStack => String -> SDoc -> a
 pprPanic s doc = panicDoc s (doc $$ callStackDoc)

@@ -2,6 +2,7 @@ module CSlash.Driver.Session
   ( DumpFlag(..)
   , GeneralFlag(..)
   , WarningFlag(..)
+  , FatalMessager, FlushOut(..)
   , dopt
   , gopt
   , wopt
