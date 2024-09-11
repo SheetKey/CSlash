@@ -245,6 +245,7 @@ library
                     , CSlash.Utils.Lexeme
                     , CSlash.Utils.Logger
                     , CSlash.Utils.Misc
+                    , CSlash.Utils.Monad
                     , CSlash.Utils.Outputable
                     , CSlash.Utils.Panic
                     , CSlash.Utils.Panic.Plain
