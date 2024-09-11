@@ -96,3 +96,13 @@ data UnusableUnitReason
   | CyclicDependencies [UnitId]
   | IgnoredDependencies [UnitId]
   | ShadowedDependencies [UnitId]
+
+-- -----------------------------------------------------------------------------
+-- Displaying packages
+
+pprUnits :: UnitState -> SDoc
+pprUnit = pprUnitsWith pprUnitInfo
+
+pprUnitsWith :: (UnitInfo -> SDoc) -> UnitState -> SDoc
+pprUnitsWith pprIPI pkgstate =
+  vcat (intersperse (text "---") (map pprIPI (listUnitInfo pkgstate)))

@@ -1,3 +1,5 @@
+{-# LANGUAGE RecordWildCards #-}
+
 module CSlash.Unit.Info
   ( GenericUnitInfo(..)
   , GenUnitInfo
@@ -51,3 +53,24 @@ instance Outputable PackageId where
 
 instance Outputable PackageName where
   ppr (PackageName str) = ftext str
+
+pprUnitInfo :: UnitInfo -> SDoc
+pprUnitInfo GenericUnitInfo {..} =
+  vcat [ field "name" (ppr unitPackageName)
+       , field "version" (text (showVersion unitPackageVersion))
+       , field "id" (ppr unitId)
+       , field "exposed" (ppr unitIsExposed)
+       , field "exposed-modules" (ppr unitExposedModules)
+       , field "hidden-modules" (fsep (map ppr unitHiddenModules))
+       , field "import-dirs" (fsep (map (text . ST.unpack) unitImportDirs))
+       , field "library-dirs" (fsep (map (text . ST.unpack) unitLibraryDirs))
+       , field "dynamic-library-dirs" (fsep (map (text . ST.unpack) unitLibraryDynDirs))
+       , field "hs-libraries" (fsep (map (text . ST.unpack) unitLibraries))
+       , field "extra-libraries" (fsep (map (text . ST.unpack) unitExtDepLibsSys))
+       , field "include-dirs" (fsep (map (text . ST.unpack) unitIncludeDirs))
+       , field "includes" (fsep (map (text . ST.unpack) unitIncludes))
+       , field "depends" (fsep (map ppr  unitDepends))
+       , field "ld-options" (fsep (map (text . ST.unpack) unitLinkerOptions))
+       ]
+  where
+    field name body = text name <> colon <+> nest 4 body
