@@ -39,7 +39,7 @@ import CSlash.Data.Maybe
 
 import CSlash.Utils.Exception as Ex
 import CSlash.Utils.Outputable
--- import GHC.Utils.Monad
+import CSlash.Utils.Monad
 import CSlash.Utils.Panic
 import CSlash.Utils.Misc
 import CSlash.Utils.Logger

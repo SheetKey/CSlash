@@ -3,7 +3,7 @@
 module CSlash.Types.SourceError where
 
 import CSlash.Types.Error
--- import GHC.Utils.Monad
+import CSlash.Utils.Monad
 import CSlash.Utils.Panic
 import CSlash.Utils.Exception
 import CSlash.Utils.Error (pprMsgEnvelopeBagWithLocDefault)
@@ -13,7 +13,6 @@ import CSlash.Driver.Errors.Ppr () -- instance Diagnostic CsMessage
 import CSlash.Driver.Errors.Types
 
 import Control.Monad.Catch as MC (MonadCatch, catch)
-import Control.Monad.IO.Class
 
 mkSrcErr :: Messages CsMessage -> SourceError
 mkSrcErr = SourceError
