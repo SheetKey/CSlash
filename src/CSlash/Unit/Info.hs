@@ -8,7 +8,10 @@ module CSlash.Unit.Info
   , PackageId(..)
   , PackageName(..)
   , Version(..)
+  , pprUnitInfo
   ) where
+
+import Prelude hiding ((<>))
 
 import CSlash.Platform.Ways
 
@@ -19,7 +22,7 @@ import CSlash.Utils.Panic
 import CSlash.Types.Unique
 
 import CSlash.Data.FastString
--- import qualified GHC.Data.ShortText as ST
+import qualified GHC.Data.ShortText as ST
 
 import CSlash.Unit.Module as Module
 -- import CSlash.Unit.Ppr

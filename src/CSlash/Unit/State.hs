@@ -3,6 +3,8 @@ module CSlash.Unit.State
   , module CSlash.Unit.State
   ) where
 
+import Prelude hiding ((<>))
+
 import CSlash.Driver.DynFlags
 
 import CSlash.Platform
@@ -90,6 +92,9 @@ data UnitDatabase unit = UnitDatbase
 
 type UnitInfoMap = UniqMap UnitId UnitInfo
 
+listUnitInfo :: UnitState -> [UnitInfo]
+listUnitInfo state = nonDetEltsUniqMap (unitInfoMap state)
+
 data UnusableUnitReason
   = IgnoredWithFlag
   | BrokenDependencies [UnitId]
@@ -101,8 +106,15 @@ data UnusableUnitReason
 -- Displaying packages
 
 pprUnits :: UnitState -> SDoc
-pprUnit = pprUnitsWith pprUnitInfo
+pprUnits = pprUnitsWith pprUnitInfo
 
 pprUnitsWith :: (UnitInfo -> SDoc) -> UnitState -> SDoc
 pprUnitsWith pprIPI pkgstate =
   vcat (intersperse (text "---") (map pprIPI (listUnitInfo pkgstate)))
+
+pprUnitsSimple :: UnitState -> SDoc
+pprUnitsSimple = pprUnitsWith pprIPI
+  where
+    pprIPI ipi = let i = unitIdFS (unitId ipi)
+                     e = if unitIsExposed ipi then text "E" else text " "
+                 in e <> text "  " <> ftext i

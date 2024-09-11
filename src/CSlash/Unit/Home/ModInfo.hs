@@ -25,7 +25,7 @@ data HomeModLinkable = HomeModLinkable
 
 type HomePackageTable = DModuleNameEnv HomeModInfo
 
-emptyHomePackageTable :: HomePackageTabel
+emptyHomePackageTable :: HomePackageTable
 emptyHomePackageTable = emptyUDFM
 
 pprHPT :: HomePackageTable -> SDoc

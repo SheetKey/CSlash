@@ -1,3 +1,14 @@
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DeriveTraversable #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE TupleSections #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module CSlash.Unit.Database 
@@ -87,7 +98,6 @@ mapGenericUnitInfo fuid fsrcpkg fsrcpkgname fmodname fmod g@(GenericUnitInfo {..
      , unitInstantiations  = fmap (bimap fmodname fmod) unitInstantiations
      , unitPackageId       = fsrcpkg unitPackageId
      , unitPackageName     = fsrcpkgname unitPackageName
-     , unitComponentName   = fmap fsrcpkgname unitComponentName
      , unitDepends         = fmap fuid unitDepends
      , unitAbiDepends      = fmap (first fuid) unitAbiDepends
      , unitExposedModules  = fmap (bimap fmodname (fmap fmod)) unitExposedModules
@@ -179,7 +189,7 @@ readPackageDbForCsPkg file mode =
 
 writePackageDb :: Binary pkgs => FilePath -> [DbUnitInfo] -> pkgs -> IO ()
 writePackageDb file csPkgs csPkgPart = do
-  writeFileAtomic file (runPut putDbForcsPkg)
+  writeFileAtomic file (runPut putDbForCsPkg)
   return ()
   where
     putDbForCsPkg = do
