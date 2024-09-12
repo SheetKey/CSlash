@@ -25,6 +25,11 @@ instance Outputable Phase where
 
 startPhase :: String -> Phase
 startPhase "csl" = Cs CsSrcFile
+startPhase _ = StopLn
+
+phaseInputExt :: Phase -> String
+phaseInputExt (Cs _) = ""
+phaseInputExt StopLn = "o"
 
 csish_src_suffixes :: [String]
 csish_src_suffixes = csish_user_src_suffixes
