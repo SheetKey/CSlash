@@ -93,7 +93,7 @@ logDiagnostics warns = do
       !print_config = initPrintConfig dflags
   liftIO $ printOrThrowDiagnostics logger print_config diag_opts warns
 
-newtype Csl a = Csl { unCs :: Session -> IO a }
+newtype Csl a = Csl { unCsl :: Session -> IO a }
   deriving stock (Functor)
   deriving (Applicative, Monad, MonadFail, MonadFix, MonadThrow, MonadCatch, MonadMask, MonadIO)
   via (ReaderT Session IO)
@@ -111,7 +111,7 @@ instance CslMonad Csl where
   setSession s' = Csl $ \(Session r) -> writeIORef r s'
 
 reflectCs :: Csl a -> Session -> IO a
-reflectCs m = unCs m
+reflectCs m = unCsl m
 
 reifyCs :: (Session -> IO a) -> Csl a
 reifyCs act = Csl $ act
