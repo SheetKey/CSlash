@@ -276,6 +276,7 @@ library
                     , transformers
                     , binary
                     , stm
+                    , unix
 
     build-tool-depends:   alex:alex 
                         , happy:happy
