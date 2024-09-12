@@ -39,6 +39,8 @@ moduleUnitId = toUnitId . moduleUnit
 
 type InstalledModule = GenModule UnitId
 
+type HomeUnitModule = GenModule UnitId
+
 type InstantiatedModule = GenModule InstantiatedUnit
 
 mkModule :: u -> ModuleName -> GenModule u
