@@ -8,14 +8,20 @@ module CSlash.Utils.Panic
 import CSlash.Stack
 
 import CSlash.Utils.Outputable
-import CSlash.Utils.Misc
 import CSlash.Utils.Panic.Plain
 import CSlash.Utils.Constants
 
 import CSlash.Utils.Exception as Exception
 
+import Control.Monad.IO.Class
 import qualified Control.Monad.Catch as MC
+import Control.Concurrent
 import Data.Typeable ( cast )
+import System.IO.Unsafe
+
+import System.Posix.Signals as S
+
+import System.Mem.Weak (deRefWeak)
 
 data CsException
   = Signal Int
@@ -81,6 +87,52 @@ pprPanic s doc = panicDoc s (doc $$ callStackDoc)
 
 panicDoc :: String -> SDoc -> a
 panicDoc x doc = throwCsException (PprPanic x doc)
+
+{-# NOINLINE signalHandlersRefCount #-}
+signalHandlersRefCount :: MVar (Word, Maybe (S.Handler, S.Handler, S.Handler, S.Handler))
+signalHandlersRefCount = unsafePerformIO $ newMVar (0, Nothing)
+
+withSignalHandlers :: ExceptionMonad m => m a -> m a
+withSignalHandlers act = do
+  main_thread <- liftIO myThreadId
+  wtid <- liftIO (mkWeakThreadId main_thread)
+
+  let interrupt = do
+        r <- deRefWeak wtid
+        case r of
+          Nothing -> return ()
+          Just t -> throwTo t UserInterrupt
+
+  let installHandlers = do
+        let installHandler' a b = installHandler a b Nothing
+        hdlQUIT <- installHandler' sigQUIT (Catch interrupt)
+        hdlINT <- installHandler' sigINT (Catch interrupt)
+        let fatal_signal n = throwTo main_thread (Signal (fromIntegral n))
+        hdlHUP <- installHandler' sigHUP (Catch (fatal_signal sigHUP))
+        hdlTERM <- installHandler' sigTERM (Catch (fatal_signal sigTERM))
+        return (hdlQUIT, hdlINT, hdlHUP, hdlTERM)
+
+  let uninstallHandlers (hdlQUIT, hdlINT, hdlHUP, hdlTERM) = do
+        _ <- installHandler sigQUIT hdlQUIT Nothing
+        _ <- installHandler sigINT hdlINT Nothing
+        _ <- installHandler sigHUP hdlHUP Nothing
+        _ <- installHandler sigTERM hdlTERM Nothing
+        return ()
+
+  let mayInstallHandlers = liftIO $ modifyMVar_ signalHandlersRefCount $ \case
+        (0, Nothing) -> do
+          hdls <- installHandlers
+          return (1, Just hdls)
+        (c, oldHandlers) -> return (c+1, oldHandlers)
+
+  let mayUninstallHandlers = liftIO $ modifyMVar_ signalHandlersRefCount $ \case
+        (1, Just hdls) -> do
+          _ <- uninstallHandlers hdls
+          return (0, Nothing)
+        (c, oldHandlers) -> return (c-1, oldHandlers)
+
+  mayInstallHandlers
+  act `MC.finally` mayUninstallHandlers
 
 callStackDoc :: HasCallStack => SDoc
 callStackDoc = prettyCallStackDoc callStack
