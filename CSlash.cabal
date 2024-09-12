@@ -120,6 +120,7 @@ library
                     , CSlash.Driver.Flags
                     , CSlash.Driver.LlvmConfigCache
                     , CSlash.Driver.Main
+                    , CSlash.Driver.Monad
                     , CSlash.Driver.Phases
                     , CSlash.Driver.Session
 
