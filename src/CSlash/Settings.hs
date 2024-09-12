@@ -1,6 +1,17 @@
 module CSlash.Settings where
 
+import CSlash.Utils.CliOption
 import CSlash.Utils.Fingerprint
+import CSlash.Platform
+
+data Settings = Settings
+  { sCsNameVersion :: {-# UNPACK #-} !CsNameVersion
+  , sFileSettings :: {-# UNPACK #-} !FileSettings
+  , sTargetPlatform :: Platform
+  , sToolSettings :: {-# UNPACK #-} !ToolSettings
+  , sPlatformMisc :: {-# UNPACK #-} !PlatformMisc
+  , sRawSettings :: [(String, String)]
+  }
 
 data FileSettings = FileSettings
   { fileSettings_cslUsagePath :: FilePath
