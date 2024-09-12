@@ -1,5 +1,7 @@
 module CSlash.Utils.TmpFs where
 
+import Prelude hiding ((<>))
+
 import CSlash.Utils.Error
 import CSlash.Utils.Outputable
 import CSlash.Utils.Logger
@@ -25,8 +27,69 @@ data TmpFs = TmpFs
   }
 
 data PathsToClean = PathsToClean
-  { ptcCsSeccion :: !(Set FilePath)
+  { ptcCsSession :: !(Set FilePath)
   , ptcCurrentModule :: !(Set FilePath)
   }
 
-data TempDir = TempDir FilePath
+newtype TempDir = TempDir FilePath
+
+emptyPathsToClean :: PathsToClean
+emptyPathsToClean = PathsToClean Set.empty Set.empty
+
+cleanTempDirs :: Logger -> TmpFs -> IO ()
+cleanTempDirs logger tmpfs = mask_ $ do
+  let ref = tmp_dirs_to_clean tmpfs
+  ds <- atomicModifyIORef' ref $ \ds -> (Map.empty, ds)
+  removeTmpDirs logger (Map.elems ds)
+
+cleanTempFiles :: Logger -> TmpFs -> IO ()
+cleanTempFiles logger tmpfs = mask_ $ do
+  removeWith (removeTmpFiles logger) (tmp_files_to_clean tmpfs)
+  removeWith (removeTmpSubdirs logger) (tmp_subdirs_to_clean tmpfs)
+  where
+    removeWith remove ref = do
+      to_delete <- atomicModifyIORef' ref $
+        \PathsToClean { ptcCurrentModule = cm_paths
+                      , ptcCsSession = cs_paths
+                      } -> ( emptyPathsToClean
+                           , Set.toList cm_paths ++ Set.toList cs_paths)
+      remove to_delete
+
+removeTmpDirs :: Logger -> [FilePath] -> IO ()
+removeTmpDirs logger ds
+  = traceCmd logger "Deleting temp dirs"
+             ("Deleting: " ++ unwords ds)
+             (mapM_ (removeWith logger removeDirectory) ds)
+
+removeTmpFiles :: Logger -> [FilePath] -> IO ()
+removeTmpFiles logger fs
+  = warnNon $
+    traceCmd logger "Deleting temp files"
+             ("Deleting: " ++ unwords deletees)
+             (mapM_ (removeWith logger removeFile) deletees)
+
+  where
+    warnNon act
+      | null non_deletees = act
+      | otherwise = do
+          putMsg logger (text "WARNING - NOT deleting source files:"
+                         <+> hsep (map text non_deletees))
+          act
+    (non_deletees, deletees) = partition isCsUserSrcFilename fs
+
+removeTmpSubdirs :: Logger -> [FilePath] -> IO ()
+removeTmpSubdirs logger fs
+  = traceCmd logger "Deleting temp subdirs"
+             ("Deleting: " ++ unwords fs)
+             (mapM_ (removeWith logger removeDirectory) fs)
+
+removeWith :: Logger -> (FilePath -> IO ()) -> FilePath -> IO ()
+removeWith logger remover f = remover f `Exception.catchIO`
+  (\ e ->
+     let msg = if isDoesNotExistError e
+               then text "Warning: deleting non-existent" <+> text f
+               else text "Warning: exception raised when deleting"
+                    <+> text f <> colon
+                    $$ text (show e)
+     in debugTraceMsg logger 2 msg
+  ) 
