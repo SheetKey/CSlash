@@ -8,6 +8,8 @@ module CSlash.Driver.Session
   , wopt
   , DynFlags(..)
   , HasDynFlags(..), ContainsDynFlags(..)
+  , CsMode(..)
+  , CsLink(..)
   , Option(..), showOpt
 
   , augmentByWorkingDirectory
