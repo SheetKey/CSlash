@@ -1,4 +1,7 @@
-module CSlash.Driver.DynFlags where
+module CSlash.Driver.DynFlags
+  ( module CSlash.Driver.DynFlags
+  , module CSlash.Utils.CliOption
+  ) where
 
 import CSlash.Platform
 import CSlash.Platform.Ways
@@ -57,8 +60,8 @@ import qualified Data.Set as Set
 -- DynFlags
 
 data DynFlags = DynFlags
-  { cslMode :: CslMode
-  , cslLink :: CslLink
+  { cslMode :: CsMode
+  , cslLink :: CsLink
   , backend :: !Backend
 
   , csNameVersion :: {-# UNPACK #-} !CsNameVersion
@@ -226,18 +229,18 @@ data ParMakeCount
   | ParMakeNumProcessors
   | ParMakeSemaphore FilePath
 
-data CslMode
+data CsMode
   = CompManager
   | OneShot
   | MkDepend
   deriving Eq
 
-instance Outputable CslMode where
+instance Outputable CsMode where
   ppr CompManager = text "CompManager"
   ppr OneShot = text "OneShot"
   ppr MkDepend = text "MkDepend"
 
-data CslLink
+data CsLink
   = NoLink
   | LinkBinary
   | LinkInMemory
