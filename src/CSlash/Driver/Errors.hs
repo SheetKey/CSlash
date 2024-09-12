@@ -32,3 +32,10 @@ printMessages logger msg_opts opts msgs
         [h] -> main_msg $$ hang (text "Suggested fix:") 2 (ppr h)
         hs -> main_msg $$ hang (text "Suggested fixes:") 2
                                (formatBulleted $ mkDecorated . map ppr $ hs)
+
+printOrThrowDiagnostics :: Logger -> CsMessageOpts -> DiagOpts -> Messages CsMessage -> IO ()
+printOrThrowDiagnostics logger print_config opts msgs
+  | errorsOrFatalWarningsFound msgs
+  = throwErrors msgs
+  | otherwise
+  = printMessages logger print_config opts msgs
