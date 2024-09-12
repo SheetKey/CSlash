@@ -17,6 +17,9 @@ import Control.Monad.Catch as MC (MonadCatch, catch)
 mkSrcErr :: Messages CsMessage -> SourceError
 mkSrcErr = SourceError
 
+srcErrorMessages :: SourceError -> Messages CsMessage
+srcErrorMessages (SourceError msgs) = msgs
+
 throwErrors :: MonadIO io => Messages CsMessage -> io a
 throwErrors = liftIO . throwIO . mkSrcErr
 
