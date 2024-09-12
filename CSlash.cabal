@@ -101,6 +101,7 @@ library
                     , CSlash.Data.OrdList
                     , CSlash.Data.Strict
                     , CSlash.Data.StringBuffer
+                    , CSlash.Data.Word64Set
 
                     , CSlash.Driver.Backend
                     , CSlash.Driver.Backend.Internal
