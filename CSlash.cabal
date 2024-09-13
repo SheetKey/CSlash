@@ -170,6 +170,8 @@ library
 
                     , CSlash.Stack
 
+                    , CSlash.SysTools.Terminal
+
                     , CSlash.Tc.Types.Origin
                     , CSlash.Tc.Utils.TcType
 
