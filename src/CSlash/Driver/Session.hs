@@ -3,6 +3,7 @@ module CSlash.Driver.Session
   , GeneralFlag(..)
   , WarningFlag(..)
   , FatalMessager, FlushOut(..)
+  , hasPprDebug, hasNoDebugOutput, hasNoStateHack
   , dopt
   , gopt
   , wopt
@@ -13,6 +14,8 @@ module CSlash.Driver.Session
   , Option(..), showOpt
 
   , augmentByWorkingDirectory
+
+  , setUnsafeGlobalDynFlags
   ) where 
 
 import CSlash.Platform
@@ -30,7 +33,7 @@ import CSlash.Driver.Backend
 import CSlash.Driver.Errors.Types
 -- import GHC.Driver.Plugins.External
 -- import GHC.Settings.Config
--- import GHC.Core.Unfold
+import CSlash.Core.Unfold
 -- import GHC.Driver.CmdLine
 import CSlash.Utils.Panic
 import CSlash.Utils.Misc
@@ -78,3 +81,9 @@ augmentByWorkingDirectory :: DynFlags -> FilePath -> FilePath
 augmentByWorkingDirectory dflags fp | isRelative fp, Just offset <- workingDirectory dflags
   = offset </> fp
 augmentByWorkingDirectory _ fp = fp
+
+setUnsafeGlobalDynFlags :: DynFlags -> IO ()
+setUnsafeGlobalDynFlags dflags = do
+  writeIORef v_unsafeHasPprDebug (hasPprDebug dflags)
+  writeIORef v_unsafeHasNoDebugOutput (hasNoDebugOutput dflags)
+  writeIORef v_unsafeHasNoStateHack (hasNoStateHack dflags)
