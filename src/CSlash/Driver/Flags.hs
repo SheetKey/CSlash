@@ -237,22 +237,22 @@ data GeneralFlag
   | Opt_DiagnosticsAsJSON  -- ^ Dump diagnostics as JSON
   | Opt_DiagnosticsShowCaret -- Show snippets of offending code
   | Opt_PprCaseAsLet
-  | Opt_ShowHoleConstraints
-   --  -- Options relating to the display of valid hole fits
-   --  -- when generating an error message for a typed hole
-   --  -- See Note [Valid hole fits include ...] in GHC.Tc.Errors.Hole
-   -- | Opt_ShowValidHoleFits
-   -- | Opt_SortValidHoleFits
-   -- | Opt_SortBySizeHoleFits
-   -- | Opt_SortBySubsumHoleFits
-   -- | Opt_AbstractRefHoleFits
-   -- | Opt_UnclutterValidHoleFits
-   -- | Opt_ShowTypeAppOfHoleFits
-   -- | Opt_ShowTypeAppVarsOfHoleFits
-   -- | Opt_ShowDocsOfHoleFits
-   -- | Opt_ShowTypeOfHoleFits
-   -- | Opt_ShowProvOfHoleFits
-   -- | Opt_ShowMatchesOfHoleFits
+  -- | Opt_ShowHoleConstraints
+  --  -- Options relating to the display of valid hole fits
+  --  -- when generating an error message for a typed hole
+  --  -- See Note [Valid hole fits include ...] in GHC.Tc.Errors.Hole
+  -- | Opt_ShowValidHoleFits
+  -- | Opt_SortValidHoleFits
+  -- | Opt_SortBySizeHoleFits
+  -- | Opt_SortBySubsumHoleFits
+  -- | Opt_AbstractRefHoleFits
+  -- | Opt_UnclutterValidHoleFits
+  -- | Opt_ShowTypeAppOfHoleFits
+  -- | Opt_ShowTypeAppVarsOfHoleFits
+  -- | Opt_ShowDocsOfHoleFits
+  -- | Opt_ShowTypeOfHoleFits
+  -- | Opt_ShowProvOfHoleFits
+  -- | Opt_ShowMatchesOfHoleFits
 
   | Opt_ShowLoadedModules
   | Opt_HexWordLiterals
@@ -293,6 +293,8 @@ data GeneralFlag
 
   | Opt_BuildDynamicToo
   | Opt_WriteIfSimplifiedCore
+
+  | Opt_G_NoStateHack
   deriving (Eq, Show, Enum)
 
 data WarningFlag =
