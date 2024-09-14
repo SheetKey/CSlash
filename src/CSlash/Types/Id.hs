@@ -1,6 +1,8 @@
 module CSlash.Types.Id
   ( Var, Id
 
+  , idName
+
   , mkGlobalId
   ) where
 
@@ -23,6 +25,9 @@ import CSlash.Data.FastString
 import CSlash.Utils.Misc
 import CSlash.Utils.Outputable
 import CSlash.Utils.Panic
+
+idName :: Id -> Name
+idName = Var.varName
 
 mkGlobalId :: IdDetails -> Name -> Type -> IdInfo -> Id
 mkGlobalId = Var.mkGlobalVar
