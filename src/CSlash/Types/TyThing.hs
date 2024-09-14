@@ -9,6 +9,7 @@ import CSlash.Types.Id.Info
 import CSlash.Types.Unique.Set
 
 import CSlash.Core.DataCon
+import CSlash.Core.ConLike
 import CSlash.Core.TyCon
 
 import CSlash.Utils.Outputable
@@ -17,7 +18,7 @@ import CSlash.Utils.Panic
 
 data TyThing
   = AnId Id
-  | ADataCon DataCon
+  | AConLike ConLike
   | ATyCon TyCon
 
 instance Outputable TyThing where
@@ -25,8 +26,8 @@ instance Outputable TyThing where
 
 instance NamedThing TyThing where
   getName (AnId id) = getName id
-  getName (ADataCon dc) = getName dc
   getName (ATyCon tc) = getName tc
+  getName (AConLike cl) = conLikeName cl
 
 mkATyCon :: TyCon -> TyThing
 mkATyCon = ATyCon
@@ -35,3 +36,14 @@ mkAnId :: Id -> TyThing
 mkAnId = AnId
 
 pprShortTyThing = undefined
+
+implicitTyConThings :: TyCon -> [TyThing]
+implicitTyConThings tc
+  = datacon_stuff
+  where
+    datacon_stuff :: [TyThing]
+    datacon_stuff = [ty_thing | dc <- cons
+                              , ty_thing <- AConLike (RealDataCon dc) :
+                                            dataConImplicitTyThings dc]
+    cons :: [DataCon]
+    cons = tyConDataCons tc
