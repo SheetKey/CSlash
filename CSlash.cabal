@@ -100,6 +100,7 @@ library
                     , CSlash.Data.FiniteMap
                     , CSlash.Data.Graph.Directed
                     , CSlash.Data.List.Infinite
+                    , CSlash.Data.List.SetOpts
                     , CSlash.Data.Maybe
                     , CSlash.Data.OrdList
                     , CSlash.Data.Strict
