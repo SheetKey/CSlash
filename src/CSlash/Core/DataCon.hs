@@ -170,6 +170,10 @@ dataConArity (MkData { dcArity = arity }) = arity
 dataConWorkId :: DataCon -> Id
 dataConWorkId dc = dcWorkId dc
 
+dataConImplicitTyThings :: DataCon -> [TyThing]
+dataConImplicitTyThings (MkData { dcWorkId = work })
+  = [mkAnId work]
+
 -- must change if I allow existentials in data type declarations (WHICH I SHOULD NOT DO!!!)
 dataConFullSig :: DataCon -> ([TypeVar],[Type], Type)
 dataConFullSig (MkData { dcUnivTyVars = univ_tvs
