@@ -40,6 +40,15 @@ data HomeUnitEnv = HomeUnitEnv
 instance Outputable HomeUnitEnv where
   ppr hug = pprHPT (homeUnitEnv_hpt hug)
 
+mkHomeUnitEnv :: DynFlags -> HomePackageTable -> Maybe HomeUnit -> HomeUnitEnv
+mkHomeUnitEnv dflags hpt home_unit = HomeUnitEnv
+  { homeUnitEnv_units = emptyUnitState
+  , homeUnitEnv_unit_dbs = Nothing
+  , homeUnitEnv_dflags = dflags
+  , homeUnitEnv_hpt = hpt
+  , homeUnitEnv_home_unit = home_unit
+  }
+
 type HomeUnitGraph = UnitEnvGraph HomeUnitEnv
 
 type UnitEnvGraphKey = UnitId
@@ -48,3 +57,7 @@ newtype UnitEnvGraph v = UnitEnvGraph
   { unitEnv_graph :: Map UnitEnvGraphKey v }
   deriving (Functor, Foldable, Traversable)
   
+
+unitEnv_singleton :: UnitEnvGraphKey -> v -> UnitEnvGraph v
+unitEnv_singleton active m = UnitEnvGraph
+  { unitEnv_graph = Map.singleton active m }
