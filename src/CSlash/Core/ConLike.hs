@@ -12,6 +12,7 @@ import CSlash.Types.GREInfo
 import CSlash.Types.Var
 import CSlash.Utils.Misc
 import CSlash.Utils.Outputable
+import CSlash.Utils.Panic
 
 import Data.Maybe( isJust )
 import qualified Data.Data as Data
@@ -61,3 +62,7 @@ instance Data.Data ConLike where
   toConstr _ = abstractConstr "ConLike"
   gunfold _ _ = error "gunfold"
   dataTypeOf _ = mkNoRepType "ConLike"
+
+conLikeName :: ConLike -> Name
+conLikeName (RealDataCon data_con) = dataConName data_con
+conLikeName PatSynCon = panic "'conLikeName PatSynCon' not implemented"
