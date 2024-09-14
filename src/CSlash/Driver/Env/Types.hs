@@ -44,7 +44,7 @@ data CsEnv = CsEnv
   , cs_targets :: [Target]
   , cs_mod_graph :: ModuleGraph
   , cs_NC :: {-# UNPACK #-} !NameCache
-  , cd_FC :: {-# UNPACK #-} !FinderCache
+  , cs_FC :: {-# UNPACK #-} !FinderCache
   , cs_type_env_vars :: KnotVars (IORef TypeEnv)
   , cs_unit_env :: UnitEnv
   , cs_logger :: !Logger
