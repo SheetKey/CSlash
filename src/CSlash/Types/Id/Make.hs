@@ -31,6 +31,27 @@ import CSlash.Data.FastString
 
 {- *********************************************************************
 *                                                                      *
+        Wired in Ids
+*                                                                      *
+********************************************************************* -}
+
+wiredInIds :: [Id]
+wiredInIds
+  = magicIds
+  ++ csPrimIds
+  ++ errorIds
+
+magicIds :: [Id]
+magicIds = []
+
+csPrimIds :: [Id]
+csPrimIds = []
+
+errorIds :: [Id]
+errorIds = []
+
+{- *********************************************************************
+*                                                                      *
         Data constructors
 *                                                                      *
 ********************************************************************* -}
