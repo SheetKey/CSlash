@@ -1,3 +1,3 @@
-module CSlash.SysTools.Terminal (stderrSupportAnsiColors) where
+module CSlash.SysTools.Terminal (stderrSupportsAnsiColors) where
 
 import GHC.SysTools.Terminal (stderrSupportsAnsiColors)
