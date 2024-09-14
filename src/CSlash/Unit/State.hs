@@ -85,6 +85,21 @@ data UnitState = UnitState
   , allowVirtualUnits :: !Bool
   }
 
+emptyUnitState :: UnitState
+emptyUnitState = UnitState
+  { unitInfoMap = emptyUniqMap
+  , preloadClosure = emptyUniqSet
+  , packageNameMap = emptyUFM
+  , wireMap = emptyUniqMap
+  , unwireMap = emptyUniqMap
+  , preloadUnits = []
+  , explicitUnits = []
+  , homeUnitDepends = []
+  , moduleNameProvidersMap = emptyUniqMap
+  , requirementContext = emptyUniqMap
+  , allowVirtualUnits = False
+  }
+
 data UnitDatabase unit = UnitDatbase
   { unitDatabasePath :: FilePath
   , unitDatabaseUnits :: [GenUnitInfo unit]
