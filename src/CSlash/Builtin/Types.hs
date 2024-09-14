@@ -10,6 +10,7 @@ import CSlash.Core.Type
 import CSlash.Core.Kind
 import CSlash.Types.Id
 import CSlash.Core.DataCon
+import CSlash.Core.ConLike
 import CSlash.Core.TyCon
 import qualified CSlash.Core.Type.Rep as TypeRep (Type(TyConApp))
 
@@ -43,13 +44,17 @@ import Numeric (showInt)
 *                                                                      *
 ********************************************************************* -}
 
+wiredInTyCons :: [TyCon]
+wiredInTyCons
+  = [ boolTyCon ]
+
 mkWiredInTyConName :: BuiltInSyntax -> Module -> FastString -> Unique -> TyCon -> Name
 mkWiredInTyConName built_in modu fs unique tycon
   = mkWiredInName modu (mkTcOccFS fs) unique (ATyCon tycon) built_in
 
 mkWiredInDataConName :: BuiltInSyntax -> Module -> FastString -> Unique -> DataCon -> Name
 mkWiredInDataConName built_in modu fs unique datacon
-  = mkWiredInName modu (mkDataOccFS fs) unique (ADataCon datacon) built_in
+  = mkWiredInName modu (mkDataOccFS fs) unique (AConLike (RealDataCon datacon)) built_in
 
 mkWiredInIdName :: Module -> FastString -> Unique -> Id -> Name
 mkWiredInIdName modu fs unique id
@@ -189,7 +194,7 @@ mk_tuple arity = (tycon, tuple_con)
                             (ATyCon tycon) UserSyntax
     tc_uniq = mkTupleTyConUnique arity
     dc_name = mkWiredInName modu (mkTupleOcc dataName arity) dc_uniq
-                            (ADataCon tuple_con) BuiltInSyntax
+                            (AConLike (RealDataCon tuple_con)) BuiltInSyntax
     dc_uniq = mkTupleDataConUnique arity
 
 {- *********************************************************************
@@ -255,7 +260,7 @@ mk_sum arity = (tycon, sum_cons)
     sum_con i =
       let dc = pcDataCon dc_name dc_tvs tc_binders [dc_arg_tys !! i] tycon
           dc_name = mkWiredInName modu (mkSumDataConOcc i arity) (dc_uniq i)
-                                  (ADataCon dc) BuiltInSyntax
+                                  (AConLike (RealDataCon dc)) BuiltInSyntax
       in dc
       
     tc_uniq = mkSumTyConUnique arity
