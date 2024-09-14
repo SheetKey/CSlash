@@ -1,4 +1,13 @@
-module CSlash.Platform where
+module CSlash.Platform
+  ( Platform(..)
+  , PlatformWordSize(..)
+  , platformArch
+  , platformOS
+  , ArchOS(..)
+  , Arch(..)
+  , OS(..)
+  , PlatformMisc(..)
+  ) where
 
 -- import GHC.Read
 import CSlash.ByteOrder (ByteOrder(..))
@@ -39,5 +48,13 @@ data PlatformWordSize
 instance Show PlatformWordSize where
   show PW4 = "4"
   show PW8 = "8"
+
+platformArch :: Platform -> Arch
+platformArch platform = case platformArchOS platform of
+  ArchOS arch _ -> arch
+
+platformOS :: Platform -> OS
+platformOS platform = case platformArchOS platform of
+  ArchOS _ os -> os
 
 data PlatformMisc = PlatformMisc
