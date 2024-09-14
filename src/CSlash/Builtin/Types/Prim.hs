@@ -43,6 +43,22 @@ mkGenPrimTc built_in_syntax occ key tycon
 
 {- *********************************************************************
 *                                                                      *
+           Primitive type constructors
+*                                                                      *
+********************************************************************* -}
+
+primTyCons :: [TyCon]
+primTyCons = unexposedPrimTyCons ++ exposedPrimTyCons
+
+unexposedPrimTyCons :: [TyCon]
+unexposedPrimTyCons = []
+
+exposedPrimTyCons :: [TyCon]
+exposedPrimTyCons
+  = [ fUNTyCon ]
+
+{- *********************************************************************
+*                                                                      *
                 Type variables
 *                                                                      *
 ********************************************************************* -}
