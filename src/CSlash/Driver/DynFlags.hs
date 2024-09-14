@@ -15,7 +15,7 @@ import CSlash.Data.Maybe
 import CSlash.Builtin.Names ( mAIN_NAME )
 import CSlash.Driver.Backend
 import CSlash.Driver.Flags
--- import GHC.Driver.Phases ( Phase(..), phaseInputExt )
+import CSlash.Driver.Phases ( Phase(..), phaseInputExt )
 -- import GHC.Driver.Plugins.External
 import CSlash.Settings
 import CSlash.Settings.Constants
@@ -27,7 +27,7 @@ import CSlash.Types.SrcLoc
 import CSlash.Unit.Module
 import CSlash.Unit.Module.Warnings
 import CSlash.Utils.CliOption
--- import GHC.SysTools.Terminal ( stderrSupportsAnsiColors )
+import CSlash.SysTools.Terminal ( stderrSupportsAnsiColors )
 -- import GHC.UniqueSubdir (uniqueSubdir)
 import CSlash.Utils.Outputable
 import CSlash.Utils.Panic
@@ -60,8 +60,8 @@ import qualified Data.Set as Set
 -- DynFlags
 
 data DynFlags = DynFlags
-  { cslMode :: CsMode
-  , cslLink :: CsLink
+  { csMode :: CsMode
+  , csLink :: CsLink
   , backend :: !Backend
 
   , csNameVersion :: {-# UNPACK #-} !CsNameVersion
@@ -84,9 +84,9 @@ data DynFlags = DynFlags
   , enableTimeStats :: Bool
 
   , maxRelevantBinds :: Maybe Int
-  , maxValidHoleFits :: Maybe Int
-  , maxRefHoleFits :: Maybe Int
-  , refLevelHoleFits :: Maybe Int
+  -- , maxValidHoleFits :: Maybe Int
+  -- , maxRefHoleFits :: Maybe Int
+  -- , refLevelHoleFits :: Maybe Int
   , maxUncoveredPatterns :: Int
   , maxPmCheckModels :: Int
   , simplTickFactor :: Int
@@ -108,9 +108,9 @@ data DynFlags = DynFlags
   , mainFunIs :: Maybe String
   , reductionDepth :: IntWithInf
   , solverIterations :: IntWithInf
-  , givensFuel :: Int
-  , wantedsFuel :: Int
-  , qcsFuel :: Int
+  -- , givensFuel :: Int
+  -- , wantedsFuel :: Int
+  -- , qcsFuel :: Int
   , homeUnitId_ :: UnitId
   , homeUnitInstanceOf_ :: Maybe UnitId
   , homeUnitInstantiations_ :: [(ModuleName, Module)]
@@ -126,13 +126,12 @@ data DynFlags = DynFlags
 
   , objectDir :: Maybe String
   , dylibInstallName :: Maybe String
-  , hiDire :: Maybe String
+  , hiDir :: Maybe String
   , hieDir :: Maybe String
   , stubDir :: Maybe String
   , dumpDir :: Maybe String
 
   , objectSuf_ :: String
-  , hcSuf :: String
   , hiSuf_ :: String
   , hieSuf :: String
 
@@ -186,7 +185,7 @@ data DynFlags = DynFlags
 
   , flushOut :: FlushOut
 
-  , cslVersionFile :: Maybe FilePath
+  , csVersionFile :: Maybe FilePath
 
   , pprUserLength :: Int
   , pprCols :: Int
@@ -216,6 +215,183 @@ class HasDynFlags m where
 
 class ContainsDynFlags t where
   extractDynFlags :: t -> DynFlags
+
+-----------------------------------------------------------------------------
+
+initDynFlags :: DynFlags -> IO DynFlags
+initDynFlags dflags = do
+  canUseUnicode <- do let enc = localeEncoding
+                          str = "‘’"
+                      (withCString enc str $ \cstr ->
+                          do str' <- peekCString enc cstr
+                             return (str == str'))
+                        `catchIOError` \_ -> return False
+  csNoUnicodeEnv <- lookupEnv "CS_NO_UNICODE"
+  let useUnicode' = isNothing csNoUnicodeEnv && canUseUnicode
+  maybeCsColorsEnv <- lookupEnv "Cs_COLORS"
+  let adjustCols (Just env) = Col.parseScheme env
+      adjustCols Nothing = id
+  let (useColor', colScheme') = adjustCols maybeCsColorsEnv (useColor dflags, colScheme dflags)
+  tmp_dir <- normalise <$> getTemporaryDirectory
+  return dflags { useUnicode = useUnicode'
+                , useColor = useColor'
+                , canUseColor = stderrSupportsAnsiColors
+                , canUseErrorLinks = stderrSupportsAnsiColors
+                , colScheme = colScheme'
+                , tmpDir = TempDir tmp_dir
+                }
+
+defaultDynFlags :: Settings -> DynFlags
+defaultDynFlags mySettings = DynFlags
+  { csMode = CompManager
+  , csLink = LinkBinary
+  , backend = platformDefaultBackend (sTargetPlatform mySettings)
+
+  , csNameVersion = sCsNameVersion mySettings
+  , fileSettings = sFileSettings mySettings
+  , targetPlatform = sTargetPlatform mySettings
+  , toolSettings = sToolSettings mySettings
+  , platformMisc = sPlatformMisc mySettings
+  , rawSettings = sRawSettings mySettings
+  , tmpDir = panic "defaultDynFlags: uninitialized tmpDir"
+
+  , llvmOptLevel = 0
+  , verbosity = 0
+  , debugLevel = 0
+  , simplPhases = 2
+  , maxSimplIterations = 4
+  , ruleCheck = Nothing
+
+  , parMakeCount = Nothing
+
+  , enableTimeStats = False
+
+  , maxRelevantBinds = Just 6
+  -- , maxValidHoleFits = Just 6
+  -- , maxRefHoleFits = Just 6
+  -- , refLevelHoleFits = Nothing
+  , maxUncoveredPatterns = 4
+  , maxPmCheckModels = 30
+  , simplTickFactor = 100
+  , specConstrThreshold = Just 2000
+  , specConstrCount = Just 3
+  , specConstrRecursive = 3
+  , binBlobThreshold = Just 500000
+  , liberateCaseThreshold = Just 2000
+  , floatLamArgs = Just 0
+
+  , liftLamsRecArgs = Just 5
+  , liftLamsNonRecArgs = Just 5
+  , liftLamsKnown = False
+
+  , historySize = 20
+
+  , importPaths = ["."]
+  , mainModuleNameIs = mAIN_NAME
+  , mainFunIs = Nothing
+  , reductionDepth = treatZeroAsInf mAX_REDUCTION_DEPTH
+  , solverIterations = treatZeroAsInf mAX_SOLVER_ITERATIONS
+  -- , givensFuel = 
+  -- , wantedsFuel =
+  -- , qcsFuel =
+  , homeUnitId_ = mainUnitId
+  , homeUnitInstanceOf_ = Nothing
+  , homeUnitInstantiations_ = []
+
+  , workingDirectory = Nothing
+  , thisPackageName = Nothing
+  , hiddenModule = Set.empty
+  , reexportedModules = Set.empty
+
+  , tagetWays_ = Set.empty
+
+  , splitInfo = Nothing
+
+  , objectDir = Nothing
+  , dylibInstallName = Nothing
+  , hiDir = Nothing
+  , hieDir = Nothing
+  , stubDir = Nothing
+  , dumpDir = Nothing
+
+  , objectSuf_ = phaseInputExt StopLn
+  , hiSuf_ = "hi"
+  , hieSuf = "hie"
+
+  , dynObjectSuf_ = "dyn_" ++ phaseInputExt StopLn
+  , dynHiSuf_ = "dyn_hi"
+
+  , outputFile = Nothing
+  , dynOutputFile_ = Nothing
+  , outputHi = Nothing
+  , dynOutputHi = Nothing
+  , dynLibLoader = SystemDependent
+
+  , dynamicNow = False
+
+  , dumpPrefix = "non-module."
+
+  , dumpPrefixForce = Nothing
+
+  , ldInputs = []
+
+  , includePaths = IncludeSpecs [] [] []
+  , libraryPaths = []
+
+  , rtsOpts = Nothing
+  , rtsOptsEnabled = RtsOptsSafeOnly
+  , rtsOptsSuggestions = True
+
+  , hpcDir = ".hpc"
+
+  , depMakefile = "Makefile"
+  , depIncludePkgDeps = False
+  , depExcludeMods = []
+  , depSuffixes = []
+
+  ,  packageDBFlags = []
+
+  , ignorePackageFlags = []
+  , packageFlags = []
+  , packageEnv = Nothing
+
+  , dumpFlags = EnumSet.empty
+  , generalFlags = EnumSet.fromList (defaultFlags mySettings)
+  , warningFlags = EnumSet.fromList standardWarnings
+  , fatalWarningFlags = EnumSet.empty
+  , customWarningCategories = completeWarningCategorySet
+  , fatalCustomWarningCategories = emptyWarningCategorySet
+
+  , unfoldinngOpts = defaultUnfoldingOpts
+
+  , maxWorkerArgs = 10
+
+  , flushOut = defaultFlushOut
+
+  , csVersionFile = Nothing
+
+  , pprUserLength = 5
+  , pprCols = 100
+
+  , useUnicode = False
+  , useColor = Auto
+  , canUseColor = False
+  , useErrorLinks = Auto
+  , canUseErrorLinks = False
+  , colScheme = Col.defaultScheme
+
+  , profAuto = NoProfAuto
+  , callerCcFilters = []
+
+  , interactivePrint = Nothing
+
+  , reverseErrors = False
+
+  , maxErrors = Nothing
+
+  , initialUnique = 0
+  , iniqueIncrement = 1
+  }
 
 type FatalMessager = String -> IO ()
 
@@ -291,7 +467,7 @@ data RtsOptsEnabled
   = RtsOptsNone
   | RtsOptsIgnore
   | RtsOptsIgnoreAll
-  | RtsOptsSaftOnly
+  | RtsOptsSafeOnly
   | RtsOptsAll
   deriving (Show)
 
@@ -308,6 +484,15 @@ data IncludeSpecs = IncludeSpecs
   }
   deriving Show
 
+hasPprDebug :: DynFlags -> Bool
+hasPprDebug = dopt Opt_D_ppr_debug
+
+hasNoDebugOutput :: DynFlags -> Bool
+hasNoDebugOutput = dopt Opt_D_no_debug_output
+
+hasNoStateHack :: DynFlags -> Bool
+hasNoStateHack = gopt Opt_G_NoStateHack
+
 dopt :: DumpFlag -> DynFlags -> Bool
 dopt = getDumpFlagFrom verbosity dumpFlags
 
@@ -322,6 +507,73 @@ gopt f dflags = f `EnumSet.member` generalFlags dflags
 
 wopt :: WarningFlag -> DynFlags -> Bool
 wopt f dflags = f `EnumSet.member` warningFlags dflags
+
+defaultFlags :: Settings -> [GeneralFlag]
+defaultFlags settings
+  = [ Opt_AutoLinkPackages
+    , Opt_DiagnosticsShowCaret
+    , Opt_EmbedManifest
+    , Opt_FamAppCache
+    , Opt_GenManifest
+    , Opt_HelpfulErrors
+    , Opt_KeepHiFiles
+    , Opt_KeepOFiles
+    , Opt_OmitYields
+    , Opt_PrintBindContents
+    , Opt_ProfCountEntries
+    , Opt_SharedImplib
+    , Opt_SimplPreInlining
+    , Opt_VersionMacros
+    , Opt_RPath
+    , Opt_DumpWithWays
+    , Opt_CompactUnwind
+    , Opt_ShowErrorContext
+    , Opt_SpecialiseIncoherents
+    ]
+    ++ [f | (ns, f) <- optLevelFlags, 0 `elem` ns]
+    ++ [Opt_LocalFloatOut, Opt_LocalFloatOutTopLevel]
+    ++ default_PIC platform
+    where platform = sTargetPlatform settings
+
+optLevelFlags :: [([Int], GeneralFlag)]
+optLevelFlags
+  = [ ([0,1,2], Opt_DoLambdaEtaExpansion)
+    , ([1,2], Opt_DoCleverArgEtaExpansion)
+    , ([0,1,2], Opt_DoEtaReduction)
+    , ([0,1,2], Opt_ProfManualCcs)
+
+    , ([0], Opt_IgnoreInterfacePragmas)
+    , ([0], Opt_OmitInterfacePragmas)
+
+    , ([1,2], Opt_CoreConstantFolding)
+
+    , ([1,2], Opt_CallArity)
+    , ([1,2], Opt_Exitification)
+    , ([1,2], Opt_CaseMerge)
+    , ([1,2], Opt_CaseFolding)
+
+    , ([1,2], Opt_FloatIn)
+    , ([1,2], Opt_IgnoreAsserts)
+    , ([1,2], Opt_Loopification)
+    , ([1,2], Opt_CfgBlocklayout)
+
+    , ([1,2], Opt_Specialise)
+    , ([1,2], Opt_CrossModuleSpecialise)
+    , ([1,2], Opt_InlineGenerics)
+    , ([1,2], Opt_CprAnal)
+    , ([1,2], Opt_SolveConstantDicts)
+    , ([1,2], Opt_NumConstantFolding)
+
+    , ([2], Opt_LiberateCase)
+    , ([2], Opt_SpecConstr)
+    , ([2], Opt_FastPAPCalls)
+    ]
+
+default_PIC :: Platform -> [GeneralFlag]
+default_PIC platform =
+  case (platformOS platform, platformArch platform) of
+    (OSLinux, ArchX86_64) -> [Opt_PIC]
+    _ -> []
 
 initSDocContext :: DynFlags -> PprStyle -> SDocContext
 initSDocContext dflags style = SDC
