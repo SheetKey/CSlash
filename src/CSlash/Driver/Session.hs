@@ -1,3 +1,6 @@
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE DeriveFunctor #-}
+
 module CSlash.Driver.Session
   ( DumpFlag(..)
   , GeneralFlag(..)
@@ -20,6 +23,8 @@ module CSlash.Driver.Session
   , defaultFatalMessager
   , augmentByWorkingDirectory
 
+  , CmdLineP(..)
+
   , setUnsafeGlobalDynFlags
   ) where 
 
@@ -39,7 +44,7 @@ import CSlash.Driver.Errors.Types
 -- import GHC.Driver.Plugins.External
 -- import GHC.Settings.Config
 import CSlash.Core.Unfold
--- import GHC.Driver.CmdLine
+import CSlash.Driver.CmdLine
 import CSlash.Utils.Panic
 import CSlash.Utils.Misc
 import CSlash.Utils.Constants (debugIsOn)
@@ -81,6 +86,23 @@ import Text.ParserCombinators.ReadP as R
 import qualified GHC.Data.EnumSet as EnumSet
 
 -- import qualified GHC.LanguageExtensions as LangExt
+
+{- *********************************************************************
+*                                                                      *
+                DynFlags parser
+*                                                                      *
+********************************************************************* -}
+
+newtype CmdLineP s a = CmdLineP (forall m. (Monad m) => StateT s m a)
+  deriving (Functor)
+
+instance Applicative (CmdLineP s) where
+  pure x = CmdLineP (pure x)
+  (<*>) = ap
+
+instance Monad (CmdLineP s) where
+  CmdLineP k >>= f = CmdLineP (k >>= \x -> case f x of CmdLineP g -> g)
+  return = pure
 
 augmentByWorkingDirectory :: DynFlags -> FilePath -> FilePath
 augmentByWorkingDirectory dflags fp | isRelative fp, Just offset <- workingDirectory dflags
