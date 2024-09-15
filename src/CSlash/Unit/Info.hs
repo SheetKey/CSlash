@@ -5,6 +5,8 @@ module CSlash.Unit.Info
   , GenUnitInfo
   , UnitInfo
 
+  , mkUnit
+
   , PackageId(..)
   , PackageName(..)
   , Version(..)
@@ -77,3 +79,8 @@ pprUnitInfo GenericUnitInfo {..} =
        ]
   where
     field name body = text name <> colon <+> nest 4 body
+
+mkUnit :: UnitInfo -> Unit
+mkUnit p
+  | unitIsIndefinite p = mkVirtUnit (unitInstanceOf p) (unitInstantiations p)
+  | otherwise = RealUnit (Definite (unitId p))
