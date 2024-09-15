@@ -1,6 +1,34 @@
 module CSlash.Driver.DynFlags
-  ( module CSlash.Driver.DynFlags
-  , module CSlash.Utils.CliOption
+  ( DumpFlag(..)
+  , GeneralFlag(..)
+  , WarningFlag(..), DiagnosticReason(..)
+  , FatalMessager, FlushOut(..)
+  , ProfAuto(..)
+  , hasPprDebug, hasNoDebugOutput, hasNoStateHack
+  , dopt
+  , gopt
+  , wopt
+  , DynFlags(..)
+  , ParMakeCount(..)
+  , ways
+  , HasDynFlags(..), ContainsDynFlags(..)
+  , CsMode(..), isOneShot
+  , CsLink(..)
+  , PackageFlag(..), PackageArg(..), ModRenaming(..)
+  , IgnorePackageFlag(..)
+  , PackageDBFlag(..), PkgDbRef(..)
+  , Option(..), showOpt
+  , DynLibLoader(..)
+
+  , defaultDynFlags
+  , initDynFlags
+  , defaultFatalMessager
+  , defaultFlushOut
+  , optLevelFlags
+
+  , IncludeSpecs(..)
+
+  , initSDocContext
   ) where
 
 import CSlash.Platform
@@ -117,10 +145,10 @@ data DynFlags = DynFlags
 
   , workingDirectory :: Maybe FilePath
   , thisPackageName :: Maybe String
-  , hiddenModule :: Set.Set ModuleName
+  , hiddenModules :: Set.Set ModuleName
   , reexportedModules :: Set.Set ModuleName
 
-  , tagetWays_ :: Ways
+  , targetWays_ :: Ways
 
   , splitInfo :: Maybe (String, Int)
 
@@ -300,10 +328,10 @@ defaultDynFlags mySettings = DynFlags
 
   , workingDirectory = Nothing
   , thisPackageName = Nothing
-  , hiddenModule = Set.empty
+  , hiddenModules = Set.empty
   , reexportedModules = Set.empty
 
-  , tagetWays_ = Set.empty
+  , targetWays_ = Set.empty
 
   , splitInfo = Nothing
 
@@ -395,6 +423,9 @@ defaultDynFlags mySettings = DynFlags
 
 type FatalMessager = String -> IO ()
 
+defaultFatalMessager :: FatalMessager
+defaultFatalMessager = hPutStrLn stderr
+
 newtype FlushOut = FlushOut (IO ())
 
 defaultFlushOut :: FlushOut
@@ -415,6 +446,10 @@ instance Outputable CsMode where
   ppr CompManager = text "CompManager"
   ppr OneShot = text "OneShot"
   ppr MkDepend = text "MkDepend"
+
+isOneShot :: CsMode -> Bool
+isOneShot OneShot = True
+isOneShot _ = False
 
 data CsLink
   = NoLink
@@ -574,6 +609,11 @@ default_PIC platform =
   case (platformOS platform, platformArch platform) of
     (OSLinux, ArchX86_64) -> [Opt_PIC]
     _ -> []
+
+ways :: DynFlags -> Ways
+ways dflags
+  | dynamicNow dflags = addWay WayDyn (targetWays_ dflags)
+  | otherwise = targetWays_ dflags
 
 initSDocContext :: DynFlags -> PprStyle -> SDocContext
 initSDocContext dflags style = SDC
