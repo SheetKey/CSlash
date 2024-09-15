@@ -22,7 +22,7 @@
 
         haskellPackages = pkgs.haskell.packages.ghc910;
 
-        packageName = "CSlash";
+        packageName = "csl";
 
         jailbreakUnbreak = pkg:
           pkgs.haskell.lib.doJailbreak (pkg.overrideAttrs (_: { meta = { }; }));
