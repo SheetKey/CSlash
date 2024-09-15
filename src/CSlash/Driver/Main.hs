@@ -16,7 +16,7 @@ import CSlash.Driver.Errors.Types
 -- import GHC.Driver.Config.Core.Lint.Interactive ( lintInteractiveExpr )
 -- import GHC.Driver.Config.CoreToStg
 -- import GHC.Driver.Config.CoreToStg.Prep
--- import GHC.Driver.Config.Logger   (initLogFlags)
+import CSlash.Driver.Config.Logger   (initLogFlags)
 import CSlash.Driver.Config.Parser   (initParserOpts)
 -- import GHC.Driver.Config.Stg.Ppr  (initStgPprOpts)
 -- import GHC.Driver.Config.Stg.Pipeline (initStgPipelineOpts)
@@ -93,7 +93,7 @@ import CSlash.Parser.Lexer as Lexer
 -- import GHC.Stg.Syntax
 -- import GHC.Stg.Pipeline ( stg2stg, StgCgInfos )
 
--- import GHC.Builtin.Utils
+import CSlash.Builtin.Utils
 import CSlash.Builtin.Names
 
 -- import qualified GHC.StgToCmm as StgToCmm ( codeGen )
@@ -107,7 +107,7 @@ import CSlash.Builtin.Names
 
 import CSlash.Unit
 import CSlash.Unit.Env
--- import CSlash.Unit.Finder
+import CSlash.Unit.Finder
 import CSlash.Unit.External
 import CSlash.Unit.Module.ModDetails
 -- import GHC.Unit.Module.ModGuts
@@ -117,7 +117,7 @@ import CSlash.Unit.Module.Graph
 import CSlash.Unit.Module.Imported
 import CSlash.Unit.Module.Deps
 -- import GHC.Unit.Module.Status
--- import GHC.Unit.Home.ModInfo
+import CSlash.Unit.Home.ModInfo
 
 import CSlash.Types.Id
 import CSlash.Types.SourceError
@@ -159,8 +159,8 @@ import CSlash.Data.StringBuffer
 -- import GHC.Data.Stream (Stream)
 import CSlash.Data.Maybe
 
--- import GHC.SysTools (initSysTools)
--- import GHC.SysTools.BaseDir (findTopDir)
+import CSlash.SysTools (initSysTools)
+import CSlash.SysTools.BaseDir (findTopDir)
 
 import Data.Data hiding (Fixity, TyCon)
 import Data.List        ( nub, isPrefixOf, partition )
@@ -198,6 +198,43 @@ import Control.Monad.IO.Class (liftIO)
                 Initialisation
 *                                                                      *
 ********************************************************************* -}
+
+newCsEnv :: FilePath -> DynFlags -> IO CsEnv
+newCsEnv top_dir dflags = newCsEnvWithHUG top_dir dflags (homeUnitId_ dflags) home_unit_graph
+  where
+    home_unit_graph = unitEnv_singleton
+                        (homeUnitId_ dflags)
+                        (mkHomeUnitEnv dflags emptyHomePackageTable Nothing)
+
+newCsEnvWithHUG :: FilePath -> DynFlags -> UnitId -> HomeUnitGraph -> IO CsEnv
+newCsEnvWithHUG top_dir top_dynflags cur_unit home_unit_graph = do
+  nc_var <- initNameCache 'r' knownKeyNames
+  fc_var <- initFinderCache
+  logger <- initLogger
+  tmpfs <- initTmpFs
+  let dflags = homeUnitEnv_dflags $ unitEnv_lookup cur_unit home_unit_graph
+  unit_env <- initUnitEnv cur_unit home_unit_graph (csNameVersion dflags) (targetPlatform dflags)
+  llvm_config <- initLlvmConfigCache top_dir
+  return CsEnv { cs_dflags = top_dynflags
+               , cs_logger = setLogFlags logger (initLogFlags top_dynflags)
+               , cs_targets = []
+               , cs_mod_graph = emptyMG
+               , cs_NC = nc_var
+               , cs_FC = fc_var
+               , cs_type_env_vars = emptyKnotVars
+               , cs_unit_env = unit_env
+               , cs_tmpfs = tmpfs
+               , cs_llvm_config = llvm_config
+               }
+
+initCsEnv :: Maybe FilePath -> IO CsEnv
+initCsEnv mb_top_dir = do
+  top_dir <- findTopDir mb_top_dir
+  mySettings <- initSysTools top_dir
+  dflags <- initDynFlags (defaultDynFlags mySettings)
+  cs_env <- newCsEnv top_dir dflags
+  setUnsafeGlobalDynFlags dflags
+  return cs_env
 
 -- -----------------------------------------------------------------------------
 
