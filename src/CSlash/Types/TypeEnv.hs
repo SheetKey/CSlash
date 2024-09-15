@@ -14,3 +14,6 @@ import CSlash.Types.Var
 import CSlash.Types.TyThing
 
 type TypeEnv = NameEnv TyThing
+
+emptyTypeEnv :: TypeEnv
+emptyTypeEnv = emptyNameEnv
