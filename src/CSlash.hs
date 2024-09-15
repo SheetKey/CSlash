@@ -2,13 +2,24 @@
 
 module CSlash
   ( defaultErrorHandler
+
+  , Csl, CslMonad(..), CsEnv
+  , runCsl
+  , printException
+  , handleSourceError
+
+  , DynFlags(..), GeneralFlag(..), Severity(..), Backend, gopt
+  , CsMode(..), CsLink(..)
+  , parseTargetFiles
+
+  , LoadHowMuch(..)
   ) where
 
 import CSlash.Platform
 import CSlash.Platform.Ways
 
--- import GHC.Driver.Phases   ( Phase(..), isHaskellSrcFilename
---                            , isSourceFilename, startPhase )
+import CSlash.Driver.Phases   ( Phase(..), isCsSrcFilename
+                              , isSourceFilename, startPhase )
 import CSlash.Driver.Env
 import CSlash.Driver.Errors
 import CSlash.Driver.Errors.Types
@@ -21,9 +32,9 @@ import CSlash.Driver.Config.Parser (initParserOpts)
 -- import GHC.Driver.Config.StgToJS (initStgToJSConfig)
 import CSlash.Driver.Config.Diagnostic
 import CSlash.Driver.Main
--- import GHC.Driver.Make
+import CSlash.Driver.Make
 -- import GHC.Driver.Hooks
--- import GHC.Driver.Monad
+import CSlash.Driver.Monad
 -- import GHC.Driver.Ppr
 
 -- import GHC.ByteCode.Types
@@ -166,3 +177,81 @@ defaultErrorHandler fm (FlushOut flushOut) inner =
                     ) $
   inner
                                 
+{- *********************************************************************
+*                                                                      *
+           The Csl Monad
+*                                                                      *
+********************************************************************* -}
+
+runCsl :: Maybe FilePath -> Csl a -> IO a
+runCsl mb_top_dir csl = do
+  ref <- newIORef (panic "empty session")
+  let session = Session ref
+  flip unCsl session $ withSignalHandlers $ do
+    initCslMonad mb_top_dir
+    withCleanupSession csl
+
+withCleanupSession :: CslMonad m => m a -> m a
+withCleanupSession csl = csl `MC.finally` cleanup
+  where
+    cleanup = do
+      cs_env <- getSession
+      let dflags = cs_dflags cs_env
+          logger = cs_logger cs_env
+          tmpfs = cs_tmpfs cs_env
+      liftIO $ do
+        unless (gopt Opt_KeepTmpFiles dflags) $ do
+          cleanTempFiles logger tmpfs
+          cleanTempDirs logger tmpfs
+
+initCslMonad :: CslMonad m => Maybe FilePath -> m ()
+initCslMonad mb_top_dir = setSession =<< liftIO (initCsEnv mb_top_dir)
+
+{- *********************************************************************
+*                                                                      *
+           Flags & settings
+*                                                                      *
+********************************************************************* -}
+
+parseTargetFiles :: DynFlags -> [String] -> (DynFlags, [(String, Maybe Phase)], [String])
+parseTargetFiles dflags0 fileish_args =
+  let normal_fileish_paths = map normalise_hyp fileish_args
+      (src, raw_objs) = partition_args normal_fileish_paths [] []
+      objs = map (augmentByWorkingDirectory dflags0) raw_objs
+
+      dflags1 = dflags0 { ldInputs = map (FileOption "") objs
+                                     ++ ldInputs dflags0 }
+  in (dflags1, src, objs)
+
+-- -----------------------------------------------------------------------------
+
+partition_args
+  :: [String] -> [(String, Maybe Phase)] -> [String] -> ([(String, Maybe Phase)], [String])
+partition_args [] srcs objs = (reverse srcs, reverse objs)
+partition_args ("-x":suff:args) srcs objs
+  | "none" <- suff = partition_args args srcs objs
+  | StopLn <- phase = partition_args args srcs (slurp ++ objs)
+  | otherwise = partition_args rest (these_srcs ++ srcs) objs
+  where
+    phase = startPhase suff
+    (slurp, rest) = break (== "-x") args
+    these_srcs = zip slurp (repeat (Just phase))
+partition_args (arg:args) srcs objs
+  | looks_like_an_input arg = partition_args args ((arg, Nothing):srcs) objs
+  | otherwise = partition_args args srcs (arg:objs)
+
+looks_like_an_input :: String -> Bool
+looks_like_an_input m
+  = isSourceFilename m
+  || looksLikeModuleName m
+  || "-" `isPrefixOf` m
+  || not (hasExtension m)
+
+normalise_hyp :: FilePath -> FilePath
+normalise_hyp fp
+  | strt_dot_sl && "-" `isPrefixOf` nfp = cur_dir ++ nfp
+  | otherwise = nfp
+  where
+    strt_dot_sl = "./" `isPrefixOf` fp
+    cur_dir = '.' : [pathSeparator]
+    nfp = normalise fp
