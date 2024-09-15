@@ -26,6 +26,10 @@ module CSlash.Driver.DynFlags
   , defaultFlushOut
   , optLevelFlags
 
+  , projectVersion
+  , topDir, toolDir
+  , globalPackageDatabasePath
+
   , IncludeSpecs(..)
 
   , initSDocContext
@@ -614,6 +618,18 @@ ways :: DynFlags -> Ways
 ways dflags
   | dynamicNow dflags = addWay WayDyn (targetWays_ dflags)
   | otherwise = targetWays_ dflags
+
+topDir :: DynFlags -> FilePath
+topDir dflags = fileSettings_topDir $ fileSettings dflags
+
+projectVersion :: DynFlags -> String
+projectVersion dflags = csNameVersion_projectVersion (csNameVersion dflags)
+
+toolDir :: DynFlags -> Maybe FilePath
+toolDir dflags = fileSettings_toolDir $ fileSettings dflags
+
+globalPackageDatabasePath :: DynFlags -> FilePath
+globalPackageDatabasePath dflags = fileSettings_globalPackageDatabase $ fileSettings dflags
 
 initSDocContext :: DynFlags -> PprStyle -> SDocContext
 initSDocContext dflags style = SDC
