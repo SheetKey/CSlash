@@ -36,6 +36,24 @@ data Flag m = Flag
 defFlag :: String -> OptKind m -> Flag m
 defFlag name optKind = Flag name optKind AllModes
 
+hoistFlag :: forall m n. (forall a. m a -> n a) -> Flag m -> Flag n
+hoistFlag f (Flag a b c) = Flag a (go b) c
+  where
+    go (NoArg k) = NoArg (go2 k)
+    go (HasArg k) = HasArg (\s -> go2 (k s))
+    go (SepArg k) = SepArg (\s -> go2 (k s))
+    go (Prefix k) = Prefix (\s -> go2 (k s))
+    go (OptPrefix k) = OptPrefix (\s -> go2 (k s))
+    go (OptIntSuffix k) = OptIntSuffix (\n -> go2 (k n))
+    go (IntSuffix k) = IntSuffix (\n -> go2 (k n))
+    go (Word64Suffix k) = Word64Suffix (\s -> go2 (k s))
+    go (FloatSuffix k) = FloatSuffix (\s -> go2 (k s))
+    go (PassFlag k) = PassFlag (\s -> go2 (k s))
+    go (AnySuffix k) = AnySuffix (\s -> go2 (k s))
+
+    go2 :: EwM m a -> EwM n a
+    go2 (EwM g) = EwM $ \loc es ws -> f (g loc es ws)
+
 data CsFlagMode
   = OnlyCs
   | AllModes

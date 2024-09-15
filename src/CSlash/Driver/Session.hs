@@ -1,3 +1,4 @@
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE DeriveFunctor #-}
 
@@ -24,7 +25,9 @@ module CSlash.Driver.Session
   , defaultFlushOut
   , augmentByWorkingDirectory
 
-  , CmdLineP(..)
+  , CmdLineP(..), runCmdLineP
+  , getCmdLineState, putCmdLineState
+  , processCmdLineP
 
   , compilerInfo
 
@@ -106,6 +109,27 @@ instance Applicative (CmdLineP s) where
 instance Monad (CmdLineP s) where
   CmdLineP k >>= f = CmdLineP (k >>= \x -> case f x of CmdLineP g -> g)
   return = pure
+
+getCmdLineState :: CmdLineP s s
+getCmdLineState = CmdLineP State.get
+
+putCmdLineState :: s -> CmdLineP s ()
+putCmdLineState x = CmdLineP (State.put x)
+
+runCmdLineP :: CmdLineP s a -> s -> (a, s)
+runCmdLineP (CmdLineP k) s0 = runIdentity $ runStateT k s0
+
+processCmdLineP
+  :: forall s m. MonadIO m
+  => [Flag (CmdLineP s)]
+  -> s
+  -> [Located String]
+  -> m (([Located String], [Err], [Warn]), s)
+processCmdLineP activeFlags s0 args =
+  runStateT (processArgs (map (hoistFlag getCmdLineP) activeFlags) args parseResponseFile) s0
+  where
+    getCmdLineP :: CmdLineP s a -> StateT s m a
+    getCmdLineP (CmdLineP k) = k
 
 augmentByWorkingDirectory :: DynFlags -> FilePath -> FilePath
 augmentByWorkingDirectory dflags fp | isRelative fp, Just offset <- workingDirectory dflags
