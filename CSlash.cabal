@@ -50,6 +50,8 @@ executable csl
 library
     exposed-modules:  CSlash
 
+                    , CSlash.BaseDir
+
                     , CSlash.Builtin.Names
                     , CSlash.Builtin.Types
                     , CSlash.Builtin.Types.Prim
