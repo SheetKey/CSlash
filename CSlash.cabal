@@ -177,6 +177,7 @@ library
 
                     , CSlash.Stack
 
+                    , CSlash.SysTools
                     , CSlash.SysTools.Terminal
 
                     , CSlash.Tc.Types.Origin
