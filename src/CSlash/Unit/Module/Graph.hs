@@ -77,6 +77,9 @@ data ModuleGraph = ModuleGraph
   , mg_trans_deps :: Map.Map NodeKey (Set.Set NodeKey)
   }
 
+emptyMG :: ModuleGraph
+emptyMG = ModuleGraph [] Map.empty
+
 mkNodeKey :: ModuleGraphNode -> NodeKey
 mkNodeKey = \case
   InstantiationNode _ iu -> NodeKey_Unit iu
