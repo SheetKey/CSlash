@@ -151,3 +151,7 @@ assertPpr cond msg a =
   if debugIsOn && not cond
   then withFrozenCallStack (assertPprPanic msg)
   else a
+
+massertPpr :: (HasCallStack, Applicative m) => Bool -> SDoc -> m ()
+{-# INLINE massertPpr #-}
+massertPpr cond msg = withFrozenCallStack (assertPpr cond msg (pure ()))
