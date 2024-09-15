@@ -1,3 +1,5 @@
+{-# LANGUAGE ScopedTypeVariables #-}
+
 module CSlash.Platform
   ( Platform(..)
   , PlatformWordSize(..)
@@ -6,10 +8,12 @@ module CSlash.Platform
   , ArchOS(..)
   , Arch(..)
   , OS(..)
+  , ByteOrder(..)
   , PlatformMisc(..)
   ) where
 
--- import GHC.Read
+import GHC.Read
+
 import CSlash.ByteOrder (ByteOrder(..))
 import CSlash.Platform.Constants
 import CSlash.Platform.ArchOS
@@ -31,7 +35,7 @@ data Platform = Platform
   , platformHasSubsectionsViaSymbols :: !Bool
   , platformIsCrossCompiling :: !Bool
   , platformLeadingUnderscore :: !Bool
-  , platformTableNextToCode :: !Bool
+  , platformTablesNextToCode :: !Bool
   , platformHasLibm :: !Bool
   , platform_constants :: !(Maybe PlatformConstants)
   }
@@ -49,6 +53,14 @@ instance Show PlatformWordSize where
   show PW4 = "4"
   show PW8 = "8"
 
+instance Read PlatformWordSize where
+  readPrec = do
+    i :: Int <- readPrec
+    case i of
+      4 -> return PW4
+      8 -> return PW8
+      other -> fail ("Invalid PlatformWordSize: " ++ show other)
+
 platformArch :: Platform -> Arch
 platformArch platform = case platformArchOS platform of
   ArchOS arch _ -> arch
@@ -58,3 +70,6 @@ platformOS platform = case platformArchOS platform of
   ArchOS _ os -> os
 
 data PlatformMisc = PlatformMisc
+  { platformMisc_targetPlatformString :: String
+  , platformMisc_llvmTarget :: String
+  }
