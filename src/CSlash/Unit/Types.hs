@@ -250,6 +250,9 @@ toUnitId HoleUnit = error "Hole unit"
 newtype Definite unit = Definite { unDefinite :: unit }
   deriving (Functor)
 
+virtualUnitId :: InstantiatedUnit -> UnitId
+virtualUnitId i = UnitId (instUnitFS i)
+
 newtype UnitId = UnitId { unitIdFS :: FastString }
   deriving (Data)
 
