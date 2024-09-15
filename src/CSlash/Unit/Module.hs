@@ -6,9 +6,13 @@ module CSlash.Unit.Module
   , module CSlash.Unit.Module.Location
   , module CSlash.Unit.Module.Env
 
+  , getModuleInstantiation
+  , getUnitInstantiations
+
   , isHoleModule
   , stableModuleCmp
   , moduleStableString
+  , installedModuleEq
   ) where
 
 import CSlash.Unit.Types
@@ -27,3 +31,24 @@ stableModuleCmp (Module p1 n1) (Module p2 n2) =
 isHoleModule :: GenModule (GenUnit u) -> Bool
 isHoleModule (Module HoleUnit _) = True
 isHoleModule _ = False
+
+installedModuleEq :: InstalledModule -> Module -> Bool
+installedModuleEq imod mod =
+  fst (getModuleInstantiation mod) == imod
+
+{- *********************************************************************
+*                                                                      *
+                        Hole substitutions
+*                                                                      *
+********************************************************************* -}
+
+getModuleInstantiation :: Module -> (InstalledModule, Maybe InstantiatedModule)
+getModuleInstantiation m =
+  let (uid, mb_iuid) = getUnitInstantiations (moduleUnit m)
+  in ( Module uid (moduleName m)
+     , fmap (\iuid -> Module iuid (moduleName m)) mb_iuid)
+
+getUnitInstantiations :: Unit -> (UnitId, Maybe InstantiatedUnit)
+getUnitInstantiations (VirtUnit iuid) = (instUnitInstanceOf iuid, Just iuid)
+getUnitInstantiations (RealUnit (Definite uid)) = (uid, Nothing)
+getUnitInstantiations (HoleUnit {}) = error "Hole unit"
