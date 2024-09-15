@@ -114,6 +114,7 @@ library
                     , CSlash.Driver.Backend.Internal
                     , CSlash.Driver.CmdLine
                     , CSlash.Driver.Config.Diagnostic
+                    , CSlash.Driver.Config.Finder
                     , CSlash.Driver.Config.Logger
                     , CSlash.Driver.Config.Parser
                     , CSlash.Driver.DynFlags
