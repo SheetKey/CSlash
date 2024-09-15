@@ -21,9 +21,12 @@ module CSlash.Driver.Session
   , defaultDynFlags
   , initDynFlags
   , defaultFatalMessager
+  , defaultFlushOut
   , augmentByWorkingDirectory
 
   , CmdLineP(..)
+
+  , compilerInfo
 
   , setUnsafeGlobalDynFlags
   ) where 
@@ -42,7 +45,7 @@ import CSlash.Driver.Flags
 import CSlash.Driver.Backend
 import CSlash.Driver.Errors.Types
 -- import GHC.Driver.Plugins.External
--- import GHC.Settings.Config
+import CSlash.Settings.Config
 import CSlash.Core.Unfold
 import CSlash.Driver.CmdLine
 import CSlash.Utils.Panic
@@ -64,7 +67,7 @@ import CSlash.Settings
 -- import GHC.CmmToAsm.CFG.Weight
 -- import GHC.Core.Opt.CallerCC
 
--- import GHC.SysTools.BaseDir ( expandToolDir, expandTopDir )
+import CSlash.SysTools.BaseDir ( expandToolDir, expandTopDir )
 
 import Data.IORef
 import Control.Arrow ((&&&))
@@ -109,8 +112,41 @@ augmentByWorkingDirectory dflags fp | isRelative fp, Just offset <- workingDirec
   = offset </> fp
 augmentByWorkingDirectory _ fp = fp
 
+-- -----------------------------------------------------------------------------
+-- Compiler Info
+
+compilerInfo :: DynFlags -> [(String, String)]
+compilerInfo dflags
+  = ("Project name", cProjectName)
+  : map (fmap $ expandDirectories (topDir dflags) (toolDir dflags))
+        (rawSettings dflags)
+  ++ [ ("Project version", projectVersion dflags)
+     , ("Project Git commit id", cProjectGitCommitId)
+     , ("Project Version Int", cProjectVersionInt)
+     , ("Project Unit Id", cProjectUnitId)
+
+     , ("Object splitting supported", showBool False)
+     , ("Support dynamic-too", showBool $ not isWindows)
+     , ("Support reexported-modules", "YES")
+     , ("Support thinning and renaming package flags", "YES")
+     , ("Requires unified installed package IDs", "YES")
+     , ("Uses unit IDs", "YES")
+     , ("Debug on", showBool debugIsOn)
+     , ("LibDir", topDir dflags)
+     , ("Global Package DB", globalPackageDatabasePath dflags)
+     ]
+  where
+    showBool True = "YES"
+    showBool False = "NO"
+    platform = targetPlatform dflags
+    isWindows = False
+    useInplaceMinGW = toolSettings_useInplaceMinGW $ toolSettings dflags
+    expandDirectories :: FilePath -> Maybe FilePath -> String -> String
+    expandDirectories topd mtoold = expandToolDir useInplaceMinGW mtoold . expandTopDir topd
+
 setUnsafeGlobalDynFlags :: DynFlags -> IO ()
 setUnsafeGlobalDynFlags dflags = do
   writeIORef v_unsafeHasPprDebug (hasPprDebug dflags)
   writeIORef v_unsafeHasNoDebugOutput (hasNoDebugOutput dflags)
   writeIORef v_unsafeHasNoStateHack (hasNoStateHack dflags)
+
