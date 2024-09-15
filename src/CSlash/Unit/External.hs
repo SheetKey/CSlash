@@ -20,8 +20,27 @@ type PackageCompleteMatches = CompleteMatches
 
 type PackageIfaceTable = ModuleEnv ModIface
 
+emptyPackageIfaceTable :: PackageIfaceTable
+emptyPackageIfaceTable = emptyModuleEnv
+
 newtype ExternalUnitCache = ExternalUnitCache
   { euc_eps :: IORef ExternalPackageState }
+
+initExternalUnitCache :: IO ExternalUnitCache
+initExternalUnitCache = ExternalUnitCache <$> newIORef initExternalPackageState
+
+initExternalPackageState :: ExternalPackageState
+initExternalPackageState = EPS
+  { eps_PIT = emptyPackageIfaceTable
+  , eps_free_holes = emptyInstalledModuleEnv
+  , eps_PTE = emptyTypeEnv
+  , eps_complete_matches = []
+  , eps_stats = EpsStats
+                { n_ifaces_in = 0
+                , n_decls_in = 0
+                , n_decls_out = 0
+                }
+  }
 
 data ExternalPackageState = EPS
   { eps_PIT :: !PackageIfaceTable
