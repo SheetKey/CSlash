@@ -18,3 +18,6 @@ data KnotVars a
 instance Outputable (KnotVars a) where
   ppr NoKnotVars = text "NoKnot"
   ppr (KnotVars dom _) = text "Knotty:" <+> ppr dom
+
+emptyKnotVars :: KnotVars a
+emptyKnotVars = NoKnotVars
