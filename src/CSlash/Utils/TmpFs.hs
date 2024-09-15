@@ -36,6 +36,19 @@ newtype TempDir = TempDir FilePath
 emptyPathsToClean :: PathsToClean
 emptyPathsToClean = PathsToClean Set.empty Set.empty
 
+initTmpFs :: IO TmpFs
+initTmpFs = do
+  files <- newIORef emptyPathsToClean
+  subdirs <- newIORef emptyPathsToClean
+  dirs <- newIORef Map.empty
+  next <- newIORef 0
+  return $ TmpFs
+    { tmp_files_to_clean = files
+    , tmp_subdirs_to_clean = subdirs
+    , tmp_dirs_to_clean = dirs
+    , tmp_next_suffix = next
+    }
+
 cleanTempDirs :: Logger -> TmpFs -> IO ()
 cleanTempDirs logger tmpfs = mask_ $ do
   let ref = tmp_dirs_to_clean tmpfs
