@@ -13,6 +13,11 @@ module CSlash.Driver.Session
   , CsLink(..)
   , Option(..), showOpt
 
+  , Settings(..)
+
+  , defaultDynFlags
+  , initDynFlags
+  , defaultFatalMessager
   , augmentByWorkingDirectory
 
   , setUnsafeGlobalDynFlags
