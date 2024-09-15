@@ -170,6 +170,7 @@ library
                     , CSlash.Settings
                     , CSlash.Settings.Config
                     , CSlash.Settings.Constants
+                    , CSlash.Settings.IO
                     , CSlash.Settings.Utils
 
                     , CSlash.Show
