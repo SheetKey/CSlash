@@ -233,6 +233,7 @@ library
                     , CSlash.Unit.Database
                     , CSlash.Unit.Env
                     , CSlash.Unit.External
+                    , CSlash.Unit.Finder
                     , CSlash.Unit.Finder.Types
                     , CSlash.Unit.Home
                     , CSlash.Unit.Home.ModInfo
