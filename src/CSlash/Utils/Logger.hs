@@ -75,7 +75,7 @@ import Control.Monad
 import Control.Concurrent.MVar
 import System.IO.Unsafe
 import Debug.Trace (trace)
-import GHC.Platform.Ways
+import CSlash.Platform.Ways
 
 data LogFlags = LogFlags
   { log_default_user_context :: SDocContext
