@@ -58,7 +58,7 @@ data DriverMessage where
   DriverRedirectedNoMain :: !ModuleName -> DriverMessage
   DriverHomePackagesNotClosed :: ![UnitId] -> DriverMessage
   DriverInconsistentDynFlags :: String -> DriverMessage
-  DriverUnrecognisedFlag :: String -> DriverMessage
+  DriverUnrecognizedFlag :: String -> DriverMessage
   DriverDeprecatedFlag :: String -> String -> DriverMessage
 
 deriving instance Generic DriverMessage

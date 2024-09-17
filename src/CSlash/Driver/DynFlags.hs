@@ -5,13 +5,19 @@ module CSlash.Driver.DynFlags
   , FatalMessager, FlushOut(..)
   , ProfAuto(..)
   , hasPprDebug, hasNoDebugOutput, hasNoStateHack
-  , dopt
-  , gopt
-  , wopt
+  , dopt, dopt_set, dopt_unset
+  , gopt, gopt_set, gopt_unset
+  , wopt, wopt_set, wopt_unset
+  , wopt_fatal, wopt_set_fatal, wopt_unset_fatal
+  , wopt_set_all_custom, wopt_unset_all_custom
+  , wopt_set_all_fatal_custom, wopt_unset_all_fatal_custom
+  , wopt_set_custom, wopt_unset_custom
+  , wopt_set_fatal_custom, wopt_unset_fatal_custom
   , DynFlags(..)
   , ParMakeCount(..)
   , ways
   , HasDynFlags(..), ContainsDynFlags(..)
+  , RtsOptsEnabled(..)
   , CsMode(..), isOneShot
   , CsLink(..)
   , PackageFlag(..), PackageArg(..), ModRenaming(..)
@@ -26,11 +32,15 @@ module CSlash.Driver.DynFlags
   , defaultFlushOut
   , optLevelFlags
 
+  , TurnOnFlag
+  , turnOn
+  , turnOff
+
   , projectVersion
   , topDir, toolDir
   , globalPackageDatabasePath
 
-  , IncludeSpecs(..)
+  , IncludeSpecs(..), addGlobalInclude
 
   , initSDocContext
   ) where
@@ -170,7 +180,7 @@ data DynFlags = DynFlags
   , dynObjectSuf_ :: String
   , dynHiSuf_ :: String
 
-  , outputFile :: Maybe String
+  , outputFile_ :: Maybe String
   , dynOutputFile_ :: Maybe String
   , outputHi :: Maybe String
   , dynOutputHi :: Maybe String
@@ -211,7 +221,7 @@ data DynFlags = DynFlags
   , customWarningCategories :: WarningCategorySet
   , fatalCustomWarningCategories :: WarningCategorySet
 
-  , unfoldinngOpts :: !UnfoldingOpts
+  , unfoldingOpts :: !UnfoldingOpts
 
   , maxWorkerArgs :: Int
 
@@ -239,7 +249,7 @@ data DynFlags = DynFlags
   , maxErrors :: Maybe Int
 
   , initialUnique :: Word64
-  , iniqueIncrement :: Int
+  , uniqueIncrement :: Int
   }
 
 class HasDynFlags m where
@@ -353,7 +363,7 @@ defaultDynFlags mySettings = DynFlags
   , dynObjectSuf_ = "dyn_" ++ phaseInputExt StopLn
   , dynHiSuf_ = "dyn_hi"
 
-  , outputFile = Nothing
+  , outputFile_ = Nothing
   , dynOutputFile_ = Nothing
   , outputHi = Nothing
   , dynOutputHi = Nothing
@@ -394,7 +404,7 @@ defaultDynFlags mySettings = DynFlags
   , customWarningCategories = completeWarningCategorySet
   , fatalCustomWarningCategories = emptyWarningCategorySet
 
-  , unfoldinngOpts = defaultUnfoldingOpts
+  , unfoldingOpts = defaultUnfoldingOpts
 
   , maxWorkerArgs = 10
 
@@ -422,7 +432,7 @@ defaultDynFlags mySettings = DynFlags
   , maxErrors = Nothing
 
   , initialUnique = 0
-  , iniqueIncrement = 1
+  , uniqueIncrement = 1
   }
 
 type FatalMessager = String -> IO ()
@@ -523,6 +533,10 @@ data IncludeSpecs = IncludeSpecs
   }
   deriving Show
 
+addGlobalInclude :: IncludeSpecs -> [String] -> IncludeSpecs
+addGlobalInclude spec paths = let f = includePathsGlobal spec
+                              in spec { includePathsGlobal = f ++ paths }
+
 hasPprDebug :: DynFlags -> Bool
 hasPprDebug = dopt Opt_D_ppr_debug
 
@@ -535,6 +549,12 @@ hasNoStateHack = gopt Opt_G_NoStateHack
 dopt :: DumpFlag -> DynFlags -> Bool
 dopt = getDumpFlagFrom verbosity dumpFlags
 
+dopt_set :: DynFlags -> DumpFlag -> DynFlags
+dopt_set dflags f = dflags{ dumpFlags = EnumSet.insert f (dumpFlags dflags) }
+
+dopt_unset :: DynFlags -> DumpFlag -> DynFlags
+dopt_unset dfs f = dfs{ dumpFlags = EnumSet.delete f (dumpFlags dfs) }
+
 gopt :: GeneralFlag -> DynFlags -> Bool
 gopt Opt_PIC dflags
   | dynamicNow dflags = True
@@ -544,8 +564,63 @@ gopt Opt_SplitSections dflags
   | dynamicNow dflags = False
 gopt f dflags = f `EnumSet.member` generalFlags dflags
 
+gopt_set :: DynFlags -> GeneralFlag -> DynFlags
+gopt_set dfs f = dfs{ generalFlags = EnumSet.insert f (generalFlags dfs) }
+
+gopt_unset :: DynFlags -> GeneralFlag -> DynFlags
+gopt_unset dfs f = dfs{ generalFlags = EnumSet.delete f (generalFlags dfs) }
+
 wopt :: WarningFlag -> DynFlags -> Bool
 wopt f dflags = f `EnumSet.member` warningFlags dflags
+
+wopt_set :: DynFlags -> WarningFlag -> DynFlags
+wopt_set dfs f = dfs{ warningFlags = EnumSet.insert f (warningFlags dfs) }
+
+wopt_unset :: DynFlags -> WarningFlag -> DynFlags
+wopt_unset dfs f = dfs{ warningFlags = EnumSet.delete f (warningFlags dfs) }
+
+wopt_fatal :: WarningFlag -> DynFlags -> Bool
+wopt_fatal f dflags = f `EnumSet.member` fatalWarningFlags dflags
+
+wopt_set_fatal :: DynFlags -> WarningFlag -> DynFlags
+wopt_set_fatal dfs f
+    = dfs { fatalWarningFlags = EnumSet.insert f (fatalWarningFlags dfs) }
+
+wopt_unset_fatal :: DynFlags -> WarningFlag -> DynFlags
+wopt_unset_fatal dfs f
+    = dfs { fatalWarningFlags = EnumSet.delete f (fatalWarningFlags dfs) }
+
+wopt_set_all_custom :: DynFlags -> DynFlags
+wopt_set_all_custom dfs
+    = dfs{ customWarningCategories = completeWarningCategorySet }
+
+wopt_unset_all_custom :: DynFlags -> DynFlags
+wopt_unset_all_custom dfs
+    = dfs{ customWarningCategories = emptyWarningCategorySet }
+
+wopt_set_all_fatal_custom :: DynFlags -> DynFlags
+wopt_set_all_fatal_custom dfs
+    = dfs { fatalCustomWarningCategories = completeWarningCategorySet }
+
+wopt_unset_all_fatal_custom :: DynFlags -> DynFlags
+wopt_unset_all_fatal_custom dfs
+    = dfs { fatalCustomWarningCategories = emptyWarningCategorySet }
+
+wopt_set_custom :: DynFlags -> WarningCategory -> DynFlags
+wopt_set_custom dfs f = dfs{ customWarningCategories = insertWarningCategorySet f (customWarningCategories dfs) }
+
+wopt_unset_custom :: DynFlags -> WarningCategory -> DynFlags
+wopt_unset_custom dfs f = dfs{ customWarningCategories = deleteWarningCategorySet f (customWarningCategories dfs) }
+
+wopt_set_fatal_custom :: DynFlags -> WarningCategory -> DynFlags
+wopt_set_fatal_custom dfs f
+  = dfs{ fatalCustomWarningCategories =
+           insertWarningCategorySet f (fatalCustomWarningCategories dfs) }
+
+wopt_unset_fatal_custom :: DynFlags -> WarningCategory -> DynFlags
+wopt_unset_fatal_custom dfs f
+  = dfs{ fatalCustomWarningCategories =
+           deleteWarningCategorySet f (fatalCustomWarningCategories dfs) }
 
 defaultFlags :: Settings -> [GeneralFlag]
 defaultFlags settings
@@ -565,7 +640,6 @@ defaultFlags settings
     , Opt_VersionMacros
     , Opt_RPath
     , Opt_DumpWithWays
-    , Opt_CompactUnwind
     , Opt_ShowErrorContext
     , Opt_SpecialiseIncoherents
     ]
@@ -607,6 +681,14 @@ optLevelFlags
     , ([2], Opt_SpecConstr)
     , ([2], Opt_FastPAPCalls)
     ]
+
+type TurnOnFlag = Bool
+
+turnOn :: TurnOnFlag
+turnOn = True
+
+turnOff :: TurnOnFlag
+turnOff = False
 
 default_PIC :: Platform -> [GeneralFlag]
 default_PIC platform =

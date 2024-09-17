@@ -29,21 +29,44 @@ import Data.List.NonEmpty (NonEmpty(..))
 import Data.Maybe (fromMaybe,mapMaybe)
 
 data DumpFlag
-  = Opt_D_dump_parsed
-  | Opt_D_dump_parsed_ast
-  | Opt_D_dump_tc_trace               
-  | Opt_D_dump_rn_trace               
-  | Opt_D_dump_cs_trace               
-  | Opt_D_dump_tc                     
-  | Opt_D_dump_rn                     
-  | Opt_D_dump_rn_stats               
-  | Opt_D_verbose_core2core           
-  | Opt_D_dump_simpl_trace            
+  = Opt_D_dump_llvm
+  | Opt_D_dump_core_stats
+  | Opt_D_dump_ds
+  | Opt_D_dump_ds_preopt
   | Opt_D_dump_inlinings              
   | Opt_D_dump_verbose_inlinings      
-  | Opt_D_dump_core_stats             
+  | Opt_D_dump_simpl_trace            
+  | Opt_D_dump_occur_anal
+  | Opt_D_dump_parsed
+  | Opt_D_dump_parsed_ast
+  | Opt_D_dump_rn
+  | Opt_D_dump_rn_ast
+  | Opt_D_dump_simpl
+  | Opt_D_dump_simpl_iterations
+  | Opt_D_dump_spec
+  | Opt_D_dump_spec_constr
+  | Opt_D_dump_prep
+  | Opt_D_dump_late_cc
+  | Opt_D_dump_call_arity
+  | Opt_D_dump_exitify
+  | Opt_D_dump_dmdanal
+  | Opt_D_dump_dmd_signatures
+  | Opt_D_dump_cpranal
+  | Opt_D_dump_cpr_signatures
+  | Opt_D_dump_tc
+  | Opt_D_dump_tc_ast
+  | Opt_D_dump_hie
   | Opt_D_dump_types                  
-  | Opt_D_dump_simpl_iterations       
+  | Opt_D_dump_cse
+  | Opt_D_dump_float_out
+  | Opt_D_dump_float_in
+  | Opt_D_dump_liberate_case
+  | Opt_D_dump_static_argument_transformation
+  | Opt_D_dump_rn_trace               
+  | Opt_D_dump_rn_stats               
+  | Opt_D_dump_simpl_stats
+  | Opt_D_dump_cs_trace               
+  | Opt_D_dump_tc_trace               
   | Opt_D_dump_ec_trace
   | Opt_D_dump_if_trace
   | Opt_D_dump_BCOs
@@ -55,13 +78,14 @@ data DumpFlag
   | Opt_D_dump_mod_cycles             
   | Opt_D_dump_mod_map
   | Opt_D_dump_timings
+  | Opt_D_verbose_core2core           
   | Opt_D_dump_debug
   | Opt_D_ppr_debug
   | Opt_D_no_debug_output
   | Opt_D_dump_faststrings
   | Opt_D_faststring_stats
   | Opt_D_ipe_stats
-  deriving (Eq, Show, Enum)
+  deriving (Eq, Ord, Show, Enum, Bounded)
 
 getDumpFlagFrom
   :: (a -> Int)
@@ -99,6 +123,7 @@ data GeneralFlag
   = Opt_DumpToFile                     -- ^ Append dump output to files instead of stdout.
   | Opt_DumpWithWays                   -- ^ Use foo.ways.<dumpFlag> instead of foo.<dumpFlag>
   | Opt_D_dump_minimal_imports
+  | Opt_DoCoreLinting
   | Opt_DoBoundsChecking
 
   | Opt_WarnIsError                    -- -Werror; makes warnings fatal
@@ -205,15 +230,14 @@ data GeneralFlag
   | Opt_PIE                         -- ^ @-fPIE@
   | Opt_PICExecutable               -- ^ @-pie@
   | Opt_ExternalDynamicRefs
-  | Opt_Ticky
-  | Opt_Ticky_Allocd
-  | Opt_Ticky_LNE
-  | Opt_Ticky_Dyn_Thunk
-  | Opt_Ticky_Tag
-  | Opt_Ticky_AP                    -- ^ Use regular thunks even when we could use std ap thunks in order to get entry counts
+  -- | Opt_Ticky
+  -- | Opt_Ticky_Allocd
+  -- | Opt_Ticky_LNE
+  -- | Opt_Ticky_Dyn_Thunk
+  -- | Opt_Ticky_Tag
+  -- | Opt_Ticky_AP                    -- ^ Use regular thunks even when we could use std ap thunks in order to get entry counts
   | Opt_RPath
   | Opt_RelativeDynlibPaths
-  | Opt_CompactUnwind               -- ^ @-fcompact-unwind@
   | Opt_Hpc
   | Opt_FamAppCache
   | Opt_VersionMacros
@@ -283,8 +307,6 @@ data GeneralFlag
 
   -- keeping stuff
   | Opt_KeepHiDiffs
-  | Opt_KeepHcFiles
-  | Opt_KeepSFiles
   | Opt_KeepTmpFiles
   | Opt_KeepRawTokenStream
   | Opt_KeepLlvmFiles
@@ -299,7 +321,6 @@ data GeneralFlag
 
 data WarningFlag =
      Opt_WarnDuplicateExports
-   | Opt_WarnDuplicateConstraints
    | Opt_WarnRedundantConstraints
    | Opt_WarnIncompletePatterns
    | Opt_WarnIncompleteUniPatterns
@@ -320,7 +341,7 @@ data WarningFlag =
    | Opt_WarnUnusedImports
    | Opt_WarnUnusedMatches
    | Opt_WarnUnusedTypePatterns
-   | Opt_WarnUnrecognisedWarningFlags
+   | Opt_WarnUnrecognizedWarningFlags
    | Opt_WarnUnusedForalls
    | Opt_WarnDeprecatedFlags
    | Opt_WarnOrphans
@@ -358,7 +379,6 @@ warnFlagNames wflag = case wflag of
   Opt_WarnDeferredOutOfScopeVariables             -> "deferred-out-of-scope-variables" :| []
   Opt_WarnDeprecatedFlags                         -> "deprecated-flags" :| []
   Opt_WarnEmptyEnumerations                       -> "empty-enumerations" :| []
-  Opt_WarnDuplicateConstraints                    -> "duplicate-constraints" :| []
   Opt_WarnRedundantConstraints                    -> "redundant-constraints" :| []
   Opt_WarnDuplicateExports                        -> "duplicate-exports" :| []
   Opt_WarnInaccessibleCode                        -> "inaccessible-code" :| []
@@ -392,7 +412,7 @@ warnFlagNames wflag = case wflag of
   Opt_WarnUnusedPatternBinds                      -> "unused-pattern-binds" :| []
   Opt_WarnUnusedTopBinds                          -> "unused-top-binds" :| []
   Opt_WarnUnusedTypePatterns                      -> "unused-type-patterns" :| []
-  Opt_WarnUnrecognisedWarningFlags                -> "unrecognised-warning-flags" :| []
+  Opt_WarnUnrecognizedWarningFlags                -> "unrecognized-warning-flags" :| []
   Opt_WarnPartialFields                           -> "partial-fields" :| []
   Opt_WarnPrepositiveQualifiedModule              -> "prepositive-qualified-module" :| []
   Opt_WarnUnusedPackages                          -> "unused-packages" :| []
@@ -468,7 +488,7 @@ standardWarnings
         Opt_WarnInlineRuleShadowing,
         Opt_WarnUnsupportedLlvmVersion,
         Opt_WarnTabs,
-        Opt_WarnUnrecognisedWarningFlags,
+        Opt_WarnUnrecognizedWarningFlags,
         Opt_WarnInaccessibleCode,
         Opt_WarnUnicodeBidirectionalFormatCharacters
       ]

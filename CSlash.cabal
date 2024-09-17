@@ -68,6 +68,7 @@ library
                     , CSlash.Core.Kind
                     , CSlash.Core.Kind.FVs
                     , CSlash.Core.Kind.Subst
+                    , CSlash.Core.Opt.CallerCC
                     , CSlash.Core.Opt.CallerCC.Types
                     , CSlash.Core.Ppr
                     , CSlash.Core.TyCon
@@ -250,6 +251,7 @@ library
                     , CSlash.Unit.Module.ModIface
                     , CSlash.Unit.Module.ModSummary
                     , CSlash.Unit.Module.Warnings
+                    , CSlash.Unit.Parser
                     , CSlash.Unit.State
                     , CSlash.Unit.Types
 

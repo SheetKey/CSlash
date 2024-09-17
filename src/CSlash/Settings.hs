@@ -14,16 +14,15 @@ data Settings = Settings
   }
 
 data ToolSettings = ToolSettings
-  { toolSettings_ldSupportsCompactUnwind :: Bool
-  , toolSettings_ldSupportsFilelist :: Bool
+  { toolSettings_ldSupportsFilelist :: Bool
   , toolSettings_ldSupportsSingleModule :: Bool
   , toolSettings_mergeObjsSupportsResponseFiles :: Bool
   , toolSettings_ldIsGnuLd :: Bool
+  , toolSettings_ccSupportsNoPie :: Bool
   , toolSettings_useInplaceMinGW :: Bool
   , toolSettings_arSupportsDashL :: Bool
 
   , toolSettings_pgm_L :: String
-  , toolSettings_pgm_a :: (String, [Option])
   , toolSettings_pgm_l :: (String, [Option])
   , toolSettings_pgm_lm :: Maybe (String, [Option])
   , toolSettings_pgm_windres :: String

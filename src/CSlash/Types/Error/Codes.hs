@@ -71,7 +71,7 @@ type family CsDiagnosticCode c = n | n -> c where
   -- CsDiagnosticCode "PsWarnHaddockIgnoreMulti"                      = 05641
   -- CsDiagnosticCode "PsWarnStarBinder"                              = 21887
   -- CsDiagnosticCode "PsWarnStarIsType"                              = 39567
-  -- CsDiagnosticCode "PsWarnUnrecognisedPragma"                      = 42044
+  -- CsDiagnosticCode "PsWarnUnrecognizedPragma"                      = 42044
   -- CsDiagnosticCode "PsWarnMisplacedPragma"                         = 28007
   CsDiagnosticCode "PsErrImportPreQualified"                          = 07924
   CsDiagnosticCode "PsErrLexer"                                    = 21231
@@ -213,7 +213,7 @@ type family CsDiagnosticCode c = n | n -> c where
   CsDiagnosticCode "DriverInconsistentDynFlags"                    = 74335
   CsDiagnosticCode "DriverSafeHaskellIgnoredExtension"             = 98887
   CsDiagnosticCode "DriverPackageTrustIgnored"                     = 83552
-  CsDiagnosticCode "DriverUnrecognisedFlag"                        = 93741
+  CsDiagnosticCode "DriverUnrecognizedFlag"                        = 93741
   CsDiagnosticCode "DriverDeprecatedFlag"                          = 53692
 
   -- To generate new random numbers:

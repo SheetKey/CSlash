@@ -247,6 +247,9 @@ toUnitId (RealUnit (Definite iuid)) = iuid
 toUnitId (VirtUnit indef) = instUnitInstanceOf indef
 toUnitId HoleUnit = error "Hole unit"
 
+stringToUnitId :: String -> UnitId
+stringToUnitId = UnitId . mkFastString
+
 newtype Definite unit = Definite { unDefinite :: unit }
   deriving (Functor)
 

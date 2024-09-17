@@ -40,6 +40,19 @@ instance B.Binary NamePattern where
   put_ bh (PWildcard x) = B.put_ bh (1 :: Word8) >> B.put_ bh x
   put_ bh PEnd = B.put_ bh (2 :: Word8)
 
+type Parser = P.ReadP
+
+parseNamePattern :: Parser NamePattern
+parseNamePattern = pat
+  where
+    pat = star P.<++ wildcard P.<++ char P.<++ end
+    star = PChar '*' <$ P.string "\\*" <*> pat
+    wildcard = do
+      void $ P.char '*'
+      PWildcard <$> pat
+    char = PChar <$> P.get <*> pat
+    end = PEnd <$ P.eof
+
 -- "caller cost center"
 data CallerCcFilter = CallerCcFilter
   { ccfModuleName :: Maybe ModuleName
@@ -56,3 +69,27 @@ instance B.Binary CallerCcFilter where
   get bh = CallerCcFilter <$> B.get bh <*> B.get bh
   put_ bh (CallerCcFilter x y) = B.put_ bh x >> B.put_ bh y
 
+parseCallerCcFilter :: String -> Either String CallerCcFilter
+parseCallerCcFilter inp =
+  case P.readP_to_S parseCallerCcFilter' inp of
+    ((result, ""):_) -> Right result
+    _ -> Left $ "parse error on " ++ inp
+
+parseCallerCcFilter' :: Parser CallerCcFilter
+parseCallerCcFilter' =
+  CallerCcFilter
+  <$> moduleFilter
+  <* P.char '.'
+  <*> parseNamePattern
+  where
+    moduleFilter :: Parser (Maybe ModuleName)
+    moduleFilter =
+      (Just . mkModuleName <$> moduleName)
+      <|> (Nothing <$ P.char '*')
+
+    moduleName :: Parser String
+    moduleName = do
+      c <- P.satisfy isUpper
+      cs <- P.munch1 (\c -> isUpper c || isLower c || isDigit c || c == '_')
+      rest <- optional $ P.char '.' >> fmap ('.':) moduleName
+      return $ c : (cs ++ fromMaybe "" rest)

@@ -17,3 +17,12 @@ newtype Backend = Named BackendName
 
 llvmBackend :: Backend
 llvmBackend = Named LLVM
+
+noBackend :: Backend
+noBackend = Named NoBackend
+
+---------------------------------------------------------------------------------
+
+backendWritesFiles :: Backend -> Bool
+backendWritesFiles (Named LLVM) = True
+backendWritesFiles (Named NoBackend) = False

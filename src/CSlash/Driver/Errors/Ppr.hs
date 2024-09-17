@@ -123,8 +123,8 @@ instance Diagnostic DriverMessage where
          in mkSimpleDecorated msg
     DriverInconsistentDynFlags msg
       -> mkSimpleDecorated $ text msg
-    DriverUnrecognisedFlag arg
-      -> mkSimpleDecorated $ text $ "unrecognised warning flag: -" ++ arg
+    DriverUnrecognizedFlag arg
+      -> mkSimpleDecorated $ text $ "unrecognized warning flag: -" ++ arg
     DriverDeprecatedFlag arg msg
       -> mkSimpleDecorated $ text $ arg ++ " is deprecated: " ++ msg
 
@@ -153,8 +153,8 @@ instance Diagnostic DriverMessage where
       -> ErrorWithoutFlag
     DriverInconsistentDynFlags {}
       -> WarningWithFlag Opt_WarnInconsistentFlags
-    DriverUnrecognisedFlag {}
-      -> WarningWithFlag Opt_WarnUnrecognisedWarningFlags
+    DriverUnrecognizedFlag {}
+      -> WarningWithFlag Opt_WarnUnrecognizedWarningFlags
     DriverDeprecatedFlag {}
       -> WarningWithFlag Opt_WarnDeprecatedFlags
 
@@ -183,7 +183,7 @@ instance Diagnostic DriverMessage where
       -> noHints
     DriverInconsistentDynFlags {}
       -> noHints
-    DriverUnrecognisedFlag {}
+    DriverUnrecognizedFlag {}
       -> noHints
     DriverDeprecatedFlag {}
       -> noHints

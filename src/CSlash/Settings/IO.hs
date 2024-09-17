@@ -70,7 +70,6 @@ initSettings top_dir = do
                       else []
       cc_args = words cc_args_str ++ unreg_cc_args
 
-  ldSupportsCompactUnwind <- getBooleanSetting "ld supports compact unwind"
   ldSupportsFilelist <- getBooleanSetting "ld supports filelist"
   ldSupportsSingleModule <- getBooleanSetting "ld supports single module"
   mergeObjsSupportsResponseFiles <- getBooleanSetting "Merge objects supports response files"
@@ -89,9 +88,7 @@ initSettings top_dir = do
   ranlib_path <- getToolSetting "ranlib command"
 
   cc_link_args_str <- getToolSetting "C compiler link flags"
-  let as_prog = cc_prog
-      as_args = map Option cc_args
-      ld_prog = cc_prog
+  let ld_prog = cc_prog
       ld_args = map Option (cc_args ++ words cc_link_args_str)
   ld_r_prog <- getToolSetting "Merge objects command"
   ld_r_args <- getToolSetting "Merge objects flags"
@@ -119,8 +116,7 @@ initSettings top_dir = do
       }
 
     , sToolSettings = ToolSettings
-      { toolSettings_ldSupportsCompactUnwind = ldSupportsCompactUnwind
-      , toolSettings_ldSupportsFilelist = ldSupportsFilelist
+      { toolSettings_ldSupportsFilelist = ldSupportsFilelist
       , toolSettings_ldSupportsSingleModule = ldSupportsSingleModule
       , toolSettings_mergeObjsSupportsResponseFiles = mergeObjsSupportsResponseFiles
       , toolSettings_ldIsGnuLd = ldIsGnuLd
@@ -128,7 +124,6 @@ initSettings top_dir = do
       , toolSettings_arSupportsDashL = arSupportsDashL
 
       , toolSettings_pgm_L = unlit_path
-      , toolSettings_pgm_a = (as_prog, as_args)
       , toolSettings_pgm_l = (ld_prog, ld_args)
       , toolSettings_pgm_lm = ld_r
       , toolSettings_pgm_windres = windres_path

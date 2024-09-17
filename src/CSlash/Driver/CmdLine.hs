@@ -36,6 +36,12 @@ data Flag m = Flag
 defFlag :: String -> OptKind m -> Flag m
 defFlag name optKind = Flag name optKind AllModes
 
+defCsFlag :: String -> OptKind m -> Flag m
+defCsFlag name optKind = Flag name optKind OnlyCs
+
+defHiddenFlag :: String -> OptKind m -> Flag m
+defHiddenFlag name optKind = Flag name optKind HiddenFlag
+
 hoistFlag :: forall m n. (forall a. m a -> n a) -> Flag m -> Flag n
 hoistFlag f (Flag a b c) = Flag a (go b) c
   where
@@ -254,3 +260,11 @@ parseResponseFile path = do
   case res of
     Left _err -> addErr "Could not open response file" >> return []
     Right resp_file -> return $ map (mkGeneralLocated path) (unescapeArgs resp_file)
+
+--------------------------------------------------------
+-- Utils
+--------------------------------------------------------
+
+errorsToCsException :: [(String, String)] -> CsException
+errorsToCsException errs =
+  UsageError $ intercalate "\n" $ [ l ++ ": " ++ e | (l, e) <- errs ]
