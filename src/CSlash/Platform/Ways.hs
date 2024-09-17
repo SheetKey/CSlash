@@ -17,6 +17,9 @@ data Way
 
 type Ways = Set Way
 
+hasWay :: Ways -> Way -> Bool
+hasWay ws w = Set.member w ws
+
 addWay :: Way -> Ways -> Ways
 addWay = Set.insert
 
@@ -42,6 +45,13 @@ wayRTSOnly WayDyn = False
 wayRTSOnly WayProf = False
 wayRTSOnly WayThreaded = True
 wayRTSOnly WayDebug = True
+
+wayDesc :: Way -> String
+wayDesc (WayCustom xs) = xs
+wayDesc WayThreaded = "Threaded"
+wayDesc WayDebug = "Debug"
+wayDesc WayDyn = "Dynamic"
+wayDesc WayProf = "Profiling"
 
 wayGeneralFlags :: Platform -> Way -> [GeneralFlag]
 wayGeneralFlags _ (WayCustom{}) = []
