@@ -6,7 +6,7 @@ import System.IO
 
 configureHandleEncoding :: IO ()
 configureHandleEncoding = do
-  mb_val <- lookupEnv "CS_CHARENC"
+  mb_val <- lookupEnv "CSL_CHARENC"
   case mb_val of
     Just "UTF-8" -> do
       hSetEncoding stdout utf8
