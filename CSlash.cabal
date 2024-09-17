@@ -255,6 +255,8 @@ library
                     , CSlash.Unit.State
                     , CSlash.Unit.Types
 
+                    , CSlash.UniqueSubdir
+
                     , CSlash.Utils.Binary
                     , CSlash.Utils.BufHandle
                     , CSlash.Utils.CliOption
