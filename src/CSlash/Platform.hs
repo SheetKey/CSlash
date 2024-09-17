@@ -9,6 +9,7 @@ module CSlash.Platform
   , Arch(..)
   , OS(..)
   , ByteOrder(..)
+  , osElfTarget
   , PlatformMisc(..)
   ) where
 
