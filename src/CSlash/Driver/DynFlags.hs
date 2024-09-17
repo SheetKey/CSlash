@@ -36,8 +36,9 @@ module CSlash.Driver.DynFlags
   , turnOn
   , turnOff
 
-  , projectVersion
-  , topDir, toolDir
+  , programName, projectVersion
+  , csUsagePath, topDir, toolDir
+  , versionedAppDir, versionedFilePath
   , globalPackageDatabasePath
 
   , IncludeSpecs(..), addGlobalInclude
@@ -70,7 +71,7 @@ import CSlash.Unit.Module
 import CSlash.Unit.Module.Warnings
 import CSlash.Utils.CliOption
 import CSlash.SysTools.Terminal ( stderrSupportsAnsiColors )
--- import GHC.UniqueSubdir (uniqueSubdir)
+import CSlash.UniqueSubdir (uniqueSubdir)
 import CSlash.Utils.Outputable
 import CSlash.Utils.Panic
 import CSlash.Utils.TmpFs
@@ -122,8 +123,6 @@ data DynFlags = DynFlags
   , ruleCheck :: Maybe String
 
   , parMakeCount :: Maybe ParMakeCount
-
-  , enableTimeStats :: Bool
 
   , maxRelevantBinds :: Maybe Int
   -- , maxValidHoleFits :: Maybe Int
@@ -268,9 +267,9 @@ initDynFlags dflags = do
                           do str' <- peekCString enc cstr
                              return (str == str'))
                         `catchIOError` \_ -> return False
-  csNoUnicodeEnv <- lookupEnv "CS_NO_UNICODE"
+  csNoUnicodeEnv <- lookupEnv "CSL_NO_UNICODE"
   let useUnicode' = isNothing csNoUnicodeEnv && canUseUnicode
-  maybeCsColorsEnv <- lookupEnv "Cs_COLORS"
+  maybeCsColorsEnv <- lookupEnv "CSL_COLORS"
   let adjustCols (Just env) = Col.parseScheme env
       adjustCols Nothing = id
   let (useColor', colScheme') = adjustCols maybeCsColorsEnv (useColor dflags, colScheme dflags)
@@ -305,8 +304,6 @@ defaultDynFlags mySettings = DynFlags
   , ruleCheck = Nothing
 
   , parMakeCount = Nothing
-
-  , enableTimeStats = False
 
   , maxRelevantBinds = Just 6
   -- , maxValidHoleFits = Just 6
@@ -468,7 +465,6 @@ isOneShot _ = False
 data CsLink
   = NoLink
   | LinkBinary
-  | LinkInMemory
   | LinkDynLib
   | LinkStaticLib
   | LinkMergedObj
@@ -704,14 +700,34 @@ ways dflags
 topDir :: DynFlags -> FilePath
 topDir dflags = fileSettings_topDir $ fileSettings dflags
 
+programName :: DynFlags -> String
+programName dflags = csNameVersion_programName $ csNameVersion dflags
+
 projectVersion :: DynFlags -> String
 projectVersion dflags = csNameVersion_projectVersion (csNameVersion dflags)
+
+csUsagePath :: DynFlags -> FilePath
+csUsagePath dflags = fileSettings_csUsagePath $ fileSettings dflags
 
 toolDir :: DynFlags -> Maybe FilePath
 toolDir dflags = fileSettings_toolDir $ fileSettings dflags
 
 globalPackageDatabasePath :: DynFlags -> FilePath
 globalPackageDatabasePath dflags = fileSettings_globalPackageDatabase $ fileSettings dflags
+
+versionedAppDir :: String -> ArchOS -> MaybeT IO FilePath
+versionedAppDir appname platform = 
+  msum $ map (checkIfExists <=< fmap (</> versionedFilePath platform))
+  [ tryMaybeT $ getAppUserDataDirectory appname
+  , tryMaybeT $ getXdgDirectory XdgData appname
+  ]
+  where
+    checkIfExists dir = tryMaybeT (doesDirectoryExist dir) >>= \x -> case x of
+      True -> pure dir
+      False -> MaybeT (pure Nothing)
+
+versionedFilePath :: ArchOS -> FilePath
+versionedFilePath platform = uniqueSubdir platform
 
 initSDocContext :: DynFlags -> PprStyle -> SDocContext
 initSDocContext dflags style = SDC

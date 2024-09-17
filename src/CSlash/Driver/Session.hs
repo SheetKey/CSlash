@@ -16,8 +16,12 @@ module CSlash.Driver.Session
   , CsMode(..)
   , CsLink(..)
   , Option(..), showOpt
+  , setFlagsFromEnvFile
 
   , Settings(..)
+  , programName, projectVersion
+  , csUsagePath
+  , versionedAppDir, versionedFilePath
 
   , defaultDynFlags
   , initDynFlags
@@ -28,6 +32,9 @@ module CSlash.Driver.Session
   , CmdLineP(..), runCmdLineP
   , getCmdLineState, putCmdLineState
   , processCmdLineP
+
+  , parseDynamicFlagsCmdLine
+  , parseDynamicFlagsFull
 
   , flagsForCompletion
 
@@ -209,6 +216,13 @@ updOptLevel n = fst . updOptLevelChanged n
 *                                                                      *
 ********************************************************************* -}
 
+parseDynamicFlagsCmdLine
+  :: MonadIO m
+  => DynFlags
+  -> [Located String]
+  -> m (DynFlags, [Located String], Messages DriverMessage)
+parseDynamicFlagsCmdLine = parseDynamicFlagsFull flagsAll True
+
 newtype CmdLineP s a = CmdLineP (forall m. (Monad m) => StateT s m a)
   deriving (Functor)
 
@@ -240,6 +254,29 @@ processCmdLineP activeFlags s0 args =
   where
     getCmdLineP :: CmdLineP s a -> StateT s m a
     getCmdLineP (CmdLineP k) = k
+
+parseDynamicFlagsFull
+  :: MonadIO m
+  => [Flag (CmdLineP DynFlags)]
+  -> Bool
+  -> DynFlags
+  -> [Located String]
+  -> m (DynFlags, [Located String], Messages DriverMessage)
+parseDynamicFlagsFull activeFlags cmdline dflags0 args = do
+  ((leftover, errs, cli_warns), dflags1) <- processCmdLineP activeFlags dflags0 args
+
+  let rdr = renderWithContext (initSDocContext dflags0 defaultUserStyle)
+  unless (null errs) $ liftIO $ throwCsExceptionIO $ errorsToCsException $
+    map ((rdr . ppr . getLoc &&& unLoc) . errMsg) $ errs
+
+  let (dflags2, consistency_warnings) = makeDynFlagsConsistent dflags1
+
+  liftIO $ setUnsafeGlobalDynFlags dflags2
+
+  let diag_opts = initDiagOpts dflags2
+      warns = warnsToMessages diag_opts $ mconcat [consistency_warnings, cli_warns]
+
+  return (dflags2, leftover, warns)
 
 {- *********************************************************************
 *                                                                      *
@@ -284,9 +321,6 @@ dynamic_flags_deps =
                                      upd (\d -> d { parMakeCount = Just ParMakeNumProcessors })))
   , make_ord_flag defCsFlag "jsem" $ hasArg $ \f d ->
                                                 d { parMakeCount = Just (ParMakeSemaphore f) }
-
-    -- RTS options --------------------------------------------------------------
-  , make_ord_flag defFlag "Rcs-timing" (NoArg (upd (\d -> d { enableTimeStats = True })))
 
      -- ways --------------------------------------------------------------------
   , make_ord_flag defCsFlag "prof" (NoArg (addWayDynP WayProf))
@@ -1381,6 +1415,33 @@ setMainIs arg
 addLdInputs :: Option -> DynFlags -> DynFlags
 addLdInputs p dflags = dflags{ldInputs = ldInputs dflags ++ [p]}
 
+-- -----------------------------------------------------------------------------
+-- Load dynflags from environment files.
+
+setFlagsFromEnvFile :: FilePath -> String -> DynP ()
+setFlagsFromEnvFile envfile content = do
+  setGeneralFlag Opt_HideAllPackages
+  parseEnvFile envfile content
+
+parseEnvFile :: FilePath -> String -> DynP ()
+parseEnvFile envfile = mapM_ parseEntry . lines
+  where
+    parseEntry str = case words str of
+      ("package-db":_) -> addPkgDbRef (PkgDbPath (envdir </> db))
+        where
+          envdir = takeDirectory envfile
+          db = drop 11 str
+      ["clear-package-db"] -> clearPkgDb
+      ["hide-package", pkg] -> hidePackage pkg
+      ["global-package-db"] -> addPkgDbRef GlobalPkgDb
+      ["user-package-db"] -> addPkgDbRef UserPkgDb
+      ["pakcage-id", pkgid] -> exposePackageId pkgid
+      (('-':'-':_):_) -> return () 
+      [] -> return ()
+      _ -> throwCsException $ CmdLineError $
+           "Can't parse environment file entry: "
+           ++ envfile ++ ": " ++ str
+
 -----------------------------------------------------------------------------
 -- Paths & Libraries
 
@@ -1454,9 +1515,60 @@ compilerInfo dflags
     expandDirectories :: FilePath -> Maybe FilePath -> String -> String
     expandDirectories topd mtoold = expandToolDir useInplaceMinGW mtoold . expandTopDir topd
 
+makeDynFlagsConsistent :: DynFlags -> (DynFlags, [Warn])
+makeDynFlagsConsistent dflags
+  | ways dflags `hasWay` WayDyn && gopt Opt_BuildDynamicToo dflags
+  = let dflags' = gopt_unset dflags Opt_BuildDynamicToo
+        warn = "-dynamic-too is ignored when using -dynamic"
+    in loop dflags' warn
+
+  | gopt Opt_SplitSections dflags
+  , platformHasSubsectionsViaSymbols (targetPlatform dflags)
+  = let dflags' = gopt_unset dflags Opt_SplitSections
+        warn = "-fsplit-sections is not useful on this platform "
+               ++ "since it uses subsections-via-symbols. Ignoring."
+    in loop dflags' warn
+       
+  | backendUnregisterisedAbiOnly (backend dflags)
+    && not (platformUnregisterised (targetPlatform dflags))
+  = pgmError (backendDescription (backend dflags) ++
+              " supports only unregisterised ABI but target platform doesn't use it.")
+
+  | gopt Opt_Hpc dflags && not (backendSupportsHpc (backend dflags))
+  = let dflags' = gopt_unset dflags Opt_Hpc
+        warn = "Hpc can't be used with " ++ backendDescription (backend dflags) ++
+               ". Ignoring -fhpc."
+    in loop dflags' warn
+
+  | platformUnregisterised (targetPlatform dflags)
+  = pgmError "platformUnregisterised not supported (no ViaC backend)"
+
+  | not (osElfTarget os) && gopt Opt_PIE dflags
+  = loop (gopt_unset dflags Opt_PIE)
+         "Position-independent only supported on ELF platforms"
+
+  | LinkMergedObj <- csLink dflags
+  , Nothing <- outputFile dflags
+  = pgmError "--output must be specified when useing --merge-objs"
+
+  | otherwise = (dflags, mempty)
+  where
+    loc = mkGeneralSrcSpan (fsLit "when making flags consistent")
+    loop updated_dflags warning
+      = case makeDynFlagsConsistent updated_dflags of
+          (dflags', ws) -> (dflags', L loc (DriverInconsistentDynFlags warning) : ws)
+    platform = targetPlatform dflags
+    arch = platformArch platform
+    os = platformOS platform
+
+
 setUnsafeGlobalDynFlags :: DynFlags -> IO ()
 setUnsafeGlobalDynFlags dflags = do
   writeIORef v_unsafeHasPprDebug (hasPprDebug dflags)
   writeIORef v_unsafeHasNoDebugOutput (hasNoDebugOutput dflags)
   writeIORef v_unsafeHasNoStateHack (hasNoStateHack dflags)
 
+outputFile :: DynFlags -> Maybe String
+outputFile dflags
+  | dynamicNow dflags = dynOutputFile_ dflags
+  | otherwise = outputFile_ dflags
