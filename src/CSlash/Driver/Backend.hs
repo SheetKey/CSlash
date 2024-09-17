@@ -23,6 +23,18 @@ noBackend = Named NoBackend
 
 ---------------------------------------------------------------------------------
 
+backendDescription :: Backend -> String
+backendDescription (Named LLVM) = "LLVM"
+backendDescription (Named NoBackend) = "no code generated"
+
 backendWritesFiles :: Backend -> Bool
 backendWritesFiles (Named LLVM) = True
 backendWritesFiles (Named NoBackend) = False
+
+backendUnregisterisedAbiOnly :: Backend -> Bool
+backendUnregisterisedAbiOnly (Named LLVM) = False
+backendUnregisterisedAbiOnly (Named NoBackend) = False
+
+backendSupportsHpc :: Backend -> Bool
+backendSupportsHpc (Named LLVM) = True
+backendSupportsHpc (Named NoBackend) = True
