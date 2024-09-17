@@ -10,10 +10,13 @@ module CSlash
 
   , DynFlags(..), GeneralFlag(..), Severity(..), Backend, gopt
   , CsMode(..), CsLink(..)
-  , parseTargetFiles
+  , parseDynamicFlags, parseTargetFiles
+  , getSessionDynFlags
 
   , LoadHowMuch(..)
   ) where
+
+import Prelude hiding ((<>))
 
 import CSlash.Platform
 import CSlash.Platform.Ways
@@ -23,12 +26,12 @@ import CSlash.Driver.Phases   ( Phase(..), isCsSrcFilename
 import CSlash.Driver.Env
 import CSlash.Driver.Errors
 import CSlash.Driver.Errors.Types
--- import GHC.Driver.CmdLine
+import CSlash.Driver.CmdLine
 import CSlash.Driver.Session
 import CSlash.Driver.Backend
--- import GHC.Driver.Config.Finder (initFinderOpts)
+import CSlash.Driver.Config.Finder (initFinderOpts)
 import CSlash.Driver.Config.Parser (initParserOpts)
--- import GHC.Driver.Config.Logger (initLogFlags)
+import CSlash.Driver.Config.Logger (initLogFlags)
 -- import GHC.Driver.Config.StgToJS (initStgToJSConfig)
 import CSlash.Driver.Config.Diagnostic
 import CSlash.Driver.Main
@@ -213,6 +216,18 @@ initCslMonad mb_top_dir = setSession =<< liftIO (initCsEnv mb_top_dir)
 *                                                                      *
 ********************************************************************* -}
 
+parseDynamicFlags
+  :: MonadIO m
+  => Logger
+  -> DynFlags
+  -> [Located String]
+  -> m (DynFlags, [Located String], Messages DriverMessage)
+parseDynamicFlags logger dflags cmdline = do
+  (dflags1, leftovers, warns) <- parseDynamicFlagsCmdLine dflags cmdline
+  let logger1 = setLogFlags logger (initLogFlags dflags1)
+  dflags2 <- liftIO $ interpretPackageEnv logger1 dflags1
+  return (dflags2, leftovers, warns)
+
 parseTargetFiles :: DynFlags -> [String] -> (DynFlags, [(String, Maybe Phase)], [String])
 parseTargetFiles dflags0 fileish_args =
   let normal_fileish_paths = map normalise_hyp fileish_args
@@ -255,3 +270,100 @@ normalise_hyp fp
     strt_dot_sl = "./" `isPrefixOf` fp
     cur_dir = '.' : [pathSeparator]
     nfp = normalise fp
+
+-- -----------------------------------------------------------------------------
+-- Find the package environment (if one exists)
+
+interpretPackageEnv :: Logger -> DynFlags -> IO DynFlags
+interpretPackageEnv logger dflags = do
+  mPkgEnv <- runMaybeT $ msum $
+              [ getCmdLineArg >>= \ env -> msum
+                [ probeNullEnv env
+                , probeEnvFile env
+                , probeEnvName env
+                , cmdLineError env
+                ]
+              , getEnvVar >>= \ env -> msum
+                [ probeNullEnv env
+                , probeEnvFile env
+                , probeEnvName env
+                , envError env
+                ]
+              , notIfHideAllPackages >> msum
+                [ findLocalEnvFile >>= probeEnvFile
+                , probeEnvName defaultEnvName
+                ]
+              ]
+  case mPkgEnv of
+    Nothing -> return dflags
+    Just "-" -> return dflags
+    Just envfile -> do
+      content <- readFile envfile
+      compilationProgressMsg logger (text "Loaded package environment from " <> text envfile)
+      let (_, dflags') = runCmdLineP (runEwM (setFlagsFromEnvFile envfile content)) dflags
+      return dflags'
+  where
+    archOS = platformArchOS (targetPlatform dflags)
+
+    namedEnvPath :: String -> MaybeT IO FilePath
+    namedEnvPath name = do
+      appdir <- versionedAppDir (programName dflags) archOS
+      return $ appdir </> "environments" </> name
+
+    probeEnvName :: String -> MaybeT IO FilePath
+    probeEnvName name = probeEnvFile =<< namedEnvPath name
+
+    probeEnvFile :: FilePath -> MaybeT IO FilePath
+    probeEnvFile path = do
+      guard =<< liftMaybeT (doesFileExist path)
+      return path
+
+    probeNullEnv :: FilePath -> MaybeT IO FilePath
+    probeNullEnv "-" = return "-"
+    probeNullEnv _ = mzero
+
+    getCmdLineArg :: MaybeT IO String
+    getCmdLineArg = MaybeT $ return $ packageEnv dflags
+
+    getEnvVar :: MaybeT IO String
+    getEnvVar = do
+      mvar <- liftMaybeT $ MC.try $ getEnv "CSL_ENVIRONMENT"
+      case mvar of
+        Right var -> return var
+        Left err -> if isDoesNotExistError err
+                    then mzero
+                    else liftMaybeT $ throwIO err
+
+    notIfHideAllPackages :: MaybeT IO ()
+    notIfHideAllPackages =
+      guard (not (gopt Opt_HideAllPackages dflags))
+
+    defaultEnvName :: String
+    defaultEnvName = "default"
+
+    localEnvFileName :: FilePath
+    localEnvFileName = ".csl.environment" <.> versionedFilePath archOS
+
+    findLocalEnvFile :: MaybeT IO FilePath
+    findLocalEnvFile = do
+      curdir <- liftMaybeT getCurrentDirectory
+      homedir <- tryMaybeT getHomeDirectory
+      let probe dir | isDrive dir || dir == homedir = mzero
+          probe dir = do
+            let file = dir </> localEnvFileName
+            exists <- liftMaybeT (doesFileExist file)
+            if exists
+              then return file
+              else probe (takeDirectory dir)
+
+      probe curdir
+
+    cmdLineError :: String -> MaybeT IO a
+    cmdLineError env = liftMaybeT . throwCsExceptionIO . CmdLineError $
+      "Package environment " ++ show env ++ " not found"
+
+    envError :: String -> MaybeT IO a
+    envError env = liftMaybeT . throwCsExceptionIO . CmdLineError $
+      "Package environment "
+      ++ show env
+      ++ " (specified in CSL_ENVIRONMENT) not found"
