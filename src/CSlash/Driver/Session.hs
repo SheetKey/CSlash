@@ -16,6 +16,7 @@ module CSlash.Driver.Session
   , CsMode(..)
   , CsLink(..)
   , Option(..), showOpt
+  , makeDynFlagsConsistent
   , setFlagsFromEnvFile
 
   , Settings(..)
@@ -1572,3 +1573,9 @@ outputFile :: DynFlags -> Maybe String
 outputFile dflags
   | dynamicNow dflags = dynOutputFile_ dflags
   | otherwise = outputFile_ dflags
+
+updatePlatformConstants :: DynFlags -> Maybe PlatformConstants -> IO DynFlags
+updatePlatformConstants dflags mconstants = 
+  let platform1 = (targetPlatform dflags) { platform_constants = mconstants }
+      dflags1 = dflags { targetPlatform = platform1 }
+  in pure dflags1
