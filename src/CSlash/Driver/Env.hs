@@ -50,3 +50,18 @@ import CSlash.Unit.Module.Graph
 
 cs_home_unit_maybe :: CsEnv -> Maybe HomeUnit
 cs_home_unit_maybe = ue_homeUnit . cs_unit_env
+
+cs_HUG :: CsEnv -> HomeUnitGraph
+cs_HUG = ue_home_unit_graph . cs_unit_env
+
+cs_all_home_unit_ids :: CsEnv -> Set.Set UnitId
+cs_all_home_unit_ids = unitEnv_keys . cs_HUG
+
+csUpdateLoggerFlags :: CsEnv -> CsEnv
+csUpdateLoggerFlags h = h
+  { cs_logger = setLogFlags (cs_logger h) (initLogFlags (cs_dflags h)) }
+
+csSetActiveUnitId :: HasDebugCallStack => UnitId -> CsEnv -> CsEnv
+csSetActiveUnitId uid e = e
+  { cs_unit_env = ue_setActiveUnit uid (cs_unit_env e)
+  , cs_dflags = ue_unitFlags uid (cs_unit_env e) }
