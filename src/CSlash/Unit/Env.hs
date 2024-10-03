@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE DeriveTraversable #-}
 
@@ -73,6 +74,14 @@ type UnitEnvGraphKey = UnitId
 newtype UnitEnvGraph v = UnitEnvGraph
   { unitEnv_graph :: Map UnitEnvGraphKey v }
   deriving (Functor, Foldable, Traversable)
+
+unitEnv_insert :: UnitEnvGraphKey -> v -> UnitEnvGraph v -> UnitEnvGraph v
+unitEnv_insert unitId env unitEnv = unitEnv
+  { unitEnv_graph = Map.insert unitId env (unitEnv_graph unitEnv) }
+
+unitEnv_delete :: UnitEnvGraphKey -> UnitEnvGraph v -> UnitEnvGraph v
+unitEnv_delete uid unitEnv = unitEnv
+  { unitEnv_graph = Map.delete uid (unitEnv_graph unitEnv) }
   
 unitEnv_singleton :: UnitEnvGraphKey -> v -> UnitEnvGraph v
 unitEnv_singleton active m = UnitEnvGraph
@@ -154,6 +163,29 @@ ue_findHomeUnitEnv uid e = case unitEnv_lookup_maybe uid (ue_home_unit_graph e) 
 ue_updateHomeUnitEnv :: (HomeUnitEnv -> HomeUnitEnv) -> UnitId -> UnitEnv -> UnitEnv
 ue_updateHomeUnitEnv f uid e = e
   { ue_home_unit_graph = unitEnv_adjust f uid $ ue_home_unit_graph e }
+
+ue_renameUnitId :: HasDebugCallStack => UnitId -> UnitId -> UnitEnv -> UnitEnv
+ue_renameUnitId oldUnit newUnit unitEnv = case ue_findHomeUnitEnv_maybe oldUnit unitEnv of
+  Nothing ->
+    pprPanic "Tried to rename unit, but it didn't exist"
+    $ text "Rename old unit \"" <> ppr oldUnit <> text "\" to \"" <> ppr newUnit <> text "\""
+    $$ nest 2 (pprUnitEnvGraph unitEnv)
+  Just oldEnv ->
+    let activeUnit :: UnitId
+        !activeUnit = if ue_currentUnit unitEnv == oldUnit
+                      then newUnit
+                      else ue_currentUnit unitEnv
+        newInternalUnitEnv = oldEnv
+          { homeUnitEnv_dflags = (homeUnitEnv_dflags oldEnv)
+                                 { homeUnitId_ = newUnit }
+          }
+    in unitEnv
+       { ue_current_unit = activeUnit
+       , ue_home_unit_graph =
+           unitEnv_insert newUnit newInternalUnitEnv
+           $ unitEnv_delete oldUnit
+           $ ue_home_unit_graph unitEnv
+       }
 
 -- ---------------------------------------------
 -- Asserts to enforce invariants for the UnitEnv
