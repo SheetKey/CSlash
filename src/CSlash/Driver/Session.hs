@@ -23,6 +23,7 @@ module CSlash.Driver.Session
   , programName, projectVersion
   , csUsagePath
   , versionedAppDir, versionedFilePath
+  , updatePlatformConstants
 
   , defaultDynFlags
   , initDynFlags
