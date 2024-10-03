@@ -11,6 +11,7 @@ module CSlash.Platform
   , ByteOrder(..)
   , osElfTarget
   , PlatformMisc(..)
+  , PlatformConstants(..)
   ) where
 
 import GHC.Read
