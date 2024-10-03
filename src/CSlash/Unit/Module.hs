@@ -9,6 +9,7 @@ module CSlash.Unit.Module
   , getModuleInstantiation
   , getUnitInstantiations
 
+  , mkHoleModule
   , isHoleModule
   , stableModuleCmp
   , moduleStableString
@@ -27,10 +28,6 @@ moduleStableString Module{..} =
 stableModuleCmp :: Module -> Module -> Ordering
 stableModuleCmp (Module p1 n1) (Module p2 n2) =
   stableUnitCmp p1 p2 <> stableModuleNameCmp n1 n2
-
-isHoleModule :: GenModule (GenUnit u) -> Bool
-isHoleModule (Module HoleUnit _) = True
-isHoleModule _ = False
 
 installedModuleEq :: InstalledModule -> Module -> Bool
 installedModuleEq imod mod =
@@ -52,3 +49,10 @@ getUnitInstantiations :: Unit -> (UnitId, Maybe InstantiatedUnit)
 getUnitInstantiations (VirtUnit iuid) = (instUnitInstanceOf iuid, Just iuid)
 getUnitInstantiations (RealUnit (Definite uid)) = (uid, Nothing)
 getUnitInstantiations (HoleUnit {}) = error "Hole unit"
+
+isHoleModule :: GenModule (GenUnit u) -> Bool
+isHoleModule (Module HoleUnit _) = True
+isHoleModule _ = False
+
+mkHoleModule :: ModuleName -> GenModule (GenUnit u)
+mkHoleModule = Module HoleUnit
