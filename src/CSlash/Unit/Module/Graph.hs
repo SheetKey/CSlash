@@ -1,4 +1,6 @@
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE DeriveTraversable #-}
 
 module CSlash.Unit.Module.Graph where
 
@@ -30,12 +32,21 @@ import CSlash.Unit.Module
 import Data.Bifunctor
 import Data.Function
 import Data.List (sort)
--- import GHC.Data.List.SetOps
+import CSlash.Data.List.SetOps
 
 data ModuleGraphNode
   = InstantiationNode UnitId InstantiatedUnit
   | ModuleNode [NodeKey] ModSummary
   | LinkNode [NodeKey] UnitId
+
+moduleGraphNodeModule :: ModuleGraphNode -> Maybe ModuleName
+moduleGraphNodeModule mgn = ms_mod_name <$> (moduleGraphNodeModSum mgn)
+
+moduleGraphNodeModSum :: ModuleGraphNode -> Maybe ModSummary
+moduleGraphNodeModSum (InstantiationNode {}) = Nothing
+moduleGraphNodeModSum (LinkNode {}) = Nothing
+moduleGraphNodeModSum (ModuleNode _ ms) = Just ms
+
 
 instance Outputable ModuleGraphNode where
   ppr = \case
@@ -77,8 +88,76 @@ data ModuleGraph = ModuleGraph
   , mg_trans_deps :: Map.Map NodeKey (Set.Set NodeKey)
   }
 
+mapMG :: (ModSummary -> ModSummary) -> ModuleGraph -> ModuleGraph
+mapMG f mg@ModuleGraph{..} = mg
+  { mg_mss = flip fmap mg_mss $ \case
+      InstantiationNode uid iuid -> InstantiationNode uid iuid
+      LinkNode uid nks -> LinkNode uid nks
+      ModuleNode deps ms -> ModuleNode deps (f ms)
+  }
+
+unionMG :: ModuleGraph -> ModuleGraph -> ModuleGraph
+unionMG a b =
+  let new_mss = nubOrdBy compare $ mg_mss a `mappend` mg_mss b
+  in ModuleGraph
+     { mg_mss = new_mss
+     , mg_trans_deps = mkTransDeps new_mss
+     }
+
 emptyMG :: ModuleGraph
 emptyMG = ModuleGraph [] Map.empty
+
+mkTransDeps :: [ModuleGraphNode] -> Map.Map NodeKey (Set.Set NodeKey)
+mkTransDeps mss =
+  let (gg, _) = moduleGraphNodes mss
+  in allReachable gg (mkNodeKey . node_payload)
+
+type SummaryNode = Node Int ModuleGraphNode
+
+summaryNodeKey :: SummaryNode -> Int
+summaryNodeKey = node_key
+
+summaryNodeSummary :: SummaryNode -> ModuleGraphNode
+summaryNodeSummary = node_payload
+
+nodeDependencies :: ModuleGraphNode -> [NodeKey]
+nodeDependencies = \case
+  LinkNode deps _ -> deps
+  InstantiationNode uid iuid ->
+    NodeKey_Module
+    . (\mod -> ModNodeKeyWithUid mod uid)
+    <$> uniqDSetToList (instUnitHoles iuid)
+  ModuleNode deps _ -> deps
+
+moduleGraphNodes :: [ModuleGraphNode] -> (Graph SummaryNode, NodeKey -> Maybe SummaryNode)
+moduleGraphNodes summaries =
+  (graphFromEdgedVerticesUniq nodes, lookup_node)
+  where
+    nodes = go <$> numbered_summaries
+      where
+        go (s, key) = let lkup_key = ms_mod <$> moduleGraphNodeModSum s
+                      in DigraphNode s key $ out_edge_keys $ nodeDependencies s
+
+    numbered_summaries = zip summaries [1..]
+
+    lookup_node :: NodeKey -> Maybe SummaryNode
+    lookup_node key = Map.lookup key (unNodeMap node_map)
+
+    lookup_key :: NodeKey -> Maybe Int
+    lookup_key = fmap summaryNodeKey . lookup_node
+ 
+    node_map :: NodeMap SummaryNode
+    node_map = NodeMap $ Map.fromList
+               [ (mkNodeKey s, node)
+               | node <- nodes
+               , let s = summaryNodeSummary node
+               ]
+
+    out_edge_keys :: [NodeKey] -> [Int]
+    out_edge_keys = mapMaybe lookup_key
+
+newtype NodeMap a = NodeMap { unNodeMap :: Map.Map NodeKey a }
+  deriving (Functor, Traversable, Foldable)
 
 mkNodeKey :: ModuleGraphNode -> NodeKey
 mkNodeKey = \case
