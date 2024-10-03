@@ -44,8 +44,8 @@ module CSlash.Utils.Error (
   showPass,
   withTiming, withTimingSilent,
   debugTraceMsg,
-  ghcExit,
-  prettyPrintGhcErrors,
+  csExit,
+  prettyPrintCsErrors,
   traceCmd,
   traceSystoolCommand,
 
@@ -267,8 +267,8 @@ sortMsgBag mopts = maybeLimit . sortBy (cmp `on` errMsgSpan) . bagToList
       | otherwise
       = id
 
-ghcExit :: Logger -> Int -> IO ()
-ghcExit logger val
+csExit :: Logger -> Int -> IO ()
+csExit logger val
   | val == 0  = exitWith ExitSuccess
   | otherwise = do errorMsg logger (text "\nCompilation had errors\n\n")
                    exitWith (ExitFailure val)
@@ -285,7 +285,7 @@ fatalErrorMsg logger msg =
 compilationProgressMsg :: Logger -> SDoc -> IO ()
 compilationProgressMsg logger msg = do
   let logflags = logFlags logger
-  let str = renderWithContext (log_default_user_context logflags) (text "GHC progress: " <> msg)
+  let str = renderWithContext (log_default_user_context logflags) (text "CSL progress: " <> msg)
   traceEventIO str
   when (logVerbAtLeast logger 1) $
     logOutput logger $ withPprStyle defaultUserStyle msg
@@ -376,7 +376,7 @@ withTiming' logger what force_result prtimings action
             && not (log_dump_to_file (logFlags logger))
 
           recordAllocs alloc =
-            liftIO $ traceMarkerIO $ "GHC:allocs:" ++ show alloc
+            liftIO $ traceMarkerIO $ "CSL:allocs:" ++ show alloc
 
           eventBegins ctx w = do
             let doc = eventBeginsDoc ctx w
@@ -388,8 +388,8 @@ withTiming' logger what force_result prtimings action
             whenPrintTimings $ traceMarkerIO doc
             liftIO $ traceEventIO doc
 
-          eventBeginsDoc ctx w = showSDocOneLine ctx $ text "GHC:started:" <+> w
-          eventEndsDoc   ctx w = showSDocOneLine ctx $ text "GHC:finished:" <+> w
+          eventBeginsDoc ctx w = showSDocOneLine ctx $ text "CSL:started:" <+> w
+          eventEndsDoc   ctx w = showSDocOneLine ctx $ text "CSL:finished:" <+> w
 
 debugTraceMsg :: Logger -> Int -> SDoc -> IO ()
 debugTraceMsg logger val msg =
@@ -415,8 +415,8 @@ logOutput :: Logger -> SDoc -> IO ()
 logOutput logger msg = logMsg logger MCOutput noSrcSpan msg
 
 
-prettyPrintGhcErrors :: ExceptionMonad m => Logger -> m a -> m a
-prettyPrintGhcErrors logger = do
+prettyPrintCsErrors :: ExceptionMonad m => Logger -> m a -> m a
+prettyPrintCsErrors logger = do
   let ctx = log_default_user_context (logFlags logger)
   MC.handle $ \e -> case e of
     PprPanic str doc ->
