@@ -46,6 +46,8 @@ module CSlash.Driver.DynFlags
   , initSDocContext
   ) where
 
+import Prelude hiding ((<>))
+
 import CSlash.Platform
 import CSlash.Platform.Ways
 -- import GHC.Platform.Profile
@@ -502,6 +504,10 @@ data PackageDBFlag
   | NoGlobalPackageDB
   | ClearPackageDBs
   deriving (Eq)
+
+instance Outputable PackageFlag where
+  ppr (ExposePackage n arg rn) = text n <> braces (ppr arg <+> ppr rn)
+  ppr (HidePackage str) = text "-hide-package" <+> text str
 
 data DynLibLoader
   = Deployable
