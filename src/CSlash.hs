@@ -1,7 +1,9 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module CSlash
   ( defaultErrorHandler
+  , prettyPrintCsErrors
 
   , Csl, CslMonad(..), CsEnv
   , runCsl
@@ -12,6 +14,7 @@ module CSlash
   , CsMode(..), CsLink(..)
   , parseDynamicFlags, parseTargetFiles
   , getSessionDynFlags
+  , setSessionDynFlags
 
   , LoadHowMuch(..)
   ) where
@@ -216,6 +219,57 @@ initCslMonad mb_top_dir = setSession =<< liftIO (initCsEnv mb_top_dir)
 *                                                                      *
 ********************************************************************* -}
 
+setSessionDynFlags :: (HasCallStack, CslMonad m) => DynFlags -> m ()
+setSessionDynFlags dflags0 = do
+  cs_env <- getSession
+  logger <- getLogger
+  dflags <- checkNewDynFlags logger dflags0
+  let all_uids = cs_all_home_unit_ids cs_env
+  case S.toList all_uids of
+    [uid] -> do
+      setUnitDynFlagsNoCheck uid dflags
+      modifySession (csUpdateLoggerFlags . csSetActiveUnitId (homeUnitId_ dflags))
+    [] -> panic "nohue"
+    _ -> panic "setSessionDynFlags can only be used with a single home unit"
+
+setUnitDynFlagsNoCheck :: CslMonad m => UnitId -> DynFlags -> m ()
+setUnitDynFlagsNoCheck uid dflags1 = do
+  logger <- getLogger
+  cs_env <- getSession
+
+  let old_hue = ue_findHomeUnitEnv uid (cs_unit_env cs_env)
+      cached_unit_dbs = homeUnitEnv_unit_dbs old_hue
+  (dbs, unit_state, home_unit, mconstants) <- liftIO $
+    initUnits logger dflags1 cached_unit_dbs (cs_all_home_unit_ids cs_env)
+  updated_dflags <- liftIO $ updatePlatformConstants dflags1 mconstants
+
+  let upd hue = hue { homeUnitEnv_units = unit_state
+                    , homeUnitEnv_unit_dbs = Just dbs
+                    , homeUnitEnv_dflags = updated_dflags
+                    , homeUnitEnv_home_unit = Just home_unit
+                    }
+
+      unit_env = ue_updateHomeUnitEnv upd uid (cs_unit_env cs_env)
+
+      dflags = updated_dflags
+
+      unit_env0 = unit_env { ue_platform = targetPlatform dflags
+                           , ue_namever = csNameVersion dflags
+                           }
+
+      !unit_env1 = if homeUnitId_ dflags /= uid
+                   then ue_renameUnitId uid (homeUnitId_ dflags) unit_env0
+                   else unit_env0
+
+  modifySession $ \h -> h { cs_unit_env = unit_env1 }
+
+  invalidateModSummaryCache
+
+invalidateModSummaryCache :: CslMonad m => m ()
+invalidateModSummaryCache = modifySession $ \h -> h { cs_mod_graph = mapMG inval (cs_mod_graph h) }
+  where
+    inval ms = ms { ms_cs_hash = fingerprint0 }
+
 parseDynamicFlags
   :: MonadIO m
   => Logger
@@ -270,6 +324,17 @@ normalise_hyp fp
     strt_dot_sl = "./" `isPrefixOf` fp
     cur_dir = '.' : [pathSeparator]
     nfp = normalise fp
+
+-----------------------------------------------------------------------------
+
+checkNewDynFlags :: MonadIO m => Logger -> DynFlags -> m DynFlags
+checkNewDynFlags logger dflags = do
+  let (dflags', warnings) = makeDynFlagsConsistent dflags
+      diag_opts = initDiagOpts dflags
+      print_config = initPrintConfig dflags
+  liftIO $ printOrThrowDiagnostics logger print_config diag_opts
+    $ fmap CsDriverMessage $ warnsToMessages diag_opts warnings
+  return dflags'
 
 -- -----------------------------------------------------------------------------
 -- Find the package environment (if one exists)
