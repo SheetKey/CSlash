@@ -10,4 +10,3 @@ cProjectName = "The CSlash Compiler"
 
 cProjectUnitId :: String
 cProjectUnitId = "csl-0.1.0-62bc"
-
