@@ -46,6 +46,9 @@ type InstantiatedModule = GenModule InstantiatedUnit
 mkModule :: u -> ModuleName -> GenModule u
 mkModule = Module
 
+instance Uniquable Module where
+  getUnique (Module p n) = getUnique (unitFS p `appendFS` moduleNameFS n)
+
 instance NFData (GenModule a) where
   rnf (Module unit name) = unit `seq` name `seq` ()
 
@@ -54,6 +57,9 @@ instance Outputable Module where
 
 instance Outputable InstalledModule where
   ppr (Module p n) = ppr p <> char ':' <> pprModuleName n
+
+instance Outputable InstantiatedModule where
+  ppr = pprInstantiatedModule
 
 instance Outputable InstantiatedUnit where
   ppr = pprInstantiatedUnit
@@ -74,6 +80,9 @@ pprInstantiatedUnit uid =
 
 class IsUnitId u where
   unitFS :: u -> FastString
+
+instance IsUnitId UnitKey where
+  unitFS (UnitKey fs) = fs
 
 instance IsUnitId UnitId where
   unitFS (UnitId fs) = fs
@@ -98,6 +107,15 @@ pprModule mod@(Module p n) = docWithStyle code doc
       | otherwise = pprModuleName n
 {-# SPECIALIZE pprModule :: Module -> SDoc #-}
 {-# SPECIALIZE pprModule :: Module -> HLine #-}
+
+pprInstantiatedModule :: InstantiatedModule -> SDoc
+pprInstantiatedModule (Module uid m) = ppr uid <> char ':' <> ppr m
+
+---------------------------------------------------------------------
+-- UNITS
+---------------------------------------------------------------------
+
+newtype UnitKey = UnitKey FastString
 
 data GenUnit uid
   = RealUnit !(Definite uid)
@@ -256,6 +274,9 @@ newtype Definite unit = Definite { unDefinite :: unit }
 virtualUnitId :: InstantiatedUnit -> UnitId
 virtualUnitId i = UnitId (instUnitFS i)
 
+unitIsDefinite :: Unit -> Bool
+unitIsDefinite = isEmptyUniqDSet . unitFreeModuleHoles
+
 newtype UnitId = UnitId { unitIdFS :: FastString }
   deriving (Data)
 
@@ -280,8 +301,20 @@ primUnitId = UnitId (fsLit "cslash-prim")
 primUnit :: Unit
 primUnit = RealUnit (Definite primUnitId)
 
+baseUnitId :: UnitId
+baseUnitId = UnitId (fsLit "base")
+
+baseUnit :: Unit
+baseUnit = RealUnit (Definite baseUnitId)
+
 mainUnitId :: UnitId
 mainUnitId = UnitId (fsLit "main")
 
 mainUnit :: Unit
 mainUnit = RealUnit (Definite mainUnitId)
+
+wiredInUnitIds :: [UnitId]
+wiredInUnitIds =
+  [ primUnitId
+  , baseUnitId
+  ]
