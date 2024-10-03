@@ -4,12 +4,17 @@ module CSlash.Unit.Info
   ( GenericUnitInfo(..)
   , GenUnitInfo
   , UnitInfo
+  , UnitKeyInfo
+  , mkUnitKeyInfo
+  , mapUnitInfo
 
   , mkUnit
 
   , PackageId(..)
   , PackageName(..)
   , Version(..)
+  , unitPackageNameString
+  , unitPackageIdString
   , pprUnitInfo
   ) where
 
@@ -39,7 +44,33 @@ import Data.List (isPrefixOf, stripPrefix)
 type GenUnitInfo unit
   = GenericUnitInfo PackageId PackageName unit ModuleName (GenModule (GenUnit unit))
 
+type UnitKeyInfo = GenUnitInfo UnitKey
+
 type UnitInfo = GenUnitInfo UnitId
+
+mkUnitKeyInfo :: DbUnitInfo -> UnitKeyInfo
+mkUnitKeyInfo = mapGenericUnitInfo
+  mkUnitKey'
+  mkPackageIdentifier'
+  mkPackageName'
+  mkModuleName'
+  mkModule'
+  where
+    mkPackageIdentifier' = PackageId . mkFastStringByteString
+    mkPackageName' = PackageName . mkFastStringByteString
+    mkUnitKey' = UnitKey . mkFastStringByteString
+    mkModuleName' = mkModuleNameFS . mkFastStringByteString
+    mkVirtUnitKey' i = case i of
+      DbInstUnitId cid insts -> mkVirtUnit (mkUnitKey' cid)
+                                           (fmap (bimap mkModuleName' mkModule') insts)
+      DbUnitId uid -> RealUnit (Definite (mkUnitKey' uid))
+    mkModule' m = case m of
+      DbModule uid n -> mkModule (mkVirtUnitKey' uid) (mkModuleName' n)
+      DbModuleVar n -> mkHoleModule (mkModuleName' n)
+ 
+
+mapUnitInfo :: IsUnitId v => (u -> v) -> GenUnitInfo u -> GenUnitInfo v
+mapUnitInfo f = mapGenericUnitInfo f id id id (fmap (mapGenUnit f))
 
 newtype PackageId = PackageId FastString deriving (Eq)
 
@@ -58,6 +89,16 @@ instance Outputable PackageId where
 
 instance Outputable PackageName where
   ppr (PackageName str) = ftext str
+
+unitPackageIdString :: GenUnitInfo u -> String
+unitPackageIdString pkg = unpackFS str
+  where
+    PackageId str = unitPackageId pkg
+
+unitPackageNameString :: GenUnitInfo u -> String
+unitPackageNameString pkg = unpackFS str
+  where
+    PackageName str = unitPackageName pkg
 
 pprUnitInfo :: UnitInfo -> SDoc
 pprUnitInfo GenericUnitInfo {..} =
