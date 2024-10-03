@@ -78,11 +78,21 @@ unitEnv_singleton :: UnitEnvGraphKey -> v -> UnitEnvGraph v
 unitEnv_singleton active m = UnitEnvGraph
   { unitEnv_graph = Map.singleton active m }
 
+unitEnv_adjust :: (v -> v) -> UnitEnvGraphKey -> UnitEnvGraph v -> UnitEnvGraph v
+unitEnv_adjust f uid unitEnv = unitEnv
+  { unitEnv_graph = Map.adjust f uid (unitEnv_graph unitEnv) }
+
+unitEnv_member :: UnitEnvGraphKey -> UnitEnvGraph v -> Bool
+unitEnv_member u env = Map.member u (unitEnv_graph env)
+
 unitEnv_lookup_maybe :: UnitEnvGraphKey -> UnitEnvGraph v -> Maybe v
 unitEnv_lookup_maybe u env = Map.lookup u (unitEnv_graph env)
 
 unitEnv_lookup :: UnitEnvGraphKey -> UnitEnvGraph v -> v
 unitEnv_lookup u env = fromJust $ unitEnv_lookup_maybe u env
+
+unitEnv_keys :: UnitEnvGraph v -> Set.Set UnitEnvGraphKey
+unitEnv_keys env = Map.keysSet (unitEnv_graph env)
 
 unitEnv_elts :: UnitEnvGraph v -> [(UnitEnvGraphKey, v)]
 unitEnv_elts env = Map.toList (unitEnv_graph env)
@@ -93,6 +103,13 @@ unitEnv_elts env = Map.toList (unitEnv_graph env)
 
 ue_units :: HasDebugCallStack => UnitEnv -> UnitState
 ue_units = homeUnitEnv_units . ue_currentHomeUnitEnv
+
+-- -------------------------------------------------------
+-- Query and modify DynFlags in HomeUnitEnv
+-- -------------------------------------------------------
+
+ue_unitFlags :: HasDebugCallStack => UnitId -> UnitEnv -> DynFlags
+ue_unitFlags uid ue_env = homeUnitEnv_dflags $ ue_findHomeUnitEnv uid ue_env
 
 -- -------------------------------------------------------
 -- Query and modify home units in HomeUnitEnv
@@ -112,6 +129,10 @@ ue_currentHomeUnitEnv e =
     Nothing -> pprPanic "packageNotFound" $
                (ppr $ ue_currentUnit e) $$ ppr (ue_home_unit_graph e)
 
+ue_setActiveUnit :: UnitId -> UnitEnv -> UnitEnv
+ue_setActiveUnit u ue_env = assertUnitEnvInvariant $ ue_env
+  { ue_current_unit = u }
+
 ue_currentUnit :: UnitEnv -> UnitId
 ue_currentUnit = ue_current_unit
 
@@ -129,6 +150,20 @@ ue_findHomeUnitEnv uid e = case unitEnv_lookup_maybe uid (ue_home_unit_graph e) 
              $ text "unit (" <> ppr uid <> text ")"
              $$ pprUnitEnvGraph e
   Just hue -> hue
+
+ue_updateHomeUnitEnv :: (HomeUnitEnv -> HomeUnitEnv) -> UnitId -> UnitEnv -> UnitEnv
+ue_updateHomeUnitEnv f uid e = e
+  { ue_home_unit_graph = unitEnv_adjust f uid $ ue_home_unit_graph e }
+
+-- ---------------------------------------------
+-- Asserts to enforce invariants for the UnitEnv
+-- ---------------------------------------------
+
+assertUnitEnvInvariant :: HasDebugCallStack => UnitEnv -> UnitEnv
+assertUnitEnvInvariant u =
+  if ue_current_unit u `unitEnv_member` ue_home_unit_graph u
+  then u
+  else pprPanic "invariant" (ppr (ue_current_unit u) $$ ppr (ue_home_unit_graph u))
 
 -- -----------------------------------------------------------------------------
 -- Pretty output functions
