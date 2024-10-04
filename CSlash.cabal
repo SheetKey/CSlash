@@ -168,6 +168,7 @@ library
                     , CSlash.Platform
                     , CSlash.Platform.ArchOS
                     , CSlash.Platform.Constants
+                    , CSlash.Platform.Profile
                     , CSlash.Platform.Ways
 
                     , CSlash.Settings
