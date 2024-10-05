@@ -193,6 +193,7 @@ library
                     , CSlash.Types.Avail
                     , CSlash.Types.Basic
                     , CSlash.Types.CompleteMatch
+                    , CSlash.Types.Demand
                     , CSlash.Types.Error
                     , CSlash.Types.Error.Codes
                     , CSlash.Types.Fixity
