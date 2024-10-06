@@ -2,6 +2,8 @@
 
 module CSlash.Types.Avail where
 
+import Prelude hiding ((<>))
+
 import CSlash.Types.Name
 import CSlash.Types.Name.Env
 import CSlash.Types.Name.Set
@@ -24,3 +26,41 @@ data AvailInfo
   deriving Data
 
 type Avails = [AvailInfo]
+
+availExportsDecl :: AvailInfo -> Bool
+availExportsDecl (AvailTC ty_name names)
+  | n : _ <- names = ty_name == n
+  | otherwise = False
+availExportsDecl _ = True
+
+availSubordinateNames :: AvailInfo -> [Name]
+availSubordinateNames (Avail{}) = []
+availSubordinateNames avail@(AvailTC _ ns)
+  | availExportsDecl avail = tail ns
+  | otherwise = ns
+
+-- -----------------------------------------------------------------------------
+-- Printing
+
+instance Outputable AvailInfo where
+  ppr = pprAvail
+
+pprAvail :: AvailInfo -> SDoc
+pprAvail (Avail n) = ppr n
+pprAvail (AvailTC n ns) = ppr n <> braces (pprWithCommas ppr ns)
+
+instance Binary AvailInfo where
+  put_ bh (Avail aa) = do
+    putByte bh 0
+    put_ bh aa
+  put_ bh (AvailTC ab ac) = do
+    putByte bh 1
+    put_ bh ab
+    put_ bh ac
+
+  get bh = do
+    h <- getByte bh
+    case h of
+      0 -> Avail <$> get bh
+      1 -> AvailTC <$> get bh <*> get bh
+      _ -> panic "invalid byte"
