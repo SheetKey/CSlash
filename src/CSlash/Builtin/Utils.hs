@@ -88,3 +88,14 @@ knownKeyNamesOkay all_names
                            pprUniqueAlways uniq <>
                            text ": " <>
                            brackets (pprWithCommas (ppr . nameOccName) ns)
+
+lookupKnownKeyName :: Unique -> Maybe Name
+lookupKnownKeyName u =
+  knownUniqueName u <|> lookupUFM_Directly knownKeysMap u
+
+isKnownKeyName :: Name -> Bool
+isKnownKeyName n =
+  isJust (knownUniqueName $ nameUnique n) || elemUFM n knownKeysMap
+
+knownKeysMap :: UniqFM Name Name
+knownKeysMap = listToIdentityUFM knownKeyNames
