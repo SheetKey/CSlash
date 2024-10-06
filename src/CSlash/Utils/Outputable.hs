@@ -29,7 +29,8 @@ module CSlash.Utils.Outputable (
   parens, cparen, brackets, braces, quotes, quote, -- quoteIfPunsEnabled,
   doubleQuotes, angleBrackets,
   semi, comma, colon, dcolon, space, equals, dot, vbar,
-  arrow, lollipop, larrow, darrow, arrowt, larrowt, arrowtt, larrowtt,
+  arrow, linarrow, affarrow, unrarrow, lollipop, larrow, darrow, arrowt, larrowt,
+  arrowtt, larrowtt,
   lambda,
   lparen, rparen, lbrack, rbrack, lbrace, rbrace, underscore,
   blankLine, forAllLit,
@@ -127,12 +128,14 @@ import Data.String
 import Data.Word
 import System.IO ( Handle )
 import System.FilePath
+import Text.Printf
 import Numeric (showFFloat)
 import Data.List (intersperse)
 import Data.List.NonEmpty (NonEmpty (..))
 import qualified Data.List.NonEmpty as NEL
 import Data.Void
 
+import CSlash.Utils.Fingerprint
 import CSlash.Show
 import CSlash.Utils.Exception
 import GHC.Exts (oneShot)
@@ -585,12 +588,15 @@ quotes d = sdocOption sdocCanUseUnicode $ \case
          _ | Just '\'' <- lastMaybe str -> pp_d
            | otherwise        -> Pretty.quotes pp_d
 
-blankLine, dcolon, arrow, lollipop, larrow, darrow, arrowt, larrowt, arrowtt,
-  larrowtt, lambda :: SDoc
+blankLine, dcolon, arrow, linarrow, affarrow, unrarrow, lollipop, larrow, darrow, arrowt,
+  larrowt, arrowtt, larrowtt, lambda :: SDoc
 
 blankLine  = docToSDoc Pretty.emptyText
 dcolon     = unicodeSyntax (char '∷') (text "::")
 arrow      = unicodeSyntax (char '→') (text "->")
+linarrow   = unicodeSyntax (text "-○>") (text "-L>")
+affarrow   = unicodeSyntax (text "-●>") (text "-A>")
+unrarrow   = unicodeSyntax (text "-★>") (text "-U>")
 lollipop   = unicodeSyntax (char '⊸') (text "%1 ->")
 larrow     = unicodeSyntax (char '←') (text "<-")
 darrow     = unicodeSyntax (char '⇒') (text "=>")
@@ -858,6 +864,9 @@ deriving newtype instance Outputable LexicalFastString
 
 instance (Outputable key, Outputable elt) => Outputable (M.Map key elt) where
   ppr m = ppr (M.toList m)
+
+instance Outputable Fingerprint where
+  ppr (Fingerprint w1 w2) = text (printf "%016x%016x" w1 w2)
 
 instance Outputable ModuleName where
   ppr = pprModuleName
