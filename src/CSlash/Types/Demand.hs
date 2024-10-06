@@ -1,4 +1,11 @@
+{-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE BinaryLiterals #-}
+{-# LANGUAGE PatternSynonyms #-}
+
 module CSlash.Types.Demand where
+
+import Prelude hiding ((<>))
 
 import CSlash.Types.Var
 import CSlash.Types.Var.Env
@@ -6,8 +13,8 @@ import CSlash.Types.Unique.FM
 import CSlash.Types.Basic
 import CSlash.Data.Maybe   ( orElse )
 
-import CSlash.Core.Type    ( Type, isTerminatingType )
-import CSlash.Core.DataCon ( splitDataProductType_maybe, StrictnessMark, isMarkedStrict )
+import CSlash.Core.Type    ( Type{-, isTerminatingType-} )
+-- import CSlash.Core.DataCon ( splitDataProductType_maybe, StrictnessMark, isMarkedStrict )
 -- import GHC.Core.Multiplicity    ( scaledThing )
 
 import CSlash.Utils.Binary
@@ -17,6 +24,8 @@ import CSlash.Utils.Panic
 
 import Data.Coerce (coerce)
 import Data.Function
+
+import Data.Bits ((.&.))
 
 {- *********************************************************************
 *                                                                      *
@@ -47,7 +56,7 @@ pattern C_1N :: Card
 pattern C_1N = Card 0b110
 
 pattern C_0N :: Card
-pattern C_N0 = Card 0b111
+pattern C_0N = Card 0b111
 
 {-# COMPLETE C_00, C_01, C_0N, C_10, C_11, C_1N :: Card #-}
 
@@ -60,8 +69,14 @@ topCard = C_0N
 isAbs :: Card -> Bool
 isAbs (Card c) = c .&. 0b110 == 0
 
+isAtMostOnce :: Card -> Bool
+isAtMostOnce (Card c) = c .&. 0b100 == 0
+
 isCardNonAbs :: Card -> Bool
 isCardNonAbs = not . isAbs
+
+isCardNonOnce :: Card -> Bool
+isCardNonOnce n = isAbs n || not (isAtMostOnce n)
 
 {- *********************************************************************
 *                                                                      *
@@ -98,8 +113,8 @@ instance Eq SubDemand where
     Prod ds1
       | Just ds2 <- viewProd (length ds1) d2 -> ds1 == ds2
     Call n1 sd1
-      | Just (n2, sd2) <- viewCall d2 -> n1 == n2 && sd1 = sd2
-    Poly n2
+      | Just (n2, sd2) <- viewCall d2 -> n1 == n2 && sd1 == sd2
+    Poly n1
       | Poly n2 <- d2 -> n1 == n2
     _ -> False
 
@@ -118,10 +133,28 @@ viewProd :: Arity -> SubDemand -> Maybe [Demand]
 viewProd n (Prod ds)
   | ds `lengthIs` n = Just ds
 viewProd n (Poly card)
-  | let !ds = replicated n $! polyFieldDmd card
+  | let !ds = replicate n $! polyFieldDmd card
   = Just ds
 viewProd _ _ = Nothing
 {-# INLINE viewProd #-}
+
+mkCall :: CardNonAbs -> SubDemand -> SubDemand
+mkCall n sd = assertPpr (isCardNonAbs n) (ppr n $$ ppr sd) $ Call n sd
+
+viewCall :: SubDemand -> Maybe (Card, SubDemand)
+viewCall (Call n sd) = Just (n :: Card, sd)
+viewCall (Poly n)
+  | isAbs n = Just (n :: Card, botSubDmd)
+viewCall _ = Nothing
+
+topDmd :: Demand
+topDmd = C_0N :* topSubDmd
+
+absDmd :: Demand
+absDmd = AbsDmd
+
+botDmd :: Demand
+botDmd = BotDmd
 
 {- *********************************************************************
 *                                                                      *
@@ -134,6 +167,11 @@ data Divergence
   | ExnOrDiv
   | Dunno
   deriving Eq
+
+defaultFvDmd :: Divergence -> Demand
+defaultFvDmd Dunno = absDmd
+defaultFvDmd ExnOrDiv = absDmd
+defaultFvDmd Diverges = botDmd
 
 {- *********************************************************************
 *                                                                      *
