@@ -1,5 +1,10 @@
 module CSlash.Settings.Constants where
 
+import CSlash.Version
+
+hiVersion :: Integer
+hiVersion = read (cProjectVersionInt ++ cProjectPatchLevel) :: Integer
+
 mAX_TUPLE_SIZE :: Int
 mAX_TUPLE_SIZE = 64
 
