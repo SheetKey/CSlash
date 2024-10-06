@@ -26,6 +26,8 @@ module CSlash.Driver.DynFlags
   , Option(..), showOpt
   , DynLibLoader(..)
 
+  , targetProfile
+
   , defaultDynFlags
   , initDynFlags
   , defaultFatalMessager
@@ -50,7 +52,7 @@ import Prelude hiding ((<>))
 
 import CSlash.Platform
 import CSlash.Platform.Ways
--- import GHC.Platform.Profile
+import CSlash.Platform.Profile
 
 -- import GHC.CmmToAsm.CFG.Weight
 import CSlash.Core.Unfold
@@ -702,6 +704,9 @@ ways :: DynFlags -> Ways
 ways dflags
   | dynamicNow dflags = addWay WayDyn (targetWays_ dflags)
   | otherwise = targetWays_ dflags
+
+targetProfile :: DynFlags -> Profile
+targetProfile dflags = Profile (targetPlatform dflags) (ways dflags)
 
 topDir :: DynFlags -> FilePath
 topDir dflags = fileSettings_topDir $ fileSettings dflags
