@@ -13,6 +13,7 @@ import CSlash.Types.Unique
 import CSlash.Types.Unique.FM
 import CSlash.Utils.Outputable
 import CSlash.Utils.Lexeme
+import CSlash.Utils.Binary
 import CSlash.Utils.Misc
 
 import qualified Data.Semigroup as S
@@ -316,3 +317,34 @@ tidyOccName env occ@(OccName occ_sp fs)
       where
         new_fs = mkFastString (base ++ show n)
         new_env = addToUFM (addToUFM env new_fs 1) base1 (n+1)
+
+{- *********************************************************************
+*                                                                      *
+                Binary instance
+*                                                                      *
+********************************************************************* -}
+
+instance Binary NameSpace where
+  put_ bh VarName = putByte bh 0
+  put_ bh DataName = putByte bh 1
+  put_ bh TvName = putByte bh 2
+  put_ bh TcClsName = putByte bh 3
+  put_ bh KvName = putByte bh 4
+  put_ _ UNKNOWN_NS = error "put_ bh UNKNOWN_NS"
+  get bh = do
+    h <- getByte bh
+    case h of
+      0 -> return VarName
+      1 -> return DataName
+      2 -> return TvName
+      3 -> return TcClsName
+      _ -> return KvName
+
+instance Binary OccName where
+  put_ bh (OccName aa ab) = do
+    put_ bh aa
+    put_ bh ab
+  get bh = do
+    aa <- get bh
+    ab <- get bh
+    return (OccName aa ab)    
