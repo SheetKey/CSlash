@@ -136,6 +136,7 @@ library
                     , CSlash.HandleEncoding
                     
                     , CSlash.Iface.Binary
+                    , CSlash.Iface.Load
                     , CSlash.Iface.Recomp.Binary
                     , CSlash.Iface.Syntax
                     , CSlash.Iface.Type
