@@ -3,6 +3,8 @@
 module CSlash.Types.Basic
   ( ConTag
 
+  , maybeParen
+
   , pprAlternative
 
   , TyConFlavor(..)
@@ -14,6 +16,7 @@ import GHC.Types.Basic as X hiding
   ( TyConFlavour(..)
   , ConTag
   , pprAlternative
+  , maybeParen
   )
   
 import CSlash.Language.Syntax.Basic
@@ -21,6 +24,11 @@ import CSlash.Utils.Outputable
 
 import Control.DeepSeq
 import Data.Data
+
+maybeParen :: PprPrec -> PprPrec -> SDoc -> SDoc
+maybeParen ctxt_prec inner_prec pretty
+  | ctxt_prec < inner_prec = pretty
+  | otherwise = parens pretty
 
 pprAlternative :: (a -> SDoc) -> a -> ConTag -> Arity -> SDoc
 pprAlternative pp x alt arity
