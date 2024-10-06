@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE MultiWayIf #-}
 
@@ -15,6 +16,7 @@ module CSlash.Types.Var
   , isTypeVar, isTyVar, isKdVar
 
   , ForAllTyFlag(..)
+  , isVisibleForAllTyFlag, isInvisibleForAllTyFlag
 
   , VarBndr(..), ForAllTyBinder, TyVarBinder
   , binderVar, binderVars
@@ -178,6 +180,13 @@ data ForAllTyFlag
   | Required  -- type application is required at call sight
   deriving (Eq, Ord, Data)
 
+isVisibleForAllTyFlag :: ForAllTyFlag -> Bool
+isVisibleForAllTyFlag af = not (isInvisibleForAllTyFlag af)
+
+isInvisibleForAllTyFlag :: ForAllTyFlag -> Bool
+isInvisibleForAllTyFlag Specified = True
+isInvisibleForAllTyFlag Required = False
+
 instance Outputable ForAllTyFlag where
   ppr Required  = text "[req]"
   ppr Specified = text "[spec]"
@@ -238,6 +247,18 @@ mkTyVarBinder vis var
 
 mkTyVarBinders :: vis -> [TypeVar] -> [VarBndr TypeVar vis]
 mkTyVarBinders vis = map (mkTyVarBinder vis)
+
+instance Outputable tv => Outputable (VarBndr tv ForAllTyFlag) where
+  ppr (Bndr v Required) = ppr v
+  ppr (Bndr v Specified) = ppr v
+
+instance (Binary tv, Binary vis) => Binary (VarBndr tv vis) where
+  put_ bh (Bndr tv vis) = do { put_ bh tv; put_ bh vis }
+
+  get bh = do { tv <- get bh; vis <- get bh; return (Bndr tv vis) }
+
+instance NamedThing tv => NamedThing (VarBndr tv flag) where
+  getName (Bndr tv _) = getName tv
 
 {- *********************************************************************
 *                                                                      *
