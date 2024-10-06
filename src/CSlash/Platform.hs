@@ -9,6 +9,7 @@ module CSlash.Platform
   , Arch(..)
   , OS(..)
   , ByteOrder(..)
+  , target32Bit
   , osElfTarget
   , PlatformMisc(..)
   , PlatformConstants(..)
@@ -41,7 +42,7 @@ data Platform = Platform
   , platformHasLibm :: !Bool
   , platform_constants :: !(Maybe PlatformConstants)
   }
-  deriving (Show, Eq, Ord)
+  deriving (Show, Eq, Ord, Read)
 
 -- -----------------------------------------------------------------------------
 -- Platform Constants
@@ -70,6 +71,13 @@ platformArch platform = case platformArchOS platform of
 platformOS :: Platform -> OS
 platformOS platform = case platformArchOS platform of
   ArchOS _ os -> os
+
+target32Bit :: Platform -> Bool
+target32Bit p =
+  case platformWordSize p of
+    PW4 -> True
+    PW8 -> False
+  
 
 data PlatformMisc = PlatformMisc
   { platformMisc_targetPlatformString :: String
