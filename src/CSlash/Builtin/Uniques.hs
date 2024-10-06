@@ -1,5 +1,10 @@
 module CSlash.Builtin.Uniques where
 
+import {-# SOURCE #-} CSlash.Builtin.Types
+import {-# SOURCE #-} CSlash.Core.TyCon
+import {-# SOURCE #-} CSlash.Core.DataCon
+import {-# SOURCE #-} CSlash.Types.Id
+import {-# SOURCE #-} CSlash.Types.Name
 import CSlash.Types.Basic
 import CSlash.Types.Unique
 
@@ -9,6 +14,17 @@ import CSlash.Utils.Panic
 import CSlash.Utils.Word64 (word64ToInt)
 
 import Data.Bits ((.&.), (.|.), shiftR, shiftL)
+
+knownUniqueName :: Unique -> Maybe Name
+knownUniqueName u =
+  case tag of
+    'z' -> Just $ getSumName n
+    '4' -> Just $ getTupleTyConName n
+    '7' -> Just $ getTupleDataConName n
+    _ -> Nothing
+  where
+    (tag, n') = unpkUnique u
+    n = assert (isValidKnownKeyUnique u) (word64ToInt n')
 
 mkSumTyConUnique :: Arity -> Unique
 mkSumTyConUnique arity =
@@ -29,6 +45,21 @@ mkSumDataConUnique alt arity
   = panic ("mkSumDataConUnique: " ++ show alt ++ " >= " ++ show arity)
   | otherwise
   = mkUniqueInt 'z' (arity `shiftL` 8 + alt `shiftL` 2)
+
+getSumName :: Int -> Name
+getSumName n
+  | n .&. 0xfc == 0xfc
+  = case tag of
+      0x0 -> tyConName $ sumTyCon arity
+      _   -> pprPanic "getSumName: invalid tag" (ppr tag)
+  | tag == 0x0
+  = dataConName $ sumDataCon (alt + 1) arity
+  | otherwise
+  = pprPanic "getUnboxedSumName" (ppr n)
+  where
+    arity = n `shiftR` 8
+    alt = (n .&. 0xfc) `shiftR` 2
+    tag = 0x3 .&. n
 
 mkTupleDataConUnique :: Arity -> Unique
 mkTupleDataConUnique a = mkUniqueInt '7' (3*a)
@@ -55,6 +86,19 @@ isTupleDataConLikeUnique u =
     (tag,   n) = unpkUnique u
     (arity', _) = quotRem n 3
     arity = word64ToInt arity'
+
+getTupleTyConName :: Int -> Name
+getTupleTyConName n =
+  case n `divMod` 2 of
+    (arity, 0) -> tyConName $ tupleTyCon arity
+    _ -> panic "getTupleTyConName"
+
+getTupleDataConName :: Int -> Name
+getTupleDataConName n =
+  case n `divMod` 3 of
+    (arity, 0) -> dataConName $ tupleDataCon arity
+    (arity, 1) -> idName $ dataConWorkId $ tupleDataCon arity
+    _ -> panic "getTupleDataConName"
 
 mkAlphaTyVarUnique :: Int -> Unique
 mkAlphaTyVarUnique i = mkUniqueInt '1' i
