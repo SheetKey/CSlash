@@ -31,6 +31,18 @@ import qualified Data.Data as Data
 *                                                                      *
 ********************************************************************* -}
 
+{- TODO:
+This binder may be for arguments to the *TC*:
+since kinds are types in GHC,
+it may be that kind arguments are considered 'Infered' (not 'Specified' or 'Required')
+while type arguemnts (whose kinds are provided by kind arguments)
+are considered 'Required'.
+WE DON'T DO THIS:
+All arguments to a type constructor are required.
+This might need to change here, i.e., 'type TyConBinder = TypeVar'.
+This change should be reflected in Iface.Type
+
+-}
 type TyConBinder = VarBndr TypeVar ForAllTyFlag
 
 verifyTyConKind :: [TyConBinder] -> Kind -> Kind
