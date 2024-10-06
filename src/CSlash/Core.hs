@@ -62,6 +62,36 @@ data Bind b
 data Unfolding
   = NoUnfolding
   | OtherCon [AltCon]
+  | CoreUnfolding
+    { uf_tmpl :: CoreExpr
+    , uf_src :: UnfoldingSource
+    , uf_is_top :: Bool
+    , uf_cache :: UnfoldingCache
+    , uf_guidance :: UnfoldingGuidance
+    }
+
+data UnfoldingCache = UnfoldingCache
+  { uf_is_value :: !Bool
+  , uf_is_conlike :: !Bool
+  , uf_is_work_free :: !Bool
+  , uf_expandable :: !Bool
+  }
+  deriving Eq
+
+data UnfoldingGuidance
+  = UnfWhen
+    { ug_arity :: Arity
+    , ug_unsat_ok :: Bool
+    , ug_boring_ok :: Bool
+    }
+  | UnfIfGoodArgs
+    { ug_args :: [Int]
+    , ug_size :: Int
+    , ug_res :: Int
+    }
+  | UnfNever
+  deriving Eq
+        
 
 noUnfolding :: Unfolding
 noUnfolding = NoUnfolding
