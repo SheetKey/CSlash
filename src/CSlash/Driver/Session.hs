@@ -12,9 +12,10 @@ module CSlash.Driver.Session
   , gopt
   , wopt
   , DynFlags(..)
+  , outputFile
   , HasDynFlags(..), ContainsDynFlags(..)
-  , CsMode(..)
-  , CsLink(..)
+  , CsMode(..), isOneShot
+  , CsLink(..), isNoLink
   , Option(..), showOpt
   , makeDynFlagsConsistent
   , setFlagsFromEnvFile
