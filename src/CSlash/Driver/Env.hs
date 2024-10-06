@@ -51,6 +51,9 @@ import CSlash.Unit.Module.Graph
 cs_home_unit_maybe :: CsEnv -> Maybe HomeUnit
 cs_home_unit_maybe = ue_homeUnit . cs_unit_env
 
+cs_units :: HasDebugCallStack => CsEnv -> UnitState
+cs_units = ue_units . cs_unit_env
+
 cs_HUG :: CsEnv -> HomeUnitGraph
 cs_HUG = ue_home_unit_graph . cs_unit_env
 
