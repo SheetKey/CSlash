@@ -10,9 +10,10 @@ import Prelude hiding ((<>))
 
 import CSlash.Language.Syntax.Module.Name
 
-import CSlash.Data.FastString
 import CSlash.Types.Unique
 import CSlash.Types.Unique.DSet
+import CSlash.Utils.Binary
+import CSlash.Data.FastString
 import CSlash.Utils.Encoding
 import CSlash.Utils.Fingerprint
 import CSlash.Utils.Outputable
@@ -48,6 +49,13 @@ mkModule = Module
 
 instance Uniquable Module where
   getUnique (Module p n) = getUnique (unitFS p `appendFS` moduleNameFS n)
+
+instance Binary a => Binary (GenModule a) where
+  put_ bh (Module p n) = put_ bh p >> put_ bh n
+  get bh = do
+    p <- get bh
+    n <- get bh
+    return $! Module p n
 
 instance NFData (GenModule a) where
   rnf (Module unit name) = unit `seq` name `seq` ()
@@ -148,6 +156,22 @@ instance Eq (GenInstantiatedUnit unit) where
 instance Ord (GenInstantiatedUnit unit) where
   u1 `compare` u2 = instUnitFS u1 `lexicalCompareFS` instUnitFS u2
 
+instance Binary InstantiatedUnit where
+  put_ bh indef = do
+    put_ bh (instUnitInstanceOf indef)
+    put_ bh (instUnitInsts indef)
+  get bh = do
+    cid <- get bh
+    insts <- get bh
+    let fs = mkInstantiatedUnitHash cid insts
+    return $! InstantiatedUnit
+      { instUnitInstanceOf = cid
+      , instUnitInsts = insts
+      , instUnitHoles = unionManyUniqDSets (map (moduleFreeHoles . snd) insts)
+      , instUnitFS = fs
+      , instUnitKey = getUnique fs
+      }
+
 instance IsUnitId u => Eq (GenUnit u) where
   uid1 == uid2 = unitUnique uid1 == unitUnique uid2
 
@@ -175,6 +199,23 @@ pprUnit HoleUnit = ftext holeFS
 
 instance Show Unit where
   show = unitString
+
+instance Binary Unit where
+  put_ bh (RealUnit def_uid) = do
+    putByte bh 0
+    put_ bh def_uid
+  put_ bh (VirtUnit indef_uid) = do
+    putByte bh 1
+    put_ bh indef_uid
+  put_ bh HoleUnit =
+    putByte bh 2
+  get bh = do
+    b <- getByte bh
+    u <- case b of
+      0 -> fmap RealUnit (get bh)
+      1 -> fmap VirtUnit (get bh)
+      _ -> pure HoleUnit
+    pure $! u
 
 unitFreeModuleHoles :: GenUnit u -> UniqDSet ModuleName
 unitFreeModuleHoles (VirtUnit x) = instUnitHoles x
@@ -270,6 +311,7 @@ stringToUnitId = UnitId . mkFastString
 
 newtype Definite unit = Definite { unDefinite :: unit }
   deriving (Functor)
+  deriving newtype (Eq, Ord, Outputable, Binary, Uniquable, IsUnitId)
 
 virtualUnitId :: InstantiatedUnit -> UnitId
 virtualUnitId i = UnitId (instUnitFS i)
@@ -279,6 +321,12 @@ unitIsDefinite = isEmptyUniqDSet . unitFreeModuleHoles
 
 newtype UnitId = UnitId { unitIdFS :: FastString }
   deriving (Data)
+
+instance Binary UnitId where
+  put_ bh (UnitId fs) = put_ bh fs
+  get bh = do
+    fs <- get bh
+    return (UnitId fs)
 
 instance Eq UnitId where
   uid1 == uid2 = getUnique uid1 == getUnique uid2
