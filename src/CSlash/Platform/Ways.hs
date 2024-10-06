@@ -13,7 +13,7 @@ data Way
   | WayDebug
   | WayProf
   | WayDyn
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord, Show, Read)
 
 type Ways = Set Way
 
