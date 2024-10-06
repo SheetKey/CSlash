@@ -19,7 +19,7 @@ module CSlash.Driver.DynFlags
   , HasDynFlags(..), ContainsDynFlags(..)
   , RtsOptsEnabled(..)
   , CsMode(..), isOneShot
-  , CsLink(..)
+  , CsLink(..), isNoLink
   , PackageFlag(..), PackageArg(..), ModRenaming(..)
   , IgnorePackageFlag(..)
   , PackageDBFlag(..), PkgDbRef(..)
@@ -473,6 +473,10 @@ data CsLink
   | LinkStaticLib
   | LinkMergedObj
   deriving (Eq, Show)
+
+isNoLink :: CsLink -> Bool
+isNoLink NoLink = True
+isNoLink _ = False
 
 data PackageArg
   = PackageArg String
