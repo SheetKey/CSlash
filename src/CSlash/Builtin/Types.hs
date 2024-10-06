@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module CSlash.Builtin.Types where
 
 import {-# SOURCE #-} CSlash.Types.Id.Make (mkDataConWorkId)
@@ -37,6 +39,9 @@ import qualified Data.ByteString.Char8 as BS
 
 import Data.List (intersperse)
 import Numeric (showInt)
+
+import Data.Char (ord, isDigit)
+import Control.Applicative ((<|>))
 
 {- *********************************************************************
 *                                                                      *
@@ -141,6 +146,107 @@ mkDataConWorkerName data_con wrk_key =
 *                                                                      *
 ********************************************************************* -}
 
+isBuiltInOcc_maybe :: OccName -> Maybe Name
+isBuiltInOcc_maybe occ =
+  case name of
+    "FUN" -> Just fUNTyConName
+    "->" -> panic "isBuiltInOcc_maybe: ->"
+
+    "()" -> Just $ tup_name 0
+    _ | Just rest <- "(" `BS.stripPrefix` name
+      , (commas, rest') <- BS.span (== ',') rest
+      , ")" <- rest'
+        -> Just $ tup_name (1 + BS.length commas)
+
+    _ | Just rest <- "(" `BS.stripPrefix` name
+      , (nb_pipes, rest') <- span_pipes rest
+      , ")" <- rest'
+        -> Just $ tyConName $ sumTyCon (1 + nb_pipes)
+
+    _ | Just rest <- "(" `BS.stripPrefix` name
+      , (nb_pipes1, rest') <- span_pipes rest
+      , Just rest'' <- "_" `BS.stripPrefix` rest'
+      , (nb_pipes2, rest''') <- span_pipes rest''
+      , ")" <- rest'''
+        -> let arity = nb_pipes1 + nb_pipes2 + 1
+               alt = nb_pipes1 + 1
+           in Just $ dataConName $ sumDataCon alt arity
+    _ -> Nothing
+  where
+    name = bytesFS $ occNameFS occ
+
+    span_pipes :: BS.ByteString -> (Int, BS.ByteString)
+    span_pipes = go 0
+      where
+        go nb_pipes bs = case BS.uncons bs of
+                           Just ('|', rest) -> go (nb_pipes + 1) rest
+                           Just (' ', rest) -> go nb_pipes rest
+                           _ -> (nb_pipes, bs)
+
+    choose_ns :: Name -> Name -> Name
+    choose_ns tc dc
+      | isTcClsNameSpace ns = tc
+      | isDataConNameSpace ns = dc
+      | otherwise = pprPanic "tup_name" (ppr occ <+> parens (pprNameSpace ns))
+      where ns = occNameSpace occ
+
+    tup_name arity = choose_ns (getName (tupleTyCon arity))
+                               (getName (tupleDataCon arity))
+
+isTupleTyOcc_maybe :: Module -> OccName -> Maybe Name
+isTupleTyOcc_maybe mod occ
+  | mod == cSLASH_TYPES
+  = match_occ
+  where
+    match_occ
+      | occ == occName unitTyConName = Just unitTyConName
+      | occ == occName soloTyConName = Just soloTyConName
+      | otherwise = isTupleNTyOcc_maybe occ
+isTupleTyOcc_maybe _ _ = Nothing
+
+isTupleNTyOcc_maybe :: OccName -> Maybe Name
+isTupleNTyOcc_maybe occ =
+  case occNameString occ of
+    'T':'u':'p':'l':'e':str | Just n <- arity_from_str str, n > 1
+                              -> Just (tupleTyConName n)
+    _ -> Nothing
+
+isSumTyOcc_maybe :: Module -> OccName -> Maybe Name
+isSumTyOcc_maybe mod occ
+  | mod == cSLASH_TYPES
+  = isSumNTyOcc_maybe occ
+isSumTyOcc_maybe _ _ = Nothing
+
+isSumNTyOcc_maybe :: OccName -> Maybe Name
+isSumNTyOcc_maybe occ =
+  case occNameString occ of
+    'S':'u':'m':str | Just n <- arity_from_str str, n > 1
+                      -> Just (tyConName (sumTyCon n))
+    _ -> Nothing
+
+arity_from_str :: String -> Maybe Int
+arity_from_str s = case s of
+  c1 : t1 | isDigit c1 -> case t1 of
+                            [] -> Just $ digit_to_int c1
+                            c2 : t2 | isDigit c2 ->
+                                        let ar = digit_to_int c1 * 10 + digit_to_int c2
+                                        in case t2 of
+                                             [] -> Just ar
+                                             _ -> Nothing
+                            _ -> Nothing
+  _ -> Nothing
+  where
+    digit_to_int :: Char -> Int
+    digit_to_int c = ord c - ord '0'
+
+isPunOcc_maybe :: Module -> OccName -> Maybe Name
+isPunOcc_maybe mod occ
+  | mod == cSLASH_TYPES, occ == occName soloDataConName
+  = Just soloDataConName
+  | otherwise
+  = isTupleTyOcc_maybe mod occ <|>
+    isSumTyOcc_maybe mod occ
+
 mkTupleOcc :: NameSpace -> Arity -> OccName
 mkTupleOcc ns ar = mkOccName ns (mkTupleStr ns ar)
 
@@ -196,6 +302,30 @@ mk_tuple arity = (tycon, tuple_con)
     dc_name = mkWiredInName modu (mkTupleOcc dataName arity) dc_uniq
                             (AConLike (RealDataCon tuple_con)) BuiltInSyntax
     dc_uniq = mkTupleDataConUnique arity
+
+unitTyCon :: TyCon
+unitTyCon = tupleTyCon 0
+
+unitTyConName :: Name
+unitTyConName = tyConName unitTyCon
+
+unitTyConKey :: Unique
+unitTyConKey = getUnique unitTyCon
+
+unitDataCon :: DataCon
+unitDataCon = head (tyConDataCons unitTyCon)
+
+unitDataConId :: Id
+unitDataConId = dataConWorkId unitDataCon
+
+soloTyCon :: TyCon
+soloTyCon = tupleTyCon 1
+
+soloTyConName :: Name
+soloTyConName = tyConName soloTyCon
+
+soloDataConName :: Name
+soloDataConName = tupleDataConName 1
 
 {- *********************************************************************
 *                                                                      *
