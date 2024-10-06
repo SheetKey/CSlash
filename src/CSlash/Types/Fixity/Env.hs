@@ -20,3 +20,9 @@ lookupFixity :: FixityEnv -> Name -> Fixity
 lookupFixity env n = case lookupNameEnv env n of
                        Just (FixItem _ fix) -> fix
                        Nothing -> defaultFixity
+
+mkIfaceFixCache :: [(OccName, Fixity)] -> OccName -> Maybe Fixity
+mkIfaceFixCache pairs
+  = \n -> lookupOccEnv env n
+  where
+    env = mkOccEnv pairs
