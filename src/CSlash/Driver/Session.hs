@@ -24,6 +24,8 @@ module CSlash.Driver.Session
   , programName, projectVersion
   , csUsagePath
   , versionedAppDir, versionedFilePath
+  , pgm_lo, pgm_lc, pgm_las
+  , opt_lo, opt_lc, opt_las
   , updatePlatformConstants
 
   , defaultDynFlags
@@ -31,6 +33,8 @@ module CSlash.Driver.Session
   , defaultFatalMessager
   , defaultFlushOut
   , augmentByWorkingDirectory
+
+  , getOpts
 
   , CmdLineP(..), runCmdLineP
   , getCmdLineState, putCmdLineState
@@ -40,6 +44,8 @@ module CSlash.Driver.Session
   , parseDynamicFlagsFull
 
   , flagsForCompletion
+
+  , picCCOpts
 
   , compilerInfo
 
@@ -104,6 +110,30 @@ import Text.ParserCombinators.ReadP as R
 import qualified GHC.Data.EnumSet as EnumSet
 
 -- import qualified GHC.LanguageExtensions as LangExt
+
+-----------------------------------------------------------------------------
+-- Accessors from 'DynFlags'
+
+pgm_lo :: DynFlags -> (String, [Option])
+pgm_lo = toolSettings_pgm_lo . toolSettings 
+
+pgm_lc :: DynFlags -> (String, [Option])
+pgm_lc = toolSettings_pgm_lc . toolSettings
+
+pgm_las :: DynFlags -> (String, [Option])
+pgm_las = toolSettings_pgm_las . toolSettings
+
+opt_lo :: DynFlags -> [String]
+opt_lo = toolSettings_opt_lo . toolSettings
+
+opt_lc :: DynFlags -> [String]
+opt_lc = toolSettings_opt_lc . toolSettings
+
+opt_las :: DynFlags -> [String]
+opt_las = toolSettings_opt_las . toolSettings
+
+getOpts :: DynFlags -> (DynFlags -> [a]) -> [a]
+getOpts dflags opts = reverse (opts dflags)
 
 setObjectDir :: String -> DynFlags -> DynFlags
 setObjectDir f d = d { objectDir = Just f }
@@ -1485,6 +1515,16 @@ setRtsOptsEnabled arg  = upd $ \ d -> d {rtsOptsEnabled = arg}
 
 setOptHpcDir :: String -> DynP ()
 setOptHpcDir arg  = upd $ \ d -> d {hpcDir = arg}
+
+-----------------------------------------------------------------------------
+-- PIC and PIE
+
+picCCOpts :: DynFlags -> [String]
+picCCOpts dflags
+  | gopt Opt_PIC dflags || ways dflags `hasWay` WayDyn
+  = ["-fPIC", "-U__PIC__", "-D__PIC__"]
+  | otherwise
+  = ["-fno-PIC"]
 
 -- -----------------------------------------------------------------------------
 -- Compiler Info
