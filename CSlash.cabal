@@ -131,6 +131,7 @@ library
                     , CSlash.Driver.Make
                     , CSlash.Driver.Monad
                     , CSlash.Driver.Phases
+                    , CSlash.Driver.Pipeline.Monad
                     , CSlash.Driver.Pipeline.Phases
                     , CSlash.Driver.Session
 
