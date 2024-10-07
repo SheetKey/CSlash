@@ -303,6 +303,7 @@ library
                     , binary
                     , stm
                     , unix
+                    , process
 
     build-tool-depends:   alex:alex 
                         , happy:happy
