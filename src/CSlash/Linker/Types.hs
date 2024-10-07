@@ -38,3 +38,5 @@ data Unlinked
   = DotO ObjFile
   | DotA FilePath
   | DotSO FilePath
+
+data SptEntry = SptEntry Id Fingerprint
