@@ -22,6 +22,9 @@ import System.IO
 import System.IO.Error as IO
 import System.Process
 
+enableProcessJobs :: CreateProcess -> CreateProcess
+enableProcessJobs opts = opts { use_process_jobs = True }
+
 -----------------------------------------------------------------------------
 -- Running an external program
 
@@ -46,7 +49,7 @@ runSomethingFiltered logger filter_fn phase_name pgm args mb_cwd mb_env =
 runSomethingWith
   :: Logger -> String -> String -> [Option] -> ([String] -> IO (ExitCode, a)) -> IO a
 runSomethingWith logger phase_name pgm args io =
-  let real_args = filter nonNull (map showOpt args)
+  let real_args = filter notNull (map showOpt args)
       cmdLine = showCommandForUser pgm real_args
   in traceCmd logger phase_name cmdLine $ handleProc pgm phase_name $ io real_args
 
@@ -103,7 +106,7 @@ builderMainLoop logger filter_fn pgm real_args mb_cwd mb_env = do
             terminateProcess hProcess
             cleanup_handles
             throw e
-          Right s ->
+          Right s -> do
             cleanup_handles
             return s
   safely $ \h -> do
@@ -124,14 +127,14 @@ builderMainLoop logger filter_fn pgm real_args mb_cwd mb_env = do
         EOF ->
           log_loop chan (t-1)
 
-readerProc :: Chang BuildMessage -> Handle -> (String -> String) -> IO ()
+readerProc :: Chan BuildMessage -> Handle -> (String -> String) -> IO ()
 readerProc chan hdl filter_fn =
   (hGetContents hdl >>= \str -> loop (linesPlatform (filter_fn str)) Nothing)
   `finally`
   writeChan chan EOF
   where
     loop [] Nothing = return ()
-    look [] (Just err) = writeChan chan err
+    loop [] (Just err) = writeChan chan err
     loop (l:ls) in_err =
       case in_err of
         Just err@(BuildError srcLoc msg)
@@ -151,8 +154,8 @@ readerProc chan hdl filter_fn =
             let srcLoc = mkSrcLoc (mkFastString file) lineNum colNum
             in loop ls (Just (BuildError srcLoc (text msg)))
 
-    leading_whitespace [] False
-    leading_whitespace(x:_) = isSpace x
+    leading_whitespace [] = False
+    leading_whitespace (x:_) = isSpace x
 
 parseError :: String -> Maybe (String, Int, Int, String)
 parseError s0 = case breakColon s0 of

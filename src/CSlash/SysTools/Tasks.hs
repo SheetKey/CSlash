@@ -29,11 +29,11 @@ import System.Process
 *                                                                      *
 ********************************************************************* -}
 
-runLlvmLlc :: Logger -> DynFlags -> [Option] -> IO ()
-runLlvmLlc logger dflags args =
+runLlvmOpt :: Logger -> DynFlags -> [Option] -> IO ()
+runLlvmOpt logger dflags args =
   let (p, args0) = pgm_lo dflags
       args1 = map Option (getOpts dflags opt_lo)
-  in traceSystoolCommand logger "opt" p $
+  in traceSystoolCommand logger "opt" $
      runSomething logger "LLVM Optimizer" p (args1 ++ args ++ args0)
   
 runLlvmLlc :: Logger -> DynFlags -> [Option] -> IO ()

@@ -1,9 +1,18 @@
-module CSlash.SysTools where
+module CSlash.SysTools
+  ( initSysTools
+
+  , module CSlash.SysTools.Tasks
+
+  , copyFile
+
+  , Option(..)
+  , expandTopDir
+  ) where
 
 import CSlash.Utils.Panic
 import CSlash.Driver.Session
 
--- import GHC.SysTools.Tasks
+import CSlash.SysTools.Tasks
 import CSlash.SysTools.BaseDir
 import CSlash.Settings.IO
 
