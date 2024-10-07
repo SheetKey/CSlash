@@ -186,6 +186,8 @@ library
 
                     , CSlash.SysTools
                     , CSlash.SysTools.BaseDir
+                    , CSlash.SysTools.Process
+                    , CSlash.SysTools.Tasks
                     , CSlash.SysTools.Terminal
 
                     , CSlash.Tc.Types.Origin
