@@ -260,6 +260,7 @@ library
                     , CSlash.Unit.Module.ModGuts
                     , CSlash.Unit.Module.ModIface
                     , CSlash.Unit.Module.ModSummary
+                    , CSlash.Unit.Module.Status
                     , CSlash.Unit.Module.Warnings
                     , CSlash.Unit.Parser
                     , CSlash.Unit.State
