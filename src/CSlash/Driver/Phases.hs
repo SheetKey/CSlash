@@ -17,6 +17,10 @@ data StopPhase
 
 data Phase
   = Cs CsSource
+  | As
+  | LlvmOpt
+  | LlvmLlc
+  | MergeForeign
   | StopLn
   deriving (Eq, Show)
 
