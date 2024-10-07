@@ -164,6 +164,7 @@ library
                     , CSlash.Parser.Errors.Basic
                     , CSlash.Parser.Errors.Ppr
                     , CSlash.Parser.Errors.Types
+                    , CSlash.Parser.Header
                     , CSlash.Parser.Lexer
                     , CSlash.Parser.PostProcess
                     , CSlash.Parser.Types

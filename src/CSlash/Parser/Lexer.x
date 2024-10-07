@@ -1282,6 +1282,10 @@ mkParserOpts diag_opts !rawTokStream =
   , pRawTokStream = rawTokStream
   }
 
+initPragState :: ParserOpts -> StringBuffer -> RealSrcLoc -> PState
+initPragState options buf loc = (initParserState options buf loc)
+  --{ lex_state = [bol, option_prags, 0] }
+
 initParserState :: ParserOpts -> StringBuffer -> RealSrcLoc -> PState
 initParserState options buf loc = 
   PState

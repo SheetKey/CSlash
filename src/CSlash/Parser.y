@@ -6,7 +6,7 @@ module CSlash.Parser
   ( parseModule, parseImport
   , parseDeclaration, parseExpression
   , parseTypeSignature
-  , parseType
+  , parseType, parseHeader
   ) where
 
 -- base
@@ -134,6 +134,7 @@ import qualified Data.Semigroup as Semi
 %name parseExpression exp
 %name parseTypeSignature sigdecl
 %name parseType ktype
+%partial parseHeader header
 %%
 
 -----------------------------------------------------------------------------
@@ -167,6 +168,32 @@ top1 :: { ([LImportDecl Ps], [LCsDecl Ps]) }
   : importdecls_semi topdecls_cs_semi { (reverse $1, fromOL $2) }
   | importdecls_semi topdecls_cs { (reverse $1, fromOL $2) }
   | importdecls { (reverse $1, []) }
+
+-----------------------------------------------------------------------------
+-- Module declaration & imports only
+
+header :: { Located (CsModule Ps) }
+  : 'module' modid maybeexports 'where' header_body
+       {% fileSrcSpan >>= \ loc ->
+          acs loc (\loc cs -> (L loc (CsModule
+                                       (XModulePs
+                                         (EpAnn (spanAsAnchor loc)
+                                                (AnnsModule [ mj AnnModule $1
+                                                            , mj AnnWhere $4 ]
+                                                            [] [] Nothing)
+                                                cs)
+                                         EpNoLayout)
+                                       $2 $3 $5 []))) }
+
+header_body :: { [LImportDecl Ps] }
+  : OPEN_LAYOUT header_top { $2 }
+
+header_top :: { [LImportDecl Ps] }
+  : semis header_top_importdecls { $2 }
+
+header_top_importdecls :: { [LImportDecl Ps] }
+  : importdecls_semi { $1 }
+  | importdecls { $1 }  
 
 -----------------------------------------------------------------------------
 -- The Export List
