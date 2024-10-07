@@ -31,6 +31,11 @@ data PathsToClean = PathsToClean
   , ptcCurrentModule :: !(Set FilePath)
   }
 
+data TempFileLifetime
+  = TFL_CurrentModule
+  | TFL_CslSession
+  deriving (Show)
+
 newtype TempDir = TempDir FilePath
 
 emptyPathsToClean :: PathsToClean
