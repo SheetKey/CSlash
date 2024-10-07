@@ -190,6 +190,7 @@ library
                     , CSlash.SysTools.Tasks
                     , CSlash.SysTools.Terminal
 
+                    , CSlash.Tc.Types
                     , CSlash.Tc.Types.Origin
                     , CSlash.Tc.Utils.TcType
 
