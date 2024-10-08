@@ -139,6 +139,7 @@ library
                     
                     , CSlash.Iface.Binary
                     , CSlash.Iface.Load
+                    , CSlash.Iface.Recomp
                     , CSlash.Iface.Recomp.Binary
                     , CSlash.Iface.Syntax
                     , CSlash.Iface.Type
