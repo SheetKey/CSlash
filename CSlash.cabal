@@ -198,6 +198,7 @@ library
 
                     , CSlash.Tc.Types
                     , CSlash.Tc.Types.Origin
+                    , CSlash.Tc.Utils.Monad
                     , CSlash.Tc.Utils.TcType
 
                     , CSlash.Types
