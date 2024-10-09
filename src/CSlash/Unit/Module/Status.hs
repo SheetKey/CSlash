@@ -13,8 +13,7 @@ data CsRecompStatus
   | CsRecompNeeded (Maybe Fingerprint)
 
 data CsBackendAction
-  = CsUpdate ModIface
-  | CsRecomp
+  = CsRecomp
     { cs_guts :: CgGuts
     , cs_mod_location :: !ModLocation
     , cs_partial_iface :: !PartialModIface
@@ -22,5 +21,4 @@ data CsBackendAction
     }
 
 instance Outputable CsBackendAction where
-  ppr (CsUpdate mi) = text "Update:" <+> (ppr (mi_module mi))
   ppr (CsRecomp _ ml _ _) = text "Recomp:" <+> ppr ml
