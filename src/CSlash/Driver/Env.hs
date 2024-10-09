@@ -1,3 +1,5 @@
+{-# LANGUAGE BangPatterns #-}
+
 module CSlash.Driver.Env
   ( Cs (..)
   , CsEnv (..)
@@ -47,6 +49,21 @@ import CSlash.Utils.Logger
 import Data.IORef
 import qualified Data.Set as Set
 import CSlash.Unit.Module.Graph
+
+runCs :: CsEnv -> Cs a -> IO a
+runCs cs_env (Cs cs) = do
+  (a, w) <- cs cs_env emptyMessages
+  let dflags = cs_dflags cs_env
+      !diag_opts = initDiagOpts dflags
+      !print_config = initPrintConfig dflags
+  printOrThrowDiagnostics (cs_logger cs_env) print_config diag_opts w
+  return a
+
+runCs' :: CsEnv -> Cs a -> IO (a, Messages CsMessage)
+runCs' cs_env (Cs cs) = cs cs_env emptyMessages
+
+cs_home_unit :: CsEnv -> HomeUnit
+cs_home_unit = unsafeGetHomeUnit . cs_unit_env
 
 cs_home_unit_maybe :: CsEnv -> Maybe HomeUnit
 cs_home_unit_maybe = ue_homeUnit . cs_unit_env
