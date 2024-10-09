@@ -13,7 +13,12 @@ import CSlash.Utils.Misc
 import System.FilePath
 
 data StopPhase
-  = NoStop
+  = StopAs
+  | NoStop
+
+stopPhaseToPhase :: StopPhase -> Phase
+stopPhaseToPhase StopAs = As
+stopPhaseToPhase NoStop = StopLn
 
 data Phase
   = Cs CsSource
@@ -27,12 +32,29 @@ data Phase
 instance Outputable Phase where
   ppr p = text (show p)
 
+eqPhase :: Phase -> Phase -> Bool
+eqPhase (Cs _) (Cs _) = True
+eqPhase As As = True
+eqPhase LlvmOpt LlvmOpt = True
+eqPhase LlvmLlc LlvmLlc = True
+eqPhase MergeForeign MergeForeign = True
+eqPhase StopLn StopLn = True
+eqPhase _ _ = False
+
 startPhase :: String -> Phase
 startPhase "csl" = Cs CsSrcFile
+startPhase "s" = As
+startPhase "ll" = LlvmOpt
+startPhase "bs" = LlvmLlc
+startPhase "o" = StopLn
 startPhase _ = StopLn
 
 phaseInputExt :: Phase -> String
-phaseInputExt (Cs _) = ""
+phaseInputExt (Cs _) = panic "phaseInputExt (Cs _)"
+phaseInputExt As = "s"
+phaseInputExt LlvmOpt = "ll"
+phaseInputExt LlvmLlc = "bc"
+phaseInputExt MergeForeign = "o"
 phaseInputExt StopLn = "o"
 
 csish_src_suffixes :: [String]
