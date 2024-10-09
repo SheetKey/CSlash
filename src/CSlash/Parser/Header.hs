@@ -38,6 +38,78 @@ import Text.ParserCombinators.ReadP (readP_to_S, gather)
 import Text.ParserCombinators.ReadPrec (readPrec_to_P)
 import Text.Read (readPrec)
 
+------------------------------------------------------------------------------
+-- Parse the imports of a source file.
+
+getImports
+  :: ParserOpts
+  -> Bool
+  -> StringBuffer
+  -> FilePath
+  -> FilePath
+  -> IO (Either
+         (Messages PsMessage)
+         ( [(RawPkgQual, Located ModuleName)]
+         , Bool
+         , Located ModuleName ))         
+getImports popts implicit_prelude buf filename source_filename = do
+  let loc = mkRealSrcLoc (mkFastString filename) 1 1
+  case unP parseHeader (initParserState popts buf loc) of
+    PFailed pst -> return $ Left $ getPsErrorMessages pst
+    POk pst rdr_module -> fmap Right $ 
+      let (_, errs) = getPsMessages pst
+      in if not (isEmptyMessages errs)
+         then throwErrors (CsPsMessage <$> errs)
+         else let csmod = unLoc rdr_module
+                  mod = csmodName csmod
+                  imps = csmodImports csmod
+                  ord_idecls = imps
+
+                  (ordinary_imps, csl_prim_import)
+                    = partition ((/= moduleName cSLASH_PRIM) . unLoc . ideclName . unLoc)
+                      ord_idecls
+
+                  pre_loc = srcLocSpan (mkSrcLoc (mkFastString source_filename) 1 1)
+                  implicit_imports = mkPrelImports (unLoc mod) pre_loc implicit_prelude imps
+                  convImport (L _ i) = (NoRawPkgQual, reLoc $ ideclName i)
+              in return ( map convImport (implicit_imports ++ ordinary_imps)
+                        , not (null csl_prim_import)
+                        , reLoc mod )
+                                 
+mkPrelImports :: ModuleName -> SrcSpan -> Bool -> [LImportDecl Ps] -> [LImportDecl Ps]
+mkPrelImports this_mod loc implicit_prelude import_decls
+  | this_mod == pRELUDE_NAME
+    || explicit_prelude_import
+    || not implicit_prelude
+  = []
+  | otherwise
+  = [preludeImportDecl]
+  where
+    explicit_prelude_import = any is_prelude_import import_decls
+
+    is_prelude_import (L _ decl) =
+      unLoc (ideclName decl) == pRELUDE_NAME
+      -- && case ideclPkgQual decl of
+      --      NoRawPkgQual -> True
+      --      RawPkgQual b -> sl_fs b == unitIdFS baseUnitId
+
+    loc' = noAnnSrcSpan loc
+
+    preludeImportDecl :: LImportDecl Ps
+    preludeImportDecl = L loc' $ ImportDecl
+      { ideclExt = XImportDeclPass
+                   { ideclAnn = noAnn
+                   , ideclSourceText = NoSourceText
+                   , ideclImplicit = True
+                   }
+      , ideclName = L loc' pRELUDE_NAME
+      -- , ideclPkgQual = NoRawPkgQual
+      , ideclQualified = NotQualified
+      , ideclAs = Nothing
+      , ideclImportList = Nothing
+      }
+                     
+
 --------------------------------------------------------------
 -- Get options
 
