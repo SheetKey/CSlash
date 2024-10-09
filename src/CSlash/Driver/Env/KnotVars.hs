@@ -21,3 +21,7 @@ instance Outputable (KnotVars a) where
 
 emptyKnotVars :: KnotVars a
 emptyKnotVars = NoKnotVars
+
+knotVarsFromModuleEnv :: ModuleEnv a -> KnotVars a
+knotVarsFromModuleEnv me | isEmptyModuleEnv me = NoKnotVars
+knotVarsFromModuleEnv me = KnotVars (moduleEnvKeys me) (lookupModuleEnv me)
