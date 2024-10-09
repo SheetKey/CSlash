@@ -49,3 +49,25 @@ runLlvmAs logger dflags args =
       args1 = map Option (getOpts dflags opt_las)
   in traceSystoolCommand logger "llvm-as" $
      runSomething logger "LLVM assembler" p (args0 ++ args1 ++ args)
+
+runMergeObjects :: Logger -> TmpFs -> DynFlags -> [Option] -> IO ()
+runMergeObjects logger tmpfs dflags args =
+  let (p, args0) = fromMaybe err (pgm_lm dflags)
+      err = throwCsException $ UsageError $ unwords
+            [ "Attempted to merge object files but the configured linker"
+            , "does not support object merging." ]
+      optl_args = map Option (getOpts dflags opt_lm)
+      args2 = args0 ++ args ++ optl_args
+  in traceSystoolCommand logger "merge-objects" $ 
+     if toolSettings_mergeObjsSupportsResponseFiles (toolSettings dflags)
+     then do mb_env <- getCslEnv args2
+             runSomethingResponseFile
+               logger tmpfs (tmpDir dflags) id "Merge objects" p args2 mb_env
+     else runSomething logger "Merge objects" p args2
+             
+
+runAr :: Logger -> DynFlags -> Maybe FilePath -> [Option] -> IO ()
+runAr logger dflags cwd args =
+  let ar = pgm_ar dflags
+  in traceSystoolCommand logger "ar" $
+     runSomethingFiltered logger id "Ar" ar args cwd Nothing

@@ -25,12 +25,60 @@ import System.Process
 enableProcessJobs :: CreateProcess -> CreateProcess
 enableProcessJobs opts = opts { use_process_jobs = True }
 
+getCslEnv :: [Option] -> IO (Maybe [(String, String)])
+getCslEnv opts =
+  if null b_dirs
+  then return Nothing
+  else do env <- getEnvironment
+          return (Just (mangle_paths env))
+  where
+    (b_dirs, _) = partitionWith get_b_opt opts
+
+    get_b_opt (Option ('-':'B':dir)) = Left dir
+    get_b_opt other = Right other
+
+    mangle_paths = id
+
 -----------------------------------------------------------------------------
 -- Running an external program
 
 runSomething :: Logger -> String -> String -> [Option] -> IO ()
 runSomething logger phase_name pgm args =
   runSomethingFiltered logger id phase_name pgm args Nothing Nothing
+
+runSomethingResponseFile
+  :: Logger
+  -> TmpFs
+  -> TempDir
+  -> (String -> String)
+  -> String
+  -> String
+  -> [Option]
+  -> Maybe [(String, String)]
+  -> IO ()
+runSomethingResponseFile logger tmpfs tmp_dir filter_fn phase_name pgm args mb_env =
+  runSomethingWith logger phase_name pgm args $ \real_args -> do
+    fp <- getResponseFile real_args
+    let args = ['@':fp]
+    r <- builderMainLoop logger filter_fn pgm args Nothing mb_env
+    return (r, ())
+  where
+    getResponseFile args = do
+      fp <- newTempName logger tmpfs tmp_dir TFL_CurrentModule "rsp"
+      withFile fp WriteMode $ \h -> do
+        hSetEncoding h utf8
+        hPutStr h $ unlines $ map escape args
+      return fp
+
+    escape x = concat
+      [ "\""
+      , concatMap (\c -> case c of
+                           '\\' -> "\\\\"
+                           '\n' -> "\\n"
+                           '\"' -> "\\\""
+                           _ -> [c]) x
+      , "\""
+      ]
 
 runSomethingFiltered
   :: Logger
