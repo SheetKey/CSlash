@@ -307,6 +307,7 @@ data GeneralFlag
 
   -- keeping stuff
   | Opt_KeepHiDiffs
+  | Opt_KeepSFiles
   | Opt_KeepTmpFiles
   | Opt_KeepRawTokenStream
   | Opt_KeepLlvmFiles
