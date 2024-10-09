@@ -45,6 +45,7 @@ module CSlash.Driver.DynFlags
   , globalPackageDatabasePath
 
   , IncludeSpecs(..), addGlobalInclude
+  , addImplicitQuoteInclude
 
   , initSDocContext
   ) where
@@ -548,6 +549,11 @@ data IncludeSpecs = IncludeSpecs
 addGlobalInclude :: IncludeSpecs -> [String] -> IncludeSpecs
 addGlobalInclude spec paths = let f = includePathsGlobal spec
                               in spec { includePathsGlobal = f ++ paths }
+
+addImplicitQuoteInclude :: IncludeSpecs -> [String] -> IncludeSpecs
+addImplicitQuoteInclude spec paths =
+  let f = includePathsQuoteImplicit spec
+  in spec { includePathsQuoteImplicit = f ++ paths }
 
 hasPprDebug :: DynFlags -> Bool
 hasPprDebug = dopt Opt_D_ppr_debug
