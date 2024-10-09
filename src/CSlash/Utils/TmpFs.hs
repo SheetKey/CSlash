@@ -19,6 +19,8 @@ import System.Directory
 import System.FilePath
 import System.IO.Error
 
+import qualified System.Posix.Internals
+
 data TmpFs = TmpFs
   { tmp_dirs_to_clean :: IORef (Map FilePath FilePath)
   , tmp_next_suffix :: IORef Int
@@ -73,6 +75,77 @@ cleanTempFiles logger tmpfs = mask_ $ do
                            , Set.toList cm_paths ++ Set.toList cs_paths)
       remove to_delete
 
+addFilesToClean :: TmpFs -> TempFileLifetime -> [FilePath] -> IO ()
+addFilesToClean tmpfs lifetime new_files =
+  addToClean (tmp_files_to_clean tmpfs) lifetime new_files
+
+addToClean :: IORef PathsToClean -> TempFileLifetime -> [FilePath] -> IO ()
+addToClean ref lifetime new_filepaths = modifyIORef' ref $
+  \PathsToClean { ptcCurrentModule = cm_paths, ptcCsSession = cs_paths }
+  -> case lifetime of
+       TFL_CurrentModule -> PathsToClean
+         { ptcCurrentModule = cm_paths `Set.union` new_filepaths_set
+         , ptcCsSession = cs_paths `Set.difference` new_filepaths_set
+         }
+       TFL_CslSession -> PathsToClean
+         { ptcCurrentModule = cm_paths `Set.difference` new_filepaths_set
+         , ptcCsSession = cs_paths `Set.union` new_filepaths_set
+         }
+  where
+    new_filepaths_set = Set.fromList new_filepaths
+
+newTempSuffix :: TmpFs -> IO Int
+newTempSuffix tmpfs = atomicModifyIORef' (tmp_next_suffix tmpfs) $ \n -> (n+1, n)
+
+newTempName :: Logger -> TmpFs -> TempDir -> TempFileLifetime -> Suffix -> IO FilePath
+newTempName logger tmpfs tmp_dir lifetime extn = do
+    d <- getTempDir logger tmpfs tmp_dir
+    findTempName (d </> "csl_")
+  where
+    findTempName :: FilePath -> IO FilePath
+    findTempName prefix = do
+      n <- newTempSuffix tmpfs
+      let filename = prefix ++ show n <.> extn
+      b <- doesFileExist filename
+      if b
+        then findTempName prefix
+        else do addFilesToClean tmpfs lifetime [filename]
+                return filename
+
+getTempDir :: Logger -> TmpFs -> TempDir -> IO FilePath
+getTempDir logger tmpfs (TempDir tmp_dir) = do
+  mapping <- readIORef dir_ref
+  case Map.lookup tmp_dir mapping of
+    Nothing -> do
+      pid <- getProcessID
+      let prefix = tmp_dir </> "csl" ++ show pid ++ "_"
+      mask_ $ mkTempDir prefix
+    Just dir -> return dir
+  where
+    dir_ref = tmp_dirs_to_clean tmpfs
+
+    mkTempDir :: FilePath -> IO FilePath
+    mkTempDir prefix = (flip Exception.catchIO)
+      (\e -> if isAlreadyExistsError e then mkTempDir prefix else ioError e) $ do
+      n <- newTempSuffix tmpfs
+      let our_dir = prefix ++ show n
+
+      createDirectory our_dir
+
+      their_dir <- atomicModifyIORef' dir_ref $ \mapping ->
+        case Map.lookup tmp_dir mapping of
+          Just dir -> (mapping, Just dir)
+          Nothing -> (Map.insert tmp_dir our_dir mapping, Nothing)
+
+      case their_dir of
+        Nothing -> do
+          debugTraceMsg logger 2 $
+            text "Created temporary directory:" <+> text our_dir
+          return our_dir
+        Just dir -> do
+          removeDirectory our_dir
+          return dir
+
 removeTmpDirs :: Logger -> [FilePath] -> IO ()
 removeTmpDirs logger ds
   = traceCmd logger "Deleting temp dirs"
@@ -111,3 +184,6 @@ removeWith logger remover f = remover f `Exception.catchIO`
                     $$ text (show e)
      in debugTraceMsg logger 2 msg
   ) 
+
+getProcessID :: IO Int
+getProcessID = System.Posix.Internals.c_getpid >>= return . fromIntegral
