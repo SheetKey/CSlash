@@ -52,6 +52,9 @@ cSLASH_PRIM = mkPrimModule (fsLit "CSlash.Prim")
 cSLASH_TYPES :: Module
 cSLASH_TYPES = mkPrimModule (fsLit "CSlash.Types")
 
+pRELUDE_NAME :: ModuleName
+pRELUDE_NAME = mkModuleNameFS (fsLit "Prelude")
+
 mAIN_NAME :: ModuleName
 mAIN_NAME = mkModuleNameFS (fsLit "Main")
 
