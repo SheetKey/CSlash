@@ -174,3 +174,15 @@ getOptions' :: ParserOpts -> [Located Token] -> (Messages PsMessage, [Located St
 getOptions' opts toks = parseToks toks
   where
     parseToks _ = (unionManyMessages [], [])
+
+-----------------------------------------------------------------------------
+-- Complain about non-dynamic flags in OPTIONS pragmas.
+
+checkProcessArgsResult :: MonadIO m => [Located String] -> m ()
+checkProcessArgsResult flags
+  = when (notNull flags) $
+    liftIO $ throwErrors $ foldMap (singleMessage . mkMsg) flags
+  where
+    mkMsg (L loc flag)
+      = mkPlainErrorMsgEnvelope loc $
+        CsPsMessage $ PsHeaderMessage $ PsErrUnknownOptionsPragma flag
