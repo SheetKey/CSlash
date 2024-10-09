@@ -178,6 +178,8 @@ library
                     , CSlash.Platform.Profile
                     , CSlash.Platform.Ways
 
+                    , CSlash.Rename.Names
+
                     , CSlash.Settings
                     , CSlash.Settings.Config
                     , CSlash.Settings.Constants
