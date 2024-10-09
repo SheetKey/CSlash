@@ -81,6 +81,10 @@ csUpdateLoggerFlags :: CsEnv -> CsEnv
 csUpdateLoggerFlags h = h
   { cs_logger = setLogFlags (cs_logger h) (initLogFlags (cs_dflags h)) }
 
+csSetFlags :: HasDebugCallStack => DynFlags -> CsEnv -> CsEnv
+csSetFlags dflags h = csUpdateLoggerFlags $ h
+  { cs_dflags = dflags, cs_unit_env = ue_setFlags dflags (cs_unit_env h) }
+
 csSetActiveUnitId :: HasDebugCallStack => UnitId -> CsEnv -> CsEnv
 csSetActiveUnitId uid e = e
   { cs_unit_env = ue_setActiveUnit uid (cs_unit_env e)
