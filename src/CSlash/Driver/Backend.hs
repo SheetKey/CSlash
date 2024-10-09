@@ -31,6 +31,10 @@ backendWritesFiles :: Backend -> Bool
 backendWritesFiles (Named LLVM) = True
 backendWritesFiles (Named NoBackend) = False
 
+backendGeneratesCode :: Backend -> Bool
+backendGeneratesCode (Named LLVM) = True
+backendGeneratesCode (Named NoBackend) = False
+
 backendUnregisterisedAbiOnly :: Backend -> Bool
 backendUnregisterisedAbiOnly (Named LLVM) = False
 backendUnregisterisedAbiOnly (Named NoBackend) = False
@@ -38,3 +42,7 @@ backendUnregisterisedAbiOnly (Named NoBackend) = False
 backendSupportsHpc :: Backend -> Bool
 backendSupportsHpc (Named LLVM) = True
 backendSupportsHpc (Named NoBackend) = True
+
+backendNormalSuccessorPhase :: Backend -> Phase
+backendNormalSuccessorPhase (Named LLVM) = LlvmOpt
+backendNormalSuccessorPhase (Named NoBackend) = StopLn
