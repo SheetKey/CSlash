@@ -1,3 +1,5 @@
+{-# LANGUAGE DeriveFunctor #-}
+
 module CSlash.Iface.Recomp where
 
 import CSlash.Data.FastString
@@ -69,6 +71,11 @@ data RecompileRequired
   = UpToDate
   | NeedRecompile !CompileReason
   deriving Eq
+
+data MaybeValidated a
+  = UpToDateItem a
+  | OutOfDateItem !CompileReason (Maybe a)
+  deriving Functor
 
 data CompileReason
   = MustCompile
