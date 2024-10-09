@@ -58,3 +58,9 @@ data CsNameVersion = CsNameVersion
   { csNameVersion_programName :: String
   , csNameVersion_projectVersion :: String
   }
+
+-----------------------------------------------------------------------------
+-- Accessors from 'Settings'
+
+sArSupportsDashL :: Settings -> Bool
+sArSupportsDashL = toolSettings_arSupportsDashL . sToolSettings
