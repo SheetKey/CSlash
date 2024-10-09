@@ -11,6 +11,7 @@ module CSlash.Unit.Finder
   , mkHiOnlyModLocation
   , mkHiPath
   , mkObjPath
+  , addHomeModuleToFinder
   ) where
 
 import CSlash.Platform.Ways
@@ -215,6 +216,12 @@ modLocationCache fc mod do_this = do
       result <- do_this
       addToFinderCache fc mod result
       return result
+
+addHomeModuleToFinder :: FinderCache -> HomeUnit -> ModuleName -> ModLocation -> IO Module
+addHomeModuleToFinder fc home_unit mod_name loc = do
+  let mod = mkHomeInstalledModule home_unit mod_name
+  addToFinderCache fc mod (InstalledFound loc mod)
+  return (mkHomeModule home_unit mod_name)
 
 -- -----------------------------------------------------------------------------
 --      The internal workers
