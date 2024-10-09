@@ -29,8 +29,13 @@ import GHC.Generics (Generic)
 type PsWarning = PsMessage
 type PsError = PsMessage
 
+data PsHeaderMessage
+  = PsErrUnknownOptionsPragma !String
+  deriving Generic
+
 data PsMessage
   = PsUnknownMessage (UnknownDiagnostic (DiagnosticOpts PsMessage))
+  | PsHeaderMessage !PsHeaderMessage
   | PsWarnBidirectionalFormatChars (NonEmpty (PsLoc, Char, String))
   | PsWarnTab !Word
   | PsWarnOperatorWhitespace !FastString !OperatorWhitespaceOccurrence

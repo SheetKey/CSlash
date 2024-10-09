@@ -25,7 +25,7 @@ import CSlash.Cs.Extension ( Rn )
 -- import GHC.Core.InstEnv (LookupInstanceErrReason)
 -- import GHC.Iface.Errors.Types
 import CSlash.Driver.Errors.Types   ( DriverMessage, CsMessageOpts, DriverMessageOpts )
-import CSlash.Parser.Errors.Types   ( PsMessage{-, PsHeaderMessage-} )
+import CSlash.Parser.Errors.Types   ( PsMessage, PsHeaderMessage )
 -- import GHC.HsToCore.Errors.Types ( DsMessage )
 -- import GHC.Tc.Errors.Types
 import CSlash.Unit.Module.Warnings ( WarningTxt )
@@ -61,7 +61,7 @@ type family CsDiagnosticCode c = n | n -> c where
   -- CsDiagnosticCode "PsErrParseLanguagePragma"                      = 68686
   -- CsDiagnosticCode "PsErrUnsupportedExt"                           = 46537
   -- CsDiagnosticCode "PsErrParseOptionsPragma"                       = 24342
-  -- CsDiagnosticCode "PsErrUnknownOptionsPragma"                     = 04924
+  CsDiagnosticCode "PsErrUnknownOptionsPragma"                     = 04924
   CsDiagnosticCode "PsWarnBidirectionalFormatChars"                = 03272
   CsDiagnosticCode "PsWarnTab"                                     = 94817
   -- CsDiagnosticCode "PsWarnTransitionalLayout"                      = 93617
@@ -259,7 +259,7 @@ type family ConRecursInto con where
   ----------------------------------
   -- Constructors of PsMessage
   ConRecursInto "PsUnknownMessage"         = 'Just (UnknownDiagnostic NoDiagnosticOpts)
-  -- ConRecursInto "PsHeaderMessage"          = 'Just PsHeaderMessage
+  ConRecursInto "PsHeaderMessage"          = 'Just PsHeaderMessage
 
   ConRecursInto _                          = 'Nothing
 
