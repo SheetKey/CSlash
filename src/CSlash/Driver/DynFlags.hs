@@ -25,6 +25,7 @@ module CSlash.Driver.DynFlags
   , PackageDBFlag(..), PkgDbRef(..)
   , Option(..), showOpt
   , DynLibLoader(..)
+  , positionIndependent
 
   , targetProfile
 
@@ -527,6 +528,9 @@ data RtsOptsEnabled
   | RtsOptsSafeOnly
   | RtsOptsAll
   deriving (Show)
+
+positionIndependent :: DynFlags -> Bool
+positionIndependent dflags = gopt Opt_PIC dflags || gopt Opt_PIE dflags
 
 data PkgDbRef
   = GlobalPkgDb
