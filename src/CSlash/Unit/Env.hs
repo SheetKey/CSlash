@@ -44,6 +44,9 @@ initUnitEnv cur_unit hug namever platform = do
     , ue_namever = namever
     }
 
+unsafeGetHomeUnit :: UnitEnv -> HomeUnit
+unsafeGetHomeUnit ue = ue_unsafeHomeUnit ue
+
 data HomeUnitEnv = HomeUnitEnv
   { homeUnitEnv_units :: !UnitState
   , homeUnitEnv_unit_dbs :: !(Maybe [UnitDatabase UnitId])
@@ -117,8 +120,19 @@ ue_units = homeUnitEnv_units . ue_currentHomeUnitEnv
 -- Query and modify DynFlags in HomeUnitEnv
 -- -------------------------------------------------------
 
+ue_setFlags :: HasDebugCallStack => DynFlags -> UnitEnv -> UnitEnv
+ue_setFlags dflags ue_env = ue_setUnitFlags (ue_currentUnit ue_env) dflags ue_env
+
+ue_setUnitFlags :: HasDebugCallStack => UnitId -> DynFlags -> UnitEnv -> UnitEnv
+ue_setUnitFlags uid dflags e = ue_updateUnitFlags (const dflags) uid e
+
 ue_unitFlags :: HasDebugCallStack => UnitId -> UnitEnv -> DynFlags
 ue_unitFlags uid ue_env = homeUnitEnv_dflags $ ue_findHomeUnitEnv uid ue_env
+
+ue_updateUnitFlags :: HasDebugCallStack => (DynFlags -> DynFlags) -> UnitId -> UnitEnv -> UnitEnv
+ue_updateUnitFlags f uid e = ue_updateHomeUnitEnv update uid e
+  where
+    update hue = hue { homeUnitEnv_dflags = f $ homeUnitEnv_dflags hue }
 
 -- -------------------------------------------------------
 -- Query and modify home units in HomeUnitEnv
@@ -126,6 +140,11 @@ ue_unitFlags uid ue_env = homeUnitEnv_dflags $ ue_findHomeUnitEnv uid ue_env
 
 ue_homeUnit :: UnitEnv -> Maybe HomeUnit
 ue_homeUnit = homeUnitEnv_home_unit . ue_currentHomeUnitEnv
+
+ue_unsafeHomeUnit :: UnitEnv -> HomeUnit
+ue_unsafeHomeUnit ue = case ue_homeUnit ue of
+  Nothing -> panic "unsafeGetHomeUnit: No home unit"
+  Just h -> h
 
 -- -------------------------------------------------------
 -- Query and modify the currently active unit
