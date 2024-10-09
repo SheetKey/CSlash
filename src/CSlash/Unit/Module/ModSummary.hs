@@ -22,17 +22,19 @@ import Data.Time
 
 data ModSummary = ModSummary
   { ms_mod :: Module
-  , ms_csl_src :: CsSource
+  , ms_cs_src :: CsSource
   , ms_location :: ModLocation
   , ms_cs_hash :: Fingerprint
   , ms_obj_date :: Maybe UTCTime
   , ms_dyn_obj_date :: !(Maybe UTCTime)
+  , ms_iface_date :: Maybe UTCTime
+  , ms_hie_date :: Maybe UTCTime
   , ms_textual_imps :: [(PkgQual, Located ModuleName)]
-  , ms_cs_prim_import :: !Bool
+  , ms_csl_prim_import :: !Bool
   , ms_parsed_mod :: Maybe CsParsedModule
-  , ms_file :: FilePath -- ghc ms_hspp_file
-  , mk_opts :: DynFlags
-  , ms_buf :: Maybe StringBuffer
+  , ms_cs_file :: FilePath
+  , ms_cs_opts :: DynFlags
+  , ms_cs_buf :: Maybe StringBuffer
   }
 
 ms_unitid :: ModSummary -> UnitId
