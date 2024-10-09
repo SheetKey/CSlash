@@ -20,6 +20,9 @@ data HomeModInfo = HomeModInfo
   , hm_linkable :: !HomeModLinkable
   }
 
+emptyHomeModInfoLinkable :: HomeModLinkable
+emptyHomeModInfoLinkable = HomeModLinkable Nothing
+
 data HomeModLinkable = HomeModLinkable
   { homeMod_object :: !(Maybe Linkable) }
 
