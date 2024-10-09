@@ -12,19 +12,26 @@ module CSlash.Driver.Session
   , gopt
   , wopt
   , DynFlags(..)
-  , outputFile
+  , outputFile, objectSuf, ways
   , HasDynFlags(..), ContainsDynFlags(..)
   , CsMode(..), isOneShot
   , CsLink(..), isNoLink
   , Option(..), showOpt
   , makeDynFlagsConsistent
+  , positionIndependent
   , setFlagsFromEnvFile
 
   , Settings(..)
+  , CsNameVersion(..)
+  , PlatformMisc(..)
+  , settings
   , programName, projectVersion
   , csUsagePath
   , versionedAppDir, versionedFilePath
+  , pgm_lm
+  , pgm_ar
   , pgm_lo, pgm_lc, pgm_las
+  , opt_lm
   , opt_lo, opt_lc, opt_las
   , updatePlatformConstants
 
@@ -41,6 +48,7 @@ module CSlash.Driver.Session
   , processCmdLineP
 
   , parseDynamicFlagsCmdLine
+  , parseDynamicFilePragma
   , parseDynamicFlagsFull
 
   , flagsForCompletion
@@ -50,6 +58,9 @@ module CSlash.Driver.Session
   , compilerInfo
 
   , setUnsafeGlobalDynFlags
+
+  , IncludeSpecs(..)
+  , addImplicitQuoteInclude
   ) where 
 
 import CSlash.Platform
@@ -114,6 +125,22 @@ import qualified GHC.Data.EnumSet as EnumSet
 -----------------------------------------------------------------------------
 -- Accessors from 'DynFlags'
 
+settings :: DynFlags -> Settings
+settings dflags = Settings
+  { sCsNameVersion = csNameVersion dflags
+  , sFileSettings = fileSettings dflags
+  , sTargetPlatform = targetPlatform dflags
+  , sToolSettings = toolSettings dflags
+  , sPlatformMisc = platformMisc dflags
+  , sRawSettings = rawSettings dflags
+  }
+
+pgm_lm :: DynFlags -> Maybe (String, [Option])
+pgm_lm = toolSettings_pgm_lm . toolSettings
+
+pgm_ar :: DynFlags -> String
+pgm_ar = toolSettings_pgm_ar . toolSettings
+
 pgm_lo :: DynFlags -> (String, [Option])
 pgm_lo = toolSettings_pgm_lo . toolSettings 
 
@@ -122,6 +149,9 @@ pgm_lc = toolSettings_pgm_lc . toolSettings
 
 pgm_las :: DynFlags -> (String, [Option])
 pgm_las = toolSettings_pgm_las . toolSettings
+
+opt_lm :: DynFlags -> [String]
+opt_lm = toolSettings_opt_lm . toolSettings
 
 opt_lo :: DynFlags -> [String]
 opt_lo = toolSettings_opt_lo . toolSettings
@@ -256,6 +286,13 @@ parseDynamicFlagsCmdLine
   -> m (DynFlags, [Located String], Messages DriverMessage)
 parseDynamicFlagsCmdLine = parseDynamicFlagsFull flagsAll True
 
+parseDynamicFilePragma
+  :: MonadIO m
+  => DynFlags
+  -> [Located String]
+  -> m (DynFlags, [Located String], Messages DriverMessage)
+parseDynamicFilePragma = parseDynamicFlagsFull flagsDynamic False
+
 newtype CmdLineP s a = CmdLineP (forall m. (Monad m) => StateT s m a)
   deriving (Functor)
 
@@ -322,6 +359,9 @@ flagsAll = map snd flagsAllDeps
 
 flagsAllDeps :: [(Deprecation, Flag (CmdLineP DynFlags))]
 flagsAllDeps = package_flags_deps ++ dynamic_flags_deps
+
+flagsDynamic :: [Flag (CmdLineP DynFlags)]
+flagsDynamic = map snd dynamic_flags_deps
 
 ----------------Helpers to make flags and keep deprecation information----------
 
@@ -472,6 +512,10 @@ dynamic_flags_deps =
         (NoArg (setGeneralFlag Opt_BuildDynamicToo))
 
     -- Keeping temporary files ----------------------------------------------
+  , make_ord_flag defCsFlag "keep-s-file"
+        (NoArg (setGeneralFlag Opt_KeepSFiles))
+  , make_ord_flag defCsFlag "keep-s-files"
+        (NoArg (setGeneralFlag Opt_KeepSFiles))
   , make_ord_flag defCsFlag "keep-llvm-file"
         (NoArg $ setObjBackend llvmBackend >> setGeneralFlag Opt_KeepLlvmFiles)
   , make_ord_flag defCsFlag "keep-llvm-files"
@@ -1615,6 +1659,11 @@ outputFile :: DynFlags -> Maybe String
 outputFile dflags
   | dynamicNow dflags = dynOutputFile_ dflags
   | otherwise = outputFile_ dflags
+
+objectSuf :: DynFlags -> String
+objectSuf dflags
+  | dynamicNow dflags = dynObjectSuf_ dflags
+  | otherwise = objectSuf_ dflags
 
 updatePlatformConstants :: DynFlags -> Maybe PlatformConstants -> IO DynFlags
 updatePlatformConstants dflags mconstants = 
