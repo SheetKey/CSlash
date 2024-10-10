@@ -32,6 +32,11 @@ data Linkable = LM
   , linkableUnlinked :: [Unlinked]
   }
 
+instance Outputable Linkable where
+  ppr (LM when_made mod unlinkeds)
+    = (text "LinkableM" <+> parens (text (show when_made)) <+> ppr mod)
+      $$ nest 3 (ppr unlinkeds)
+
 type ObjFile = FilePath
 
 data Unlinked
@@ -39,4 +44,20 @@ data Unlinked
   | DotA FilePath
   | DotSO FilePath
 
+instance Outputable Unlinked where
+  ppr (DotO path) = text "DotO" <+> text path
+  ppr (DotA path) = text "DotA" <+> text path
+  ppr (DotSO path) = text "DotSO" <+> text path
+
 data SptEntry = SptEntry Id Fingerprint
+
+isObjectLinkable :: Linkable -> Bool
+isObjectLinkable l = not (null unlinked) && all isObject unlinked
+  where
+    unlinked = linkableUnlinked l
+
+isObject :: Unlinked -> Bool
+isObject (DotO _) = True
+isObject (DotA _) = True
+isObject (DotSO _) = True
+isObject _ = False
