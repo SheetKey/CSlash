@@ -12,6 +12,7 @@ import CSlash.Types.GREInfo
 import CSlash.Types.SrcLoc
 import CSlash.Types.Unique
 import CSlash.Types.Name
+import CSlash.Types.Name.Set
 import CSlash.Types.Name.Occurrence
 import CSlash.Unit.Types
 import CSlash.Utils.Outputable
@@ -124,6 +125,23 @@ instance Eq RdrName where
   (Qual m1 o1) == (Qual m2 o2) = m1 == m2 && o1 == o2
   (Unqual o1) == (Unqual o2) = o1 == o2
   _ == _ = False
+
+{- *********************************************************************
+*                                                                      *
+                        LocalRdrEnv
+*                                                                      *
+********************************************************************* -}
+
+data LocalRdrEnv = LRE
+  { lre_env :: OccEnv Name
+  , lre_in_scope :: NameSet
+  }
+
+{- *********************************************************************
+*                                                                      *
+                        GlobalRdrEnv
+*                                                                      *
+********************************************************************* -}
 
 type GlobalRdrEnv = GlobalRdrEnvX GREInfo
 
