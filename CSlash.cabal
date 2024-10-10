@@ -134,6 +134,7 @@ library
                     , CSlash.Driver.Phases
                     , CSlash.Driver.Pipeline.Monad
                     , CSlash.Driver.Pipeline.Phases
+                    , CSlash.Driver.Ppr
                     , CSlash.Driver.Session
 
                     , CSlash.HandleEncoding
