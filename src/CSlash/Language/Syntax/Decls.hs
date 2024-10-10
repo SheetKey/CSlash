@@ -8,3 +8,5 @@ type LCsDecl p = XRec p (CsDecl p)
 data CsDecl p
   = ValD (XValD p) (CsBind p)
   | SigD (XSigD p) (Sig p)
+
+data CsGroup p
