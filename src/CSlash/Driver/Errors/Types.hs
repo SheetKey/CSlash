@@ -7,8 +7,9 @@ module CSlash.Driver.Errors.Types
   , CsMessageOpts(..)
   , DriverMessage(..)
   , DriverMessageOpts(..)
-  , DriverMessages
-  , PsMessage()
+  , DriverMessages, PsMessage(PsHeaderMessage)
+  , WarningMessages
+  , ErrorMessages
   ) where
 
 import Data.Bifunctor
@@ -20,7 +21,7 @@ import CSlash.Types.Error
 import CSlash.Unit.Module
 import CSlash.Unit.State
 
-import CSlash.Parser.Errors.Types ( PsMessage() )
+import CSlash.Parser.Errors.Types ( PsMessage(PsHeaderMessage) )
 -- import GHC.HsToCore.Errors.Types ( DsMessage )
 import CSlash.Cs.Extension          (Tc)
 
@@ -31,6 +32,10 @@ import GHC.Generics ( Generic )
 
 -- import GHC.Tc.Errors.Types
 -- import GHC.Iface.Errors.Types
+
+type WarningMessages = Messages CsMessage
+
+type ErrorMessages = Messages CsMessage
 
 data CsMessage where
   CsPsMessage :: PsMessage -> CsMessage
