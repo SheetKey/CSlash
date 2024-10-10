@@ -77,5 +77,5 @@ import System.FilePath  ((</>))
 import System.IO
 
 renameRawPkgQual :: UnitEnv -> ModuleName -> RawPkgQual -> PkgQual
-renameRawPkgQual _ _ NoRawPkgQual = NoRawPkgQual
+renameRawPkgQual _ _ NoRawPkgQual = NoPkgQual
 renameRawPkgQual _ _ (RawPkgQual _) = panic "renameRawPkgQual RawPkgQual"
