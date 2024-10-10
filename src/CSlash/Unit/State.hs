@@ -15,7 +15,7 @@ import CSlash.Platform.Ways
 
 import CSlash.Unit.Database
 import CSlash.Unit.Info
--- import GHC.Unit.Ppr
+import CSlash.Unit.Ppr
 import CSlash.Unit.Types
 import CSlash.Unit.Module
 import CSlash.Unit.Home
@@ -1214,6 +1214,18 @@ instance Outputable UnitErr where
       ppr_reason (p, reason) = pprReason (ppr (unitId p) <+> text "is") reason
 
 -- -----------------------------------------------------------------------------
+-- Pretty-print a UnitId for the user.
+
+pprUnitIdForUser :: UnitState -> UnitId -> SDoc
+pprUnitIdForUser state uid@(UnitId fs) =
+  case lookupUnitPprInfo state uid of
+    Nothing -> ftext fs
+    Just i -> ppr i
+
+lookupUnitPprInfo :: UnitState -> UnitId -> Maybe UnitPprInfo
+lookupUnitPprInfo state uid = fmap (mkUnitPprInfo unitIdFS) (lookupUnitId state uid)
+
+-- -----------------------------------------------------------------------------
 -- Displaying packages
 
 pprUnits :: UnitState -> SDoc
@@ -1276,3 +1288,8 @@ renameHoleUnit' pkg_map closure env uid =
               mkVirtUnit cid
               (map (\(k, v) -> (k, renameHoleModule' pkg_map closure env v)) insts)
     _ -> uid
+
+pprWithUnitState :: UnitState -> SDoc -> SDoc
+pprWithUnitState state = updSDocContext (\ctx -> ctx
+                                          { sdocUnitIdForUser =
+                                              \fs -> pprUnitIdForUser state (UnitId fs) })
