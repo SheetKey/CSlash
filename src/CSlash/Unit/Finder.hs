@@ -12,6 +12,8 @@ module CSlash.Unit.Finder
   , mkHiPath
   , mkObjPath
   , addHomeModuleToFinder
+
+  , findObjectLinkable
   ) where
 
 import CSlash.Platform.Ways
@@ -32,7 +34,7 @@ import CSlash.Utils.Misc
 import CSlash.Utils.Outputable as Outputable
 import CSlash.Utils.Panic
 
--- import GHC.Linker.Types
+import CSlash.Linker.Types
 import CSlash.Types.PkgQual
 
 import CSlash.Utils.Fingerprint
@@ -429,4 +431,8 @@ mkHiePath fopts basename mod_basename = hie_basename <.> hiesuf
     hie_basename | Just dir <- hiedir = dir </> mod_basename
                  | otherwise = basename
 
+-- -----------------------------------------------------------------------------
+-- findLinkable
 
+findObjectLinkable :: Module -> FilePath -> UTCTime -> IO Linkable
+findObjectLinkable mod obj_fn obj_time = return (LM obj_time mod [DotO obj_fn])
