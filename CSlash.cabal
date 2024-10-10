@@ -196,6 +196,7 @@ library
                     , CSlash.SysTools.Tasks
                     , CSlash.SysTools.Terminal
 
+                    , CSlash.Tc.Module
                     , CSlash.Tc.Types
                     , CSlash.Tc.Types.Origin
                     , CSlash.Tc.Utils.Monad
