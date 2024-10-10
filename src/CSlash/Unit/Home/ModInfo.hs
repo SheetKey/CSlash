@@ -4,7 +4,7 @@ import CSlash.Unit.Module.ModIface
 import CSlash.Unit.Module.ModDetails
 import CSlash.Unit.Module
 
-import CSlash.Linker.Types ( Linkable(..){-, isObjectLinkable-} )
+import CSlash.Linker.Types ( Linkable(..), isObjectLinkable )
 
 import CSlash.Types.Unique
 import CSlash.Types.Unique.DFM
@@ -25,6 +25,10 @@ emptyHomeModInfoLinkable = HomeModLinkable Nothing
 
 data HomeModLinkable = HomeModLinkable
   { homeMod_object :: !(Maybe Linkable) }
+
+justObjects :: Linkable -> HomeModLinkable
+justObjects lm = assertPpr (isObjectLinkable lm) (ppr lm) $
+  emptyHomeModInfoLinkable { homeMod_object = Just lm }
 
 type HomePackageTable = DModuleNameEnv HomeModInfo
 
