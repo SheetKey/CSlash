@@ -15,6 +15,9 @@ platformDefaultBackend platform
 
 newtype Backend = Named BackendName
 
+instance Show Backend where
+  show = backendDescription
+
 llvmBackend :: Backend
 llvmBackend = Named LLVM
 
