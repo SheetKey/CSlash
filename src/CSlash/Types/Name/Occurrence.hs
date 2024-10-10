@@ -2,7 +2,10 @@
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE MagicHash #-}
 
-module CSlash.Types.Name.Occurrence where
+module CSlash.Types.Name.Occurrence
+  ( module CSlash.Types.Name.Occurrence
+  , FastStringEnv
+  ) where
 
 import Prelude hiding ((<>))
 
