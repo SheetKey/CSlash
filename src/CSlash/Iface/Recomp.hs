@@ -8,7 +8,7 @@ import CSlash.Driver.Backend
 import CSlash.Driver.Config.Finder
 import CSlash.Driver.Env
 import CSlash.Driver.DynFlags
--- import GHC.Driver.Ppr
+import CSlash.Driver.Ppr
 -- import GHC.Driver.Plugins
 
 import CSlash.Iface.Syntax
@@ -18,7 +18,7 @@ import CSlash.Iface.Load
 -- import GHC.Iface.Env
 
 import CSlash.Core
--- import GHC.Tc.Utils.Monad
+import CSlash.Tc.Utils.Monad
 import CSlash.Cs
 
 import CSlash.Data.Graph.Directed
@@ -69,7 +69,7 @@ import GHC.Iface.Errors.Ppr
 
 data RecompileRequired
   = UpToDate
-  | NeedRecompile !CompileReason
+  | NeedsRecompile !CompileReason
   deriving Eq
 
 data MaybeValidated a
@@ -77,10 +77,21 @@ data MaybeValidated a
   | OutOfDateItem !CompileReason (Maybe a)
   deriving Functor
 
+instance Outputable a => Outputable (MaybeValidated a) where
+  ppr (UpToDateItem a) = text "UpToDate" <+> ppr a
+  ppr (OutOfDateItem r _) = text "OutOfDate: " <+> ppr r
+
+outOfDateItemBecause :: RecompReason -> Maybe a -> MaybeValidated a
+outOfDateItemBecause reason item = OutOfDateItem (RecompBecause reason) item
+
 data CompileReason
   = MustCompile
   | RecompBecause !RecompReason
   deriving Eq
+
+instance Outputable CompileReason where
+  ppr MustCompile = text "MustCompile"
+  ppr (RecompBecause r) = text "RecompBecause" <+> ppr r
 
 data RecompReason
   = UnitDepRemoved UnitId
@@ -106,3 +117,42 @@ data RecompReason
   | ObjectsChange
   | LibraryChanged
   deriving Eq
+
+instance Outputable RecompReason where
+  ppr rr = case rr of
+    UnitDepRemoved uid -> ppr uid <+> text "removed"
+    ModulePackageChanged s -> ftext s <+> text "package changed"
+    SourceFileChanged -> text "Source file changed"
+    ThisUnitIdChanged -> text "-this-unit-id changed"
+    HieMissing -> text "HIE file is missing"
+    HieOutdated -> text "HIE file is out of date"
+    ModuleChanged m -> ppr m <+> text "changed"
+    ModuleRemoved (_, m) -> ppr m <+> text "removed"
+    ModuleAdded(_, m) -> ppr m <+> text "added"
+    ModuleChangedRaw m -> ppr m <+> text "changed (raw)"
+    ModuleChangedIface m -> ppr m <+> text "changed (interface)"
+    FileChanged fp -> text fp <+> text "changed"
+    CustomReason s -> text s
+    FlagsChanged -> text "Flags changed"
+    OptimFlagsChange -> text "Optimisation flags changed"
+    PcFlagsChanged -> text "PC flags changed"
+    MissingObjectFile -> text "Missing object file"
+    MissingDynObjectFile -> text "Missing dynamic object file"
+    MissingDynHiFile -> text "Missing dynamic interface file"
+    MismatchedDynHiFile -> text "Mismatched dynamic interface file"
+    ObjectsChange -> text "Objects changed"
+    LibraryChanged -> text "Library changed"
+
+checkOldIface :: CsEnv -> ModSummary -> Maybe ModIface -> IO (MaybeValidated ModIface)
+checkOldIface cs_env mod_summary maybe_iface = do
+  let dflags = cs_dflags cs_env
+      logger = cs_logger cs_env
+  showPass logger $
+    "Checking old interface for "
+    ++ (showPpr dflags $ ms_mod mod_summary)
+    ++ " (use -ddump-hi-diffs for more details)"
+  initIfaceCheck (text "checkOldIface") cs_env $
+    check_old_iface cs_env mod_summary maybe_iface
+
+check_old_iface :: CsEnv -> ModSummary -> Maybe ModIface -> IfG (MaybeValidated ModIface)
+check_old_iface cs_env mod_summary maybe_iface = panic "check_old_iface"
