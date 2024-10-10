@@ -51,7 +51,7 @@ import CSlash.Rename.Names
 -- import CSlash.Iface.Env     ( externaliseName )
 import CSlash.Iface.Load
 
-import CSlash.Builtin.Types ( mkListTy, anyTypeOfKind )
+-- import CSlash.Builtin.Types ( mkListTy, anyTypeOfKind )
 import CSlash.Builtin.Names
 import CSlash.Builtin.Utils
 
