@@ -103,6 +103,7 @@ library
                     , CSlash.Data.FastString.Env
                     , CSlash.Data.FiniteMap
                     , CSlash.Data.Graph.Directed
+                    , CSlash.Data.IOEnv
                     , CSlash.Data.List.Infinite
                     , CSlash.Data.List.SetOps
                     , CSlash.Data.Maybe
