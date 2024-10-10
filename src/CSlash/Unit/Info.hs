@@ -7,6 +7,7 @@ module CSlash.Unit.Info
   , UnitKeyInfo
   , mkUnitKeyInfo
   , mapUnitInfo
+  , mkUnitPprInfo
 
   , mkUnit
 
@@ -32,7 +33,7 @@ import CSlash.Data.FastString
 import qualified GHC.Data.ShortText as ST
 
 import CSlash.Unit.Module as Module
--- import CSlash.Unit.Ppr
+import CSlash.Unit.Ppr
 import CSlash.Unit.Database
 
 import CSlash.Settings
@@ -125,3 +126,9 @@ mkUnit :: UnitInfo -> Unit
 mkUnit p
   | unitIsIndefinite p = mkVirtUnit (unitInstanceOf p) (unitInstantiations p)
   | otherwise = RealUnit (Definite (unitId p))
+
+mkUnitPprInfo :: (u -> FastString) -> GenUnitInfo u -> UnitPprInfo
+mkUnitPprInfo ufs i = UnitPprInfo
+  (ufs (unitId i))
+  (unitPackageNameString i)
+  (unitPackageVersion i)
