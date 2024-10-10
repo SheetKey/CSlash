@@ -199,6 +199,7 @@ library
 
                     , CSlash.Tc.Module
                     , CSlash.Tc.Types
+                    , CSlash.Tc.Types.LclEnv
                     , CSlash.Tc.Types.Origin
                     , CSlash.Tc.Types.TcRef
                     , CSlash.Tc.Utils.Monad
