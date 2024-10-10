@@ -272,6 +272,7 @@ library
                     , CSlash.Unit.Module.Status
                     , CSlash.Unit.Module.Warnings
                     , CSlash.Unit.Parser
+                    , CSlash.Unit.Ppr
                     , CSlash.Unit.State
                     , CSlash.Unit.Types
 
