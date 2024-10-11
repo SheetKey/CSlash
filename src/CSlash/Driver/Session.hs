@@ -1163,7 +1163,7 @@ fFlagsDeps =
   , flagSpec "show-warning-groups"              Opt_ShowWarnGroups
   , flagSpec "hide-source-paths"                Opt_HideSourcePaths
   , flagSpec "show-loaded-modules"              Opt_ShowLoadedModules
-  , flagSpec "whole-archive-hs-libs"            Opt_WholeArchiveCsLibs
+  , flagSpec "whole-archive-cs-libs"            Opt_WholeArchiveCsLibs
   , flagSpec "keep-cafs"                        Opt_KeepCAFs
   , flagSpec "link-rts"                         Opt_LinkRts
   , flagSpec "show-error-context"               Opt_ShowErrorContext
