@@ -7,8 +7,8 @@ module CSlash.Driver.Pipeline.Execute where
 -- import {-# SOURCE #-} GHC.Driver.Pipeline (compileForeign, compileEmptyStub)
 -- import GHC.Runtime.Loader (initializePlugins)
 import CSlash.Rename.Names
--- import GHC.Linker.ExtraObj
--- import GHC.Linker.Dynamic
+import CSlash.Linker.ExtraObj
+import CSlash.Linker.Dynamic
 
 import CSlash.Data.Maybe
 import CSlash.Data.StringBuffer
@@ -528,3 +528,13 @@ joinObjectFiles cs_env o_files output_fn
     dflags = cs_dflags cs_env
     tmpfs = cs_tmpfs cs_env
     logger = cs_logger cs_env
+
+-----------------------------------------------------------------------------
+
+linkDynLibCheck :: Logger -> TmpFs -> DynFlags -> UnitEnv -> [String] -> [UnitId] -> IO ()
+linkDynLibCheck logger tmpfs dflags unit_env o_files dep_units = do
+  when (haveRtsOptsFlags dflags) $
+    logMsg logger MCInfo noSrcSpan
+    $ withPprStyle defaultUserStyle
+    $ text "Warning: -rtsopts and -with-rtsopts have no effect with -shared."
+  linkDynLib logger tmpfs dflags unit_env o_files dep_units
