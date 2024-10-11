@@ -201,7 +201,6 @@ data GeneralFlag
   | Opt_ProfManualCcs -- ^ Ignore manual SCC annotations
 
   -- misc opts
-  | Opt_Pp
   | Opt_ForceRecomp
   | Opt_IgnoreOptimChanges
   | Opt_IgnoreHpcChanges
