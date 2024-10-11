@@ -59,6 +59,9 @@ data CsNameVersion = CsNameVersion
   , csNameVersion_projectVersion :: String
   }
 
+dynLibSuffix :: CsNameVersion -> String
+dynLibSuffix (CsNameVersion name ver) = '-' : name ++ ver
+
 -----------------------------------------------------------------------------
 -- Accessors from 'Settings'
 
