@@ -61,6 +61,8 @@ module CSlash.Driver.Session
 
   , setUnsafeGlobalDynFlags
 
+  , useXLinkerRPath
+
   , IncludeSpecs(..)
   , addImplicitQuoteInclude
   ) where 
@@ -1655,12 +1657,19 @@ makeDynFlagsConsistent dflags
     arch = platformArch platform
     os = platformOS platform
 
-
 setUnsafeGlobalDynFlags :: DynFlags -> IO ()
 setUnsafeGlobalDynFlags dflags = do
   writeIORef v_unsafeHasPprDebug (hasPprDebug dflags)
   writeIORef v_unsafeHasNoDebugOutput (hasNoDebugOutput dflags)
   writeIORef v_unsafeHasNoStateHack (hasNoStateHack dflags)
+
+-- -----------------------------------------------------------------------------
+-- Linker/compiler information
+
+useXLinkerRPath :: DynFlags -> OS -> Bool
+useXLinkerRPath dflags _ = gopt Opt_RPath dflags
+
+-- -----------------------------------------------------------------------------
 
 outputFile :: DynFlags -> Maybe String
 outputFile dflags
