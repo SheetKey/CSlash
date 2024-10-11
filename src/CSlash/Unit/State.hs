@@ -288,6 +288,16 @@ lookupUnitId state uid = lookupUnitId' (unitInfoMap state) uid
 lookupUnitId' :: UnitInfoMap -> UnitId -> Maybe UnitInfo
 lookupUnitId' db uid = lookupUniqMap db uid
 
+unsafeLookupUnit :: HasDebugCallStack => UnitState -> Unit -> UnitInfo
+unsafeLookupUnit state u = case lookupUnit state u of
+  Just info -> info
+  Nothing -> pprPanic "unsafeLookupUnit" (ppr u)
+
+unsafeLookupUnitId :: HasDebugCallStack => UnitState -> UnitId -> UnitInfo
+unsafeLookupUnitId state uid = case lookupUnitId state uid of
+  Just info -> info
+  Nothing -> pprPanic "unsafeLookupUnitId" (ppr uid)
+
 mkUnitInfoMap :: [UnitInfo] -> UnitInfoMap
 mkUnitInfoMap infos = foldl' add emptyUniqMap infos
   where
