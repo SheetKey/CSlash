@@ -17,6 +17,9 @@ module CSlash.Unit.Info
   , unitPackageNameString
   , unitPackageIdString
   , pprUnitInfo
+
+  , collectLibraryDirs
+  , unitCsLibs
   ) where
 
 import Prelude hiding ((<>))
@@ -132,3 +135,31 @@ mkUnitPprInfo ufs i = UnitPprInfo
   (ufs (unitId i))
   (unitPackageNameString i)
   (unitPackageVersion i)
+
+collectLibraryDirs :: Ways -> [UnitInfo] -> [FilePath]
+collectLibraryDirs ws = ordNub . filter notNull . concatMap (libraryDirsForWay ws)
+
+libraryDirsForWay :: Ways -> UnitInfo -> [String]
+libraryDirsForWay ws
+  | hasWay ws WayDyn = map ST.unpack . unitLibraryDynDirs
+  | otherwise = map ST.unpack . unitLibraryDirs
+
+unitCsLibs :: CsNameVersion -> Ways -> UnitInfo -> [String]
+unitCsLibs namever ways0 p = map (mkDynName . addSuffix . ST.unpack) (unitLibraries p)
+  where
+    ways1 = removeWay WayDyn ways0
+
+    tag = waysTag (fullWays ways1)
+    rts_tag = waysTag ways1
+
+    mkDynName x
+      | not (ways0 `hasWay` WayDyn) = x
+      | "CS" `isPrefixOf` x = x ++ dynLibSuffix namever
+      | Just x' <- stripPrefix "C" x = x'
+      | otherwise = panic ("Don't understand library name " ++ x)
+
+    addSuffix rts@"CSrts" = rts ++ (expandTag rts_tag)
+    addSuffix other = other ++ (expandTag tag)
+
+    expandTag t | null t = ""
+                | otherwise = '_' : t
