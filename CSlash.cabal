@@ -143,6 +143,7 @@ library
                     , CSlash.Iface.Binary
                     , CSlash.Iface.Env
                     , CSlash.Iface.Load
+                    , CSlash.Iface.Make
                     , CSlash.Iface.Recomp
                     , CSlash.Iface.Recomp.Binary
                     , CSlash.Iface.Syntax
