@@ -43,6 +43,7 @@ module CSlash.Driver.Session
   , augmentByWorkingDirectory
 
   , getOpts
+  , getVerbFlags
 
   , CmdLineP(..), runCmdLineP
   , getCmdLineState, putCmdLineState
@@ -165,6 +166,11 @@ opt_las = toolSettings_opt_las . toolSettings
 
 getOpts :: DynFlags -> (DynFlags -> [a]) -> [a]
 getOpts dflags opts = reverse (opts dflags)
+
+getVerbFlags :: DynFlags -> [String]
+getVerbFlags dflags
+  | verbosity dflags >= 4 = ["-v"]
+  | otherwise = []
 
 setObjectDir :: String -> DynFlags -> DynFlags
 setObjectDir f d = d { objectDir = Just f }
