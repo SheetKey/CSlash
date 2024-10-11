@@ -1,4 +1,7 @@
-module CSlash.Driver.Main where
+module CSlash.Driver.Main
+  ( module CSlash.Driver.Main
+  , CsBackendAction(..), CsRecompStatus(..)
+  ) where
 
 import CSlash.Platform
 
@@ -37,7 +40,7 @@ import CSlash.Driver.Config.Diagnostic
 -- import GHC.ByteCode.Types
 
 -- import GHC.Linker.Loader
--- import GHC.Linker.Types
+import CSlash.Linker.Types
 -- import GHC.Linker.Deps
 
 import CSlash.Cs
@@ -56,7 +59,7 @@ import CSlash.Cs.Stats         ( ppSourceStats )
 
 -- import GHC.Iface.Load   ( ifaceStats, writeIface )
 -- import GHC.Iface.Make
--- import GHC.Iface.Recomp
+import CSlash.Iface.Recomp
 -- import GHC.Iface.Tidy
 -- import GHC.Iface.Ext.Ast    ( mkHieFile )
 -- import GHC.Iface.Ext.Types  ( getAsts, hie_asts, hie_module )
@@ -85,8 +88,8 @@ import CSlash.Parser.Errors.Types
 import CSlash.Parser
 import CSlash.Parser.Lexer as Lexer
 
--- import GHC.Tc.Module
--- import GHC.Tc.Utils.Monad
+import CSlash.Tc.Module
+import CSlash.Tc.Utils.Monad
 -- import GHC.Tc.Utils.TcType
 -- import GHC.Tc.Zonk.Env ( ZonkFlexi (DefaultFlexi) )
 
@@ -110,13 +113,13 @@ import CSlash.Unit.Env
 import CSlash.Unit.Finder
 import CSlash.Unit.External
 import CSlash.Unit.Module.ModDetails
--- import GHC.Unit.Module.ModGuts
+import CSlash.Unit.Module.ModGuts
 import CSlash.Unit.Module.ModIface
 import CSlash.Unit.Module.ModSummary
 import CSlash.Unit.Module.Graph
 import CSlash.Unit.Module.Imported
 import CSlash.Unit.Module.Deps
--- import GHC.Unit.Module.Status
+import CSlash.Unit.Module.Status
 import CSlash.Unit.Home.ModInfo
 
 import CSlash.Types.Id
@@ -184,7 +187,7 @@ import Data.Time
 
 import System.IO.Unsafe ( unsafeInterleaveIO )
 
--- import GHC.Iface.Env ( trace_if )
+import CSlash.Iface.Env ( trace_if )
 -- import GHC.Stg.InferTags.TagSig (seqTagSig)
 -- import GHC.StgToCmm.Utils (IPEStats)
 import CSlash.Types.Unique.FM
@@ -263,8 +266,8 @@ csParse' mod_summary
         (text "Parser" <+> brackets (ppr $ ms_mod mod_summary))
         (const ()) $
         do
-          let src_filename = ms_file mod_summary
-              maybe_src_buf = ms_buf mod_summary
+          let src_filename = ms_cs_file mod_summary
+              maybe_src_buf = ms_cs_buf mod_summary
           buf <- case maybe_src_buf of
                    Just b -> return b
                    Nothing -> liftIO $ hGetStringBuffer src_filename
@@ -340,3 +343,120 @@ checkBidirectionFormatChars start_loc sb
             | Just desc <- lookup chr bidirectionalFormatChars ->
                 (loc, chr, desc) : go1 (advancePsLoc loc chr) sb
             | otherwise -> go1 (advancePsLoc loc chr) sb
+
+-- -----------------------------------------------------------------------------
+-- Rename and typecheck a module
+
+csTypecheckAndGetWarnings :: CsEnv -> ModSummary -> IO (FrontendResult, WarningMessages)
+csTypecheckAndGetWarnings cs_env summary = runCs' cs_env $
+  FrontendTypecheck . fst <$> cs_typecheck False summary Nothing
+  
+cs_typecheck :: Bool -> ModSummary -> Maybe CsParsedModule -> Cs (TcGblEnv, RenamedStuff)
+cs_typecheck keep_rn mod_summary mb_rdr_module = panic "cs_typecheck"
+
+{- *********************************************************************
+*                                                                      *
+                The main compiler pipeline
+*                                                                      *
+********************************************************************* -}
+
+type Messager = CsEnv -> (Int, Int) -> RecompileRequired -> ModuleGraphNode -> IO ()
+
+csRecompStatus
+  :: Maybe Messager
+  -> CsEnv
+  -> ModSummary
+  -> Maybe ModIface
+  -> HomeModLinkable
+  -> (Int, Int)
+  -> IO CsRecompStatus
+csRecompStatus mCsMessage cs_env mod_summary mb_old_iface old_linkable mod_index = do
+  let msg what = case mCsMessage of
+                   Just csMessage -> csMessage cs_env mod_index what (ModuleNode [] mod_summary)
+                   Nothing -> return ()
+
+  recomp_if_result
+    <- {-# SCC "checkOldIface" #-}
+    liftIO $ checkOldIface cs_env mod_summary mb_old_iface
+
+  case recomp_if_result of
+    OutOfDateItem reason mb_checked_iface -> do
+      msg $ NeedsRecompile reason
+      return $ CsRecompNeeded $ fmap (mi_iface_hash . mi_final_exts) mb_checked_iface
+
+    UpToDateItem checked_iface ->
+      let lcl_dflags = ms_cs_opts mod_summary
+      in if not (backendGeneratesCode (backend lcl_dflags))
+         then do msg UpToDate
+                 return $ CsUpToDate checked_iface emptyHomeModInfoLinkable
+         else do obj_linkable <- liftIO $
+                   checkObjects lcl_dflags (homeMod_object old_linkable) mod_summary
+                 trace_if (cs_logger cs_env) (vcat [text "Object Linkable", ppr obj_linkable])
+
+                 let just_o = justObjects <$> obj_linkable
+                     recomp_linkable_result =
+                       if backendWritesFiles (backend lcl_dflags)
+                       then just_o
+                       else pprPanic "csRecompStatus" (text $ show $ backend lcl_dflags)
+
+                 case recomp_linkable_result of
+                   UpToDateItem linkable -> do
+                     msg $ UpToDate
+                     return $ CsUpToDate checked_iface $ linkable
+                   OutOfDateItem reason _ -> do
+                     msg $ NeedsRecompile reason
+                     return $ CsRecompNeeded $ Just $ mi_iface_hash $ mi_final_exts checked_iface
+                                                   
+checkObjects :: DynFlags -> Maybe Linkable -> ModSummary -> IO (MaybeValidated Linkable)
+checkObjects dflags mb_old_linkable summary = 
+  let dt_enabled = gopt Opt_BuildDynamicToo dflags
+      this_mod = ms_mod summary
+      mb_obj_date = ms_obj_date summary
+      mb_dyn_obj_date = ms_dyn_obj_date summary
+      mb_if_date = ms_iface_date summary
+      obj_fn = ml_obj_file (ms_location summary)
+
+      checkDynamicObj k = if dt_enabled
+        then case (>=) <$> mb_dyn_obj_date <*> mb_if_date of
+               Just True -> k
+               _ -> return $ outOfDateItemBecause MissingDynObjectFile Nothing
+        else k
+
+  in checkDynamicObj $
+     case (,) <$> mb_obj_date <*> mb_if_date of
+       Just (obj_date, if_date)
+         | obj_date >= if_date
+           -> case mb_old_linkable of
+                Just old_linkable
+                  | isObjectLinkable old_linkable
+                  , linkableTime old_linkable == obj_date
+                    -> return $ UpToDateItem old_linkable
+                _ -> UpToDateItem <$> findObjectLinkable this_mod obj_fn obj_date
+       _ -> return $ outOfDateItemBecause MissingObjectFile Nothing             
+                       
+--------------------------------------------------------------
+-- Compilers
+--------------------------------------------------------------
+
+csDesugarAndSimplify
+  :: ModSummary
+  -> FrontendResult
+  -> Messages CsMessage
+  -> Maybe Fingerprint
+  -> Cs CsBackendAction
+csDesugarAndSimplify summary (FrontendTypecheck tc_result) tc_warnings mb_old_hash = do
+  panic "csDesugarAndSimplify"
+
+--------------------------------------------------------------
+-- NoRecomp handlers
+--------------------------------------------------------------
+
+--------------------------------------------------------------
+-- Progress displayers.
+--------------------------------------------------------------
+
+oneShotMsg :: Logger -> RecompileRequired -> IO ()
+oneShotMsg logger recomp =
+  case recomp of
+    UpToDate -> compilationProgressMsg logger $ text "compilation IS NOT required"
+    NeedsRecompile _ -> return ()
