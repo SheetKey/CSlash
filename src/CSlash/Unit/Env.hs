@@ -47,6 +47,24 @@ initUnitEnv cur_unit hug namever platform = do
 unsafeGetHomeUnit :: UnitEnv -> HomeUnit
 unsafeGetHomeUnit ue = ue_unsafeHomeUnit ue
 
+preloadUnitsInfo' :: UnitEnv -> [UnitId] -> MaybeErr UnitErr [UnitInfo]
+preloadUnitsInfo' unit_env ids0 = all_infos
+  where
+    unit_state = ue_units unit_env
+    ids = ids0 ++ inst_ids
+    inst_ids
+      | Just home_unit <- ue_homeUnit unit_env
+      , not (isHomeUnitIndefinite home_unit)
+      = map (toUnitId . moduleUnit . snd) (homeUnitInstantiations home_unit)
+      | otherwise = []
+    pkg_map = unitInfoMap unit_state
+    preload = preloadUnits unit_state
+
+    all_pkgs = closeUnitDeps' pkg_map preload (ids `zip` repeat Nothing)
+    all_infos = map (unsafeLookupUnitId unit_state) <$> all_pkgs
+
+-- -----------------------------------------------------------------------------
+
 data HomeUnitEnv = HomeUnitEnv
   { homeUnitEnv_units :: !UnitState
   , homeUnitEnv_unit_dbs :: !(Maybe [UnitDatabase UnitId])
