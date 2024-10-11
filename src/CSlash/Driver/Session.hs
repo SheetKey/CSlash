@@ -15,9 +15,11 @@ module CSlash.Driver.Session
   , DynFlags(..)
   , outputFile, objectSuf, ways
   , HasDynFlags(..), ContainsDynFlags(..)
+  , RtsOptsEnabled(..)
   , CsMode(..), isOneShot
   , CsLink(..), isNoLink
   , Option(..), showOpt
+  , DynLibLoader(..)
   , makeDynFlagsConsistent
   , positionIndependent
   , setFlagsFromEnvFile
