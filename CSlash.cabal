@@ -161,6 +161,7 @@ library
                     , CSlash.Language.Syntax.Pat
                     , CSlash.Language.Syntax.Type
 
+                    , CSlash.Linker.Static
                     , CSlash.Linker.Types
                     , CSlash.Linker.Unit
 
