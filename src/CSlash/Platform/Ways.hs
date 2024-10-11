@@ -46,6 +46,9 @@ wayRTSOnly WayProf = False
 wayRTSOnly WayThreaded = True
 wayRTSOnly WayDebug = True
 
+fullWays :: Ways -> Ways
+fullWays ws = Set.filter (not . wayRTSOnly) ws
+
 wayDesc :: Way -> String
 wayDesc (WayCustom xs) = xs
 wayDesc WayThreaded = "Threaded"
