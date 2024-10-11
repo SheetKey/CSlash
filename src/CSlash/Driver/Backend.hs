@@ -26,6 +26,12 @@ noBackend = Named NoBackend
 
 ---------------------------------------------------------------------------------
 
+data DefunctionalizedPostCsPipeline
+  = LlvmPostCsPipeline
+  | NoPostCsPipeline
+
+---------------------------------------------------------------------------------
+
 backendDescription :: Backend -> String
 backendDescription (Named LLVM) = "LLVM"
 backendDescription (Named NoBackend) = "no code generated"
@@ -45,6 +51,10 @@ backendUnregisterisedAbiOnly (Named NoBackend) = False
 backendSupportsHpc :: Backend -> Bool
 backendSupportsHpc (Named LLVM) = True
 backendSupportsHpc (Named NoBackend) = True
+
+backendPostCsPipeline :: Backend -> DefunctionalizedPostCsPipeline
+backendPostCsPipeline (Named LLVM) = LlvmPostCsPipeline
+backendPostCsPipeline (Named NoBackend) = NoPostCsPipeline
 
 backendNormalSuccessorPhase :: Backend -> Phase
 backendNormalSuccessorPhase (Named LLVM) = LlvmOpt
