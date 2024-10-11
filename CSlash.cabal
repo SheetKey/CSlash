@@ -162,6 +162,7 @@ library
                     , CSlash.Language.Syntax.Type
 
                     , CSlash.Linker.Static
+                    , CSlash.Linker.Static.Utils
                     , CSlash.Linker.Types
                     , CSlash.Linker.Unit
 
