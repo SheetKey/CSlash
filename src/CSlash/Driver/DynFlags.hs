@@ -13,6 +13,7 @@ module CSlash.Driver.DynFlags
   , wopt_set_all_fatal_custom, wopt_unset_all_fatal_custom
   , wopt_set_custom, wopt_unset_custom
   , wopt_set_fatal_custom, wopt_unset_fatal_custom
+  , setDynamicNow
   , DynFlags(..)
   , ParMakeCount(..)
   , ways
@@ -532,6 +533,9 @@ data RtsOptsEnabled
 
 positionIndependent :: DynFlags -> Bool
 positionIndependent dflags = gopt Opt_PIC dflags || gopt Opt_PIE dflags
+
+setDynamicNow :: DynFlags -> DynFlags
+setDynamicNow dflags = dflags { dynamicNow = True }
 
 data PkgDbRef
   = GlobalPkgDb

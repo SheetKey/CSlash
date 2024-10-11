@@ -11,6 +11,7 @@ module CSlash.Driver.Session
   , dopt
   , gopt
   , wopt
+  , setDynamicNow
   , DynFlags(..)
   , outputFile, objectSuf, ways
   , HasDynFlags(..), ContainsDynFlags(..)
