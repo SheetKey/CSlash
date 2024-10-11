@@ -79,6 +79,10 @@ addFilesToClean :: TmpFs -> TempFileLifetime -> [FilePath] -> IO ()
 addFilesToClean tmpfs lifetime new_files =
   addToClean (tmp_files_to_clean tmpfs) lifetime new_files
 
+addSubdirsToClean :: TmpFs -> TempFileLifetime -> [FilePath] -> IO ()
+addSubdirsToClean tmpfs lifetime new_subdirs =
+  addToClean (tmp_subdirs_to_clean tmpfs) lifetime new_subdirs
+
 addToClean :: IORef PathsToClean -> TempFileLifetime -> [FilePath] -> IO ()
 addToClean ref lifetime new_filepaths = modifyIORef' ref $
   \PathsToClean { ptcCurrentModule = cm_paths, ptcCsSession = cs_paths }
@@ -111,6 +115,25 @@ newTempName logger tmpfs tmp_dir lifetime extn = do
         then findTempName prefix
         else do addFilesToClean tmpfs lifetime [filename]
                 return filename
+
+newTempSubDir :: Logger -> TmpFs -> TempDir -> IO FilePath
+newTempSubDir logger tmpfs tmp_dir = do
+  d <- getTempDir logger tmpfs tmp_dir
+  findTempDir (d </> "csl_")
+  where
+    findTempDir :: FilePath -> IO FilePath
+    findTempDir prefix = do
+      n <- newTempSuffix tmpfs
+      let name = prefix ++ show n
+      b <- doesDirectoryExist name
+      if b then findTempDir prefix
+        else (flip Exception.catchIO)
+             (\e -> if isAlreadyExistsError e
+                    then findTempDir prefix else ioError e)
+             $ do createDirectory name
+                  addSubdirsToClean tmpfs TFL_CslSession [name]
+                  return name
+        
 
 getTempDir :: Logger -> TmpFs -> TempDir -> IO FilePath
 getTempDir logger tmpfs (TempDir tmp_dir) = do
