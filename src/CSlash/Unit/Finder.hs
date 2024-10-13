@@ -4,16 +4,21 @@ module CSlash.Unit.Finder
   , FinderOpts(..)
   , FinderCache
   , initFinderCache
+  , flushFinderCaches
   , findImportedModule
   , findHomeModule
   , findExposedPackageModule
+  , mkHomeModLocation
   , mkHomeModLocation2
   , mkHiOnlyModLocation
   , mkHiPath
   , mkObjPath
+  , addModuleToFinder
   , addHomeModuleToFinder
 
   , findObjectLinkable
+
+  , lookupFinderCache
   ) where
 
 import CSlash.Platform.Ways
@@ -58,6 +63,13 @@ type BaseName = String
 initFinderCache :: IO FinderCache
 initFinderCache = FinderCache <$> newIORef emptyInstalledModuleEnv
                               <*> newIORef M.empty
+
+flushFinderCaches :: FinderCache -> UnitEnv -> IO ()
+flushFinderCaches (FinderCache ref file_ref) ue = do
+  atomicModifyIORef' ref $ \fm -> (filterInstalledModuleEnv is_ext fm, ())
+  atomicModifyIORef' file_ref $ \_ -> (M.empty, ())
+  where
+    is_ext mod _ = not (isUnitEnvInstalledModule ue mod)
 
 addToFinderCache :: FinderCache -> InstalledModule -> InstalledFindResult -> IO ()
 addToFinderCache (FinderCache ref _) key val =
@@ -219,6 +231,11 @@ modLocationCache fc mod do_this = do
       addToFinderCache fc mod result
       return result
 
+addModuleToFinder :: FinderCache -> Module -> ModLocation -> IO ()
+addModuleToFinder fc mod loc = 
+  let imod = toUnitId <$> mod
+  in addToFinderCache fc imod (InstalledFound loc imod)
+
 addHomeModuleToFinder :: FinderCache -> HomeUnit -> ModuleName -> ModLocation -> IO Module
 addHomeModuleToFinder fc home_unit mod_name loc = do
   let mod = mkHomeInstalledModule home_unit mod_name
@@ -354,6 +371,11 @@ mkHomeModLocationSearched
   :: FinderOpts -> ModuleName -> FileExt -> FilePath -> BaseName -> ModLocation
 mkHomeModLocationSearched fopts mod suff path basename
   = mkHomeModLocation2 fopts mod (path </> basename) suff
+
+mkHomeModLocation :: FinderOpts -> ModuleName -> FilePath -> ModLocation
+mkHomeModLocation dflags mod src_filename =
+  let (basename, extension) = splitExtension src_filename
+  in mkHomeModLocation2 dflags mod basename extension
 
 mkHomeModLocation2 :: FinderOpts -> ModuleName -> FilePath -> String -> ModLocation
 mkHomeModLocation2 fopts mod src_basename ext
