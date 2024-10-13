@@ -23,6 +23,9 @@ srcErrorMessages (SourceError msgs) = msgs
 throwErrors :: MonadIO io => Messages CsMessage -> io a
 throwErrors = liftIO . throwIO . mkSrcErr
 
+throwOneError :: MonadIO io => MsgEnvelope CsMessage -> io a
+throwOneError = throwErrors . singleMessage
+
 newtype SourceError = SourceError (Messages CsMessage)
 
 instance Show SourceError where
