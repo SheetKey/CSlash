@@ -47,6 +47,12 @@ initUnitEnv cur_unit hug namever platform = do
 unsafeGetHomeUnit :: UnitEnv -> HomeUnit
 unsafeGetHomeUnit ue = ue_unsafeHomeUnit ue
 
+updateHpt_lazy :: (HomePackageTable -> HomePackageTable) -> UnitEnv -> UnitEnv
+updateHpt_lazy = ue_updateHPT_lazy
+
+updateHug :: (HomeUnitGraph -> HomeUnitGraph) -> UnitEnv -> UnitEnv
+updateHug = ue_updateHUG
+
 preloadUnitsInfo' :: UnitEnv -> [UnitId] -> MaybeErr UnitErr [UnitInfo]
 preloadUnitsInfo' unit_env ids0 = all_infos
   where
@@ -76,6 +82,11 @@ data HomeUnitEnv = HomeUnitEnv
 instance Outputable HomeUnitEnv where
   ppr hug = pprHPT (homeUnitEnv_hpt hug)
 
+homeUnitEnv_unsafeHomeUnit :: HomeUnitEnv -> HomeUnit
+homeUnitEnv_unsafeHomeUnit hue = case homeUnitEnv_home_unit hue of
+  Nothing -> panic "homeUnitEnv_unsafeHomeUnit: No home unit"
+  Just h -> h
+
 mkHomeUnitEnv :: DynFlags -> HomePackageTable -> Maybe HomeUnit -> HomeUnitEnv
 mkHomeUnitEnv dflags hpt home_unit = HomeUnitEnv
   { homeUnitEnv_units = emptyUnitState
@@ -85,7 +96,29 @@ mkHomeUnitEnv dflags hpt home_unit = HomeUnitEnv
   , homeUnitEnv_home_unit = home_unit
   }
 
+isUnitEnvInstalledModule :: UnitEnv -> InstalledModule -> Bool
+isUnitEnvInstalledModule ue m = maybe False (`isHomeInstalledModule` m) hu
+  where
+    hu = ue_unitHomeUnit_maybe (moduleUnit m) ue
+
 type HomeUnitGraph = UnitEnvGraph HomeUnitEnv
+
+addHomeModInfoToHug :: HomeModInfo -> HomeUnitGraph -> HomeUnitGraph
+addHomeModInfoToHug hmi hug = unitEnv_alter go hmi_unit hug
+  where
+    hmi_mod :: Module
+    hmi_mod = mi_module (hm_iface hmi)
+
+    hmi_unit = toUnitId (moduleUnit hmi_mod)
+
+    go :: Maybe HomeUnitEnv -> Maybe HomeUnitEnv
+    go Nothing = pprPanic "addHomeInfoToHug" (ppr hmi_mod)
+    go (Just hue) = Just (updateHueHpt (addHomeModInfoToHpt hmi) hue)
+
+updateHueHpt :: (HomePackageTable -> HomePackageTable) -> HomeUnitEnv -> HomeUnitEnv
+updateHueHpt f hue =
+  let !hpt =  f (homeUnitEnv_hpt hue)
+  in hue { homeUnitEnv_hpt = hpt }
 
 instance Outputable (UnitEnvGraph HomeUnitEnv) where
   ppr g = ppr [(k, length (homeUnitEnv_hpt hue)) | (k, hue) <- (unitEnv_elts g)]
@@ -112,6 +145,19 @@ unitEnv_adjust :: (v -> v) -> UnitEnvGraphKey -> UnitEnvGraph v -> UnitEnvGraph 
 unitEnv_adjust f uid unitEnv = unitEnv
   { unitEnv_graph = Map.adjust f uid (unitEnv_graph unitEnv) }
 
+unitEnv_alter :: (Maybe v -> Maybe v) -> UnitEnvGraphKey -> UnitEnvGraph v -> UnitEnvGraph v
+unitEnv_alter f uid unitEnv = unitEnv
+  { unitEnv_graph = Map.alter f uid (unitEnv_graph unitEnv) }
+
+unitEnv_mapWithKey :: (UnitEnvGraphKey -> v -> b) -> UnitEnvGraph v -> UnitEnvGraph b
+unitEnv_mapWithKey f (UnitEnvGraph u) = UnitEnvGraph $ Map.mapWithKey f u
+
+unitEnv_new :: Map UnitEnvGraphKey v -> UnitEnvGraph v
+unitEnv_new m = UnitEnvGraph { unitEnv_graph = m }
+
+unitEnv_map :: (v -> v) -> UnitEnvGraph v -> UnitEnvGraph v
+unitEnv_map f m = m { unitEnv_graph = Map.map f (unitEnv_graph m) }
+
 unitEnv_member :: UnitEnvGraphKey -> UnitEnvGraph v -> Bool
 unitEnv_member u env = Map.member u (unitEnv_graph env)
 
@@ -127,12 +173,38 @@ unitEnv_keys env = Map.keysSet (unitEnv_graph env)
 unitEnv_elts :: UnitEnvGraph v -> [(UnitEnvGraphKey, v)]
 unitEnv_elts env = Map.toList (unitEnv_graph env)
 
+unitEnv_foldWithKey :: (b -> UnitEnvGraphKey -> a -> b) -> b -> UnitEnvGraph a -> b
+unitEnv_foldWithKey f z (UnitEnvGraph g) = Map.foldlWithKey' f z g
+
 -- -------------------------------------------------------
 -- Query and modify UnitState in HomeUnitEnv
 -- -------------------------------------------------------
 
 ue_units :: HasDebugCallStack => UnitEnv -> UnitState
 ue_units = homeUnitEnv_units . ue_currentHomeUnitEnv
+
+-- -------------------------------------------------------
+-- Query and modify Home Package Table in HomeUnitEnv
+-- -------------------------------------------------------
+
+ue_hpt :: HasDebugCallStack => UnitEnv -> HomePackageTable
+ue_hpt = homeUnitEnv_hpt . ue_currentHomeUnitEnv
+
+ue_updateHPT_lazy
+  :: HasDebugCallStack => (HomePackageTable -> HomePackageTable) -> UnitEnv -> UnitEnv
+ue_updateHPT_lazy f e = ue_updateUnitHPT_lazy f (ue_currentUnit e) e
+
+ue_updateHUG :: HasDebugCallStack => (HomeUnitGraph -> HomeUnitGraph) -> UnitEnv -> UnitEnv
+ue_updateHUG f e = ue_updateUnitHUG f e
+
+ue_updateUnitHPT_lazy
+  :: HasDebugCallStack => (HomePackageTable -> HomePackageTable) -> UnitId -> UnitEnv -> UnitEnv
+ue_updateUnitHPT_lazy f uid ue_env = ue_updateHomeUnitEnv update uid ue_env
+  where
+    update unitEnv = unitEnv { homeUnitEnv_hpt = f $ homeUnitEnv_hpt unitEnv }
+
+ue_updateUnitHUG :: HasDebugCallStack => (HomeUnitGraph -> HomeUnitGraph) -> UnitEnv -> UnitEnv
+ue_updateUnitHUG f ue_env = ue_env { ue_home_unit_graph = f (ue_home_unit_graph ue_env) }
 
 -- -------------------------------------------------------
 -- Query and modify DynFlags in HomeUnitEnv
@@ -163,6 +235,13 @@ ue_unsafeHomeUnit :: UnitEnv -> HomeUnit
 ue_unsafeHomeUnit ue = case ue_homeUnit ue of
   Nothing -> panic "unsafeGetHomeUnit: No home unit"
   Just h -> h
+
+ue_unitHomeUnit_maybe :: UnitId -> UnitEnv -> Maybe HomeUnit
+ue_unitHomeUnit_maybe uid ue_env
+  = homeUnitEnv_unsafeHomeUnit <$> (ue_findHomeUnitEnv_maybe uid ue_env)
+
+ue_unitHomeUnit :: UnitId -> UnitEnv -> HomeUnit
+ue_unitHomeUnit uid ue_env = homeUnitEnv_unsafeHomeUnit $ ue_findHomeUnitEnv uid ue_env
 
 -- -------------------------------------------------------
 -- Query and modify the currently active unit
