@@ -26,6 +26,9 @@ emptyHomeModInfoLinkable = HomeModLinkable Nothing
 data HomeModLinkable = HomeModLinkable
   { homeMod_object :: !(Maybe Linkable) }
 
+instance Outputable HomeModLinkable where
+  ppr (HomeModLinkable l1) = ppr l1
+
 justObjects :: Linkable -> HomeModLinkable
 justObjects lm = assertPpr (isObjectLinkable lm) (ppr lm) $
   emptyHomeModInfoLinkable { homeMod_object = Just lm }
@@ -34,6 +37,18 @@ type HomePackageTable = DModuleNameEnv HomeModInfo
 
 emptyHomePackageTable :: HomePackageTable
 emptyHomePackageTable = emptyUDFM
+
+lookupHpt :: HomePackageTable -> ModuleName -> Maybe HomeModInfo
+lookupHpt = lookupUDFM
+
+addToHpt :: HomePackageTable -> ModuleName -> HomeModInfo -> HomePackageTable
+addToHpt = addToUDFM
+
+addHomeModInfoToHpt :: HomeModInfo -> HomePackageTable -> HomePackageTable
+addHomeModInfoToHpt hmi hpt = addToHpt hpt (moduleName (mi_module (hm_iface hmi))) hmi
+
+addListToHpt :: HomePackageTable -> [(ModuleName, HomeModInfo)] -> HomePackageTable
+addListToHpt = addListToUDFM
 
 pprHPT :: HomePackageTable -> SDoc
 pprHPT hpt = pprUDFM hpt $ \hms ->
