@@ -143,6 +143,10 @@ instance Outputable RecompReason where
     ObjectsChange -> text "Objects changed"
     LibraryChanged -> text "Library changed"
 
+recompileRequired :: RecompileRequired -> Bool
+recompileRequired UpToDate = False
+recompileRequired _ = True
+
 checkOldIface :: CsEnv -> ModSummary -> Maybe ModIface -> IO (MaybeValidated ModIface)
 checkOldIface cs_env mod_summary maybe_iface = do
   let dflags = cs_dflags cs_env
