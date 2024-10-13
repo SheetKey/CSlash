@@ -76,6 +76,9 @@ data ModIface_ (phase :: ModIfacePhase) = ModIface
   , mi_src_hash :: !Fingerprint
   }
 
+mi_mn :: ModIface -> ModuleName
+mi_mn = moduleName . mi_module 
+
 instance Binary ModIface where
   put_ bh (ModIface { mi_final_exts = ModIfaceBackend {..}, .. }) = do
     put_ bh mi_module
