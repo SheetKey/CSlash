@@ -3,6 +3,7 @@
 module CSlash.Utils.Panic
   ( module CSlash.Utils.Panic
   , module CSlash.Utils.Panic.Plain
+  , Exception.Exception(..)
   ) where
 
 import CSlash.Stack
