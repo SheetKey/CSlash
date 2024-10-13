@@ -135,6 +135,7 @@ library
                     , CSlash.Driver.Phases
                     , CSlash.Driver.Pipeline
                     , CSlash.Driver.Pipeline.Execute
+                    , CSlash.Driver.Pipeline.LogQueue
                     , CSlash.Driver.Pipeline.Monad
                     , CSlash.Driver.Pipeline.Phases
                     , CSlash.Driver.Ppr
