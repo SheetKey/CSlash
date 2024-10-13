@@ -1,3 +1,4 @@
+{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
@@ -16,7 +17,16 @@ module CSlash
   , getSessionDynFlags
   , setSessionDynFlags
 
-  , LoadHowMuch(..)
+  , Target(..), TargetId(..), Phase
+  , setTargets
+  , getTargets
+  , addTarget
+  , removeTarget
+  , guessTarget
+
+  , depanalE
+  , load, loadWithCache, LoadHowMuch(..)
+  , SuccessFlag(..), succeeded, failed
   ) where
 
 import Prelude hiding ((<>))
@@ -41,7 +51,7 @@ import CSlash.Driver.Main
 import CSlash.Driver.Make
 -- import GHC.Driver.Hooks
 import CSlash.Driver.Monad
--- import GHC.Driver.Ppr
+import CSlash.Driver.Ppr
 
 -- import GHC.ByteCode.Types
 -- import qualified GHC.Linker.Loader as Loader
@@ -145,6 +155,8 @@ import System.Environment ( getEnv, getProgName )
 import System.Exit      ( exitWith, ExitCode(..) )
 import System.FilePath
 import System.IO.Error  ( isDoesNotExistError )
+
+import Debug.Trace (trace)
 
 {- *********************************************************************
 *                                                                      *
@@ -335,6 +347,58 @@ checkNewDynFlags logger dflags = do
   liftIO $ printOrThrowDiagnostics logger print_config diag_opts
     $ fmap CsDriverMessage $ warnsToMessages diag_opts warnings
   return dflags'
+
+{- *********************************************************************
+*                                                                      *
+           Setting, getting, and modifying the targets
+*                                                                      *
+********************************************************************* -}
+
+setTargets :: CslMonad m => [Target] -> m ()
+setTargets targets = modifySession $ \h -> h { cs_targets = targets }
+
+getTargets :: CslMonad m => m [Target]
+getTargets = withSession (return . cs_targets)
+
+addTarget :: CslMonad m => Target -> m ()
+addTarget target = modifySession $ \h -> h { cs_targets = target : cs_targets h }
+
+removeTarget :: CslMonad m => TargetId -> m ()
+removeTarget target_id = modifySession $ \h -> h { cs_targets = filter (cs_targets h) }
+  where
+    filter targets = [ t | t@Target { targetId = id } <- targets, id /= target_id ]
+
+guessTarget :: CslMonad m => String -> Maybe UnitId -> Maybe Phase -> m Target
+guessTarget str mUnitId (Just phase) = do
+  tuid <- unitIdOrHomeUnit mUnitId
+  return (Target (TargetFile str (Just phase)) True tuid Nothing)
+guessTarget str mUnitId Nothing
+  | isCsSrcFilename file
+  = target (TargetFile file Nothing)
+  | otherwise = do
+      exists <- liftIO $ doesFileExist cs_file
+      if | exists -> target (TargetFile cs_file Nothing)
+         | looksLikeModuleName file -> trace "guessTarget TargetModule" $
+                                       target (TargetModule (mkModuleName file))
+         | otherwise -> do
+             dflags <- getDynFlags
+             liftIO $ throwCsExceptionIO
+                      (ProgramError (showSDoc dflags
+                                     $ text "target" <+> quotes (text file)
+                                     <+> text "is not a module name or a source file"))
+  where
+    (file, obj_allowed)
+      | '*' : rest <- str = (rest, False)
+      | otherwise = (str, True)
+    cs_file = file <.> "cs"
+    target tid = do
+      tuid <- unitIdOrHomeUnit mUnitId
+      pure $ Target tid obj_allowed tuid Nothing
+
+unitIdOrHomeUnit :: CslMonad m => Maybe UnitId -> m UnitId
+unitIdOrHomeUnit mUnitId = do
+  currentHomeUnitId <- homeUnitId . cs_home_unit <$> getSession
+  pure (fromMaybe currentHomeUnitId mUnitId)
 
 -- -----------------------------------------------------------------------------
 -- Find the package environment (if one exists)
