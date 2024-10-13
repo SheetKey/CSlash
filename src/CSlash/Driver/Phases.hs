@@ -13,10 +13,12 @@ import CSlash.Utils.Misc
 import System.FilePath
 
 data StopPhase
-  = StopAs
+  = StopPreprocess
+  | StopAs
   | NoStop
 
 stopPhaseToPhase :: StopPhase -> Phase
+stopPhaseToPhase StopPreprocess = anyCs
 stopPhaseToPhase StopAs = As
 stopPhaseToPhase NoStop = StopLn
 
@@ -31,6 +33,9 @@ data Phase
 
 instance Outputable Phase where
   ppr p = text (show p)
+
+anyCs :: Phase
+anyCs = Cs (panic "anyCs")
 
 eqPhase :: Phase -> Phase -> Bool
 eqPhase (Cs _) (Cs _) = True
@@ -87,3 +92,8 @@ isCsUserSrcFilename f = isCsUserSrcSuffix (drop 1 $ takeExtension f)
 
 isSourceFilename :: FilePath -> Bool
 isSourceFilename f = isSourceSuffix (drop 1 $ takeExtension f)
+
+isCsishTarget :: (String, Maybe Phase) -> Bool
+isCsishTarget (f, Nothing) = looksLikeModuleName f || isCsSrcFilename f || not (hasExtension f)
+isCsishTarget (_, Just phase) =
+  phase `notElem` [ As, StopLn ]
