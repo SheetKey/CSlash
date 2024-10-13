@@ -12,7 +12,8 @@ version:            0.1.0
 -- bug-reports:
 
 -- The license under which the package is released.
--- license:
+license:            MIT
+license-file:       LICENSE
 author:             Will
 maintainer:         wveatchw@gmail.com
 
