@@ -130,6 +130,7 @@ library
                     , CSlash.Driver.LlvmConfigCache
                     , CSlash.Driver.Main
                     , CSlash.Driver.Make
+                    , CSlash.Driver.MakeSem
                     , CSlash.Driver.Monad
                     , CSlash.Driver.Phases
                     , CSlash.Driver.Pipeline
