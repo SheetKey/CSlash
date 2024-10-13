@@ -17,10 +17,10 @@ import CSlash.Driver.Env.Types ( Cs(..), CsEnv(..) )
 -- import GHC.Runtime.Interpreter.Types (Interp)
 
 import CSlash.Unit
--- import GHC.Unit.Module.ModGuts
--- import GHC.Unit.Module.ModIface
--- import GHC.Unit.Module.ModDetails
--- import GHC.Unit.Home.ModInfo
+import CSlash.Unit.Module.ModGuts
+import CSlash.Unit.Module.ModIface
+import CSlash.Unit.Module.ModDetails
+import CSlash.Unit.Home.ModInfo
 import CSlash.Unit.Env
 import CSlash.Unit.External
 
@@ -71,8 +71,19 @@ cs_home_unit_maybe = ue_homeUnit . cs_unit_env
 cs_units :: HasDebugCallStack => CsEnv -> UnitState
 cs_units = ue_units . cs_unit_env
 
+cs_HPT :: CsEnv -> HomePackageTable
+cs_HPT = ue_hpt . cs_unit_env
+
 cs_HUG :: CsEnv -> HomeUnitGraph
 cs_HUG = ue_home_unit_graph . cs_unit_env
+
+csUpdateHPT_lazy :: (HomePackageTable -> HomePackageTable) -> CsEnv -> CsEnv
+csUpdateHPT_lazy f cs_env =
+  let !res = updateHpt_lazy f (cs_unit_env cs_env)
+  in cs_env { cs_unit_env = res }
+
+csUpdateHUG :: (HomeUnitGraph -> HomeUnitGraph) -> CsEnv -> CsEnv
+csUpdateHUG f cs_env = cs_env { cs_unit_env = updateHug f (cs_unit_env cs_env) }
 
 cs_all_home_unit_ids :: CsEnv -> Set.Set UnitId
 cs_all_home_unit_ids = unitEnv_keys . cs_HUG
@@ -81,12 +92,19 @@ csUpdateLoggerFlags :: CsEnv -> CsEnv
 csUpdateLoggerFlags h = h
   { cs_logger = setLogFlags (cs_logger h) (initLogFlags (cs_dflags h)) }
 
+mainModIs :: HomeUnitEnv -> Module
+mainModIs hue = mkHomeModule (expectJust "mainModIs" $ homeUnitEnv_home_unit hue)
+                             (mainModuleNameIs (homeUnitEnv_dflags hue))
+
 csUpdateFlags :: (DynFlags -> DynFlags) -> CsEnv -> CsEnv
 csUpdateFlags f h = csSetFlags (f (cs_dflags h)) h
 
 csSetFlags :: HasDebugCallStack => DynFlags -> CsEnv -> CsEnv
 csSetFlags dflags h = csUpdateLoggerFlags $ h
   { cs_dflags = dflags, cs_unit_env = ue_setFlags dflags (cs_unit_env h) }
+
+csSetActiveHomeUnit :: HasDebugCallStack => HomeUnit -> CsEnv -> CsEnv
+csSetActiveHomeUnit home_unit = csSetActiveUnitId (homeUnitId home_unit)
 
 csSetActiveUnitId :: HasDebugCallStack => UnitId -> CsEnv -> CsEnv
 csSetActiveUnitId uid e = e
