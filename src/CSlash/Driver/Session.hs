@@ -13,6 +13,7 @@ module CSlash.Driver.Session
   , wopt
   , setDynamicNow
   , DynFlags(..)
+  , ParMakeCount(..)
   , outputFile, objectSuf, ways
   , HasDynFlags(..), ContainsDynFlags(..)
   , RtsOptsEnabled(..)
@@ -54,7 +55,10 @@ module CSlash.Driver.Session
   , parseDynamicFlagsCmdLine
   , parseDynamicFilePragma
   , parseDynamicFlagsFull
+  , flagSuggestions
 
+  , allNonDeprecatedFlags
+  , flagsAll
   , flagsForCompletion
 
   , picCCOpts
@@ -359,11 +363,30 @@ parseDynamicFlagsFull activeFlags cmdline dflags0 args = do
 
   return (dflags2, leftover, warns)
 
+flagSuggestions :: [String] -> String -> [String]
+flagSuggestions flags userInput
+  | elem '=' userInput
+  = let (flagsWithEq, flagsWithoutEq) = partition (elem '=') flags
+        fName = takeWhile (/= '=') userInput
+    in (fuzzyMatch userInput flagsWithEq) ++ (fuzzyMatch fName flagsWithoutEq)
+  | otherwise = fuzzyMatch userInput flags
+
 {- *********************************************************************
 *                                                                      *
                 DynFlags specifications
 *                                                                      *
 ********************************************************************* -}
+
+allNonDeprecatedFlags :: [String]
+allNonDeprecatedFlags = allFlagsDeps False
+
+allFlagsDeps :: Bool -> [String]
+allFlagsDeps keepDeprecated = [ '-':flagName flag
+                              | (deprecated, flag) <- flagsAllDeps
+                              , keepDeprecated || not (isDeprecated deprecated) ]
+  where
+    isDeprecated Deprecated = True
+    isDeprecated _ = False
 
 flagsAll :: [Flag (CmdLineP DynFlags)]
 flagsAll = map snd flagsAllDeps
