@@ -48,6 +48,10 @@ backendUnregisterisedAbiOnly :: Backend -> Bool
 backendUnregisterisedAbiOnly (Named LLVM) = False
 backendUnregisterisedAbiOnly (Named NoBackend) = False
 
+backendSpecialModuleSource :: Backend -> Maybe String
+backendSpecialModuleSource (Named LLVM) =  Nothing
+backendSpecialModuleSource (Named NoBackend) = Just "nothing"
+
 backendSupportsHpc :: Backend -> Bool
 backendSupportsHpc (Named LLVM) = True
 backendSupportsHpc (Named NoBackend) = True
