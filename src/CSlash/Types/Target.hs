@@ -13,7 +13,7 @@ data Target = Target
   { targetId :: !TargetId
   , targetAllowObjCode :: !Bool
   , targetUnitId :: !UnitId
-  , targetContext :: !(Maybe (InputFileBuffer, UTCTime))
+  , targetContents :: !(Maybe (InputFileBuffer, UTCTime))
   }
 
 data TargetId
