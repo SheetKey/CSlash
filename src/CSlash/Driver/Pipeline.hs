@@ -1,3 +1,6 @@
+{-# LANGUAGE TupleSections #-}
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ConstraintKinds #-}
@@ -78,7 +81,7 @@ import Data.Maybe
 import qualified Data.Set as Set
 
 import Data.Time        ( getCurrentTime )
--- import CSlash.Iface.Recomp
+import CSlash.Iface.Recomp
 import CSlash.Types.Unique.DSet
 
 type P m = TPipelineClass TPhase m
@@ -86,11 +89,111 @@ type P m = TPipelineClass TPhase m
 -- ---------------------------------------------------------------------------
 -- Pre-process
 
+preprocess
+  :: CsEnv
+  -> FilePath
+  -> Maybe InputFileBuffer
+  -> Maybe Phase
+  -> IO (Either DriverMessages (DynFlags, FilePath))
+preprocess cs_env input_fn mb_input_buf mb_phase =
+  handleSourceError (\err -> return $ Left $ to_driver_messages $ srcErrorMessages err)
+  $ MC.handle handler
+  $ fmap Right $ do
+  massertPpr (isJust mb_phase || isCsSrcFilename input_fn) (text input_fn)
+  input_fn_final <- mkInputFn
+  let preprocess_pipeline
+        = preprocessPipeline pipe_env (setDumpPrefix pipe_env cs_env) input_fn_final
+  (, input_fn_final) <$> runPipeline preprocess_pipeline
+
+  where
+    srcspan = srcLocSpan $ mkSrcLoc (mkFastString input_fn) 1 1
+    handler (ProgramError msg) = return $ Left $ singleMessage $
+                                 mkPlainErrorMsgEnvelope srcspan $
+                                 DriverUnknownMessage $ mkSimpleUnknownDiagnostic $
+                                 mkPlainError noHints $ text msg
+    handler ex = throwCsExceptionIO ex
+
+    to_driver_messages :: Messages CsMessage -> Messages DriverMessage
+    to_driver_messages msgs = case traverse to_driver_message msgs of
+      Nothing -> pprPanic "non-driver message in preproess"
+                 (vcat $ pprMsgEnvelopeBagWithLoc
+                   (defaultDiagnosticOpts @CsMessage) (getMessages msgs))
+      Just msgs' -> msgs'
+
+    to_driver_message = \case
+      CsDriverMessage msg -> Just msg
+      CsPsMessage (PsHeaderMessage msg) -> Just (DriverPsHeaderMessage (PsHeaderMessage msg))
+      _ -> Nothing
+
+    pipe_env = mkPipeEnv StopPreprocess input_fn mb_phase (Temporary TFL_CslSession)
+    mkInputFn = case mb_input_buf of
+                  Just input_buf -> panic "mkInputFn: Just buf passed to preprocess"
+                  Nothing -> return input_fn
+
 -- ---------------------------------------------------------------------------
 -- Compile
 
+compileOne
+  :: CsEnv
+  -> ModSummary
+  -> Int
+  -> Int
+  -> Maybe ModIface
+  -> HomeModLinkable
+  -> IO HomeModInfo
+compileOne = compileOne' (Just batchMsg)
+
+compileOne'
+  :: Maybe Messager
+  -> CsEnv
+  -> ModSummary
+  -> Int
+  -> Int
+  -> Maybe ModIface
+  -> HomeModLinkable
+  -> IO HomeModInfo
+compileOne' mCsMessage cs_env0 summary mod_index nmods mb_old_iface mb_old_linkable = do
+  panic "compileOne'"
+
 -- ---------------------------------------------------------------------------
 -- Link
+
+link
+  :: CsLink
+  -> Logger
+  -> TmpFs
+  -> FinderCache
+  -> DynFlags
+  -> UnitEnv
+  -> Bool
+  -> Maybe (RecompileRequired -> IO ())
+  -> HomePackageTable
+  -> IO SuccessFlag
+link csLink logger tmpfs fc dflags unit_env batch_attempt_linking mCsMessage hpt =
+  case csLink of
+    NoLink -> return Succeeded
+    LinkBinary -> normal_link
+    LinkStaticLib -> normal_link
+    LinkDynLib -> normal_link
+    LinkMergedObj -> normal_link
+  where
+    normal_link = link' logger tmpfs fc dflags unit_env batch_attempt_linking mCsMessage hpt
+
+link'
+  :: Logger
+  -> TmpFs
+  -> FinderCache
+  -> DynFlags
+  -> UnitEnv
+  -> Bool
+  -> Maybe (RecompileRequired -> IO ())
+  -> HomePackageTable
+  -> IO SuccessFlag
+link' logger tmpfs fc dflags unit_env batch_attempt_linking mCsMessager hpt
+  | batch_attempt_linking
+  = do panic "link'"
+  | otherwise
+  = panic "link'"
 
 -- -----------------------------------------------------------------------------
 -- Compile files in one-shot mode.
