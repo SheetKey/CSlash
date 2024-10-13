@@ -22,30 +22,34 @@ import CSlash.Types.SrcLoc
 import Data.Version
 
 -- import Language.Haskell.Syntax.Decls (RuleDecl(..))
--- import GHC.Tc.Errors.Types (TcRnMessage)
+import CSlash.Tc.Errors.Types (TcRnMessage)
 -- import GHC.HsToCore.Errors.Types (DsMessage)
 -- import GHC.Iface.Errors.Types
--- import GHC.Tc.Errors.Ppr ()
+import CSlash.Tc.Errors.Ppr ()
 -- import GHC.Iface.Errors.Ppr ()
 
 instance HasDefaultDiagnosticOpts CsMessageOpts where
   defaultOpts = CsMessageOpts (defaultDiagnosticOpts @PsMessage)
+                              (defaultDiagnosticOpts @TcRnMessage)
                               (defaultDiagnosticOpts @DriverMessage)
 
 instance Diagnostic CsMessage where
   type DiagnosticOpts CsMessage = CsMessageOpts
   diagnosticMessage opts = \case
     CsPsMessage m -> diagnosticMessage (psMessageOpts opts) m
+    CsTcRnMessage m -> diagnosticMessage (tcMessageOpts opts) m
     CsDriverMessage m -> diagnosticMessage (driverMessageOpts opts) m
     CsUnknownMessage (UnknownDiagnostic f m) -> diagnosticMessage (f opts) m
 
   diagnosticReason = \case
     CsPsMessage m -> diagnosticReason m
+    CsTcRnMessage m -> diagnosticReason m
     CsDriverMessage m -> diagnosticReason m
     CsUnknownMessage m -> diagnosticReason m
 
   diagnosticHints = \case
     CsPsMessage m -> diagnosticHints m
+    CsTcRnMessage m -> diagnosticHints m
     CsDriverMessage m -> diagnosticHints m
     CsUnknownMessage m -> diagnosticHints m
 

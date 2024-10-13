@@ -27,7 +27,7 @@ import CSlash.Cs.Extension ( Rn )
 import CSlash.Driver.Errors.Types   ( DriverMessage, CsMessageOpts, DriverMessageOpts )
 import CSlash.Parser.Errors.Types   ( PsMessage, PsHeaderMessage )
 -- import GHC.HsToCore.Errors.Types ( DsMessage )
--- import GHC.Tc.Errors.Types
+import CSlash.Tc.Errors.Types
 import CSlash.Unit.Module.Warnings ( WarningTxt )
 import CSlash.Utils.Panic.Plain
 
@@ -238,7 +238,7 @@ type family ConRecursInto con where
   -- Constructors of CsMessage
   ConRecursInto "CsDriverMessage"         = 'Just DriverMessage
   ConRecursInto "CsPsMessage"             = 'Just PsMessage
-  -- ConRecursInto "GhcTcRnMessage"           = 'Just TcRnMessage
+  ConRecursInto "CsTcRnMessage"           = 'Just TcRnMessage
   -- ConRecursInto "GhcDsMessage"             = 'Just DsMessage
   ConRecursInto "CsUnknownMessage"        = 'Just (UnknownDiagnostic CsMessageOpts)
 
@@ -260,6 +260,14 @@ type family ConRecursInto con where
   -- Constructors of PsMessage
   ConRecursInto "PsUnknownMessage"         = 'Just (UnknownDiagnostic NoDiagnosticOpts)
   ConRecursInto "PsHeaderMessage"          = 'Just PsHeaderMessage
+
+  ----------------------------------
+  -- Constructors of TcRnMessage
+
+  ConRecursInto "TcRnUnknownMessage"       = 'Just (UnknownDiagnostic TcRnMessageOpts)
+
+  ConRecursInto "TcRnMessageWithInfo"      = 'Just TcRnMessageDetailed
+  ConRecursInto "TcRnMessageDetailed"      = 'Just TcRnMessage
 
   ConRecursInto _                          = 'Nothing
 

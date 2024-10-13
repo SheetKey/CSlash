@@ -39,3 +39,6 @@ printOrThrowDiagnostics logger print_config opts msgs
   = throwErrors msgs
   | otherwise
   = printMessages logger print_config opts msgs
+
+mkDriverPsHeaderMessage :: MsgEnvelope PsMessage -> MsgEnvelope DriverMessage
+mkDriverPsHeaderMessage = fmap DriverPsHeaderMessage

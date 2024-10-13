@@ -209,6 +209,8 @@ library
                     , CSlash.SysTools.Tasks
                     , CSlash.SysTools.Terminal
 
+                    , CSlash.Tc.Errors.Ppr
+                    , CSlash.Tc.Errors.Types
                     , CSlash.Tc.Module
                     , CSlash.Tc.Types
                     , CSlash.Tc.Types.LclEnv

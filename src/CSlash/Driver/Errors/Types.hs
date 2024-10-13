@@ -10,6 +10,7 @@ module CSlash.Driver.Errors.Types
   , DriverMessages, PsMessage(PsHeaderMessage)
   , WarningMessages
   , ErrorMessages
+  , hoistTcRnMessage
   ) where
 
 import Data.Bifunctor
@@ -30,7 +31,7 @@ import CSlash.Cs.Extension          (Tc)
 
 import GHC.Generics ( Generic )
 
--- import GHC.Tc.Errors.Types
+import CSlash.Tc.Errors.Types
 -- import GHC.Iface.Errors.Types
 
 type WarningMessages = Messages CsMessage
@@ -39,19 +40,25 @@ type ErrorMessages = Messages CsMessage
 
 data CsMessage where
   CsPsMessage :: PsMessage -> CsMessage
+  CsTcRnMessage :: TcRnMessage -> CsMessage
   CsDriverMessage :: DriverMessage -> CsMessage
   CsUnknownMessage :: (UnknownDiagnostic (DiagnosticOpts CsMessage)) -> CsMessage
   deriving Generic
 
 data CsMessageOpts = CsMessageOpts
   { psMessageOpts :: DiagnosticOpts PsMessage
+  , tcMessageOpts :: DiagnosticOpts TcRnMessage
   , driverMessageOpts :: DiagnosticOpts DriverMessage
   }
+
+hoistTcRnMessage :: Monad m => m (Messages TcRnMessage, a) -> m (Messages CsMessage, a)
+hoistTcRnMessage = fmap (first (fmap CsTcRnMessage))
   
 type DriverMessages = Messages DriverMessage
 
 data DriverMessage where
   DriverUnknownMessage :: UnknownDiagnostic (DiagnosticOpts DriverMessage) -> DriverMessage
+  DriverPsHeaderMessage :: !PsMessage -> DriverMessage
   DriverMissingHomeModules :: UnitId -> [ModuleName] -> DriverMessage
   DriverUnknownReexportedModules :: UnitId -> [ModuleName] -> DriverMessage
   DriverUnknownHiddenModules :: UnitId -> [ModuleName] -> DriverMessage
