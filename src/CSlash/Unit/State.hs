@@ -1,3 +1,4 @@
+{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE BangPatterns #-}
 
@@ -1101,6 +1102,18 @@ data ModuleSuggestion
 lookupModuleWithSuggestions :: UnitState -> ModuleName -> PkgQual -> LookupResult
 lookupModuleWithSuggestions pkgs
   = lookupModuleWithSuggestions' pkgs (moduleNameProvidersMap pkgs)
+
+lookupModulePackage :: UnitState -> ModuleName -> PkgQual -> Maybe [UnitInfo]
+lookupModulePackage pkgs mn mfs =
+  case lookupModuleWithSuggestions' pkgs (moduleNameProvidersMap pkgs) mn mfs of
+    LookupFound _ (orig_unit, origin) ->
+      case origin of
+        ModOrigin {fromOrigUnit, fromExposedReexport} ->
+          case fromOrigUnit of
+            Just True -> pure [orig_unit]
+            _ -> pure fromExposedReexport
+        _ -> Nothing
+    _ -> Nothing
 
 lookupModuleWithSuggestions'
   :: UnitState -> ModuleNameProvidersMap -> ModuleName -> PkgQual -> LookupResult
