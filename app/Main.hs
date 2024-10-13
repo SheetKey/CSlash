@@ -12,9 +12,9 @@ import CSlash.Driver.Errors
 import CSlash.Driver.Errors.Types
 import CSlash.Driver.Phases
 import CSlash.Driver.Session
--- import GHC.Driver.Ppr
--- import GHC.Driver.Pipeline  ( oneShot, compileFile )
--- import GHC.Driver.MakeFile  ( doMkDependHS )
+import CSlash.Driver.Ppr
+import CSlash.Driver.Pipeline  ( oneShot, compileFile )
+-- import CSlash.Driver.MakeFile  ( doMkDependCS )
 -- import GHC.Driver.Backpack  ( doBackpack )
 -- import GHC.Driver.Plugins
 import CSlash.Driver.Config.Logger (initLogFlags)
@@ -62,13 +62,12 @@ import CSlash.HandleEncoding
 import CSlash.Data.FastString
 import CSlash.SysTools.BaseDir
 
--- import GHC.Iface.Load
+import CSlash.Iface.Load
 -- import GHC.Iface.Recomp.Binary ( fingerprintBinMem )
 
 -- import GHC.Tc.Utils.Monad      ( initIfaceCheck )
 -- import GHC.Iface.Errors.Ppr
 
--- Standard Haskell libraries
 import System.IO
 import System.Environment
 import System.Exit
@@ -122,19 +121,13 @@ main = do
             main' postLoadMode units dflags argv3 flagWarnings
 
 main' :: PostLoadMode -> [String] -> DynFlags -> [Located String] -> [Warn] -> Csl ()
-main' postLoadMoade units dflags0 args flagWarnings = do
-  let args' = case postLoadMode of
-                DoRun -> panic "DoRun not implemented"
-                  -- takeWhile (\arg -> unLoc arg /= "--") args
-                _ -> args
-
+main' postLoadMode units dflags0 args flagWarnings = do
   let dflt_backend = backend dflags0
       (mode, bcknd, link) = case postLoadMode of
-        DoRun -> panic "DoRun not implemented"
-        DoMake -> (ComManager, dflt_backend, LinkBinary)
+        DoMake -> (CompManager, dflt_backend, LinkBinary)
         DoMkDepend -> (MkDepend, dflt_backend, LinkBinary)
         DoAbiHash -> (OneShot, dflt_backend, LinkBinary)
-        _ -> (OneShow, dflt_backend, LinkBinary)
+        _ -> (OneShot, dflt_backend, LinkBinary)
 
   let dflags1 = dflags0 { csMode = mode
                         , backend = bcknd
@@ -147,7 +140,7 @@ main' postLoadMoade units dflags0 args flagWarnings = do
   let logger2 = setLogFlags logger1 (initLogFlags dflags1)
 
   (dflags4, fileish_args, dynamicFlagWarnings) <-
-    CSL.parseDynamicFlags logger2 dfalgs1 args'
+    CSL.parseDynamicFlags logger2 dflags1 args
 
   let logger4 = setLogFlags logger2 (initLogFlags dflags4)
 
@@ -173,7 +166,7 @@ main' postLoadMoade units dflags0 args flagWarnings = do
     cs_env <- getSession
     logger <- getLogger
 
-    case verbosity dflags of
+    case verbosity dflags6 of
       v | v == 4 -> liftIO $ dumpUnitsSimple cs_env
         | v >= 5 -> liftIO $ dumpUnits cs_env
         | otherwise -> return ()
@@ -191,10 +184,9 @@ main' postLoadMoade units dflags0 args flagWarnings = do
                              (cs_units cs_env)
                              (cs_NC cs_env)
                              f
-        DoMake -> doMake unit srcs
-        DoMkDepend -> doMkDepend (map fst srcs)
+        DoMake -> doMake units srcs
+        DoMkDepend -> panic "doMkDependCS not implemented" --doMkDependCS (map fst srcs)
         StopBefore p -> liftIO (oneShot cs_env p srcs)
-        DoRun -> doRun units srcs args
         DoAbiHash -> abiHash (map fst srcs)
         ShowPackages -> liftIO $ showUnits cs_env
     liftIO $ dumpFinalStats logger
@@ -219,7 +211,7 @@ checkOptions mode dflags srcs objs units = do
          (UsageError "-dynohi can only be used when compiling a single source file")
     else
       if (srcs `lengthExceeds` 1 && isJust (outputFile dflags)
-          && no (isLinkMode mode))
+          && not (isLinkMode mode))
       then throwCsException
            (UsageError "can't apply -o to multiple source files")
       else
@@ -295,7 +287,6 @@ data PostLoadMode
   | DoMkDepend
   | StopBefore StopPhase
   | DoMake
-  | DoRun
   | DoAbiHash
   | ShowPackages
 
@@ -304,9 +295,6 @@ doMkDependMode = mkPostLoadMode DoMkDepend
 
 doMakeMode :: Mode
 doMakeMode = mkPostLoadMode DoMake
-
-doRunMode :: Mode
-doRunMode = mkPostLoadMode DoRun
 
 doAbiHashMode :: Mode
 doAbiHashMode = mkPostLoadMode DoAbiHash
@@ -330,6 +318,21 @@ isStopLnMode _ = False
 isDoMakeMode :: Mode -> Bool
 isDoMakeMode (Right (Right DoMake)) = True
 isDoMakeMode _ = False
+
+needsInputsMode :: PostLoadMode -> Bool
+needsInputsMode DoMkDepend = True
+needsInputsMode (StopBefore _) = True
+needsInputsMode DoMake = True
+needsInputsMode _ = False
+
+isLinkMode :: PostLoadMode -> Bool
+isLinkMode (StopBefore NoStop) = True
+isLinkMode DoMake = True
+isLinkMode _ = False
+
+isCompManagerMode :: PostLoadMode -> Bool
+isCompManagerMode DoMake = True
+isCompManagerMode _ = False
 
 -- -----------------------------------------------------------------------------
 -- Parsing the mode flag
@@ -390,7 +393,6 @@ mode_flags =
   , defFlag "c" (PassFlag (\f -> do setMode (stopBeforeMode NoStop) f
                                     addFlag "-no-link" f))
   , defFlag "M" (PassFlag (setMode doMkDependMode))
-  , defFlag "-run" (PassFlag (setMode doRunMode))
   , defFlag "-make" (PassFlag (setMode doMakeMode))
   , defFlag "unit" (SepArg (\s -> addUnit s "-unit"))
   , defFlag "-abi-hash" (PassFlag (setMode doAbiHashMode))
@@ -434,6 +436,188 @@ addFlag s flag = liftEwM $ do
   putCmdLineState (m, units, e, mkGeneralLocated loc s : flags')
     where loc = "addFlag by " ++ flag ++ " on the commandline"
 
+-- ----------------------------------------------------------------------------
+-- Run --make mode
+
+doMake :: [String] -> [(String, Maybe Phase)] -> Csl ()
+doMake units targets = do
+  cs_srcs <- case NE.nonEmpty units of
+    Just ne_units -> initMulti ne_units
+    Nothing -> do
+      s <- initMake targets
+      return $ map (uncurry (, Nothing, )) s
+  case cs_srcs of
+    [] -> return ()
+    _ -> do
+      targets' <- mapM (\(src, uid, phase) -> CSL.guessTarget src uid phase) cs_srcs
+      CSL.setTargets targets'
+      ok_flag <- CSL.load LoadAllTargets
+      when (failed ok_flag) (liftIO $ exitWith (ExitFailure 1))
+
+initMake :: [(String, Maybe Phase)] -> Csl [(String, Maybe Phase)]
+initMake srcs = do
+  let (cs_srcs, non_cs_srcs) = partition isCsishTarget srcs
+
+  cs_env <- CSL.getSession
+
+  if (null cs_srcs)
+    then liftIO (oneShot cs_env NoStop srcs) >> return []
+    else do o_files <- mapMaybeM (\x -> liftIO $ compileFile cs_env NoStop x)
+                                 non_cs_srcs
+            dflags <- CSL.getSessionDynFlags
+            let dflags' = dflags { ldInputs = map (FileOption "") o_files ++ ldInputs dflags }
+            _ <- CSL.setSessionDynFlags dflags'
+            return cs_srcs
+
+removeRTS :: [String] -> [String]
+removeRTS ("+RTS" : xs) =
+  case dropWhile (/="-RTS") xs of
+    [] -> []
+    (_ : ys) -> removeRTS ys
+removeRTS (y:ys) = y : removeRTS ys
+removeRTS [] = []
+    
+initMulti :: NE.NonEmpty String -> Csl [(String, Maybe UnitId, Maybe Phase)]
+initMulti unitArgsFiles = do
+  cs_env <- CSL.getSession
+  let logger = cs_logger cs_env
+  initial_dflags <- CSL.getSessionDynFlags
+
+  dynFlagsAndSrcs <- forM unitArgsFiles $ \f -> do
+    when (verbosity initial_dflags > 2) (liftIO $ print f)
+    args <- liftIO $ expandResponse [f]
+    (dflags2, fileish_args, warns) <- parseDynamicFlagsCmdLine
+                                      initial_dflags (map (mkGeneralLocated f) (removeRTS args))
+    handleSourceError
+      (\e -> do
+          CSL.printException e
+          liftIO $ exitWith (ExitFailure 1)
+      ) $
+      liftIO $ printOrThrowDiagnostics
+        logger (initPrintConfig dflags2) (initDiagOpts dflags2) (CsDriverMessage <$> warns)
+
+    let (dflags3, srcs, objs) = parseTargetFiles dflags2 (map unLoc fileish_args)
+        dflags4 = offsetDynFlags dflags3
+
+    let (cs_srcs, non_cs_srcs) = partition isCsishTarget srcs
+
+    let dubious_cs_env = csSetFlags dflags4 cs_env
+
+    if (null cs_srcs)
+      then liftIO (oneShot dubious_cs_env NoStop srcs) >> return (dflags4, [])
+      else do o_files <- mapMaybeM (\x -> liftIO $ compileFile dubious_cs_env NoStop x)
+                                   non_cs_srcs
+              let dflags5 = dflags4 { ldInputs = map (FileOption "") o_files ++ ldInputs dflags4 }
+
+              liftIO $ checkOptions DoMake dflags5 srcs objs []
+
+              pure (dflags5, cs_srcs)
+
+  let unitDflags = NE.map fst dynFlagsAndSrcs
+      srcs = NE.map (\(dflags, lsrcs) -> map (uncurry (, Just $ homeUnitId_ dflags, )) lsrcs)
+                    dynFlagsAndSrcs
+      (cs_srcs, _) = unzip (map (partition (\(file, _, phase) -> isCsishTarget (file, phase)))
+                                (NE.toList srcs))
+
+  checkDuplicateUnits initial_dflags (NE.toList (NE.zip unitArgsFiles unitDflags))
+
+  let (initial_home_graph, mainUnitId) = createUnitEnvFromFlags unitDflags
+      home_units = unitEnv_keys initial_home_graph
+
+  home_unit_graph <- forM initial_home_graph $ \homeUnitEnv -> do
+    let cached_unit_dbs = homeUnitEnv_unit_dbs homeUnitEnv
+        hue_flags = homeUnitEnv_dflags homeUnitEnv
+        dflags = homeUnitEnv_dflags homeUnitEnv
+    (dbs, unit_state, home_unit, mconstants) <-
+      liftIO $ State.initUnits logger hue_flags cached_unit_dbs home_units
+
+    updated_dflags <- liftIO $ updatePlatformConstants dflags mconstants
+    pure $ HomeUnitEnv
+      { homeUnitEnv_units = unit_state
+      , homeUnitEnv_unit_dbs = Just dbs
+      , homeUnitEnv_dflags = updated_dflags
+      , homeUnitEnv_hpt = emptyHomePackageTable
+      , homeUnitEnv_home_unit = Just home_unit
+      }
+
+  checkUnitCycles initial_dflags home_unit_graph
+
+  let dflags = homeUnitEnv_dflags $ unitEnv_lookup mainUnitId home_unit_graph
+  unitEnv <- assertUnitEnvInvariant <$>
+    (liftIO $ initUnitEnv mainUnitId home_unit_graph
+                          (csNameVersion dflags) (targetPlatform dflags))
+  let final_cs_env = cs_env { cs_unit_env = unitEnv }
+
+  CSL.setSession final_cs_env
+
+  if (null cs_srcs)
+    then do
+    liftIO $ hPutStrLn stderr $ "Multi Mode can not be used for one-shot mode."
+    liftIO $ exitWith (ExitFailure 1)
+    else return $ concat cs_srcs
+
+checkUnitCycles :: DynFlags -> UnitEnvGraph HomeUnitEnv -> Csl ()
+checkUnitCycles dflags graph = processSCCs sccs
+  where
+    mkNode :: (UnitId, HomeUnitEnv) -> Node UnitId UnitId
+    mkNode (uid, hue) = DigraphNode uid uid (homeUnitDepends (homeUnitEnv_units hue))
+    nodes = map mkNode (unitEnv_elts graph)
+
+    sccs = stronglyConnCompFromEdgedVerticesOrd nodes
+
+    processSCCs [] = return ()
+    processSCCs (AcyclicSCC _ : other_sccs) = processSCCs other_sccs
+    processSCCs (CyclicSCC uids : _)
+      = throwCsException $ CmdLineError $ showSDoc dflags (cycle_err uids)
+
+    cycle_err uids = hang (text "Units form a dependency cycle:") 2 (one_err uids)
+
+    one_err uids = vcat $ (map (\uid -> text "-" <+> ppr uid <+> text "depends on") start)
+                          ++ [text "-" <+> ppr final]
+      where
+        start = init uids
+        final = last uids
+
+checkDuplicateUnits :: DynFlags -> [(FilePath, DynFlags)] -> Csl ()
+checkDuplicateUnits dflags flags =
+  unless (null duplicate_ids)
+         (throwCsException $ CmdLineError $ showSDoc dflags multi_err)
+  where
+    uids = map (second homeUnitId_) flags
+    deduplicated_uids = ordNubOn snd uids
+    duplicate_ids = Set.fromList (map snd uids \\ map snd deduplicated_uids)
+
+    duplicate_flags = filter (flip Set.member duplicate_ids . snd) uids
+
+    one_err (fp, home_uid) = text "-" <+> ppr home_uid <+> text "defined in" <+> text fp
+
+    multi_err = hang (text "Multiple units with the same unit-id:") 2
+                     (vcat (map one_err duplicate_flags))
+
+offsetDynFlags :: DynFlags -> DynFlags
+offsetDynFlags dflags =
+  dflags { hiDir = c hiDir
+         , objectDir = c objectDir
+         , stubDir = c stubDir
+         , hieDir = c hieDir
+         , dumpDir = c dumpDir
+         }
+  where
+    c f = augment_maybe (f dflags)
+
+    augment_maybe Nothing = Nothing
+    augment_maybe (Just f) = Just (augment f)
+
+    augment f | isRelative f, Just offset <- workingDirectory dflags = offset </> f
+              | otherwise = f
+
+createUnitEnvFromFlags :: NE.NonEmpty DynFlags -> (HomeUnitGraph, UnitId)
+createUnitEnvFromFlags unitDflags =
+  let newInternalUnitEnv dflags = mkHomeUnitEnv dflags emptyHomePackageTable Nothing
+      unitEnvList = NE.map (\dflags -> (homeUnitId_ dflags, newInternalUnitEnv dflags)) unitDflags
+      activeUnit = fst $ NE.head unitEnvList
+  in (unitEnv_new (Map.fromList (NE.toList (unitEnvList))), activeUnit)
+
 -- ---------------------------------------------------------------------------
 -- Various banners and verbosity output.
 
@@ -472,3 +656,63 @@ showCslUsage dflags = do
       "" -> return ()
       '$':'$':s -> putStr progName >> dump progName s
       c:s -> putChar c >> dump progName s
+
+dumpFinalStats :: Logger -> IO ()
+dumpFinalStats logger = do
+  when (logHasDumpFlag logger Opt_D_faststring_stats) $ dumpFastStringStats logger
+
+  when (logHasDumpFlag logger Opt_D_dump_faststrings) $ do
+    fss <- getFastStringTable
+    let ppr_table = fmap ppr_segment (fss `zip` [0..])
+        ppr_segment (s, n) = hang (text "Segment" <+> int n) 2
+                                  (vcat (fmap ppr_bucket (s `zip` [0..])))
+        ppr_bucket (b, n) = hang (text "Bucket" <+> int n) 2 (vcat (fmap ftext b))
+    putDumpFileMaybe logger Opt_D_dump_faststrings "FastStrings" FormatText (vcat ppr_table)
+
+dumpFastStringStats :: Logger -> IO ()
+dumpFastStringStats logger = do
+  segments <- getFastStringTable
+  hasZ <- getFastStringZEncCounter
+  let buckets = concat segments
+      bucketsPerSegment = map length segments
+      entriesPerBucket = map length buckets
+      entries = sum entriesPerBucket
+      msg = text "FastString stats:" $$ nest 4 (vcat
+        [ text "segments:         " <+> int (length segments)
+        , text "buckets:          " <+> int (sum bucketsPerSegment)
+        , text "entries:          " <+> int entries
+        , text "largest segment   " <+> int (maximum bucketsPerSegment)
+        , text "smallest segment: " <+> int (minimum bucketsPerSegment)
+        , text "longest bucket:   " <+> int (maximum entriesPerBucket)
+        , text "has z-encoding:   " <+> (hasZ `pcntOf` entries)
+        ])
+  putMsg logger msg
+  where
+    x `pcntOf` y = int ((x * 100) `quot` y) Outputable.<> char '%'
+
+showUnits :: CsEnv -> IO ()
+showUnits cs_env = putStrLn (showSDoc (cs_dflags cs_env) (pprUnits (cs_units cs_env)))
+
+dumpUnits :: CsEnv -> IO ()
+dumpUnits cs_env = putMsg (cs_logger cs_env) (pprUnits (cs_units cs_env))
+
+dumpUnitsSimple :: CsEnv -> IO ()
+dumpUnitsSimple cs_env = putMsg (cs_logger cs_env) (pprUnitsSimple (cs_units cs_env))
+
+-- -----------------------------------------------------------------------------
+-- ABI hash support
+
+abiHash :: [String] -> Csl ()
+abiHash = undefined
+
+-- -----------------------------------------------------------------------------
+-- Util
+
+unknownFlagsErr :: [String] -> a
+unknownFlagsErr fs = throwCsException $ UsageError $ concatMap oneError fs
+  where
+    oneError f =
+      "unrecognised flag: " ++ f ++ "\n" ++
+      (case flagSuggestions (nubSort allNonDeprecatedFlags) f of
+         [] -> ""
+         suggs -> "did you mean one of:\n" ++ unlines (map ("  " ++) suggs))
