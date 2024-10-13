@@ -3,6 +3,8 @@ module CSlash.Driver.Main
   , CsBackendAction(..), CsRecompStatus(..)
   ) where
 
+import Prelude hiding ((<>))
+
 import CSlash.Platform
 
 -- import GHC.Driver.Plugins
@@ -253,6 +255,15 @@ handleWarningsThrowErrors (warnings, errors) = do
   liftIO $ printMessages logger NoDiagnosticOpts diag_opts wWarns
   throwErrors $ fmap CsPsMessage $ errors `unionMessages` wErrs
 
+ioMsgMaybe :: IO (Messages CsMessage, Maybe a) -> Cs a
+ioMsgMaybe ioA = do
+  (msgs, mb_r) <- liftIO ioA
+  let (warns, errs) = partitionMessages msgs
+  logDiagnostics warns
+  case mb_r of
+    Nothing -> throwErrors errs
+    Just r -> assert (isEmptyMessages errs) return r
+
 -- -----------------------------------------------------------------------------
 -- | parse a file, returning the abstract syntax
 
@@ -460,3 +471,45 @@ oneShotMsg logger recomp =
   case recomp of
     UpToDate -> compilationProgressMsg logger $ text "compilation IS NOT required"
     NeedsRecompile _ -> return ()
+
+batchMsg :: Messager
+batchMsg = batchMsgWith (\_ _ _ _ -> empty)
+
+batchMultiMsg :: Messager
+batchMultiMsg = batchMsgWith (\_ _ _ node -> brackets (ppr (moduleGraphNodeUnitId node)))
+
+batchMsgWith :: (CsEnv -> (Int, Int) -> RecompileRequired -> ModuleGraphNode -> SDoc) -> Messager
+batchMsgWith extra cs_env_start mod_index recomp node =
+  case recomp of
+    UpToDate
+      | logVerbAtLeast logger 2 -> showMsg (text "Skipping") empty
+      | otherwise -> return ()
+    NeedsRecompile reason0 -> showMsg (text herald) $ case reason0 of
+      MustCompile -> empty
+      RecompBecause reason -> text " [" <> pprWithUnitState state (ppr reason) <> text "]"
+  where
+    herald = case node of
+               LinkNode {} -> "Linking"
+               InstantiationNode {} -> "Instantiating"
+               ModuleNode {} -> "Compiling"
+    cs_env = csSetActiveUnitId (moduleGraphNodeUnitId node) cs_env_start
+    dflags = cs_dflags cs_env
+    logger = cs_logger cs_env
+    state = cs_units cs_env
+    showMsg msg reason = compilationProgressMsg logger
+                         $ (showModuleIndex mod_index
+                            <> msg <+> showModMsg dflags (recompileRequired recomp) node)
+                         <> extra cs_env mod_index recomp node
+                         <> reason
+
+{- *********************************************************************
+*                                                                      *
+        Progress Messages: Module i of n
+*                                                                      *
+********************************************************************* -}
+
+showModuleIndex :: (Int, Int) -> SDoc
+showModuleIndex (i, n) = text "[" <> pad <> int i <> text " of " <> int n <> text "] "
+  where
+    len x = ceiling (logBase 10 (fromIntegral x+1) :: Float)
+    pad = text (replicate (len n - len i) ' ')
