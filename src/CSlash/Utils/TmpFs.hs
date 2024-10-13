@@ -43,6 +43,12 @@ newtype TempDir = TempDir FilePath
 emptyPathsToClean :: PathsToClean
 emptyPathsToClean = PathsToClean Set.empty Set.empty
 
+mergePathsToClean :: PathsToClean -> PathsToClean -> PathsToClean
+mergePathsToClean x y = PathsToClean
+  { ptcCsSession = Set.union (ptcCsSession x) (ptcCsSession y)
+  , ptcCurrentModule = Set.union (ptcCurrentModule x) (ptcCurrentModule y)
+  }
+
 initTmpFs :: IO TmpFs
 initTmpFs = do
   files <- newIORef emptyPathsToClean
@@ -55,6 +61,24 @@ initTmpFs = do
     , tmp_dirs_to_clean = dirs
     , tmp_next_suffix = next
     }
+
+forkTmpFsFrom :: TmpFs -> IO TmpFs
+forkTmpFsFrom old = do
+  files <- newIORef emptyPathsToClean
+  subdirs <- newIORef emptyPathsToClean
+  return $ TmpFs
+    { tmp_files_to_clean = files
+    , tmp_subdirs_to_clean = subdirs
+    , tmp_dirs_to_clean = tmp_dirs_to_clean old
+    , tmp_next_suffix = tmp_next_suffix old
+    }
+
+mergeTmpFsInto :: TmpFs -> TmpFs -> IO ()
+mergeTmpFsInto src dst = do
+  src_files <- atomicModifyIORef' (tmp_files_to_clean src) (\s -> (emptyPathsToClean, s))
+  src_subdirs <- atomicModifyIORef' (tmp_subdirs_to_clean src) (\s -> (emptyPathsToClean, s))
+  atomicModifyIORef' (tmp_files_to_clean dst) (\s -> (mergePathsToClean src_files s, ()))
+  atomicModifyIORef' (tmp_subdirs_to_clean dst) (\s -> (mergePathsToClean src_subdirs s, ()))
 
 cleanTempDirs :: Logger -> TmpFs -> IO ()
 cleanTempDirs logger tmpfs = mask_ $ do
@@ -74,6 +98,34 @@ cleanTempFiles logger tmpfs = mask_ $ do
                       } -> ( emptyPathsToClean
                            , Set.toList cm_paths ++ Set.toList cs_paths)
       remove to_delete
+
+keepCurrentModuleTempFiles :: HasCallStack => Logger -> TmpFs -> IO ()
+keepCurrentModuleTempFiles logger tmpfs = mask_ $ do
+  to_keep_files <- keep (tmp_files_to_clean tmpfs)
+  to_keep_subdirs <- keep (tmp_subdirs_to_clean tmpfs)
+  keepDirs (to_keep_files ++ to_keep_subdirs) (tmp_dirs_to_clean tmpfs)
+  where
+    keepDirs keeps ref = 
+      let keep_dirs = Set.fromList (map takeDirectory keeps)
+      in atomicModifyIORef' ref $ \m -> (Map.filter (\fp -> fp `Set.notMember` keep_dirs) m, ())
+    keep ref = do
+      to_keep <- atomicModifyIORef' ref $
+        \ptc@PathsToClean{ ptcCurrentModule = cm_paths } ->
+          (ptc{ ptcCurrentModule = Set.empty }, Set.toList cm_paths)
+      debugTraceMsg logger 2 (text "Keeping:" <+> hsep (map text to_keep))
+      return to_keep
+
+cleanCurrentModuleTempFiles :: Logger -> TmpFs -> IO ()
+cleanCurrentModuleTempFiles logger tmpfs = mask_ $ do
+  removeWith (removeTmpFiles logger) (tmp_files_to_clean tmpfs)
+  removeWith (removeTmpSubdirs logger) (tmp_subdirs_to_clean tmpfs)
+  where
+    removeWith remove ref = do
+      to_delete <- atomicModifyIORef' ref $
+        \ptc@PathsToClean{ ptcCurrentModule = cm_paths } ->
+          (ptc{ ptcCurrentModule = Set.empty }, Set.toList cm_paths)
+      remove to_delete
+  
 
 addFilesToClean :: TmpFs -> TempFileLifetime -> [FilePath] -> IO ()
 addFilesToClean tmpfs lifetime new_files =
