@@ -1,5 +1,7 @@
 module CSlash.Unit.Module.ModSummary where
 
+import Prelude hiding ((<>))
+
 import CSlash.Cs
 
 import CSlash.Driver.DynFlags
@@ -42,3 +44,35 @@ ms_unitid = toUnitId . moduleUnit . ms_mod
 
 ms_mod_name :: ModSummary -> ModuleName
 ms_mod_name = moduleName . ms_mod
+
+ms_imps :: ModSummary -> [(PkgQual, Located ModuleName)]
+ms_imps = ms_textual_imps
+
+msCsFilePath :: ModSummary -> FilePath
+msCsFilePath ms = expectJust "msCsFilePath" (ml_cs_file (ms_location ms))
+
+msDynHiFilePath :: ModSummary -> FilePath
+msDynHiFilePath ms = ml_dyn_hi_file (ms_location ms)
+
+msHiFilePath :: ModSummary -> FilePath
+msHiFilePath ms = ml_hi_file (ms_location ms)
+
+msObjFilePath :: ModSummary -> FilePath
+msObjFilePath ms = ml_obj_file (ms_location ms)
+
+msDynObjFilePath :: ModSummary -> FilePath
+msDynObjFilePath ms = ml_dyn_obj_file (ms_location ms)
+
+msDeps :: ModSummary -> [(PkgQual, Located ModuleName)]
+msDeps = ms_imps
+
+instance Outputable ModSummary where
+  ppr ms = sep [ text "ModSummary {"
+               , nest 3 (sep [ text "ms_cs_hash = " <> text (show (ms_cs_hash ms))
+                             , text "ms_mod = " <+> ppr (ms_mod ms)
+                               <> text (csSourceString (ms_cs_src ms)) <> comma
+                             , text "unit =" <+> ppr (ms_unitid ms)
+                             , text "ms_textual_imps =" <+> ppr (ms_textual_imps ms)
+                             ])
+               , char '}'
+               ]
