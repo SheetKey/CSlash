@@ -10,3 +10,10 @@ data ModDetails = ModDetails
   , md_types :: !TypeEnv
   , md_complete_matches :: [CompleteMatch]
   }
+
+emptyModDetails :: ModDetails
+emptyModDetails = ModDetails
+  { md_types = emptyTypeEnv
+  , md_exports = []
+  , md_complete_matches = []
+  }
