@@ -1038,6 +1038,7 @@ summarizeModule cs_env' home_unit old_summary_map (L _ wanted_mod) mb_pkg maybe_
             cs_env (new_summary loc mod src_fn) old_summary loc (fingerprintStringBuffer buf)
           Nothing -> checkSummaryHash
             cs_env (new_summary loc mod src_fn) old_summary loc h
+      | otherwise = new_summary loc mod src_fn h
 
     new_summary
       :: ModLocation
@@ -1148,7 +1149,7 @@ getPreprocessedImports cs_env src_fn mb_phase maybe_buf = do
     return (first (mkMessages . fmap mkDriverPsHeaderMessage . getMessages) mimps)
   let rn_pkg_qual = renameRawPkgQual (cs_unit_env cs_env)
       rn_imps = fmap (\(pk, lmn@(L _ mn)) -> (rn_pkg_qual mn pk, lmn))
-      pi_theimports = rn_imps pi_theimps'
+      pi_theimps = rn_imps pi_theimps'
   return PreprocessedImports{..}
 
 -----------------------------------------------------------------------------

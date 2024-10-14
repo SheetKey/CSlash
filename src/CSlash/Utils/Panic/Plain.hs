@@ -44,7 +44,7 @@ showPlainCsException =
       . s . showString "\n"
     panicMsg :: ShowS -> ShowS
     panicMsg s =
-        showString "panic! (then 'impossible' happened)\n"
+        showString "panic! (the 'impossible' happened)\n"
       . showString ("  CSlash version " ++ cProjectVersion ++ ":\n\t")
       . s . showString "\n"
 

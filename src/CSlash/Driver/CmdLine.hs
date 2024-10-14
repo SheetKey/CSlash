@@ -187,6 +187,9 @@ processOneArg opt_kind rest arg args
          Prefix f | notNull rest_no_eq -> Right (f rest_no_eq, args)
                   | otherwise -> Right (f dash_arg, args)
 
+         PassFlag f | notNull rest -> unknownFlagErr dash_arg
+                    | otherwise -> Right (f dash_arg, args)
+
          OptIntSuffix f | null rest -> Right (f Nothing, args)
                         | Just n <- parseInt rest_no_eq -> Right (f (Just n), args)
                         | otherwise -> Left ("malformed integer argument in " ++ dash_arg)
