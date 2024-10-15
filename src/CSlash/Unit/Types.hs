@@ -344,7 +344,7 @@ pprUnitId :: UnitId -> SDoc
 pprUnitId (UnitId fs) = sdocOption sdocUnitIdForUser ($ fs)
 
 primUnitId :: UnitId
-primUnitId = UnitId (fsLit "cslash-prim")
+primUnitId = UnitId (fsLit "csl-prim")
 
 primUnit :: Unit
 primUnit = RealUnit (Definite primUnitId)
