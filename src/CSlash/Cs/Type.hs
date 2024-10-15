@@ -23,6 +23,7 @@ module CSlash.Cs.Type
 
 import Prelude hiding ((<>))
 
+import CSlash.Types.Fixity (LexicalFixity(..))
 import CSlash.Language.Syntax.Type
 import {-# SOURCE #-} CSlash.Language.Syntax.Expr
 import CSlash.Language.Syntax.Extension
@@ -33,8 +34,9 @@ import CSlash.Types.Name
 import CSlash.Types.Name.Reader
 import CSlash.Parser.Annotation
 import CSlash.Utils.Outputable
+import CSlash.Core.Ppr (pprOcc)
 
-import Data.Data
+import Data.Data hiding (Fixity(..))
 
 type instance XCsForAll (CsPass _) = EpAnnForallTy
 
@@ -140,6 +142,7 @@ instance OutputableBndrId p => Outputable (CsType (CsPass p)) where
 
 instance (OutputableBndrId p) => Outputable (CsTyVarBndr (CsPass p)) where
   ppr (KindedTyVar _ n k) = parens $ hsep [ppr n, colon, ppr k]
+  ppr (ImpKindedTyVar _ n k) = braces $ hsep [ppr n, colon, ppr k]
 
 instance (OutputableBndrId p) => Outputable (CsPatSigType (CsPass p)) where
   ppr (CsPS { csps_body = ty }) = ppr ty
@@ -164,15 +167,19 @@ ppr_mono_lty ty = ppr_mono_ty (unLoc ty)
 ppr_mono_ty :: (OutputableBndrId p) => CsType (CsPass p) -> SDoc
 ppr_mono_ty (CsForAllTy {cst_tele = tele, cst_body = ty})
   = sep [pprCsForAll tele, ppr_mono_lty ty]
+ppr_mono_ty (CsQualTy _ ctxt ty) = sep [text "ppr_mono_ty CTXT", ppr_mono_lty ty]
 ppr_mono_ty (CsTyVar _ (L _ name)) = pprPrefixOcc name
 ppr_mono_ty (CsAppTy _ fun_ty arg_ty)
   = hsep [ppr_mono_lty fun_ty, ppr_mono_lty arg_ty]
 ppr_mono_ty (CsFunTy _ mult ty1 ty2) = ppr_fun_ty mult ty1 ty2
 ppr_mono_ty (CsTupleTy _ tys) = parens (pprWithCommas ppr tys)
 ppr_mono_ty (CsSumTy _ tys) = parens (pprWithBars ppr tys)
+ppr_mono_ty (CsOpTy _ ty1 (L _ op) ty2)
+  = sep [ ppr_mono_lty ty1, sep [pprOcc Infix op, ppr_mono_lty ty2 ] ]
 ppr_mono_ty (CsParTy _ ty) = parens (ppr_mono_lty ty)
 ppr_mono_ty (CsKindSig _ ty kind)
   = ppr_mono_lty ty <+> colon <+> ppr kind
+ppr_mono_ty (CsTyLamTy _ _) = text "ppr_mono_ty CsTyLamTy"
 
 ppr_fun_ty
   :: (OutputableBndrId p)

@@ -28,6 +28,8 @@ import CSlash.Tc.Errors.Types (TcRnMessage)
 import CSlash.Tc.Errors.Ppr ()
 -- import GHC.Iface.Errors.Ppr ()
 
+import CSlash.Utils.Panic
+
 instance HasDefaultDiagnosticOpts CsMessageOpts where
   defaultOpts = CsMessageOpts (defaultDiagnosticOpts @PsMessage)
                               (defaultDiagnosticOpts @TcRnMessage)
@@ -131,6 +133,7 @@ instance Diagnostic DriverMessage where
       -> mkSimpleDecorated $ text $ "unrecognized warning flag: -" ++ arg
     DriverDeprecatedFlag arg msg
       -> mkSimpleDecorated $ text $ arg ++ " is deprecated: " ++ msg
+    _ -> mkSimpleDecorated $ text "diagnosticMessage DriverMessage"
 
   diagnosticReason = \case
     DriverUnknownMessage m
@@ -161,6 +164,7 @@ instance Diagnostic DriverMessage where
       -> WarningWithFlag Opt_WarnUnrecognizedWarningFlags
     DriverDeprecatedFlag {}
       -> WarningWithFlag Opt_WarnDeprecatedFlags
+    _ -> panic "diagnosticReason DriverMessage"
 
   diagnosticHints = \case
     DriverUnknownMessage m
@@ -191,5 +195,6 @@ instance Diagnostic DriverMessage where
       -> noHints
     DriverDeprecatedFlag {}
       -> noHints
+    _ -> panic "diagnosticHints DriverMessage"
 
   diagnosticCode = constructorCode

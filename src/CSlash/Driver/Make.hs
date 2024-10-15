@@ -842,6 +842,7 @@ downsweep cs_env old_summaries excl_mods allow_dup_roots = do
             (rest, summarized', done') <- loopImports ss done summarized
             return (nk : rest, summarized', done')
           [Left _] -> loopImports ss done summarized
+          _ -> loopImports ss done summarized
       | otherwise
       = do
           mb_s <-

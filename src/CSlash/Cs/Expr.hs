@@ -275,6 +275,7 @@ ppr_expr (CsMultiIf _ alts)
 ppr_expr (ExprWithTySig _ expr sig)
   = hang (nest 2 (ppr_lexpr expr) <+> dcolon)
          4 (ppr sig)
+ppr_expr _ = text "ppr_expr"
 
 ppr_infix_expr :: (OutputableBndrId p) => CsExpr (CsPass p) -> Maybe SDoc
 ppr_infix_expr (CsVar _ (L _ v)) = Just (pprInfixOcc v)
@@ -339,7 +340,7 @@ csExprNeedsParens prec = go
     go (CsIf{}) = prec > topPrec
     go (CsMultiIf{}) = prec > topPrec
     go (ExprWithTySig{}) = prec >= sigPrec
-
+    go _ = panic "csExpreNeedsParens"
 isAtomicCsExpr :: IsPass p => CsExpr (CsPass p) -> Bool
 isAtomicCsExpr (CsVar{}) = True
 isAtomicCsExpr (CsUnboundVar{}) = True
@@ -450,6 +451,7 @@ pprStmt
       Outputable body)
   => (StmtLR (CsPass idL) (CsPass idR) body) -> SDoc
 pprStmt (BindStmt _ pat expr) = pprBindStmt pat expr
+pprStmt _ = text "pprStmt"
 
 pprBindStmt :: (Outputable pat, Outputable expr) => pat -> expr -> SDoc
 pprBindStmt pat expr = hsep [ ppr pat, larrow, ppr expr]
@@ -462,6 +464,7 @@ instance Outputable fn => Outputable (CsMatchContext fn) where
   ppr TyLamAlt = text "TyLamAlt"
   ppr CaseAlt = text "CaseAlt"
   ppr MultiIfAlt = text "MultiIfAlt"
+  ppr TyLamTyAlt = text "TyLamTyAlt"
 
 type instance Anno (CsExpr (CsPass p)) = SrcSpanAnnA
 type instance Anno [LocatedA (Match (CsPass p) (LocatedA (CsExpr (CsPass p))))] = SrcSpanAnnL

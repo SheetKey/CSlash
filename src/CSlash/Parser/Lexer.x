@@ -1355,7 +1355,7 @@ getCommentsFor _ = return emptyComments
 
 getPriorCommentsFor :: (MonadP m) => SrcSpan -> m EpAnnComments
 getPriorCommentsFor (RealSrcSpan l _) = allocatePriorCommentsP l
-getPriorCOmmentsFor _ = return emptyComments
+getPriorCommentsFor _ = return emptyComments
 
 getFinalCommentsFor :: (MonadP m) => SrcSpan -> m EpAnnComments
 getFinalCommentsFor (RealSrcSpan l _) = allocateFinalCommentsP l

@@ -97,6 +97,10 @@ subst_ty subst ty = go ty
       = case substTyVarBndrUnchecked subst tv of
           (subst', tv') -> (ForAllTy $! ((Bndr $! tv') vis))
                                      $! (subst_ty subst' ty)
+    go (WithContext kdctxt ty)
+      = let !kdctxt' = substKd subst kdctxt
+            !ty' = go ty
+        in WithContext kdctxt' ty'
 
 substTyVar :: Subst -> TypeVar -> Type
 substTyVar (Subst _ _ tenv _) tv

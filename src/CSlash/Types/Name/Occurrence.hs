@@ -95,12 +95,16 @@ pprNameSpace VarName = text "variable"
 pprNameSpace TvName = text "type variable"
 pprNameSpace KvName = text "kind variable"
 pprNameSpace TcClsName = text "type constructor or class"
+pprNameSpace DataName = text "data constructor"
+pprNameSpace UNKNOWN_NS = text "UNKNOWN_NS"
 
 pprNameSpaceBrief :: NameSpace -> SDoc
 pprNameSpaceBrief VarName = char 'v'
 pprNameSpaceBrief TvName = text "tv"
 pprNameSpaceBrief KvName = text "kv"
 pprNameSpaceBrief TcClsName = text "tc"
+pprNameSpaceBrief DataName = text "dc"
+pprNameSpaceBrief UNKNOWN_NS = text "UK_NS"
 
 data OccName = OccName
   { occNameSpace :: !NameSpace
@@ -250,6 +254,8 @@ isSymOcc (OccName ns s) = case ns of
   TvName -> isLexSym s
   KvName -> isLexKdSym s
   TcClsName -> isLexSym s
+  DataName -> isLexConSym s
+  UNKNOWN_NS -> False
 
 isConOccFS :: OccName -> Bool
 isConOccFS (OccName _ s) = isLexCon s

@@ -102,6 +102,7 @@ evaldUnfolding = OtherCon []
 isEvaldUnfolding :: Unfolding -> Bool
 isEvaldUnfolding (OtherCon _) = True
 isEvaldUnfolding NoUnfolding = False
+isEvaldUnfolding (CoreUnfolding { uf_cache = cache }) = uf_is_value cache
   
 {- *********************************************************************
 *                                                                      *

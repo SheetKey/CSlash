@@ -47,3 +47,5 @@ instance Outputable (PatBuilder Ps) where
   ppr (PatBuilderApp (L _ p1) (L _ p2)) = ppr p1 <+> ppr p2
   ppr (PatBuilderAppType (L _ p) t) = ppr p <+> ppr t
   ppr (PatBuilderOpApp (L _ p1) op (L _ p2) _) = ppr p1 <+> ppr op <+> ppr p2
+  ppr (PatBuilderVar v) = ppr v
+  ppr (PatBuilderOverLit l) = ppr l

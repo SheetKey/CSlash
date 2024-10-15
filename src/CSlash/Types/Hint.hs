@@ -42,7 +42,6 @@ data CsHint
   | SuggestParentheses
   | SuggestIncreaseMaxPmCheckModels
   | SuggestAddTypeSignatures AvailableBindings
-  | SuggestBindToWildcard !(LCsExpr Tc)
   --  | SuggestAddInlineOrNoInlinePragma !Var !Activation
   | SuggestIncreaseSimplifierIterations
   | SuggestQualifiedAfterModuleName

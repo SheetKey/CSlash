@@ -50,6 +50,9 @@ unsafeGetHomeUnit ue = ue_unsafeHomeUnit ue
 updateHpt_lazy :: (HomePackageTable -> HomePackageTable) -> UnitEnv -> UnitEnv
 updateHpt_lazy = ue_updateHPT_lazy
 
+updateHpt :: (HomePackageTable -> HomePackageTable) -> UnitEnv -> UnitEnv
+updateHpt = ue_updateHPT
+
 updateHug :: (HomeUnitGraph -> HomeUnitGraph) -> UnitEnv -> UnitEnv
 updateHug = ue_updateHUG
 
@@ -194,6 +197,9 @@ ue_updateHPT_lazy
   :: HasDebugCallStack => (HomePackageTable -> HomePackageTable) -> UnitEnv -> UnitEnv
 ue_updateHPT_lazy f e = ue_updateUnitHPT_lazy f (ue_currentUnit e) e
 
+ue_updateHPT :: HasDebugCallStack => (HomePackageTable -> HomePackageTable) -> UnitEnv -> UnitEnv
+ue_updateHPT f e = ue_updateUnitHPT f (ue_currentUnit e) e
+
 ue_updateHUG :: HasDebugCallStack => (HomeUnitGraph -> HomeUnitGraph) -> UnitEnv -> UnitEnv
 ue_updateHUG f e = ue_updateUnitHUG f e
 
@@ -202,6 +208,14 @@ ue_updateUnitHPT_lazy
 ue_updateUnitHPT_lazy f uid ue_env = ue_updateHomeUnitEnv update uid ue_env
   where
     update unitEnv = unitEnv { homeUnitEnv_hpt = f $ homeUnitEnv_hpt unitEnv }
+
+ue_updateUnitHPT
+  :: HasDebugCallStack => (HomePackageTable -> HomePackageTable) -> UnitId -> UnitEnv -> UnitEnv
+ue_updateUnitHPT f uid ue_env = ue_updateHomeUnitEnv update uid ue_env
+  where
+    update unitEnv =
+      let !res = f $ homeUnitEnv_hpt unitEnv
+      in unitEnv { homeUnitEnv_hpt = res }
 
 ue_updateUnitHUG :: HasDebugCallStack => (HomeUnitGraph -> HomeUnitGraph) -> UnitEnv -> UnitEnv
 ue_updateUnitHUG f ue_env = ue_env { ue_home_unit_graph = f (ue_home_unit_graph ue_env) }

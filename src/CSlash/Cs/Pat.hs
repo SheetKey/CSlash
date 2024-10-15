@@ -1,3 +1,5 @@
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE LambdaCase #-}
@@ -20,6 +22,8 @@ module CSlash.Cs.Pat
 
   , pprParendLPat
   ) where
+
+import Prelude hiding ((<>))
 
 import CSlash.Language.Syntax.Pat
 
@@ -138,18 +142,58 @@ patNeedsParens p = go
     go :: IsPass q => Pat (CsPass q) -> Bool
     go (WildPat{}) = False
     go (VarPat{}) = False
+    go (TyVarPat{}) = True
+    go (AsPat{}) = False
+    go (ParPat{}) = False
     go (TuplePat{}) = p >= appPrec
     go (SumPat{}) = False
+    go (ConPat { pat_args = ds }) = conPatNeedsParens p ds
     go (LitPat _ l) = csLitNeedsParens p l
+    go (NPat _ lol _ _) = csOverLitNeedsParens p (unLoc lol)
     go (SigPat{}) = p >= sigPrec
+    go (KdSigPat{}) = p >= sigPrec
+    go (ImpPat{}) = False
 
-pprPat :: (OutputableBndrId p) => Pat (CsPass p) -> SDoc
+conPatNeedsParens :: PprPrec -> CsConDetails t a -> Bool
+conPatNeedsParens p = go
+  where 
+    go (PrefixCon ts args) = p >= appPrec && (not (null args) || not (null ts))
+    go (InfixCon {}) = p >= opPrec
+
+pprPat :: forall p. (OutputableBndrId p) => Pat (CsPass p) -> SDoc
 pprPat (WildPat{}) = char '_'
 pprPat (VarPat _ lvar) = pprPatBndr (unLoc lvar)
+pprPat (TyVarPat _ lvar) = pprPatBndr (unLoc lvar)
+pprPat (AsPat _ name pat) = hcat [pprPrefixOcc (unLoc name), char '@', pprParendLPat appPrec pat]
+pprPat (ParPat _ pat) = parens (ppr pat)
 pprPat (TuplePat _ pats) = parens (pprWithCommas ppr pats)
 pprPat (SumPat _ pat alt arity) = parens (pprAlternative ppr pat alt arity)
+pprPat (ConPat { pat_con = con, pat_args = details, pat_con_ext = ext }) =
+  case csPass @p of
+    Ps -> pprUserCon (unLoc con) details
+    Rn -> pprUserCon (unLoc con) details
+    Tc -> sdocOption sdocPrintTypecheckerElaboration $ \case
+      False -> pprUserCon (unLoc con) details
+      True -> error "pprPat"
 pprPat (LitPat _ s) = ppr s
+pprPat (NPat _ l Nothing _) = ppr l
+pprPat (NPat _ l (Just _) _) = char '-' <> ppr l
 pprPat (SigPat _ pat ty) = ppr pat <+> colon <+> ppr ty
+pprPat (KdSigPat _ pat kd) = ppr pat <+> colon <+> text "pprPat ppr kd"
+pprPat (ImpPat _ pat) = braces $ ppr pat
+
+pprUserCon
+  :: (OutputableBndr con, OutputableBndrId p, Outputable (Anno (IdCsP p)))
+  => con -> CsConPatDetails (CsPass p) -> SDoc
+pprUserCon c (InfixCon p1 p2) = ppr p1 <+> pprInfixOcc c <+> ppr p2
+pprUserCon c details = pprPrefixOcc c <+> pprConArgs details
+
+pprConArgs
+  :: (OutputableBndrId p, Outputable (Anno (IdCsP p)))
+  => CsConPatDetails (CsPass p) -> SDoc
+pprConArgs (PrefixCon ts pats) = fsep (pprTyArgs ts : map (pprParendLPat appPrec) pats)
+  where pprTyArgs tyargs = fsep (map ppr tyargs)
+pprConArgs (InfixCon p1 p2) = sep [ pprParendLPat appPrec p1, pprParendLPat appPrec p2 ]
 
 type instance Anno (Pat (CsPass p)) = SrcSpanAnnA
 type instance Anno (CsOverLit (CsPass p)) = EpAnnCO

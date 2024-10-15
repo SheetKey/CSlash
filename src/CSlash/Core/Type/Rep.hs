@@ -86,9 +86,11 @@ foldType (TypeFolder { tf_view = view
     go_ty env (TyVarTy tv) = tyvar env tv
     go_ty env (AppTy t1 t2) = go_ty env t1 `mappend` go_ty env t2
     go_ty env (FunTy _ arg res) = go_ty env arg `mappend` go_ty env res
+    go_ty env (TyConApp _ tys) = go_tys env tys
     go_ty env (ForAllTy (Bndr tv vis) inner)
       = let !env' = tybinder env tv vis
         in go_ty env' inner
+    go_ty env (WithContext _ ty) = go_ty env ty
 
     go_tys _ [] = mempty
     go_tys env (t:ts) = go_ty env t `mappend` go_tys env ts
@@ -108,6 +110,7 @@ typeSize (AppTy t1 t2) = typeSize t1 + typeSize t2
 typeSize (TyConApp _ ts) = 1 + typesSize ts
 typeSize (ForAllTy (Bndr tv _) t) = typeSize (varType tv) + typeSize t
 typeSize (FunTy _ t1 t2) = typeSize t1 + typeSize t2
+typeSize (WithContext _ t) = typeSize t
 
 typesSize :: [Type] -> Int
 typesSize tys = foldr ((+) . typeSize) 0 tys

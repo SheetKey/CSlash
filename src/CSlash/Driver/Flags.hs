@@ -345,7 +345,6 @@ data WarningFlag =
    | Opt_WarnUnusedForalls
    | Opt_WarnDeprecatedFlags
    | Opt_WarnOrphans
-   | Opt_WarnAutoOrphans
    | Opt_WarnIdentities
    | Opt_WarnTabs
    | Opt_WarnDodgyForeignImports
@@ -373,11 +372,11 @@ data WarningFlag =
 
 warnFlagNames :: WarningFlag -> NonEmpty String
 warnFlagNames wflag = case wflag of
-  Opt_WarnAutoOrphans                             -> "auto-orphans" :| []
   Opt_WarnTermVariableCapture                     -> "term-variable-capture" :| []
   Opt_WarnDeferredTypeErrors                      -> "deferred-type-errors" :| []
   Opt_WarnDeferredOutOfScopeVariables             -> "deferred-out-of-scope-variables" :| []
   Opt_WarnDeprecatedFlags                         -> "deprecated-flags" :| []
+  Opt_WarnDodgyForeignImports                     -> "dodgy-foreign-imports" :| []
   Opt_WarnEmptyEnumerations                       -> "empty-enumerations" :| []
   Opt_WarnRedundantConstraints                    -> "redundant-constraints" :| []
   Opt_WarnDuplicateExports                        -> "duplicate-exports" :| []
@@ -412,6 +411,7 @@ warnFlagNames wflag = case wflag of
   Opt_WarnUnusedPatternBinds                      -> "unused-pattern-binds" :| []
   Opt_WarnUnusedTopBinds                          -> "unused-top-binds" :| []
   Opt_WarnUnusedTypePatterns                      -> "unused-type-patterns" :| []
+  Opt_WarnMissingHomeModules                      -> "missing-home-modules" :| []
   Opt_WarnUnrecognizedWarningFlags                -> "unrecognized-warning-flags" :| []
   Opt_WarnPartialFields                           -> "partial-fields" :| []
   Opt_WarnPrepositiveQualifiedModule              -> "prepositive-qualified-module" :| []
@@ -419,6 +419,7 @@ warnFlagNames wflag = case wflag of
   Opt_WarnCompatUnqualifiedImports                -> "compat-unqualified-imports" :| []
   Opt_WarnOperatorWhitespace                      -> "operator-whitespace" :| []
   Opt_WarnUnicodeBidirectionalFormatCharacters    -> "unicode-bidirectional-format-characters" :| []
+  Opt_WarnInconsistentFlags                       -> "inconsistent-flags" :| []
 
 data WarningGroup = W_unused_binds
                   | W_extended_warnings

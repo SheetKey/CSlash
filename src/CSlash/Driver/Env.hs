@@ -82,6 +82,11 @@ csUpdateHPT_lazy f cs_env =
   let !res = updateHpt_lazy f (cs_unit_env cs_env)
   in cs_env { cs_unit_env = res }
 
+csUpdateHPT :: (HomePackageTable -> HomePackageTable) -> CsEnv -> CsEnv
+csUpdateHPT f cs_env =
+  let !res = updateHpt f (cs_unit_env cs_env)
+  in cs_env { cs_unit_env = res }
+
 csUpdateHUG :: (HomeUnitGraph -> HomeUnitGraph) -> CsEnv -> CsEnv
 csUpdateHUG f cs_env = cs_env { cs_unit_env = updateHug f (cs_unit_env cs_env) }
 

@@ -179,7 +179,8 @@ instance Diagnostic PsMessage where
                 , text "looks like"
                 , text "'" <> text [looks_like_char] <> text "' (" <> text looks_like_char_name <> text ")" <> comma
                 , text "but it is not" ]
-
+    _ -> mkSimpleDecorated $ text "diagnosticMessage PsMessage"
+    
 pp_unexpected_fun_app :: Outputable a => SDoc -> a -> SDoc
 pp_unexpected_fun_app e a =
   text "Unexpected " <> e <> text " in function application:"

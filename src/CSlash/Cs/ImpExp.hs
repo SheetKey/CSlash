@@ -128,8 +128,10 @@ type instance XIETyVar Tc = NoExtField
 type instance Anno (LocatedA (IE (CsPass p))) = SrcSpanAnnA
 
 instance OutputableBndrId p => Outputable (IE (CsPass p)) where
-  ppr ie@(IEVar _ var) = ppr (unLoc var)
-  ppr ie@(IEModuleContents _ mod') = text "module" <+> ppr mod'
+  ppr (IEVar _ var) = ppr (unLoc var)
+  ppr (IEModuleContents _ mod') = text "module" <+> ppr mod'
+  ppr (IETyVar _ ty) = text "type" <+> ppr ty
 
 instance OutputableBndrId p => Outputable (IEWrappedName (CsPass p)) where
   ppr (IEName _ (L _ n)) = pprPrefixOcc n
+  ppr (IETyName _ (L _ n)) = text "type" <+> pprPrefixOcc n

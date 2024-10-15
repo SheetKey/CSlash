@@ -38,6 +38,14 @@ type instance XOverLit Ps = NoExtField
 type instance XOverLit Rn = OverLitRn
 type instance XOverLit Tc = OverLitTc
 
+csOverLitNeedsParens :: PprPrec -> CsOverLit x -> Bool
+csOverLitNeedsParens p (OverLit { ol_val = olv }) = go olv
+  where
+    go :: OverLitVal -> Bool
+    go (CsIntegral x) = p > topPrec && il_neg x
+    go (CsFractional x) = p > topPrec && fl_neg x
+    go (CsIsString {}) = False
+
 csLitNeedsParens :: PprPrec -> CsLit x -> Bool
 csLitNeedsParens p = go
   where

@@ -405,14 +405,17 @@ class (b ~ (Body b) Ps, AnnoBody b) => DisambECP b where
 checkLamMatchGroup :: SrcSpan -> MatchGroup Ps (LCsExpr Ps) -> PV ()
 checkLamMatchGroup l (MG { mg_alts = (L _ (matches:_)) }) = do
   when (null (csLMatchPats matches)) $ addError $ mkPlainErrorMsgEnvelope l PsErrEmptyLambda
+checkLamMatchGroup _ _ = panic "checkLamMatchGroup"
 
 checkTyLamMatchGroup :: SrcSpan -> MatchGroup Ps (LCsExpr Ps) -> PV ()
 checkTyLamMatchGroup l (MG { mg_alts = (L _ (matches:_)) }) = do
   when (null (csLMatchPats matches)) $ addError $ mkPlainErrorMsgEnvelope l PsErrEmptyTyLam
+checkTyLamMatchGroup _ _ = panic "checkTyLamMatchGroup"
 
 checkTyLamTyMatchGroup :: SrcSpan -> MatchGroup Ps (LCsType Ps) -> P ()
 checkTyLamTyMatchGroup l (MG { mg_alts = (L _ (matches:_)) }) = do
   when (null (csLMatchPats matches)) $ addError $ mkPlainErrorMsgEnvelope l PsErrEmptyTyLamTy
+checkTyLamTyMatchGroup _ _ = panic "checkTyLamTyMatchGroup"
 
 instance DisambECP (CsExpr Ps) where
   type Body (CsExpr Ps) = CsExpr

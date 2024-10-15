@@ -21,7 +21,7 @@ data IdDetails
   = VanillaId
   | DataConWorkId DataCon
   --  | DataConWrapId DataCon
-  | DataConId DataCon
+  --  | DataConId DataCon
   | TickBoxOpId TickBoxOp
   | JoinId JoinArity
 

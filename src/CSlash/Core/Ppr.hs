@@ -26,3 +26,7 @@ instance OutputableBndr Var where
   pprInfixOcc = undefined
   pprPrefixOcc = undefined
   bndrIsJoin_maybe = undefined
+
+pprOcc :: OutputableBndr a => LexicalFixity -> a -> SDoc
+pprOcc Infix = pprInfixOcc
+pprOcc Prefix = pprPrefixOcc

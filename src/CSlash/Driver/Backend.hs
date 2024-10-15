@@ -6,6 +6,7 @@ import CSlash.Driver.Phases
 import CSlash.Utils.Error
 import CSlash.Utils.Panic
 
+import CSlash.Driver.Pipeline.Monad
 import CSlash.Platform
 
 platformDefaultBackend :: Platform -> Backend
@@ -39,6 +40,10 @@ backendDescription (Named NoBackend) = "no code generated"
 backendWritesFiles :: Backend -> Bool
 backendWritesFiles (Named LLVM) = True
 backendWritesFiles (Named NoBackend) = False
+
+backendPipelineOutput :: Backend -> PipelineOutput
+backendPipelineOutput (Named LLVM) = Persistent
+backendPipelineOutput (Named NoBackend) = NoOutputFile
 
 backendGeneratesCode :: Backend -> Bool
 backendGeneratesCode (Named LLVM) = True
