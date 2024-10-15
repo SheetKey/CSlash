@@ -390,7 +390,7 @@ guessTarget str mUnitId Nothing
     (file, obj_allowed)
       | '*' : rest <- str = (rest, False)
       | otherwise = (str, True)
-    cs_file = file <.> "cs"
+    cs_file = file <.> "csl"
     target tid = do
       tuid <- unitIdOrHomeUnit mUnitId
       pure $ Target tid obj_allowed tuid Nothing
