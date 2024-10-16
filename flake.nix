@@ -53,12 +53,12 @@
 
         devShell = pkgs.mkShell {
           buildInputs = with pkgs; [
-            ghc
-            cabal-install
-            haskell-language-server
-            haskellPackages.implicit-hie
-            alex
-            happy
+            haskell.compiler.ghc910
+            # cabal-install
+            haskellPackages.haskell-language-server
+            # haskellPackages.implicit-hie
+            haskellPackages.alex
+            haskellPackages.happy
           ];
           inputsFrom = builtins.attrValues self.packages.${system};
         };
