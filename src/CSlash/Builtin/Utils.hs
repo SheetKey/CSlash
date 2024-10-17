@@ -39,6 +39,8 @@ import Control.Applicative ((<|>))
 import Data.List        ( find )
 import Data.Maybe
 
+import Debug.Trace (trace)
+
 knownKeyNames :: [Name]
 knownKeyNames
   | debugIsOn
@@ -99,3 +101,12 @@ isKnownKeyName n =
 
 knownKeysMap :: UniqFM Name Name
 knownKeysMap = listToIdentityUFM knownKeyNames
+
+{- *********************************************************************
+*                                                                      *
+            Export lists for pseudo-modules (CSL.Prim)
+*                                                                      *
+********************************************************************* -}
+
+cslPrimExports :: [IfaceExport]
+cslPrimExports = trace "cslPrimExports" []
