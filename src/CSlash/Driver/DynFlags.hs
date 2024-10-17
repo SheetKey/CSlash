@@ -207,7 +207,7 @@ data DynFlags = DynFlags
   , rtsOptsEnabled :: RtsOptsEnabled
   , rtsOptsSuggestions :: Bool
 
-  , hpcDir :: String
+  , pcDir :: String
 
   , depMakefile :: FilePath
   , depIncludePkgDeps :: Bool
@@ -388,7 +388,7 @@ defaultDynFlags mySettings = DynFlags
   , rtsOptsEnabled = RtsOptsSafeOnly
   , rtsOptsSuggestions = True
 
-  , hpcDir = ".hpc"
+  , pcDir = ".pc"
 
   , depMakefile = "Makefile"
   , depIncludePkgDeps = False
