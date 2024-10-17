@@ -4,7 +4,7 @@
 
 module CSlash.Types.Name.Occurrence
   ( module CSlash.Types.Name.Occurrence
-  , FastStringEnv
+  , FastStringEnv, emptyFsEnv, lookupFsEnv, extendFsEnv, mkFsEnv
   ) where
 
 import Prelude hiding ((<>))
