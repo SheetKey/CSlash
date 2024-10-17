@@ -102,6 +102,15 @@ data Env gbl lcl = Env
   , env_lcl :: lcl
   }
 
+instance ContainsDynFlags (Env gbl lcl) where
+  extractDynFlags env = cs_dflags (env_top env)
+
+instance ContainsLogger (Env gbl lcl) where
+    extractLogger env = cs_logger (env_top env)
+
+-- instance ContainsModule gbl => ContainsModule (Env gbl lcl) where
+--     extractModule env = extractModule (env_gbl env)
+
 {- *********************************************************************
 *                                                                      *
                 The interface environments
