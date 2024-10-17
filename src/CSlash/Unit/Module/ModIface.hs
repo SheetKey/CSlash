@@ -79,6 +79,9 @@ data ModIface_ (phase :: ModIfacePhase) = ModIface
 mi_mn :: ModIface -> ModuleName
 mi_mn = moduleName . mi_module 
 
+mi_semantic_module :: ModIface_ a -> Module
+mi_semantic_module = mi_module
+
 instance Binary ModIface where
   put_ bh (ModIface { mi_final_exts = ModIfaceBackend {..}, .. }) = do
     put_ bh mi_module
@@ -130,6 +133,39 @@ instance Binary ModIface where
 
 type IfaceExport = AvailInfo
 
+emptyPartialModIface :: Module -> PartialModIface
+emptyPartialModIface mod = ModIface
+  { mi_module = mod
+  , mi_cs_src = CsSrcFile
+  , mi_src_hash = fingerprint0
+  , mi_deps = noDependencies
+  , mi_usages = []
+  , mi_exports = []
+  , mi_fixities = []
+  , mi_decls = []
+  , mi_extra_decls = Nothing
+  , mi_globals = Nothing
+  , mi_pc = False
+  , mi_complete_matches = []
+  , mi_final_exts = ()
+  }
+
+emptyFullModIface :: Module -> ModIface
+emptyFullModIface mod =
+  (emptyPartialModIface mod)
+  { mi_decls = []
+  , mi_final_exts = ModIfaceBackend
+    { mi_iface_hash = fingerprint0
+    , mi_mod_hash = fingerprint0
+    , mi_flag_hash = fingerprint0
+    , mi_opt_hash = fingerprint0
+    , mi_pc_hash = fingerprint0
+    , mi_exp_hash = fingerprint0
+    , mi_fix_fn = emptyIfaceFixCache
+    , mi_hash_fn = emptyIfaceHashCache
+    }
+  }
+
 mkIfaceHashCache :: [(Fingerprint, IfaceDecl)] -> OccName -> Maybe (OccName, Fingerprint)
 mkIfaceHashCache pairs
   = \occ -> lookupOccEnv env occ
@@ -138,3 +174,6 @@ mkIfaceHashCache pairs
     add_decl env0 (v, d) = foldl' add env0 (ifaceDeclFingerprints v d)
       where
         add env0 (occ, hash) = extendOccEnv env0 occ (occ, hash)
+
+emptyIfaceHashCache :: OccName -> Maybe (OccName, Fingerprint)
+emptyIfaceHashCache _ = Nothing
