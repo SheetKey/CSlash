@@ -23,6 +23,7 @@ module CSlash.Driver.Session
   , DynLibLoader(..)
   , makeDynFlagsConsistent
   , positionIndependent
+  , optimisationFlags
   , setFlagsFromEnvFile
 
   , Settings(..)
@@ -603,7 +604,7 @@ dynamic_flags_deps =
         (NoArg (setGeneralFlag Opt_HexWordLiterals))
 
   , make_ord_flag defCsFlag "main-is"              (SepArg setMainIs)
-  , make_ord_flag defCsFlag "hpcdir"               (SepArg setOptHpcDir)
+  , make_ord_flag defCsFlag "pcdir"                (SepArg setOptPcDir)
   -- , make_ord_flag defCsFlag "ticky-allocd"
   --       (NoArg (setGeneralFlag Opt_Ticky_Allocd))
   -- , make_ord_flag defCsFlag "ticky-LNE"
@@ -750,7 +751,7 @@ dynamic_flags_deps =
         (setDumpFlag Opt_D_dump_hi)
   , make_ord_flag defCsFlag "ddump-minimal-imports"
         (NoArg (setGeneralFlag Opt_D_dump_minimal_imports))
-  , make_ord_flag defCsFlag "ddump-hpc"
+  , make_ord_flag defCsFlag "ddump-pc"
         (setDumpFlag Opt_D_dump_ticked) -- back compat
   , make_ord_flag defCsFlag "ddump-ticked"
         (setDumpFlag Opt_D_dump_ticked)
@@ -934,8 +935,6 @@ warningControls set unset set_werror unset_fatal xs
   ++ map (mkFlag turnOn "Werror=" set_werror) xs
   ++ map (mkFlag turnOn "Wwarn=" unset_fatal) xs
   ++ map (mkFlag turnOn "Wno-error" unset_fatal) xs
-  ++ map (mkFlag turnOn "fwarn-" set . hideFlag) xs
-  ++ map (mkFlag turnOff "fno-warn-" unset . hideFlag) xs
 
 customOrUnrecognizedWarning :: String -> (WarningCategory -> DynP ()) -> Flag (CmdLineP DynFlags)
 customOrUnrecognizedWarning prefix custom = defHiddenFlag prefix (Prefix action)
@@ -1130,13 +1129,13 @@ fFlagsDeps =
   , flagSpec "float-in"                         Opt_FloatIn
   , flagSpec "force-recomp"                     Opt_ForceRecomp
   , flagSpec "ignore-optim-changes"             Opt_IgnoreOptimChanges
-  , flagSpec "ignore-hpc-changes"               Opt_IgnoreHpcChanges
+  , flagSpec "ignore-pc-changes"                Opt_IgnorePcChanges
   , flagSpec "local-float-out"                  Opt_LocalFloatOut
   , flagSpec "local-float-out-top-level"        Opt_LocalFloatOutTopLevel
   , flagSpec "gen-manifest"                     Opt_GenManifest
   , flagSpec "validate-ide-info"                Opt_ValidateHie
   , flagSpec "helpful-errors"                   Opt_HelpfulErrors
-  , flagSpec "hpc"                              Opt_Hpc
+  , flagSpec "pc"                               Opt_Pc
   , flagSpec "ignore-asserts"                   Opt_IgnoreAsserts
   , flagSpec "ignore-interface-pragmas"         Opt_IgnoreInterfacePragmas
   , flagSpec "irrefutable-tuples"               Opt_IrrefutableTuples
@@ -1589,10 +1588,10 @@ setRtsOptsEnabled :: RtsOptsEnabled -> DynP ()
 setRtsOptsEnabled arg  = upd $ \ d -> d {rtsOptsEnabled = arg}
 
 -----------------------------------------------------------------------------
--- Hpc stuff
+-- Pc stuff
 
-setOptHpcDir :: String -> DynP ()
-setOptHpcDir arg  = upd $ \ d -> d {hpcDir = arg}
+setOptPcDir :: String -> DynP ()
+setOptPcDir arg  = upd $ \ d -> d {pcDir = arg}
 
 -----------------------------------------------------------------------------
 -- PIC and PIE
@@ -1655,10 +1654,10 @@ makeDynFlagsConsistent dflags
   = pgmError (backendDescription (backend dflags) ++
               " supports only unregisterised ABI but target platform doesn't use it.")
 
-  | gopt Opt_Hpc dflags && not (backendSupportsHpc (backend dflags))
-  = let dflags' = gopt_unset dflags Opt_Hpc
-        warn = "Hpc can't be used with " ++ backendDescription (backend dflags) ++
-               ". Ignoring -fhpc."
+  | gopt Opt_Pc dflags && not (backendSupportsPc (backend dflags))
+  = let dflags' = gopt_unset dflags Opt_Pc
+        warn = "Pc can't be used with " ++ backendDescription (backend dflags) ++
+               ". Ignoring -fpc."
     in loop dflags' warn
 
   | platformUnregisterised (targetPlatform dflags)
