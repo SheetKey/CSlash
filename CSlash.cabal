@@ -150,6 +150,7 @@ library
                     , CSlash.Iface.Make
                     , CSlash.Iface.Recomp
                     , CSlash.Iface.Recomp.Binary
+                    , CSlash.Iface.Recomp.Flags
                     , CSlash.Iface.Syntax
                     , CSlash.Iface.Type
 
