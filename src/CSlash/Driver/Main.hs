@@ -1,3 +1,5 @@
+{-# LANGUAGE BangPatterns #-}
+
 module CSlash.Driver.Main
   ( module CSlash.Driver.Main
   , CsBackendAction(..), CsRecompStatus(..)
@@ -142,7 +144,7 @@ import CSlash.Types.Name.Cache ( initNameCache )
 import CSlash.Types.Name.Reader
 -- import GHC.Types.Name.Ppr
 import CSlash.Types.TyThing
--- import GHC.Types.HpcInfo
+-- import GHC.Types.PcInfo
 import CSlash.Types.Unique.Supply (uniqFromTag)
 import CSlash.Types.Unique.Set
 
@@ -245,6 +247,9 @@ initCsEnv mb_top_dir = do
 
 logDiagnostics :: Messages CsMessage -> Cs ()
 logDiagnostics w = Cs $ \_ w0 -> return ((), w0 `unionMessages` w)
+
+getCsEnv :: Cs CsEnv
+getCsEnv = Cs $ \e w -> return (e, w)
 
 handleWarningsThrowErrors :: (Messages PsWarning, Messages PsError) -> Cs a
 handleWarningsThrowErrors (warnings, errors) = do
@@ -356,6 +361,12 @@ checkBidirectionFormatChars start_loc sb
             | otherwise -> go1 (advancePsLoc loc chr) sb
 
 -- -----------------------------------------------------------------------------
+-- If the renamed source has been kept, extract it. Dump it if requested.
+
+extract_renamed_stuff :: ModSummary -> TcGblEnv -> Cs RenamedStuff
+extract_renamed_stuff mod_summary tc_result = panic "extrace-renamed-stuff"
+
+-- -----------------------------------------------------------------------------
 -- Rename and typecheck a module
 
 csTypecheckAndGetWarnings :: CsEnv -> ModSummary -> IO (FrontendResult, WarningMessages)
@@ -363,7 +374,28 @@ csTypecheckAndGetWarnings cs_env summary = runCs' cs_env $
   FrontendTypecheck . fst <$> cs_typecheck False summary Nothing
   
 cs_typecheck :: Bool -> ModSummary -> Maybe CsParsedModule -> Cs (TcGblEnv, RenamedStuff)
-cs_typecheck keep_rn mod_summary mb_rdr_module = panic "cs_typecheck"
+cs_typecheck keep_rn mod_summary mb_rdr_module = do
+  cs_env <- getCsEnv
+  let cs_src = ms_cs_src
+      dflags = cs_dflags cs_env
+      home_unit = cs_home_unit cs_env
+      outer_mod = ms_mod mod_summary
+      mod_name = moduleName outer_mod
+      outer_mod' = mkHomeModule home_unit mod_name
+      inner_mod = homeModuleNameInstantiation home_unit mod_name
+      src_filename = ms_cs_file mod_summary
+      real_loc = realSrcLocSpan $ mkRealSrcLoc (mkFastString src_filename) 1 1
+      keep_rn' = gopt Opt_WriteHie dflags || keep_rn
+  massert (isHomeModule home_unit outer_mod)
+  cpm <- case mb_rdr_module of
+           Just cpm -> return cpm
+           Nothing -> csParse' mod_summary
+  tc_result <- tcRnModule' mod_summary keep_rn' cpm
+  rn_info <- extract_renamed_stuff mod_summary tc_result
+  return (tc_result, rn_info)
+
+tcRnModule' :: ModSummary -> Bool -> CsParsedModule -> Cs TcGblEnv
+tcRnModule' sum save_rn_syntax mod = panic "tcRnModule'"
 
 {- *********************************************************************
 *                                                                      *
@@ -449,6 +481,13 @@ checkObjects dflags mb_old_linkable summary =
 -- Compilers
 --------------------------------------------------------------
 
+initModDetails :: CsEnv -> ModIface -> IO ModDetails
+initModDetails cs_env iface = fixIO $ \details' -> 
+  let act hpt = addToHpt hpt (moduleName $ mi_module iface)
+                             (HomeModInfo iface details' emptyHomeModInfoLinkable)
+      !cs_env' = csUpdateHPT act cs_env
+  in genModDetails cs_env' iface
+
 csDesugarAndSimplify
   :: ModSummary
   -> FrontendResult
@@ -461,6 +500,10 @@ csDesugarAndSimplify summary (FrontendTypecheck tc_result) tc_warnings mb_old_ha
 --------------------------------------------------------------
 -- NoRecomp handlers
 --------------------------------------------------------------
+
+genModDetails :: CsEnv -> ModIface -> IO ModDetails
+genModDetails cs_env old_iface = do
+  panic "genModDetails"
 
 --------------------------------------------------------------
 -- Progress displayers.
