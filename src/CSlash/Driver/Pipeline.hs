@@ -153,7 +153,54 @@ compileOne'
   -> HomeModLinkable
   -> IO HomeModInfo
 compileOne' mCsMessage cs_env0 summary mod_index nmods mb_old_iface mb_old_linkable = do
-  panic "compileOne'"
+  debugTraceMsg logger 2 (text "compile: input file" <+> text input_fn)
+
+  massertPpr (input_fn == input_fn') $ text input_fn <+> text "/=" <+> text input_fn'
+
+  unless (gopt Opt_KeepHiFiles lcl_dflags) $
+    addFilesToClean tmpfs TFL_CurrentModule [ml_hi_file $ ms_location summary]
+
+  unless (gopt Opt_KeepOFiles lcl_dflags) $
+    addFilesToClean tmpfs TFL_CslSession [ml_obj_file $ ms_location summary]
+
+  let pipe_env = mkPipeEnv NoStop input_fn Nothing pipelineOutput
+  status <- csRecompStatus
+              mCsMessage
+              cs_env
+              upd_summary
+              mb_old_iface
+              mb_old_linkable
+              (mod_index, nmods)
+  let pipeline = csPipeline pipe_env (setDumpPrefix pipe_env cs_env, upd_summary, status)
+  (iface, linkable) <- runPipeline pipeline
+  details <- initModDetails cs_env iface
+  return $! HomeModInfo iface details linkable
+  where
+    lcl_dflags = ms_cs_opts summary
+    location = ms_location summary
+    input_fn = expectJust "compile:cs" (ml_cs_file location)
+    input_fn' = ms_cs_file summary
+
+    pipelineOutput = backendPipelineOutput bcknd
+
+    logger = cs_logger cs_env0
+    tmpfs = cs_tmpfs cs_env0
+
+    basename = dropExtension input_fn
+
+    current_dir = takeDirectory basename
+    old_paths = includePaths lcl_dflags
+    (bcknd, dflags3) = (backend dflags, lcl_dflags)
+
+    dflags = dflags3 { includePaths = offsetIncludePaths dflags3
+                                      $ addImplicitQuoteInclude old_paths [current_dir] }
+    upd_summary = summary { ms_cs_opts = dflags }
+    cs_env = csSetFlags dflags cs_env0
+
+    offsetIncludePaths :: DynFlags -> IncludeSpecs -> IncludeSpecs
+    offsetIncludePaths dflags (IncludeSpecs incs quotes impl) =
+      let go = map (augmentByWorkingDirectory dflags)
+      in IncludeSpecs (go incs) (go quotes) (go impl)
 
 -- ---------------------------------------------------------------------------
 -- Link
@@ -202,6 +249,8 @@ oneShot :: CsEnv -> StopPhase -> [(String, Maybe Phase) ] -> IO ()
 oneShot cs_env stop_phase srcs = do
   o_files <- mapMaybeM (compileFile cs_env stop_phase) srcs
   case stop_phase of
+    StopPreprocess -> return ()
+    StopAs -> return ()
     NoStop -> doLink cs_env o_files
 
 compileFile :: CsEnv -> StopPhase -> (FilePath, Maybe Phase) -> IO (Maybe FilePath)
@@ -374,13 +423,22 @@ pipelineStart pipe_env cs_env input_fn mb_phase =
     stop_after = stop_phase pipe_env
     frontend :: P m => CsSource -> m (Maybe FilePath)
     frontend sf = case stop_after of
-                    NoStop -> objFromLinkable <$> fullPipeline pipe_env cs_env input_fn sf
+                    StopPreprocess -> do
+                      _ <- preprocessPipeline pipe_env cs_env input_fn
+                      let logger = cs_logger cs_env
+                      final_fn <- liftIO
+                        $ phaseOutputFilenameNew (Cs CsSrcFile) pipe_env cs_env Nothing
+                      when (final_fn /= input_fn) $ do
+                        panic "pipelineStart bad file names"
+                      return Nothing
+                    _ -> objFromLinkable <$> fullPipeline pipe_env cs_env input_fn sf
 
     objFromLinkable (_, homeMod_object -> Just (LM _ _ [DotO lnk])) = Just lnk
     objFromLinkable _ = Nothing
 
     fromPhase :: P m => Phase -> m (Maybe FilePath)
     fromPhase (Cs p) = frontend p
+    fromPhase As = panic "fromPhase As"
     fromPhase LlvmOpt = llvmPipeline pipe_env cs_env Nothing input_fn
     fromPhase LlvmLlc = llvmLlcPipeline pipe_env cs_env Nothing input_fn
     fromPhase StopLn = return (Just input_fn)
