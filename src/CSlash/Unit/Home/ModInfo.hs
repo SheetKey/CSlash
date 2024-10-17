@@ -41,6 +41,9 @@ emptyHomePackageTable = emptyUDFM
 lookupHpt :: HomePackageTable -> ModuleName -> Maybe HomeModInfo
 lookupHpt = lookupUDFM
 
+anyHpt :: (HomeModInfo -> Bool) -> HomePackageTable -> Bool
+anyHpt = anyUDFM          
+
 addToHpt :: HomePackageTable -> ModuleName -> HomeModInfo -> HomePackageTable
 addToHpt = addToUDFM
 
@@ -49,6 +52,11 @@ addHomeModInfoToHpt hmi hpt = addToHpt hpt (moduleName (mi_module (hm_iface hmi)
 
 addListToHpt :: HomePackageTable -> [(ModuleName, HomeModInfo)] -> HomePackageTable
 addListToHpt = addListToUDFM
+
+lookupHptByModule :: HomePackageTable -> Module -> Maybe HomeModInfo
+lookupHptByModule hpt mod = case lookupHpt hpt (moduleName mod) of
+  Just hm | mi_module (hm_iface hm) == mod -> Just hm
+  _ -> Nothing
 
 pprHPT :: HomePackageTable -> SDoc
 pprHPT hpt = pprUDFM hpt $ \hms ->
