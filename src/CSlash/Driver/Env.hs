@@ -74,6 +74,9 @@ cs_units = ue_units . cs_unit_env
 cs_HPT :: CsEnv -> HomePackageTable
 cs_HPT = ue_hpt . cs_unit_env
 
+cs_HUE :: CsEnv -> HomeUnitEnv
+cs_HUE = ue_currentHomeUnitEnv . cs_unit_env
+
 cs_HUG :: CsEnv -> HomeUnitGraph
 cs_HUG = ue_home_unit_graph . cs_unit_env
 
@@ -90,12 +93,21 @@ csUpdateHPT f cs_env =
 csUpdateHUG :: (HomeUnitGraph -> HomeUnitGraph) -> CsEnv -> CsEnv
 csUpdateHUG f cs_env = cs_env { cs_unit_env = updateHug f (cs_unit_env cs_env) }
 
+csEPS :: CsEnv -> IO ExternalPackageState
+csEPS cs_env = readIORef (euc_eps (ue_eps (cs_unit_env cs_env)))
+
 cs_all_home_unit_ids :: CsEnv -> Set.Set UnitId
 cs_all_home_unit_ids = unitEnv_keys . cs_HUG
 
 csUpdateLoggerFlags :: CsEnv -> CsEnv
 csUpdateLoggerFlags h = h
   { cs_logger = setLogFlags (cs_logger h) (initLogFlags (cs_dflags h)) }
+
+lookupIfaceByModule :: HomeUnitGraph -> PackageIfaceTable -> Module -> Maybe ModIface
+lookupIfaceByModule hug pit mod
+  = case lookupHugByModule mod hug of
+      Just hm -> Just (hm_iface hm)
+      Nothing -> lookupModuleEnv pit mod
 
 mainModIs :: HomeUnitEnv -> Module
 mainModIs hue = mkHomeModule (expectJust "mainModIs" $ homeUnitEnv_home_unit hue)
