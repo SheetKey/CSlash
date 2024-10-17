@@ -106,6 +106,11 @@ isUnitEnvInstalledModule ue m = maybe False (`isHomeInstalledModule` m) hu
 
 type HomeUnitGraph = UnitEnvGraph HomeUnitEnv
 
+lookupHugByModule :: Module -> HomeUnitGraph -> Maybe HomeModInfo
+lookupHugByModule mod hug = do
+  env <- (unitEnv_lookup_maybe (toUnitId $ moduleUnit mod) hug)
+  lookupHptByModule (homeUnitEnv_hpt env) mod
+
 addHomeModInfoToHug :: HomeModInfo -> HomeUnitGraph -> HomeUnitGraph
 addHomeModInfoToHug hmi hug = unitEnv_alter go hmi_unit hug
   where
