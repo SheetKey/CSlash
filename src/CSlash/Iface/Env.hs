@@ -37,3 +37,7 @@ import Control.Monad
 trace_if :: Logger -> SDoc -> IO ()
 {-# INLINE trace_if #-}
 trace_if logger doc = when (logHasDumpFlag logger Opt_D_dump_if_trace) $ putMsg logger doc
+
+trace_hi_diffs :: Logger -> SDoc -> IO ()
+{-# INLINE trace_hi_diffs #-}
+trace_hi_diffs logger doc = when (logHasDumpFlag logger Opt_D_dump_hi_diffs) $ putMsg logger doc
