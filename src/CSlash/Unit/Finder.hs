@@ -6,6 +6,7 @@ module CSlash.Unit.Finder
   , initFinderCache
   , flushFinderCaches
   , findImportedModule
+  , findExactModule
   , findHomeModule
   , findExposedPackageModule
   , mkHomeModLocation
@@ -143,6 +144,23 @@ findImportedModuleNoCs fc fopts ue mhome_unit mod_name mb_pkg =
       = map
         (\uid -> (uid, initFinderOpts (homeUnitEnv_dflags (ue_findHomeUnitEnv uid ue))))
         hpt_deps
+
+findExactModule
+  :: FinderCache
+  -> FinderOpts
+  -> UnitEnvGraph FinderOpts
+  -> UnitState
+  -> Maybe HomeUnit
+  -> InstalledModule
+  -> IO InstalledFindResult
+findExactModule fc fopts other_fopts unit_state mhome_unit mod = 
+  case mhome_unit of
+    Just home_unit
+      | isHomeInstalledModule home_unit mod
+        -> findInstalledHomeModule fc fopts (homeUnitId home_unit) (moduleName mod)
+      | Just home_fopts <- unitEnv_lookup_maybe (moduleUnit mod) other_fopts
+        -> findInstalledHomeModule fc home_fopts (moduleUnit mod) (moduleName mod)
+    _ -> findPackageModule fc unit_state fopts mod
 
 -- -----------------------------------------------------------------------------
 -- Helpers
@@ -317,6 +335,14 @@ augmentImports _ [] = []
 augmentImports work_dir (fp:fps)
   | isAbsolute fp = fp : augmentImports work_dir fps
   | otherwise = (work_dir </> fp) : augmentImports work_dir fps
+
+findPackageModule
+  :: FinderCache -> UnitState -> FinderOpts -> InstalledModule -> IO InstalledFindResult
+findPackageModule fc unit_state fopts mod =
+  let pkg_id = moduleUnit mod
+  in case lookupUnitId unit_state pkg_id of
+    Nothing -> return (InstalledNoPackage pkg_id)
+    Just u -> findPackageModule_ fc fopts mod u
 
 findPackageModule_
   :: FinderCache -> FinderOpts -> InstalledModule -> UnitInfo -> IO InstalledFindResult
