@@ -55,6 +55,8 @@ instance Outputable CsHint where
     SuggestQualifiedAfterModuleName
       -> text "Place" <+> quotes (text "qualified")
           <+> text "after the module name."
+    SuggestTypeSignatureRemoveQualifier
+      -> text "Perhaps you meant to omit the qualifier"
     -- SuggestFixOrphanInst { isFamilyInstance = mbFamFlavor }
     --   -> vcat [ text "Move the instance declaration to the module of the" <+> what <+> text "or of the type, or"
     --           , text "wrap the type with a newtype and declare the instance on the new type."
