@@ -299,6 +299,9 @@ unsafeLookupUnitId state uid = case lookupUnitId state uid of
   Just info -> info
   Nothing -> pprPanic "unsafeLookupUnitId" (ppr uid)
 
+searchPackageId :: UnitState -> PackageId -> [UnitInfo]
+searchPackageId pkgstate pid = filter ((pid ==) . unitPackageId) (listUnitInfo pkgstate)
+
 mkUnitInfoMap :: [UnitInfo] -> UnitInfoMap
 mkUnitInfoMap infos = foldl' add emptyUniqMap infos
   where
@@ -1280,6 +1283,9 @@ fsPackageName info = fs
   where
     PackageName fs = unitPackageName info
 
+improveUnit :: UnitState -> Unit -> Unit
+improveUnit state u = improveUnit' (unitInfoMap state) (preloadClosure state) u
+
 improveUnit' :: UnitInfoMap -> PreloadUnitClosure -> Unit -> Unit
 improveUnit' _ _ uid@(RealUnit _) = uid
 improveUnit' pkg_map closure uid =
@@ -1288,6 +1294,9 @@ improveUnit' pkg_map closure uid =
     Just pkg -> if unitId pkg `elementOfUniqSet` closure
                 then mkUnit pkg
                 else uid
+
+instUnitToUnit :: UnitState -> InstantiatedUnit -> Unit
+instUnitToUnit state iuid = improveUnit state $ VirtUnit iuid
 
 type ShHoleSubst = ModuleNameEnv Module
 
@@ -1311,6 +1320,10 @@ renameHoleUnit' pkg_map closure env uid =
               mkVirtUnit cid
               (map (\(k, v) -> (k, renameHoleModule' pkg_map closure env v)) insts)
     _ -> uid
+
+instModuleToModule :: UnitState -> InstantiatedModule -> Module
+instModuleToModule pkgstate (Module iuid mod_name) =
+  mkModule (instUnitToUnit pkgstate iuid) mod_name
 
 pprWithUnitState :: UnitState -> SDoc -> SDoc
 pprWithUnitState state = updSDocContext (\ctx -> ctx
