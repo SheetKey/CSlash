@@ -15,7 +15,7 @@ import CSlash.Data.StringBuffer
 import CSlash.Driver.Backend
 import CSlash.Driver.Config.Finder
 import CSlash.Driver.Config.Parser
-import CSlash.Driver.Env hiding (Hsc)
+import CSlash.Driver.Env
 import CSlash.Driver.Env.KnotVars
 import CSlash.Driver.Errors.Types
 import CSlash.Driver.LlvmConfigCache (readLlvmConfigCache)
