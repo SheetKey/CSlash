@@ -1,3 +1,5 @@
+{-# LANGUAGE MultiWayIf #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE LambdaCase #-}
 
@@ -5,10 +7,12 @@ module CSlash.Parser.Errors.Ppr where
 
 import Prelude hiding ((<>))
 
+import CSlash.Driver.Flags
 import CSlash.Data.FastString
 import CSlash.Cs.Expr
 import CSlash.Types.Error
 import CSlash.Types.SrcLoc
+import CSlash.Types.Error.Codes
 import CSlash.Types.Hint.Ppr (perhapsAsPat)
 import CSlash.Types.Name.Reader (opIsAt, rdrNameOcc)
 import CSlash.Types.Name.Occurrence (isSymOcc, occNameFS, varName)
@@ -25,6 +29,7 @@ instance Diagnostic PsMessage where
   diagnosticMessage opts = \case
     PsUnknownMessage (UnknownDiagnostic f m)
       -> diagnosticMessage (f opts) m
+    PsHeaderMessage m -> psHeaderMessageDiagnostic m
     PsWarnBidirectionalFormatChars ((loc, _, desc) :| xs)
       -> mkSimpleDecorated $
             text "A unicode bidirectional formatting character" <+> parens (text desc)
@@ -180,7 +185,112 @@ instance Diagnostic PsMessage where
                 , text "'" <> text [looks_like_char] <> text "' (" <> text looks_like_char_name <> text ")" <> comma
                 , text "but it is not" ]
     _ -> mkSimpleDecorated $ text "diagnosticMessage PsMessage"
+
+  diagnosticReason = \case
+    PsUnknownMessage m -> diagnosticReason m
+    PsHeaderMessage m -> psHeaderMessageReason m
+    PsWarnBidirectionalFormatChars {} ->
+      WarningWithFlag Opt_WarnUnicodeBidirectionalFormatCharacters
+    PsWarnTab {} -> WarningWithFlag Opt_WarnTabs
+    PsWarnOperatorWhitespace sym occ -> WarningWithFlag Opt_WarnOperatorWhitespace
+    PsErrEmptyLambda {} -> ErrorWithoutFlag
+    PsErrEmptyTyLam {} -> ErrorWithoutFlag
+    PsErrEmptyTyLamTy {} -> ErrorWithoutFlag
+    PsErrMissingBlock -> ErrorWithoutFlag
+    PsErrLexer {} -> ErrorWithoutFlag
+    PsErrParse {} -> ErrorWithoutFlag
+    PsErrUnexpectedQualifiedConstructor {} -> ErrorWithoutFlag
+    PsErrTupleSectionInPat {} -> ErrorWithoutFlag
+    PsErrOpFewArgs {} -> ErrorWithoutFlag
+    PsErrImportQualifiedTwice -> ErrorWithoutFlag          
+    PsErrImportPreQualified -> WarningWithFlag Opt_WarnPrepositiveQualifiedModule            
+    PsErrVarForTyCon {} -> ErrorWithoutFlag
+    PsErrPrecedenceOutOfRange {} -> ErrorWithoutFlag
+    PsErrIfInPat -> ErrorWithoutFlag
+    PsErrLambdaInPat {} -> ErrorWithoutFlag                   
+    PsErrTyLambdaInPat {} -> ErrorWithoutFlag                 
+    PsErrCaseInPat -> ErrorWithoutFlag                     
+    PsErrLetInPat -> ErrorWithoutFlag                      
+    PsErrArrowExprInPat {} -> ErrorWithoutFlag
+    PsErrInvalidInfixHole -> ErrorWithoutFlag              
+    PsErrSemiColonsInCondExpr {} -> ErrorWithoutFlag
+    PsErrAtInPatPos -> ErrorWithoutFlag                    
+    PsErrUnexpectedAsPat -> ErrorWithoutFlag               
+    PsErrCaseInFunAppExpr {} -> ErrorWithoutFlag
+    PsErrLambdaInFunAppExpr {} -> ErrorWithoutFlag
+    PsErrLetInFunAppExpr {} -> ErrorWithoutFlag
+    PsErrIfInFunAppExpr {} -> ErrorWithoutFlag
+    PsErrMalformedTyDecl {} -> ErrorWithoutFlag
+    PsErrParseErrorOnInput {} -> ErrorWithoutFlag
+    PsErrInvalidTypeSignature {} -> ErrorWithoutFlag
+    PsErrUnexpectedTypeInDecl {} -> ErrorWithoutFlag
+    PsErrInPat {} -> ErrorWithoutFlag
+    PsErrInTyPat {} -> ErrorWithoutFlag
+    PsErrUnicodeCharLooksLike {} -> ErrorWithoutFlag
+    PsErrParseRightOpSectionInPat {} -> ErrorWithoutFlag
+    PsErrInvalidKindRelation {} -> ErrorWithoutFlag
     
+  diagnosticHints = \case
+    PsUnknownMessage m -> diagnosticHints m
+    PsHeaderMessage m -> psHeaderMessageHints m
+    PsWarnBidirectionalFormatChars {} -> noHints
+    PsWarnTab {} -> [SuggestUseSpaces]
+    PsWarnOperatorWhitespace sym occ -> [SuggestUseWhitespaceAround (unpackFS sym) occ]
+    PsErrEmptyLambda {} -> noHints
+    PsErrEmptyTyLam {} -> noHints
+    PsErrEmptyTyLamTy {} -> noHints
+    PsErrMissingBlock -> noHints
+    PsErrLexer {} -> noHints
+    PsErrParse {} -> noHints
+    PsErrUnexpectedQualifiedConstructor {} -> noHints
+    PsErrTupleSectionInPat {} -> noHints             
+    PsErrOpFewArgs {} -> noHints
+    PsErrImportQualifiedTwice -> noHints          
+    PsErrImportPreQualified -> [SuggestQualifiedAfterModuleName]            
+    PsErrVarForTyCon {} -> noHints
+    PsErrPrecedenceOutOfRange {} -> noHints
+    PsErrIfInPat -> noHints
+    PsErrLambdaInPat {} -> noHints                   
+    PsErrTyLambdaInPat {} -> noHints
+    PsErrCaseInPat -> noHints
+    PsErrLetInPat -> noHints
+    PsErrArrowExprInPat {} -> noHints
+    PsErrInvalidInfixHole -> noHints
+    PsErrSemiColonsInCondExpr {} -> noHints
+    PsErrAtInPatPos -> noHints
+    PsErrUnexpectedAsPat -> noHints
+    PsErrCaseInFunAppExpr {} -> [SuggestParentheses]
+    PsErrLambdaInFunAppExpr {} -> [SuggestParentheses]
+    PsErrLetInFunAppExpr {} -> [SuggestParentheses]
+    PsErrIfInFunAppExpr {} -> [SuggestParentheses]
+    PsErrMalformedTyDecl {} -> noHints
+    PsErrParseErrorOnInput {} -> noHints
+    PsErrInvalidTypeSignature reason lhs ->
+      if | PsErrInvalidTypeSig_Qualified <- reason
+           -> [SuggestTypeSignatureRemoveQualifier]
+         | otherwise -> noHints
+    PsErrUnexpectedTypeInDecl {} -> noHints
+    PsErrInPat {} -> noHints
+    PsErrInTyPat {} -> noHints
+    PsErrUnicodeCharLooksLike {} -> noHints
+    PsErrParseRightOpSectionInPat {} -> noHints
+    PsErrInvalidKindRelation {} -> noHints
+
+  diagnosticCode = constructorCode
+
+psHeaderMessageDiagnostic :: PsHeaderMessage -> DecoratedSDoc
+psHeaderMessageDiagnostic  = \case
+  PsErrUnknownOptionsPragma flag ->
+    mkSimpleDecorated $ text "Unknown flag in {-# OPTIONS_CSL #-} pragma:" <+> text flag
+
+psHeaderMessageReason :: PsHeaderMessage -> DiagnosticReason
+psHeaderMessageReason = \case
+  PsErrUnknownOptionsPragma {} -> ErrorWithoutFlag
+
+psHeaderMessageHints :: PsHeaderMessage -> [CsHint]
+psHeaderMessageHints = \case
+  PsErrUnknownOptionsPragma {} -> noHints
+
 pp_unexpected_fun_app :: Outputable a => SDoc -> a -> SDoc
 pp_unexpected_fun_app e a =
   text "Unexpected " <> e <> text " in function application:"
