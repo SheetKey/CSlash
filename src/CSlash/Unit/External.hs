@@ -55,3 +55,9 @@ data EpsStats = EpsStats
   , n_decls_in :: !Int
   , n_decls_out :: !Int
   }
+
+addEpsInStats :: EpsStats -> Int -> EpsStats
+addEpsInStats stats n_decls = stats
+  { n_ifaces_in = n_ifaces_in stats + 1
+  , n_decls_in = n_decls_in stats + n_decls
+  }
