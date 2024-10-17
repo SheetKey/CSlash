@@ -8,18 +8,25 @@ module CSlash.Unit.Module
 
   , getModuleInstantiation
   , getUnitInstantiations
-
+  , uninstantiateInstantiatedUnit
+  , uninstantiateInstantiatedModule
+  
   , mkHoleModule
   , isHoleModule
   , stableModuleCmp
   , moduleStableString
+  , moduleIsDefinite
   , installedModuleEq
   ) where
 
+import CSlash.Types.Unique.DSet
 import CSlash.Unit.Types
 import CSlash.Language.Syntax.Module.Name
 import CSlash.Unit.Module.Location
 import CSlash.Unit.Module.Env
+
+moduleIsDefinite :: Module -> Bool
+moduleIsDefinite = isEmptyUniqDSet . moduleFreeHoles
 
 moduleStableString :: Module -> String
 moduleStableString Module{..} =
@@ -49,6 +56,15 @@ getUnitInstantiations :: Unit -> (UnitId, Maybe InstantiatedUnit)
 getUnitInstantiations (VirtUnit iuid) = (instUnitInstanceOf iuid, Just iuid)
 getUnitInstantiations (RealUnit (Definite uid)) = (uid, Nothing)
 getUnitInstantiations (HoleUnit {}) = error "Hole unit"
+
+uninstantiateInstantiatedUnit :: InstantiatedUnit -> InstantiatedUnit
+uninstantiateInstantiatedUnit u =
+  mkInstantiatedUnit (instUnitInstanceOf u)
+                     (map (\(m,_) -> (m, mkHoleModule m))
+                       (instUnitInsts u))
+
+uninstantiateInstantiatedModule :: InstantiatedModule -> InstantiatedModule
+uninstantiateInstantiatedModule (Module uid n) = Module (uninstantiateInstantiatedUnit uid) n
 
 isHoleModule :: GenModule (GenUnit u) -> Bool
 isHoleModule (Module HoleUnit _) = True
