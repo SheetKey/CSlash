@@ -33,6 +33,12 @@ instance Binary Dependencies where
               dps <- get bh
               return $ Deps dms dps
 
+noDependencies :: Dependencies
+noDependencies = Deps
+  { dep_direct_mods = Set.empty
+  , dep_direct_pkgs = Set.empty
+  }
+
 pprDeps :: UnitState -> Dependencies -> SDoc
 pprDeps = undefined
 
