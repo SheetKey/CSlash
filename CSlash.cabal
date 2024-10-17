@@ -146,6 +146,9 @@ library
                     
                     , CSlash.Iface.Binary
                     , CSlash.Iface.Env
+                    , CSlash.Iface.Errors
+                    , CSlash.Iface.Errors.Ppr
+                    , CSlash.Iface.Errors.Types
                     , CSlash.Iface.Load
                     , CSlash.Iface.Make
                     , CSlash.Iface.Recomp
