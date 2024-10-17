@@ -57,9 +57,9 @@ backendSpecialModuleSource :: Backend -> Maybe String
 backendSpecialModuleSource (Named LLVM) =  Nothing
 backendSpecialModuleSource (Named NoBackend) = Just "nothing"
 
-backendSupportsHpc :: Backend -> Bool
-backendSupportsHpc (Named LLVM) = True
-backendSupportsHpc (Named NoBackend) = True
+backendSupportsPc :: Backend -> Bool
+backendSupportsPc (Named LLVM) = True
+backendSupportsPc (Named NoBackend) = True
 
 backendPostCsPipeline :: Backend -> DefunctionalizedPostCsPipeline
 backendPostCsPipeline (Named LLVM) = LlvmPostCsPipeline
