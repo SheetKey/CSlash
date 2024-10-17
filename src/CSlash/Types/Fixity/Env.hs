@@ -26,3 +26,6 @@ mkIfaceFixCache pairs
   = \n -> lookupOccEnv env n
   where
     env = mkOccEnv pairs
+
+emptyIfaceFixCache :: OccName -> Maybe Fixity
+emptyIfaceFixCache _ = Nothing
