@@ -46,6 +46,7 @@ data CsHint
   | SuggestIncreaseSimplifierIterations
   | SuggestQualifiedAfterModuleName
   --  | SuggestFixOrphanInst { isFamilyInstance :: Maybe FamFlavor }
+  | SuggestTypeSignatureRemoveQualifier
   | SuggestAddStandaloneKindSignature Name
   | SuggestMoveToDeclarationSite
       SDoc
