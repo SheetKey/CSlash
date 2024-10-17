@@ -2,6 +2,7 @@ module CSlash.Driver.Flags
   ( DumpFlag(..)
   , getDumpFlagFrom
   , GeneralFlag(..)
+  , optimisationFlags
 
   , WarningGroup(..)
   , warningGroupName
@@ -203,7 +204,7 @@ data GeneralFlag
   -- misc opts
   | Opt_ForceRecomp
   | Opt_IgnoreOptimChanges
-  | Opt_IgnoreHpcChanges
+  | Opt_IgnorePcChanges
   | Opt_ExcessPrecision
   | Opt_EagerBlackHoling
   | Opt_NoCsMain
@@ -237,7 +238,7 @@ data GeneralFlag
   -- | Opt_Ticky_AP                    -- ^ Use regular thunks even when we could use std ap thunks in order to get entry counts
   | Opt_RPath
   | Opt_RelativeDynlibPaths
-  | Opt_Hpc
+  | Opt_Pc
   | Opt_FamAppCache
   | Opt_VersionMacros
   | Opt_WholeArchiveCsLibs
@@ -318,6 +319,35 @@ data GeneralFlag
 
   | Opt_G_NoStateHack
   deriving (Eq, Show, Enum)
+
+optimisationFlags :: EnumSet GeneralFlag
+optimisationFlags = EnumSet.fromList
+  [ Opt_CallArity
+  , Opt_LateDmdAnal
+  , Opt_KillAbsence
+  , Opt_KillOneShot
+  , Opt_FloatIn
+  , Opt_LateSpecialise
+  , Opt_Specialise
+  , Opt_SpecialiseAggressively
+  , Opt_CrossModuleSpecialise
+  , Opt_StaticArgumentTransformation
+  , Opt_CSE
+  , Opt_LiberateCase
+  , Opt_SpecConstr
+  , Opt_SpecConstrKeen
+  , Opt_DoLambdaEtaExpansion
+  , Opt_IgnoreAsserts
+  , Opt_DoEtaReduction
+  , Opt_CaseMerge
+  , Opt_CaseFolding
+  , Opt_DictsCheap
+  , Opt_IrrefutableTuples
+  , Opt_Loopification
+  , Opt_WeightlessBlocklayout
+  , Opt_CprAnal
+  , Opt_SolveConstantDicts
+  ]
 
 data WarningFlag =
      Opt_WarnDuplicateExports
