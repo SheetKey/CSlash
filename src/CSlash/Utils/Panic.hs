@@ -1,3 +1,4 @@
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE LambdaCase #-}
 
 module CSlash.Utils.Panic
@@ -88,6 +89,19 @@ pprPanic s doc = panicDoc s (doc $$ callStackDoc)
 
 panicDoc :: String -> SDoc -> a
 panicDoc x doc = throwCsException (PprPanic x doc)
+
+tryMost :: IO a -> IO (Either SomeException a)
+tryMost action = do
+  r <- try action
+  case r of
+    Left se -> case fromException se of
+                 Just (Signal _) -> throwIO se
+                 Just (Panic _) -> throwIO se
+                 Just _ -> return $ Left se
+                 Nothing -> case fromException se of
+                              Just (_ :: IOException) -> return $ Left se
+                              Nothing -> throwIO se
+    Right v -> return (Right v)
 
 {-# NOINLINE signalHandlersRefCount #-}
 signalHandlersRefCount :: MVar (Word, Maybe (S.Handler, S.Handler, S.Handler, S.Handler))
