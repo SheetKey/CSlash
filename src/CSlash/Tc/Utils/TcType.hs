@@ -51,9 +51,11 @@ data MetaDetails
 
 data MetaInfo
 
-instance Outputable MetaDetails
+instance Outputable MetaDetails where
+  ppr = undefined
 
-instance Outputable MetaInfo
+instance Outputable MetaInfo where
+  ppr = undefined
 
 newtype TcLevel = TcLevel Int deriving (Eq, Ord)
 
