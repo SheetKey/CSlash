@@ -83,7 +83,6 @@ import qualified Data.Semigroup as Semi
   ':' { L _ ITcolon }
   '=' { L _ ITequal }
   '\\' { L _ ITlam }
-  '\\\\' { L _ ITdlam }
   '|' { L _ ITvbar }
   '<-' { L _ ITlarrow }
   '->' { L _ ITrarrow }

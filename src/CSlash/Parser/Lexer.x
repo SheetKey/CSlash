@@ -256,7 +256,6 @@ data Token
   | ITcolon
   | ITequal
   | ITlam
-  | ITdlam
   | ITvbar
   | ITlarrow
   | ITrarrow
@@ -341,7 +340,6 @@ reservedSymsFM = listToUFM $
       [ (":", ITcolon, NormalSyntax)
       , ("=", ITequal, NormalSyntax)
       , ("\\", ITlam, NormalSyntax)
-      , ("\\\\", ITdlam, NormalSyntax)
       , ("/\\", ITbiglam, NormalSyntax)
       , ("|", ITvbar, NormalSyntax)
       , ("<-", ITlarrow, NormalSyntax)
