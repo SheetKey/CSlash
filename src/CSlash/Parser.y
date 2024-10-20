@@ -447,7 +447,8 @@ tv_bndr :: { LCsTyVarBndr Ps }
 
 tv_bndrs1 :: { [LCsTyVarBndr Ps] }
   : tv_bndrs1 tv_bndr_parens { $2 : $1 }
-  | {- empty -} %shift { [] }
+  -- | {- empty -} %shift { [] }
+  | tv_bndr_parens { [$1] }
 
 tv_bndr_parens :: { LCsTyVarBndr Ps }
   : '(' a_var ':' aexp1 ')' {% runPV (unETP $4) >>= \ ($4 :: LCsKind Ps) ->
