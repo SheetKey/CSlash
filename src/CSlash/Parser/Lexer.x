@@ -17,7 +17,7 @@ import qualified CSlash.Data.Strict as Strict
 
 -- base
 import Data.Char
-import Data.List (stripPrefix, isInfixOf, partition)
+import Data.List (stripPrefix, isInfixOf, partition, unsnoc)
 import Data.Word
 import Debug.Trace (trace)
 
@@ -98,7 +98,7 @@ $docsym = [\| \^ \* \$]
 @conid = $large $idchar*
 
 @varsym = ($symbol # \:) $symbol*
-@consym = \: $symbol+
+@consym = \: $symbol*
 
 @numspc = _*
 @decimal = $decdigit(@numspc $decdigit)*
@@ -180,6 +180,7 @@ $unigraphic / { isSmartQuote } { smart_quote_error }
 }
 
 <0> {
+  @negative @varid \> { tok_fun_kind }
   @qvarid { idtoken qvarid }
   @qconid { idtoken qconid }
   @varid { varid }
@@ -263,6 +264,7 @@ data Token
   | ITarrowU
   | ITarrowA
   | ITarrowL
+  | ITarrowK FastString
   | ITprefixminus
   | ITsuffixarr
   | ITtightinfixat
@@ -664,6 +666,17 @@ sym con span buf len _buf2 =
       L span <$!> con span fs
   where
     !fs = lexemeToFastString buf len
+
+tok_fun_kind :: Action
+tok_fun_kind span buf len _buf2 =
+  let fs = lexemeToFastString buf len
+      str = unpackFS fs
+      var = case str of
+        '-' : rest -> case unsnoc rest of
+          Just (var, '>') -> var
+          _ -> panic $ "tok_fun_kind: " ++ str
+        _ -> panic $ "tok_fun_kind: " ++ str
+  in return $ L span (ITarrowK $ fsLit (var))
 
 tok_integral
   :: (SourceText -> Integer -> Token)
