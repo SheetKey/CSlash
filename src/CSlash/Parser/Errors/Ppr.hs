@@ -111,8 +111,78 @@ instance Diagnostic PsMessage where
               else empty
     PsErrPrecedenceOutOfRange i
       -> mkSimpleDecorated $ text "Precedence out of range: " <> int i
+    PsErrTypeInExpr ty
+      -> mkSimpleDecorated $
+         text "Unexpected type" <+> quotes (ppr ty) <+> text "in an expression."
+    PsErrKindInExpr kd
+      -> mkSimpleDecorated $
+         text "Unexpected kind" <+> quotes (ppr kd) <+> text "in an expression."
+    PsErrExpInType e
+      -> mkSimpleDecorated $
+         text "Unexpected expression" <+> quotes (ppr e) <+> text "in a type."
+    PsErrKindInType kd
+      -> mkSimpleDecorated $
+         text "Unexpected kind" <+> quotes (ppr kd) <+> text "in a type."
+    PsErrNegAppInType
+      -> mkSimpleDecorated $ text "Invalid neg app in type."
+    PsErrLetInType
+      -> mkSimpleDecorated $ text "(let ... in ...)-syntax in type"
+    PsErrTyLamInType
+      -> mkSimpleDecorated $ text "(/\\ ...)-syntax in type"
+    PsErrCaseInType
+      -> mkSimpleDecorated $ text "(case ... of ...)-syntax in type"
+    PsErrInBracesType
+      -> mkSimpleDecorated $ text "({ ... })-syntax in type"
+    PsErrSumDCType
+      -> mkSimpleDecorated $ text "Invalid sum data constructor in type."
+    PsErrExpInKind e
+      -> mkSimpleDecorated $
+         text "Unexpected expression" <+> quotes (ppr e) <+> text "in a kind."
+    PsErrTypeInKind ty
+      -> mkSimpleDecorated $
+         text "Unexpected type" <+> quotes (ppr ty) <+> text "in a kind."
+    PsErrKindWithSig
+      -> mkSimpleDecorated $ text "Invalid kind with signature."
+    PsErrKindOpApp
+      -> mkSimpleDecorated $ text "Invalid kind operator application."
+    PsErrKindApp
+      -> mkSimpleDecorated $ text "Invalid kind application."
+    PsErrNegAppInKind
+      -> mkSimpleDecorated $ text "Invalid neg app in kind."
+    PsErrLetInKind
+      -> mkSimpleDecorated $ text "(let ... in ...)-syntax in kind"
+    PsErrLamInKind
+      -> mkSimpleDecorated $ text "(\\ ...)-syntax in kind"
+    PsErrTyLamInKind
+      -> mkSimpleDecorated $ text "(/\\ ...)-syntax in kind"
+    PsErrCaseInKind
+      -> mkSimpleDecorated $ text "(case ... of ...)-syntax in kind"
+    PsErrKindCon
+      -> mkSimpleDecorated $ text "Invalid kind constructor."
+    PsErrLitInKind
+      -> mkSimpleDecorated $ text "Invalid literal in kind."
+    PsErrOverLitInKind
+      -> mkSimpleDecorated $ text "Invalid literal in kind."
+    PsErrSumOrTupleKind
+      -> mkSimpleDecorated $ text "Invalid sum or tuple in kind."
+    PsErrWildCardKind
+      -> mkSimpleDecorated $ text "Invalid wildcard in kind."
+    PsErrInBracesKind
+      -> mkSimpleDecorated $ text "({ ... })-syntax in kind"
+    PsErrKindSection
+      -> mkSimpleDecorated $ text "Invalid section in kind."
+    PsErrTypeInPat ty
+      -> mkSimpleDecorated $ parse_error_in_pat <+>
+         text "Unexpected type" <+> quotes (ppr ty) <+> text "in a pattern."
+    PsErrKindInPat kd
+      -> mkSimpleDecorated $ parse_error_in_pat <+>
+         text "Unexpected kind" <+> quotes (ppr kd) <+> text "in a pattern."
     PsErrIfInPat
       -> mkSimpleDecorated $ text "(if ...) in pattern"
+    PsErrIfInType
+      -> mkSimpleDecorated $ text "(if ...) in type"
+    PsErrIfInKind
+      -> mkSimpleDecorated $ text "(if ...) in kind"
     PsErrLambdaInPat
       -> mkSimpleDecorated $ text "Illegal lambda-syntax in pattern"
     PsErrCaseInPat
@@ -125,6 +195,8 @@ instance Diagnostic PsMessage where
       -> mkSimpleDecorated $ pp_unexpected_fun_app (text "case expression") a
     PsErrLambdaInFunAppExpr a
       -> mkSimpleDecorated $ pp_unexpected_fun_app (text "lambda expression") a
+    PsErrLambdaInTyFunAppExpr t
+      -> mkSimpleDecorated $ pp_unexpected_ty_fun_app (text "type lambda expression") t
     PsErrLetInFunAppExpr a
       -> mkSimpleDecorated $ pp_unexpected_fun_app (text "let expression") a
     PsErrIfInFunAppExpr a
@@ -175,6 +247,23 @@ instance Diagnostic PsMessage where
                                         else empty
                  _  -> ppr s
          in mkSimpleDecorated $ msg <+> body
+    PsErrInTyPat t details
+      -> let msg = parse_error_in_ty_pat
+             body = case details of
+                      PEIP_NegApp -> text "-" <> ppr t
+                      PEIP_TypeArgs peipd_tyargs
+                        | not (null peipd_tyargs) -> ppr t <+> vcat 
+                          [ hsep (map ppr peipd_tyargs)
+                          , text "Type application are not allowed in type patterns."
+                          ]
+                        | otherwise -> ppr t
+                      PEIP_OtherPatDetails (ParseContext (Just fun))
+                        -> ppr t <+> text "In a type function binding for the"
+                                 <+> quotes (ppr fun)
+                                 <+> text "operator."
+                      _ -> ppr t
+         in mkSimpleDecorated $ msg <+> body
+                            
     PsErrUnicodeCharLooksLike bad_char looks_like_char looks_like_char_name
       -> mkSimpleDecorated $
            hsep [ text "Unicode character"
@@ -207,6 +296,8 @@ instance Diagnostic PsMessage where
     PsErrVarForTyCon {} -> ErrorWithoutFlag
     PsErrPrecedenceOutOfRange {} -> ErrorWithoutFlag
     PsErrIfInPat -> ErrorWithoutFlag
+    PsErrIfInType -> ErrorWithoutFlag
+    PsErrIfInKind -> ErrorWithoutFlag
     PsErrLambdaInPat {} -> ErrorWithoutFlag                   
     PsErrTyLambdaInPat {} -> ErrorWithoutFlag                 
     PsErrCaseInPat -> ErrorWithoutFlag                     
@@ -218,6 +309,7 @@ instance Diagnostic PsMessage where
     PsErrUnexpectedAsPat -> ErrorWithoutFlag               
     PsErrCaseInFunAppExpr {} -> ErrorWithoutFlag
     PsErrLambdaInFunAppExpr {} -> ErrorWithoutFlag
+    PsErrLambdaInTyFunAppExpr {} -> ErrorWithoutFlag
     PsErrLetInFunAppExpr {} -> ErrorWithoutFlag
     PsErrIfInFunAppExpr {} -> ErrorWithoutFlag
     PsErrMalformedTyDecl {} -> ErrorWithoutFlag
@@ -229,6 +321,38 @@ instance Diagnostic PsMessage where
     PsErrUnicodeCharLooksLike {} -> ErrorWithoutFlag
     PsErrParseRightOpSectionInPat {} -> ErrorWithoutFlag
     PsErrInvalidKindRelation {} -> ErrorWithoutFlag
+    PsErrTypeInExpr {} -> ErrorWithoutFlag
+    PsErrKindInExpr {} -> ErrorWithoutFlag
+    PsErrExpInType {} -> ErrorWithoutFlag
+    PsErrKindInType {} -> ErrorWithoutFlag
+    PsErrNegAppInType -> ErrorWithoutFlag
+    PsErrLetInType -> ErrorWithoutFlag
+    PsErrTyLamInType -> ErrorWithoutFlag
+    PsErrCaseInType -> ErrorWithoutFlag
+    PsErrLitInType -> ErrorWithoutFlag
+    PsErrOverLitInType -> ErrorWithoutFlag
+    PsErrInBracesType -> ErrorWithoutFlag
+    PsErrSumDCType -> ErrorWithoutFlag
+    PsErrExpInKind {} -> ErrorWithoutFlag
+    PsErrTypeInKind {} -> ErrorWithoutFlag
+    PsErrKindWithSig -> ErrorWithoutFlag
+    PsErrKindOpApp -> ErrorWithoutFlag
+    PsErrKindApp -> ErrorWithoutFlag
+    PsErrNegAppInKind -> ErrorWithoutFlag
+    PsErrLetInKind -> ErrorWithoutFlag
+    PsErrLamInKind -> ErrorWithoutFlag
+    PsErrTyLamInKind -> ErrorWithoutFlag
+    PsErrCaseInKind -> ErrorWithoutFlag
+    PsErrKindCon -> ErrorWithoutFlag
+    PsErrLitInKind -> ErrorWithoutFlag
+    PsErrOverLitInKind -> ErrorWithoutFlag
+    PsErrSumOrTupleKind -> ErrorWithoutFlag
+    PsErrWildCardKind -> ErrorWithoutFlag
+    PsErrInBracesKind -> ErrorWithoutFlag
+    PsErrKindSection -> ErrorWithoutFlag
+    PsErrTypeInPat {} -> ErrorWithoutFlag
+    PsErrKindInPat {} -> ErrorWithoutFlag
+    PsErrParseLeftOpSectionInPat {} -> ErrorWithoutFlag
     
   diagnosticHints = \case
     PsUnknownMessage m -> diagnosticHints m
@@ -250,6 +374,8 @@ instance Diagnostic PsMessage where
     PsErrVarForTyCon {} -> noHints
     PsErrPrecedenceOutOfRange {} -> noHints
     PsErrIfInPat -> noHints
+    PsErrIfInType -> noHints
+    PsErrIfInKind -> noHints
     PsErrLambdaInPat {} -> noHints                   
     PsErrTyLambdaInPat {} -> noHints
     PsErrCaseInPat -> noHints
@@ -261,6 +387,7 @@ instance Diagnostic PsMessage where
     PsErrUnexpectedAsPat -> noHints
     PsErrCaseInFunAppExpr {} -> [SuggestParentheses]
     PsErrLambdaInFunAppExpr {} -> [SuggestParentheses]
+    PsErrLambdaInTyFunAppExpr {} -> [SuggestParentheses]
     PsErrLetInFunAppExpr {} -> [SuggestParentheses]
     PsErrIfInFunAppExpr {} -> [SuggestParentheses]
     PsErrMalformedTyDecl {} -> noHints
@@ -275,6 +402,38 @@ instance Diagnostic PsMessage where
     PsErrUnicodeCharLooksLike {} -> noHints
     PsErrParseRightOpSectionInPat {} -> noHints
     PsErrInvalidKindRelation {} -> noHints
+    PsErrTypeInExpr {} -> noHints
+    PsErrKindInExpr {} -> noHints
+    PsErrExpInType {} -> noHints
+    PsErrKindInType {} -> noHints
+    PsErrNegAppInType -> noHints
+    PsErrLetInType -> noHints
+    PsErrTyLamInType -> noHints
+    PsErrCaseInType -> noHints
+    PsErrLitInType -> noHints
+    PsErrOverLitInType -> noHints
+    PsErrInBracesType -> noHints
+    PsErrSumDCType -> noHints
+    PsErrExpInKind {} -> noHints
+    PsErrTypeInKind {} -> noHints
+    PsErrKindWithSig -> noHints
+    PsErrKindOpApp -> noHints
+    PsErrKindApp -> noHints
+    PsErrNegAppInKind -> noHints
+    PsErrLetInKind -> noHints
+    PsErrLamInKind -> noHints
+    PsErrTyLamInKind -> noHints
+    PsErrCaseInKind -> noHints
+    PsErrKindCon -> noHints
+    PsErrLitInKind -> noHints
+    PsErrOverLitInKind -> noHints
+    PsErrSumOrTupleKind -> noHints
+    PsErrWildCardKind -> noHints
+    PsErrInBracesKind -> noHints
+    PsErrKindSection -> noHints
+    PsErrTypeInPat {} -> noHints
+    PsErrKindInPat {} -> noHints
+    PsErrParseLeftOpSectionInPat {} -> noHints
 
   diagnosticCode = constructorCode
 
@@ -296,5 +455,13 @@ pp_unexpected_fun_app e a =
   text "Unexpected " <> e <> text " in function application:"
   $$ nest 4 (ppr a)
 
+pp_unexpected_ty_fun_app :: Outputable a => SDoc -> a -> SDoc
+pp_unexpected_ty_fun_app e a =
+  text "Unexpected " <> e <> text " in type function application:"
+  $$ nest 4 (ppr a)
+
 parse_error_in_pat :: SDoc
 parse_error_in_pat = text "Parse error in pattern:"
+
+parse_error_in_ty_pat :: SDoc
+parse_error_in_ty_pat = text "Parse error in type pattern:"

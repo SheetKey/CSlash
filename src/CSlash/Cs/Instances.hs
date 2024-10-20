@@ -147,6 +147,10 @@ deriving instance Data (CsType Ps)
 deriving instance Data (CsType Rn)
 deriving instance Data (CsType Tc)
 
+deriving instance Data (CsTyTupArg Ps)
+deriving instance Data (CsTyTupArg Rn)
+deriving instance Data (CsTyTupArg Tc)
+
 deriving instance Data (CsKind Ps)
 deriving instance Data (CsKind Rn)
 deriving instance Data (CsKind Tc)

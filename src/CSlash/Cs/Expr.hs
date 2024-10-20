@@ -131,7 +131,7 @@ type instance XExprWithTySig Ps = [AddEpAnn]
 type instance XExprWithTySig Rn = NoExtField
 type instance XExprWithTySig Tc = NoExtField
 
-type instance XEmbTy Ps = NoExtField
+type instance XEmbTy Ps = [AddEpAnn]
 type instance XEmbTy Rn = NoExtField
 type instance XEmbTy Tc = DataConCantHappen
 
@@ -219,7 +219,7 @@ ppr_expr (SectionL _ expr op)
   where
     pp_expr = pprDebugParendExpr opPrec expr
     pp_prefixly = hang (hsep [text " \\ x_ ->", ppr op])
-                       4 (hsep [pp_expr, text "x, )"])
+                       4 (hsep [pp_expr, text "x_ )"])
     pp_infixly v = (sep [pp_expr, v])
 ppr_expr (SectionR _ op expr)
   | Just pp_op <- ppr_infix_expr (unLoc op)

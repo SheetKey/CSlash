@@ -32,7 +32,9 @@ module CSlash.Types.SrcLoc (
         interactiveSrcSpan,
         srcLocSpan, realSrcLocSpan,
         combineSrcSpans,
+        combinePsSpans, 
         srcSpanFirstCharacter,
+        shrinkSrcSpan,
 
         srcSpanStart, srcSpanEnd,
         realSrcSpanStart, realSrcSpanEnd,
@@ -229,6 +231,23 @@ data UnhelpfulSpanReason
   | UnhelpfulOther !FastString
   deriving (Eq, Show)
 
+
+shrinkSrcSpan :: SrcSpan -> SrcSpan
+shrinkSrcSpan (RealSrcSpan r (Strict.Just b))
+  = RealSrcSpan (shrinkRealSrcSpan r) (Strict.Just (shrinkBufSpan b))
+shrinkSrcSpan _ = panic "shrinkSrcSpan"
+
+shrinkRealSrcSpan :: RealSrcSpan -> RealSrcSpan
+shrinkRealSrcSpan (RealSrcSpan' f sl sc el ec)
+  = assertPpr (sl == el) (text "shrinkRealSrcSpan failed same line") $
+    assertPpr (sc + 2 <= ec) (text "shrinkRealSrcSpan failed column width") $
+    RealSrcSpan' f sl (sc + 1) el (ec - 1)
+
+shrinkBufSpan :: BufSpan -> BufSpan
+shrinkBufSpan (BufSpan (BufPos s) (BufPos e))
+  = assertPpr (s + 2 <= e) (text "shrinkBufSpan failed width") $
+    BufSpan (BufPos $ s + 1) (BufPos $ e - 1)
+
 removeBufSpan :: SrcSpan -> SrcSpan
 removeBufSpan (RealSrcSpan s _) = RealSrcSpan s Strict.Nothing
 removeBufSpan s = s
@@ -312,6 +331,9 @@ combineBufSpans span1 span2 = BufSpan start end
     start = min (bufSpanStart span1) (bufSpanStart span2)
     end   = max (bufSpanEnd   span1) (bufSpanEnd   span2)
 
+combinePsSpans :: PsSpan -> PsSpan -> PsSpan
+combinePsSpans (PsSpan rs1 bs1) (PsSpan rs2 bs2)
+  = PsSpan (combineRealSrcSpans rs1 rs2) (combineBufSpans bs1 bs2)
 
 srcSpanFirstCharacter :: SrcSpan -> SrcSpan
 srcSpanFirstCharacter l@(UnhelpfulSpan {}) = l

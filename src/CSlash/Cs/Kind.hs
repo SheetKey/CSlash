@@ -10,6 +10,7 @@ module CSlash.Cs.Kind
   , module CSlash.Cs.Kind
   ) where
 
+import {-# SOURCE #-} CSlash.Language.Syntax.Expr
 import CSlash.Language.Syntax.Extension
 import CSlash.Language.Syntax.Kind
 import CSlash.Cs.Extension
@@ -36,7 +37,7 @@ type instance XLKd (CsPass _) = NoExtField
 type instance XKdVar (CsPass _) = [AddEpAnn]
 type instance XFunKd (CsPass _) = NoExtField
 type instance XQualKd (CsPass _) = NoExtField
-type instance XParKd (CsPass _) = AnnParen
+type instance XParKd (CsPass _) = (EpToken "(", EpToken ")")
 
 -- type instance XKdLT Ps = EpToken "<"
 type instance XKdLT (CsPass _) = EpToken "<"
@@ -100,3 +101,8 @@ type instance Anno (CsKind (CsPass p)) = SrcSpanAnnA
 type instance Anno (CsKdRel (CsPass p)) = SrcSpanAnnA
 
 type instance Anno [LocatedA (CsKdRel (CsPass p))] = SrcSpanAnnC
+
+-- needed for DisambETP instance
+type instance Anno [LocatedA (Match (CsPass p) (LocatedA (CsKind (CsPass p))))] = SrcSpanAnnL
+type instance Anno (Match (CsPass p) (LocatedA (CsKind (CsPass p)))) = SrcSpanAnnA
+type instance Anno (GRHS (CsPass p) (LocatedA (CsKind (CsPass p)))) = EpAnnCO

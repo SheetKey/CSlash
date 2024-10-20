@@ -180,6 +180,7 @@ type family XCsTP x
 type family XForAllTy x
 type family XQualTy x
 type family XTyVar x
+type family XUnboundTyVar x
 type family XAppTy x
 type family XFunTy x
 type family XTupleTy x
@@ -189,6 +190,13 @@ type family XParTy x
 type family XKdSig x
 type family XTyLamTy x
 type family XTyAppTy x
+type family XTySectionL x
+type family XTySectionR x
+
+-- -------------------------------------
+-- HsTupArg type families
+type family XTyPresent  x
+type family XTyMissing  x
 
 -- ---------------------------------------------------------------------
 -- CsForAllTelescope type families

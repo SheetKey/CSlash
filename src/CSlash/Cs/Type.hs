@@ -1,3 +1,4 @@
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -15,6 +16,7 @@ module CSlash.Cs.Type
   , CsPatSigType(..)
   , CsTyPat(..)
   , CsSigType(..), LCsSigType
+  , CsTyTupArg(..)
 
   , CsConDetails(..)
 
@@ -29,6 +31,7 @@ import {-# SOURCE #-} CSlash.Language.Syntax.Expr
 import CSlash.Language.Syntax.Extension
 import CSlash.Cs.Extension
 import CSlash.Cs.Kind
+import CSlash.Types.Basic
 import CSlash.Types.SrcLoc
 import CSlash.Types.Name
 import CSlash.Types.Name.Reader
@@ -82,14 +85,36 @@ mkCsTyPat x = CsTP { cstp_ext = noExtField
 type instance XForAllTy (CsPass _) = NoExtField
 type instance XQualTy (CsPass _) = NoExtField
 type instance XTyVar (CsPass _) = [AddEpAnn]
+type instance XUnboundTyVar Ps = Maybe EpAnnUnboundTyVar
+type instance XUnboundTyVar Rn = NoExtField
+type instance XUnboundTyVar Tc = DataConCantHappen
 type instance XAppTy (CsPass _) = NoExtField
 type instance XFunTy (CsPass _) = NoExtField
 type instance XTupleTy (CsPass _) = AnnParen
 type instance XSumTy (CsPass _) = AnnParen
 type instance XOpTy (CsPass _) = [AddEpAnn]
-type instance XParTy (CsPass _) = AnnParen
+type instance XParTy (CsPass _) = (EpToken "(", EpToken ")")
 type instance XKdSig (CsPass _) = [AddEpAnn]
 type instance XTyLamTy (CsPass _) = [AddEpAnn]
+
+type instance XTySectionL Ps = NoExtField
+type instance XTySectionR Ps = NoExtField
+type instance XTySectionL Rn = NoExtField
+type instance XTySectionR Rn = NoExtField
+type instance XTySectionL Tc = DataConCantHappen
+type instance XTySectionR Tc = DataConCantHappen
+
+type instance XTyPresent (CsPass _) = NoExtField
+
+type instance XTyMissing Ps = EpAnn Bool
+type instance XTyMissing Rn = NoExtField
+type instance XTyMissing Tc = NoExtField -- should be Scaled Type
+
+data EpAnnUnboundTyVar = EpAnnUnboundTyVar
+  { csUnboundTyBackquotes :: (EpaLocation, EpaLocation)
+  , csUnboundTyHole :: EpaLocation
+  }
+  deriving Data
 
 data EpArrow
   = EpU !(EpUniToken "-U>" "-★>")
@@ -107,7 +132,6 @@ instance (OutputableBndrId p) => Outputable (CsArrow (CsPass p)) where
 
 pprCsArrow :: (OutputableBndrId p) => CsArrow (CsPass p) -> SDoc
 pprCsArrow (CsArrow _ kind) = ppr kind
-
 
 {- *********************************************************************
 *                                                                      *
@@ -169,10 +193,20 @@ ppr_mono_ty (CsForAllTy {cst_tele = tele, cst_body = ty})
   = sep [pprCsForAll tele, ppr_mono_lty ty]
 ppr_mono_ty (CsQualTy _ ctxt ty) = sep [text "ppr_mono_ty CTXT", ppr_mono_lty ty]
 ppr_mono_ty (CsTyVar _ (L _ name)) = pprPrefixOcc name
+ppr_mono_ty (CsUnboundTyVar _ v) = pprPrefixOcc v
 ppr_mono_ty (CsAppTy _ fun_ty arg_ty)
   = hsep [ppr_mono_lty fun_ty, ppr_mono_lty arg_ty]
 ppr_mono_ty (CsFunTy _ mult ty1 ty2) = ppr_fun_ty mult ty1 ty2
-ppr_mono_ty (CsTupleTy _ tys) = parens (pprWithCommas ppr tys)
+ppr_mono_ty (CsTupleTy _ tys) = parens (fcat (ppr_tup_args tys))
+  where
+    ppr_tup_args [] = []
+    ppr_tup_args (TyPresent _ t : ts)
+      = (ppr_mono_lty t <> punc ts) : ppr_tup_args ts
+    ppr_tup_args (TyMissing _ : ts)
+      = punc ts : ppr_tup_args ts
+    punc (TyPresent{} : _) = comma <> space
+    punc (TyMissing{} : _) = comma
+    punc [] = empty
 ppr_mono_ty (CsSumTy _ tys) = parens (pprWithBars ppr tys)
 ppr_mono_ty (CsOpTy _ ty1 (L _ op) ty2)
   = sep [ ppr_mono_lty ty1, sep [pprOcc Infix op, ppr_mono_lty ty2 ] ]
@@ -180,6 +214,64 @@ ppr_mono_ty (CsParTy _ ty) = parens (ppr_mono_lty ty)
 ppr_mono_ty (CsKindSig _ ty kind)
   = ppr_mono_lty ty <+> colon <+> ppr kind
 ppr_mono_ty (CsTyLamTy _ _) = text "ppr_mono_ty CsTyLamTy"
+ppr_mono_ty (TySectionL _ ty op)
+  | Just pp_op <- ppr_infix_ty (unLoc op)
+  = pp_infixly pp_op
+  | otherwise
+  = pp_prefixly
+  where
+    pp_ty = pprDebugParendTy opPrec ty
+    pp_prefixly = hang (hsep [ text " \\ x_ ->", ppr op])
+                       4 (hsep [pp_ty, text "x_ )"])
+    pp_infixly v = sep [v, pp_ty]
+ppr_mono_ty (TySectionR _ op ty)
+  | Just pp_op <- ppr_infix_ty (unLoc op)
+  = pp_infixly pp_op
+  | otherwise
+  = pp_prefixly
+  where
+    pp_ty = pprDebugParendTy opPrec ty
+    pp_prefixly = hang (hsep [ text "( \\ x_ ->"
+                             , ppr op
+                             , text "x_" ])
+                        4 (pp_ty <> rparen)
+    pp_infixly v = sep [v, pp_ty]
+
+ppr_infix_ty :: (OutputableBndrId p) => CsType (CsPass p) -> Maybe SDoc
+ppr_infix_ty (CsTyVar _ (L _ v)) = Just (pprInfixOcc v)
+ppr_infix_ty (CsUnboundTyVar _ v) = Just (pprInfixOcc v)
+ppr_infix_ty _ = Nothing
+
+pprDebugParendTy :: (OutputableBndrId p) => PprPrec -> LCsType (CsPass p) -> SDoc
+pprDebugParendTy p ty = getPprDebug $ \case
+  True -> pprParendLTy p ty
+  False -> ppr_mono_lty ty
+
+pprParendLTy :: (OutputableBndrId p) => PprPrec -> LCsType (CsPass p) -> SDoc
+pprParendLTy p (L _ e) = pprParendTy p e
+
+pprParendTy :: (OutputableBndrId p) => PprPrec -> CsType (CsPass p) -> SDoc
+pprParendTy p ty
+  | csTyNeedsParens p ty = parens (pprCsType ty)
+  | otherwise = pprCsType ty
+
+csTyNeedsParens :: IsPass p => PprPrec -> CsType (CsPass p) -> Bool
+csTyNeedsParens prec = go
+  where
+    go (CsTyVar{}) = False
+    go (CsUnboundTyVar{}) = False
+    go (CsTyLamTy{}) = prec > topPrec
+    go (CsAppTy{}) = prec >= appPrec
+    go (CsOpTy{}) = prec >= opPrec
+    go (CsParTy{}) = False
+    go (CsFunTy{}) = prec > topPrec
+    go (CsTupleTy{}) = False
+    go (CsSumTy{}) = False
+    go (CsKindSig{}) = True
+    go (TySectionL{}) = True
+    go (TySectionR{}) = True
+    go (CsForAllTy{}) = prec > topPrec
+    go (CsQualTy{}) = prec > topPrec
 
 ppr_fun_ty
   :: (OutputableBndrId p)

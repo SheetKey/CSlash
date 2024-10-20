@@ -21,6 +21,7 @@ import CSlash.Parser.Annotation
 
 import CSlash.Language.Syntax.Expr
 import CSlash.Language.Syntax.Type
+import CSlash.Language.Syntax.Kind
 import CSlash.Language.Syntax.Pat
 
 -- ghc
@@ -52,7 +53,40 @@ data PsMessage
   | PsErrImportPreQualified
   | PsErrVarForTyCon !RdrName
   | PsErrPrecedenceOutOfRange !Int
+  | PsErrTypeInExpr !(CsType Ps)
+  | PsErrKindInExpr !(CsKind Ps)
+  | PsErrExpInType !(CsExpr Ps)
+  | PsErrKindInType !(CsKind Ps)
+  | PsErrNegAppInType
+  | PsErrLetInType
+  | PsErrTyLamInType
+  | PsErrCaseInType
+  | PsErrLitInType
+  | PsErrOverLitInType
+  | PsErrInBracesType
+  | PsErrSumDCType
+  | PsErrExpInKind !(CsExpr Ps)
+  | PsErrTypeInKind !(CsType Ps)
+  | PsErrKindWithSig
+  | PsErrKindOpApp
+  | PsErrKindApp
+  | PsErrNegAppInKind
+  | PsErrLetInKind
+  | PsErrLamInKind
+  | PsErrTyLamInKind
+  | PsErrCaseInKind
+  | PsErrKindCon
+  | PsErrLitInKind
+  | PsErrOverLitInKind
+  | PsErrSumOrTupleKind
+  | PsErrWildCardKind
+  | PsErrInBracesKind
+  | PsErrKindSection
+  | PsErrTypeInPat !(CsType Ps)
+  | PsErrKindInPat !(CsKind Ps)
   | PsErrIfInPat -- replaces PsErrIfThenElseInPat
+  | PsErrIfInType
+  | PsErrIfInKind
   | PsErrLambdaInPat 
   | PsErrTyLambdaInPat 
   | PsErrCaseInPat
@@ -64,6 +98,7 @@ data PsMessage
   | PsErrUnexpectedAsPat
   | PsErrCaseInFunAppExpr !(LCsExpr Ps)
   | PsErrLambdaInFunAppExpr !(LCsExpr Ps)
+  | PsErrLambdaInTyFunAppExpr !(LCsType Ps)
   | PsErrLetInFunAppExpr !(LCsExpr Ps)
   | PsErrIfInFunAppExpr !(LCsExpr Ps)
   | PsErrMalformedTyDecl !(LocatedN RdrName)
@@ -75,8 +110,9 @@ data PsMessage
                               [LCsTypeArg Ps]
                               !SDoc
   | PsErrInPat !(PatBuilder Ps) !PsErrInPatDetails
-  | PsErrInTyPat !(CsType Ps)
+  | PsErrInTyPat !(PatBuilder Ps) !PsErrInPatDetails
   | PsErrUnicodeCharLooksLike Char Char String
+  | PsErrParseLeftOpSectionInPat !(PatBuilder Ps) !RdrName
   | PsErrParseRightOpSectionInPat !RdrName !(PatBuilder Ps)
   | PsErrInvalidKindRelation !RdrName
   deriving Generic

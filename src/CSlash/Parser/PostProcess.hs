@@ -4,7 +4,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE BangPatterns #-}
 
@@ -89,16 +88,16 @@ fixValbindsAnn :: EpAnn AnnList -> EpAnn AnnList
 fixValbindsAnn (EpAnn anchor (AnnList ma o c r t) cs)
   = (EpAnn (widenAnchor anchor (r ++ map trailingAnnToAddEpAnn t)) (AnnList ma o c r t) cs)
 
-mkCsTyLamTy
-  :: SrcSpan
-  -> (LocatedL [LMatch Ps (LCsType Ps)])
-  -> [AddEpAnn]
-  -> P (LCsType Ps)
-mkCsTyLamTy l (L lm m) anns = do
-  !cs <- getCommentsFor l
-  let mg = mkTyLamTyMatchGroup FromSource (L lm m)
-  checkTyLamTyMatchGroup l mg
-  return $ L (EpAnn (spanAsAnchor l) noAnn cs) (CsTyLamTy anns mg)
+-- mkCsTyLamTy
+--   :: SrcSpan
+--   -> (LocatedL [LMatch Ps (LCsType Ps)])
+--   -> [AddEpAnn]
+--   -> P (LCsType Ps)
+-- mkCsTyLamTy l (L lm m) anns = do
+--   !cs <- getCommentsFor l
+--   let mg = mkTyLamTyMatchGroup FromSource (L lm m)
+--   checkTyLamTyMatchGroup l mg
+--   return $ L (EpAnn (spanAsAnchor l) noAnn cs) (CsTyLamTy anns mg)
 
 {- **********************************************************************
 
@@ -130,7 +129,6 @@ cvBindsAndSigs fb = return $ partitionBindsAndSigs $ fromOL fb
 
 *********************************************************************** -}
 
-
 -- GHC checkTyClHdr
 checkTyHdr :: LocatedN RdrName -> P EpAnnComments
 checkTyHdr ty@(L l name)
@@ -148,71 +146,96 @@ checkExpBlockArguments = checkExpr
       CsLet {} -> check PsErrLetInFunAppExpr expr
       CsIf {} -> check PsErrIfInFunAppExpr expr
       _ -> return ()
-    check err a = addError $ mkPlainErrorMsgEnvelope (getLocA a) $ (err a)
+    check err a = addError $ mkPlainErrorMsgEnvelope (getLocA a) (err a)
+
+checkTypeArguments :: LCsType Ps -> PV ()
+checkTypeArguments ty = case unLoc ty of
+  CsTyLamTy {} -> check PsErrLambdaInTyFunAppExpr ty
+  _ -> return ()
+  where
+    check err a = addError $ mkPlainErrorMsgEnvelope (getLocA a) (err a)
       
 -- -------------------------------------------------------------------------
 -- Checking Patterns.
 
-checkTyPattern :: Maybe (Located Token) -> LCsType Ps -> Maybe (Located Token) -> P (LPat Ps)
-checkTyPattern moc (L l@(EpAnn anc an _) t) mcc = do
-  (L l' p, cs) <- checkTyPat (EpAnn anc an emptyComments) emptyComments moc (L l t) mcc
-  return (L (addCommentsToEpAnn l' cs) p)
+-- checkTyPattern :: Maybe (Located Token) -> LCsType Ps -> Maybe (Located Token) -> P (LPat Ps)
+-- checkTyPattern moc (L l@(EpAnn anc an _) t) mcc = do
+--   (L l' p, cs) <- checkTyPat (EpAnn anc an emptyComments) emptyComments moc (L l t) mcc
+--   return (L (addCommentsToEpAnn l' cs) p)
+
+-- checkTyPat
+--   :: SrcSpanAnnA
+--   -> EpAnnComments
+--   -> Maybe (Located Token)
+--   -> LCsType Ps
+--   -> Maybe (Located Token)
+--   -> P (LPat Ps, EpAnnComments)
+-- checkTyPat loc cs moc ty mcc = case (moc, mcc) of
+--   (Just oc, Just cc) -> do (p, cs') <- checkTyPat' loc cs ty
+--                            let loc' = combineSrcSpans (getHasLoc oc) (getHasLoc cc)
+--                                impPatAnn = EpAnnImpPat (EpTok $ EpaSpan $ getHasLoc oc)
+--                                                        (EpTok $ EpaSpan $ getHasLoc cc)
+--                            return ( L (EpAnn (spanAsAnchor loc') noAnn cs')
+--                                       (ImpPat impPatAnn p)
+--                                   , cs' )
+--   (Nothing, Nothing) -> checkTyPat' loc cs ty
+--   _ -> panic "checkTyPat"
+
+-- checkTyPat'
+--   :: SrcSpanAnnA
+--   -> EpAnnComments
+--   -> LCsType Ps
+--   -> P (LPat Ps, EpAnnComments)
+-- checkTyPat' loc cs (L l (CsTyVar an id))
+--   = pure (L l (TyVarPat noExtField id), cs)
+-- checkTyPat' loc cs (L l (CsParTy ann ty)) = do
+--   p <- checkTyPattern Nothing ty Nothing
+--   return (L l (ParPat ann p), cs)
+-- checkTyPat' loc cs (L l (CsKindSig an ty kd)) = do
+--   p <- checkVarTyPattern ty
+--   return (L l (KdSigPat an p (CsPSK noAnn kd)), cs)
+-- checkTyPat' loc _ ty
+--   = addFatalError $ mkPlainErrorMsgEnvelope (locA loc) $ PsErrInTyPat (unLoc ty)
+
+-- checkVarTyPattern :: LCsType Ps -> P (LPat Ps)
+-- checkVarTyPattern (L l@(EpAnn anc an _) t) = do
+--   (L l' p, cs) <- checkVarTyPat (EpAnn anc an emptyComments) emptyComments (L l t)
+--   return (L (addCommentsToEpAnn l' cs) p)
+
+-- checkVarTyPat
+--   :: SrcSpanAnnA
+--   -> EpAnnComments
+--   -> LCsType Ps
+--   -> P (LPat Ps, EpAnnComments)
+-- checkVarTyPat loc cs (L l (CsTyVar an id)) = pure (L l (TyVarPat noExtField id), cs)
+-- checkVarTyPat loc cs (L l (CsParTy ann ty)) = do
+--   p <- checkVarTyPattern ty
+--   return (L l (ParPat ann p), cs)
+-- checkVarTyPat loc _ ty
+--   = addFatalError $ mkPlainErrorMsgEnvelope (locA loc) $ PsErrInTyPat (unLoc ty)
+
+checkLImpTyPattern :: LocatedA (PatBuilder Ps) -> PV (LPat Ps)
+checkLImpTyPattern (L l@(EpAnn anc an _) p) = do
+  (L l' p', cs) <- checkTyPat (EpAnn anc an emptyComments) emptyComments (L l p)
+  return (L (addCommentsToEpAnn l' cs) p')
 
 checkTyPat
-  :: SrcSpanAnnA
-  -> EpAnnComments
-  -> Maybe (Located Token)
-  -> LCsType Ps
-  -> Maybe (Located Token)
-  -> P (LPat Ps, EpAnnComments)
-checkTyPat loc cs moc ty mcc = case (moc, mcc) of
-  (Just oc, Just cc) -> do (p, cs') <- checkTyPat' loc cs ty
-                           let loc' = combineSrcSpans (getHasLoc oc) (getHasLoc cc)
-                               impPatAnn = EpAnnImpPat (EpTok $ EpaSpan $ getHasLoc oc)
-                                                       (EpTok $ EpaSpan $ getHasLoc cc)
-                           return ( L (EpAnn (spanAsAnchor loc') noAnn cs')
-                                      (ImpPat impPatAnn p)
-                                  , cs' )
-  (Nothing, Nothing) -> checkTyPat' loc cs ty
-  _ -> panic "checkTyPat"
+  :: SrcSpanAnnA -> EpAnnComments -> LocatedA (PatBuilder Ps) -> PV (LPat Ps, EpAnnComments)
+checkTyPat loc cs (L l t) = do
+  p <- checkATyPat loc t
+  return (L l p, cs)
 
-checkTyPat'
-  :: SrcSpanAnnA
-  -> EpAnnComments
-  -> LCsType Ps
-  -> P (LPat Ps, EpAnnComments)
-checkTyPat' loc cs (L l (CsTyVar an id))
-  = pure (L l (TyVarPat noExtField id), cs)
-checkTyPat' loc cs (L l (CsParTy an ty)) = do
-  p <- checkTyPattern Nothing ty Nothing
-  massert (ap_adornment an == AnnParens)
-  let lpar = EpTok $ ap_open an
-      rpar = EpTok $ ap_close an
-  return (L l (ParPat (lpar, rpar) p), cs)
-checkTyPat' loc cs (L l (CsKindSig an ty kd)) = do
-  p <- checkVarTyPattern ty
-  return (L l (KdSigPat an p (CsPSK noAnn kd)), cs)
-checkTyPat' loc _ ty
-  = addFatalError $ mkPlainErrorMsgEnvelope (locA loc) $ PsErrInTyPat (unLoc ty)
-
-checkVarTyPattern :: LCsType Ps -> P (LPat Ps)
-checkVarTyPattern (L l@(EpAnn anc an _) t) = do
-  (L l' p, cs) <- checkVarTyPat (EpAnn anc an emptyComments) emptyComments (L l t)
-  return (L (addCommentsToEpAnn l' cs) p)
-
-checkVarTyPat
-  :: SrcSpanAnnA
-  -> EpAnnComments
-  -> LCsType Ps
-  -> P (LPat Ps, EpAnnComments)
-checkVarTyPat loc cs (L l (CsTyVar an id)) = pure (L l (TyVarPat noExtField id), cs)
-checkVarTyPat loc cs (L l (CsParTy an ty)) = do
-  p <- checkVarTyPattern ty
-  let lpar = EpTok $ ap_open an
-      rpar = EpTok $ ap_close an
-  return (L l (ParPat (lpar, rpar) p), cs)
-checkVarTyPat loc _ ty
-  = addFatalError $ mkPlainErrorMsgEnvelope (locA loc) $ PsErrInTyPat (unLoc ty)
+checkATyPat :: SrcSpanAnnA -> PatBuilder Ps -> PV (Pat Ps)
+checkATyPat loc t0 =
+  case t0 of
+    PatBuilderPat p -> return p
+    PatBuilderVar x -> return (TyVarPat noExtField x)
+    PatBuilderPar lpar t rpar -> do
+      p <- checkLImpTyPattern t
+      return (ParPat (lpar, rpar) p)
+    _ -> do
+      details <- fromParseContext <$> askParseContext
+      patFail (locA loc) (PsErrInTyPat t0 details)
 
 checkPattern :: LocatedA (PatBuilder Ps) -> P (LPat Ps)
 checkPattern = runPV . checkLPat
@@ -233,14 +256,18 @@ checkPat
   -> [LPat Ps]
   -> PV (LPat Ps, EpAnnComments)
 checkPat loc cs (L l e@(PatBuilderVar (L ln c))) tyargs args
-  | isRdrDataCon c = return ( L loc $ ConPat
-                              { pat_con_ext = noAnn
-                              , pat_con = L ln c
-                              , pat_args = PrefixCon tyargs args
-                              }
-                            , comments l Semi.<> cs)
-checkPat loc cs (L la (PatBuilderAppType f t)) tyargs args =
-  checkPat loc (cs Semi.<> comments la) f (CsConPatTyArg noExtField t : tyargs) args
+  | not (isRdrUnknown c) = panic "checkPat1"
+checkPat loc cs (L l e@(PatBuilderCon (L ln c))) tyargs args
+  | not (isRdrUnknown c) = panic "checkPat2"
+  | otherwise
+  = return ( L loc $ ConPat
+             { pat_con_ext = noAnn
+             , pat_con = L ln (unknownToData c)
+             , pat_args = PrefixCon tyargs args
+             }
+           , comments l Semi.<> cs )
+checkPat loc cs (L la (PatBuilderAppType f t anns)) tyargs args =
+  checkPat loc (cs Semi.<> comments la) f (CsConPatTyArg anns t : tyargs) args
 checkPat loc cs (L la (PatBuilderApp f e)) [] args = do
   p <- checkLPat e
   checkPat loc (cs Semi.<> comments la) f [] (p : args)
@@ -252,22 +279,27 @@ checkPat loc _ e _ _ = do
   patFail (locA loc) (PsErrInPat (unLoc e) details)
 
 checkAPat :: SrcSpanAnnA -> PatBuilder Ps -> PV (Pat Ps)
-checkAPat loc e0 = do
+checkAPat loc e0 = 
   case e0 of
     PatBuilderPat p -> return p
-    PatBuilderVar x -> return (VarPat noExtField x)
+    PatBuilderVar (L l v)
+      | not (isRdrUnknown v) -> panic "checkAPat1"
+      | otherwise -> return (VarPat noExtField (L l (unknownToVar v)))
     PatBuilderOverLit pos_lit -> return (mkNPat (L (l2l loc) pos_lit) Nothing noAnn)
     PatBuilderOpApp _ op _ _
       | opIsAt (unLoc op) -> do
           addError $ mkPlainErrorMsgEnvelope (getLocA op) PsErrAtInPatPos
           return (WildPat noExtField)
     PatBuilderOpApp l (L cl c) r anns
-      | isRdrDataCon c -> do
+      | not (isRdrUnknown c) -> panic "checkAPat2"
+    PatBuilderConOpApp l (L cl c) r anns
+      | not (isRdrUnknown c) -> panic "checkAPat3"
+      | otherwise -> do
           l <- checkLPat l
           r <- checkLPat r
           return $ ConPat
             { pat_con_ext = anns
-            , pat_con = L cl c
+            , pat_con = L cl (unknownToData c)
             , pat_args = InfixCon l r
             }
     PatBuilderPar lpar e rpar -> do
@@ -304,28 +336,28 @@ checkLayoutIfThenElse err guardExpr semiThen thenExpr semiElse elseExpr
 -- -------------------------------------------------------------------------
 -- Expression/command/pattern ambiguity.
 
-newtype ECP
-  = ECP { unECP :: forall b. DisambECP b => PV (LocatedA b) }
+-- newtype ECP
+--   = ECP { unECP :: forall b. DisambECP b => PV (LocatedA b) }
 
-ecpFromExp :: LCsExpr Ps -> ECP
-ecpFromExp a = ECP (ecpFromExp' a)
+-- ecpFromExp :: LCsExpr Ps -> ECP
+-- ecpFromExp a = ECP (ecpFromExp' a)
 
--- Currently NOT setting the namespace
-class DisambInfixOp b where
-  mkCsVarOpPV :: LocatedN RdrName -> PV (LocatedN b)
-  mkCsConOpPV :: LocatedN RdrName -> PV (LocatedN b)
+-- -- Currently NOT setting the namespace
+-- class DisambInfixOp b where
+--   mkCsVarOpPV :: LocatedN RdrName -> PV (LocatedN b)
+--   mkCsConOpPV :: LocatedN RdrName -> PV (LocatedN b)
 
-instance DisambInfixOp (CsExpr Ps) where
-  mkCsVarOpPV (L l rn) = assert (isRdrUnknown rn) $
-                         return $ L l (CsVar noExtField (L l rn))
-  mkCsConOpPV (L l rn) = assert (isRdrUnknown rn) $
-                         return $ L l (CsVar noExtField (L l rn))
+-- instance DisambInfixOp (CsExpr Ps) where
+--   mkCsVarOpPV (L l rn) = assert (isRdrUnknown rn) $
+--                          return $ L l (CsVar noExtField (L l rn))
+--   mkCsConOpPV (L l rn) = assert (isRdrUnknown rn) $
+--                          return $ L l (CsVar noExtField (L l rn))
 
-instance DisambInfixOp RdrName where
-  mkCsVarOpPV (L l v) = assert (isRdrUnknown v) $
-                        return $ L l v
-  mkCsConOpPV (L l v) = assert (isRdrUnknown v) $
-                        return $ L l v
+-- instance DisambInfixOp RdrName where
+--   mkCsVarOpPV (L l v) = assert (isRdrUnknown v) $
+--                         return $ L l v
+--   mkCsConOpPV (L l v) = assert (isRdrUnknown v) $
+--                         return $ L l v
 
 type AnnoBody b
   = ( Anno (GRHS Ps (LocatedA (Body b Ps))) ~ EpAnnCO
@@ -336,9 +368,30 @@ type AnnoBody b
                       (LocatedA (Body (Body (Body b Ps) Ps) Ps)))] ~ SrcSpanAnnL
     )
 
-class (b ~ (Body b) Ps, AnnoBody b) => DisambECP b where
+newtype ETP = ETP { unETP :: forall b. DisambETP b => PV (LocatedA b) }
+
+etpFromExp :: LCsExpr Ps -> ETP
+etpFromExp a = ETP (etpFromExp' a)
+
+etpFromTy :: LCsType Ps -> ETP
+etpFromTy a = ETP (etpFromTy' a)
+
+etpFromKd :: LCsKind Ps -> ETP
+etpFromKd a = ETP (etpFromKd' a)
+
+class (b ~ (Body b) Ps, AnnoBody b) => DisambETP b where
   type Body b :: K.Type -> K.Type
-  ecpFromExp' :: LCsExpr Ps -> PV (LocatedA b)
+  etpFromExp' :: LCsExpr Ps -> PV (LocatedA b)
+  etpFromTy' :: LCsType Ps -> PV (LocatedA b)
+  etpFromKd' :: LCsKind Ps -> PV (LocatedA b)
+  type SigTy b
+  superSigPV :: (DisambETP (SigTy b) => PV (LocatedA b)) -> PV (LocatedA b)
+  mkCsSigPV :: SrcSpanAnnA -> LocatedA b -> LocatedA (SigTy b) -> [AddEpAnn] -> PV (LocatedA b)
+  mkCsOpAppPV :: SrcSpan -> LocatedA b -> LocatedN RdrName -> LocatedA b -> PV (LocatedA b)
+  mkCsConOpAppPV :: SrcSpan -> LocatedA b -> LocatedN RdrName -> LocatedA b -> PV (LocatedA b)
+  mkCsAppPV :: SrcSpanAnnA -> LocatedA b -> LocatedA b -> PV (LocatedA b)
+  mkCsAsPatPV :: SrcSpan -> LocatedN RdrName -> EpToken "@" -> LocatedA b -> PV (LocatedA b)
+  mkCsNegAppPV :: SrcSpan -> LocatedA b -> [AddEpAnn] -> PV (LocatedA b)
   mkCsLetPV
     :: SrcSpan
     -> EpToken "let"
@@ -346,41 +399,15 @@ class (b ~ (Body b) Ps, AnnoBody b) => DisambECP b where
     -> EpToken "in"
     -> LocatedA b
     -> PV (LocatedA b)
-  type InfixOp b
-  superInfixOp :: (DisambInfixOp (InfixOp b) => PV (LocatedA b)) -> PV (LocatedA b)
-  mkCsOpAppPV
+  mkCsLamPV 
     :: SrcSpan
-    -> LocatedA b
-    -> LocatedN (InfixOp b)
-    -> LocatedA b
-    -> PV (LocatedA b)
-  mkCsCasePV
-    :: SrcSpan
-    -> LCsExpr Ps
-    -> (LocatedL [LMatch Ps (LocatedA b)])
-    -> EpAnnCsCase
-    -> PV (LocatedA b)
-  mkCsLamPV
-    :: SrcSpan
-    -> (LocatedL [LMatch Ps (LocatedA b)])
+    -> (CsMatchContext fn -> LocatedL [LMatch Ps (LocatedA b)])
     -> [AddEpAnn]
     -> PV (LocatedA b)
   mkCsTyLamPV
     :: SrcSpan
     -> (LocatedL [LMatch Ps (LocatedA b)])
     -> [AddEpAnn]
-    -> PV (LocatedA b)
-  type FunArg b
-  superFunArg :: (DisambECP (FunArg b) => PV (LocatedA b)) -> PV (LocatedA b)
-  mkCsAppPV
-    :: SrcSpanAnnA
-    -> LocatedA b
-    -> LocatedA (FunArg b)
-    -> PV (LocatedA b)
-  mkCsAppTypePV
-    :: SrcSpanAnnA
-    -> LocatedA b
-    -> LCsType Ps
     -> PV (LocatedA b)
   mkCsIfPV
     :: SrcSpan
@@ -391,16 +418,389 @@ class (b ~ (Body b) Ps, AnnoBody b) => DisambECP b where
     -> LocatedA b
     -> AnnsIf
     -> PV (LocatedA b)
-  mkCsParPV :: SrcSpan -> EpToken "(" -> LocatedA b -> EpToken ")" -> PV (LocatedA b)
+  mkCsCasePV
+    :: SrcSpan
+    -> LCsExpr Ps
+    -> (LocatedL [LMatch Ps (LocatedA b)])
+    -> EpAnnCsCase
+    -> PV (LocatedA b)
   mkCsVarPV :: LocatedN RdrName -> PV (LocatedA b)
+  mkCsConPV :: LocatedN RdrName -> PV (LocatedA b)
   mkCsLitPV :: Located (CsLit Ps) -> PV (LocatedA b)
   mkCsOverLitPV :: LocatedAn a (CsOverLit Ps) -> PV (LocatedAn a b)
+  mkCsParPV :: SrcSpan -> EpToken "(" -> LocatedA b -> EpToken ")" -> PV (LocatedA b)
+  mkCsSumOrTuplePV :: SrcSpanAnnA -> SumOrTuple b -> [AddEpAnn] -> PV (LocatedA b)
   mkCsWildCardPV :: (NoAnn a) => SrcSpan -> PV (LocatedAn a b)
-  mkCsTySigPV :: SrcSpanAnnA -> LocatedA b -> LCsType Ps -> [AddEpAnn] -> PV (LocatedA b)
-  mkCsNegAppPV :: SrcSpan -> LocatedA b -> [AddEpAnn] -> PV (LocatedA b)
-  mkCsSectionR_PV :: SrcSpan -> LocatedA (InfixOp b) -> LocatedA b -> PV (LocatedA b)
-  mkCsAsPatPV :: SrcSpan -> LocatedN RdrName -> EpToken "@" -> LocatedA b -> PV (LocatedA b)
-  mkSumOrTuplePV :: SrcSpanAnnA -> SumOrTuple b -> [AddEpAnn] -> PV (LocatedA b)
+  type InBraces b
+  superBracesPV :: (DisambETP (InBraces b) => PV (LocatedA b)) -> PV (LocatedA b)
+  mkCsInBracesPV :: SrcSpan -> LocatedA (InBraces b) -> [AddEpAnn] -> PV (LocatedA b)
+  mkCsVarSectionL :: SrcSpan -> LocatedA b -> LocatedN RdrName -> PV (LocatedA b)
+  mkCsConSectionL :: SrcSpan -> LocatedA b -> LocatedN RdrName -> PV (LocatedA b)
+  mkCsVarSectionR :: SrcSpan -> LocatedN RdrName -> LocatedA b -> PV (LocatedA b)
+  mkCsConSectionR :: SrcSpan -> LocatedN RdrName -> LocatedA b -> PV (LocatedA b)
+
+instance DisambETP (CsExpr Ps) where
+  type Body (CsExpr Ps) = CsExpr
+  etpFromExp' = return
+  etpFromTy' (L l t) = addFatalError $ mkPlainErrorMsgEnvelope (locA l) $ PsErrTypeInExpr t
+  etpFromKd' (L l k) = addFatalError $ mkPlainErrorMsgEnvelope (locA l) $ PsErrKindInExpr k
+  type SigTy (CsExpr Ps) = CsType Ps
+  superSigPV e = e
+  mkCsSigPV l@(EpAnn anc an csIn) e sig anns = do
+    !cs <- getCommentsFor (locA l)
+    return $ L (EpAnn anc an (csIn Semi.<> cs)) (ExprWithTySig anns e (csTypeToCsSigType sig))
+  mkCsOpAppPV l e1 op@(L opl@(EpAnn anc _ _) n) e2 = do
+    !vcs <- getCommentsFor (getHasLoc opl)
+    massert (isRdrUnknown n)
+    let nsOp = L opl (unknownToVar n)
+        op' = L (EpAnn anc (noAnn :: NameAnn) vcs) (CsVar noExtField nsOp)
+    !cs <- getCommentsFor l
+    return $ L (EpAnn (spanAsAnchor l) noAnn cs) $ OpApp [] e1 (reLoc op') e2
+  mkCsConOpAppPV l e1 op@(L opl@(EpAnn anc _ _) n) e2 = do
+    !vcs <- getCommentsFor (getHasLoc opl)
+    massert (isRdrUnknown n)
+    let nsOp = L opl (unknownToData n)
+        op' = L (EpAnn anc (noAnn :: NameAnn) vcs) (CsVar noExtField nsOp)
+    !cs <- getCommentsFor l
+    return $ L (EpAnn (spanAsAnchor l) noAnn cs) $ OpApp [] e1 (reLoc op') e2
+  mkCsAppPV l e1 e2 = do
+    checkExpBlockArguments e1
+    checkExpBlockArguments e2
+    return $ L l (CsApp noExtField e1 e2)
+  mkCsAsPatPV l v _ e = addError (mkPlainErrorMsgEnvelope l PsErrUnexpectedAsPat)
+                        >> return (L (noAnnSrcSpan l) (csHoleExpr noAnn))
+  mkCsNegAppPV l a anns = do
+    !cs <- getCommentsFor l
+    return $ L (EpAnn (spanAsAnchor l) noAnn cs) (NegApp anns a noSyntaxExpr)
+  mkCsLetPV l tkLet bs tkIn c = do
+    !cs <- getCommentsFor l
+    return $ L (EpAnn (spanAsAnchor l) noAnn cs) (CsLet (tkLet, tkIn) bs c)
+  mkCsLamPV l mkMatch anns = do
+    !cs <- getCommentsFor l
+    let m = mkMatch LamAlt
+        mg = mkLamMatchGroup FromSource m
+    checkLamMatchGroup l mg
+    return $ L (EpAnn (spanAsAnchor l) noAnn cs) (CsLam anns mg)
+  mkCsTyLamPV l m anns = do
+    !cs <- getCommentsFor l
+    let mg = mkTyLamMatchGroup FromSource m
+    checkTyLamMatchGroup l mg
+    return $ L (EpAnn (spanAsAnchor l) noAnn cs) (CsTyLam anns mg)
+  mkCsIfPV l c semi1 a semi2 b anns = do
+    checkLayoutIfThenElse PsErrSemiColonsInCondExpr c semi1 a semi2 b
+    !cs <- getCommentsFor l
+    return $ L (EpAnn (spanAsAnchor l) noAnn cs) (mkCsIf c a b anns)
+  mkCsCasePV l e m anns = do
+    !cs <- getCommentsFor l
+    let mg = mkMatchGroup FromSource m
+    return $ L (EpAnn (spanAsAnchor l) noAnn cs) (CsCase anns e mg)
+  mkCsVarPV v@(L l@(EpAnn anc _ _) n) = do
+    !cs <- getCommentsFor (getHasLoc l)
+    massert (isRdrUnknown n)
+    let v' = L l (unknownToVar n)
+    return $ L (EpAnn anc noAnn cs) (CsVar noExtField v')
+  mkCsConPV v@(L l@(EpAnn anc _ _) n) = do
+    !cs <- getCommentsFor (getHasLoc l)
+    massert (isRdrUnknown n)
+    let v' = L l (unknownToData n)
+    return $ L (EpAnn anc noAnn cs) (CsVar noExtField v')
+  mkCsLitPV (L l a) = do
+    !cs <- getCommentsFor (getHasLoc l)
+    return $ L (EpAnn (spanAsAnchor l) noAnn cs) (CsLit noExtField a)
+  mkCsOverLitPV (L (EpAnn l an csIn) a) = do
+    !cs <- getCommentsFor (locA l)
+    return $ L (EpAnn l an (cs Semi.<> csIn)) (CsOverLit noExtField a)
+  mkCsParPV l lpar e rpar = do
+    !cs <- getCommentsFor l
+    return $ L (EpAnn (spanAsAnchor l) noAnn cs) (CsPar (lpar, rpar) e)
+  mkCsSumOrTuplePV = mkSumOrTupleExpr
+  mkCsWildCardPV l = return $ L (noAnnSrcSpan l) (csHoleExpr noAnn)
+  type InBraces (CsExpr Ps) = CsType Ps
+  superBracesPV e = e
+  mkCsInBracesPV l ty anns = do
+    !cs <- getCommentsFor l
+    return $ L (EpAnn (spanAsAnchor l) noAnn cs) (CsEmbTy anns ty)
+  mkCsVarSectionL l e op@(L opl@(EpAnn anc _ _) n) = do
+    !opcs <- getCommentsFor (getHasLoc opl)
+    massert (isRdrUnknown n)
+    let op' = L opl (unknownToVar n)
+        eop = L (EpAnn anc noAnn opcs) (CsVar noExtField op')
+    !cs <- getCommentsFor l
+    return $ L (EpAnn (spanAsAnchor l) noAnn cs) (SectionL noExtField e eop)
+  mkCsConSectionL l e op@(L opl@(EpAnn anc _ _) n) = do
+    !opcs <- getCommentsFor (getHasLoc opl)
+    massert (isRdrUnknown n)
+    let op' = L opl (unknownToData n)
+        eop = L (EpAnn anc noAnn opcs) (CsVar noExtField op')
+    !cs <- getCommentsFor l
+    return $ L (EpAnn (spanAsAnchor l) noAnn cs) (SectionL noExtField e eop)
+  mkCsVarSectionR l op@(L opl@(EpAnn anc _ _)n) e = do
+    !opcs <- getCommentsFor (getHasLoc opl)
+    massert (isRdrUnknown n)
+    let op' = L opl (unknownToVar n)
+        eop = L (EpAnn anc noAnn opcs) (CsVar noExtField op')
+    !cs <- getCommentsFor l
+    return $ L (EpAnn (spanAsAnchor l) noAnn cs) (SectionR noExtField eop e)
+  mkCsConSectionR l op@(L opl@(EpAnn anc _ _) n) e = do
+    !opcs <- getCommentsFor (getHasLoc opl)
+    massert (isRdrUnknown n)
+    let op' = L opl (unknownToData n)
+        eop = L (EpAnn anc noAnn opcs) (CsVar noExtField op')
+    !cs <- getCommentsFor l
+    return $ L (EpAnn (spanAsAnchor l) noAnn cs) (SectionR noExtField eop e)
+
+instance DisambETP (CsType Ps) where
+  type Body (CsType Ps) = CsType
+  etpFromExp' (L l e) = addFatalError $ mkPlainErrorMsgEnvelope (locA l) $ PsErrExpInType e
+  etpFromTy' = return
+  etpFromKd' (L l e) = addFatalError $ mkPlainErrorMsgEnvelope (locA l) $ PsErrKindInType e
+  type SigTy (CsType Ps) = CsKind Ps
+  superSigPV t = t
+  mkCsSigPV l@(EpAnn anc an csIn) t k anns = do
+    !cs <- getCommentsFor (locA l)
+    return $ L (EpAnn anc an (csIn Semi.<> cs)) (CsKindSig anns t k)
+  mkCsOpAppPV l t1 (L opl n) t2 = do
+    massert (isRdrUnknown n)
+    let op = L opl (unknownToTv n)
+    !cs <- getCommentsFor l
+    return $ L (EpAnn (spanAsAnchor l) noAnn cs) (CsOpTy [] t1 op t2)
+  mkCsConOpAppPV l t1 (L opl n) t2 = do
+    massert (isRdrUnknown n)
+    let op = L opl (unknownToTcCls n)
+    !cs <- getCommentsFor l
+    return $ L (EpAnn (spanAsAnchor l) noAnn cs) (CsOpTy [] t1 op t2)
+  mkCsAppPV l t1 t2 = do
+    checkTypeArguments t1
+    checkTypeArguments t2
+    return $ L l (CsAppTy noExtField t1 t2)
+  mkCsAsPatPV l v _ e = addError (mkPlainErrorMsgEnvelope l PsErrUnexpectedAsPat)
+                        >> return (L (noAnnSrcSpan l) (csHoleType noAnn))
+  mkCsNegAppPV l _ _= addFatalError $ mkPlainErrorMsgEnvelope l PsErrNegAppInType
+  mkCsLetPV l _ _ _ _ = addFatalError $ mkPlainErrorMsgEnvelope l PsErrLetInType
+  mkCsLamPV l mkMatch anns = do
+    !cs <- getCommentsFor l
+    let m = mkMatch TyLamTyAlt
+        mg = mkTyLamTyMatchGroup FromSource m
+    checkTyLamTyMatchGroup l mg
+    return $ L (EpAnn (spanAsAnchor l) noAnn cs) (CsTyLamTy anns mg)
+  mkCsTyLamPV l _ _ = addFatalError $ mkPlainErrorMsgEnvelope l PsErrTyLamInType
+  mkCsIfPV l _ _ _ _ _ _ = addFatalError $ mkPlainErrorMsgEnvelope l PsErrIfInType
+  mkCsCasePV l _ _ _ = addFatalError $ mkPlainErrorMsgEnvelope l PsErrCaseInType
+  mkCsVarPV v@(L l@(EpAnn anc _ _) n) = do
+    !cs <- getCommentsFor (getHasLoc l)
+    massert (isRdrUnknown n)
+    let v' = L l (unknownToTv n)
+    return $ L (EpAnn anc noAnn cs) (CsTyVar [] v')
+  mkCsConPV v@(L l@(EpAnn anc _ _) n) = do
+    !cs <- getCommentsFor (getHasLoc l)
+    massert (isRdrUnknown n)
+    let v' = L l (unknownToTcCls n)
+    return $ L (EpAnn anc noAnn cs) (CsTyVar [] v')
+  mkCsLitPV (L l _) = addFatalError $ mkPlainErrorMsgEnvelope (locA l) PsErrLitInType
+  mkCsOverLitPV (L l _) = addFatalError $ mkPlainErrorMsgEnvelope (locA l) PsErrOverLitInType
+  mkCsParPV l lpar t rpar = do
+    !cs <- getCommentsFor l
+    return $ L (EpAnn (spanAsAnchor l) noAnn cs) (CsParTy (lpar, rpar) t)
+  mkCsSumOrTuplePV = mkSumOrTupleType
+  mkCsWildCardPV l = return $ L (noAnnSrcSpan l) (csHoleType noAnn)
+  type InBraces (CsType Ps) = CsType Ps
+  superBracesPV t = t
+  mkCsInBracesPV l _ _ = addFatalError $ mkPlainErrorMsgEnvelope l PsErrInBracesType
+  mkCsVarSectionL l t op@(L opl@(EpAnn anc _ _) n) = do
+    !opcs <- getCommentsFor (getHasLoc l)
+    massert (isRdrUnknown n)
+    let op' = L opl (unknownToTv n)
+        top = L (EpAnn anc noAnn opcs) (CsTyVar [] op')
+    !cs <- getCommentsFor l
+    return $ L (EpAnn (spanAsAnchor l) noAnn cs) (TySectionL noExtField t top)
+  mkCsConSectionL l t op@(L opl@(EpAnn anc _ _) n) = do
+    !opcs <- getCommentsFor (getHasLoc opl)
+    massert (isRdrUnknown n)
+    let op' = L opl (unknownToTcCls n)
+        top = L (EpAnn anc noAnn opcs) (CsTyVar [] op')
+    !cs <- getCommentsFor l
+    return $ L (EpAnn (spanAsAnchor l) noAnn cs) (TySectionL noExtField t top)
+  mkCsVarSectionR l op@(L opl@(EpAnn anc _ _) n) t = do
+    !opcs <- getCommentsFor (getHasLoc l)
+    massert (isRdrUnknown n)
+    let op' = L opl (unknownToTv n)
+        top = L (EpAnn anc noAnn opcs) (CsTyVar [] op')
+    !cs <- getCommentsFor l
+    return $ L (EpAnn (spanAsAnchor l) noAnn cs) (TySectionR noExtField top t)
+  mkCsConSectionR l op@(L opl@(EpAnn anc _ _) n) t = do
+    !opcs <- getCommentsFor (getHasLoc opl)
+    massert (isRdrUnknown n)
+    let op' = L opl (unknownToTcCls n)
+        top = L (EpAnn anc noAnn opcs) (CsTyVar [] op')
+    !cs <- getCommentsFor l
+    return $ L (EpAnn (spanAsAnchor l) noAnn cs) (TySectionL noExtField top t)
+    
+instance DisambETP (CsKind Ps) where
+  type Body (CsKind Ps) = CsKind
+  etpFromExp' (L l e) = addFatalError $ mkPlainErrorMsgEnvelope (locA l) $ PsErrExpInKind e
+  etpFromTy' (L l t) = addFatalError $ mkPlainErrorMsgEnvelope (locA l) $ PsErrTypeInKind t
+  etpFromKd' = return
+  type SigTy (CsKind Ps) = CsKind Ps
+  superSigPV k = k
+  mkCsSigPV l _ _ _ = addFatalError $ mkPlainErrorMsgEnvelope (locA l) PsErrKindWithSig
+  mkCsOpAppPV l _ _ _ = addFatalError $ mkPlainErrorMsgEnvelope l PsErrKindOpApp
+  mkCsConOpAppPV l _ _ _ = addFatalError $ mkPlainErrorMsgEnvelope l PsErrKindOpApp
+  mkCsAppPV l _ _ = addFatalError $ mkPlainErrorMsgEnvelope (locA l) PsErrKindApp
+  mkCsAsPatPV l _ _ _ = addFatalError $ mkPlainErrorMsgEnvelope l PsErrUnexpectedAsPat
+  mkCsNegAppPV l _ _ = addFatalError $ mkPlainErrorMsgEnvelope l PsErrNegAppInKind
+  mkCsLetPV l _ _ _ _ = addFatalError $ mkPlainErrorMsgEnvelope l PsErrLetInKind
+  mkCsLamPV l _ _ = addFatalError $ mkPlainErrorMsgEnvelope l PsErrLamInKind
+  mkCsTyLamPV l _ _ = addFatalError $ mkPlainErrorMsgEnvelope l PsErrTyLamInKind
+  mkCsIfPV l _ _ _ _ _ _ = addFatalError $ mkPlainErrorMsgEnvelope l PsErrIfInKind
+  mkCsCasePV l _ _ _ = addFatalError $ mkPlainErrorMsgEnvelope l PsErrCaseInKind
+  mkCsVarPV v@(L l@(EpAnn anc _ _) n) = do
+    !cs <- getCommentsFor (getHasLoc l)
+    massert (isRdrUnknown n)
+    let v' = L l (unknownToKv n)
+    return $ L (EpAnn anc noAnn cs) (CsKdVar [] v')
+  mkCsConPV (L l _) = addFatalError $ mkPlainErrorMsgEnvelope (locA l) PsErrKindCon
+  mkCsLitPV (L l _) = addFatalError $ mkPlainErrorMsgEnvelope (locA l) PsErrLitInKind
+  mkCsOverLitPV (L l _) = addFatalError $ mkPlainErrorMsgEnvelope (locA l) PsErrOverLitInKind
+  mkCsParPV l lpar k rpar = do
+    !cs <- getCommentsFor l
+    return $ L (EpAnn (spanAsAnchor l) noAnn cs) (CsParKd (lpar, rpar) k)
+  mkCsSumOrTuplePV l _ _ = addFatalError $ mkPlainErrorMsgEnvelope (locA l) PsErrSumOrTupleKind
+  mkCsWildCardPV l = addFatalError $ mkPlainErrorMsgEnvelope l PsErrWildCardKind
+  type InBraces (CsKind Ps) = CsType Ps
+  superBracesPV k = k
+  mkCsInBracesPV l _ _ = addFatalError $ mkPlainErrorMsgEnvelope l PsErrInBracesKind
+  mkCsVarSectionL l _ _ = addFatalError $ mkPlainErrorMsgEnvelope l PsErrKindSection
+  mkCsConSectionL l _ _ = addFatalError $ mkPlainErrorMsgEnvelope l PsErrKindSection
+  mkCsVarSectionR l _ _ = addFatalError $ mkPlainErrorMsgEnvelope l PsErrKindSection
+  mkCsConSectionR l _ _ = addFatalError $ mkPlainErrorMsgEnvelope l PsErrKindSection
+
+-- We don't set RdrName namespaces here:
+-- PatBuilder is used to build argument patterns for term and type level lambdas.
+-- The DisambETP instances for Expr and Type should set RdrName namespaces;
+-- probably in 'mkLamMatchGroup' and others
+instance DisambETP (PatBuilder Ps) where
+  type Body (PatBuilder Ps) = PatBuilder
+  etpFromExp' (L l e) = addFatalError $ mkPlainErrorMsgEnvelope (locA l) $ PsErrArrowExprInPat e
+  etpFromTy' (L l t) = addFatalError $ mkPlainErrorMsgEnvelope (locA l) $ PsErrTypeInPat t
+  etpFromKd' (L l k) = addFatalError $ mkPlainErrorMsgEnvelope (locA l) $ PsErrKindInPat k
+  type SigTy (PatBuilder Ps) = CsType Ps
+  superSigPV p = p
+  mkCsSigPV l b sig anns = do
+    p <- checkLPat b
+    return $ L l (PatBuilderPat (SigPat anns p (mkCsPatSigType noAnn sig)))
+  mkCsOpAppPV l p1 op p2 = do
+    !cs <- getCommentsFor l
+    return $ L (EpAnn (spanAsAnchor l) noAnn cs) $ PatBuilderOpApp p1 op p2 []
+  mkCsConOpAppPV l p1 op p2 = do
+    !cs <- getCommentsFor l
+    return $ L (EpAnn (spanAsAnchor l) noAnn cs) $ PatBuilderConOpApp p1 op p2 []
+  mkCsAppPV l p1 p2 = return $ L l (PatBuilderApp p1 p2)
+  mkCsAsPatPV l v at e = do
+    p <- checkLPat e
+    !cs <- getCommentsFor l
+    return $ L (EpAnn (spanAsAnchor l) noAnn cs) (PatBuilderPat (AsPat at v p))
+  mkCsNegAppPV l (L lp p) anns = do
+    lit <- case p of
+             PatBuilderOverLit pos_lit -> return (L (l2l lp) pos_lit)
+             _ -> patFail l $ PsErrInPat p PEIP_NegApp
+    !cs <- getCommentsFor l
+    return $ L (EpAnn (spanAsAnchor l) noAnn cs)
+               (PatBuilderPat (mkNPat lit (Just noSyntaxExpr) anns))
+  mkCsLetPV l _ _ _ _ = addFatalError $ mkPlainErrorMsgEnvelope l PsErrLetInPat
+  mkCsLamPV l _ _ = addFatalError $ mkPlainErrorMsgEnvelope l PsErrLambdaInPat
+  mkCsTyLamPV l _ _ = addFatalError $ mkPlainErrorMsgEnvelope l PsErrTyLambdaInPat
+  mkCsIfPV l _ _ _ _ _ _ = addFatalError $ mkPlainErrorMsgEnvelope l PsErrIfInPat
+  mkCsCasePV l _ _ _ = addFatalError $ mkPlainErrorMsgEnvelope l PsErrCaseInPat
+  mkCsVarPV v@(L l _) = return $ L (l2l l) (PatBuilderVar v)
+  mkCsConPV v@(L l _) = return $ L (l2l l) (PatBuilderCon v)
+  mkCsLitPV lit@(L l a) = do
+    !cs <- getCommentsFor l
+    return $ L (EpAnn (spanAsAnchor l) noAnn cs) (PatBuilderPat (LitPat noExtField a))
+  mkCsOverLitPV (L l a) = return $ L l (PatBuilderOverLit a)
+  mkCsParPV l lpar p rpar = return $ L (noAnnSrcSpan l) (PatBuilderPar lpar p rpar)
+  mkCsSumOrTuplePV = mkSumOrTuplePat
+  mkCsWildCardPV l = return $ L (noAnnSrcSpan l) (PatBuilderPat (WildPat noExtField))
+  type InBraces (PatBuilder Ps) = PatBuilder Ps
+  superBracesPV p = p
+  mkCsInBracesPV l p anns = do
+    !cs <- getCommentsFor l
+    let impAnn = case anns of
+                   [AddEpAnn AnnOpenC ol, AddEpAnn AnnCloseC cl] ->
+                     EpAnnImpPat (EpTok ol) (EpTok cl)
+                   _ -> panic "mkCsInBracesPV(PatBuilder) bad anns"
+    pat <- checkLImpTyPattern p
+    return $ L (EpAnn (spanAsAnchor l) noAnn cs) (PatBuilderPat (ImpPat impAnn pat))
+  mkCsVarSectionL l p op = patFail l (PsErrParseLeftOpSectionInPat (unLoc p) (unLoc op))
+  mkCsConSectionL l p op = patFail l (PsErrParseLeftOpSectionInPat (unLoc p) (unLoc op))
+  mkCsVarSectionR l op p = patFail l (PsErrParseRightOpSectionInPat (unLoc op) (unLoc p))
+  mkCsConSectionR l op p = patFail l (PsErrParseRightOpSectionInPat (unLoc op) (unLoc p))
+  
+-- class (b ~ (Body b) Ps, AnnoBody b) => DisambECP b where
+--   type Body b :: K.Type -> K.Type
+--   ecpFromExp' :: LCsExpr Ps -> PV (LocatedA b)
+--   mkCsLetPV
+--     :: SrcSpan
+--     -> EpToken "let"
+--     -> CsLocalBinds Ps
+--     -> EpToken "in"
+--     -> LocatedA b
+--     -> PV (LocatedA b)
+--   type InfixOp b
+--   superInfixOp :: (DisambInfixOp (InfixOp b) => PV (LocatedA b)) -> PV (LocatedA b)
+--   mkCsOpAppPV
+--     :: SrcSpan
+--     -> LocatedA b
+--     -> LocatedN (InfixOp b)
+--     -> LocatedA b
+--     -> PV (LocatedA b)
+--   mkCsCasePV
+--     :: SrcSpan
+--     -> LCsExpr Ps
+--     -> (LocatedL [LMatch Ps (LocatedA b)])
+--     -> EpAnnCsCase
+--     -> PV (LocatedA b)
+--   mkCsLamPV
+--     :: SrcSpan
+--     -> (LocatedL [LMatch Ps (LocatedA b)])
+--     -> [AddEpAnn]
+--     -> PV (LocatedA b)
+--   mkCsTyLamPV
+--     :: SrcSpan
+--     -> (LocatedL [LMatch Ps (LocatedA b)])
+--     -> [AddEpAnn]
+--     -> PV (LocatedA b)
+--   type FunArg b
+--   superFunArg :: (DisambECP (FunArg b) => PV (LocatedA b)) -> PV (LocatedA b)
+--   mkCsAppPV
+--     :: SrcSpanAnnA
+--     -> LocatedA b
+--     -> LocatedA (FunArg b)
+--     -> PV (LocatedA b)
+--   mkCsAppTypePV
+--     :: SrcSpanAnnA
+--     -> LocatedA b
+--     -> LCsType Ps
+--     -> [AddEpAnn]
+--     -> PV (LocatedA b)
+--   mkCsIfPV
+--     :: SrcSpan
+--     -> LCsExpr Ps
+--     -> Bool        -- semicolon? (I.e., newline)
+--     -> LocatedA b
+--     -> Bool        -- semicolon? (I.e., newline)
+--     -> LocatedA b
+--     -> AnnsIf
+--     -> PV (LocatedA b)
+--   mkCsParPV :: SrcSpan -> EpToken "(" -> LocatedA b -> EpToken ")" -> PV (LocatedA b)
+--   mkCsVarPV :: LocatedN RdrName -> PV (LocatedA b)
+--   mkCsLitPV :: Located (CsLit Ps) -> PV (LocatedA b)
+--   mkCsOverLitPV :: LocatedAn a (CsOverLit Ps) -> PV (LocatedAn a b)
+--   mkCsWildCardPV :: (NoAnn a) => SrcSpan -> PV (LocatedAn a b)
+--   mkCsTySigPV :: SrcSpanAnnA -> LocatedA b -> LCsType Ps -> [AddEpAnn] -> PV (LocatedA b)
+--   mkCsNegAppPV :: SrcSpan -> LocatedA b -> [AddEpAnn] -> PV (LocatedA b)
+--   mkCsSectionR_PV :: SrcSpan -> LocatedA (InfixOp b) -> LocatedA b -> PV (LocatedA b)
+--   mkCsAsPatPV :: SrcSpan -> LocatedN RdrName -> EpToken "@" -> LocatedA b -> PV (LocatedA b)
+--   mkSumOrTuplePV :: SrcSpanAnnA -> SumOrTuple b -> [AddEpAnn] -> PV (LocatedA b)
 
 checkLamMatchGroup :: SrcSpan -> MatchGroup Ps (LCsExpr Ps) -> PV ()
 checkLamMatchGroup l (MG { mg_alts = (L _ (matches:_)) }) = do
@@ -412,120 +812,123 @@ checkTyLamMatchGroup l (MG { mg_alts = (L _ (matches:_)) }) = do
   when (null (csLMatchPats matches)) $ addError $ mkPlainErrorMsgEnvelope l PsErrEmptyTyLam
 checkTyLamMatchGroup _ _ = panic "checkTyLamMatchGroup"
 
-checkTyLamTyMatchGroup :: SrcSpan -> MatchGroup Ps (LCsType Ps) -> P ()
+checkTyLamTyMatchGroup :: SrcSpan -> MatchGroup Ps (LCsType Ps) -> PV ()
 checkTyLamTyMatchGroup l (MG { mg_alts = (L _ (matches:_)) }) = do
   when (null (csLMatchPats matches)) $ addError $ mkPlainErrorMsgEnvelope l PsErrEmptyTyLamTy
 checkTyLamTyMatchGroup _ _ = panic "checkTyLamTyMatchGroup"
 
-instance DisambECP (CsExpr Ps) where
-  type Body (CsExpr Ps) = CsExpr
-  ecpFromExp' = return
-  mkCsLetPV l tkLet bs tkIn c = do
-    !cs <- getCommentsFor l
-    return $ L (EpAnn (spanAsAnchor l) noAnn cs) (CsLet (tkLet, tkIn) bs c)
-  type InfixOp (CsExpr Ps) = CsExpr Ps
-  superInfixOp m = m
-  mkCsOpAppPV l e1 op e2 = do
-    !cs <- getCommentsFor l
-    return $ L (EpAnn (spanAsAnchor l) noAnn cs) $ OpApp [] e1 (reLoc op) e2
-  mkCsCasePV l e (L lm m) anns = do
-    !cs <- getCommentsFor l
-    let mg = mkMatchGroup FromSource (L lm m)
-    return $ L (EpAnn (spanAsAnchor l) noAnn cs) (CsCase anns e mg)
-  mkCsLamPV l (L lm m) anns = do
-    !cs <- getCommentsFor l
-    let mg = mkLamMatchGroup FromSource (L lm m)
-    checkLamMatchGroup l mg
-    return $ L (EpAnn (spanAsAnchor l) noAnn cs) (CsLam anns mg)
-  mkCsTyLamPV l (L lm m) anns = do
-    !cs <- getCommentsFor l
-    let mg = mkTyLamMatchGroup FromSource (L lm m)
-    checkTyLamMatchGroup l mg
-    return $ L (EpAnn (spanAsAnchor l) noAnn cs) (CsTyLam anns mg)
-  type FunArg (CsExpr Ps) = CsExpr Ps
-  superFunArg m = m
-  mkCsAppPV l e1 e2 = do
-    checkExpBlockArguments e1
-    checkExpBlockArguments e2
-    return $ L l (CsApp noExtField e1 e2)
-  mkCsAppTypePV l e t = do
-    checkExpBlockArguments e
-    return $ L l (CsTyApp noExtField e (L (l2l t) $ CsEmbTy noExtField t))
-  mkCsIfPV l c semi1 a semi2 b anns = do
-    checkLayoutIfThenElse PsErrSemiColonsInCondExpr c semi1 a semi2 b
-    !cs <- getCommentsFor l
-    return $ L (EpAnn (spanAsAnchor l) noAnn cs) (mkCsIf c a b anns)
-  mkCsParPV l lpar e rpar = do
-    !cs <- getCommentsFor l
-    return $ L (EpAnn (spanAsAnchor l) noAnn cs) (CsPar (lpar, rpar) e)
-  mkCsVarPV v@(L l@(EpAnn anc _ _) _) = do
-    !cs <- getCommentsFor (getHasLoc l)
-    return $ L (EpAnn anc noAnn cs) (CsVar noExtField v)
-  mkCsLitPV (L l a) = do
-    !cs <- getCommentsFor l
-    return $ L (EpAnn (spanAsAnchor l) noAnn cs) (CsLit noExtField a)
-  mkCsOverLitPV (L (EpAnn l an csIn) a) = do
-    !cs <- getCommentsFor (locA l)
-    return $ L (EpAnn l an (cs Semi.<> csIn)) (CsOverLit noExtField a)
-  mkCsWildCardPV l = return $ L (noAnnSrcSpan l) (csHoleExpr noAnn)
-  mkCsTySigPV l@(EpAnn anc an csIn) a sig anns = do
-    !cs <- getCommentsFor (locA l)
-    return $ L (EpAnn anc an (csIn Semi.<> cs)) (ExprWithTySig anns a (csTypeToCsSigType sig))
-  mkCsNegAppPV l a anns = do
-    !cs <- getCommentsFor l
-    return $ L (EpAnn (spanAsAnchor l) noAnn cs) (NegApp anns a noSyntaxExpr)
-  mkCsSectionR_PV l op e = do
-    !cs <- getCommentsFor l
-    return $ L (EpAnn (spanAsAnchor l) noAnn cs) (SectionR noExtField op e)
-  mkCsAsPatPV l v _ e = addError (mkPlainErrorMsgEnvelope l PsErrUnexpectedAsPat)
-                        >> return (L (noAnnSrcSpan l) (csHoleExpr noAnn))
-  mkSumOrTuplePV = mkSumOrTupleExpr
+-- instance DisambECP (CsExpr Ps) where
+--   type Body (CsExpr Ps) = CsExpr
+--   ecpFromExp' = return
+--   mkCsLetPV l tkLet bs tkIn c = do
+--     !cs <- getCommentsFor l
+--     return $ L (EpAnn (spanAsAnchor l) noAnn cs) (CsLet (tkLet, tkIn) bs c)
+--   type InfixOp (CsExpr Ps) = CsExpr Ps
+--   superInfixOp m = m
+--   mkCsOpAppPV l e1 op e2 = do
+--     !cs <- getCommentsFor l
+--     return $ L (EpAnn (spanAsAnchor l) noAnn cs) $ OpApp [] e1 (reLoc op) e2
+--   mkCsCasePV l e (L lm m) anns = do
+--     !cs <- getCommentsFor l
+--     let mg = mkMatchGroup FromSource (L lm m)
+--     return $ L (EpAnn (spanAsAnchor l) noAnn cs) (CsCase anns e mg)
+--   mkCsLamPV l (L lm m) anns = do
+--     !cs <- getCommentsFor l
+--     let mg = mkLamMatchGroup FromSource (L lm m)
+--     checkLamMatchGroup l mg
+--     return $ L (EpAnn (spanAsAnchor l) noAnn cs) (CsLam anns mg)
+--   mkCsTyLamPV l (L lm m) anns = do
+--     !cs <- getCommentsFor l
+--     let mg = mkTyLamMatchGroup FromSource (L lm m)
+--     checkTyLamMatchGroup l mg
+--     return $ L (EpAnn (spanAsAnchor l) noAnn cs) (CsTyLam anns mg)
+--   type FunArg (CsExpr Ps) = CsExpr Ps
+--   superFunArg m = m
+--   mkCsAppPV l e1 e2 = do
+--     checkExpBlockArguments e1
+--     checkExpBlockArguments e2
+--     return $ L l (CsApp noExtField e1 e2)
+--   mkCsAppTypePV l e t anns = do
+--     checkExpBlockArguments e
+--     return $ L l (CsTyApp noExtField e (L (l2l t) $ CsEmbTy anns t))
+--   mkCsIfPV l c semi1 a semi2 b anns = do
+--     checkLayoutIfThenElse PsErrSemiColonsInCondExpr c semi1 a semi2 b
+--     !cs <- getCommentsFor l
+--     return $ L (EpAnn (spanAsAnchor l) noAnn cs) (mkCsIf c a b anns)
+--   mkCsParPV l lpar e rpar = do
+--     !cs <- getCommentsFor l
+--     return $ L (EpAnn (spanAsAnchor l) noAnn cs) (CsPar (lpar, rpar) e)
+--   mkCsVarPV v@(L l@(EpAnn anc _ _) _) = do
+--     !cs <- getCommentsFor (getHasLoc l)
+--     return $ L (EpAnn anc noAnn cs) (CsVar noExtField v)
+--   mkCsLitPV (L l a) = do
+--     !cs <- getCommentsFor l
+--     return $ L (EpAnn (spanAsAnchor l) noAnn cs) (CsLit noExtField a)
+--   mkCsOverLitPV (L (EpAnn l an csIn) a) = do
+--     !cs <- getCommentsFor (locA l)
+--     return $ L (EpAnn l an (cs Semi.<> csIn)) (CsOverLit noExtField a)
+--   mkCsWildCardPV l = return $ L (noAnnSrcSpan l) (csHoleExpr noAnn)
+--   mkCsTySigPV l@(EpAnn anc an csIn) a sig anns = do
+--     !cs <- getCommentsFor (locA l)
+--     return $ L (EpAnn anc an (csIn Semi.<> cs)) (ExprWithTySig anns a (csTypeToCsSigType sig))
+--   mkCsNegAppPV l a anns = do
+--     !cs <- getCommentsFor l
+--     return $ L (EpAnn (spanAsAnchor l) noAnn cs) (NegApp anns a noSyntaxExpr)
+--   mkCsSectionR_PV l op e = do
+--     !cs <- getCommentsFor l
+--     return $ L (EpAnn (spanAsAnchor l) noAnn cs) (SectionR noExtField op e)
+--   mkCsAsPatPV l v _ e = addError (mkPlainErrorMsgEnvelope l PsErrUnexpectedAsPat)
+--                         >> return (L (noAnnSrcSpan l) (csHoleExpr noAnn))
+--   mkSumOrTuplePV = mkSumOrTupleExpr
 
 csHoleExpr :: Maybe EpAnnUnboundVar -> CsExpr Ps
 csHoleExpr anns = CsUnboundVar anns (mkRdrUnqual (mkVarOccFS (fsLit "_")))
 
-instance DisambECP (PatBuilder Ps) where
-  type Body (PatBuilder Ps) = PatBuilder
-  ecpFromExp' (L l e) = addFatalError $ mkPlainErrorMsgEnvelope (locA l) $ PsErrArrowExprInPat e
-  mkCsLetPV l _ _ _ _ = addFatalError $ mkPlainErrorMsgEnvelope l PsErrLetInPat
-  type InfixOp (PatBuilder Ps) = RdrName
-  superInfixOp m = m
-  mkCsOpAppPV l p1 op p2 = do
-    !cs <- getCommentsFor l
-    return $ L (EpAnn (spanAsAnchor l) noAnn cs) $ PatBuilderOpApp p1 op p2 []
-  mkCsLamPV l _ _ = addFatalError $ mkPlainErrorMsgEnvelope l PsErrLambdaInPat
-  mkCsTyLamPV l _ _ = addFatalError $ mkPlainErrorMsgEnvelope l PsErrTyLambdaInPat
-  mkCsCasePV l _ _ _ = addFatalError $ mkPlainErrorMsgEnvelope l PsErrCaseInPat
-  type FunArg (PatBuilder Ps) = PatBuilder Ps
-  superFunArg m = m
-  mkCsAppPV l p1 p2 = return $ L l (PatBuilderApp p1 p2)
-  mkCsAppTypePV l p t = do
-    !cs <- getCommentsFor (locA l)
-    return $ L (addCommentsToEpAnn l cs) (PatBuilderAppType p (mkCsTyPat t))
-  mkCsIfPV l _ _ _ _ _ _ = addFatalError $ mkPlainErrorMsgEnvelope l PsErrIfInPat
-  mkCsParPV l lpar p rpar = return $ L (noAnnSrcSpan l) (PatBuilderPar lpar p rpar)
-  mkCsVarPV v@(getLoc -> l) = return $ L (l2l l) (PatBuilderVar v)
-  mkCsLitPV lit@(L l a) = do
-    !cs <- getCommentsFor l
-    return $ L (EpAnn (spanAsAnchor l) noAnn cs) (PatBuilderPat (LitPat noExtField a))
-  mkCsOverLitPV (L l a) = return $ L l (PatBuilderOverLit a)
-  mkCsWildCardPV l = return $ L (noAnnSrcSpan l) (PatBuilderPat (WildPat noExtField))
-  mkCsTySigPV l b sig anns = do
-    p <- checkLPat b
-    return $ L l (PatBuilderPat (SigPat anns p (mkCsPatSigType noAnn sig)))
-  mkCsNegAppPV l (L lp p) anns = do
-    lit <- case p of
-             PatBuilderOverLit pos_lit -> return (L (l2l lp) pos_lit)
-             _ -> patFail l $ PsErrInPat p PEIP_NegApp
-    !cs <- getCommentsFor l
-    return
-      $ L (EpAnn (spanAsAnchor l) noAnn cs) (PatBuilderPat (mkNPat lit (Just noSyntaxExpr) anns))
-  mkCsSectionR_PV l op p = patFail l (PsErrParseRightOpSectionInPat (unLoc op) (unLoc p))
-  mkCsAsPatPV l v at e = do
-    p <- checkLPat e
-    !cs <- getCommentsFor l
-    return $ L (EpAnn (spanAsAnchor l) noAnn cs) (PatBuilderPat (AsPat at v p))
-  mkSumOrTuplePV = mkSumOrTuplePat
+csHoleType :: Maybe EpAnnUnboundTyVar -> CsType Ps
+csHoleType anns = CsUnboundTyVar anns (mkRdrUnqual (mkTyVarOccFS (fsLit "_")))
+
+-- instance DisambECP (PatBuilder Ps) where
+--   type Body (PatBuilder Ps) = PatBuilder
+--   ecpFromExp' (L l e) = addFatalError $ mkPlainErrorMsgEnvelope (locA l) $ PsErrArrowExprInPat e
+--   mkCsLetPV l _ _ _ _ = addFatalError $ mkPlainErrorMsgEnvelope l PsErrLetInPat
+--   type InfixOp (PatBuilder Ps) = RdrName
+--   superInfixOp m = m
+--   mkCsOpAppPV l p1 op p2 = do
+--     !cs <- getCommentsFor l
+--     return $ L (EpAnn (spanAsAnchor l) noAnn cs) $ PatBuilderOpApp p1 op p2 []
+--   mkCsLamPV l _ _ = addFatalError $ mkPlainErrorMsgEnvelope l PsErrLambdaInPat
+--   mkCsTyLamPV l _ _ = addFatalError $ mkPlainErrorMsgEnvelope l PsErrTyLambdaInPat
+--   mkCsCasePV l _ _ _ = addFatalError $ mkPlainErrorMsgEnvelope l PsErrCaseInPat
+--   type FunArg (PatBuilder Ps) = PatBuilder Ps
+--   superFunArg m = m
+--   mkCsAppPV l p1 p2 = return $ L l (PatBuilderApp p1 p2)
+--   mkCsAppTypePV l p t anns = do
+--     !cs <- getCommentsFor (locA l)
+--     return $ L (addCommentsToEpAnn l cs) (PatBuilderAppType p (mkCsTyPat t) anns)
+--   mkCsIfPV l _ _ _ _ _ _ = addFatalError $ mkPlainErrorMsgEnvelope l PsErrIfInPat
+--   mkCsParPV l lpar p rpar = return $ L (noAnnSrcSpan l) (PatBuilderPar lpar p rpar)
+--   mkCsVarPV v@(getLoc -> l) = return $ L (l2l l) (PatBuilderVar v)
+--   mkCsLitPV lit@(L l a) = do
+--     !cs <- getCommentsFor l
+--     return $ L (EpAnn (spanAsAnchor l) noAnn cs) (PatBuilderPat (LitPat noExtField a))
+--   mkCsOverLitPV (L l a) = return $ L l (PatBuilderOverLit a)
+--   mkCsWildCardPV l = return $ L (noAnnSrcSpan l) (PatBuilderPat (WildPat noExtField))
+--   mkCsTySigPV l b sig anns = do
+--     p <- checkLPat b
+--     return $ L l (PatBuilderPat (SigPat anns p (mkCsPatSigType noAnn sig)))
+--   mkCsNegAppPV l (L lp p) anns = do
+--     lit <- case p of
+--              PatBuilderOverLit pos_lit -> return (L (l2l lp) pos_lit)
+--              _ -> patFail l $ PsErrInPat p PEIP_NegApp
+--     !cs <- getCommentsFor l
+--     return
+--       $ L (EpAnn (spanAsAnchor l) noAnn cs) (PatBuilderPat (mkNPat lit (Just noSyntaxExpr) anns))
+--   mkCsSectionR_PV l op p = patFail l (PsErrParseRightOpSectionInPat (unLoc op) (unLoc p))
+--   mkCsAsPatPV l v at e = do
+--     p <- checkLPat e
+--     !cs <- getCommentsFor l
+--     return $ L (EpAnn (spanAsAnchor l) noAnn cs) (PatBuilderPat (AsPat at v p))
+--   mkSumOrTuplePV = mkSumOrTuplePat
 
 class DisambTD b where
   mkCsAppTyHeadPV :: LCsType Ps -> PV (LocatedA b)
@@ -692,6 +1095,21 @@ mkSumOrTupleExpr l@(EpAnn anc anIn csIn) (Sum alt arity e barsp barsa) anns = do
              _ -> panic "mkSumOrTupleExpr"
   !cs <- getCommentsFor (locA l)
   return $ L (EpAnn anc anIn (csIn Semi.<> cs)) (ExplicitSum an alt arity e)
+
+mkSumOrTupleType :: SrcSpanAnnA -> SumOrTuple (CsType Ps) -> [AddEpAnn] -> PV (LCsType Ps)
+mkSumOrTupleType l@(EpAnn anc an csIn) (Tuple ts) anns = do
+  !cs <- getCommentsFor (locA l)
+  return $ L (EpAnn anc an (csIn Semi.<> cs)) (CsTupleTy anns' (map toTyTupArg ts))
+    where
+      toTyTupArg :: Either (EpAnn Bool) (LCsType Ps) -> CsTyTupArg Ps
+      toTyTupArg (Left ann) = TyMissing ann 
+      toTyTupArg (Right a) = TyPresent noExtField a
+      anns' = case anns of
+        [AddEpAnn AnnOpenP ol, AddEpAnn AnnCloseP cl] ->
+          AnnParen AnnParens ol cl
+        _ -> panic "mkSumOrTupleType bad anns"
+
+mkSumOrTupleType l (Sum {}) _ = addFatalError $ mkPlainErrorMsgEnvelope (locA l) PsErrSumDCType
 
 mkSumOrTuplePat
   :: SrcSpanAnnA

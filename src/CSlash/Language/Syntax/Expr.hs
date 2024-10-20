@@ -24,7 +24,7 @@ data CsExpr p
   | CsLam (XLam p) (MatchGroup p (LCsExpr p))
   | CsApp (XApp p) (LCsExpr p) (LCsExpr p)
   | CsTyLam (XTyLam p) (MatchGroup p (LCsExpr p))
-  | CsTyApp (XTyApp p) (LCsExpr p) (LCsExpr p)
+  | CsTyApp (XTyApp p) (LCsExpr p) (LCsExpr p) -- remove
   | OpApp (XOpApp p) (LCsExpr p) (LCsExpr p) (LCsExpr p)
   -- this could change to BinOp:
   -- we can parse prefix occurence as a binary operator (maybe a bad idea)
@@ -61,10 +61,10 @@ data Match p body = Match
 
 data CsMatchContext fn
   = LamAlt
-  | TyLamAlt
+  | TyLamAlt -- for biglam (term level lambda that binds a type)
   | CaseAlt
   | MultiIfAlt
-  | TyLamTyAlt
+  | TyLamTyAlt -- for type level lambdas
 
 data GRHSs p body
   = GRHSs

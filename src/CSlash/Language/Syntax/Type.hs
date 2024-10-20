@@ -8,6 +8,7 @@ import {-# SOURCE #-} CSlash.Language.Syntax.Expr
 
 import CSlash.Language.Syntax.Extension
 import CSlash.Language.Syntax.Kind
+import CSlash.Types.Name.Reader
 
 import Data.Data (Data)
 
@@ -56,17 +57,22 @@ data CsType pass
     , cst_body :: LCsType pass
     }
   | CsTyVar (XTyVar pass) (LIdP pass)
+  | CsUnboundTyVar (XUnboundTyVar pass) RdrName
   | CsAppTy (XAppTy pass) (LCsType pass) (LCsType pass)
   | CsFunTy (XFunTy pass) (CsArrow pass) (LCsType pass) (LCsType pass)
-  | CsTupleTy (XTupleTy pass) [LCsType pass]
+  | CsTupleTy (XTupleTy pass) [CsTyTupArg pass]
   | CsSumTy (XSumTy pass) [LCsType pass]
   | CsOpTy (XOpTy pass) (LCsType pass) (LIdP pass) (LCsType pass)
   | CsParTy (XParTy pass) (LCsType pass)
   | CsKindSig (XKdSig pass) (LCsType pass) (LCsKind pass)
     -- function from type to type
   | CsTyLamTy (XTyLamTy pass) (MatchGroup pass (LCsType pass))
-  --    -- type applied to a type
-  --  | CsTyAppTy (XTyAppTy pass) (LCsType pass) (LCsType pass)
+  | TySectionL (XTySectionL pass) (LCsType pass) (LCsType pass)
+  | TySectionR (XTySectionR pass) (LCsType pass) (LCsType pass)
+
+data CsTyTupArg id
+  = TyPresent (XTyPresent id) (LCsType id)
+  | TyMissing (XTyMissing id)
 
 data CsArrow pass
   = CsArrow !(XCsArrow pass) !(LCsKind pass)

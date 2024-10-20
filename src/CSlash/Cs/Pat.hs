@@ -91,7 +91,7 @@ type instance ConLikeP Ps = RdrName
 type instance ConLikeP Rn = Name
 type instance ConLikeP Tc = ConLike
 
-type instance XConPatTyArg Ps = NoExtField
+type instance XConPatTyArg Ps = [AddEpAnn]
 type instance XConPatTyArg Rn = NoExtField
 type instance XConPatTyArg Tc = NoExtField
 
