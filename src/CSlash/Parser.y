@@ -463,28 +463,32 @@ tv_bndr_parens :: { LCsTyVarBndr Ps }
 -----------------------------------------------------------------------------
 -- Argument patterns
 
-argpats :: { [LPat Ps] }
-  : argpat { [$1] }
-  | argpats1 { reverse $1 }
+-- argpats :: { [LPat Ps] }
+--   : argpat { [$1] }
+--   | argpats1 { reverse $1 }
 
-argpat :: { LPat Ps }
-  : sig_exp {% (checkPattern <=< runPV) (unETP $1) }
+-- argpat :: { LPat Ps }
+--   : sig_exp {% (checkPattern <=< runPV) (unETP $1) }
 
 -- argpats1 :: { [LPat Ps] }
---   : argpats1 aexp {% runPV (unETP $2) >>= \ $2 -> do
---                      { res <- checkPattern $2
---                      ; return $ res : $1 } }
---   | aexp {% runPV (unETP $1) >>= \ $1 -> do
---             { res <- checkPattern $1
---             ; return [res] } }
-
-argpats1 :: { [LPat Ps] }
-  : argpats1 argpat1 { $2 : $1 }
-  | argpat1 { [$1] }
+--   : argpats1 argpat1 { $2 : $1 }
+--   | argpat1 { [$1] }
   
-argpat1 :: { LPat Ps }
-  : aexp {% (checkPattern <=< runPV) (unETP $1) }
+-- argpat1 :: { LPat Ps }
+--   : aexp {% (checkPattern <=< runPV) (unETP $1) }
 
+argpats :: { ETP }
+  : sig_exp { ETP $ unETP $1 >>= \ $1 ->
+              mkCsPatListPV $1 }
+  | argpats1 { $1 }
+
+argpats1 :: { ETP }
+  : argpats1 aexp { ETP $ unETP $1 >>= \ $1 ->
+                          unETP $2 >>= \ $2 ->
+                          mkCsPatListConsPV $1 $2 }
+  | aexp { ETP $ unETP $1 >>= \ $1 ->
+           mkCsPatListPV $1 }
+  
 -----------------------------------------------------------------------------
 -- Type argument patterns
 
@@ -648,32 +652,36 @@ aexp :: { ETP }
                               mkCsNegAppPV (comb2 $1 $>) $2 [mj AnnMinus $1] }
   | 'let' bind 'in' sig_exp { ETP $ unETP $4 >>= \ $4 ->
                                 mkCsLetPV (comb2 $1 $>) (epTok $1) (unLoc $2) (epTok $3) $4 }
-  | '\\' argpats '->' sig_exp { ETP $ unETP $4 >>= \ $4 ->
-                                  mkCsLamPV (comb2 $1 $>)
-                                    (\ctxt -> sLLl $1 $>
+  | '\\' argpats '->' sig_exp { ETP $ superArgBuilderPV $
+                                      unETP $2 >>= \ $2 ->
+                                      unETP $4 >>= \ $4 ->
+                                  mkCsLamPV (comb2 $1 $>) $2
+                                    (\ctxt (L _ pats) -> sLLl $1 $>
                                      [sLLa $1 $> $ Match
                                       { m_ext = []
                                       , m_ctxt = ctxt
-                                      , m_pats = L (listLocation $2) $2
+                                      , m_pats = L (listLocation pats) pats
                                       , m_grhss = unguardedGRHSs
                                                   (comb2 $3 $4) $4
                                                   (EpAnn (glR $3)
                                                          (GrhsAnn Nothing (mu AnnRarrow $3))
                                                          emptyComments) }])
                                     [mj AnnLam $1] }
-  | '/\\' argpats '->' sig_exp { ETP $ unETP $4 >>= \ $4 ->
-                                     mkCsTyLamPV (comb2 $1 $>)
-                                       (sLLl $1 $>
-                                        [sLLa $1 $> $ Match
-                                         { m_ext = []
-                                         , m_ctxt = TyLamAlt
-                                         , m_pats = L (listLocation $2) $2
-                                         , m_grhss = unguardedGRHSs
-                                                     (comb2 $3 $4) $4
-                                                     (EpAnn (glR $3)
-                                                            (GrhsAnn Nothing (mu AnnRarrow $3))
-                                                            emptyComments) }])
-                                       [mj AnnTyLam $1] }
+  | '/\\' argpats '->' sig_exp { ETP $ unETP $2 >>= \ $2 ->
+                                       unETP $4 >>= \ $4 -> do
+                                       { L _ pats <- checkLTyArgListPat $2
+                                       ; mkCsTyLamPV (comb2 $1 $>)
+                                         (sLLl $1 $>
+                                          [sLLa $1 $> $ Match
+                                           { m_ext = []
+                                           , m_ctxt = TyLamAlt
+                                           , m_pats = L (listLocation pats) pats
+                                           , m_grhss = unguardedGRHSs
+                                                       (comb2 $3 $4) $4
+                                                       (EpAnn (glR $3)
+                                                              (GrhsAnn Nothing (mu AnnRarrow $3))
+                                                              emptyComments) }])
+                                         [mj AnnTyLam $1] } }
   | 'if' sig_exp optSemi 'then' sig_exp optSemi 'else' sig_exp
     {% runPV (unETP $2) >>= \ ($2 :: LCsExpr Ps) ->
          return $ ETP $

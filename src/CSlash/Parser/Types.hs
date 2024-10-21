@@ -4,8 +4,9 @@
 
 module CSlash.Parser.Types
   ( SumOrTuple(..)
-  , PatBuilder(..) )
-  where
+  , PatBuilder(..) 
+  , TyPatBuilder(..)
+  ) where
 
 import CSlash.Types.Basic
 import CSlash.Types.SrcLoc
@@ -37,6 +38,7 @@ data PatBuilder p
   | PatBuilderVar (LocatedN RdrName)
   | PatBuilderCon (LocatedN RdrName)
   | PatBuilderOverLit (CsOverLit Ps)
+  | PatBuilderArgList [LocatedA (PatBuilder p)]
 
 -- These instances are here so that they are not orphans
 type instance Anno (GRHS Ps (LocatedA (PatBuilder Ps)))             = EpAnnCO
@@ -54,3 +56,31 @@ instance Outputable (PatBuilder Ps) where
   ppr (PatBuilderVar v) = ppr v
   ppr (PatBuilderCon c) = ppr c
   ppr (PatBuilderOverLit l) = ppr l
+  ppr (PatBuilderArgList l) = hsep $ ppr <$> l
+
+data TyPatBuilder p
+  = TyPatBuilderPat (Pat p)
+  | TyPatBuilderPar (EpToken "(") (LocatedA (TyPatBuilder p)) (EpToken ")")
+  | TyPatBuilderApp (LocatedA (TyPatBuilder p)) (LocatedA (TyPatBuilder p))
+  | TyPatBuilderOpApp (LocatedA (TyPatBuilder p)) (LocatedN RdrName)
+                      (LocatedA (TyPatBuilder p)) [AddEpAnn]
+  | TyPatBuilderConOpApp (LocatedA (TyPatBuilder p)) (LocatedN RdrName)
+                         (LocatedA (TyPatBuilder p)) [AddEpAnn]
+  | TyPatBuilderVar (LocatedN RdrName)
+  | TyPatBuilderCon (LocatedN RdrName)
+  | TyPatBuilderArgList [LocatedA (TyPatBuilder p)]
+
+type instance Anno (GRHS Ps (LocatedA (TyPatBuilder Ps)))             = EpAnnCO
+type instance Anno [LocatedA (Match Ps (LocatedA (TyPatBuilder Ps)))] = SrcSpanAnnL
+type instance Anno (Match Ps (LocatedA (TyPatBuilder Ps)))            = SrcSpanAnnA
+type instance Anno (StmtLR Ps Ps (LocatedA (TyPatBuilder Ps)))     = SrcSpanAnnA
+
+instance Outputable (TyPatBuilder Ps) where
+  ppr (TyPatBuilderPat p) = ppr p
+  ppr (TyPatBuilderPar _ (L _ p) _) = parens (ppr p)
+  ppr (TyPatBuilderApp (L _ p1) (L _ p2)) = ppr p1 <+> ppr p2
+  ppr (TyPatBuilderOpApp (L _ p1) op (L _ p2) _) = ppr p1 <+> ppr op <+> ppr p2
+  ppr (TyPatBuilderConOpApp (L _ p1) op (L _ p2) _) = ppr p1 <+> ppr op <+> ppr p2
+  ppr (TyPatBuilderVar v) = ppr v
+  ppr (TyPatBuilderCon c) = ppr c
+  ppr (TyPatBuilderArgList l) = hsep $ ppr <$> l

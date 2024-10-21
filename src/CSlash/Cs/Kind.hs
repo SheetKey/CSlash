@@ -31,6 +31,10 @@ data CsPSKRn = CsPSKRn
   }
   deriving Data
 
+mkCsPatSigKind :: EpAnnCO -> LCsKind Ps -> CsPatSigKind Ps
+mkCsPatSigKind ann x = CsPSK { cspsk_ext = ann
+                             , cspsk_body = x }
+
 type instance XUKd (CsPass _) = NoExtField
 type instance XAKd (CsPass _) = NoExtField
 type instance XLKd (CsPass _) = NoExtField

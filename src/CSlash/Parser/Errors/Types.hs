@@ -110,10 +110,10 @@ data PsMessage
                               [LCsTypeArg Ps]
                               !SDoc
   | PsErrInPat !(PatBuilder Ps) !PsErrInPatDetails
-  | PsErrInTyPat !(PatBuilder Ps) !PsErrInPatDetails
+  | PsErrInTyPat !(TyPatBuilder Ps) !PsErrInPatDetails
   | PsErrUnicodeCharLooksLike Char Char String
-  | PsErrParseLeftOpSectionInPat !(PatBuilder Ps) !RdrName
-  | PsErrParseRightOpSectionInPat !RdrName !(PatBuilder Ps)
+  | PsErrParseLeftOpSectionInPat !(Either (PatBuilder Ps) (TyPatBuilder Ps)) !RdrName
+  | PsErrParseRightOpSectionInPat !RdrName !(Either (PatBuilder Ps) (TyPatBuilder Ps))
   | PsErrInvalidKindRelation !RdrName
   deriving Generic
 
