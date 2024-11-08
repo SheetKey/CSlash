@@ -359,7 +359,9 @@ library
     ghc-options:      -W
                       -Wall
                       -Wno-name-shadowing
-                      -Wincomplete-uni-patterns
+                      -Werror=incomplete-patterns
+                      -- -Werror=incomplete-uni-patterns
+                      -- -Werror=missing-methods
                       -Wincomplete-record-updates
                       -- -Wpartial-fields
                       -Werror=missing-home-modules
