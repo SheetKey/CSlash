@@ -13,7 +13,7 @@ module CSlash.Types.Var
 
   , mkGlobalVar
 
-  , isTypeVar, isTyVar, isKdVar
+  , isTypeVar, isTyVar, isTcTyVar, isKdVar
 
   , ForAllTyFlag(..)
   , isVisibleForAllTyFlag, isInvisibleForAllTyFlag
@@ -26,9 +26,9 @@ module CSlash.Types.Var
 
   , mkTyVar, mkKdVar
 
-  , tyVarName
+  , tyVarName, tyVarKind, tcTyVarDetails
 
-  , setTyVarKind
+  , setTyVarName, setTyVarKind
 
   , nonDetCmpVar
   ) where
@@ -37,7 +37,8 @@ import Prelude hiding ((<>))
 
 import {-# SOURCE #-} CSlash.Core.Type.Rep (Type)
 import {-# SOURCE #-} CSlash.Core.Kind (Kind, pprKind)
-import {-# SOURCE #-} CSlash.Tc.Utils.TcType (TcTyVarDetails, pprTcTyVarDetails)
+import {-# SOURCE #-} CSlash.Tc.Utils.TcType
+  (TcTyVarDetails, pprTcTyVarDetails, vanillaSkolemTvUnk)
 import {-# SOURCE #-} CSlash.Types.Id.Info (IdDetails, IdInfo, pprIdDetails)
 
 import CSlash.Types.Name hiding (varName)
@@ -269,6 +270,12 @@ instance NamedThing tv => NamedThing (VarBndr tv flag) where
 tyVarName :: TypeVar -> Name
 tyVarName = varName
 
+tyVarKind :: TypeVar -> Kind
+tyVarKind = varKind
+
+setTyVarName :: TypeVar -> Name -> TypeVar
+setTyVarName = setVarName
+
 setTyVarKind :: TypeVar -> Kind -> TypeVar
 setTyVarKind tv k = tv { varKind = k }
 
@@ -280,6 +287,11 @@ mkTyVar name kind = TyVar { varName = name
 
 mkKdVar :: Name -> KindVar
 mkKdVar name = KdVar { varName = name, realUnique = nameUnique name }
+
+tcTyVarDetails :: TypeVar -> TcTyVarDetails
+tcTyVarDetails (TcTyVar { tc_tv_details = details }) = details
+tcTyVarDetails (TyVar {}) = vanillaSkolemTvUnk
+tcTyVarDetails var = pprPanic "tcTyVarDetails" (ppr var <+> colon <+> pprKind (tyVarKind var))
 
 {- *********************************************************************
 *                                                                      *
@@ -315,6 +327,10 @@ isTyVar :: Var -> Bool
 isTyVar (TyVar {}) = True
 isTyVar (TcTyVar {}) = True
 isTyVar _ = False
+
+isTcTyVar :: Var -> Bool
+isTcTyVar (TcTyVar {}) = True
+isTcTyVar _ = False
 
 isKdVar :: Var -> Bool
 isKdVar (KdVar {}) = True

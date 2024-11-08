@@ -1040,6 +1040,7 @@ wWarningFlagsDeps = [minBound..maxBound] >>= \x -> case x of
   Opt_WarnRedundantConstraints -> warnSpec x
   Opt_WarnDuplicateExports -> warnSpec x
   Opt_WarnInaccessibleCode -> warnSpec x
+  Opt_WarnImplicitPrelude -> warnSpec x
   Opt_WarnIncompletePatterns -> warnSpec x
   Opt_WarnIncompleteUniPatterns -> warnSpec x
   Opt_WarnInconsistentFlags -> warnSpec x

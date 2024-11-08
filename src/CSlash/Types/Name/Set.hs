@@ -14,6 +14,10 @@ module CSlash.Types.Name.Set (
   isEmptyFVs, emptyFVs, plusFVs, plusFV,
   mkFVs, addOneFV, unitFV, delFV, delFVs,
   intersectFVs, intersectsFVs,
+
+  Defs, Uses, DefUse, DefUses,
+  emptyDUs, usesOnly, mkDUs, plusDU,
+  findUses, duDefs, duUses, allUses,
   ) where
 
 import CSlash.Types.Name
@@ -100,3 +104,59 @@ delFV n s   = delFromNameSet s n
 delFVs ns s = delListFromNameSet s ns
 intersectFVs = intersectNameSet
 intersectsFVs = intersectsNameSet
+
+{- *********************************************************************
+*                                                                      *
+                Defs and uses
+*                                                                      *
+********************************************************************* -}
+
+type Defs = NameSet
+
+type Uses = NameSet
+
+type DefUse = (Maybe Defs, Uses)
+
+type DefUses = OrdList DefUse
+
+emptyDUs :: DefUses
+emptyDUs = nilOL
+
+usesOnly :: Uses -> DefUses
+usesOnly uses = unitOL (Nothing, uses)
+
+mkDUs :: [(Defs, Uses)] -> DefUses
+mkDUs pairs = toOL [(Just defs, uses) | (defs, uses) <- pairs]
+
+plusDU :: DefUses -> DefUses -> DefUses
+plusDU = appOL
+
+duDefs :: DefUses -> Defs
+duDefs dus = foldr get emptyNameSet dus
+  where
+    get (Nothing, _u1) d2 = d2
+    get (Just d1, _u1) d2 = d1 `unionNameSet` d2
+
+allUses :: DefUses -> Uses
+allUses dus = foldr get emptyNameSet dus
+  where
+    get (_d1, u1) u2 = u1 `unionNameSet` u2
+
+duUses :: DefUses -> Uses
+duUses dus = foldr get emptyNameSet dus
+  where
+    get (Nothing,   rhs_uses) uses = rhs_uses `unionNameSet` uses
+    get (Just defs, rhs_uses) uses = (rhs_uses `unionNameSet` uses)
+                                     `minusNameSet` defs
+
+findUses :: DefUses -> Uses -> Uses
+findUses dus uses = foldr get uses dus
+  where
+    get (Nothing, rhs_uses) uses
+        = rhs_uses `unionNameSet` uses
+    get (Just defs, rhs_uses) uses
+        | defs `intersectsNameSet` uses
+        || nameSetAny (startsWithUnderscore . nameOccName) defs
+        = rhs_uses `unionNameSet` uses
+        | otherwise
+        = uses

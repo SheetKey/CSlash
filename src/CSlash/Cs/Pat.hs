@@ -14,8 +14,10 @@ module CSlash.Cs.Pat
   , EpAnnImpPat(..)
   , ConPatTc(..)
   , ConLikeP
+  , CsPatExpansion(..)
+  , XXPatCsTc(..)
 
-  , CsConPatDetails
+  , CsConPatDetails, csConPatArgs, csConPatTyArgs
   , CsConPatTyArg(..)
 
   , patNeedsParens
@@ -87,6 +89,10 @@ type instance XKdSigPat Tc = Kind
 
 type instance XImpPat (CsPass _) = EpAnnImpPat
 
+type instance XXPat Ps = DataConCantHappen
+type instance XXPat Rn = CsPatExpansion (Pat Rn) (Pat Rn)
+type instance XXPat Tc = XXPatCsTc
+
 type instance ConLikeP Ps = RdrName
 type instance ConLikeP Rn = Name
 type instance ConLikeP Tc = ConLike
@@ -110,6 +116,15 @@ data EpAnnImpPat = EpAnnImpPat
   , impPatCCurly :: EpToken "}"
   }
   deriving Data  
+
+-- ---------------------------------------------------------------------
+
+data XXPatCsTc = ExpansionPat (Pat Rn) (Pat Tc)
+
+data CsPatExpansion a b = CsPatExpanded a b
+  deriving Data
+
+-- ---------------------------------------------------------------------
 
 data ConPatTc = ConPatTc
 
@@ -136,10 +151,10 @@ pprParendPat p pat =
   then parens (pprPat pat)
   else pprPat pat
 
-patNeedsParens :: IsPass p => PprPrec -> Pat (CsPass p) -> Bool
-patNeedsParens p = go
+patNeedsParens :: forall p. IsPass p => PprPrec -> Pat (CsPass p) -> Bool
+patNeedsParens p = go @p
   where
-    go :: IsPass q => Pat (CsPass q) -> Bool
+    go :: forall q. IsPass q => Pat (CsPass q) -> Bool
     go (WildPat{}) = False
     go (VarPat{}) = False
     go (TyVarPat{}) = True
@@ -153,6 +168,11 @@ patNeedsParens p = go
     go (SigPat{}) = p >= sigPrec
     go (KdSigPat{}) = p >= sigPrec
     go (ImpPat{}) = False
+    go (XPat ext) = case csPass @q of
+      Rn -> case ext of
+        CsPatExpanded _ pat -> go pat
+      Tc -> case ext of
+        ExpansionPat _ pat -> go pat
 
 conPatNeedsParens :: PprPrec -> CsConDetails t a -> Bool
 conPatNeedsParens p = go
@@ -181,6 +201,11 @@ pprPat (NPat _ l (Just _) _) = char '-' <> ppr l
 pprPat (SigPat _ pat ty) = ppr pat <+> colon <+> ppr ty
 pprPat (KdSigPat _ pat kd) = ppr pat <+> colon <+> text "pprPat ppr kd"
 pprPat (ImpPat _ pat) = braces $ ppr pat
+pprPat (XPat ext) = case csPass @p of
+  Rn -> case ext of
+    CsPatExpanded orig _ -> pprPat orig
+  Tc -> case ext of
+    ExpansionPat orig _ -> pprPat orig
 
 pprUserCon
   :: (OutputableBndr con, OutputableBndrId p, Outputable (Anno (IdCsP p)))

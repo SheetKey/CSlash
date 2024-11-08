@@ -237,6 +237,12 @@ mkPrimTyCon :: Name -> [TyConBinder] -> Kind -> Kind -> TyCon
 mkPrimTyCon name binders res_kind kind
   = mkTyCon name binders res_kind kind PrimTyCon
 
+isTypeSynonymTyCon :: TyCon -> Bool
+isTypeSynonymTyCon (TyCon { tyConDetails = details })
+  | SynonymTyCon{} <- details = True
+  | otherwise = False
+{-# INLINE isTypeSynonymTyCon #-}
+
 tyConDataCons :: TyCon -> [DataCon]
 tyConDataCons tycon = tyConDataCons_maybe tycon `orElse` []
 

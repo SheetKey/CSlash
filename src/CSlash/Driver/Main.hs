@@ -314,21 +314,9 @@ csParse' mod_summary
 
               let n_cs = FilePath.normalise src_filename
                   TempDir tmp_dir = tmpDir dflags
-                  srcs0 = nub $ filter (not . (tmp_dir `isPrefixOf`))
-                              $ filter (not . (== n_cs))
-                              $ map FilePath.normalise
-                              $ filter (not . isPrefixOf "<")
-                              $ map unpackFS
-                              $ srcfiles pst
-                  srcs1 = case ml_cs_file (ms_location mod_summary) of
-                            Just f -> filter (/= FilePath.normalise f) srcs0
-                            Nothing -> srcs0
-
-              srcs2 <- liftIO $ filterM doesFileExist srcs1
 
               let res = CsParsedModule
                         { cpm_module = rdr_module
-                        , cpm_src_files = srcs2
                         }
                   (warns, errs) = getPsMessages pst
 
@@ -395,7 +383,16 @@ cs_typecheck keep_rn mod_summary mb_rdr_module = do
   return (tc_result, rn_info)
 
 tcRnModule' :: ModSummary -> Bool -> CsParsedModule -> Cs TcGblEnv
-tcRnModule' sum save_rn_syntax mod = panic "tcRnModule'"
+tcRnModule' sum save_rn_syntax mod = do
+  cs_env <- getCsEnv
+  dflags <- getDynFlags
+
+  let diag_opts = initDiagOpts dflags
+
+  tcg_res <- {-# SCC "Typecheck-Rename" #-}
+             ioMsgMaybe $ hoistTcRnMessage $ tcRnModule cs_env sum save_rn_syntax mod
+
+  return tcg_res
 
 {- *********************************************************************
 *                                                                      *

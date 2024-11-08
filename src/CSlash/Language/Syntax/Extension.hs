@@ -53,11 +53,13 @@ type family XEmptyLocalBinds x x'
 
 -- CsValBindsLR type families
 type family XValBinds x x'
+type family XXValBindsLR x x'
 
 -- CsBindLR type families
 type family XFunBind x x'
 type family XTyFunBind x x'
 type family XTCVarBind x x'
+type family XXCsBindsLR x x'
 
 -- Sig type families
 type family XTypeSig x
@@ -73,6 +75,14 @@ type family XFixitySig x
 -- CsDecl type families
 type family XValD x
 type family XSigD x
+
+-- -------------------------------------
+-- HsGroup type families
+type family XCCsGroup x
+
+-- -------------------------------------
+-- TyClGroup type families
+type family XCTypeGroup x
 
 -- =====================================================================
 -- Type families for the HsModule extension points
@@ -159,6 +169,7 @@ type family XSumPat x
 type family XConPat x
 type family XLitPat x
 type family XNPat x
+type family XXPat x
 
 -- =====================================================================
 -- Type families for the CsTypes type families

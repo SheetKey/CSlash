@@ -1114,7 +1114,6 @@ data PState = PState
   , loc :: PsLoc
   , context :: [LayoutContext]
   , lex_state :: [Int]
-  , srcfiles :: [FastString]
 
   , eof_pos :: Strict.Maybe (Strict.Pair RealSrcSpan RealSrcSpan)
   , header_comments :: Strict.Maybe [LEpaComment]
@@ -1313,7 +1312,6 @@ initParserState options buf loc =
   , loc = init_loc
   , context = []
   , lex_state = [bol, 0]
-  , srcfiles = []
   , eof_pos = Strict.Nothing
   , header_comments = Strict.Nothing
   , comment_q = []

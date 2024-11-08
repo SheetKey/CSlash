@@ -251,6 +251,14 @@ type family CsDiagnosticCode c = n | n -> c where
   CsDiagnosticCode "DriverUnrecognizedFlag"                        = 93741
   CsDiagnosticCode "DriverDeprecatedFlag"                          = 53692
 
+  CsDiagnosticCode "TcRnBindingOfExistingName"                     = 58805
+  CsDiagnosticCode "TcRnQualifiedBinder"                           = 28329
+  CsDiagnosticCode "TcRnMultipleFixityDecls"                       = 50419
+  CsDiagnosticCode "TcRnDuplicateDecls"                            = 29916
+  CsDiagnosticCode "TcRnUnusedName"                                = 40910
+  CsDiagnosticCode "TcRnModMissingRealSrcSpan"                     = 84170
+  CsDiagnosticCode "TcRnImplicitImportOfPrelude"                   = 20540
+
   -- To generate new random numbers:
   --  https://www.random.org/integers/?num=10&min=1&max=99999&col=1&base=10&format=plain
   --

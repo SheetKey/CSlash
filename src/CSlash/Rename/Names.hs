@@ -2,18 +2,18 @@ module CSlash.Rename.Names where
 
 import CSlash.Driver.Env
 import CSlash.Driver.Session
--- import GHC.Driver.Ppr
+import CSlash.Driver.Ppr
 
--- import GHC.Rename.Env
--- import GHC.Rename.Fixity
+import CSlash.Rename.Env
+import CSlash.Rename.Fixity
 -- import GHC.Rename.Utils ( warnUnusedTopBinds )
 -- import GHC.Rename.Unbound
 -- import qualified GHC.Rename.Unbound as Unbound
 
--- import GHC.Tc.Errors.Types
+import CSlash.Tc.Errors.Types
 -- import GHC.Tc.Utils.Env
--- import GHC.Tc.Utils.Monad
--- import GHC.Tc.Types.LclEnv
+import CSlash.Tc.Utils.Monad
+import CSlash.Tc.Types.LclEnv
 -- import GHC.Tc.Zonk.TcType ( tcInitTidyEnv )
 
 import CSlash.Cs
@@ -76,6 +76,121 @@ import qualified Data.Set as S
 import System.FilePath  ((</>))
 import System.IO
 
+{- *********************************************************************
+*                                                                      *
+            rnImports
+*                                                                      *
+********************************************************************* -}
+
+rnImports
+  :: [(LImportDecl Ps, SDoc)] -> RnM ([LImportDecl Rn], GlobalRdrEnv, ImportAvails, AnyPcUsage)
+rnImports imports = do
+  panic "rnImports"
+
 renameRawPkgQual :: UnitEnv -> ModuleName -> RawPkgQual -> PkgQual
 renameRawPkgQual _ _ NoRawPkgQual = NoPkgQual
 renameRawPkgQual _ _ (RawPkgQual _) = panic "renameRawPkgQual RawPkgQual"
+
+{- *********************************************************************
+*                                                                      *
+            importsFromLocalDecls
+*                                                                      *
+********************************************************************* -}
+
+extendGlobalRdrEnvRn :: [GlobalRdrElt] -> MiniFixityEnv -> RnM (TcGblEnv, TcLclEnv)
+extendGlobalRdrEnvRn new_gres new_fixities = checkNoErrs $ do
+  (gbl_env, lcl_env) <- getEnvs
+  let rdr_env1 = tcg_rdr_env gbl_env
+      fix_env1 = tcg_fix_env gbl_env
+  rdr_env2 <- foldlM add_gre rdr_env1 new_gres
+  let fix_env2 = foldl' extend_fix_env fix_env1 new_gres
+      gbl_env' = gbl_env { tcg_rdr_env = rdr_env2, tcg_fix_env = fix_env2 }
+  traceRn "extendGlobalRdrEnvRn 2" (pprGlobalRdrEnv True rdr_env2)
+  return (gbl_env', lcl_env)
+  where
+    extend_fix_env fix_env gre
+      | Just (L _ fi) <- lookupMiniFixityEnv new_fixities name
+      = extendNameEnv fix_env name (FixItem occ fi)
+      | otherwise
+      = fix_env
+      where
+        name = greName gre
+        occ = greOccName gre
+
+    add_gre :: GlobalRdrEnv -> GlobalRdrElt -> RnM GlobalRdrEnv
+    add_gre env gre
+      | not (null dups)
+      = do addDupDeclErr (gre :| dups)
+           return env
+      | otherwise
+      = return $ extendGlobalRdrEnv env gre
+      where
+        dups = filter isBadDupGRE
+          $ lookupGRE env (LookupOccName (greOccName gre) (RelevantGREs False))
+        isBadDupGRE old_gre = isLocalGRE old_gre && greClashesWith gre old_gre
+
+{- *********************************************************************
+*                                                                      *
+    getLocalDeclBindersd@ returns the names for an CsDecl
+             It's used for source code.
+*                                                                      *
+********************************************************************* -}
+
+getLocalNonValBinders :: MiniFixityEnv -> CsGroup Ps -> RnM ((TcGblEnv, TcLclEnv), NameSet)
+getLocalNonValBinders fixity_env CsGroup{ cs_valds = binds, cs_typeds = type_decls } = do
+  tc_gres <- concatMapM new_tc (typeGroupTypeDecls type_decls)
+  traceRn "getLocalNonValBinders 1" (ppr tc_gres)
+  envs <- extendGlobalRdrEnvRn tc_gres fixity_env
+  restoreEnvs envs $ do
+    let new_bndrs = gresToNameSet tc_gres
+    traceRn "getLocalNonValBinders 2" (Outputable.empty)
+    envs <- extendGlobalRdrEnvRn [] fixity_env
+    return (envs, new_bndrs)
+
+  where
+    new_tc :: LCsBind Ps -> RnM [GlobalRdrElt]
+    new_tc tc_decl = do
+      let TyDeclBinders (main_bndr, tc_flav) = csLTyDeclBinders tc_decl
+      tycon_name <- newTopSrcBinder $ la2la main_bndr
+      let tc_gre = mkLocalTyConGRE (fmap (const tycon_name) tc_flav) tycon_name
+      traceRn "getLocalNonValBinders new_tc" $
+        vcat [ text "tycon:" <+> ppr tycon_name
+             , text "tc_gre:" <+> ppr tc_gre ]
+      return $ [tc_gre]
+
+{- *********************************************************************
+*                                                                      *
+            Unused names
+*                                                                      *
+********************************************************************* -}
+
+reportUnusedNames :: TcGblEnv -> CsSource -> RnM ()
+reportUnusedNames gbl_env cs_src = do
+  panic "reportUnusedNames"
+
+{- *********************************************************************
+*                                                                      *
+            Missing signatures
+*                                                                      *
+********************************************************************* -}
+
+
+
+{- *********************************************************************
+*                                                                      *
+            Unused imports
+*                                                                      *
+********************************************************************* -}
+
+{- *********************************************************************
+*                                                                      *
+            Errors
+*                                                                      *
+********************************************************************* -}
+
+addDupDeclErr :: NonEmpty GlobalRdrElt -> TcRn ()
+addDupDeclErr gres@(gre :| _)
+  = addErrAt (getSrcSpan (NE.last sorted_names))
+    $ (TcRnDuplicateDecls (greOccName gre) sorted_names)
+  where
+    sorted_names = NE.sortBy (SrcLoc.leftmost_smallest `on` nameSrcSpan) (fmap greName gres)

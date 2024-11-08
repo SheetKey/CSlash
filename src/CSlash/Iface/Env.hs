@@ -28,6 +28,53 @@ import CSlash.Utils.Logger
 import Data.List     ( partition )
 import Control.Monad
 
+{- *****************************************************
+*                                                      *
+        Allocating new Names in the Name Cache
+*                                                      *
+***************************************************** -}
+
+newGlobalBinder :: Module -> OccName -> SrcSpan -> TcRnIf a b Name
+newGlobalBinder mod occ loc = do
+  cs_env <- getTopEnv
+  name <- liftIO $ allocateGlobalBinder (cs_NC cs_env) mod occ loc
+  traceIf $ text "newGlobalBinder" <+> (vcat [ ppr mod <+> ppr occ <+> ppr loc, ppr name ])
+  return name
+
+allocateGlobalBinder :: NameCache -> Module -> OccName -> SrcSpan -> IO Name
+allocateGlobalBinder nc mod occ loc = updateNameCache nc mod occ $ \cache0 -> 
+  case lookupOrigNameCache cache0 mod occ of
+    Just name | isWiredInName name
+                -> pure (cache0, name)
+              | otherwise
+                -> pure (new_cache, name')
+              where
+                uniq = nameUnique name
+                name' = mkExternalName uniq mod occ loc
+                new_cache = extendOrigNameCache cache0 mod occ name'
+    Nothing -> do uniq <- takeUniqFromNameCache nc
+                  let name = mkExternalName uniq mod occ loc
+                      new_cache = extendOrigNameCache cache0 mod occ name
+                  pure (new_cache, name)
+
+{- *********************************************************************
+*                                                                      *
+                Name cache access
+*                                                                      *
+********************************************************************* -}
+
+externalizeName :: Module -> Name -> TcRnIf m n Name
+externalizeName mod name = do
+  let occ = nameOccName name
+      loc = nameSrcSpan name
+      uniq = nameUnique name
+  occ `seq` return ()
+  cs_env <- getTopEnv
+  liftIO $ updateNameCache (cs_NC cs_env) mod occ $ \cache -> 
+    let name' = mkExternalName uniq mod occ loc
+        cache' = extendOrigNameCache cache mod occ name'
+    in pure (cache', name')
+
 {- *********************************************************************
 *                                                                      *
                 Tracing

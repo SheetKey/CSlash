@@ -52,6 +52,9 @@ cSLASH_PRIM = mkPrimModule (fsLit "CSlash.Prim")
 cSLASH_TYPES :: Module
 cSLASH_TYPES = mkPrimModule (fsLit "CSlash.Types")
 
+rOOT_MAIN :: Module
+rOOT_MAIN= mkMainModule (fsLit ":Main")
+
 pRELUDE_NAME :: ModuleName
 pRELUDE_NAME = mkModuleNameFS (fsLit "Prelude")
 
@@ -60,6 +63,9 @@ mAIN_NAME = mkModuleNameFS (fsLit "Main")
 
 mkPrimModule :: FastString -> Module
 mkPrimModule m = mkModule primUnit (mkModuleNameFS m)
+
+mkMainModule :: FastString -> Module
+mkMainModule m = mkModule mainUnit (mkModuleNameFS m)
 
 {- *********************************************************************
 *                                                                      *

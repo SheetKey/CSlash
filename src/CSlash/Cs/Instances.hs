@@ -26,15 +26,23 @@ instance Data (CsLocalBindsLR Ps Rn)
 instance Data (CsLocalBindsLR Rn Rn)
 instance Data (CsLocalBindsLR Tc Tc)
 
--- deriving instance Data (CsValBindsLR Ps Ps)
--- deriving instance Data (CsValBindsLR Ps Rn)
--- deriving instance Data (CsValBindsLR Rn Rn)
--- deriving instance Data (CsValBindsLR Tc Tc)
+deriving instance Data (CsValBindsLR Ps Ps)
+deriving instance Data (CsValBindsLR Ps Rn)
+deriving instance Data (CsValBindsLR Rn Rn)
+deriving instance Data (CsValBindsLR Tc Tc)
+
+deriving instance Data (NCsValBindsLR Ps)
+deriving instance Data (NCsValBindsLR Rn)
+deriving instance Data (NCsValBindsLR Tc)
 
 deriving instance Data (CsBindLR Ps Ps)
 deriving instance Data (CsBindLR Ps Rn)
 deriving instance Data (CsBindLR Rn Rn)
 deriving instance Data (CsBindLR Tc Tc)
+
+deriving instance Data AbsBinds
+
+deriving instance Data ABExport
 
 deriving instance Data (Sig Ps)
 deriving instance Data (Sig Rn)
@@ -47,6 +55,14 @@ deriving instance Data (FixitySig Tc)
 deriving instance Data (CsDecl Ps)
 deriving instance Data (CsDecl Rn)
 deriving instance Data (CsDecl Tc)
+
+deriving instance Data (CsGroup Ps)
+deriving instance Data (CsGroup Rn)
+deriving instance Data (CsGroup Tc)
+
+deriving instance Data (TypeGroup Ps)
+deriving instance Data (TypeGroup Rn)
+deriving instance Data (TypeGroup Tc)
 
 deriving instance Data (CsExpr Ps)
 deriving instance Data (CsExpr Rn)
@@ -174,3 +190,5 @@ deriving instance Data (IE Tc)
 deriving instance Eq (IE Ps)
 deriving instance Eq (IE Rn)
 deriving instance Eq (IE Tc)
+
+deriving instance Data XXPatCsTc

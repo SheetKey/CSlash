@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 
 module CSlash.Types.Basic
@@ -7,7 +8,7 @@ module CSlash.Types.Basic
 
   , pprAlternative
 
-  , TyConFlavor(..)
+  , TyConFlavor(..), tyConFlavorAssoc_maybe
 
   , module X
   ) where
@@ -38,7 +39,7 @@ data TyConFlavor tc
   = TupleFlavor
   | SumFlavor
   | TypeFunFlavor
-  deriving (Eq, Data)
+  deriving (Eq, Data, Functor)
 
 instance Outputable (TyConFlavor tc) where
   ppr = text . go
@@ -51,3 +52,10 @@ instance NFData tc => NFData (TyConFlavor tc) where
   rnf TupleFlavor = ()
   rnf SumFlavor = ()
   rnf TypeFunFlavor = ()
+
+tyConFlavorAssoc_maybe :: TyConFlavor tc -> Maybe tc
+tyConFlavorAssoc_maybe _ = Nothing
+
+instance Outputable TopLevelFlag where
+  ppr TopLevel = text "<TopLevel>"
+  ppr NotTopLevel = text "<NotTopLevel>"

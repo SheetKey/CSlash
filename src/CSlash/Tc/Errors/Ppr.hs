@@ -4,6 +4,8 @@
 
 module CSlash.Tc.Errors.Ppr where
 
+import Prelude hiding ((<>))
+
 import CSlash.Builtin.Names
 -- import GHC.Builtin.Types ( boxedRepDataConTyCon, tYPETyCon, filterCTuple, pretendNameIsInScope )
 
@@ -107,14 +109,50 @@ instance Diagnostic TcRnMessage where
       -> messageWithInfoDiagnosticMessage unit_state err_info
            (tcOptsShowContext opts)
            (diagnosticMessage opts msg)
+    TcRnBindingOfExistingName name -> mkSimpleDecorated $
+      text "Illegal binding of an existing name:" <+> ppr name
+    TcRnQualifiedBinder rdr_name -> mkSimpleDecorated $
+      text "Qualified name in binding position:" <+> ppr rdr_name
+    TcRnMultipleFixityDecls loc rdr_name -> mkSimpleDecorated $
+      vcat [ text "Multiple fixity declarations for" <+> quotes (ppr rdr_name)
+           , text "also at " <+> ppr loc ]
+    TcRnDuplicateDecls name sorted_names -> mkSimpleDecorated $
+      vcat [ text "Multiple declarations of" <+> quotes (ppr name)
+           , text "Declared at:" <+>
+             vcat (NE.toList $ ppr . nameSrcLoc <$> sorted_names) ]
+    TcRnUnusedName name reason -> mkSimpleDecorated $
+      pprUnusedName name reason
+    TcRnModMissingRealSrcSpan mod -> mkDecorated $
+      [ text "Module does not have a RealSrcSpan:" <+> ppr mod ]
+    TcRnImplicitImportOfPrelude -> mkSimpleDecorated $
+      text "Module" <+> quotes (text "Prelude") <+> text "implicitly imported."
 
   diagnosticReason = \case
     TcRnUnknownMessage m -> diagnosticReason m
     TcRnMessageWithInfo _ (TcRnMessageDetailed _ m) -> diagnosticReason m
+    TcRnBindingOfExistingName{} -> ErrorWithoutFlag
+    TcRnQualifiedBinder{} -> ErrorWithoutFlag
+    TcRnMultipleFixityDecls{} -> ErrorWithoutFlag
+    TcRnDuplicateDecls{} -> ErrorWithoutFlag
+    TcRnUnusedName _ prov -> WarningWithFlag $ case prov of
+      UnusedNameTopDecl -> Opt_WarnUnusedTopBinds
+      UnusedNameImported _ -> Opt_WarnUnusedTopBinds
+      UnusedNameTypePattern -> Opt_WarnUnusedTypePatterns
+      UnusedNameMatch -> Opt_WarnUnusedMatches
+      UnusedNameLocalBind -> Opt_WarnUnusedLocalBinds
+    TcRnModMissingRealSrcSpan{} -> ErrorWithoutFlag
+    TcRnImplicitImportOfPrelude{} -> WarningWithFlag Opt_WarnImplicitPrelude
 
   diagnosticHints = \case
     TcRnUnknownMessage m -> diagnosticHints m
     TcRnMessageWithInfo _ (TcRnMessageDetailed _ m) -> diagnosticHints m
+    TcRnBindingOfExistingName{} -> noHints
+    TcRnQualifiedBinder{} -> noHints
+    TcRnMultipleFixityDecls{} -> noHints
+    TcRnDuplicateDecls{} -> noHints
+    TcRnUnusedName{} -> noHints
+    TcRnModMissingRealSrcSpan{} -> noHints
+    TcRnImplicitImportOfPrelude{} -> noHints
 
   diagnosticCode = constructorCode
 
@@ -125,3 +163,16 @@ messageWithInfoDiagnosticMessage unit_state ErrInfo{..} show_ctxt important =
                       ([errInfoContext | show_ctxt] ++ [errInfoSupplementary])
   in (mapDecoratedSDoc (pprWithUnitState unit_state) important) `unionDecoratedSDoc`
      mkDecorated err_info'
+
+pprUnusedName :: OccName -> UnusedNameProv -> SDoc
+pprUnusedName name reason =
+  sep [ msg <> colon
+      , nest 2 $ pprNonVarNameSpace (occNameSpace name) <+> quotes (ppr name) ]
+  where
+    msg = case reason of
+      UnusedNameTopDecl -> defined
+      UnusedNameImported mod -> text "Imported from" <+> quotes (ppr mod) <+> text "but not used"
+      UnusedNameTypePattern -> defined <+> text "on the right hand side"
+      UnusedNameMatch -> defined
+      UnusedNameLocalBind -> defined
+    defined = text "Defined but not used"

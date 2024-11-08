@@ -16,6 +16,8 @@ module CSlash.Unit.Module
   , stableModuleCmp
   , moduleStableString
   , moduleIsDefinite
+  , HasModule(..)
+  , ContainsModule(..)
   , installedModuleEq
   ) where
 
@@ -39,6 +41,12 @@ stableModuleCmp (Module p1 n1) (Module p2 n2) =
 installedModuleEq :: InstalledModule -> Module -> Bool
 installedModuleEq imod mod =
   fst (getModuleInstantiation mod) == imod
+
+class HasModule m where
+  getModule :: m Module
+
+class ContainsModule t where
+  extractModule :: t -> Module
 
 {- *********************************************************************
 *                                                                      *

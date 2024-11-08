@@ -352,6 +352,7 @@ optimisationFlags = EnumSet.fromList
 data WarningFlag =
      Opt_WarnDuplicateExports
    | Opt_WarnRedundantConstraints
+   | Opt_WarnImplicitPrelude
    | Opt_WarnIncompletePatterns
    | Opt_WarnIncompleteUniPatterns
    | Opt_WarnOverflowedLiterals
@@ -411,6 +412,7 @@ warnFlagNames wflag = case wflag of
   Opt_WarnRedundantConstraints                    -> "redundant-constraints" :| []
   Opt_WarnDuplicateExports                        -> "duplicate-exports" :| []
   Opt_WarnInaccessibleCode                        -> "inaccessible-code" :| []
+  Opt_WarnImplicitPrelude                         -> "implicit-prelude" :| []
   Opt_WarnIncompletePatterns                      -> "incomplete-patterns" :| []
   Opt_WarnIncompleteUniPatterns                   -> "incomplete-uni-patterns" :| []
   Opt_WarnInlineRuleShadowing                     -> "inline-rule-shadowing" :| []

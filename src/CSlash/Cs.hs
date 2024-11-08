@@ -95,5 +95,4 @@ pp_nonnull xs = vcat (map ppr xs)
 
 data CsParsedModule = CsParsedModule
   { cpm_module :: Located (CsModule Ps)
-  , cpm_src_files :: [FilePath]
   }

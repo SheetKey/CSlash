@@ -1,3 +1,5 @@
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE MagicHash #-}
@@ -14,6 +16,7 @@ import CSlash.Data.FastString
 import CSlash.Data.FastString.Env
 import CSlash.Types.Unique
 import CSlash.Types.Unique.FM
+import CSlash.Types.Unique.Set
 import CSlash.Utils.Outputable
 import CSlash.Utils.Lexeme
 import CSlash.Utils.Binary
@@ -80,6 +83,10 @@ isKvNameSpace :: NameSpace -> Bool
 isKvNameSpace KvName = True
 isKvNameSpace _ = False
 
+isTermVarNameSpace :: NameSpace -> Bool
+isTermVarNameSpace VarName = True
+isTermVarNameSpace _ = False
+
 isVarNameSpace :: NameSpace -> Bool
 isVarNameSpace TvName = True
 isVarNameSpace KvName = True
@@ -90,6 +97,11 @@ isUnknownNameSpace :: NameSpace -> Bool
 isUnknownNameSpace UNKNOWN_NS = True
 isUnknownNameSpace _ = False
 
+isValNameSpace :: NameSpace -> Bool
+isValNameSpace DataName = True
+isValNameSpace VarName = True
+isValNameSpace _ = False
+
 pprNameSpace :: NameSpace -> SDoc
 pprNameSpace VarName = text "variable"
 pprNameSpace TvName = text "type variable"
@@ -97,6 +109,10 @@ pprNameSpace KvName = text "kind variable"
 pprNameSpace TcClsName = text "type constructor or class"
 pprNameSpace DataName = text "data constructor"
 pprNameSpace UNKNOWN_NS = text "UNKNOWN_NS"
+
+pprNonVarNameSpace :: NameSpace -> SDoc
+pprNonVarNameSpace VarName = empty
+pprNonVarNameSpace ns = pprNameSpace ns
 
 pprNameSpaceBrief :: NameSpace -> SDoc
 pprNameSpaceBrief VarName = char 'v'
@@ -214,8 +230,76 @@ lookupOccEnv (MkOccEnv as) (OccName ns s) = do
   m <- lookupFsEnv as s
   lookupUFM m ns
 
+lookupOccEnv_AllNameSpaces :: OccEnv a -> OccName -> [a]
+lookupOccEnv_AllNameSpaces (MkOccEnv as) (OccName _ s)
+  = case lookupFsEnv as s of
+      Nothing -> []
+      Just r -> nonDetEltsUFM r
+
 mkOccEnv :: [(OccName, a)] -> OccEnv a
 mkOccEnv = extendOccEnvList emptyOccEnv
+
+nonDetFoldOccEnv :: (a -> b -> b) -> b -> OccEnv a -> b
+nonDetFoldOccEnv f b0 (MkOccEnv as) =
+  nonDetFoldFsEnv (flip $ nonDetFoldUFM f) b0 as
+
+nonDetOccEnvElts :: OccEnv a -> [a]
+nonDetOccEnvElts = nonDetFoldOccEnv (:) []
+
+plusOccEnv_C :: (a -> a -> a) -> OccEnv a -> OccEnv a -> OccEnv a
+plusOccEnv_C f (MkOccEnv env1) (MkOccEnv env2) = MkOccEnv $ plusFsEnv_C (plusUFM_C f) env1 env2
+
+extendOccEnv_Acc
+  :: forall a b
+  .  (a -> b -> b)
+  -> (a -> b)
+  -> OccEnv b
+  -> OccName
+  -> a
+  -> OccEnv b
+extendOccEnv_Acc f g (MkOccEnv env) (OccName ns s)
+  = MkOccEnv . extendFsEnv_Acc f' g' env s
+  where
+    f' :: a -> UniqFM NameSpace b -> UniqFM NameSpace b
+    f' a bs = alterUFM (Just . \case { Nothing -> g a; Just b -> f a b }) bs ns
+    g' a = unitUFM ns (g a)
+
+--------------------------------------------------------------------------------
+
+newtype OccSet = OccSet (FastStringEnv (UniqSet NameSpace))
+
+emptyOccSet :: OccSet
+emptyOccSet = OccSet emptyFsEnv
+
+unitOccSet :: OccName -> OccSet
+unitOccSet (OccName ns s) = OccSet $ unitFsEnv s (unitUniqSet ns)
+
+mkOccSet :: [OccName] -> OccSet
+mkOccSet = extendOccSetList emptyOccSet
+
+extendOccSet :: OccSet -> OccName -> OccSet
+extendOccSet (OccSet occs) (OccName ns s) = OccSet $ extendFsEnv occs s (unitUniqSet ns)
+
+extendOccSetList :: OccSet -> [OccName] -> OccSet
+extendOccSetList = foldl' extendOccSet
+
+unionOccSets :: OccSet -> OccSet -> OccSet
+unionOccSets (OccSet xs) (OccSet ys) = OccSet $ plusFsEnv_C unionUniqSets xs ys
+
+unionManyOccSets :: [OccSet] -> OccSet
+unionManyOccSets = foldl' unionOccSets emptyOccSet
+
+elemOccSet :: OccName -> OccSet -> Bool
+elemOccSet (OccName ns s) (OccSet occs) = maybe False (elementOfUniqSet ns) $ lookupFsEnv occs s
+
+isEmptyOccSet :: OccSet -> Bool
+isEmptyOccSet (OccSet occs) = isNullUFM occs
+
+{- *********************************************************************
+*                                                                      *
+            Predicates and taking them apart
+*                                                                      *
+********************************************************************* -}
 
 occNameString :: OccName -> String
 occNameString (OccName _ s) = unpackFS s
@@ -268,6 +352,11 @@ isConOccFS (OccName _ s) = isLexCon s
 
 setOccNameSpace :: NameSpace -> OccName -> OccName
 setOccNameSpace sp (OccName _ occ) = OccName sp occ
+
+startsWithUnderscore :: OccName -> Bool
+startsWithUnderscore occ = case unpackFS (occNameFS occ) of
+  '_':_ -> True
+  _ -> False
 
 {- *********************************************************************
 *                                                                      *

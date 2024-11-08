@@ -36,6 +36,8 @@ data Pat p
   | KdSigPat (XKdSigPat p) (LPat p) (CsPatSigKind (NoTc p))
   ------------ Implicit (Type) parameters ---------------
   | ImpPat (XImpPat p) (LPat p)
+  ------------ Extension ---------------
+  | XPat !(XXPat p)
 
 type family ConLikeP x
 
@@ -44,3 +46,11 @@ data CsConPatTyArg p = CsConPatTyArg !(XConPatTyArg p) (CsTyPat p)
 type family XConPatTyArg p
 
 type CsConPatDetails p = CsConDetails (CsConPatTyArg (NoTc p)) (LPat p)
+
+csConPatArgs :: UnXRec p => CsConPatDetails p -> [LPat p]
+csConPatArgs (PrefixCon _ ps) = ps
+csConPatArgs (InfixCon p1 p2) = [p1, p2]
+
+csConPatTyArgs :: UnXRec p => CsConPatDetails p -> [CsConPatTyArg (NoTc p)]
+csConPatTyArgs (PrefixCon tyargs _) = tyargs
+csConPatTyArgs (InfixCon _ _) = []

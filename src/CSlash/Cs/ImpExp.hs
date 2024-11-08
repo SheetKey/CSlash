@@ -29,7 +29,7 @@ import CSlash.Utils.Panic
 
 import Data.Data
 import Data.Maybe
-import GHC.Hs.Doc (LHsDoc)
+-- import GHC.Hs.Doc (LHsDoc)
 
 type instance Anno (ImportDecl (CsPass p)) = SrcSpanAnnA
 
@@ -69,6 +69,15 @@ data EpAnnImportDecl = EpAnnImportDecl
 
 instance NoAnn EpAnnImportDecl where
   noAnn = EpAnnImportDecl noAnn Nothing Nothing Nothing 
+
+simpleImportDecl :: ModuleName -> ImportDecl Ps
+simpleImportDecl mn = ImportDecl
+  { ideclExt = XImportDeclPass noAnn NoSourceText False
+  , ideclName = noLocA mn
+  , ideclQualified = NotQualified
+  , ideclAs = Nothing
+  , ideclImportList = Nothing
+  }
 
 instance ( OutputableBndrId p
          , Outputable (Anno (IE (CsPass p))))

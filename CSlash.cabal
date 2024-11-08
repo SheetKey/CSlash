@@ -79,6 +79,7 @@ library
                     , CSlash.Core.Type.Rep
                     , CSlash.Core.Type.Subst
                     , CSlash.Core.Unfold
+                    , CSlash.Core.UsageEnv
 
                     , CSlash.Cs
                     , CSlash.Cs.Binds
@@ -196,7 +197,13 @@ library
                     , CSlash.Platform.Profile
                     , CSlash.Platform.Ways
 
+                    , CSlash.Rename.Bind
+                    , CSlash.Rename.Env
+                    , CSlash.Rename.Fixity
+                    , CSlash.Rename.Module
                     , CSlash.Rename.Names
+                    , CSlash.Rename.Pat
+                    , CSlash.Rename.Utils
 
                     , CSlash.Settings
                     , CSlash.Settings.Config
@@ -218,11 +225,16 @@ library
                     , CSlash.Tc.Errors.Types
                     , CSlash.Tc.Module
                     , CSlash.Tc.Types
+                    , CSlash.Tc.Types.BasicTypes
+                    , CSlash.Tc.Types.Evidence
+                    , CSlash.Tc.Types.ErrCtxt
                     , CSlash.Tc.Types.LclEnv
                     , CSlash.Tc.Types.Origin
                     , CSlash.Tc.Types.TcRef
                     , CSlash.Tc.Utils.Monad
                     , CSlash.Tc.Utils.TcType
+                    , CSlash.Tc.Zonk.Monad
+                    , CSlash.Tc.Zonk.TcType
 
                     , CSlash.Types
                     , CSlash.Types.Avail

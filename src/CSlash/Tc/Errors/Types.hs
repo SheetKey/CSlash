@@ -77,5 +77,19 @@ data TcRnMessageDetailed = TcRnMessageDetailed !ErrInfo !TcRnMessage
 
 data TcRnMessage where
   TcRnUnknownMessage :: (UnknownDiagnostic (DiagnosticOpts TcRnMessage)) -> TcRnMessage
-  TcRnMessageWithInfo :: !UnitState -> !TcRnMessageDetailed -> TcRnMessage  
+  TcRnMessageWithInfo :: !UnitState -> !TcRnMessageDetailed -> TcRnMessage
+  TcRnBindingOfExistingName :: RdrName -> TcRnMessage
+  TcRnQualifiedBinder :: !RdrName -> TcRnMessage
+  TcRnMultipleFixityDecls :: SrcSpan -> RdrName -> TcRnMessage
+  TcRnDuplicateDecls :: !OccName -> !(NE.NonEmpty Name) -> TcRnMessage
+  TcRnUnusedName :: !OccName -> !UnusedNameProv -> TcRnMessage
+  TcRnModMissingRealSrcSpan :: Module -> TcRnMessage
+  TcRnImplicitImportOfPrelude :: TcRnMessage
   deriving Generic
+
+data UnusedNameProv
+  = UnusedNameTopDecl
+  | UnusedNameImported !ModuleName
+  | UnusedNameTypePattern
+  | UnusedNameMatch
+  | UnusedNameLocalBind

@@ -1,3 +1,5 @@
+{-# LANGUAGE BangPatterns #-}
+
 module CSlash.Types.Name.Cache where
 
 import CSlash.Unit.Module
@@ -58,3 +60,7 @@ updateNameCache' (NameCache _ nc) upd_fn = modifyMVar' nc upd_fn
 
 modifyMVar' :: MVar a -> (a -> IO (a, b)) -> IO b
 modifyMVar' m f = modifyMVar m $ f >=> \c -> fst c `seq` pure c
+
+updateNameCache
+  :: NameCache -> Module -> OccName -> (OrigNameCache -> IO (OrigNameCache, c)) -> IO c
+updateNameCache name_cache !_mod !_occ upd_fn = updateNameCache' name_cache upd_fn

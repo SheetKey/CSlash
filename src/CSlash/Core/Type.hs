@@ -3,7 +3,7 @@ module CSlash.Core.Type
   , Var, TypeVar, isTyVar, ForAllTyBinder
   , KnotTied
 
-  , mkTyVarTy, mkTyVarTys
+  , mkTyVarTy, mkTyVarTys, getTyVar_maybe, repGetTyVar_maybe
 
   , mkAppTy, mkAppTys
 
@@ -11,7 +11,7 @@ module CSlash.Core.Type
 
   , binderVar, binderVars
 
-  , coreView
+  , coreView, coreFullView
   ) where
 
 import CSlash.Types.Basic
@@ -60,6 +60,17 @@ coreView (TyConApp tc tys) = expandSynTyConApp_maybe tc tys
 coreView _ = Nothing
 {-# INLINE coreView #-}
 
+coreFullView :: Type -> Type
+coreFullView ty@(TyConApp tc _)
+  | isTypeSynonymTyCon tc = core_full_view ty
+coreFullView ty = ty
+{-# INLINE coreFullView #-}
+
+core_full_view :: Type -> Type
+core_full_view ty
+  | Just ty' <- coreView ty = core_full_view ty'
+  | otherwise = ty
+
 expandSynTyConApp_maybe :: TyCon -> [Type] -> Maybe Type
 expandSynTyConApp_maybe tc arg_tys
   | Just (tvs, rhs) <- synTyConDefn_maybe tc
@@ -89,6 +100,19 @@ expand_syn tvs rhs arg_tys
         rhs' = substTy subst rhs
     go subst (tv:tvs) (ty:tys) = go (extendTvSubst subst tv ty) tvs tys
     go _ (_:_) [] = pprPanic "expand_syn" (ppr tvs $$ ppr rhs $$ ppr arg_tys)
+
+{- *********************************************************************
+*                                                                      *
+                      TyVarTy
+*                                                                      *
+********************************************************************* -}
+
+getTyVar_maybe :: Type -> Maybe TypeVar
+getTyVar_maybe = repGetTyVar_maybe . coreFullView
+
+repGetTyVar_maybe :: Type -> Maybe TypeVar
+repGetTyVar_maybe (TyVarTy tv) = Just tv
+repGetTyVar_maybe _ = Nothing
 
 {- *********************************************************************
 *                                                                      *

@@ -83,3 +83,9 @@ instance Binary Usage where
               return UsageHomeModule { usg_mod_name = nm, usg_mod_hash = mod, usg_unit_id = uid
                                      , usg_exports = exps, usg_entities = ents }
       i -> error ("Binary.get(Usage): " ++ show i)
+
+data ImportAvails = ImportAvails
+  { imp_mods :: ImportedMods
+  , imp_direct_dep_mods :: InstalledModuleEnv ModuleName
+  , imp_dep_direct_pkgs :: Set UnitId
+  }

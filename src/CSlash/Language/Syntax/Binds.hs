@@ -24,6 +24,7 @@ type CsValBinds id = CsValBindsLR id id
 data CsValBindsLR idL idR
   = ValBinds (XValBinds idL idR)
              (LCsBindsLR idL idR) [LSig idR]
+  | XValBindsLR !(XXValBindsLR idL idR)
 
 -- ---------------------------------------------------------------------
 
@@ -53,6 +54,7 @@ data CsBindLR idL idR
     , tcvar_id :: IdP idL
     , tcvar_rhs :: LCsExpr idR
     }
+  | XCsBindsLR !(XXCsBindsLR idL idR)
 
 type LSig p = XRec p (Sig p)
 
@@ -60,6 +62,8 @@ data Sig pass
   = TypeSig (XTypeSig pass) (LIdP pass) (LCsSigType pass)
   | KindSig (XKindSig pass) (LIdP pass) (LCsKind pass)
   | FixSig (XFixSig pass) (FixitySig pass)
+
+type LFixitySig pass = XRec pass (FixitySig pass)
 
 data FixitySig pass
   = FixitySig (XFixitySig pass) (LIdP pass) Fixity

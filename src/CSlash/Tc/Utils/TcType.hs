@@ -1,11 +1,6 @@
 module CSlash.Tc.Utils.TcType
-  ( TcType
+  ( module CSlash.Tc.Utils.TcType
   , TcTyVar
-
-  , TcLevel(..)
-
-  , TcTyVarDetails(..), pprTcTyVarDetails
-  , MetaDetails, MetaInfo
   ) where
 
 import Prelude hiding ((<>))
@@ -15,7 +10,7 @@ import CSlash.Types.Var
 import CSlash.Core.TyCon
 
 import {-# SOURCE #-} CSlash.Tc.Types.Origin
-  ( SkolemInfo )
+  ( SkolemInfo, unkSkol )
 
 import CSlash.Types.Name as Name
 import CSlash.Types.Name.Env
@@ -30,7 +25,31 @@ import CSlash.Utils.Panic
 
 import Data.IORef (IORef)
 
+{- *********************************************************************
+*                                                                      *
+              Types
+*                                                                      *
+********************************************************************* -}
+
 type TcType = Type
+
+{- *********************************************************************
+*                                                                      *
+          ExpType: an "expected type" in the type checker
+*                                                                      *
+********************************************************************* -}
+
+data ExpType
+  = Check TcType
+  | Infer !InferResult
+
+data InferResult
+
+{- *********************************************************************
+*                                                                      *
+        TyVarDetails, MetaDetails, MetaInfo
+*                                                                      *
+********************************************************************* -}
 
 data TcTyVarDetails
   = SkolemTv SkolemInfo TcLevel
@@ -38,6 +57,9 @@ data TcTyVarDetails
            , mtv_ref :: IORef MetaDetails
            , mtv_tclvl :: TcLevel
            }
+
+vanillaSkolemTvUnk :: HasDebugCallStack => TcTyVarDetails
+vanillaSkolemTvUnk = SkolemTv unkSkol topTcLevel
 
 instance Outputable TcTyVarDetails where
   ppr = pprTcTyVarDetails
@@ -48,6 +70,8 @@ pprTcTyVarDetails (MetaTv { mtv_info = info, mtv_tclvl = tclvl })
   = ppr info <> colon <> ppr tclvl
 
 data MetaDetails
+  = Flexi
+  | Indirect TcType
 
 data MetaInfo
 
@@ -57,7 +81,16 @@ instance Outputable MetaDetails where
 instance Outputable MetaInfo where
   ppr = undefined
 
+{- *********************************************************************
+*                                                                      *
+                Untouchable type variables
+*                                                                      *
+********************************************************************* -}
+
 newtype TcLevel = TcLevel Int deriving (Eq, Ord)
 
 instance Outputable TcLevel where
   ppr (TcLevel us) = ppr us
+
+topTcLevel :: TcLevel
+topTcLevel = TcLevel 0

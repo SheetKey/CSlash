@@ -14,6 +14,6 @@ instance ContainsLogger env => HasLogger (IOEnv env) where
     getLogger = do env <- getEnv
                    return $! extractLogger env
 
--- instance ContainsModule env => HasModule (IOEnv env) where
---     getModule = do env <- getEnv
---                    return $ extractModule env
+instance ContainsModule env => HasModule (IOEnv env) where
+    getModule = do env <- getEnv
+                   return $ extractModule env

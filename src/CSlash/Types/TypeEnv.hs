@@ -17,3 +17,6 @@ type TypeEnv = NameEnv TyThing
 
 emptyTypeEnv :: TypeEnv
 emptyTypeEnv = emptyNameEnv
+
+plusTypeEnv :: TypeEnv -> TypeEnv -> TypeEnv
+plusTypeEnv env1 env2 = plusNameEnv env1 env2

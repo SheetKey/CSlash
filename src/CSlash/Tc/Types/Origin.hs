@@ -21,6 +21,9 @@ import CSlash.Utils.Panic
 import CSlash.Types.Unique
 
 import GHC.Exception
+import GHC.Stack (callStack)
+
+import CSlash.Utils.Misc
 
 data UserTypeCtxt
   = FunSigCtxt Name ReportRedundantConstraints
@@ -40,7 +43,7 @@ data ReportRedundantConstraints
   | WantRRC SrcSpan
   deriving (Eq)
 
-data SkolemInfo = SkolemInfor Unique SkolemInfoAnon
+data SkolemInfo = SkolemInfo Unique SkolemInfoAnon
 
 data SkolemInfoAnon
   = SigSkol UserTypeCtxt TcType [(Name, TcTyVar)]
@@ -50,6 +53,12 @@ data SkolemInfoAnon
   | UnifyForAllSkol TcType
   | TyConSkol (TyConFlavor TyCon) Name
   | UnkSkol CallStack
+
+unkSkol :: HasDebugCallStack => SkolemInfo
+unkSkol = SkolemInfo (mkUniqueGrimily 0) unkSkolAnon
+
+unkSkolAnon :: HasDebugCallStack => SkolemInfoAnon
+unkSkolAnon = UnkSkol callStack
 
 data TyVarBndrs = CsTyVarBndrsRn [CsTyVarBndr Rn]
 
