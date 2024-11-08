@@ -61,7 +61,7 @@ import CSlash.Types.Var.Env
 import CSlash.Types.SrcLoc
 import CSlash.Types.Name.Env
 import CSlash.Types.Name.Set
--- import CSlash.Types.Name.Ppr
+import CSlash.Types.Name.Ppr
 import CSlash.Types.Unique.FM ( emptyUFM )
 import CSlash.Types.Unique.Supply
 -- import GHC.Types.Annotations
@@ -355,7 +355,7 @@ getNamePprCtx :: TcRn NamePprCtx
 getNamePprCtx = do
   rdr_env <- getGlobalRdrEnv
   cs_env <- getTopEnv
-  panic "getNamePprCtx"
+  return $ mkNamePprCtx (cs_unit_env cs_env) rdr_env
 
 traceIf :: SDoc -> TcRnIf m n ()
 traceIf = traceOptIf Opt_D_dump_if_trace

@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE BangPatterns #-}
@@ -364,8 +365,20 @@ startsWithUnderscore occ = case unpackFS (occNameFS occ) of
 *                                                                      *
 ********************************************************************* -}
 
+mk_deriv :: NameSpace -> FastString -> [FastString] -> OccName
+mk_deriv occ_sp sys_prefix str = mkOccNameFS occ_sp (concatFS $ sys_prefix : str)
+
+isDerivedOccName :: OccName -> Bool
+isDerivedOccName occ = case occNameString occ of
+  '$':c:_ | isAlphaNum c -> True
+  c:':':_ | isAlphaNum c -> True
+  _ -> False
+
 mkDataConWorkerOcc :: OccName -> OccName
-mkDataConWorkerOcc datacon_occ = setOccNameSpace varName datacon_occ
+mkDataConWorkerOcc = mk_simple_deriv varName "$W"
+
+mk_simple_deriv :: NameSpace -> FastString -> OccName -> OccName
+mk_simple_deriv sp px occ = mk_deriv sp px [occNameFS occ]
 
 {- *********************************************************************
 *                                                                      *

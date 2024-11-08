@@ -256,6 +256,7 @@ library
                     , CSlash.Types.Name.Cache
                     , CSlash.Types.Name.Env
                     , CSlash.Types.Name.Occurrence
+                    , CSlash.Types.Name.Ppr
                     , CSlash.Types.Name.Reader
                     , CSlash.Types.Name.Set
                     , CSlash.Types.PcInfo

@@ -81,6 +81,9 @@ rdrNameSpace = occNameSpace . rdrNameOcc
 mkRdrUnqual :: OccName -> RdrName
 mkRdrUnqual occ = Unqual occ
 
+mkRdrQual :: ModuleName -> OccName -> RdrName
+mkRdrQual mod occ = Qual mod occ
+
 mkUnqual :: NameSpace -> FastString -> RdrName
 mkUnqual sp n = Unqual (mkOccNameFS sp n)
 
@@ -268,6 +271,12 @@ greOccName (GRE { gre_name = nm }) = nameOccName nm
 
 greDefinitionModule :: GlobalRdrEltX info -> Maybe Module
 greDefinitionModule = nameModule_maybe . greName
+
+greQualModName :: Outputable info => GlobalRdrEltX info -> ModuleName
+greQualModName gre@(GRE { gre_lcl = lcl, gre_imp = iss })
+  | lcl, Just mod <- greDefinitionModule gre = moduleName mod
+  | Just is <- headMaybe iss = is_as (is_decl is)
+  | otherwise = pprPanic "greQualModName" (ppr gre)
 
 gresToNameSet :: [GlobalRdrEltX info] -> NameSet
 gresToNameSet gres = foldr add emptyNameSet gres

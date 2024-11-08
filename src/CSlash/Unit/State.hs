@@ -1091,6 +1091,14 @@ mkModMap pkg mod = unitUniqMap (mkModule pkg mod)
 -- -----------------------------------------------------------------------------
 -- Package Utils
 
+lookupModuleInAllUnits :: UnitState -> ModuleName -> [(Module, UnitInfo)]
+lookupModuleInAllUnits pkgs m
+  = case lookupModuleWithSuggestions pkgs m NoPkgQual of
+      LookupFound a b -> [(a, fst b)]
+      LookupMultiple rs -> map f rs
+        where f (m, _) = (m, expectJust "lookkupModule" (lookupUnit pkgs (moduleUnit m)))
+      _ -> []
+
 data LookupResult
   = LookupFound Module (UnitInfo, ModuleOrigin)
   | LookupMultiple [(Module, ModuleOrigin)]
