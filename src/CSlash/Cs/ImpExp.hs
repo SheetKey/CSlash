@@ -83,6 +83,7 @@ simpleImportDecl :: ModuleName -> ImportDecl Ps
 simpleImportDecl mn = ImportDecl
   { ideclExt = XImportDeclPass noAnn NoSourceText False
   , ideclName = noLocA mn
+  , ideclPkgQual = NoRawPkgQual
   , ideclQualified = NotQualified
   , ideclAs = Nothing
   , ideclImportList = Nothing

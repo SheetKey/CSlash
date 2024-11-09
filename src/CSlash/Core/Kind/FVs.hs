@@ -49,6 +49,7 @@ shallowKvFolder = KindFolder { kf_view = noKindView
                              , kf_UKd = mempty
                              , kf_AKd = mempty
                              , kf_LKd = mempty
+                             , kf_ctxt = do_ctxt
                              }
   where
     do_kv is v = Endo do_it
@@ -56,3 +57,4 @@ shallowKvFolder = KindFolder { kf_view = noKindView
         do_it acc | v `elemVarSet` is = acc
                   | v `elemVarSet` acc = acc
                   | otherwise = acc `extendVarSet` v
+    do_ctxt _ _ = mempty

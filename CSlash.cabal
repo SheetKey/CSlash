@@ -363,6 +363,7 @@ library
                       -Wno-name-shadowing
                       -Werror=incomplete-patterns
                       -Werror=incomplete-uni-patterns
+                      -Werror=missing-fields
                       -- -Werror=missing-methods
                       -Wincomplete-record-updates
                       -- -Wpartial-fields

@@ -142,6 +142,7 @@ emptyPartialModIface mod = ModIface
   , mi_usages = []
   , mi_exports = []
   , mi_fixities = []
+  , mi_anns = []
   , mi_decls = []
   , mi_extra_decls = Nothing
   , mi_globals = Nothing

@@ -80,7 +80,7 @@ data KindFolder env a = KindFolder
   , kf_UKd :: a
   , kf_AKd :: a
   , kf_LKd :: a
-  , kd_ctxt :: env -> [KdRel] -> a
+  , kf_ctxt :: env -> [KdRel] -> a
   }
 
 {-# INLINE foldKind #-}
@@ -95,7 +95,7 @@ foldKind (KindFolder { kf_view = view
     go_kd env (KdVarKd kv) = kdvar env kv
     go_kd env (FunKd FKF_K_K arg res) = go_kd env arg `mappend` go_kd env res
     go_kd env (FunKd FKF_C_K ctxt inner) = go_kd env ctxt `mappend` go_kd env inner
-    go_kd env (KdContext rels) = kd_ctxt env rels
+    go_kd env (KdContext rels) = kf_ctxt env rels
     go_kd _ UKd = kf_UKd
     go_kd _ AKd = kf_AKd
     go_kd _ LKd = kf_LKd

@@ -103,12 +103,11 @@ mkPrelImports this_mod loc implicit_prelude import_decls
                    , ideclImplicit = True
                    }
       , ideclName = L loc' pRELUDE_NAME
-      -- , ideclPkgQual = NoRawPkgQual
+      , ideclPkgQual = NoRawPkgQual
       , ideclQualified = NotQualified
       , ideclAs = Nothing
       , ideclImportList = Nothing
       }
-                     
 
 --------------------------------------------------------------
 -- Get options

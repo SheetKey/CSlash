@@ -8,10 +8,10 @@ import CSlash.Utils.Error (DiagOpts (..))
 import CSlash.Driver.Errors.Types
   ( CsMessage, CsMessageOpts (..), PsMessage, DriverMessage, DriverMessageOpts (..) )
 import CSlash.Driver.Errors.Ppr ()
--- import GHC.Tc.Errors.Types
+import CSlash.Tc.Errors.Types
 -- import GHC.HsToCore.Errors.Types
 import CSlash.Types.Error
--- import GHC.Iface.Errors.Types
+import CSlash.Iface.Errors.Types
 
 initDiagOpts :: DynFlags -> DiagOpts
 initDiagOpts dflags = DiagOpts
@@ -28,11 +28,21 @@ initDiagOpts dflags = DiagOpts
 initPrintConfig :: DynFlags -> DiagnosticOpts CsMessage
 initPrintConfig dflags =
   CsMessageOpts { psMessageOpts = initPsMessageOpts dflags
+                , tcMessageOpts = initTcMessageOpts dflags
                 , driverMessageOpts = initDriverMessageOpts dflags
                 }
 
 initPsMessageOpts :: DynFlags -> DiagnosticOpts PsMessage
 initPsMessageOpts _ = NoDiagnosticOpts
+
+initTcMessageOpts :: DynFlags -> DiagnosticOpts TcRnMessage
+initTcMessageOpts dflags = TcRnMessageOpts
+  { tcOptsShowContext = gopt Opt_ShowErrorContext dflags
+  , tcOptsIfaceOpts = initIfaceMessageOpts dflags }
+
+initIfaceMessageOpts :: DynFlags -> DiagnosticOpts IfaceMessage
+initIfaceMessageOpts dflags = IfaceMessageOpts
+  { ifaceShowTriedFiles = verbosity dflags >= 3 }
 
 initDriverMessageOpts :: DynFlags -> DiagnosticOpts DriverMessage
 initDriverMessageOpts dflags = DriverMessageOpts (initPsMessageOpts dflags)

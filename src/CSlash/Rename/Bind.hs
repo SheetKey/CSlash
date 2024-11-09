@@ -111,9 +111,9 @@ makeMiniFixityEnv decls = foldM add_one_sig emptyMiniFixityEnv decls
 
     extend_mini_fixity_env ns_spec env@MFE{mfe_data_level_names, mfe_type_level_names} fs fix_item
       = case ns_spec of
-          NoNamespaceSpecifier -> MFE
+          NoNamespaceSpecifier -> env
             { mfe_data_level_names = extendFsEnv mfe_data_level_names fs fix_item }
-          TypeNamespaceSpecifier{} -> MFE
+          TypeNamespaceSpecifier{} -> env
             { mfe_type_level_names = extendFsEnv mfe_type_level_names fs fix_item }
 
 {- ******************************************************
