@@ -425,6 +425,9 @@ wrapLocMA fn (L loc a) = setSrcSpanA loc $ do
   b <- fn a
   return (L loc b)
 
+setErrsVar :: TcRef (Messages TcRnMessage) -> TcRn a -> TcRn a
+setErrsVar v = updLclEnv $ \env -> env { tcl_errs = v }
+
 addErr :: TcRnMessage -> TcRn ()
 addErr msg = do
   loc <- getSrcSpanM
@@ -445,6 +448,12 @@ getErrsVar = do
 
 mkDetailedMessage :: ErrInfo -> TcRnMessage -> TcRnMessageDetailed
 mkDetailedMessage = TcRnMessageDetailed
+
+addMessages :: Messages TcRnMessage -> TcRn ()
+addMessages msgs1 = do
+  errs_var <- getErrsVar
+  msgs0 <- readTcRef errs_var
+  writeTcRef errs_var (msgs0 `unionMessages` msgs1)
 
 {- *********************************************************************
 *                                                                      *
@@ -513,9 +522,21 @@ tcTryM thing_inside = do
              Left _ -> Nothing
              Right r -> Just r
 
+capture_messages :: TcM r -> TcM (r, Messages TcRnMessage)
+capture_messages thing_inside = do
+  msg_var <- newTcRef emptyMessages
+  res <- setErrsVar msg_var thing_inside
+  msgs <- readTcRef msg_var
+  return (res, msgs)
+
 askNoErrs :: TcRn a -> TcRn (a, Bool)
 askNoErrs thing_inside = do
-  panic "askNoErrs"
+  (mb_res, msgs) <- capture_messages $ tcTryM thing_inside
+  addMessages msgs
+  case mb_res of
+    Nothing -> failM
+    Just res -> let errs_found = errorsFound msgs
+                in return (res, not errs_found)
 
 attemptM :: TcRn r -> TcRn (Maybe r)
 attemptM thing_inside = do
@@ -663,5 +684,10 @@ liftZonkM (ZonkM f) = do
   lvl <- getTcLevel
   src_span <- getSrcSpanM
   bndrs <- getLclEnvBinderStack <$> getLclEnv
-  panic "liftZonkM"
+  let zge = ZonkGblEnv { zge_logger = logger
+                       , zge_name_ppr_ctx = name_ppr_ctx
+                       , zge_src_span = src_span
+                       , zge_tc_level = lvl
+                       , zge_binder_stack = bndrs }
+  liftIO $ f zge
 {-# INLINE liftZonkM #-}

@@ -21,7 +21,7 @@ import GHC.Exts               ( oneShot )
 
 data ZonkGblEnv = ZonkGblEnv
   { zge_logger :: Logger
-  , zge_name_ppr_ctz :: NamePprCtx
+  , zge_name_ppr_ctx :: NamePprCtx
   , zge_src_span :: SrcSpan
   , zge_tc_level :: TcLevel
   , zge_binder_stack :: TcBinderStack
