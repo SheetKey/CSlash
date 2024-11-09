@@ -23,7 +23,7 @@ import CSlash.Types.Error
 import CSlash.Cs.Extension ( Rn )
 
 -- import GHC.Core.InstEnv (LookupInstanceErrReason)
--- import GHC.Iface.Errors.Types
+import CSlash.Iface.Errors.Types
 import CSlash.Driver.Errors.Types   ( DriverMessage, CsMessageOpts, DriverMessageOpts )
 import CSlash.Parser.Errors.Types   ( PsMessage, PsHeaderMessage )
 -- import GHC.HsToCore.Errors.Types ( DsMessage )
@@ -258,6 +258,40 @@ type family CsDiagnosticCode c = n | n -> c where
   CsDiagnosticCode "TcRnUnusedName"                                = 40910
   CsDiagnosticCode "TcRnModMissingRealSrcSpan"                     = 84170
   CsDiagnosticCode "TcRnImplicitImportOfPrelude"                   = 20540
+  CsDiagnosticCode "TcRnSelfImport"                                = 43281
+  CsDiagnosticCode "TcRnNoExplicitImportList"                      = 16029
+  CsDiagnosticCode "TcRnMissingImportList"                         = 77037
+
+  -- BadImport
+  CsDiagnosticCode "BadImportNotExported"                          = 61689
+  CsDiagnosticCode "BadImportAvailDataCon"                         = 35373
+  CsDiagnosticCode "BadImportNotExportedSubordinates"              = 10237
+  CsDiagnosticCode "BadImportAvailTyCon"                           = 56449
+  CsDiagnosticCode "BadImportAvailVar"                             = 12112
+
+  -- TcRnDodgyImports/DodgyImportsReason
+  CsDiagnosticCode "DodgyImportsEmptyParent"                       = 99623
+
+  -- TcRnImportLookup/ImportLookupReason
+  CsDiagnosticCode "ImportLookupQualified"                         = 48795
+  CsDiagnosticCode "ImportLookupIllegal"                           = 14752
+  CsDiagnosticCode "ImportLookupAmbiguous"                         = 92057
+
+  -- Interface errors
+  CsDiagnosticCode "Can'tFindNameInInterface"                      = 83249
+  CsDiagnosticCode "CircularImport"                                = 75429
+  CsDiagnosticCode "HiModuleNameMismatchWarn"                      = 53693
+  CsDiagnosticCode "ExceptionOccurred"                             = 47808
+  CsDiagnosticCode "HomeModError"                                  = 58427
+  CsDiagnosticCode "DynamicHashMismatchError"                      = 54709
+  CsDiagnosticCode "CouldntFindInFiles"                            = 94559
+  CsDiagnosticCode "GenericMissing"                                = 87110
+  CsDiagnosticCode "MissingPackageFiles"                           = 22211
+  CsDiagnosticCode "MissingPackageWayFiles"                        = 88719
+  CsDiagnosticCode "ModuleSuggestion"                              = 61948
+  CsDiagnosticCode "MultiplePackages"                              = 45102
+  CsDiagnosticCode "NoUnitIdMatching"                              = 51294
+  CsDiagnosticCode "NotAModule"                                    = 35235
 
   -- To generate new random numbers:
   --  https://www.random.org/integers/?num=10&min=1&max=99999&col=1&base=10&format=plain
@@ -291,13 +325,13 @@ type family ConRecursInto con where
   ConRecursInto "DriverPsHeaderMessage"    = 'Just PsMessage
   -- ConRecursInto "DriverInterfaceError"     = 'Just IfaceMessage
 
-  -- ConRecursInto "CantFindErr"              = 'Just CantFindInstalled
-  -- ConRecursInto "CantFindInstalledErr"     = 'Just CantFindInstalled
+  ConRecursInto "CantFindErr"              = 'Just CantFindInstalled
+  ConRecursInto "CantFindInstalledErr"     = 'Just CantFindInstalled
 
-  -- ConRecursInto "CantFindInstalled"        = 'Just CantFindInstalledReason
+  ConRecursInto "CantFindInstalled"        = 'Just CantFindInstalledReason
 
-  -- ConRecursInto "BadIfaceFile"                 = 'Just ReadInterfaceError
-  -- ConRecursInto "FailedToLoadDynamicInterface" = 'Just ReadInterfaceError
+  ConRecursInto "BadIfaceFile"                 = 'Just ReadInterfaceError
+  ConRecursInto "FailedToLoadDynamicInterface" = 'Just ReadInterfaceError
 
   ----------------------------------
   -- Constructors of PsMessage
@@ -311,6 +345,18 @@ type family ConRecursInto con where
 
   ConRecursInto "TcRnMessageWithInfo"      = 'Just TcRnMessageDetailed
   ConRecursInto "TcRnMessageDetailed"      = 'Just TcRnMessage
+  ConRecursInto "TcRnDodgyImports"         = 'Just DodgyImportsReason
+  ConRecursInto "DodgyImportsHiding"       = 'Just ImportLookupReason
+  ConRecursInto "TcRnImportLookup"         = 'Just ImportLookupReason
+  
+  
+  -- Interface file errors
+  ConRecursInto "TcRnInterfaceError"       = 'Just IfaceMessage
+  ConRecursInto "Can'tFindInterface"       = 'Just MissingInterfaceError
+
+  ----------------------------------
+  -- Constructors of ImportLookupBad
+  ConRecursInto "ImportLookupBad"          = 'Just BadImportKind
 
   ConRecursInto _                          = 'Nothing
 

@@ -288,6 +288,19 @@ instance Outputable TyCon where
                               then text "[tc]"
                               else empty
 
+tyConFlavor :: TyCon -> TyConFlavor TyCon
+tyConFlavor (TyCon { tyConDetails = details })
+  | AlgTyCon { algTcFlavor = parent, algTcRhs = rhs } <- details
+  = case parent of
+      _ -> case rhs of
+             AbstractTyCon -> AbstractTypeFlavor
+             TupleTyCon {} -> TupleFlavor
+             SumTyCon {} -> SumFlavor
+             DataTyCon {} -> DataTypeFlavor
+  | SynonymTyCon {} <- details = TypeFunFlavor
+  | PrimTyCon {} <- details = BuiltInTypeFlavor
+  | TcTyCon { tctc_flavor = flav } <- details = flav
+
 instance NamedThing TyCon where
   getName = tyConName
 

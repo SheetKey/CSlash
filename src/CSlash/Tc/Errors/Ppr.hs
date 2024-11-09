@@ -1,3 +1,4 @@
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE LambdaCase #-}
@@ -63,8 +64,8 @@ import CSlash.Types.Var.Set
 import CSlash.Types.Var.Env
 import CSlash.Types.Fixity (defaultFixity)
 
--- import CSlash.Iface.Errors.Types
--- import CSlash.Iface.Errors.Ppr
+import CSlash.Iface.Errors.Types
+import CSlash.Iface.Errors.Ppr
 import CSlash.Iface.Syntax
 
 import CSlash.Unit.State
@@ -95,7 +96,7 @@ import Data.Bifunctor
 
 defaultTcRnMessageOpts :: TcRnMessageOpts
 defaultTcRnMessageOpts = TcRnMessageOpts { tcOptsShowContext = True
-                                         , tcOptsIfaceOpts = () }
+                                         , tcOptsIfaceOpts = defaultDiagnosticOpts @IfaceMessage }
 
 instance HasDefaultDiagnosticOpts TcRnMessageOpts where
   defaultOpts = defaultTcRnMessageOpts
@@ -126,6 +127,22 @@ instance Diagnostic TcRnMessage where
       [ text "Module does not have a RealSrcSpan:" <+> ppr mod ]
     TcRnImplicitImportOfPrelude -> mkSimpleDecorated $
       text "Module" <+> quotes (text "Prelude") <+> text "implicitly imported."
+    TcRnInterfaceError reason ->
+      diagnosticMessage (tcOptsIfaceOpts opts) reason
+    TcRnSelfImport imp_mod_name -> mkSimpleDecorated $
+      text "A module cannot import itself:" <+> ppr imp_mod_name
+    TcRnNoExplicitImportList mod -> mkSimpleDecorated $
+      text "The module" <+> quotes (ppr mod) <+> text "does not have an explicit import list"
+    TcRnDodgyImports d -> case d of
+      DodgyImportsEmptyParent gre -> mkDecorated $
+        [dodgy_msg (text "import") gre (dodgy_msg_insert gre)]
+      DodgyImportsHiding reason -> mkSimpleDecorated $
+        pprImportLookup reason
+    TcRnMissingImportList ie -> mkDecorated
+      [ text "The import item" <+> quotes (ppr ie)
+        <+> text "does not have ann explicit import list" ]
+    TcRnImportLookup reason -> mkSimpleDecorated $
+      pprImportLookup reason
 
   diagnosticReason = \case
     TcRnUnknownMessage m -> diagnosticReason m
@@ -142,6 +159,12 @@ instance Diagnostic TcRnMessage where
       UnusedNameLocalBind -> Opt_WarnUnusedLocalBinds
     TcRnModMissingRealSrcSpan{} -> ErrorWithoutFlag
     TcRnImplicitImportOfPrelude{} -> WarningWithFlag Opt_WarnImplicitPrelude
+    TcRnInterfaceError err -> interfaceErrorReason err
+    TcRnSelfImport{} -> ErrorWithoutFlag
+    TcRnNoExplicitImportList{} -> WarningWithFlag Opt_WarnMissingImportList
+    TcRnDodgyImports{} -> WarningWithFlag Opt_WarnDodgyImports
+    TcRnMissingImportList{} -> WarningWithFlag Opt_WarnMissingImportList
+    TcRnImportLookup{} -> ErrorWithoutFlag
 
   diagnosticHints = \case
     TcRnUnknownMessage m -> diagnosticHints m
@@ -153,6 +176,22 @@ instance Diagnostic TcRnMessage where
     TcRnUnusedName{} -> noHints
     TcRnModMissingRealSrcSpan{} -> noHints
     TcRnImplicitImportOfPrelude{} -> noHints
+    TcRnInterfaceError reason -> interfaceErrorHints reason
+    TcRnSelfImport{} -> noHints
+    TcRnNoExplicitImportList{} -> noHints
+    TcRnDodgyImports{} -> noHints
+    TcRnMissingImportList{} -> noHints
+    TcRnImportLookup (ImportLookupBad k _ is ie) ->
+      let mod_name = moduleName $ is_mod is
+          occ = rdrNameOcc $ ieName ie
+      in case k of
+           BadImportAvailVar -> [ImportSuggestion occ $ CouldRemoveTypeKeyword mod_name]
+           BadImportNotExported suggs -> suggs
+           BadImportAvailTyCon -> [ImportSuggestion occ $ CouldAddTypeKeyword mod_name]
+           BadImportAvailDataCon par -> [ImportSuggestion occ $
+                                         ImportDataCon (Just mod_name) par]
+           BadImportNotExportedSubordinates{} -> noHints
+    TcRnImportLookup{} -> noHints
 
   diagnosticCode = constructorCode
 
@@ -163,6 +202,15 @@ messageWithInfoDiagnosticMessage unit_state ErrInfo{..} show_ctxt important =
                       ([errInfoContext | show_ctxt] ++ [errInfoSupplementary])
   in (mapDecoratedSDoc (pprWithUnitState unit_state) important) `unionDecoratedSDoc`
      mkDecorated err_info'
+
+dodgy_msg :: Outputable ie => SDoc -> GlobalRdrElt -> ie -> SDoc
+dodgy_msg kind tc ie = panic "dodgy_msg"
+
+dodgy_msg_insert :: GlobalRdrElt -> IE Rn
+dodgy_msg_insert tc_gre = panic "dodgy_msg_insert"
+
+pprImportLookup :: ImportLookupReason -> SDoc
+pprImportLookup _ = panic "pprImportLookup"
 
 pprUnusedName :: OccName -> UnusedNameProv -> SDoc
 pprUnusedName name reason =

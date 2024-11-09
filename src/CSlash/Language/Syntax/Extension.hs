@@ -224,7 +224,8 @@ type family XImpKindedTyVar x
 
 -- -------------------------------------
 -- ImportDecl type families
-type family XCImportDecl       x
+type family XCImportDecl x
+type family ImportDeclPkgQual x
 
 -- -------------------------------------
 -- IE type families

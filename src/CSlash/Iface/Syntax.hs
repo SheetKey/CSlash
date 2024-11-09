@@ -1,3 +1,4 @@
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE DeriveTraversable #-}
 
 module CSlash.Iface.Syntax
@@ -37,7 +38,7 @@ import CSlash.Types.Var( VarBndr(..), binderVar{-, tyVarSpecToBinders, visArgTyp
 -- import GHC.Stg.InferTags.TagSig
 import CSlash.Parser.Annotation (noLocA)
 import CSlash.Cs.Extension ( Rn )
--- import GHC.Hs.Doc ( WithHsDocIdentifiers(..) )
+import CSlash.Cs.Doc ( WithCsDocIdentifiers(..) )
 
 import CSlash.Utils.Lexeme (isLexSym)
 import CSlash.Utils.Fingerprint
@@ -91,6 +92,16 @@ data IfaceConDecl
     , ifConTvBinders :: [IfaceBndr]
     , ifConArgTys :: [IfaceType]
     }
+
+data IfaceWarnings
+  = IfWarnAll IfaceWarningTxt
+  | IfWarnSome [(OccName, IfaceWarningTxt)] [(IfExtName, IfaceWarningTxt)]
+
+data IfaceWarningTxt
+  = IfWarningTxt (Maybe WarningCategory) SourceText [(IfaceStringLiteral, [IfExtName])]
+  | IfDeprecatedTxt SourceText [(IfaceStringLiteral, [IfExtName])]
+
+data IfaceStringLiteral = IfStringLiteral SourceText FastString
 
 data IfaceAnnotation
 
@@ -180,6 +191,30 @@ ifaceDeclFingerprints hash decl
   where
     computeFingerprint' =
       unsafeDupablePerformIO . computeFingerprint (panic "ifaceDeclFingerprints")
+
+fromIfaceWarnings :: IfaceWarnings -> Warnings Rn
+fromIfaceWarnings = \case
+  IfWarnAll txt -> WarnAll (fromIfaceWarningTxt txt)
+  IfWarnSome vs ds -> WarnSome [(occ, fromIfaceWarningTxt txt) | (occ, txt) <- vs]
+                               [(occ, fromIfaceWarningTxt txt) | (occ, txt) <- ds]
+
+fromIfaceWarningTxt :: IfaceWarningTxt -> WarningTxt Rn
+fromIfaceWarningTxt = \case
+  IfWarningTxt mb_cat src strs -> WarningTxt
+    (noLocA . fromWarningCategory <$> mb_cat)
+    src
+    (noLocA <$> map fromIfaceStringLiteralWithNames strs)
+  IfDeprecatedTxt src strs -> DeprecatedTxt
+    src
+    (noLocA <$> map fromIfaceStringLiteralWithNames strs)
+
+fromIfaceStringLiteralWithNames
+  :: (IfaceStringLiteral, [IfExtName]) -> WithCsDocIdentifiers StringLiteral Rn
+fromIfaceStringLiteralWithNames (str, names)
+  = WithCsDocIdentifiers (fromIfaceStringLiteral str) (map noLoc names)
+
+fromIfaceStringLiteral :: IfaceStringLiteral -> StringLiteral
+fromIfaceStringLiteral (IfStringLiteral st fs) = StringLiteral st fs Nothing
 
 {- *********************************************************************
 *                                                                      *

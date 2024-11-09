@@ -15,6 +15,8 @@ import CSlash.Language.Syntax.Module.Name
 import CSlash.Data.Bag
 import CSlash.Data.Maybe
 import CSlash.Data.FastString
+
+import CSlash.Types.Avail
 import CSlash.Types.Basic
 import CSlash.Types.GREInfo
 import CSlash.Types.SrcLoc
@@ -278,6 +280,11 @@ greQualModName gre@(GRE { gre_lcl = lcl, gre_imp = iss })
   | Just is <- headMaybe iss = is_as (is_decl is)
   | otherwise = pprPanic "greQualModName" (ppr gre)
 
+mkParent :: Name -> AvailInfo -> Parent
+mkParent _ (Avail _) = NoParent
+mkParent n (AvailTC m _) | n == m = NoParent
+                         | otherwise = ParentIs m
+
 gresToNameSet :: [GlobalRdrEltX info] -> NameSet
 gresToNameSet gres = foldr add emptyNameSet gres
   where
@@ -451,6 +458,11 @@ pickQualGRE mod gre@(GRE { gre_lcl = lcl, gre_imp = iss })
 
 plusGlobalRdrEnv :: GlobalRdrEnv -> GlobalRdrEnv -> GlobalRdrEnv
 plusGlobalRdrEnv env1 env2 = plusOccEnv_C (foldr insertGRE) env1 env2
+
+mkGlobalRdrEnv :: [GlobalRdrElt] -> GlobalRdrEnv
+mkGlobalRdrEnv gres = foldr add emptyGlobalRdrEnv gres
+  where
+    add gre env = extendOccEnv_Acc insertGRE Utils.singleton env (greOccName gre) gre
     
 insertGRE :: GlobalRdrElt -> [GlobalRdrElt] -> [GlobalRdrElt]
 insertGRE new_g [] = [new_g]

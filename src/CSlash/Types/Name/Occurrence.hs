@@ -240,6 +240,10 @@ lookupOccEnv_AllNameSpaces (MkOccEnv as) (OccName _ s)
 mkOccEnv :: [(OccName, a)] -> OccEnv a
 mkOccEnv = extendOccEnvList emptyOccEnv
 
+mkOccEnv_C :: (a -> a -> a) -> [(OccName, a)] -> OccEnv a
+mkOccEnv_C f elts = MkOccEnv $ foldl' g emptyFsEnv elts
+  where g env (OccName ns s, a) = extendFsEnv_C (plusUFM_C $ flip f) env s (unitUFM ns a)
+
 nonDetFoldOccEnv :: (a -> b -> b) -> b -> OccEnv a -> b
 nonDetFoldOccEnv f b0 (MkOccEnv as) =
   nonDetFoldFsEnv (flip $ nonDetFoldUFM f) b0 as

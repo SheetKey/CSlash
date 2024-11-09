@@ -1,3 +1,4 @@
+{-# LANGUAGE LambdaCase #-}
 module CSlash.Types.TyThing where
 
 import CSlash.Types.GREInfo
@@ -47,3 +48,9 @@ implicitTyConThings tc
                                             dataConImplicitTyThings dc]
     cons :: [DataCon]
     cons = tyConDataCons tc
+
+tyThingGREInfo :: TyThing -> GREInfo
+tyThingGREInfo = \case
+  AConLike con -> IAmConLike $ conLikeConInfo con
+  AnId _ -> Vanilla
+  ATyCon tc -> IAmTyCon (fmap tyConName $ tyConFlavor tc)               

@@ -38,7 +38,10 @@ pprAlternative pp x alt arity
 data TyConFlavor tc
   = TupleFlavor
   | SumFlavor
+  | DataTypeFlavor
+  | AbstractTypeFlavor
   | TypeFunFlavor
+  | BuiltInTypeFlavor
   deriving (Eq, Data, Functor)
 
 instance Outputable (TyConFlavor tc) where
@@ -47,11 +50,17 @@ instance Outputable (TyConFlavor tc) where
       go TupleFlavor = "tuple"
       go SumFlavor = "sum"
       go TypeFunFlavor = "type synonym"
+      go DataTypeFlavor = "data type"
+      go AbstractTypeFlavor = "abstract type"
+      go BuiltInTypeFlavor = "built-in type"
 
 instance NFData tc => NFData (TyConFlavor tc) where
   rnf TupleFlavor = ()
   rnf SumFlavor = ()
   rnf TypeFunFlavor = ()
+  rnf DataTypeFlavor = ()
+  rnf AbstractTypeFlavor = ()
+  rnf BuiltInTypeFlavor = ()
 
 tyConFlavorAssoc_maybe :: TyConFlavor tc -> Maybe tc
 tyConFlavorAssoc_maybe _ = Nothing

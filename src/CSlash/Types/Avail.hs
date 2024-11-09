@@ -40,6 +40,17 @@ availSubordinateNames avail@(AvailTC _ ns)
   | otherwise = ns
 
 -- -----------------------------------------------------------------------------
+-- Operations on AvailInfo
+
+availName :: AvailInfo -> Name
+availName (Avail n) = n
+availName (AvailTC n _) = n
+
+availNames :: AvailInfo -> [Name]
+availNames (Avail n) = [n]
+availNames (AvailTC _ cs) = cs
+
+-- -----------------------------------------------------------------------------
 -- Printing
 
 instance Outputable AvailInfo where

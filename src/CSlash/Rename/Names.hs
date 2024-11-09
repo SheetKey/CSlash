@@ -1,3 +1,4 @@
+{-# LANGUAGE LambdaCase #-}
 module CSlash.Rename.Names where
 
 import CSlash.Driver.Env
@@ -7,8 +8,7 @@ import CSlash.Driver.Ppr
 import CSlash.Rename.Env
 import CSlash.Rename.Fixity
 -- import GHC.Rename.Utils ( warnUnusedTopBinds )
--- import GHC.Rename.Unbound
--- import qualified GHC.Rename.Unbound as Unbound
+import CSlash.Rename.Unbound as Unbound
 
 import CSlash.Tc.Errors.Types
 -- import GHC.Tc.Utils.Env
@@ -17,8 +17,8 @@ import CSlash.Tc.Types.LclEnv
 -- import GHC.Tc.Zonk.TcType ( tcInitTidyEnv )
 
 import CSlash.Cs
--- import CSlash.Iface.Load   ( loadSrcInterface )
--- import CSlash.Iface.Syntax ( fromIfaceWarnings )
+import CSlash.Iface.Load   ( loadSrcInterface )
+import CSlash.Iface.Syntax ( fromIfaceWarnings )
 import CSlash.Builtin.Names
 -- import CSlash.Parser.PostProcess ( setRdrNameSpace )
 import CSlash.Core.Type
@@ -46,7 +46,7 @@ import CSlash.Types.SourceText
 import CSlash.Types.Id
 import CSlash.Types.PcInfo
 import CSlash.Types.PkgQual
-import CSlash.Types.GREInfo (ConInfo(..))
+import CSlash.Types.GREInfo (ConInfo(..), GREInfo(..))
 
 import CSlash.Unit
 import CSlash.Unit.Module.Warnings
@@ -85,11 +85,127 @@ import System.IO
 rnImports
   :: [(LImportDecl Ps, SDoc)] -> RnM ([LImportDecl Rn], GlobalRdrEnv, ImportAvails, AnyPcUsage)
 rnImports imports = do
-  panic "rnImports"
+  tcg_env <- getGblEnv
+  let this_mod = tcg_mod tcg_env
+  stuff <- mapAndReportM (rnImportDecl this_mod) imports
+  return $ combine stuff
+
+  where
+    combine :: [(LImportDecl Rn, GlobalRdrEnv, ImportAvails, AnyPcUsage)]
+            -> ([LImportDecl Rn], GlobalRdrEnv, ImportAvails, AnyPcUsage)
+    combine = foldr plus ([], emptyGlobalRdrEnv, emptyImportAvails, False)
+
+    plus (decl, gbl_env1, imp_avails1, pc_usage1)
+         (decls, gbl_env2, imp_avails2, pc_usage2)
+      = ( decl : decls
+        , gbl_env1 `plusGlobalRdrEnv` gbl_env2
+        , imp_avails1 `plusImportAvails` imp_avails2
+        , pc_usage1 || pc_usage2 )
+      
+rnImportDecl
+  :: Module
+  -> (LImportDecl Ps, SDoc)
+  -> RnM (LImportDecl Rn, GlobalRdrEnv, ImportAvails, AnyPcUsage)
+rnImportDecl this_mod (L loc decl, import_reason) =
+  let ImportDecl { ideclName = loc_imp_mod_name
+                 , ideclPkgQual = raw_pkg_qual
+                 , ideclQualified = qual_style
+                 , ideclExt = XImportDeclPass { ideclImplicit = implicit }
+                 , ideclAs = as_mod
+                 , ideclImportList = imp_details } = decl
+  in setSrcSpanA loc $ do
+    let qual_only = isImportDeclQualified qual_style
+        imp_mod_name = unLoc loc_imp_mod_name
+        doc = ppr imp_mod_name <+> import_reason
+
+    cs_env <- getTopEnv
+    unit_env <- cs_unit_env <$> getTopEnv
+    let pkg_qual = renameRawPkgQual unit_env imp_mod_name raw_pkg_qual
+
+    when (imp_mod_name == moduleName this_mod
+          && (case pkg_qual of
+                NoPkgQual -> True
+                ThisPkg uid -> uid == homeUnitId_ (cs_dflags cs_env)
+                OtherPkg _ -> False))
+      $ addErr (TcRnSelfImport imp_mod_name)
+
+    case imp_details of
+      Just (Exactly, _) -> return ()
+      _ | implicit -> return ()
+        | qual_only -> return ()
+        | otherwise -> addDiagnostic (TcRnNoExplicitImportList imp_mod_name)
+
+    iface <- loadSrcInterface doc imp_mod_name pkg_qual
+
+    let imp_mod = mi_module iface
+        qual_mod_name = fmap unLoc as_mod `orElse` imp_mod_name
+        imp_spec = ImpDeclSpec { is_mod = imp_mod, is_qual = qual_only
+                               , is_dloc = locA loc, is_as = qual_mod_name }
+
+    (new_imp_details, gres) <- filterImports cs_env iface imp_spec imp_details
+
+    potential_gres <- mkGlobalRdrEnv . snd <$> filterImports cs_env iface imp_spec Nothing
+
+    let gbl_env = mkGlobalRdrEnv gres
+
+        is_hiding | Just (EverythingBut, _) <- imp_details = True
+                  | otherwise = False
+
+    cs_env <- getTopEnv
+    let home_unit = cs_home_unit cs_env
+        other_home_units = cs_all_home_unit_ids cs_env
+        imv = ImportedModsVal
+              { imv_name = qual_mod_name
+              , imv_span = locA loc
+              , imv_is_hiding = is_hiding
+              , imv_all_exports = potential_gres
+              , imv_qualified = qual_only }
+        imports = calculateAvails home_unit other_home_units iface (ImportedByUser imv)
+
+    -- case fromIfaceWarnings (mi_warns iface) of
+    --   WarnAll txt -> addDiagnostic (TcRnDeprecatedModule imp_mod_name txt)
+    --   _ -> return ()
+
+    let new_imp_decl = ImportDecl
+          { ideclExt = ideclExt decl
+          , ideclName = ideclName decl
+          , ideclPkgQual = pkg_qual
+          , ideclQualified = ideclQualified decl
+          , ideclAs = ideclAs decl
+          , ideclImportList = new_imp_details }
+
+    return (L loc new_imp_decl, gbl_env, imports, mi_pc iface)
 
 renameRawPkgQual :: UnitEnv -> ModuleName -> RawPkgQual -> PkgQual
 renameRawPkgQual _ _ NoRawPkgQual = NoPkgQual
 renameRawPkgQual _ _ (RawPkgQual _) = panic "renameRawPkgQual RawPkgQual"
+
+calculateAvails
+  :: HomeUnit
+  -> S.Set UnitId
+  -> ModIface
+  -> ImportedBy
+  -> ImportAvails
+calculateAvails home_unit other_home_units iface imported_by =
+  let imp_mod = mi_module iface
+      imp_sem_mod = mi_semantic_module iface
+      deps = mi_deps iface
+
+      pkg = moduleUnit (mi_module iface)
+      ipkg = toUnitId pkg
+
+      dependent_pkgs = if ipkg `S.member` other_home_units
+                       then S.empty
+                       else S.singleton ipkg
+
+      direct_mods = mkModDeps $ if ipkg `S.member` other_home_units
+                                then S.singleton (moduleUnitId imp_mod, moduleName imp_mod)
+                                else S.empty
+  in ImportAvails
+     { imp_mods = unitModuleEnv (mi_module iface) [imported_by]
+     , imp_direct_dep_mods = direct_mods
+     , imp_dep_direct_pkgs = dependent_pkgs
+     }
 
 {- *********************************************************************
 *                                                                      *
@@ -160,6 +276,236 @@ getLocalNonValBinders fixity_env CsGroup{ cs_valds = binds, cs_typeds = type_dec
 
 {- *********************************************************************
 *                                                                      *
+        Filtering imports
+*                                                                      *
+********************************************************************* -}
+
+gresFromAvail :: HasDebugCallStack => CsEnv -> Maybe ImportSpec -> AvailInfo -> [GlobalRdrElt]
+gresFromAvail cs_env prov avail =
+  [ mk_gre nm info
+  | nm <- availNames avail
+  , let info = lookupGREInfo cs_env nm ]
+  where
+    mk_gre n info = case prov of
+      Nothing -> GRE { gre_name = n, gre_par = mkParent n avail
+                     , gre_lcl = True, gre_imp = emptyBag
+                     , gre_info = info }
+      Just is -> GRE { gre_name = n, gre_par = mkParent n avail
+                     , gre_lcl = False, gre_imp = unitBag is
+                     , gre_info = info }
+
+gresFromAvails :: CsEnv -> Maybe ImportSpec -> [AvailInfo] -> [GlobalRdrElt]
+gresFromAvails cs_env prov = concatMap (gresFromAvail cs_env prov)
+
+filterImports
+  :: HasDebugCallStack
+  => CsEnv
+  -> ModIface
+  -> ImpDeclSpec
+  -> Maybe (ImportListInterpretation, LocatedL [LIE Ps])
+  -> RnM (Maybe (ImportListInterpretation, LocatedL [LIE Rn]), [GlobalRdrElt])
+filterImports cs_env iface decl_spec Nothing
+  = return (Nothing, gresFromAvails cs_env (Just imp_spec) all_avails)
+  where
+    all_avails = mi_exports iface
+    imp_spec = ImpSpec { is_decl = decl_spec, is_item = ImpAll }
+filterImports cs_env iface decl_spec (Just (want_hiding, L l import_items)) = do
+  items1 <- mapM lookup_lie import_items
+
+  let items2 = concat items1
+
+      gres = case want_hiding of
+        Exactly -> concatMap (gresFromIE decl_spec) items2
+        EverythingBut ->
+          let hidden_names = mkNameSet $ concatMap (map greName . snd) items2
+              keep n = not (n `elemNameSet` hidden_names)
+              all_gres = gresFromAvails cs_env (Just hiding_spec) all_avails
+          in filter (keep . greName) all_gres
+  return (Just (want_hiding, L l (map fst items2)), gres)
+
+  where
+    import_mod = mi_module iface
+    all_avails = mi_exports iface
+    hiding_spec = ImpSpec { is_decl = decl_spec, is_item = ImpAll }
+    imp_occ_env = mkImportOccEnv cs_env decl_spec all_avails
+
+    lookup_parent :: IE Ps -> RdrName -> IELookupM ImpOccItem
+    lookup_parent ie rdr =
+      assertPpr (not $ isVarNameSpace ns)
+        (vcat [ text "filterImports lookup_parent: unexpected variable"
+              , text "rdr:" <+> ppr rdr
+              , text "namespace:" <+> pprNameSpace ns ]) $ 
+      do xs <- lookup_names ie rdr
+         case xs of
+           cax :| [] -> return cax
+           _ -> pprPanic "filter_imports lookup_parent ambiguous" $
+                vcat [ text "rdr:" <+> ppr rdr
+                     , text "lookups:" <+> ppr (fmap imp_item xs) ]
+      where
+        occ = rdrNameOcc rdr
+        ns = occNameSpace occ
+
+    lookup_names :: IE Ps -> RdrName -> IELookupM (NonEmpty ImpOccItem)
+    lookup_names ie rdr
+      | isQual rdr
+      = failLookupWith (QualImportError rdr)
+      | otherwise
+      = case lookups of
+          [] -> failLookupWith (BadImport ie IsNotSubordinate)
+          item:items -> return $ item :| items
+      where
+        lookups = concatMap nonDetNameEnvElts $
+                  lookupImpOccEnv (RelevantGREs False) imp_occ_env (rdrNameOcc rdr)
+
+    lookup_lie :: LIE Ps -> TcRn [(LIE Rn, [GlobalRdrElt])]
+    lookup_lie (L loc ieRdr) = setSrcSpanA loc $ do
+      (stuff, warns) <- liftM (fromMaybe ([], [])) $ run_lookup (lookup_ie ieRdr)
+      mapM_ (addTcRnDiagnostic <=< warning_msg) warns
+      return [ (L loc ie, gres) | (ie, gres) <- stuff ]
+
+      where
+        warning_msg (DodgyImport n) = pure $ TcRnDodgyImports (DodgyImportsEmptyParent n)
+        warning_msg MissingImportList = pure $ TcRnMissingImportList ieRdr
+        warning_msg (BadImportW ie) = do
+          reason <- badImportItemErr iface decl_spec ie IsNotSubordinate all_avails
+          pure $ TcRnDodgyImports (DodgyImportsHiding reason)
+
+        run_lookup :: IELookupM a -> TcRn (Maybe a)
+        run_lookup m = case m of
+          Failed err -> do msg <- lookup_err_msg err
+                           addErr $ TcRnImportLookup msg
+                           return Nothing
+          Succeeded a -> return $ Just a
+
+        lookup_err_msg err = case err of
+          BadImport ie sub -> badImportItemErr iface decl_spec ie sub all_avails
+          IllegalImport -> pure ImportLookupIllegal
+          QualImportError rdr -> pure $ ImportLookupQualified rdr
+
+    lookup_ie :: IE Ps -> IELookupM ([(IE Rn, [GlobalRdrElt])], [IELookupWarning])
+    lookup_ie ie = handle_bad_import $ case ie of
+      IEVar _ (L l n) -> do
+        xs <- lookup_names ie (ieWrappedName n)
+        let gres = map imp_item $ NE.toList xs
+        return ( [ (IEVar noExtField (L l (replaceWrappedName n name)), [gre])
+                 | gre <- gres
+                 , let name = greName gre ]
+               , [] )
+      _ -> failLookupWith IllegalImport
+
+      where
+        handle_bad_import m = catchIELookup m $ \err -> case err of
+          BadImport ie _
+            | want_hiding == EverythingBut
+              -> return ([], [BadImportW ie])
+          _ -> failLookupWith err
+
+type IELookupM = MaybeErr IELookupError
+
+data IELookupWarning
+  = BadImportW (IE Ps)
+  | MissingImportList
+  | DodgyImport GlobalRdrElt
+
+data IsSubordinate = IsSubordinate | IsNotSubordinate
+
+data IELookupError
+  = QualImportError RdrName
+  | BadImport (IE Ps) IsSubordinate
+  | IllegalImport
+
+failLookupWith :: IELookupError -> IELookupM a
+failLookupWith err = Failed err
+
+catchIELookup :: IELookupM a -> (IELookupError -> IELookupM a) -> IELookupM a
+catchIELookup m h = case m of
+  Succeeded r -> return r
+  Failed err -> h err
+
+data ImpOccItem = ImpOccItem
+  { imp_item :: GlobalRdrElt
+  , imp_bundled :: [GlobalRdrElt]
+  , imp_is_parent :: Bool
+  }
+
+instance Outputable ImpOccItem where
+  ppr (ImpOccItem { imp_item = item, imp_bundled = bundled, imp_is_parent = is_par })
+    = braces $ hsep
+      [ text "ImpOccItem"
+      , if is_par then text "[is_par]" else empty
+      , ppr (greName item) <+> ppr (greParent item)
+      , braces $ text "bundled:" <+> ppr (map greName bundled) ]
+
+mkImportOccEnv :: CsEnv -> ImpDeclSpec -> [IfaceExport] -> OccEnv (NameEnv ImpOccItem)
+mkImportOccEnv cs_env decl_spec all_avails =
+  mkOccEnv_C (plusNameEnv_C combine)
+  [ (occ, mkNameEnv [(nm, item)])
+  | avail <- all_avails
+  , let gres = gresFromAvail cs_env (Just hiding_spec) avail
+  , gre <- gres
+  , let nm = greName gre
+        occ = greOccName gre
+        (is_parent, bundled) = case avail of
+          AvailTC c _
+            | c == nm -> (True, drop 1 gres)
+            | otherwise -> (False, gres)
+          _ -> (False, [])
+        item = ImpOccItem { imp_item = gre, imp_bundled = bundled, imp_is_parent = is_parent } ]
+  where
+    hiding_spec = ImpSpec { is_decl = decl_spec, is_item = ImpAll }
+
+    combine :: ImpOccItem -> ImpOccItem -> ImpOccItem
+    combine item1@(ImpOccItem { imp_item = gre1, imp_is_parent = is_parent1 })
+            item2@(ImpOccItem { imp_item = gre2, imp_is_parent = is_parent2 })
+      | is_parent1 || is_parent2
+      , let name1 = greName gre1
+            name2 = greName gre2
+            gre = gre1 `plusGRE` gre2
+      = assertPpr (name1 == name2) (ppr name1 <+> ppr name2) $
+        if is_parent1
+        then item1 { imp_item = gre }
+        else item2 { imp_item = gre }
+    combine item1@(ImpOccItem { imp_item = c1, imp_bundled = kids1 })
+            item2@(ImpOccItem { imp_item = c2, imp_bundled = kids2 })
+      = assertPpr (greName c1 == greName c2
+                   && (not (null kids1 && null kids2)))
+                  (ppr c1 <+> ppr c2 <+> ppr kids1 <+> ppr kids2) $
+        if null kids1 then item2 else item1
+
+lookupImpOccEnv
+  :: WhichGREs GREInfo -> OccEnv (NameEnv ImpOccItem) -> OccName -> [NameEnv ImpOccItem]
+lookupImpOccEnv which_gres env occ =
+  mapMaybe relevant_items $ lookupOccEnv_AllNameSpaces env occ
+  where
+    is_relevant :: ImpOccItem -> Bool
+    is_relevant (ImpOccItem { imp_item = gre }) =
+      greIsRelevant which_gres (occNameSpace occ) gre
+
+    relevant_items :: NameEnv ImpOccItem -> Maybe (NameEnv ImpOccItem)
+    relevant_items nms =
+      let nms' = filterNameEnv is_relevant nms
+      in if isEmptyNameEnv nms' then Nothing else Just nms'
+
+{- *********************************************************************
+*                                                                      *
+            Import/Export utils
+*                                                                      *
+********************************************************************* -}
+
+gresFromIE :: ImpDeclSpec -> (LIE Rn, [GlobalRdrElt]) -> [GlobalRdrElt]
+gresFromIE decl_spec (L loc ie, gres) = map set_gre_imp gres
+  where
+    is_explicit = case ie of
+                    -- IEThingAll _ name _ -> \n -> n == lieWrappedName name
+                    _ -> const True
+    prov_fn name = ImpSpec { is_decl = decl_spec, is_item = item_spec }
+      where item_spec = ImpSome { is_explicit = is_explicit name
+                                , is_iloc = locA loc }
+    set_gre_imp gre@(GRE { gre_name = nm })
+      = gre { gre_imp = unitBag $ prov_fn nm }
+
+{- *********************************************************************
+*                                                                      *
             Unused names
 *                                                                      *
 ********************************************************************* -}
@@ -187,6 +533,57 @@ reportUnusedNames gbl_env cs_src = do
             Errors
 *                                                                      *
 ********************************************************************* -}
+
+badImportItemErr
+  :: ModIface
+  -> ImpDeclSpec
+  -> IE Ps
+  -> IsSubordinate
+  -> [AvailInfo]
+  -> TcRn ImportLookupReason
+badImportItemErr iface decl_spec ie sub avails = do
+  dflags <- getDynFlags
+  cs_env <- getTopEnv
+  let rdr_env = mkGlobalRdrEnv $ gresFromAvails cs_env (Just imp_spec) all_avails
+  pure $ ImportLookupBad (importErrorKind dflags rdr_env) iface decl_spec ie
+  where
+    importErrorKind dflags rdr_env
+      | any checkIfTyCon avails = case sub of
+          IsNotSubordinate -> BadImportAvailTyCon
+          IsSubordinate -> BadImportNotExportedSubordinates unavailableChildren
+      | any checkIfVarName avails = BadImportAvailVar
+      | Just con <- find checkIfDataCon avails = BadImportAvailDataCon $ availOccName con
+      | otherwise = BadImportNotExported suggs
+        where
+          suggs = similar_suggs
+          similar_names = similarNameSuggestions (Unbound.LF WL_Anything WL_Global)
+                                                 dflags rdr_env emptyLocalRdrEnv rdr
+          similar_suggs = case NE.nonEmpty $ mapMaybe imported_item $ similar_names of
+            Just similar -> [ SuggestSimilarNames rdr similar ]
+            Nothing -> []
+          imported_item (SimilarRdrName rdr_name (Just (ImportedBy {})))
+            = Just (SimilarRdrName rdr_name Nothing)
+          imported_item _ = Nothing
+
+    checkIfDataCon = checkIfAvailMatches isDataConName
+    checkIfTyCon = checkIfAvailMatches isTyConName
+    checkIfVarName = \case
+      AvailTC{} -> False
+      Avail n -> importedFS == occNameFS (occName n)
+                  && isVarOcc (occName n)
+    checkIfAvailMatches namePred = \case
+      AvailTC _ ns -> case find (\n -> importedFS == occNameFS (occName n)) ns of
+                        Just n -> namePred n
+                        Nothing -> False
+      Avail {} -> False
+    availOccName = occName . availName
+    rdr = ieName ie
+    importedFS = occNameFS $ rdrNameOcc rdr
+    imp_spec = ImpSpec { is_decl = decl_spec, is_item = ImpAll }
+    all_avails = mi_exports iface
+    unavailableChildren = case ie of
+      --IEThingWith _ _ _ ns _ -> map (rdrNameOcc . ieWrappedName . unLoc) ns
+      _ -> panic "importedChildren failed patten match: no children"
 
 addDupDeclErr :: NonEmpty GlobalRdrElt -> TcRn ()
 addDupDeclErr gres@(gre :| _)

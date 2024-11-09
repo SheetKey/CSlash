@@ -912,7 +912,7 @@ mkModuleImpExp anns (L l specname) subs = do
       | isVarNameSpace (rdrNameSpace name)
         -> return $ IEVar noExtField (L l (ieNameFromSpec specname))
       | isTvNameSpace (rdrNameSpace name)
-        -> return $ IETyVar noExtField (L l (ieNameFromSpec specname))
+        -> return $ IEVar noExtField (L l (ieNameFromSpec specname))
       | otherwise -> panic "mkModuleImpExp"
   where
     name = ieNameVal specname

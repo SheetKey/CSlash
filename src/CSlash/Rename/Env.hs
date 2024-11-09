@@ -24,7 +24,7 @@ import CSlash.Core.DataCon
 import CSlash.Core.TyCon
 import CSlash.Builtin.Names( rOOT_MAIN )
 import CSlash.Types.Basic  ( TopLevelFlag(..), TupleSort(..), tupleSortBoxity )
--- import CSlash.Types.TyThing ( tyThingGREInfo )
+import CSlash.Types.TyThing ( tyThingGREInfo )
 import CSlash.Types.SrcLoc as SrcLoc
 import CSlash.Utils.Outputable as Outputable
 import CSlash.Types.Unique.FM
@@ -80,6 +80,23 @@ newTopSrcBinder (L loc rdr_name)
        traceRn "newTopSrcBinder" (ppr this_mod $$ ppr rdr_name $$ ppr (locA loc))
        newGlobalBinder this_mod (rdrNameOcc rdr_name) (locA loc)
 
+lookupGREInfo :: HasDebugCallStack => CsEnv -> Name -> GREInfo
+lookupGREInfo cs_env nm
+  | Just ty_thing <- wiredInNameTyThing_maybe nm
+  = tyThingGREInfo ty_thing
+  | otherwise
+  = case nameModule_maybe nm of
+      Nothing -> UnboundGRE
+      Just mod -> unsafePerformIO $ do
+        _ <- initIfaceLoad cs_env $
+             loadInterface (text "lookupGREInfo" <+> parens (ppr nm))
+             mod ImportBySystem
+        mb_ty_thing <- lookupType cs_env nm
+        case mb_ty_thing of
+          Nothing -> pprPanic "lookupGREInfo" $
+                     vcat [ text "lookup failed:" <+> ppr nm ]
+          Just ty_thing -> return $ tyThingGREInfo ty_thing
+
 data CsSigCtxt
   = TopSigCtxt NameSet
   | LocalBindCtxt NameSet
@@ -87,3 +104,5 @@ data CsSigCtxt
 instance Outputable CsSigCtxt where
   ppr (TopSigCtxt ns) = text "TopSigCtxt" <+> ppr ns
   ppr (LocalBindCtxt ns) = text "LocalBindCtxt" <+> ppr ns
+
+

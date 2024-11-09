@@ -22,6 +22,7 @@ data ImportDeclQualifiedStyle
 data ImportDecl pass = ImportDecl
   { ideclExt :: XCImportDecl pass
   , ideclName :: XRec pass ModuleName
+  , ideclPkgQual :: ImportDeclPkgQual pass
   , ideclQualified :: ImportDeclQualifiedStyle
   , ideclAs :: Maybe (XRec pass ModuleName)
   , ideclImportList :: Maybe (ImportListInterpretation, XRec pass [LIE pass])
@@ -34,7 +35,6 @@ type LIE pass = XRec pass (IE pass)
 data IE pass
   = IEVar (XIEVar pass) (LIEWrappedName pass)
   | IEModuleContents (XIEModuleContents pass) (XRec pass ModuleName)
-  | IETyVar (XIETyVar pass) (LIEWrappedName pass) -- for type synonyms or type functions, Tv namespace. Should add another constructor for IECon/IETyCon
 
 data IEWrappedName p
   = IEName (XIEName p) (LIdP p)

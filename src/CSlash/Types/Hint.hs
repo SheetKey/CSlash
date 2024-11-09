@@ -67,7 +67,7 @@ data ImportSuggestion
   | CouldRemoveTypeKeyword ModuleName
   | CouldAddTypeKeyword ModuleName
   | ImportDataCon
-      { ies_suggest_import_from :: Maybe (ModuleName, Bool)
+      { ies_suggest_import_from :: Maybe (ModuleName)
       , ies_parent :: OccName }
 
 data HowInScope

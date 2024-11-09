@@ -103,6 +103,26 @@ csUpdateLoggerFlags :: CsEnv -> CsEnv
 csUpdateLoggerFlags h = h
   { cs_logger = setLogFlags (cs_logger h) (initLogFlags (cs_dflags h)) }
 
+lookupType :: CsEnv -> Name -> IO (Maybe TyThing)
+lookupType cs_env name = do
+  eps <- liftIO $ csEPS cs_env
+  let pte = eps_PTE eps
+  return $ lookupTypeInPTE cs_env pte name
+
+lookupTypeInPTE :: CsEnv -> PackageTypeEnv -> Name -> Maybe TyThing
+lookupTypeInPTE cs_env pte name = ty
+  where
+    hpt = cs_HUG cs_env
+    mod = assertPpr (isExternalName name) (ppr name)
+          $ if isHoleName name
+            then mkHomeModule (cs_home_unit cs_env) (moduleName (nameModule name))
+            else nameModule name
+    !ty = if isOneShot (csMode (cs_dflags cs_env))
+          then lookupNameEnv pte name
+          else case lookupHugByModule mod hpt of
+                 Just hm -> lookupNameEnv (md_types (hm_details hm)) name
+                 Nothing -> lookupNameEnv pte name
+
 lookupIfaceByModule :: HomeUnitGraph -> PackageIfaceTable -> Module -> Maybe ModIface
 lookupIfaceByModule hug pit mod
   = case lookupHugByModule mod hug of

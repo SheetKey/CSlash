@@ -57,14 +57,14 @@ import CSlash.Unit.Module.Warnings (WarningCategory, WarningTxt)
 
 import GHC.Generics ( Generic )
 import CSlash.Types.Name.Env (NameEnv)
--- import CSlash.Iface.Errors.Types
+import CSlash.Iface.Errors.Types
 import CSlash.Unit.Module.ModIface (ModIface)
 -- import GHC.Tc.Types.TH
 -- import GHC.Tc.Types.BasicTypes
 
 data TcRnMessageOpts = TcRnMessageOpts
   { tcOptsShowContext :: !Bool
-  , tcOptsIfaceOpts :: !()
+  , tcOptsIfaceOpts :: !IfaceMessageOpts
   }
 
 data ErrInfo = ErrInfo
@@ -85,6 +85,32 @@ data TcRnMessage where
   TcRnUnusedName :: !OccName -> !UnusedNameProv -> TcRnMessage
   TcRnModMissingRealSrcSpan :: Module -> TcRnMessage
   TcRnImplicitImportOfPrelude :: TcRnMessage
+  TcRnInterfaceError :: !IfaceMessage -> TcRnMessage
+  TcRnSelfImport :: !ModuleName -> TcRnMessage
+  TcRnNoExplicitImportList :: !ModuleName -> TcRnMessage
+  TcRnDodgyImports :: !DodgyImportsReason -> TcRnMessage
+  TcRnMissingImportList :: IE Ps -> TcRnMessage
+  TcRnImportLookup :: !ImportLookupReason -> TcRnMessage
+  deriving Generic
+
+data BadImportKind
+  = BadImportNotExported [CsHint]
+  | BadImportAvailTyCon
+  | BadImportAvailDataCon OccName
+  | BadImportNotExportedSubordinates [OccName]
+  | BadImportAvailVar
+  deriving Generic
+
+data DodgyImportsReason
+  = DodgyImportsEmptyParent !GlobalRdrElt
+  | DodgyImportsHiding !ImportLookupReason
+  deriving Generic
+
+data ImportLookupReason where
+  ImportLookupBad :: BadImportKind -> ModIface -> ImpDeclSpec -> IE Ps -> ImportLookupReason
+  ImportLookupQualified :: !RdrName -> ImportLookupReason
+  ImportLookupIllegal :: ImportLookupReason
+  ImportLookupAmbiguous :: !RdrName -> ![GlobalRdrElt] -> ImportLookupReason
   deriving Generic
 
 data UnusedNameProv

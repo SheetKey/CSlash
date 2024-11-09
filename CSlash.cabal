@@ -203,6 +203,7 @@ library
                     , CSlash.Rename.Module
                     , CSlash.Rename.Names
                     , CSlash.Rename.Pat
+                    , CSlash.Rename.Unbound
                     , CSlash.Rename.Utils
 
                     , CSlash.Settings

@@ -375,6 +375,7 @@ data WarningFlag =
    | Opt_WarnUnrecognizedWarningFlags
    | Opt_WarnUnusedForalls
    | Opt_WarnDeprecatedFlags
+   | Opt_WarnDodgyImports
    | Opt_WarnOrphans
    | Opt_WarnIdentities
    | Opt_WarnTabs
@@ -428,6 +429,7 @@ warnFlagNames wflag = case wflag of
   Opt_WarnMissingExportedSignatures               -> "missing-exported-signatures" :| []
   Opt_WarnMonomorphism                            -> "monomorphism-restriction" :| []
   Opt_WarnNameShadowing                           -> "name-shadowing" :| []
+  Opt_WarnDodgyImports                            -> "dodgy-imports" :| []
   Opt_WarnOrphans                                 -> "orphans" :| []
   Opt_WarnOverflowedLiterals                      -> "overflowed-literals" :| []
   Opt_WarnOverlappingPatterns                     -> "overlapping-patterns" :| []

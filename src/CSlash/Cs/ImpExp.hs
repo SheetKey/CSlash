@@ -20,6 +20,7 @@ import CSlash.Language.Syntax.ImpExp
 import CSlash.Types.SourceText   ( SourceText(..) )
 import CSlash.Types.SrcLoc
 import CSlash.Types.Name
+import CSlash.Types.PkgQual
 
 import CSlash.Parser.Annotation
 import CSlash.Cs.Extension
@@ -33,9 +34,17 @@ import Data.Maybe
 
 type instance Anno (ImportDecl (CsPass p)) = SrcSpanAnnA
 
-importDeclQualifiedStype :: Maybe EpaLocation -> (Maybe EpaLocation, ImportDeclQualifiedStyle)
-importDeclQualifiedStype mPost =
+importDeclQualifiedStyle :: Maybe EpaLocation -> (Maybe EpaLocation, ImportDeclQualifiedStyle)
+importDeclQualifiedStyle mPost =
   if isJust mPost then (mPost, QualifiedPost) else (Nothing, NotQualified)
+
+isImportDeclQualified :: ImportDeclQualifiedStyle -> Bool
+isImportDeclQualified NotQualified = False
+isImportDeclQualified _ = True
+
+type instance ImportDeclPkgQual Ps = RawPkgQual
+type instance ImportDeclPkgQual Rn = PkgQual
+type instance ImportDeclPkgQual Tc = PkgQual
 
 type instance XCImportDecl Ps = XImportDeclPass
 type instance XCImportDecl Rn = XImportDeclPass
@@ -136,10 +145,24 @@ type instance XIETyVar Tc = NoExtField
 
 type instance Anno (LocatedA (IE (CsPass p))) = SrcSpanAnnA
 
+ieName :: IE (CsPass p) -> IdP (CsPass p)
+ieName (IEVar _ (L _ n)) = ieWrappedName n
+ieName _ = panic "ieName failed pattern match!"
+
+ieWrappedLName :: IEWrappedName (CsPass p) -> LIdP (CsPass p)
+ieWrappedLName (IEName _ n) = n
+ieWrappedLName (IETyName _ n) = n
+
+ieWrappedName :: IEWrappedName (CsPass p) -> IdP (CsPass p)
+ieWrappedName = unLoc . ieWrappedLName
+
+replaceWrappedName :: IEWrappedName Ps -> IdP Rn -> IEWrappedName Rn
+replaceWrappedName (IEName x (L l _)) n = IEName x (L l n)
+replaceWrappedName (IETyName r (L l _)) n = IETyName r (L l n)
+
 instance OutputableBndrId p => Outputable (IE (CsPass p)) where
   ppr (IEVar _ var) = ppr (unLoc var)
   ppr (IEModuleContents _ mod') = text "module" <+> ppr mod'
-  ppr (IETyVar _ ty) = text "type" <+> ppr ty
 
 instance OutputableBndrId p => Outputable (IEWrappedName (CsPass p)) where
   ppr (IEName _ (L _ n)) = pprPrefixOcc n

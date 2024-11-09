@@ -87,6 +87,30 @@ import Debug.Trace (trace)
 
 {- *********************************************************************
 *                                                                      *
+        loadSrcInterface, loadOrphanModules, loadInterfaceForName
+
+                These three are called from TcM-land
+*                                                                      *
+********************************************************************* -}
+
+loadSrcInterface :: SDoc -> ModuleName -> PkgQual -> RnM ModIface
+loadSrcInterface doc mod maybe_pkg = do
+  res <- loadSrcInterface_maybe doc mod maybe_pkg
+  case res of
+    Failed err -> failWithTc $ TcRnInterfaceError $ Can'tFindInterface err $ LookingForModule mod
+    Succeeded iface -> return iface
+
+loadSrcInterface_maybe
+  :: SDoc -> ModuleName -> PkgQual -> RnM (MaybeErr MissingInterfaceError ModIface)
+loadSrcInterface_maybe doc mod maybe_pkg = do
+  cs_env <- getTopEnv
+  res <- liftIO $ findImportedModule cs_env mod maybe_pkg
+  case res of
+    Found _ mod -> initIfaceTcRn $ loadInterface doc mod ImportByUser
+    err -> return $ Failed $ cannotFindModule cs_env mod err
+
+{- *********************************************************************
+*                                                                      *
                 loadInterface
 
         The main function to load an interface

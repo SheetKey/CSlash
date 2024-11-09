@@ -16,6 +16,16 @@ data IfaceMessageOpts = IfaceMessageOpts
   { ifaceShowTriedFiles :: !Bool
   }
 
+data InterfaceLookingFor
+  = LookingForName !Name
+  | LookingForModule !ModuleName
+
+data IfaceMessage
+  = Can'tFindInterface MissingInterfaceError InterfaceLookingFor
+  | Can'tFindNameInInterface Name [TyThing]
+  | CircularImport !Module
+  deriving Generic
+
 data MissingInterfaceError
   = HomeModError !InstalledModule !ModLocation
   | DynamicHashMismatchError !Module !ModLocation

@@ -42,6 +42,7 @@ import CSlash.Types.Basic
 import CSlash.Types.Error (CsHint(..))
 import CSlash.Types.Fixity
 import CSlash.Types.SourceText
+import CSlash.Types.PkgQual
 
 import CSlash.Core.DataCon (DataCon, dataConName)
 
@@ -284,7 +285,8 @@ importdecl :: { LImportDecl Ps }
                 ImportDecl { ideclExt = XImportDeclPass (EpAnn (spanAsAnchor loc) anns cs)
                                                         NoSourceText False
                            , ideclName = $2
-                           , ideclQualified = snd $ importDeclQualifiedStype mPostQual
+                           , ideclPkgQual = NoRawPkgQual
+                           , ideclQualified = snd $ importDeclQualifiedStyle mPostQual
                            , ideclAs = unLoc (snd $4)
                            , ideclImportList = unLoc $5 }) } }
 

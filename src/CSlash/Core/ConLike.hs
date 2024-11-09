@@ -63,6 +63,13 @@ instance Data.Data ConLike where
   gunfold _ _ = error "gunfold"
   dataTypeOf _ = mkNoRepType "ConLike"
 
+conLikeArity :: ConLike -> Arity
+conLikeArity (RealDataCon data_con) = dataConArity data_con
+conLikeArity PatSynCon = panic "conLikeArity PatSynCon"
+
+conLikeConInfo :: ConLike -> ConInfo
+conLikeConInfo con = mkConInfo (conLikeArity con)
+
 conLikeName :: ConLike -> Name
 conLikeName (RealDataCon data_con) = dataConName data_con
 conLikeName PatSynCon = panic "'conLikeName PatSynCon' not implemented"

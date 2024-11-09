@@ -196,6 +196,11 @@ instance ContainsModule TcGblEnv where
 *                                                                      *
 ********************************************************************* -}
 
+mkModDeps :: Set (UnitId, ModuleName) -> InstalledModuleEnv ModuleName
+mkModDeps deps = S.foldl' add emptyInstalledModuleEnv deps
+  where
+    add env (uid, mod) = extendInstalledModuleEnv env (mkModule uid mod) mod
+
 plusModDeps
   :: InstalledModuleEnv ModuleName
   -> InstalledModuleEnv ModuleName

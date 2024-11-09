@@ -425,6 +425,11 @@ wrapLocMA fn (L loc a) = setSrcSpanA loc $ do
   b <- fn a
   return (L loc b)
 
+addErr :: TcRnMessage -> TcRn ()
+addErr msg = do
+  loc <- getSrcSpanM
+  addErrAt loc msg
+
 addErrAt :: SrcSpan -> TcRnMessage -> TcRn ()
 addErrAt loc msg = do
   ctxt <- getErrCtxt
@@ -501,9 +506,33 @@ getErrCtxt = do
 *                                                                      *
 ********************************************************************* -}
 
+tcTryM :: TcRn r -> TcRn (Maybe r)
+tcTryM thing_inside = do
+  either_res <- tryM thing_inside
+  return $ case either_res of
+             Left _ -> Nothing
+             Right r -> Just r
+
 askNoErrs :: TcRn a -> TcRn (a, Bool)
 askNoErrs thing_inside = do
   panic "askNoErrs"
+
+attemptM :: TcRn r -> TcRn (Maybe r)
+attemptM thing_inside = do
+  mb_r <- tcTryM thing_inside
+  when (isNothing mb_r) $ traceTc "attemptM recovering with insoluble constraints" empty
+  return mb_r
+
+mapAndRecoverM :: (a -> TcRn b) -> [a] -> TcRn [b]
+mapAndRecoverM f xs = do
+  mb_rs <- mapM (attemptM . f) xs
+  return [ r | Just r <- mb_rs ]
+
+mapAndReportM :: (a -> TcRn b) -> [a] -> TcRn [b]
+mapAndReportM  f xs = do
+  mb_rs <- mapM (attemptM . f) xs
+  when (any isNothing mb_rs) failM
+  return [ r | Just r <- mb_rs ]
 
 {- *********************************************************************
 *                                                                      *
@@ -511,8 +540,27 @@ askNoErrs thing_inside = do
 *                                                                      *
 ********************************************************************* -}
 
+addErrTc :: TcRnMessage -> TcM ()
+addErrTc err_msg = do
+  env0 <- liftZonkM tcInitTidyEnv
+  addErrTcM (env0, err_msg)
+
+addErrTcM :: (TidyEnv, TcRnMessage) -> TcM ()
+addErrTcM (tidy_env, err_msg) = do
+  ctxt <- getErrCtxt
+  loc <- getSrcSpanM
+  add_err_tcm tidy_env err_msg loc ctxt
+
+failWithTc :: TcRnMessage -> TcM a
+failWithTc err_msg = addErrTc err_msg >> failM
+
 no_err_info :: ErrInfo
 no_err_info = ErrInfo Outputable.empty Outputable.empty
+
+addTcRnDiagnostic :: TcRnMessage -> TcM ()
+addTcRnDiagnostic msg = do
+  loc <- getSrcSpanM
+  mkTcRnMessage loc msg >>= reportDiagnostic
 
 addDiagnostic :: TcRnMessage -> TcRn ()
 addDiagnostic msg = add_diagnostic (mkDetailedMessage no_err_info msg)
@@ -528,6 +576,11 @@ add_diagnostic msg = do
   loc <- getSrcSpanM
   unit_state <- cs_units <$> getTopEnv
   mkTcRnMessage loc (TcRnMessageWithInfo unit_state msg) >>= reportDiagnostic
+
+add_err_tcm :: TidyEnv -> TcRnMessage -> SrcSpan -> [ErrCtxt] -> TcM ()
+add_err_tcm tidy_env msg loc ctxt = do
+  err_info <- mkErrInfo tidy_env ctxt
+  add_long_err_at loc (mkDetailedMessage (ErrInfo err_info Outputable.empty) msg)
 
 mkErrInfo :: TidyEnv -> [ErrCtxt] -> TcM SDoc
 mkErrInfo env ctxts = go False 0 env ctxts
@@ -568,6 +621,26 @@ mkIfLclEnv mod loc = IfLclEnv
   , if_tv_env = emptyFsEnv
   , if_id_env = emptyFsEnv
   }
+
+initIfaceTcRn :: IfG a -> TcRn a
+initIfaceTcRn thing_inside = do
+  tcg_env <- getGblEnv
+  cs_env <- getTopEnv
+  let !mhome_unit = cs_home_unit_maybe cs_env
+      !knot_vars = tcg_type_env_var tcg_env
+      is_instantiate = fromMaybe False (isHomeUnitInstantiating <$> mhome_unit)
+      if_env = IfGblEnv { if_doc = text "initIfaceTcRn"
+                        , if_rec_types = if is_instantiate
+                                         then emptyKnotVars
+                                         else readTcRef <$> knot_vars }
+  setEnvs (if_env, ()) thing_inside                        
+
+initIfaceLoad :: CsEnv -> IfG a -> IO a
+initIfaceLoad cs_env do_this =
+  let gbl_env = IfGblEnv { if_doc = text "initIfaceLoad"
+                         , if_rec_types = emptyKnotVars }
+  in initTcRnIf 'i' (cs_env { cs_type_env_vars = emptyKnotVars }) gbl_env () do_this
+  
 
 initIfaceCheck :: SDoc -> CsEnv -> IfG a -> IO a
 initIfaceCheck doc cs_env do_this =

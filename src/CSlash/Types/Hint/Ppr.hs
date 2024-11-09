@@ -165,7 +165,7 @@ pprImportSuggestion occ_name (CouldRemoveTypeKeyword mod)
 pprImportSuggestion dc_occ (ImportDataCon Nothing parent_occ)
   = text "Import the data constructor" <+> quotes (ppr dc_occ) <+>
     text "of" <+> quotes (ppr parent_occ)
-pprImportSuggestion dc_occ (ImportDataCon (Just (mod, patsyns_enabled)) parent_occ)
+pprImportSuggestion dc_occ (ImportDataCon (Just mod) parent_occ)
   = vcat $ [ text "Use"
            , nest 2 $ text "import"
                <+> ppr mod
@@ -174,13 +174,12 @@ pprImportSuggestion dc_occ (ImportDataCon (Just (mod, patsyns_enabled)) parent_o
            , nest 2 $ text "import"
                <+> ppr mod
                <+> parens_sp (pprPrefixOcc parent_occ <> text "(..)")
-           ] ++ if patsyns_enabled
-                then [ text "or"
-                     , nest 2 $ text "import"
-                         <+> ppr mod
-                         <+> parens_sp (text "pattern" <+> pprPrefixOcc dc_occ)
-                     ]
-                else []
+           ] ++ [ text "or"
+                , nest 2 $ text "import"
+                  <+> ppr mod
+                  <+> parens_sp (text "pattern" <+> pprPrefixOcc dc_occ)
+                ]
+             
   where
     parens_sp d = parens (space <> d <> space)
 
