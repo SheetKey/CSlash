@@ -460,7 +460,9 @@ llvmOptions llvm_config dflags =
   ++ [ ("", "-target-abi=" ++ abi) | not (null abi) ]
   where
     target = platformMisc_llvmTarget $ platformMisc dflags
-    Just (LlvmTarget _ mcpu mattr) = lookup target (llvmTargets llvm_config)
+    LlvmTarget _ mcpu mattr = case lookup target (llvmTargets llvm_config) of
+      Just lt -> lt
+      Nothing -> panic "llvmOptions: no LlvmTarget"
 
     rmodel | gopt Opt_PIC dflags = "pic"
            | positionIndependent dflags = "pic"
