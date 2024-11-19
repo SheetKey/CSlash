@@ -342,6 +342,9 @@ instance HasOccName (GlobalRdrEltX info) where
 greOccName :: GlobalRdrEltX info -> OccName
 greOccName (GRE { gre_name = nm }) = nameOccName nm
 
+greDefinitionSrcSpan :: GlobalRdrEltX info -> SrcSpan
+greDefinitionSrcSpan = nameSrcSpan . greName
+
 greDefinitionModule :: GlobalRdrEltX info -> Maybe Module
 greDefinitionModule = nameModule_maybe . greName
 
@@ -363,6 +366,9 @@ gresToNameSet gres = foldr add emptyNameSet gres
 
 emptyGlobalRdrEnv :: GlobalRdrEnvX info
 emptyGlobalRdrEnv = emptyOccEnv
+
+globalRdrEnvElts :: GlobalRdrEnvX info -> [GlobalRdrEltX info]
+globalRdrEnvElts env = nonDetFoldOccEnv (++) [] env
 
 instance Outputable info => Outputable (GlobalRdrEltX info) where
   ppr gre = hang (ppr (greName gre) <+> ppr (gre_par gre) <+> ppr (gre_info gre))

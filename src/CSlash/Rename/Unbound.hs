@@ -12,7 +12,7 @@ import CSlash.Driver.Ppr
 
 import CSlash.Tc.Errors.Types
 import CSlash.Tc.Utils.Monad
-import CSlash.Builtin.Names ( mkUnboundName, isUnboundName{-, getUnique-})
+import CSlash.Builtin.Names ( mkUnboundName, isUnboundName, getUnique)
 import CSlash.Utils.Misc
 import CSlash.Utils.Panic (panic)
 
@@ -151,4 +151,76 @@ importSuggestions
   -> ImportAvails
   -> RdrName
   -> ([ImportError], [ImportSuggestion])
-importSuggestions looking_for global_env hpt currMod imports rdr_name = panic "importSuggestions"
+importSuggestions looking_for global_env hpt currMod imports rdr_name
+  | WL_LocalOnly <- lf_where looking_for = ([], [])
+  | WL_LocalTop <- lf_where looking_for = ([], [])
+  | not (isQual rdr_name || isUnqual rdr_name) = ([], [])
+  | null interesting_imports
+  , Just name <- mod_name
+  , show_not_imported_line name
+  = ([MissingModule name], [])
+  | is_qualified
+  , null helpful_imports
+  , (mod : mods) <- map fst interesting_imports
+  = ([ModulesDoNotExport (mod :| mods) occ_name], [])
+  | mod : mods <- helpful_imports_non_hiding
+  = ([], [CouldImportFrom (mod :| mods)])
+  | mod : mods <- helpful_imports_hiding
+  = ([], [CouldUnhideFrom (mod :| mods)])
+  | otherwise
+  = ([], [])
+  where
+    is_qualified = isQual rdr_name
+    (mod_name, occ_name) = case rdr_name of
+      Unqual occ_name -> (Nothing, occ_name)
+      Qual mod_name occ_name -> (Just mod_name, occ_name)
+      _ -> panic "importSuggestions: dead code"
+
+    interesting_imports = [ (mod, imp) | (mod, mod_imports) <- moduleEnvToList (imp_mods imports)
+                                       , Just imp <- return $ pick (importedByUser mod_imports) ]
+
+    pick = listToMaybe . sortBy cmp . filter select
+      where
+        select imv = case mod_name of
+                       Just name -> imv_name imv == name
+                       Nothing -> not (imv_qualified imv)
+        cmp = on compare imv_is_hiding S.<> on SrcLoc.leftmost_smallest imv_span
+
+    helpful_imports = filter helpful interesting_imports
+      where
+        helpful (_, imv) = any (isGreOk looking_for)
+                           $ lookupGRE (imv_all_exports imv)
+                                       (LookupOccName occ_name $ RelevantGREs False)
+
+    (helpful_imports_hiding, helpful_imports_non_hiding)
+      = partition (imv_is_hiding . snd) helpful_imports
+
+    show_not_imported_line modname
+      | modname `elem` glob_mods = False
+      | moduleName currMod == modname = False
+      | is_last_loaded_mod modname hpt_uniques = False
+      | otherwise = True
+      where
+        hpt_uniques = map fst (udfmToList hpt)
+        is_last_loaded_mod modname uniqs = lastMaybe uniqs == Just (getUnique modname)
+        glob_mods = nub [ mod | gre <- globalRdrEnvElts global_env
+                              , (mod, _) <- qualsInScope gre ]
+
+qualsInScope :: GlobalRdrElt -> [(ModuleName, HowInScope)]
+qualsInScope gre@GRE { gre_lcl = lcl, gre_imp = is }
+  | lcl = case greDefinitionModule gre of
+            Nothing -> []
+            Just m -> [(moduleName m, LocallyBoundAt (greDefinitionSrcSpan gre))]
+  | otherwise = [ (is_as ispec, ImportedBy ispec)
+                | i <- bagToList is, let ispec = is_decl i ]
+
+isGreOk :: LookingFor -> GlobalRdrElt -> Bool
+isGreOk (LF what_look where_look) gre = what_ok && where_ok
+  where
+    what_ok = True
+
+    where_ok = case where_look of
+                 WL_LocalTop -> isLocalGRE gre
+                 WL_LocalOnly -> False
+                 _ -> True
+                

@@ -104,4 +104,7 @@ rnStmtsWithFreeVars _ _ _ _ = panic "rnStmtsWithFreeVars"
 ********************************************************************* -}
 
 checkEmptyStmts :: CsStmtContextRn -> RnM ()
-checkEmptyStmts ctxt = panic "checkEmptyStmts"
+checkEmptyStmts ctxt = mapM_ (panic "addErr . TcRnEmptyStmtsGroup") mb_err
+  where
+    mb_err = case ctxt of
+      PatGuard {} -> Nothing
