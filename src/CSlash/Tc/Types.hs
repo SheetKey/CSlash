@@ -71,7 +71,7 @@ import CSlash.Utils.Fingerprint
 import CSlash.Utils.Panic
 import CSlash.Utils.Logger
 
--- import CSlash.Builtin.Names ( isUnboundName )
+import CSlash.Builtin.Names ( isUnboundName )
 
 -- import GHCi.Message
 -- import GHCi.RemoteTypes

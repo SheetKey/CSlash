@@ -243,6 +243,11 @@ isTypeSynonymTyCon (TyCon { tyConDetails = details })
   | otherwise = False
 {-# INLINE isTypeSynonymTyCon #-}
 
+isTupleTyCon :: TyCon -> Bool
+isTupleTyCon (TyCon { tyConDetails = details })
+  | AlgTyCon { algTcRhs = TupleTyCon {} } <- details = True
+  | otherwise = False
+
 tyConDataCons :: TyCon -> [DataCon]
 tyConDataCons tycon = tyConDataCons_maybe tycon `orElse` []
 

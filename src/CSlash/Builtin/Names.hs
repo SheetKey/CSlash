@@ -32,6 +32,18 @@ allNameStringList = Inf.toList allNameStrings
 
 {- *********************************************************************
 *                                                                      *
+      Local names
+*                                                                      *
+********************************************************************* -}
+
+mkUnboundName :: OccName -> Name
+mkUnboundName occ = mkInternalName unboundKey occ noSrcSpan
+
+isUnboundName :: Name -> Bool
+isUnboundName name = name `hasKey` unboundKey
+
+{- *********************************************************************
+*                                                                      *
       Known key Names
 *                                                                      *
 ********************************************************************* -}
@@ -69,6 +81,15 @@ mkMainModule m = mkModule mainUnit (mkModuleNameFS m)
 
 {- *********************************************************************
 *                                                                      *
+            Known-key names
+*                                                                      *
+********************************************************************* -}
+
+negateName :: Name
+negateName = undefined
+
+{- *********************************************************************
+*                                                                      *
                Uniques for wired-in TyCons
 *                                                                      *
 ********************************************************************* -}
@@ -90,3 +111,12 @@ falseDataConKey = mkWiredInDataConUnique 4
 
 trueDataConKey :: Unique
 trueDataConKey = mkWiredInDataConUnique 14
+
+{- *********************************************************************
+*                                                                      *
+      Uniques for wired-in Ids
+*                                                                      *
+********************************************************************* -}
+
+unboundKey :: Unique
+unboundKey = mkWiredInMiscIdUnique 158

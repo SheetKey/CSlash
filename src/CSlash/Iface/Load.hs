@@ -109,6 +109,14 @@ loadSrcInterface_maybe doc mod maybe_pkg = do
     Found _ mod -> initIfaceTcRn $ loadInterface doc mod ImportByUser
     err -> return $ Failed $ cannotFindModule cs_env mod err
 
+loadInterfaceForName :: SDoc -> Name -> TcRn ModIface
+loadInterfaceForName doc name = do
+  when debugIsOn $ do
+    this_mod <- getModule
+    massertPpr (not (nameIsLocalOrFrom this_mod name)) (ppr name <+> parens doc)
+  assertPpr (isExternalName name) (ppr name) $
+    initIfaceTcRn $ loadSysInterface doc (nameModule name)
+
 {- *********************************************************************
 *                                                                      *
                 loadInterface
@@ -118,6 +126,15 @@ loadSrcInterface_maybe doc mod maybe_pkg = do
         the External Package State
 *                                                                      *
 ********************************************************************* -}
+
+loadSysInterface :: SDoc -> Module -> IfM lcl ModIface
+loadSysInterface doc mod_name = loadInterfaceWithException doc mod_name ImportBySystem
+
+loadInterfaceWithException :: SDoc -> Module -> WhereFrom -> IfM lcl ModIface
+loadInterfaceWithException doc mod_name where_from = do
+  dflags <- getDynFlags
+  let ctx = initSDocContext dflags defaultUserStyle
+  withIfaceErr ctx (loadInterface doc mod_name where_from)
 
 loadInterface :: SDoc -> Module -> WhereFrom -> IfM lcl (MaybeErr MissingInterfaceError ModIface)
 loadInterface doc_str mod from

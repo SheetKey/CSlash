@@ -66,6 +66,9 @@ data CsMatchContext fn
   | MultiIfAlt
   | TyLamTyAlt -- for type level lambdas
 
+data CsStmtContext fn
+  = PatGuard (CsMatchContext fn)
+
 data GRHSs p body
   = GRHSs
     { grhssExt :: XCGRHSs p body
@@ -85,3 +88,8 @@ data StmtLR idL idR body
   = BindStmt (XBindStmt idL idR body) (LPat idL) body -- used in pattern guards
   | BodyStmt (XBodyStmt idL idR body) body
   | LetStmt (XLetStmt idL idR body) (CsLocalBindsLR idL idR)
+
+isPatSynCtxt :: CsMatchContext fn -> Bool
+isPatSynCtxt ctxt = case ctxt of
+  TyLamTyAlt -> True
+  _ -> False

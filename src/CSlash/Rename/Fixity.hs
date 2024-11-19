@@ -20,7 +20,7 @@ import CSlash.Utils.Outputable
 
 import CSlash.Data.Maybe
 
--- import CSlash.Rename.Unbound
+import CSlash.Rename.Unbound
 
 {- *****************************************************
 *                                                      *
@@ -55,3 +55,37 @@ lookupMiniFixityEnv MFE { mfe_data_level_names, mfe_type_level_names } name
 
 emptyMiniFixityEnv :: MiniFixityEnv
 emptyMiniFixityEnv = MFE emptyFsEnv emptyFsEnv
+
+lookupFixityRn :: Name -> RnM Fixity
+lookupFixityRn = fmap snd . lookupFixityRn_help
+
+lookupFixityRn_help :: Name -> RnM (Bool, Fixity)
+lookupFixityRn_help name
+  | isUnboundName name
+  = return (False, Fixity minPrecedence InfixL)
+  | otherwise
+  = do local_fix_env <- getFixityEnv
+       case lookupNameEnv local_fix_env name of
+         Just (FixItem _ fix) -> return (True, fix)
+         Nothing -> do this_mod <- getModule
+                       if nameIsLocalOrFrom this_mod name
+                         then return (False, defaultFixity)
+                         else lookup_imported
+  where
+    occ = nameOccName name
+    lookup_imported = do
+      iface <- loadInterfaceForName doc name
+      let mb_fix = mi_fix_fn (mi_final_exts iface) occ
+          msg = case mb_fix of
+                  Nothing -> text "looking up name" <+> ppr name
+                             <+> text "in iface, but found no fixity for it."
+                             <+> text "Using default fixity instead."
+                  Just f -> text "looking up name in iface and found:"
+                            <+> vcat [ppr name, ppr f]
+      traceRn "lookupFixityRn_either:" msg
+      return $ maybe (False, defaultFixity) (\f -> (True, f)) mb_fix
+
+    doc = text "Checking fixity for" <+> ppr name
+
+lookupTyFixityRn :: LocatedN Name -> RnM Fixity
+lookupTyFixityRn = lookupFixityRn . unLoc

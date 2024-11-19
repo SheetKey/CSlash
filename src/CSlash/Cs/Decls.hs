@@ -102,4 +102,19 @@ csGroupTopLevelFixitySigs (CsGroup { cs_fixds = fixds }) = fixds
 
 type instance XCTypeGroup (CsPass _) = NoExtField
 
+typeDeclLName
+  :: ( Anno (IdCsP p) ~ SrcSpanAnnN
+     , OutputableBndrId p )
+  => CsBind (CsPass p)
+  -> LocatedN (IdP (CsPass p))
+typeDeclLName (TyFunBind { tyfun_id = ln }) = ln
+typeDeclLName other = pprPanic "typeDeclLName" (ppr other)
+
+tydName
+  :: ( Anno (IdCsP p) ~ SrcSpanAnnN
+     , OutputableBndrId p )
+  => CsBind (CsPass p)
+  -> IdP (CsPass p)
+tydName = unLoc . typeDeclLName
+
 type instance Anno (CsDecl (CsPass _)) = SrcSpanAnnA

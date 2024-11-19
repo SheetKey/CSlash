@@ -38,6 +38,7 @@ import CSlash.Types.Name.Reader
 import CSlash.Parser.Annotation
 import CSlash.Utils.Outputable
 import CSlash.Core.Ppr (pprOcc)
+import CSlash.Builtin.Names ( negateName )
 
 import Data.Data hiding (Fixity(..))
 
@@ -57,8 +58,7 @@ type instance XCsTP Rn = CsTyPatRn
 type instance XCsTP Tc = DataConCantHappen
 
 data CsPSRn = CsPSRn
-  { csps_nwcs :: [Name]
-  , csps_imp_tvs :: [Name]
+  { csps_imp_kvs :: [Name]
   }
   deriving Data
 
@@ -133,6 +133,17 @@ instance (OutputableBndrId p) => Outputable (CsArrow (CsPass p)) where
 pprCsArrow :: (OutputableBndrId p) => CsArrow (CsPass p) -> SDoc
 pprCsArrow (CsArrow _ kind) = ppr kind
 
+csTyVarLName :: CsTyVarBndr (CsPass p) -> LIdP (CsPass p)
+csTyVarLName (KindedTyVar _ n _) = n
+csTyVarLName (ImpKindedTyVar _ n _) = n
+
+csTyVarName :: CsTyVarBndr (CsPass p) -> IdP (CsPass p)
+csTyVarName = unLoc . csTyVarLName
+
+csLTyVarLocName
+  :: Anno (IdCsP p) ~ SrcSpanAnnN => LCsTyVarBndr (CsPass p) -> LocatedN (IdP (CsPass p))
+csLTyVarLocName (L _ a) = csTyVarLName a
+
 {- *********************************************************************
 *                                                                      *
                 Building types
@@ -149,6 +160,22 @@ mkCsOpTy ty1 op ty2 = CsOpTy noAnn ty1 op ty2
 
 mkCsAppTy :: LCsType (CsPass p) -> LCsType (CsPass p) -> LCsType (CsPass p)
 mkCsAppTy t1 t2 = addCLocA t1 t2 (CsAppTy noExtField t1 t2)
+
+{- *********************************************************************
+*                                                                      *
+            OpName
+*                                                                      *
+********************************************************************* -}
+
+data OpName
+  = NormalOp Name
+  | NegateOp
+  | UnboundOp RdrName
+
+instance Outputable OpName where
+  ppr (NormalOp n) = ppr n
+  ppr NegateOp = ppr negateName
+  ppr (UnboundOp uv) = ppr uv
 
 {- *********************************************************************
 *                                                                      *

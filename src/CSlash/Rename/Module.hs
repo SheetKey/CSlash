@@ -10,7 +10,7 @@ import Prelude hiding ( head )
 import CSlash.Cs
 -- import GHC.Types.FieldLabel
 import CSlash.Types.Name.Reader
--- import GHC.Rename.HsType
+import CSlash.Rename.CsType
 import CSlash.Rename.Bind
 -- import GHC.Rename.Doc
 import CSlash.Rename.Env
@@ -123,7 +123,38 @@ addTcgDUs tcg_env dus = tcg_env { tcg_dus = tcg_dus tcg_env `plusDU` dus }
 
 rnTypeDecls :: [TypeGroup Ps] -> RnM ([TypeGroup Rn], FreeVars)
 rnTypeDecls type_ds = do
+  types_w_fvs <- mapM (wrapLocFstMA rnTypeDecl) (typeGroupTypeDecls type_ds)
+  let tc_names = mkNameSet $ map (tydName . unLoc . fst) types_w_fvs
+  traceRn "rnTypeDecls" $
+    vcat [ text "typeGroupTypeDecls:" <+> ppr types_w_fvs
+         , text "tc_names:" <+> ppr tc_names ]
+
   panic "rnTypeDecls"
+
+{- ******************************************************
+*                                                       *
+         Renaming a type declaration
+*                                                       *
+****************************************************** -}
+
+rnTypeDecl :: CsBind Ps -> RnM (CsBind Rn, FreeVars)
+rnTypeDecl (TyFunBind { tyfun_id = tycon, tyfun_body = rhs }) = do
+  tycon' <- lookupLocatedTopConstructorRnN tycon
+  let all_kv_occs = extractCsTyRdrKindVars rhs
+      doc = TySynCtx tycon
+  traceRn "rntype-ty" (ppr tycon <+> ppr all_kv_occs)
+  bindCsKiVars doc all_kv_occs $ \ all_kv_nms -> do
+    (final_rhs, fvs) <- rnTyFun doc rhs
+    return
+      ( TyFunBind
+        { tyfun_id = tycon'
+        , tyfun_body = final_rhs
+        , tyfun_ext = (all_kv_nms, fvs) }
+      , fvs )
+rnTypeDecl other = pprPanic "rnTypeDecl" (ppr other)
+
+rnTyFun :: CsDocContext -> LCsType Ps -> RnM (LCsType Rn, FreeVars)
+rnTyFun doc rhs = rnLCsType doc rhs
 
 {- *****************************************************
 *                                                      *

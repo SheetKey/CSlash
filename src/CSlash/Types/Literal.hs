@@ -4,7 +4,10 @@
 module CSlash.Types.Literal where
 
 import CSlash.Utils.Outputable
+import CSlash.Settings.Constants
 
+import Data.Int
+import Data.Char
 import Data.Data
 import GHC.Exts (isTrue#, dataToTag#, (<#))
 import Numeric (fromRat)
@@ -31,6 +34,9 @@ instance Eq Literal where
 
 instance Ord Literal where
   compare = cmpLit
+
+inCharRange :: Char -> Bool
+inCharRange c = c >= '\0' && c <= chr tARGET_MAX_CHAR
 
 cmpLit :: Literal -> Literal -> Ordering
 cmpLit (LitChar a) (LitChar b) = a `compare` b

@@ -106,8 +106,17 @@ nukeExact n
 isRdrDataCon :: RdrName -> Bool
 isRdrDataCon rn = isDataOcc (rdrNameOcc rn)
 
+isRdrTyLvl :: RdrName -> Bool
+isRdrTyLvl rn = let occ = rdrNameOcc rn in isTcOcc occ || isTvOcc occ
+
 isRdrTc :: RdrName -> Bool
 isRdrTc rn = isTcOcc (rdrNameOcc rn)
+
+idRdrTyVar :: RdrName -> Bool
+idRdrTyVar rn = isTvOcc (rdrNameOcc rn)
+
+isRdrKiVar :: RdrName -> Bool
+isRdrKiVar rn = isKvOcc (rdrNameOcc rn)
 
 isRdrUnknown :: RdrName -> Bool
 isRdrUnknown rn = isUnknownOcc (rdrNameOcc rn)
@@ -123,6 +132,10 @@ isQual _ = False
 isOrig_maybe :: RdrName -> Maybe (Module, OccName)
 isOrig_maybe (Orig m n) = Just (m, n)
 isOrig_maybe _ = Nothing
+
+isExact :: RdrName -> Bool
+isExact (Exact _) = True
+isExact _ = False
 
 isExact_maybe :: RdrName -> Maybe Name
 isExact_maybe (Exact n) = Just n
@@ -157,6 +170,35 @@ instance Eq RdrName where
   (Unqual o1) == (Unqual o2) = o1 == o2
   _ == _ = False
 
+instance Ord RdrName where
+  a <= b = case (a `compare` b) of
+             GT -> False
+             _ -> True
+  a < b = case (a `compare` b) of
+            LT -> True
+            _ -> False
+  a >= b = case (a `compare` b) of
+             LT -> False
+             _ -> True
+  a > b = case (a `compare` b) of
+            GT -> True
+            _ -> False
+
+  compare (Exact n1) (Exact n2) = n1 `compare` n2
+  compare (Exact _) _ = LT
+
+  compare (Unqual _) (Exact _) = GT
+  compare (Unqual o1) (Unqual o2) = o1 `compare` o2
+  compare (Unqual _) _ = LT
+
+  compare (Qual _ _) (Exact _) = GT
+  compare (Qual _ _) (Unqual _) = GT
+  compare (Qual m1 o1) (Qual m2 o2) = compare o1 o2 S.<> compare m1 m2
+  compare (Qual _ _) (Orig _ _) = LT
+
+  compare (Orig m1 o1) (Orig m2 o2) = compare o1 o2 S.<> compare m1 m2
+  compare (Orig _ _) _ = GT
+
 {- *********************************************************************
 *                                                                      *
                         LocalRdrEnv
@@ -177,7 +219,30 @@ extendLocalRdrEnvList :: LocalRdrEnv -> [Name] -> LocalRdrEnv
 extendLocalRdrEnvList lre@(LRE { lre_env = env, lre_in_scope = ns }) names
   = lre { lre_env = extendOccEnvList env [(nameOccName n, n) | n <- names]
         , lre_in_scope = extendNameSetList ns names }
-                                             
+
+lookupLocalRdrEnv :: LocalRdrEnv -> RdrName -> Maybe Name
+lookupLocalRdrEnv (LRE { lre_env = env, lre_in_scope = ns }) rdr
+  | Unqual occ <- rdr
+  = lookupOccEnv env occ
+  | Exact name <- rdr
+  , name `elemNameSet` ns
+  = Just name
+  | otherwise
+  = Nothing
+
+lookupLocalRdrOcc :: LocalRdrEnv -> OccName -> Maybe Name
+lookupLocalRdrOcc (LRE { lre_env = env }) occ = lookupOccEnv env occ
+
+elemLocalRdrEnv :: RdrName -> LocalRdrEnv -> Bool
+elemLocalRdrEnv rdr_name (LRE { lre_env = env, lre_in_scope = ns })
+  = case rdr_name of
+      Unqual occ -> occ `elemOccEnv` env
+      Exact name -> name `elemNameSet` ns
+      Qual {} -> False
+      Orig {} -> False
+   
+inLocalRdrEnvScope :: Name -> LocalRdrEnv -> Bool
+inLocalRdrEnvScope name (LRE { lre_in_scope = ns }) = name `elemNameSet` ns
 
 {- *********************************************************************
 *                                                                      *
@@ -251,6 +316,12 @@ mkGRE prov_fn info par n =
                    , gre_lcl = False
                    , gre_imp = unitBag is
                    , gre_info = info }
+
+mkExactGRE :: Name -> GREInfo -> GlobalRdrElt
+mkExactGRE nm info = GRE
+  { gre_name = nm, gre_par = NoParent
+  , gre_lcl = False, gre_imp = emptyBag
+  , gre_info = info }
 
 mkLocalGRE :: GREInfo -> Parent -> Name -> GlobalRdrElt
 mkLocalGRE = mkGRE (const Nothing)
@@ -430,6 +501,9 @@ highestPriorityGREs priotity gres =
 
 isLocalGRE :: GlobalRdrEltX info -> Bool
 isLocalGRE (GRE { gre_lcl = lcl }) = lcl
+
+isImportedGRE :: GlobalRdrEltX info -> Bool
+isImportedGRE (GRE { gre_imp = imps }) = not $ isEmptyBag imps
 
 pickGREs :: RdrName -> [GlobalRdrEltX info] -> [GlobalRdrEltX info]
 pickGREs (Unqual{}) gres = mapMaybe pickUnqualGRE gres

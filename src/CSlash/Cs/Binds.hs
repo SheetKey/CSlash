@@ -27,6 +27,7 @@ import CSlash.Types.Tickish
 import CSlash.Types.SourceText
 import CSlash.Types.SrcLoc as SrcLoc
 import CSlash.Types.Var
+import CSlash.Types.Name
 import CSlash.Types.Name.Set
 import CSlash.Types.Basic
 import CSlash.Data.Bag
@@ -52,7 +53,7 @@ type instance XFunBind (CsPass pL) Rn = NameSet
 type instance XFunBind (CsPass pL) Tc = [CsTickish]
 
 type instance XTyFunBind (CsPass pL) Ps = [AddEpAnn]
-type instance XTyFunBind (CsPass pL) Rn = NameSet
+type instance XTyFunBind (CsPass pL) Rn = ([Name], FreeVars)
 type instance XTyFunBind (CsPass pL) Tc = [CsTickish]
 
 type instance XXCsBindsLR Ps pR = DataConCantHappen

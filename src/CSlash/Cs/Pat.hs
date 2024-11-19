@@ -87,7 +87,9 @@ type instance XKdSigPat Ps = [AddEpAnn]
 type instance XKdSigPat Rn = NoExtField
 type instance XKdSigPat Tc = Kind
 
-type instance XImpPat (CsPass _) = EpAnnImpPat
+type instance XImpPat Ps = EpAnnImpPat
+type instance XImpPat Rn = NoExtField
+type instance XImpPat Tc = NoExtField
 
 type instance XXPat Ps = DataConCantHappen
 type instance XXPat Rn = CsPatExpansion (Pat Rn) (Pat Rn)

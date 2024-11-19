@@ -261,6 +261,8 @@ type family CsDiagnosticCode c = n | n -> c where
   CsDiagnosticCode "TcRnSelfImport"                                = 43281
   CsDiagnosticCode "TcRnNoExplicitImportList"                      = 16029
   CsDiagnosticCode "TcRnMissingImportList"                         = 77037
+  CsDiagnosticCode "TcRnShadowedName"                              = 63397
+  CsDiagnosticCode "TcRnBindingNameConflict"                       = 10498
 
   -- BadImport
   CsDiagnosticCode "BadImportNotExported"                          = 61689
@@ -292,6 +294,16 @@ type family CsDiagnosticCode c = n | n -> c where
   CsDiagnosticCode "MultiplePackages"                              = 45102
   CsDiagnosticCode "NoUnitIdMatching"                              = 51294
   CsDiagnosticCode "NotAModule"                                    = 35235
+
+  -- Out of scope errors
+  CsDiagnosticCode "NotInScope"                                    = 76037
+  CsDiagnosticCode "NotARecordField"                               = 22385
+  CsDiagnosticCode "NoExactName"                                   = 97784
+  CsDiagnosticCode "SameName"                                      = 81573
+  CsDiagnosticCode "MissingBinding"                                = 44432
+  CsDiagnosticCode "NoTopLevelBinding"                             = 10173
+  CsDiagnosticCode "UnknownSubordinate"                            = 54721
+  CsDiagnosticCode "NotInScopeTc"                                  = 76329
 
   -- To generate new random numbers:
   --  https://www.random.org/integers/?num=10&min=1&max=99999&col=1&base=10&format=plain
@@ -345,10 +357,12 @@ type family ConRecursInto con where
 
   ConRecursInto "TcRnMessageWithInfo"      = 'Just TcRnMessageDetailed
   ConRecursInto "TcRnMessageDetailed"      = 'Just TcRnMessage
+
   ConRecursInto "TcRnDodgyImports"         = 'Just DodgyImportsReason
   ConRecursInto "DodgyImportsHiding"       = 'Just ImportLookupReason
   ConRecursInto "TcRnImportLookup"         = 'Just ImportLookupReason
-  
+  ConRecursInto "TcRnNotInScope"           = 'Just NotInScopeError
+
   
   -- Interface file errors
   ConRecursInto "TcRnInterfaceError"       = 'Just IfaceMessage

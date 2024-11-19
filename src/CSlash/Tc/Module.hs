@@ -174,7 +174,7 @@ tcRnModuleTcRnM cs_env mod_sum parsedModule (this_mod, prel_imp_loc) = do
 
       cs_src = ms_cs_src mod_sum
 
-      implicit_prelude = True
+      implicit_prelude = False
       prel_imports = mkPrelImports (moduleName this_mod) prel_imp_loc implicit_prelude import_decls
 
   when (notNull prel_imports) $

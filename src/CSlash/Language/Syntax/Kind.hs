@@ -9,17 +9,20 @@ data CsPatSigKind pass = CsPSK
   , cspsk_body :: LCsKind pass
   }
 
+csPatSigKind :: CsPatSigKind pass -> LCsKind pass
+csPatSigKind = cspsk_body
+
 data CsKind pass
   = CsUKd (XUKd pass)
   | CsAKd (XAKd pass)
   | CsLKd (XLKd pass)
   | CsKdVar (XKdVar pass) (LIdP pass)
   | CsFunKd (XFunKd pass) (LCsKind pass) (LCsKind pass)
-  | CsQualKd -- should be removed (don't want or have standalone kind sigs)
-    { csk_xqual :: XQualKd pass
-    , csk_ctxt :: LCsContext pass
-    , csk_body :: LCsKind pass
-    }
+  -- | CsQualKd -- should be removed (don't want or have standalone kind sigs)
+  --   { csk_xqual :: XQualKd pass
+  --   , csk_ctxt :: LCsContext pass
+  --   , csk_body :: LCsKind pass
+  --   }
   | CsParKd (XParKd pass) (LCsKind pass)
 
 type LCsContext pass = XRec pass (CsContext pass)

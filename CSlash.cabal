@@ -198,7 +198,10 @@ library
                     , CSlash.Platform.Ways
 
                     , CSlash.Rename.Bind
+                    , CSlash.Rename.CsKind
+                    , CSlash.Rename.CsType
                     , CSlash.Rename.Env
+                    , CSlash.Rename.Expr
                     , CSlash.Rename.Fixity
                     , CSlash.Rename.Module
                     , CSlash.Rename.Names

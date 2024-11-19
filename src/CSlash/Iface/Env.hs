@@ -63,6 +63,22 @@ allocateGlobalBinder nc mod occ loc = updateNameCache nc mod occ $ \cache0 ->
 *                                                                      *
 ********************************************************************* -}
 
+lookupOrig :: Module -> OccName -> TcRnIf a b Name
+lookupOrig mod occ = do
+  cs_env <- getTopEnv
+  traceIf (text "lookup_orig" <+> ppr mod <+> ppr occ)
+  liftIO $ lookupNameCache (cs_NC cs_env) mod occ
+
+lookupNameCache :: NameCache -> Module -> OccName -> IO Name
+lookupNameCache nc mod occ = updateNameCache nc mod occ $ \cache0 ->
+  case lookupOrigNameCache cache0 mod occ of
+    Just name -> pure (cache0, name)
+    Nothing -> do
+      uniq <- takeUniqFromNameCache nc
+      let name = mkExternalName uniq mod occ noSrcSpan
+          new_cache = extendOrigNameCache cache0 mod occ name
+      pure (new_cache, name)
+
 externalizeName :: Module -> Name -> TcRnIf m n Name
 externalizeName mod name = do
   let occ = nameOccName name

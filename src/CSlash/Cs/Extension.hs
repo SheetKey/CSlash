@@ -30,6 +30,8 @@ type instance Anno RdrName = SrcSpanAnnN
 type instance Anno Name = SrcSpanAnnN
 type instance Anno Id = SrcSpanAnnN
 
+type IsSrcSpanAnn p a = (Anno (IdCsP p) ~ EpAnn a, NoAnn a, IsPass p)
+
 instance UnXRec (CsPass p) where
   unXRec = unLoc
 

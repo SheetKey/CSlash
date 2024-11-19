@@ -1,9 +1,11 @@
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module CSlash.Tc.Utils.Monad
   ( module CSlash.Tc.Utils.Monad
   , module CSlash.Tc.Types
+  , module CSlash.Tc.Types.TcRef
   , module CSlash.Data.IOEnv
   ) where
 
@@ -78,8 +80,8 @@ import qualified Data.Map as Map
 import CSlash.Driver.Env.KnotVars
 import CSlash.Linker.Types
 import CSlash.Types.Unique.DFM
--- import CSlash.Iface.Errors.Types
--- import GHC.Iface.Errors.Ppr
+import CSlash.Iface.Errors.Types
+import CSlash.Iface.Errors.Ppr
 import CSlash.Tc.Types.LclEnv
 
 {- *********************************************************************
@@ -269,10 +271,20 @@ doptM flag = do
 goptM :: GeneralFlag -> TcRnIf gbl lcl Bool
 goptM flag = gopt flag <$> getDynFlags
 
+woptM :: WarningFlag -> TcRnIf gbl lcl Bool
+woptM flag = wopt flag <$> getDynFlags
+
 whenDOptM :: DumpFlag -> TcRnIf gbl lcl () -> TcRnIf gbl lcl ()
 whenDOptM flag thing_inside = do
   b <- doptM flag
   when b thing_inside
+{-# INLINE whenDOptM #-}
+
+whenWOptM :: WarningFlag -> TcRnIf gbl lcl () -> TcRnIf gbl lcl ()
+whenWOptM flag thing_inside = do
+  b <- woptM flag
+  when b thing_inside
+{-# INLINE whenWOptM #-}
 
 getEpsVar :: TcRnIf gbl lcl (TcRef ExternalPackageState)
 getEpsVar = do
@@ -288,11 +300,26 @@ updateEps upd = do
 updateEps_ :: (ExternalPackageState -> ExternalPackageState) -> TcRnIf gbl lcl ()
 updateEps_ upd = updateEps (\eps -> (upd eps, ()))
 
+getHpt :: TcRnIf gbl lcl HomePackageTable
+getHpt = do
+  env <- getTopEnv
+  return (cs_HPT env)
+
 getEpsAndHug :: TcRnIf gbl lcl (ExternalPackageState, HomeUnitGraph)
 getEpsAndHug = do
   env <- getTopEnv
   eps <- liftIO $ csEPS env
   return (eps, cs_HUG env)
+
+withIfaceErr :: MonadIO m => SDocContext -> m (MaybeErr MissingInterfaceError a) -> m a
+withIfaceErr ctx do_this = do
+  r <- do_this
+  case r of
+    Failed err -> do
+      let opts = defaultDiagnosticOpts @IfaceMessage
+          msg = missingInterfaceErrorDiagnostic opts err
+      liftIO $ throwCsExceptionIO (ProgramError (renderWithContext ctx msg))
+    Succeeded result -> return result
 
 {- *********************************************************************
 *                                                                      *
@@ -377,10 +404,10 @@ getGlobalRdrEnv = do
   env <- getGblEnv
   return (tcg_rdr_env env)
 
--- getRdrEnvs :: TcRn (GlobalRdrEnv, LocalRdrEnv)
--- getRdrEnvs = do
---   (gbl, lcl) <- getEnvs
---   return (tcg_rdr_env gbl, getLclEnvRdrEnv lcl)
+getRdrEnvs :: TcRn (GlobalRdrEnv, LocalRdrEnv)
+getRdrEnvs = do
+  (gbl, lcl) <- getEnvs
+  return (tcg_rdr_env gbl, getLclEnvRdrEnv lcl)
 
 getImports :: TcRn ImportAvails
 getImports = do
@@ -425,8 +452,18 @@ wrapLocMA fn (L loc a) = setSrcSpanA loc $ do
   b <- fn a
   return (L loc b)
 
+wrapLocFstMA :: (a -> TcM (b, c)) -> GenLocated (EpAnn ann) a -> TcM (GenLocated (EpAnn ann) b, c)
+wrapLocFstMA fn (L loc a) = setSrcSpanA loc $ do
+  (b, c) <- fn a
+  return (L loc b, c)
+
 setErrsVar :: TcRef (Messages TcRnMessage) -> TcRn a -> TcRn a
 setErrsVar v = updLclEnv $ \env -> env { tcl_errs = v }
+
+getErrsVar :: TcRn (TcRef (Messages TcRnMessage))
+getErrsVar = do
+  env <- getLclEnv
+  return (tcl_errs env)
 
 addErr :: TcRnMessage -> TcRn ()
 addErr msg = do
@@ -441,13 +478,11 @@ addErrAt loc msg = do
   let detailed_msg = mkDetailedMessage (ErrInfo err_info Outputable.empty) msg
   add_long_err_at loc detailed_msg
 
-getErrsVar :: TcRn (TcRef (Messages TcRnMessage))
-getErrsVar = do
-  env <- getLclEnv
-  return (tcl_errs env)
-
 mkDetailedMessage :: ErrInfo -> TcRnMessage -> TcRnMessageDetailed
 mkDetailedMessage = TcRnMessageDetailed
+
+checkErr :: Bool -> TcRnMessage -> TcRn ()
+checkErr ok msg = unless ok (addErr msg)
 
 addMessages :: Messages TcRnMessage -> TcRn ()
 addMessages msgs1 = do
@@ -508,6 +543,21 @@ getErrCtxt :: TcM [ErrCtxt]
 getErrCtxt = do
   env <- getLclEnv
   return $ getLclEnvErrCtxt env
+
+addErrCtxt :: SDoc -> TcM a -> TcM a
+addErrCtxt msg = addErrCtxtM (\env -> return (env, msg))
+{-# INLINE addErrCtxt #-}
+
+addErrCtxtM :: (TidyEnv -> ZonkM (TidyEnv, SDoc)) -> TcM a -> TcM a
+addErrCtxtM ctxt = pushCtxt (False, ctxt)
+{-# INLINE addErrCtxtM #-}
+
+pushCtxt :: ErrCtxt -> TcM a -> TcM a
+pushCtxt ctxt = updLclEnv (updCtxt ctxt)
+{-# INLINE pushCtxt #-}
+
+updCtxt :: ErrCtxt -> TcLclEnv -> TcLclEnv
+updCtxt  ctxt env = addLclEnvErrCtxt ctxt env
 
 {- *********************************************************************
 *                                                                      *
@@ -626,6 +676,17 @@ getTcLevel :: TcM TcLevel
 getTcLevel = do
   env <- getLclEnv
   return $! getLclEnvTcLevel env 
+
+{- *********************************************************************
+*                                                                      *
+             Stuff for the renamer's local env
+*                                                                      *
+********************************************************************* -}
+
+getLocalRdrEnv :: RnM LocalRdrEnv
+getLocalRdrEnv = do
+  env <- getLclEnv
+  return $ getLclEnvRdrEnv env
 
 {- *********************************************************************
 *                                                                      *

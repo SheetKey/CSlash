@@ -6,32 +6,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ConstraintKinds #-}
 
-module CSlash.Cs.Utils
-  (
-    unguardedGRHSs, unguardedRHS
-  , mkMatchGroup, mkLamMatchGroup, mkTyLamMatchGroup, mkTyLamTyMatchGroup, mkCsIf
-
-  , missingTupArg
-
-  , mkCsIntegral, mkCsFractional, mkCsIsString
-
-  , mkNPat
-
-  , csTypeToCsSigType
-
-  , mkBodyStmt
-  , mkPsBindStmt
-  , mkLetStmt
-
-  , collectCsIdBinders
-  , collectCsBindsBinders
-
-  , collectPatSigBndrs
-  , CollectPass(..), CollectFlag(..)
-
-  , TyDeclBinders(..)
-  , csLTyDeclBinders, csTyForeignBinders
-  ) where
+module CSlash.Cs.Utils where
 
 import CSlash.Cs.Decls
 import CSlash.Cs.Binds
@@ -100,14 +75,14 @@ unguardedRHS
   -> [LGRHS (CsPass p) (LocatedA (body (CsPass p)))]
 unguardedRHS an loc rhs = [L (noAnnSrcSpan loc) (GRHS an [] rhs)]
 
-type AnnoBody p body
+type UtilsAnnoBody p body
   = ( XMG (CsPass p) (LocatedA (body (CsPass p))) ~ Origin
     , Anno [LocatedA (Match (CsPass p) (LocatedA (body (CsPass p))))] ~ SrcSpanAnnL
     , Anno (Match (CsPass p) (LocatedA (body (CsPass p)))) ~ SrcSpanAnnA
     )
 
 mkMatchGroup
-  :: AnnoBody p body
+  :: UtilsAnnoBody p body
   => Origin
   -> LocatedL [LocatedA (Match (CsPass p) (LocatedA (body (CsPass p))))]
   -> MatchGroup (CsPass p) (LocatedA (body (CsPass p)))
@@ -115,7 +90,7 @@ mkMatchGroup origin matches = MG { mg_ext = origin
                                  , mg_alts = matches }
 
 mkLamMatchGroup
-  :: AnnoBody p body
+  :: UtilsAnnoBody p body
   => Origin
   -> LocatedL [LocatedA (Match (CsPass p) (LocatedA (body (CsPass p))))]
   -> MatchGroup (CsPass p) (LocatedA (body (CsPass p)))
@@ -125,7 +100,7 @@ mkLamMatchGroup origin (L l matches)
     fixCtxt (L a match) = L a match{ m_ctxt = LamAlt }
 
 mkTyLamMatchGroup
-  :: AnnoBody p body
+  :: UtilsAnnoBody p body
   => Origin
   -> LocatedL [LocatedA (Match (CsPass p) (LocatedA (body (CsPass p))))]
   -> MatchGroup (CsPass p) (LocatedA (body (CsPass p)))
@@ -135,7 +110,7 @@ mkTyLamMatchGroup origin (L l matches)
     fixCtxt (L a match) = L a match{ m_ctxt = TyLamAlt }
 
 mkTyLamTyMatchGroup
-  :: AnnoBody p body
+  :: UtilsAnnoBody p body
   => Origin
   -> LocatedL [LocatedA (Match (CsPass p) (LocatedA (body (CsPass p))))]
   -> MatchGroup (CsPass p) (LocatedA (body (CsPass p)))
@@ -171,6 +146,15 @@ mkPsBindStmt ann pat body = BindStmt ann pat body
 
 mkLetStmt :: [AddEpAnn] -> CsLocalBinds Ps -> StmtLR Ps Ps (LocatedA b)
 mkLetStmt anns binds = LetStmt anns binds
+
+{- *********************************************************************
+*                                                                      *
+              Constructing syntax with no location info
+*                                                                      *
+********************************************************************* -}
+
+nl_CsVar :: IsSrcSpanAnn p a => IdP (CsPass p) -> CsExpr (CsPass p)
+nl_CsVar n = CsVar noExtField (noLocA n)
 
 missingTupArg :: EpAnn Bool -> CsTupArg Ps
 missingTupArg ann = Missing ann
@@ -239,6 +223,21 @@ collect_bind _ _ (FunBind { fun_id = f }) acc = unXRec @p f : acc
 collect_bind _ _ (XCsBindsLR b) acc = collectXXCsBindsLR @p @idR b acc
 collect_bind _ _ _ _ = panic "collect_bind" 
 
+collectPatBinders
+  :: CollectPass p
+  => CollectFlag p
+  -> LPat p
+  -> [IdP p]
+collectPatBinders flag pat = collect_lpat flag pat []
+  
+collectPatsBinders
+  :: CollectPass p
+  => CollectFlag p
+  -> [LPat p]
+  -> [IdP p]
+collectPatsBinders flag pats = foldr (collect_lpat flag) [] pats
+
+
 data CollectFlag p where
   CollNoDictBinders :: CollectFlag p
   CollVarTyVarBinders :: CollectFlag Rn
@@ -291,7 +290,7 @@ collectTyPatBndrs :: CsTyPat Rn -> [Name]
 collectTyPatBndrs (CsTP (CsTPRn nwcs imp_tvs exp_tvs) _) = nwcs ++ imp_tvs ++ exp_tvs
 
 collectPatSigBndrs :: CsPatSigType Rn -> [Name]
-collectPatSigBndrs (CsPS (CsPSRn nwcs imp_tvs) _) = nwcs ++ imp_tvs
+collectPatSigBndrs (CsPS (CsPSRn imp_tvs) _) = imp_tvs
 
 class UnXRec p => CollectPass p where
   collectXXPat :: CollectFlag p -> XXPat p -> [IdP p] -> [IdP p]

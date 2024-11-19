@@ -161,6 +161,9 @@ mkDataConTy tyvars b_tyvars arg_tys tycon
 dataConName :: DataCon -> Name
 dataConName = dcName
 
+dataConTyCon :: DataCon -> TyCon
+dataConTyCon = dcTyCon
+
 dataConType :: DataCon -> Type
 dataConType = dcType
          

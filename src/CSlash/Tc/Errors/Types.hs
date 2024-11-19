@@ -91,7 +91,14 @@ data TcRnMessage where
   TcRnDodgyImports :: !DodgyImportsReason -> TcRnMessage
   TcRnMissingImportList :: IE Ps -> TcRnMessage
   TcRnImportLookup :: !ImportLookupReason -> TcRnMessage
+  TcRnNotInScope :: NotInScopeError -> RdrName -> [ImportError] -> [CsHint] -> TcRnMessage
+  TcRnShadowedName :: OccName -> ShadowedNameProvenance -> TcRnMessage
+  TcRnBindingNameConflict :: !RdrName -> !(NE.NonEmpty SrcSpan) -> TcRnMessage
   deriving Generic
+
+data ShadowedNameProvenance
+  = ShadowedNameProvenanceLocal !SrcLoc
+  | ShadowedNameProvenanceGlobal [GlobalRdrElt]
 
 data BadImportKind
   = BadImportNotExported [CsHint]
@@ -100,6 +107,31 @@ data BadImportKind
   | BadImportNotExportedSubordinates [OccName]
   | BadImportAvailVar
   deriving Generic
+
+data NotInScopeError
+  = NotInScope
+  | NoExactName Name
+  | SameName [GlobalRdrElt]
+  | MissingBinding SDoc [CsHint]
+  | NoTopLevelBinding
+  deriving Generic
+
+mkTcRnNotInScope :: RdrName -> NotInScopeError -> TcRnMessage
+mkTcRnNotInScope rdr err = TcRnNotInScope err rdr [] noHints
+
+data ImportError
+  = MissingModule ModuleName
+  | ModulesDoNotExport (NE.NonEmpty Module) OccName
+
+{- *********************************************************************
+*                                                                      *
+      Context for renaming errors
+*                                                                      *
+********************************************************************* -}
+
+data CsDocContext
+  = TySynCtx (LocatedN RdrName)
+  | PatCtx
 
 data DodgyImportsReason
   = DodgyImportsEmptyParent !GlobalRdrElt

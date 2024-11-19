@@ -70,3 +70,17 @@ mkDataConWorkId wkr_name data_con
     wkr_lf_info
       | wkr_arity == 0 = LFCon data_con
       | otherwise = LFReEntrant TopLevel (countFunRepArgs wkr_arity wkr_ty) True ArgUnknown
+
+{- *********************************************************************
+*                                                                      *
+              Un-definable
+*                                                                      *
+********************************************************************* -}
+
+leftTySectionName :: Name
+leftTySectionName = panic "leftTySectionName"
+--  = mkWiredInIdName cSLASH_PRIM (fsLit "leftTySection") leftSectionKey leftSectionId
+
+rightTySectionName :: Name
+rightTySectionName = panic "rightTySectionName"
+--  = mkWiredInIdName cSLASH_PRIM (fsLit "rightTySection") rightSectionKey rightSectionId

@@ -244,6 +244,11 @@ mkOccEnv_C :: (a -> a -> a) -> [(OccName, a)] -> OccEnv a
 mkOccEnv_C f elts = MkOccEnv $ foldl' g emptyFsEnv elts
   where g env (OccName ns s, a) = extendFsEnv_C (plusUFM_C $ flip f) env s (unitUFM ns a)
 
+elemOccEnv :: OccName -> OccEnv a -> Bool
+elemOccEnv (OccName ns s) (MkOccEnv as) = case lookupFsEnv as s of
+  Nothing -> False
+  Just m -> ns `elemUFM` m
+
 nonDetFoldOccEnv :: (a -> b -> b) -> b -> OccEnv a -> b
 nonDetFoldOccEnv f b0 (MkOccEnv as) =
   nonDetFoldFsEnv (flip $ nonDetFoldUFM f) b0 as

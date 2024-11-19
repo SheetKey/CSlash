@@ -19,6 +19,9 @@ data CsPatSigType pass = CsPS
   , csps_body :: LCsType pass
   }
 
+csPatSigType :: CsPatSigType pass -> LCsType pass
+csPatSigType = csps_body
+
 data CsTyPat pass = CsTP
   { cstp_ext :: XCsTP pass
   , cstp_body :: LCsType pass

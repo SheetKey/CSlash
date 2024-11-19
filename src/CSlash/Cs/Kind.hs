@@ -22,14 +22,8 @@ import CSlash.Utils.Outputable
 import Data.Data
 
 type instance XCsPSK Ps = EpAnnCO
-type instance XCsPSK Rn = CsPSKRn
-type instance XCsPSK Tc = CsPSKRn
-
-data CsPSKRn = CsPSKRn
-  { cspsk_nwcs :: [Name]
-  , cspsk_imp_kvs :: [Name]
-  }
-  deriving Data
+type instance XCsPSK Rn = NoExtField
+type instance XCsPSK Tc = NoExtField
 
 mkCsPatSigKind :: EpAnnCO -> LCsKind Ps -> CsPatSigKind Ps
 mkCsPatSigKind ann x = CsPSK { cspsk_ext = ann
@@ -63,8 +57,8 @@ ppr_kind (CsLKd _) = lKindLit
 ppr_kind (CsKdVar _ (L _ name)) = pprPrefixOcc name
 ppr_kind (CsFunKd _ kd1 kd2)
   = sep [ppr_lkind kd1, arrow <+> ppr_lkind kd2]
-ppr_kind (CsQualKd{ csk_ctxt = ctxt, csk_body = kind })
-  = sep [pprLCsContextAlways ctxt, ppr_lkind kind]
+-- ppr_kind (CsQualKd{ csk_ctxt = ctxt, csk_body = kind })
+--   = sep [pprLCsContextAlways ctxt, ppr_lkind kind]
 ppr_kind (CsParKd _ kind) = parens (ppr_lkind kind)
 
 pprLCsContextAlways

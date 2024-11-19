@@ -18,6 +18,8 @@ import CSlash.Language.Syntax.Expr (CsExpr)
 import CSlash.Language.Syntax.Extension
 import CSlash.Language.Syntax.Lit
 
+import CSlash.Utils.Panic
+
 type instance XCsChar (CsPass _) = SourceText
 type instance XCsString (CsPass _) = SourceText
 type instance XCsInt (CsPass _) = NoExtField
@@ -53,6 +55,10 @@ csLitNeedsParens p = go
     go (CsString{}) = False
     go (CsInt _ x) = p > topPrec && il_neg x
     go (CsDouble{}) = False
+
+convertLit :: CsLit (CsPass p1) -> CsLit (CsPass p2)
+convertLit (CsChar a x) = CsChar a x
+convertLit _ = panic "convertLit"
 
 instance Outputable (CsLit (CsPass p)) where
   ppr (CsChar st c) = pprWithSourceText st (pprCsChar c)

@@ -143,6 +143,21 @@ instance Diagnostic TcRnMessage where
         <+> text "does not have ann explicit import list" ]
     TcRnImportLookup reason -> mkSimpleDecorated $
       pprImportLookup reason
+    TcRnNotInScope err name imp_errs _ -> mkSimpleDecorated $
+      pprScopeError name err $$ vcat (map ppr imp_errs)
+    TcRnShadowedName occ provenance ->
+      let shadowed_locs = case provenance of
+            ShadowedNameProvenanceLocal n -> [text "bound at" <+> ppr n]
+            ShadowedNameProvenanceGlobal gres -> map pprNameProvenance gres
+      in mkSimpleDecorated $
+         sep [ text "This binding for" <+> quotes (ppr occ)
+               <+> text "shadows the existing binding" <> plural shadowed_locs
+             , nest 2 (vcat shadowed_locs) ]
+    TcRnBindingNameConflict name locs -> mkSimpleDecorated $
+      vcat [ text "Conflicting definitions for" <+> quotes (ppr name)
+           , locations ]
+      where
+        locations = text "Bound at:" <+> vcat (map ppr (sortBy leftmost_smallest (NE.toList locs)))
 
   diagnosticReason = \case
     TcRnUnknownMessage m -> diagnosticReason m
@@ -165,6 +180,9 @@ instance Diagnostic TcRnMessage where
     TcRnDodgyImports{} -> WarningWithFlag Opt_WarnDodgyImports
     TcRnMissingImportList{} -> WarningWithFlag Opt_WarnMissingImportList
     TcRnImportLookup{} -> ErrorWithoutFlag
+    TcRnNotInScope{} -> ErrorWithoutFlag
+    TcRnShadowedName{} -> WarningWithFlag Opt_WarnNameShadowing
+    TcRnBindingNameConflict{} -> ErrorWithoutFlag
 
   diagnosticHints = \case
     TcRnUnknownMessage m -> diagnosticHints m
@@ -192,6 +210,9 @@ instance Diagnostic TcRnMessage where
                                          ImportDataCon (Just mod_name) par]
            BadImportNotExportedSubordinates{} -> noHints
     TcRnImportLookup{} -> noHints
+    TcRnNotInScope err _ _ hints -> scopeErrorHints err ++ hints
+    TcRnShadowedName{} -> noHints
+    TcRnBindingNameConflict{} -> noHints
 
   diagnosticCode = constructorCode
 
@@ -208,6 +229,37 @@ dodgy_msg kind tc ie = panic "dodgy_msg"
 
 dodgy_msg_insert :: GlobalRdrElt -> IE Rn
 dodgy_msg_insert tc_gre = panic "dodgy_msg_insert"
+
+{- *********************************************************************
+*                                                                      *
+      Outputting ScopeError messages
+*                                                                      *
+********************************************************************* -}
+
+pprScopeError :: RdrName -> NotInScopeError -> SDoc
+pprScopeError rdr_name scope_err = panic "pprScopeError"
+
+scopeErrorHints :: NotInScopeError -> [CsHint]
+scopeErrorHints scope_err = panic "scopeErrorHints"
+
+{- *********************************************************************
+*                                                                      *
+      Outputting ImportError messages
+*                                                                      *
+********************************************************************* -}
+
+instance Outputable ImportError where
+  ppr _ = panic "ppr ImportError"
+
+{- *********************************************************************
+*                                                                      *
+      Contexts for renaming errors
+*                                                                      *
+********************************************************************* -}
+
+pprCsDocContext :: CsDocContext -> SDoc
+pprCsDocContext (TySynCtx name) = text "the declaration for type synonym" <+> quotes (ppr name)
+pprCsDocContext PatCtx = text "a pattern type-signature"
 
 pprImportLookup :: ImportLookupReason -> SDoc
 pprImportLookup _ = panic "pprImportLookup"

@@ -23,7 +23,7 @@ module CSlash.Types.Name
     pprFullName, pprTickyName,
 
     isSystemName, isInternalName, isExternalName,
-    isTyVarName, isTyConName,
+    isTyVarName, isKdVarName, isTyConName,
     isDataConName,
     isValName, isVarName,
     -- isDynLinkName, isFieldName,

@@ -62,6 +62,7 @@ initSettings top_dir = do
   targetPlatformString <- getSetting "target platform string"
   cc_prog <- getToolSetting "C compiler command"
   cc_args_str <- getToolSetting "C compiler flags"
+  gccSupportsNoPie <- getBooleanSetting "C compiler supports -no-pie"
 
   platform <- either pgmError pure $ getTargetPlatform settingsFile mySettings
 
@@ -120,6 +121,7 @@ initSettings top_dir = do
       , toolSettings_ldSupportsSingleModule = ldSupportsSingleModule
       , toolSettings_mergeObjsSupportsResponseFiles = mergeObjsSupportsResponseFiles
       , toolSettings_ldIsGnuLd = ldIsGnuLd
+      , toolSettings_ccSupportsNoPie = gccSupportsNoPie
       , toolSettings_useInplaceMinGW = useInplaceMinGW
       , toolSettings_arSupportsDashL = arSupportsDashL
 

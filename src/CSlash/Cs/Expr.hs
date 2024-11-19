@@ -53,6 +53,9 @@ noSyntaxExpr = case csPass @p of
   Rn -> NoSyntaxExprRn
   Tc -> NoSyntaxExprTc
 
+mkSyntaxExpr :: CsExpr Rn -> SyntaxExprRn
+mkSyntaxExpr = SyntaxExprRn
+
 data EpAnnCsCase = EpAnnCsCase
   { csCaseAnnCase :: EpaLocation
   , csCaseAnnOf :: EpaLocation
@@ -456,8 +459,16 @@ pprStmt _ = text "pprStmt"
 pprBindStmt :: (Outputable pat, Outputable expr) => pat -> expr -> SDoc
 pprBindStmt pat expr = hsep [ ppr pat, larrow, ppr expr]
 
+{- *********************************************************************
+*                                                                      *
+              CsMatchCtxt
+*                                                                      *
+********************************************************************* -}
+
 type CsMatchContextPs = CsMatchContext (LIdP Ps)
 type CsMatchContextRn = CsMatchContext (LIdP Rn)
+
+type CsStmtContextRn = CsStmtContext (LIdP Rn)
 
 instance Outputable fn => Outputable (CsMatchContext fn) where
   ppr LamAlt = text "LamAlt"
@@ -465,6 +476,20 @@ instance Outputable fn => Outputable (CsMatchContext fn) where
   ppr CaseAlt = text "CaseAlt"
   ppr MultiIfAlt = text "MultiIfAlt"
   ppr TyLamTyAlt = text "TyLamTyAlt"
+
+pprMatchContext :: CsMatchContext fn -> SDoc
+pprMatchContext ctxt
+  | want_an ctxt = text "an" <+> pprMatchContextNoun ctxt
+  | otherwise = text "a" <+> pprMatchContextNoun ctxt
+  where
+    want_an _ = False
+
+pprMatchContextNoun :: CsMatchContext fn -> SDoc
+pprMatchContextNoun LamAlt = text "lambda abstraction"
+pprMatchContextNoun TyLamAlt = text "type lambda abstraction"
+pprMatchContextNoun CaseAlt = text "case alternative"
+pprMatchContextNoun MultiIfAlt = text "multi-way if alternative"
+pprMatchContextNoun TyLamTyAlt = text "type level lambda abstraction"
 
 type instance Anno (CsExpr (CsPass p)) = SrcSpanAnnA
 type instance Anno [LocatedA (Match (CsPass p) (LocatedA (CsExpr (CsPass p))))] = SrcSpanAnnL
