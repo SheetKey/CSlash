@@ -183,7 +183,9 @@ checkATyPat :: SrcSpanAnnA -> TyPatBuilder Ps -> PV (Pat Ps)
 checkATyPat loc t0 =
   case t0 of
     TyPatBuilderPat p -> return p
-    TyPatBuilderVar x -> return (TyVarPat noExtField x)
+    TyPatBuilderVar (L l v)
+      | not (isRdrUnknown v) -> panic "checkATyPat1"
+      | otherwise -> return (TyVarPat noExtField (L l (unknownToTv v)))
     TyPatBuilderPar lpar t rpar -> do
       p <- checkLTyPat t
       return (ParPat (lpar, rpar) p)
