@@ -237,10 +237,30 @@ dodgy_msg_insert tc_gre = panic "dodgy_msg_insert"
 ********************************************************************* -}
 
 pprScopeError :: RdrName -> NotInScopeError -> SDoc
-pprScopeError rdr_name scope_err = panic "pprScopeError"
+pprScopeError rdr_name scope_err = case scope_err of
+  NotInScope -> hang (text "Not in scope:") 2 (what <+> quotes (ppr rdr_name))
+  NoExactName name -> text "The Name" <+> quotes (ppr name) <+> text "is not in scope."
+  SameName gres ->
+    assertPpr (length gres >= 2) (text "pprScopeError SameName: fewer than 2 elements"
+                                  $$ nest 2 (ppr gres))
+    $ hang (text "Same Name in multiple name-spaces:") 2 (vcat (map pp_one sorted_names))
+    where
+      sorted_names = sortBy (leftmost_smallest `on` nameSrcSpan)
+                     $ map greName gres
+      pp_one name = hang (pprNameSpace (occNameSpace (getOccName name))
+                          <+> quotes (ppr name) <> comma)
+                    2 (text "declared at:" <+> ppr (nameSrcLoc name))
+  MissingBinding thing _ -> sep [ text "The" <+> thing <+> text "for" <+> quotes (ppr rdr_name)
+                                , nest 2 $ text "lacks an accompanying binding" ]
+  NoTopLevelBinding -> hang (text "No top-level binding for")
+                       2 (what <+> quotes (ppr rdr_name) <+> text "in this module")
+  where
+    what = pprNonVarNameSpace (occNameSpace (rdrNameOcc rdr_name))
 
 scopeErrorHints :: NotInScopeError -> [CsHint]
-scopeErrorHints scope_err = panic "scopeErrorHints"
+scopeErrorHints scope_err = case scope_err of
+  MissingBinding _ hints -> hints
+  _ -> noHints
 
 {- *********************************************************************
 *                                                                      *
