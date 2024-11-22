@@ -505,6 +505,13 @@ highestPriorityGREs priotity gres =
     take_highest_prio (fs : _) = map (\(S.Arg _ gre) -> gre) $ NE.toList fs
 {-# INLINABLE highestPriorityGREs #-}
 
+lookupGRE_Name :: Outputable info => GlobalRdrEnvX info -> Name -> Maybe (GlobalRdrEltX info)
+lookupGRE_Name env name =
+  case lookupGRE env (LookupExactName { lookupExactName = name, lookInAllNameSpaces = False }) of
+    [] -> Nothing
+    [gre] -> Just gre
+    gres -> pprPanic "lookupGRE_Name" (ppr name $$ ppr (nameOccName name) $$ ppr gres)
+
 isLocalGRE :: GlobalRdrEltX info -> Bool
 isLocalGRE (GRE { gre_lcl = lcl }) = lcl
 
