@@ -118,28 +118,22 @@ checkWildCardKi env name =
                 --TcRnIllegalWildCardInKind name
   else return ()
 
--- Create new renamed kind variables corresponding to source-level ones.
--- Duplicates are permitted, and will be removed here. This handles 
--- free kind variables in a type signature, all of which are implicitly bound.
-rnImplicitKvOccs :: FreeKiVars -> ([Name] -> RnM (a, FreeVars)) -> RnM (a, FreeVars)
-rnImplicitKvOccs implicit_vs_with_dups thing_inside = do
-  massertPpr (all (isRdrKiVar . unLoc) implicit_vs_with_dups)
-    (text "rnImplicitKvOccs: Contains not kind var name:"
-     <+> ppr implicit_vs_with_dups)
+rnImplicitTvKvOccs :: FreeTyKiVars -> ([Name] -> RnM (a, FreeVars)) -> RnM (a, FreeVars)
+rnImplicitTvKvOccs implicit_vs_with_dups thing_inside = do
   let implicit_vs = nubN implicit_vs_with_dups
-  traceRn "rnImplicitKvOccs" $
+  traceRn "rnImplicitTvKvOccs" $
     vcat [ ppr implicit_vs_with_dups, ppr implicit_vs ]
   loc <- getSrcSpanM
   let loc' = noAnnSrcSpan loc
-  vars <- mapM (newKiVarNameRnImplicit . L loc' . unLoc) implicit_vs
+  vars <- mapM (newTyKiVarNameRnImplicit . L loc' . unLoc) implicit_vs
   bindLocalNamesFV vars $ thing_inside vars
 
-newKiVarNameRnImplicit :: LocatedN RdrName -> RnM Name
-newKiVarNameRnImplicit = new_ki_name_rn $ \lrdr ->
+newTyKiVarNameRnImplicit :: LocatedN RdrName -> RnM Name
+newTyKiVarNameRnImplicit = new_tyki_name_rn $ \lrdr ->
   newLocalBndrRn lrdr
 
-new_ki_name_rn :: (LocatedN RdrName -> RnM Name) -> LocatedN RdrName -> RnM Name
-new_ki_name_rn cont lrdr = cont lrdr
+new_tyki_name_rn :: (LocatedN RdrName -> RnM Name) -> LocatedN RdrName -> RnM Name
+new_tyki_name_rn cont lrdr = cont lrdr
 
 {- *********************************************************************
 *                                                                      *
@@ -148,12 +142,12 @@ new_ki_name_rn cont lrdr = cont lrdr
 ********************************************************************* -}
 
 
-type FreeKiVars = [LocatedN RdrName]
+type FreeTyKiVars = [LocatedN RdrName]
 
-filterInScope :: (GlobalRdrEnv, LocalRdrEnv) -> FreeKiVars -> FreeKiVars
+filterInScope :: (GlobalRdrEnv, LocalRdrEnv) -> FreeTyKiVars -> FreeTyKiVars
 filterInScope envs = filterOut (inScope envs . unLoc)
 
-filterInScopeM :: FreeKiVars -> RnM FreeKiVars
+filterInScopeM :: FreeTyKiVars -> RnM FreeTyKiVars
 filterInScopeM vars = do
   envs <- getRdrEnvs
   return (filterInScope envs vars)

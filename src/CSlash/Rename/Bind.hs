@@ -71,7 +71,15 @@ rnValBindsLHS topP (ValBinds x mbinds sigs) = do
 rnValBindsLHS _ b = pprPanic "rnValBindsLHS" (ppr b)
 
 rnValBindsRHS :: CsSigCtxt -> CsValBindsLR Rn Ps -> RnM (CsValBinds Rn, DefUses)
-rnValBindsRHS ctxt (ValBinds _ mbinds sigs) = panic "rnValBindsRHS"
+rnValBindsRHS ctxt (ValBinds _ mbinds sigs) = do
+  (sigs', sig_fvs) <- renameSigs ctxt sigs
+  binds_w_dus <- mapBagM rnLBind mbinds
+  let !(anal_binds, anal_dus) = depAnalBinds binds_w_dus
+
+      valbind'_dus = anal_dus `plusDU` usesOnly sig_fvs
+
+  return (XValBindsLR (NValBinds anal_binds sigs'), valbind'_dus)
+
 rnValBindsRHS _ b = pprPanic "rnValBindsRHS" (ppr b)
 
 ---------------------
@@ -82,11 +90,49 @@ rnBindLHS name_maker _ bind@(FunBind { fun_id = rdr_name, fun_ext = ext }) = do
   return (bind { fun_id = name, fun_ext = ext })
 rnBindLHS _ _ b = pprPanic "rnBindLHS" (ppr b)
 
+rnLBind :: LCsBindLR Rn Ps -> RnM (LCsBind Rn, Name, Uses)
+rnLBind (L loc bind) = setSrcSpanA loc $ do
+  (bind', bndr, dus) <- rnBind 
+  return (L loc bind', bndr, dus)
+
+rnBind :: CsBindLR Rn Ps -> RnM (CsBind Rn, Name, Uses)
+rnBind bind@(FunBind { fun_id = name, fun_matches = matches }) = do
+  let plain_name = unLoc name
+
+  (matches', rhs_fvs) <- rnMatchGroup (mkPrefixFunRhs name) rnLExpr matches
+
+  let is_infix = isInfixFunBind bind
+  when is_infix $ checkPrecMatch plain_name matches'
+
+  mod <- getModule
+  let fvs' = filterNameSet (nameIsLocalOrFrom mod) rhs_fvs
+
+  fvs' `seq`
+    return (bind { fun_matches = matches', fun_ext = fvs' }, plain_name, rhs_fvs)
+
+rnBind other = pprPanic "rnBind" (ppr other)
+
 {- *********************************************************************
 *                                                                      *
           Dependency analysis and other support functions
 *                                                                      *
 ********************************************************************* -}
+
+depAnalBinds :: Bag (LCsBind Rn, Name, Uses) -> ([(RecFlag, LCsBinds Rn)], DefUses)
+depAnalBinds binds_w_dus = (map get_binds sccs, toOL $ map get_du sccs)
+  where
+    sccs = depAnal (\(_, defs, _) -> defs)
+                   (\(_, _, uses) -> nonDetEltsUniqSet uses)
+                   (bagToList binds_w_dus)
+
+    get_binds (AcyclicSCC (bind, _, _)) = (NonRecursive, unitBag bind)
+    get_binds (CyclicSCC binds'_w_dus) = (Recursive, listToBag [ b | (b, _, _) <- binds'_w_dus ])
+
+    get_du (AcyclicSCC (_, bndrs, uses)) = (Just (mkNameSet bndrs), uses)
+    get_du (CyclicSCC binds'_w_dus) = (Just defs, uses)
+      where
+        defs = mkNameSet [ b | (_, bs, _) <- binds'_w_dus, b <- bs ]
+        uses = unionNameSets [ u | (_, _, u) <- binds'_w_dus ]
 
 makeMiniFixityEnv :: [LFixitySig Ps] -> RnM MiniFixityEnv
 makeMiniFixityEnv decls = foldM add_one_sig emptyMiniFixityEnv decls
@@ -115,6 +161,29 @@ makeMiniFixityEnv decls = foldM add_one_sig emptyMiniFixityEnv decls
             { mfe_data_level_names = extendFsEnv mfe_data_level_names fs fix_item }
           TypeNamespaceSpecifier{} -> env
             { mfe_type_level_names = extendFsEnv mfe_type_level_names fs fix_item }
+
+{- *********************************************************************
+*                                                                      *
+              Signatures
+*                                                                      *
+********************************************************************* -}
+
+renameSigs :: CsSigCtxt -> [LSig Ps] -> RnM ([LSig Rn], FreeVars)
+renameSigs ctxt sigs = do
+  mapM_ dupSigDeclErr (findDupSigs sigs)
+
+  (sigs', sig_fvs) <- mapFvRn (wrapLocFstMA (renameSig ctxt)) sigs
+
+  let (good_sigs, bad_sigs) = partition (okCsSig ctxt) sigs'
+  mapM_ misplacedSigErr bad_sigs
+
+  return (good_sigs, sig_fvs)
+
+renameSig :: CsSigCtxt -> Sig Ps -> RnM (Sig Rn, FreeVars)
+renameSig ctxt sig@(TypeSig _ v ty) = do
+  new_v <- lookupSigOccRnN ctxt sig v
+  let doc = TypeSigCtx (ppr_sig_bndr v)
+  (new_ty, fvs) <- rnCsSigType doc ty
 
 {- *********************************************************************
 *                                                                      *

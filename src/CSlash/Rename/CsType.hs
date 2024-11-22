@@ -202,16 +202,16 @@ rnTyVar _ rdr_name = lookupTypeOccRn rdr_name
 -- We require all type variables to be bound (by forall or lambda)
 -- All kind variables are implicitly universally quantified (no user quantification)
 -- We need 
-bindCsKiVars
+bindCsTyKiVars
   :: CsDocContext
-  -> FreeKiVars
+  -> FreeTyKiVars
   -> ([Name] -> RnM (b, FreeVars))
   -> RnM (b, FreeVars)
-bindCsKiVars doc all_kv_occs thing_inside = do
+bindCsTyKiVars doc all_implicit_occs thing_inside = do
   traceRn "checkMixedVars3" $
-    vcat [ text "all_kv_occs" <+> ppr all_kv_occs ]
+    vcat [ text "all_implicit_occs" <+> ppr all_implicit_occs ]
 
-  rnImplicitKvOccs all_kv_occs $ \ all_kv_nms' -> do
+  rnImplicitTvKvOccs all_implicit_occs $ \ all_implicit_nms' -> do
     let all_kv_nms = map (`setNameLoc` bndrs_loc) all_kv_nms'
     traceRn "bindCsKiVars" (ppr all_kv_nms)
     thing_inside all_kv_nms
@@ -404,7 +404,9 @@ warnUnusedForAll doc (L loc tv) used_names
 We have two major differences compared to GHC:
   1. All type variables must be bound. E.g., by forall or a type lambda.
   2. Kind variables cannot be explicitly quantified, but are always implicitly universally
-     quantified. 
+     quantified.
+'Free' type variables are things like type synonyms:
+they are non quantified in a type sig but they may not yet be in scope.
 -}
 
 -- Extract ALL the free kind variables from a CsType.
@@ -413,75 +415,109 @@ We have two major differences compared to GHC:
 -- GHC checks that these are quantified earlier.
 -- We don't care; all kvs are implicitly quantified; we don't allow explicit quantification.
 -- We list them in the order they appear from left to right. 
-extractCsTyRdrKindVars :: LCsType Ps -> FreeKiVars
-extractCsTyRdrKindVars (L _ ty) = case ty of
-  CsForAllTy _ tele ty -> extractCsForAllTelescopeKindVars tele ++ extractCsTyRdrKindVars ty
-  CsQualTy _ c ty -> extractCsContextKindVars c ++ extractCsTyRdrKindVars ty
-  CsAppTy _ ty1 ty2 -> extractCsTyRdrKindVars ty1 ++ extractCsTyRdrKindVars ty2
-  CsFunTy _ arr ty1 ty2 -> extractCsTyRdrKindVars ty1
-                           ++ extractCsArrowKindVars arr
-                           ++ extractCsTyRdrKindVars ty2
-  CsTupleTy _ tys -> concatMap extractCsTyTupArgKindVars tys
-  CsSumTy _ tys -> concatMap extractCsTyRdrKindVars tys
-  CsOpTy _ ty1 _ ty2 -> extractCsTyRdrKindVars ty1 ++ extractCsTyRdrKindVars ty2
-  CsParTy _ ty -> extractCsTyRdrKindVars ty
-  CsKindSig _ ty ki -> extractCsTyRdrKindVars ty ++ extractCsKindKindVars ki
-  CsTyLamTy _ mg -> extractCsTyMGKindVars mg
-  TySectionL _ ty1 ty2 -> extractCsTyRdrKindVars ty1 ++ extractCsTyRdrKindVars ty2
-  TySectionR _ ty1 ty2 -> extractCsTyRdrKindVars ty1 ++ extractCsTyRdrKindVars ty2
-  _ -> []
+extractCsTyRdrTyKiVars :: LCsType Ps -> FreeTyKiVars
+extractCsTyRdrTyKiVars ty = extract_lty ty []
 
-extractCsForAllTelescopeKindVars :: CsForAllTelescope Ps -> FreeKiVars
-extractCsForAllTelescopeKindVars (CsForAll { csf_bndrs = bndrs })
-  = concatMap extractCsTyVarBndrsKindVars bndrs
+extract_lty :: LCsType Ps -> FreeTyKiVars -> FreeTyKiVars
+extract_lty (L _ ty) acc = case ty of
+  CsForAllTy _ tele ty -> extract_cs_for_all_telescope tele acc
+                          $ extract_lty ty []
+  CsQualTy _ c ty -> extract_cs_context c
+                     $ extract_lty ty acc
+  CsTyVar _ ltv -> extract_tv ltv acc
+  CsUnboundName _ rdr_name -> extract_unbound_tv rdr_name acc
+  CsAppTy _ ty1 ty2 -> extract_lty ty1
+                       $ extract_lty ty2
+  CsFunTy _ arr ty1 ty2 -> extract_lty ty1
+                           $ extract_lty ty2
+                           $ extract_cs_arrow arr acc
+  CsTupleTy _ tys -> extract_ltys tys acc
+  CsSumTy _ tys -> extract_ltys tys acc
+  CsOpTy _ ty1 tv ty2 -> extract_tv tv
+                         $ extract_lty ty1
+                         $ extract_lty ty2 acc
+  CsParTy _ ty -> extract_lty ty acc
+  CsKindSig _ ty ki -> extract_kind_sig ty ki acc
+  CsTyLamTy _ mg -> extract_ty_mg mg acc
+  TySectionL _ ty1 ty2 -> extract_lty ty1
+                          $ extract_lty ty2 acc
+  TySectionR _ ty1 ty2 -> extract_lty ty1
+                          $ extract_lty ty2 acc
 
-extractCsTyVarBndrsKindVars :: LCsTyVarBndr Ps -> FreeKiVars
-extractCsTyVarBndrsKindVars (L _ (KindedTyVar _ _ ki)) = extractCsKindKindVars ki
-extractCsTyVarBndrsKindVars (L _ (ImpKindedTyVar _ _ ki)) = extractCsKindKindVars ki
+extract_kind_sig :: LCsType Ps -> LCsKind Ps -> FreeTyKiVars -> FreeTyKiVars
+extract_kind_sig ty ki acc = extract_lty ty $ extract_lki ki acc
 
-extractCsContextKindVars :: LCsContext Ps -> FreeKiVars
-extractCsContextKindVars (L _ ctxt)
-  = concatMap extractCsKdRelKindVars ctxt
+extract_cs_arrow :: CsArrow Ps -> FreeTyKiVars -> FreeTyKiVars 
+extract_cs_arrow (CsArrow _ ki) acc = extract_lki ki acc
 
-extractCsKdRelKindVars :: LCsKdRel Ps -> FreeKiVars
-extractCsKdRelKindVars (L _ rel) = case rel of
-  CsKdLT _ k1 k2 -> extractCsKindKindVars k1 ++ extractCsKindKindVars k2
-  CsKdLTEQ _ k1 k2 -> extractCsKindKindVars k1 ++ extractCsKindKindVars k2
+extract_cs_for_all_telescope
+  :: CsForAllTelescope Ps -> FreeTyKiVars -> FreeTyKiVars -> FreeTyKiVars
+extract_cs_for_all_telescope (CsForAll _ bndrs) acc_vars body_fvs =
+  extract_cs_tv_bndrs bndrs acc_vars body_fvs
 
-extractCsArrowKindVars :: CsArrow Ps -> FreeKiVars
-extractCsArrowKindVars (CsArrow _ ki) = extractCsKindKindVars ki
+extract_cs_tv_bndrs :: [LCsTyVarBndr Ps] -> FreeTyKiVars -> FreeTyKiVars -> FreeTyKiVars
+extract_cs_tv_bndrs tv_bndrs acc_vars body_vars = new_vars ++ acc_vars
+  where
+    new_vars
+      | null tv_bndrs = body_vars
+      | otherwise = filterFreeVarsToBind tv_bndr_rdrs $ bndr_vars ++ body_vars
 
-extractCsTyTupArgKindVars :: CsTyTupArg Ps -> FreeKiVars
-extractCsTyTupArgKindVars (TyPresent _ ty) = extractCsTyRdrKindVars ty
-extractCsTyTupArgKindVars _ = []
+    bndr_vars = extract_cs_tv_bndrs_kvs tv_bndrs
+    tv_bndr_rdrs = map csLTyVarLocName tv_bndrs
 
-extractCsTyMGKindVars :: MatchGroup Ps (LCsType Ps) -> FreeKiVars
-extractCsTyMGKindVars (MG _ (L _ alts)) = concatMap extractCsTyMatchKindVars alts
+extract_cs_tv_bndrs_kvs :: [LCsTyVarBndr Ps] -> FreeTyKiVars
+extract_cs_tv_bndrs_kvs tv_bndrs =
+  foldr extract_lki [] (tv_bndr_kind <$> tv_bndrs)
+  where
+    tv_bndr_kind (KindedTyVar _ _ k) = k
+    tv_bndr_kind (ImpKindedTyVar _ _ k) = k
 
-extractCsTyMatchKindVars :: LMatch Ps (LCsType Ps) -> FreeKiVars
-extractCsTyMatchKindVars (L _ (Match _ _ (L _ pats) grhss))
-  = concatMap extractCsTyPatKindVars pats ++ extractCsTyGRHSsKindVars grhss
+filterFreeVarsToBind :: FreeTyKiVars -> FreeTyKiVars -> FreeTyKiVars
+filterFreeVarsToBind bndrs = filterOut is_in_scope
+  where
+    is_in_scope locc = any (eqLocated locc) bndrs
 
-extractCsTyPatKindVars :: LPat Ps -> FreeKiVars
-extractCsTyPatKindVars (L _ pat) = case pat of
-  ParPat _ lpat -> extractCsTyPatKindVars lpat
-  KdSigPat _ lpat ksig -> extractCsTyPatKindVars lpat ++ extractCsPatSigKindKindVars ksig
-  ImpPat _ lpat -> extractCsTyPatKindVars lpat
-  _ -> []
-  
-extractCsPatSigKindKindVars :: CsPatSigKind (NoTc Ps) -> FreeKiVars
-extractCsPatSigKindKindVars (CsPSK _ ki) = extractCsKindKindVars ki
+extract_cs_context :: LCsContext Ps -> FreeTyKiVars -> FreeTyKiVars
+extract_cs_context (L _ ctxt) acc = foldr extract_cs_kdrel acc ctxt
 
-extractCsTyGRHSsKindVars :: GRHSs Ps (LCsType Ps) -> FreeKiVars
-extractCsTyGRHSsKindVars (GRHSs _ grhss)
-  = concatMap extractCsTyGRHSKindVars grhss
+extract_cs_kdrel :: LCsKdRel Ps -> FreeTyKiVars -> FreeTyKiVars
+extract_cs_kdrel (L _ rel) acc = case rel of
+  CsKdLT _ k1 k2 -> extract_lki k1
+                    $ extract_lki k2 acc
+  CsKdLTEQ _ k1 k2 -> extract_lki k1
+                      $ extract_lki k2 acc
 
-extractCsTyGRHSKindVars :: LGRHS Ps (LCsType Ps) -> FreeKiVars
-extractCsTyGRHSKindVars (L _ (GRHS _ [] ty)) = extractCsTyRdrKindVars ty
-extractCsTyGRHSKindVars (L _ (GRHS _ stmt _)) = pprPanic "extractCsTyGRHSKindVars" (ppr stmt)
+extract_ty_mg :: MatchGroup Ps (LCsType Ps) -> FreeTyKiVars -> FreeTyKiVars
+extract_ty_mg (MG _ (L _ alts)) acc = foldr extract_ty_match acc alts
 
-extractCsKindKindVars :: LCsKind Ps -> FreeKiVars
-extractCsKindKindVars ki = extract_lki ki []
+extract_ty_match :: LMatch Ps (LCsType Ps) -> FreeTyKiVars -> FreeTyKiVars
+extract_ty_match (L _ (Match _ _ (L _ pats) grhss)) acc =
+  let pats_vars = foldr extract_cs_ty_pat [] pats
+      rhs_vars = extract_cs_ty_grhss grhss
+      pat_bndr_rdrs = map csLTyPatLocName pats
+      new_vars = filterFreeVarsToBind pat_bndr_rdrs $ pats_vars ++ rhs_vars
+  in new_vars ++ acc
+
+extract_cs_ty_pat :: LPat Ps -> FreeTyKiVars -> FreeTyKiVars
+extract_cs_ty_pat (L _ pat) acc = case pat of
+  WilPat {} -> acc
+  TyVarPat _ tv -> extract_tv tv acc
+  ParPat _ lpat -> extract_cs_ty_pat lpat acc
+  KdSigPat _ lpat ksig -> extract_cs_ty_pat lpat
+                          $ extract_cs_pat_sig_kind ksig acc
+  ImpPat _ lpat -> extract_cs_ty_pat lpat acc
+  other -> pprPanic "extract_cs_ty_pat" (ppr other)
+
+extract_cs_pat_sig_kind :: CsPatSigKind (NoTc Ps) -> FreeTyKiVars -> FreeTyKiVars
+extract_cs_pat_sig_kind (CsPSK _ ki) acc = extract_cs_lki ki acc
+
+extract_cs_ty_grhss :: GRHSs Ps (LCsType Ps) -> FreeTyKiVars
+extract_cs_ty_grhss (GRHSs _ grhss)
+  = foldr extract_cs_ty_grhs [] grhss
+
+extract_cs_ty_grhs :: LGRHS Ps (LCsType Ps) -> FreeTyKiVars -> FreeTyKiVars
+extract_cs_ty_grhs (L _ (GRHS _ [] ty)) acc = extract_lty ty acc
+extract_cs_ty_grhs (L _ (GRHS _ stmt _)) = pprPanic "extractCsTyGRHSKindVars" (ppr stmt)
 
 extract_lki :: LCsKind Ps -> FreeKiVars -> FreeKiVars
 extract_lki (L _ ki) acc = case ki of

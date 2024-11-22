@@ -129,7 +129,46 @@ rnTypeDecls type_ds = do
     vcat [ text "typeGroupTypeDecls:" <+> ppr types_w_fvs
          , text "tc_names:" <+> ppr tc_names ]
 
-  panic "rnTypeDecls"
+  massertPpr (null (typeGroupKindSigs type_ds)) (ppr $ typeGroupKindSigs type_ds)
+
+  rdr_env <- getGlobalRdrEnv
+  traceRn "rnTypeDecls SCC analysis" $
+    vcat [ text "rdr_env:" <+> ppr rdr_env ]
+  let type_sccs = depAnalTypeDecls rdr_env types_w_fvs
+
+      all_groups = map mk_group type_sccs
+
+      all_fvs = foldr (plusFV . snd) emptyFVs types_w_fvs
+
+  traceRn "rnType dependency analysis made groups" (ppr all_groups)
+  return (all_groups, all_fvs)
+
+  where
+    mk_group :: SCC (LCsBind Rn) -> TypeGroup Rn
+    mk_group scc = group
+      where
+        type_ds = flattenSCC scc
+
+        group = TypeGroup { group_ext = noExtField
+                          , group_typeds = type_ds
+                          , group_kisigs = []
+                          }
+
+depAnalTypeDecls :: GlobalRdrEnv -> [(LCsBind Rn, FreeVars)] -> [SCC (LCsBind Rn)]
+depAnalTypeDecls rdr_env ds_w_fvs = stronglyConnCompFromEdgedVerticesUniq edges
+  where
+    edges :: [Node Name (LCsBind Rn)]
+    edges = [ DigraphNode d name (map (getParent rdr_env) (nonDetEltsUniqSet fvs))
+            | (d, fvs) <- ds_w_fvs
+            , let name = tydName (unLoc d)
+            ]
+
+getParent :: GlobalRdrEnv -> Name -> Name
+getParent rdr_env n = case lookupGRE_Name rdr_env n of
+                        Just gre -> case greParent gre of
+                                      ParentIs { par_is = p } -> p
+                                      _ -> n
+                        Nothing -> n
 
 {- ******************************************************
 *                                                       *
