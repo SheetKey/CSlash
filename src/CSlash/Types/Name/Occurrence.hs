@@ -274,6 +274,15 @@ extendOccEnv_Acc f g (MkOccEnv env) (OccName ns s)
     f' a bs = alterUFM (Just . \case { Nothing -> g a; Just b -> f a b }) bs ns
     g' a = unitUFM ns (g a)
 
+instance Outputable a => Outputable (OccEnv a) where
+  ppr x = pprOccEnv ppr x
+
+pprOccEnv :: (a -> SDoc) -> OccEnv a -> SDoc
+pprOccEnv ppr_elt (MkOccEnv env) = brackets $ fsep $ punctuate comma $
+  [ ppr uq <+> text ":->" <+> ppr_elt elt
+  | (uq, elts) <- nonDetUFMToList env
+  , elt <- nonDetEltsUFM elts ]
+
 --------------------------------------------------------------------------------
 
 newtype OccSet = OccSet (FastStringEnv (UniqSet NameSpace))
