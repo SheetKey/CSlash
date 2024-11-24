@@ -80,6 +80,7 @@ rnSrcDecls group@(CsGroup { cs_valds = val_decls
     let id_bndrs = collectCsIdBinders CollNoDictBinders new_lhs
     traceRn "rnSrcDecls" (ppr id_bndrs)
     tc_envs <- extendGlobalRdrEnvRn (map (mkLocalVanillaGRE NoParent) id_bndrs) local_fix_env
+
     restoreEnvs tc_envs $ do
       traceRn "Start rnTypeDecls" (ppr type_decls)
       (rn_type_decls, src_fvs1) <- rnTypeDecls type_decls
