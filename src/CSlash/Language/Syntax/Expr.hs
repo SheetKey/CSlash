@@ -91,5 +91,4 @@ data StmtLR idL idR body
 
 isPatSynCtxt :: CsMatchContext fn -> Bool
 isPatSynCtxt ctxt = case ctxt of
-  TyLamTyAlt -> True
   _ -> False
