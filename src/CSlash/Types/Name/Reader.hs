@@ -112,8 +112,8 @@ isRdrTyLvl rn = let occ = rdrNameOcc rn in isTcOcc occ || isTvOcc occ
 isRdrTc :: RdrName -> Bool
 isRdrTc rn = isTcOcc (rdrNameOcc rn)
 
-idRdrTyVar :: RdrName -> Bool
-idRdrTyVar rn = isTvOcc (rdrNameOcc rn)
+isRdrTyVar :: RdrName -> Bool
+isRdrTyVar rn = isTvOcc (rdrNameOcc rn)
 
 isRdrKiVar :: RdrName -> Bool
 isRdrKiVar rn = isKvOcc (rdrNameOcc rn)
@@ -241,6 +241,9 @@ elemLocalRdrEnv rdr_name (LRE { lre_env = env, lre_in_scope = ns })
       Qual {} -> False
       Orig {} -> False
    
+localRdrEnvElts :: LocalRdrEnv -> [Name]
+localRdrEnvElts (LRE { lre_env = env }) = nonDetOccEnvElts env
+
 inLocalRdrEnvScope :: Name -> LocalRdrEnv -> Bool
 inLocalRdrEnvScope name (LRE { lre_in_scope = ns }) = name `elemNameSet` ns
 

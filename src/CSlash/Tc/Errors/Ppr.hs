@@ -278,6 +278,7 @@ instance Outputable ImportError where
 ********************************************************************* -}
 
 pprCsDocContext :: CsDocContext -> SDoc
+pprCsDocContext (TypeSigCtx doc) = text "the type signature for" <+> doc
 pprCsDocContext (TySynCtx name) = text "the declaration for type synonym" <+> quotes (ppr name)
 pprCsDocContext PatCtx = text "a pattern type-signature"
 

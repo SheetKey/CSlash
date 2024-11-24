@@ -130,7 +130,8 @@ data ImportError
 ********************************************************************* -}
 
 data CsDocContext
-  = TySynCtx (LocatedN RdrName)
+  = TypeSigCtx SDoc
+  | TySynCtx (LocatedN RdrName)
   | PatCtx
 
 data DodgyImportsReason

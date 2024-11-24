@@ -129,7 +129,46 @@ rnTypeDecls type_ds = do
     vcat [ text "typeGroupTypeDecls:" <+> ppr types_w_fvs
          , text "tc_names:" <+> ppr tc_names ]
 
-  panic "rnTypeDecls"
+  massertPpr (null (typeGroupKindSigs type_ds)) (ppr $ typeGroupKindSigs type_ds)
+
+  rdr_env <- getGlobalRdrEnv
+  traceRn "rnTypeDecls SCC analysis" $
+    vcat [ text "rdr_env:" <+> ppr rdr_env ]
+  let type_sccs = depAnalTypeDecls rdr_env types_w_fvs
+
+      all_groups = map mk_group type_sccs
+
+      all_fvs = foldr (plusFV . snd) emptyFVs types_w_fvs
+
+  traceRn "rnType dependency analysis made groups" (ppr all_groups)
+  return (all_groups, all_fvs)
+
+  where
+    mk_group :: SCC (LCsBind Rn) -> TypeGroup Rn
+    mk_group scc = group
+      where
+        type_ds = flattenSCC scc
+
+        group = TypeGroup { group_ext = noExtField
+                          , group_typeds = type_ds
+                          , group_kisigs = []
+                          }
+
+depAnalTypeDecls :: GlobalRdrEnv -> [(LCsBind Rn, FreeVars)] -> [SCC (LCsBind Rn)]
+depAnalTypeDecls rdr_env ds_w_fvs = stronglyConnCompFromEdgedVerticesUniq edges
+  where
+    edges :: [Node Name (LCsBind Rn)]
+    edges = [ DigraphNode d name (map (getParent rdr_env) (nonDetEltsUniqSet fvs))
+            | (d, fvs) <- ds_w_fvs
+            , let name = tydName (unLoc d)
+            ]
+
+getParent :: GlobalRdrEnv -> Name -> Name
+getParent rdr_env n = case lookupGRE_Name rdr_env n of
+                        Just gre -> case greParent gre of
+                                      ParentIs { par_is = p } -> p
+                                      _ -> n
+                        Nothing -> n
 
 {- ******************************************************
 *                                                       *
@@ -138,19 +177,25 @@ rnTypeDecls type_ds = do
 ****************************************************** -}
 
 rnTypeDecl :: CsBind Ps -> RnM (CsBind Rn, FreeVars)
-rnTypeDecl (TyFunBind { tyfun_id = tycon, tyfun_body = rhs }) = do
+rnTypeDecl (TyFunBind { tyfun_id = tycon, tyfun_body = body }) = do
   tycon' <- lookupLocatedTopConstructorRnN tycon
-  let all_kv_occs = extractCsTyRdrKindVars rhs
-      doc = TySynCtx tycon
-  traceRn "rntype-ty" (ppr tycon <+> ppr all_kv_occs)
-  bindCsKiVars doc all_kv_occs $ \ all_kv_nms -> do
-    (final_rhs, fvs) <- rnTyFun doc rhs
-    return
-      ( TyFunBind
-        { tyfun_id = tycon'
-        , tyfun_body = final_rhs
-        , tyfun_ext = (all_kv_nms, fvs) }
-      , fvs )
+  traceRn "rntype-ty" (ppr tycon)
+  let doc = TySynCtx tycon
+  rnLCsTypeWithKvs doc body $ \ (final_body, fvs) kv_nms -> 
+    return ( TyFunBind { tyfun_id = tycon'
+                       , tyfun_body = final_body
+                       , tyfun_ext = (kv_nms, fvs) }
+           , fvs )
+                       
+  -- bindCsKiVars doc all_kv_occs $ \ all_kv_nms -> do
+  --   (final_rhs, fvs) <- rnTyFun doc rhs
+  --   return
+  --     ( TyFunBind
+  --       { tyfun_id = tycon'
+  --       , tyfun_body = final_rhs
+  --       , tyfun_ext = (all_kv_nms, fvs) }
+  --     , fvs )
+
 rnTypeDecl other = pprPanic "rnTypeDecl" (ppr other)
 
 rnTyFun :: CsDocContext -> LCsType Ps -> RnM (LCsType Rn, FreeVars)

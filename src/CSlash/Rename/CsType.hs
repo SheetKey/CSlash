@@ -46,21 +46,34 @@ import Control.Monad
 *                                                       *
 ****************************************************** -}
 
+rnCsSigType :: CsDocContext -> LCsSigType Ps -> RnM (LCsSigType Rn, FreeVars)
+rnCsSigType doc (L l sig_ty@(CsSig _ body)) = do
+  traceRn "rnCsSigType" (ppr sig_ty)
+  rnLCsTypeWithKvs doc body $ \ (final_body, fvs) kv_nms ->
+    return ( L l $ CsSig { sig_ext = kv_nms, sig_body = final_body }
+           , fvs )
+
 rnCsPatSigType
   :: CsDocContext
   -> CsPatSigType Ps
   -> (CsPatSigType Rn -> RnM (a, FreeVars))
   -> RnM (a, FreeVars)
-rnCsPatSigType ctx sig_ty thing_inside = do
+rnCsPatSigType doc sig_ty thing_inside = do
   let pat_sig_ty = csPatSigType sig_ty
-  free_ki_vars <- filterInScopeM (extractCsTyRdrKindVars pat_sig_ty)
-  rnImplicitKvOccs free_ki_vars $ \imp_kvs -> do
-    let env = RTE ctx RnTypeBody
-    (pat_sig_ty', fvs1) <- rnLCsTy env pat_sig_ty
-    let sig_names = CsPSRn imp_kvs
-        sig_ty' = CsPS sig_names pat_sig_ty'
-    (res, fvs2) <- thing_inside sig_ty'
-    return (res, fvs1 `plusFV` fvs2)                              
+
+  rnLCsTypeWithKvs doc pat_sig_ty $ \ (final_pat_sig_ty, fvs1) kv_nms -> do
+    let sig_names = CsPSRn kv_nms
+        final_sig_ty = CsPS sig_names final_pat_sig_ty
+    (res, fvs2) <- thing_inside final_sig_ty
+    return (res, fvs1 `plusFV` fvs2)
+                  
+  -- rnImplicitKvOccs free_ki_vars $ \imp_kvs -> do
+  --   let env = RTE ctx RnTypeBody
+  --   (pat_sig_ty', fvs1) <- rnLCsTy env pat_sig_ty
+  --   let sig_names = CsPSRn imp_kvs
+  --       sig_ty' = CsPS sig_names pat_sig_ty'
+  --   (res, fvs2) <- thing_inside sig_ty'
+  --   return (res, fvs1 `plusFV` fvs2)                              
 
 {- ******************************************************
 *                                                       *
@@ -198,28 +211,49 @@ rnTyVar _ rdr_name = lookupTypeOccRn rdr_name
 *                                                      *
 ***************************************************** -}
 
+rnLCsTypeWithKvs
+  :: CsDocContext
+  -> LCsType Ps
+  -> ((LCsType Rn, FreeVars) -> [Name] -> RnM (a, FreeVars))
+  -> RnM (a, FreeVars)
+rnLCsTypeWithKvs doc lty thing_inside = do
+  traceRn "rnLCsTypeWithKvs" (ppr lty)
+  let kv_occs = extractCsTyRdrKindVars lty
+      bndrs_loc = case map getLocA kv_occs of
+        [] -> panic "bindCsKiVars/bndrs_loc"
+        [loc] -> loc
+        loc:locs -> loc `combineSrcSpans` last locs
+  traceRn "kv_occs" (ppr kv_occs)
+
+  rnImplicitKvOccs kv_occs $ \kv_nms -> do
+    let kv_nms_final = map (`setNameLoc` bndrs_loc) kv_nms
+    traceRn "kv_nms" (ppr kv_nms_final)
+
+    stuff <- rnLCsType doc lty
+
+    thing_inside stuff kv_nms
+
 -- bindHsQTyVars
 -- We require all type variables to be bound (by forall or lambda)
 -- All kind variables are implicitly universally quantified (no user quantification)
--- We need 
-bindCsKiVars
-  :: CsDocContext
-  -> FreeKiVars
-  -> ([Name] -> RnM (b, FreeVars))
-  -> RnM (b, FreeVars)
-bindCsKiVars doc all_kv_occs thing_inside = do
-  traceRn "checkMixedVars3" $
-    vcat [ text "all_kv_occs" <+> ppr all_kv_occs ]
+-- bindCsKiVars -- NOTE: this should be renamed since nothing is bound
+--   :: CsDocContext
+--   -> FreeKiVars
+--   -> ([Name] -> RnM (b, FreeVars))
+--   -> RnM (b, FreeVars)
+-- bindCsKiVars doc all_kv_occs thing_inside = do
+--   traceRn "checkMixedVars3" $
+--     vcat [ text "all_kv_occs" <+> ppr all_kv_occs ]
 
-  rnImplicitKvOccs all_kv_occs $ \ all_kv_nms' -> do
-    let all_kv_nms = map (`setNameLoc` bndrs_loc) all_kv_nms'
-    traceRn "bindCsKiVars" (ppr all_kv_nms)
-    thing_inside all_kv_nms
-  where
-    bndrs_loc = case map getLocA all_kv_occs of
-      [] -> panic "bindCsKiVars/bndrs_loc"
-      [loc] -> loc
-      loc:locs -> loc `combineSrcSpans` last locs
+--   rnImplicitKvOccs all_kv_occs $ \ all_kv_nms' -> do
+--     let all_kv_nms = map (`setNameLoc` bndrs_loc) all_kv_nms'
+--     traceRn "bindCsKiVars" (ppr all_kv_nms)
+--     thing_inside all_kv_nms
+--   where
+--     bndrs_loc = case map getLocA all_kv_occs of
+--       [] -> panic "bindCsKiVars/bndrs_loc"
+--       [loc] -> loc
+--       loc:locs -> loc `combineSrcSpans` last locs
 
 data WarnUnusedForalls
   = WarnUnusedForalls

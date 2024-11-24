@@ -34,6 +34,7 @@ import CSlash.Data.Bag
 import CSlash.Parser.Annotation
 import CSlash.Utils.Outputable
 import CSlash.Utils.Panic
+import CSlash.Utils.Misc ((<||>))
 
 import Data.Function
 import Data.List (sortBy)
@@ -204,6 +205,10 @@ data NamespaceSpecifier
   | TypeNamespaceSpecifier (EpToken "type")
   deriving (Eq, Data)
 
+coveredByNamespaceSpecifier :: NamespaceSpecifier -> NameSpace -> Bool
+coveredByNamespaceSpecifier NoNamespaceSpecifier = const True
+coveredByNamespaceSpecifier TypeNamespaceSpecifier{} = isTcClsNameSpace <||> isTvNameSpace
+
 data AnnSig = AnnSig
   { asColon :: AddEpAnn
   , asRest :: [AddEpAnn]
@@ -222,6 +227,11 @@ ppr_sig
 ppr_sig (TypeSig _ var ty) = pprVarSig (unLoc var) (ppr ty)
 ppr_sig (KindSig _ var kind) = pprVarSig (unLoc var) (ppr kind)
 ppr_sig (FixSig _ fix_sig) = ppr fix_sig
+
+csSigDoc :: Sig (CsPass p) -> SDoc
+csSigDoc (TypeSig {}) = text "type signature"
+csSigDoc (FixSig {}) = text "fixity declaration"
+csSigDoc (KindSig {}) = text "kind signature"
 
 instance OutputableBndrId p => Outputable (FixitySig (CsPass p)) where
   ppr (FixitySig _ name fixity) = sep [ppr fixity, pprop]

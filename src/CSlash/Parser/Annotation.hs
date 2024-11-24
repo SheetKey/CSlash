@@ -94,6 +94,7 @@ import CSlash.Types.SrcLoc
 import CSlash.Utils.Outputable hiding ( (<>) )
 import CSlash.Utils.Panic
 import qualified CSlash.Data.Strict as Strict
+import CSlash.Types.SourceText (SourceText (NoSourceText))
 
 data AnnKeywordId
     = AnnAnyclass
@@ -863,6 +864,9 @@ instance NoAnn (EpToken s) where
 
 instance NoAnn (EpUniToken s t) where
   noAnn = NoEpUniTok
+
+instance NoAnn SourceText where
+  noAnn = NoSourceText
 
 instance (Outputable a) => Outputable (EpAnn a) where
   ppr (EpAnn l a c)  = text "EpAnn" <+> ppr l <+> ppr a <+> ppr c

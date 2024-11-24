@@ -69,7 +69,9 @@ data CsTyPatRn = CsTPRn
   }
   deriving Data
 
-type instance XCsSig (CsPass _) = NoExtField
+type instance XCsSig Ps = NoExtField
+type instance XCsSig Rn = [Name]
+type instance XCsSig Tc = [Name]
 
 type instance XKindedTyVar (CsPass _) = [AddEpAnn]
 type instance XImpKindedTyVar (CsPass _) = [AddEpAnn]

@@ -5,7 +5,7 @@ import CSlash.Iface.Env
 import CSlash.Cs
 import CSlash.Types.Name.Reader
 import CSlash.Tc.Errors.Types
--- import CSlash.Tc.Errors.Ppr (pprScopeError)
+import CSlash.Tc.Errors.Ppr (pprScopeError)
 -- import CSlash.Tc.Utils.Env
 import CSlash.Tc.Types.LclEnv
 import CSlash.Tc.Utils.Monad
@@ -207,7 +207,6 @@ lookupOccRnX_maybe globalLookup wrapper rdr_name = runMaybeT . msum . map MaybeT
                       in Just <$> wrapper gre }
   , globalLookup rdr_name ]
 
-
 lookupOccRn_maybe :: RdrName -> RnM (Maybe GlobalRdrElt)
 lookupOccRn_maybe = lookupOccRnX_maybe (lookupGlobalOccRn_maybe $ RelevantGREs False) return 
 
@@ -275,6 +274,92 @@ data CsSigCtxt
 instance Outputable CsSigCtxt where
   ppr (TopSigCtxt ns) = text "TopSigCtxt" <+> ppr ns
   ppr (LocalBindCtxt ns) = text "LocalBindCtxt" <+> ppr ns
+
+lookupSigOccRnN :: CsSigCtxt -> Sig Ps -> LocatedN RdrName -> RnM (LocatedN Name)
+lookupSigOccRnN ctxt sig = lookupSigCtxtOccRn ctxt (csSigDoc sig)
+
+lookupSigCtxtOccRn
+  :: CsSigCtxt -> SDoc -> GenLocated (EpAnn ann) RdrName -> RnM (GenLocated (EpAnn ann) Name)
+lookupSigCtxtOccRn ctxt what = wrapLocMA $ \ rdr_name -> do
+  let also_try_tycons = False
+  mb_names <- lookupBindGroupOcc ctxt what rdr_name also_try_tycons NoNamespaceSpecifier
+  case mb_names of
+    Right name NE.:| rest -> do
+      massertPpr (null rest) $
+        vcat (text "lookupSigCtxtOccRn" <+> ppr name
+              : map (either (pprScopeError rdr_name) ppr) rest)
+      return name
+    Left err NE.:| _ -> do
+      addErr (mkTcRnNotInScope rdr_name err)
+      return (mkUnboundNameRdr rdr_name)
+
+lookupBindGroupOcc
+  :: CsSigCtxt
+  -> SDoc
+  -> RdrName
+  -> Bool
+  -> NamespaceSpecifier
+  -> RnM (NE.NonEmpty (Either NotInScopeError Name))
+lookupBindGroupOcc ctxt what rdr_name also_try_tycon_ns ns_spec 
+  | Just n <- isExact_maybe rdr_name
+  = do mb_gre <- lookupExactOcc_either n
+       return $ case mb_gre of
+         Left err -> NE.singleton $ Left err
+         Right gre -> finish (NoExactName $ greName gre) gre
+  | Just (rdr_mod, rdr_occ) <- isOrig_maybe rdr_name
+  = NE.singleton . Right <$> lookupOrig rdr_mod rdr_occ
+  | otherwise
+  = case ctxt of
+      TopSigCtxt ns -> lookup_top (elem_name_set_with_namespace ns)
+      LocalBindCtxt ns -> lookup_group ns
+  where
+    elem_name_set_with_namespace ns n = check_namespace n && (n `elemNameSet` ns)
+
+    check_namespace = coveredByNamespaceSpecifier ns_spec . nameNameSpace
+
+    namespace = occNameSpace occ
+    occ = rdrNameOcc rdr_name
+    relevant_gres = RelevantGREs also_try_tycon_ns
+    ok_gre = greIsRelevant relevant_gres namespace
+
+    finish err gre
+      | ok_gre gre = NE.singleton (Right $ greName gre)
+      | otherwise = NE.singleton (Left err)
+
+    lookup_top keep_me = do
+      env <- getGlobalRdrEnv
+      let occ = rdrNameOcc rdr_name
+          all_gres = lookupGRE env (LookupOccName occ relevant_gres)
+          names_in_scope = map greName $ filter (ok_gre <&&> isLocalGRE) $ globalRdrEnvElts env
+          candidates_msg = candidates names_in_scope
+      case filter (keep_me . greName) all_gres of
+        [] | null all_gres -> bale_out_with candidates_msg
+           | otherwise -> bale_out_with local_msg
+        (gre1:gres) -> return (fmap (Right . greName) (gre1 NE.:| gres))
+
+    lookup_group bound_names = do
+      mname <- lookupLocalOccRn_maybe rdr_name
+      env <- getLocalRdrEnv
+      let candidates_msg = candidates $ localRdrEnvElts env
+      case mname of
+        Just n | n `elemNameSet` bound_names -> return $ NE.singleton $ Right n
+               | otherwise -> bale_out_with local_msg
+        Nothing -> bale_out_with candidates_msg
+
+    bale_out_with hints = return $ NE.singleton $ Left $ MissingBinding what hints
+
+    local_msg = [SuggestMoveToDeclarationSite what rdr_name]
+
+    candidates :: [Name] -> [CsHint]
+    candidates names_in_scope
+      | (nm : nms) <- map SimilarName similar_names
+      = [SuggestSimilarNames rdr_name (nm NE.:| nms)]
+      | otherwise
+      = []
+      where
+        similar_names = fuzzyLookup (unpackFS $ occNameFS $ rdrNameOcc rdr_name)
+                      $ map (\x -> ((unpackFS $ occNameFS $ nameOccName x), x))
+                        names_in_scope
 
 {- *********************************************************************
 *                                                                      *
