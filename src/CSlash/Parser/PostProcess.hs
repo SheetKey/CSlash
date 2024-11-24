@@ -132,7 +132,7 @@ cvBindsAndSigs fb = return $ partitionBindsAndSigs $ fromOL fb
 -- GHC checkTyClHdr
 checkTyHdr :: LocatedN RdrName -> P EpAnnComments
 checkTyHdr ty@(L l name)
-  | isRdrTc name = return $ emptyComments Semi.<> comments l
+  | isRdrTyVar name = return $ emptyComments Semi.<> comments l
   | otherwise = addFatalError $ mkPlainErrorMsgEnvelope (locA l) $
                 (PsErrMalformedTyDecl ty)
 

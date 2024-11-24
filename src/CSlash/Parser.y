@@ -378,7 +378,7 @@ topdecl :: { LCsDecl Ps }
 
 ty_decl :: { LCsBind Ps }
   : 'type' a_var '=' context_exp {% runPV (unETP $4) >>= \ $4 ->
-                                    mkTyFunBind (comb2 $1 $4) (fmap unknownToTcCls $2) $4
+                                    mkTyFunBind (comb2 $1 $4) (fmap unknownToTv $2) $4
                                                  [mj AnnType $1, mj AnnEqual $3] }
 
 -----------------------------------------------------------------------------
