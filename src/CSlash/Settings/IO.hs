@@ -30,7 +30,8 @@ initSettings top_dir = do
       libexec :: FilePath -> FilePath
       libexec file = top_dir </> ".." </> "bin" </> file
 
-      settingsFile = installed "settings"
+      -- settingsFile = installed "settings"
+      settingsFile = "./settings"
 
       readFileSafe :: FilePath -> ExceptT SettingsError m String
       readFileSafe path = liftIO (doesFileExist path) >>= \case
@@ -77,8 +78,10 @@ initSettings top_dir = do
   ldIsGnuLd <- getBooleanSetting "ld is GNU ld"
   arSupportsDashL <- getBooleanSetting "ar supports -L"
   
-  let globalpkgdb_path = installed "package.conf.d"
-      cs_usage_msg_path = installed "cs-usage.txt"
+  let -- globalpkgdb_path = installed "package.conf.d"
+      -- cs_usage_msg_path = installed "cs-usage.txt"
+      globalpkgdb_path = "./package.conf.d"
+      cs_usage_msg_path = "./cs-usage.txt"
 
   unlit_path <- getToolSetting "unlit command"
 
