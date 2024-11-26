@@ -5,8 +5,8 @@ module CSlash.Language.Syntax.Lit where
 import CSlash.Language.Syntax.Extension
 
 import CSlash.Types.SourceText
-
 import CSlash.Data.FastString
+import CSlash.Utils.Panic
 
 import Data.Data hiding (Fixity)
 
@@ -28,3 +28,8 @@ data OverLitVal
   | CsFractional !FractionalLit
   | CsIsString !SourceText !FastString
   deriving Data
+
+negateOverLitVal :: OverLitVal -> OverLitVal
+negateOverLitVal (CsIntegral i) = CsIntegral (negateIntegralLit i)
+negateOverLitVal (CsFractional f) = CsFractional (negateFractionalLit f)
+negateOverLitVal _ = panic "negateOverLitVal: argument is not a number"

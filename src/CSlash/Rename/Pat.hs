@@ -1,3 +1,4 @@
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE DeriveFunctor #-}
 
@@ -262,5 +263,37 @@ rnLit :: CsLit p -> RnM ()
 rnLit (CsChar _ c) = checkErr (inCharRange c) (panic "TcRnCharLiteralOutOfRange c")
 rnLit _ = panic "rnLit"
 
-rnOverLit :: CsOverLit t -> RnM ((CsOverLit Rn, Maybe (CsExpr Rn)), FreeVars)
-rnOverLit origLit = panic "rnOverLit"  
+generalizeOverLitVal :: OverLitVal -> OverLitVal
+generalizeOverLitVal (CsFractional fl@(FL { fl_text = src, fl_neg = neg, fl_exp = e }))
+  | e >= -100 && e <= 100
+  , let val = rationalFromFractionalLit fl
+  , denominator val == 1
+  = CsIntegral (IL { il_text = src, il_neg = neg, il_value = numerator val })
+generalizeOverLitVal lit = lit
+
+isNegativeZeroOverLit :: CsOverLit t -> Bool
+isNegativeZeroOverLit lit = case ol_val lit of
+  CsIntegral i -> 0 == il_value i && il_neg i
+  CsFractional fl -> 0 == fl_signi fl && fl_neg fl
+  _ -> False
+
+csOverLitName :: OverLitVal -> Name
+csOverLitName (CsIntegral {}) = panic "fromIntegerName"
+csOverLitName (CsFractional {}) = panic "fromRationalName"
+csOverLitName (CsIsString {}) = panic "fromStringName"
+
+rnOverLit :: forall t. CsOverLit t -> RnM ((CsOverLit Rn, Maybe (CsExpr Rn)), FreeVars)
+rnOverLit origLit = do
+  let lit :: CsOverLit t
+      lit@(OverLit { ol_val = val }) = origLit { ol_val = generalizeOverLitVal (ol_val origLit) }
+      std_name = csOverLitName val
+  (from_thing_name, fvs1) <- lookupSyntaxName std_name
+  loc <- getSrcSpanM
+  let lit' = lit { ol_ext = OverLitRn { ol_from_fun = L (noAnnSrcSpan loc) from_thing_name } }
+
+  if isNegativeZeroOverLit lit'
+    then do (negate_name, fvs2) <- lookupSyntaxExpr negateName
+            return ( ( lit' { ol_val = negateOverLitVal val }
+                     , Just negate_name )
+                   , fvs1 `plusFV` fvs2 )
+    else return ((lit', Nothing), fvs1)

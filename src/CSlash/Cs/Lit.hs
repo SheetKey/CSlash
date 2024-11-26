@@ -26,13 +26,11 @@ type instance XCsInt (CsPass _) = NoExtField
 type instance XCsDouble (CsPass _) = NoExtField
 
 data OverLitRn = OverLitRn
-  { ol_rebindable :: Bool
-  , ol_from_fun :: LIdP Rn
+  { ol_from_fun :: LIdP Rn
   }
 
 data OverLitTc = OverLitTc
-  { ol_rebindable :: Bool
-  , ol_witness :: CsExpr Tc
+  { ol_witness :: CsExpr Tc
   , ol_type :: Type
   }
 
