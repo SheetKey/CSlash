@@ -565,9 +565,6 @@ extractCsTyPatKindVars (L _ pat) = case pat of
   KdSigPat _ lpat ksig -> extractCsTyPatKindVars lpat ++ extractCsPatSigKindKindVars ksig
   ImpPat _ lpat -> extractCsTyPatKindVars lpat
   _ -> []
-  
-extractCsPatSigKindKindVars :: CsPatSigKind (NoTc Ps) -> FreeKiVars
-extractCsPatSigKindKindVars (CsPSK _ ki) = extractCsKindKindVars ki
 
 extractCsTyGRHSsKindVars :: GRHSs Ps (LCsType Ps) -> FreeKiVars
 extractCsTyGRHSsKindVars (GRHSs _ grhss)
@@ -576,20 +573,3 @@ extractCsTyGRHSsKindVars (GRHSs _ grhss)
 extractCsTyGRHSKindVars :: LGRHS Ps (LCsType Ps) -> FreeKiVars
 extractCsTyGRHSKindVars (L _ (GRHS _ [] ty)) = extractCsTyRdrKindVars ty
 extractCsTyGRHSKindVars (L _ (GRHS _ stmt _)) = pprPanic "extractCsTyGRHSKindVars" (ppr stmt)
-
-extractCsKindKindVars :: LCsKind Ps -> FreeKiVars
-extractCsKindKindVars ki = extract_lki ki []
-
-extract_lki :: LCsKind Ps -> FreeKiVars -> FreeKiVars
-extract_lki (L _ ki) acc = case ki of
-  CsUKd {} -> acc
-  CsAKd {} -> acc
-  CsLKd {} -> acc
-  CsKdVar _ lkv -> extract_kv lkv acc
-  CsFunKd _ ki1 ki2 -> extract_lki ki1 $ extract_lki ki2 acc
-  CsParKd _ ki -> extract_lki ki acc
-
-extract_kv :: LocatedN RdrName -> FreeKiVars -> FreeKiVars
-extract_kv kv acc =
-  assertPpr (isRdrKiVar (unLoc kv) && (not . isQual) (unLoc kv)) (text "extact_kv:" <+> ppr kv)
-  $ kv : acc

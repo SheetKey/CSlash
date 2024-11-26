@@ -41,6 +41,12 @@ import Control.Monad
 *                                                       *
 ****************************************************** -}
 
+-- binds kind variables that are not already in scope
+-- Consider a TyLam:
+-- /\ t : k -> ...
+-- We do not allow any explicit binding of kvs.
+-- We also do not have 'ScopedKindVariables' analogous to GHC's 'ScopedTypeVariables'.
+-- So, we must bind 'k' if it is not already in scope.
 rnCsPatSigKind
   :: CsDocContext
   -> CsPatSigKind Ps
@@ -48,11 +54,18 @@ rnCsPatSigKind
   -> RnM (a, FreeVars)
 rnCsPatSigKind ctx sig_ki thing_inside = do
   let pat_sig_ki = csPatSigKind sig_ki
-      env = RKE ctx 
-  (pat_sig_ki', fvs1) <- rnLCsKi env pat_sig_ki
-  let sig_ki' = CsPSK noExtField pat_sig_ki'
-  (res, fvs2) <- thing_inside sig_ki'
-  return (res, fvs1 `plusFV` fvs2)                              
+      env = RKE ctx
+  do_first $ \_ -> do
+    (pat_sig_ki', fvs1) <- rnLCsKi env pat_sig_ki
+    let sig_ki' = CsPSK noExtField pat_sig_ki'
+    (res, fvs2) <- thing_inside sig_ki'
+    return (res, fvs1 `plusFV` fvs2)                              
+  where
+    do_first f = case ctx of
+      PatCtx -> do
+        let kv_occs = extractCsPatSigKindKindVars sig_ki
+        rnImplicitKvOccs kv_occs f
+      _ -> f []
 
 {- ******************************************************
 *                                                       *
@@ -124,7 +137,7 @@ checkWildCardKi env name =
 rnImplicitKvOccs :: FreeKiVars -> ([Name] -> RnM (a, FreeVars)) -> RnM (a, FreeVars)
 rnImplicitKvOccs implicit_vs_with_dups thing_inside = do
   massertPpr (all (isRdrKiVar . unLoc) implicit_vs_with_dups)
-    (text "rnImplicitKvOccs: Contains not kind var name:"
+    (text "rnImplicitKvOccs: Contains non kind var name:"
      <+> ppr implicit_vs_with_dups)
   let implicit_vs = nubN implicit_vs_with_dups
   traceRn "rnImplicitKvOccs" $
@@ -167,3 +180,23 @@ inScope (gbl, lcl) rdr = rdr_in_scope
 
 nubN :: Eq a => [LocatedN a] -> [LocatedN a]
 nubN = nubBy eqLocated
+  
+extractCsPatSigKindKindVars :: CsPatSigKind (NoTc Ps) -> FreeKiVars
+extractCsPatSigKindKindVars (CsPSK _ ki) = extractCsKindKindVars ki
+
+extractCsKindKindVars :: LCsKind Ps -> FreeKiVars
+extractCsKindKindVars ki = extract_lki ki []
+
+extract_lki :: LCsKind Ps -> FreeKiVars -> FreeKiVars
+extract_lki (L _ ki) acc = case ki of
+  CsUKd {} -> acc
+  CsAKd {} -> acc
+  CsLKd {} -> acc
+  CsKdVar _ lkv -> extract_kv lkv acc
+  CsFunKd _ ki1 ki2 -> extract_lki ki1 $ extract_lki ki2 acc
+  CsParKd _ ki -> extract_lki ki acc
+
+extract_kv :: LocatedN RdrName -> FreeKiVars -> FreeKiVars
+extract_kv kv acc =
+  assertPpr (isRdrKiVar (unLoc kv) && (not . isQual) (unLoc kv)) (text "extact_kv:" <+> ppr kv)
+  $ kv : acc

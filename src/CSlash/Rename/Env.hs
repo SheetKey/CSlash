@@ -195,7 +195,7 @@ lookupKindOccRn rdr_name = do
   mb_gre <- lookupOccRn_maybe rdr_name
   case mb_gre of
     Just gre -> return $ greName gre
-    Nothing -> pprPanic "lookupKindOccRn" (ppr rdr_name)
+    Nothing -> unboundName (LF WL_Anything WL_Anywhere) rdr_name
 
 lookupOccRnX_maybe
   :: (RdrName -> RnM (Maybe r)) -> (GlobalRdrElt -> RnM r) -> RdrName -> RnM (Maybe r)

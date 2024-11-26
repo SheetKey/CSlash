@@ -154,7 +154,7 @@ rn_pats_general ctxt pats thing_inside = do
 
     rn_pats_fun = case ctxt of
       LamAlt -> mapM . rnLArgPatAndThen
-      TyLamAlt -> mapM . rnLArgPatAndThen
+      TyLamAlt -> mapM . rnLArgPatAndThen -- extract and bind kind vars here?
       TyLamTyAlt -> mapM . rnLArgPatAndThen
       _ -> mapM . rnLPatAndThen
 
