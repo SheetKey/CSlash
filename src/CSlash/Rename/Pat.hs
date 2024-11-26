@@ -103,6 +103,9 @@ data NameMaker
 topRecNameMaker :: MiniFixityEnv -> NameMaker
 topRecNameMaker fix_env = LetMk TopLevel fix_env
 
+localRecNameMaker :: MiniFixityEnv -> NameMaker
+localRecNameMaker fix_env = LetMk NotTopLevel fix_env
+
 matchNameMaker :: CsMatchContext fn -> NameMaker
 matchNameMaker _ = LamMk True
 

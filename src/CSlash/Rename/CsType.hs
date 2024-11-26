@@ -404,12 +404,75 @@ tySectionPrecErr op@(n1, _) arg_op@(n2, _) section
   | otherwise
   = panic "addErr $ TcRnTySectionPrecedenceError op arg_op section"
 
+mkOpAppRn :: LCsExpr Rn -> LCsExpr Rn -> Fixity -> LCsExpr Rn -> RnM (CsExpr Rn)
+-- (e1a `op1` e1b) `op2` e2
+mkOpAppRn e1@(L _ (OpApp fix1 e1a op1 e1b)) op2 fix2 e2
+  | nofix_error
+  = do precParseErr (get_op op1, fix1) (get_op op2, fix2)
+       return (OpApp fix2 e1 op2 e2)
+  | associate_right
+  = do new_e <- mkOpAppRn e1b op2 fix2 e2
+       return (OpApp fix1 e1a op1 (L loc' new_e))
+  where
+    loc' = combineLocsA e1b e2
+    (nofix_error, associate_right) = compareFixity fix1 fix2
+
+mkOpAppRn e1 op fix e2
+  = assertPpr (right_op_ok fix (unLoc e2))
+    (ppr e1 $$ text "---" $$ ppr op $$ text "---" $$ ppr fix $$ text "---" $$ ppr e2)
+    $ return (OpApp fix e1 op e2)
+
+get_op :: LCsExpr Rn -> OpName
+get_op (L _ (CsVar _ n)) = NormalOp (unLoc n)
+get_op (L _ (CsUnboundVar _ uv)) = UnboundOp uv
+get_op other = pprPanic "get_op" (ppr other)
+
+right_op_ok :: Fixity -> CsExpr Rn -> Bool
+right_op_ok fix1 (OpApp fix2 _ _ _)
+  = not error_please && associate_right
+  where (error_please, associate_right) = compareFixity fix1 fix2
+right_op_ok _ _ = True
+
+mkNegAppRn :: LCsExpr Rn -> SyntaxExpr Rn -> RnM (CsExpr Rn)
+mkNegAppRn neg_arg neg_name
+  = assert (not_op_app (unLoc neg_arg))
+    $ return (NegApp noExtField neg_arg neg_name)
+
+not_op_app :: CsExpr id -> Bool
+not_op_app (OpApp {}) = False
+not_op_app _ = True
+
+checkSectionPrec :: FixityDirection -> CsExpr Ps -> LCsExpr Rn -> LCsExpr Rn -> RnM ()
+checkSectionPrec direction section op arg = case unLoc arg of
+  OpApp fix _ op' _ -> go_for_it (get_op op') fix
+  NegApp _ _ _ -> go_for_it NegateOp negateFixity
+  _ -> return ()
+  where
+    op_name = get_op op
+    go_for_it arg_op arg_fix@(Fixity arg_prec assoc) = do
+      op_fix@(Fixity op_prec _) <- lookupFixityOp op_name
+      unless (op_prec < arg_prec
+              || (op_prec == arg_prec && direction == assoc))
+        (sectionPrecErr (get_op op, op_fix) (arg_op, arg_fix) section)
+
+lookupFixityOp :: OpName -> RnM Fixity
+lookupFixityOp (NormalOp n) = lookupFixityRn n
+lookupFixityOp NegateOp = lookupFixityRn negateName
+lookupFixityOp (UnboundOp u) = lookupFixityRn (mkUnboundName (occName u))
+
 precParseErr :: (OpName, Fixity) -> (OpName, Fixity) -> RnM ()
 precParseErr op1@(n1, _) op2@(n2, _)
   | is_unbound n1 || is_unbound n2
   = return ()
   | otherwise
   = panic "addErr $ TcRnPrecedenceParsingError op1 op2"
+
+sectionPrecErr :: (OpName, Fixity) -> (OpName, Fixity) -> CsExpr Ps -> RnM ()
+sectionPrecErr op@(n1, _) arg_op@(n2, _) section
+  | is_unbound n1 || is_unbound n2
+  = return ()
+  | otherwise
+  = panic "addErr $ TcRnSectionPrecedenceError op arg_op section"
 
 is_unbound :: OpName -> Bool
 is_unbound (NormalOp n) = isUnboundName n

@@ -68,6 +68,12 @@ mkUnboudnGRE occ = mkLocalGRE UnboundGRE NoParent $ mkUnboundName occ
 mkUnboundGRERdr :: RdrName -> GlobalRdrElt
 mkUnboundGRERdr rdr = mkLocalGRE UnboundGRE NoParent $ mkUnboundNameRdr rdr
 
+reportUnboundName' :: WhatLooking -> RdrName -> RnM Name
+reportUnboundName' what_look rdr = unboundName (LF what_look WL_Anywhere) rdr
+
+reportUnboundName :: RdrName -> RnM Name
+reportUnboundName = reportUnboundName' WL_Anything
+
 unboundName :: LookingFor -> RdrName -> RnM Name
 unboundName lf rdr = unboundNameX lf rdr []
 

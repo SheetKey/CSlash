@@ -56,11 +56,38 @@ import Data.List.NonEmpty ( NonEmpty(..) )
 rnTopBindsLHS :: MiniFixityEnv -> CsValBinds Ps -> RnM (CsValBindsLR Rn Ps)
 rnTopBindsLHS fix_env binds = rnValBindsLHS (topRecNameMaker fix_env) binds
 
+{- *****************************************************
+*                                                      *
+                HsLocalBinds
+*                                                      *
+***************************************************** -}
+
+rnLocalBindsAndThen
+  :: CsLocalBinds Ps
+  -> (CsLocalBinds Rn -> FreeVars -> RnM (result, FreeVars))
+  -> RnM (result, FreeVars)
+rnLocalBindsAndThen (EmptyLocalBinds x) thing_inside
+  = thing_inside (EmptyLocalBinds x) emptyNameSet
+  
+rnLocalBindsAndThen (CsValBinds x val_binds) thing_inside 
+  = rnLocalValBindsAndThen val_binds $ \val_binds' ->
+      thing_inside (CsValBinds x val_binds')
+
 {- *********************************************************************
 *                                                                      *
                 ValBinds
 *                                                                      *
 ********************************************************************* -}
+
+rnLocalValBindsLHS :: MiniFixityEnv -> CsValBinds Ps -> RnM ([Name], CsValBindsLR Rn Ps)
+rnLocalValBindsLHS fix_env binds = do
+  binds' <- rnValBindsLHS (localRecNameMaker fix_env) binds
+
+  let bound_names = collectCsValBinders CollNoDictBinders binds'
+  envs <- getRdrEnvs
+  checkDupAndShadowedNames envs bound_names
+
+  return (bound_names, binds')
 
 rnValBindsLHS :: NameMaker -> CsValBinds Ps -> RnM (CsValBindsLR Rn Ps)
 rnValBindsLHS topP (ValBinds x mbinds sigs) = do
@@ -82,6 +109,32 @@ rnValBindsRHS ctxt (ValBinds _ mbinds sigs) = do
   return (XValBindsLR (NValBinds anal_binds sigs'), valbind'_dus)
 
 rnValBindsRHS _ b = pprPanic "rnValBindsRHS" (ppr b)
+
+rnLocalValBindsRHS :: NameSet -> CsValBindsLR Rn Ps -> RnM (CsValBinds Rn, DefUses)
+rnLocalValBindsRHS bound_names binds = rnValBindsRHS (LocalBindCtxt bound_names) binds
+
+rnLocalValBindsAndThen
+  :: CsValBinds Ps
+  -> (CsValBinds Rn -> FreeVars -> RnM (result, FreeVars))
+  -> RnM (result, FreeVars)
+rnLocalValBindsAndThen binds@(ValBinds {}) thing_inside = do
+  new_fixities <- makeMiniFixityEnv []
+
+  (bound_names, new_lhs) <- rnLocalValBindsLHS new_fixities binds
+
+  bindLocalNamesFV bound_names
+    $ addLocalFixities new_fixities bound_names
+    $ do (binds', dus) <- rnLocalValBindsRHS (mkNameSet bound_names) new_lhs
+         (result, result_fvs) <- thing_inside binds' (allUses dus)
+
+         let real_uses = findUses dus result_fvs
+         warnUnusedLocalBinds bound_names real_uses
+
+         let all_uses = allUses dus `plusFV` result_fvs
+
+         return (result, all_uses)
+
+rnLocalValBindsAndThen bs _ = pprPanic "rnLocalValBindsAndThen" (ppr bs)
 
 ---------------------
 

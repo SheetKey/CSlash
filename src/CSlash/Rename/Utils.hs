@@ -189,12 +189,27 @@ checkTupSize tup_size
 
 {- *********************************************************************
 *                                                                      *
-              Generating code for ExpandedThingRn (or type sections)
+              Generating code for expanded exprs
 *                                                                      *
 ********************************************************************* -}
 
 wrapGenSpan :: (NoAnn an) => a -> LocatedAn an a
 wrapGenSpan x = L (noAnnSrcSpan generatedSrcSpan) x
+
+genCsApps :: Name -> [LCsExpr Rn] -> CsExpr Rn
+genCsApps fun args = foldl genCsApp (genCsVar fun) args
+
+genCsApp :: CsExpr Rn -> LCsExpr Rn -> CsExpr Rn
+genCsApp fun arg = CsApp noExtField (wrapGenSpan fun) arg
+
+genCsVar :: Name -> CsExpr Rn
+genCsVar nm = CsVar noExtField $ wrapGenSpan nm
+
+{- *********************************************************************
+*                                                                      *
+              Generating code for expanded types
+*                                                                      *
+********************************************************************* -}
 
 genCsTyVar :: Name -> CsType Rn
 genCsTyVar nm = CsTyVar noAnn $ wrapGenSpan nm

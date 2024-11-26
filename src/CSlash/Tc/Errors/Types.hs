@@ -133,6 +133,8 @@ data CsDocContext
   = TypeSigCtx SDoc
   | TySynCtx (LocatedN RdrName)
   | PatCtx
+  | ExprWithTySigCtx
+  | CsTypeCtx
 
 data DodgyImportsReason
   = DodgyImportsEmptyParent !GlobalRdrElt

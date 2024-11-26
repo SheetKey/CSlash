@@ -281,6 +281,8 @@ pprCsDocContext :: CsDocContext -> SDoc
 pprCsDocContext (TypeSigCtx doc) = text "the type signature for" <+> doc
 pprCsDocContext (TySynCtx name) = text "the declaration for type synonym" <+> quotes (ppr name)
 pprCsDocContext PatCtx = text "a pattern type-signature"
+pprCsDocContext ExprWithTySigCtx = text "an expression type signature"
+pprCsDocContext CsTypeCtx = text "a type argument"
 
 pprImportLookup :: ImportLookupReason -> SDoc
 pprImportLookup _ = panic "pprImportLookup"

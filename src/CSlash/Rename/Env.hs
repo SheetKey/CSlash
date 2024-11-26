@@ -210,6 +210,14 @@ lookupOccRnX_maybe globalLookup wrapper rdr_name = runMaybeT . msum . map MaybeT
 lookupOccRn_maybe :: RdrName -> RnM (Maybe GlobalRdrElt)
 lookupOccRn_maybe = lookupOccRnX_maybe (lookupGlobalOccRn_maybe $ RelevantGREs False) return 
 
+lookupExprOccRn :: RdrName -> RnM (Maybe GlobalRdrElt)
+lookupExprOccRn rdr_name = 
+  lookupOccRnX_maybe lookupExpr_helper return rdr_name
+  where
+    lookupExpr_helper :: RdrName -> RnM (Maybe GlobalRdrElt)
+    lookupExpr_helper rdr_name =
+      lookupExactOrOrig_maybe rdr_name id $ lookupGreRn_maybe (RelevantGREs False) rdr_name
+
 lookupGlobalOccRn_maybe :: WhichGREs GREInfo -> RdrName -> RnM (Maybe GlobalRdrElt)
 lookupGlobalOccRn_maybe which_gres rdr_name =
   lookupExactOrOrig_maybe rdr_name id $
