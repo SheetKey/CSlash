@@ -479,15 +479,15 @@ tv_bndr_parens :: { LCsTyVarBndr Ps }
 -- argpat1 :: { LPat Ps }
 --   : aexp {% (checkPattern <=< runPV) (unETP $1) }
 
-argpats :: { ETP }
-  : sig_exp { ETP $ unETP $1 >>= \ $1 ->
-              mkCsPatListPV $1 }
-  | argpats1 { $1 }
+-- argpats :: { ETP }
+--   : sig_exp { ETP $ unETP $1 >>= \ $1 ->
+--               mkCsPatListPV $1 }
+--   | argpats1 { $1 }
 
-argpats1 :: { ETP }
-  : argpats1 aexp { ETP $ unETP $1 >>= \ $1 ->
-                          unETP $2 >>= \ $2 ->
-                          mkCsPatListConsPV $1 $2 }
+argpats :: { ETP }
+  : argpats aexp { ETP $ unETP $1 >>= \ $1 ->
+                         unETP $2 >>= \ $2 ->
+                         mkCsPatListConsPV $1 $2 }
   | aexp { ETP $ unETP $1 >>= \ $1 ->
            mkCsPatListPV $1 }
   
@@ -760,7 +760,7 @@ aexp1 :: { ETP }
 -- Tuple expressions
 
 texp :: { ETP }
-  : context_exp { $1 }
+  : quant_exp { $1 }
   | infixexp a_qvarop { ETP $ unETP $1 >>= \ $1 ->
                               mkCsVarSectionL (comb2 $1 $2) $1 $2 }
   | infixexp a_qconop { ETP $ unETP $1 >>= \ $1 ->
