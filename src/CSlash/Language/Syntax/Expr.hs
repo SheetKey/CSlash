@@ -65,6 +65,7 @@ data CsMatchContext fn
   | CaseAlt
   | MultiIfAlt
   | TyLamTyAlt -- for type level lambdas
+  | StmtCtxt (CsStmtContext fn) -- pattern guard
 
 data CsStmtContext fn
   = PatGuard (CsMatchContext fn)
@@ -81,6 +82,8 @@ data GRHS p body
   = GRHS (XCGRHS p body) [GuardLStmt p] body
 
 type LStmt id body = XRec id (StmtLR id id body)
+
+type Stmt id body = StmtLR id id body
 
 type GuardLStmt id = LStmt id (LCsExpr id)
 

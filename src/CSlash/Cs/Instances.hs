@@ -109,6 +109,7 @@ deriving instance Data (StmtLR Ps Rn (LocatedA (CsExpr Rn)))
 deriving instance Data (StmtLR Rn Rn (LocatedA (CsExpr Rn)))
 deriving instance Data (StmtLR Tc Tc (LocatedA (CsExpr Tc)))
 
+deriving instance Data fn => Data (CsStmtContext fn)
 deriving instance Data fn => Data (CsMatchContext fn)
 
 deriving instance Data SyntaxExprRn

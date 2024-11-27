@@ -1,3 +1,4 @@
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE DeriveFunctor #-}
@@ -160,6 +161,14 @@ rn_pats_general ctxt pats thing_inside = do
 
 rnPats :: CsMatchContextRn -> [LPat Ps] -> ([LPat Rn] -> RnM (a, FreeVars)) -> RnM (a, FreeVars)
 rnPats = rn_pats_general
+
+rnPat
+  :: forall a.
+     CsMatchContextRn
+  -> LPat Ps
+  -> (LPat Rn -> RnM (a, FreeVars))
+  -> RnM (a, FreeVars)
+rnPat = coerce (rn_pats_general @Identity @a)
 
 applyNameMaker :: NameMaker -> LocatedN RdrName -> RnM (LocatedN Name)
 applyNameMaker mk rdr = fst <$> runCps (newPatLName mk rdr)

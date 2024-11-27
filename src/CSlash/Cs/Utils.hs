@@ -175,6 +175,15 @@ csTypeToCsSigType lty@(L loc ty) =
 *                                                                      *
 ********************************************************************* -}
 
+collectLocalBinders
+  :: CollectPass (CsPass idL)
+  => CollectFlag (CsPass idL)
+  -> CsLocalBindsLR (CsPass idL) (CsPass idR)
+  -> [IdP (CsPass idL)]
+collectLocalBinders flag = \case
+  CsValBinds _ binds -> collectCsIdBinders flag binds
+  EmptyLocalBinds _ -> []
+
 collectCsIdBinders
   :: CollectPass (CsPass idL)
   => CollectFlag (CsPass idL)

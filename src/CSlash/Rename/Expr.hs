@@ -233,7 +233,47 @@ rnStmtsWithFreeVars ctxt _ [] thing_inside = do
   checkEmptyStmts ctxt
   (thing, fvs) <- thing_inside []
   return (([], thing), fvs)
-rnStmtsWithFreeVars _ _ _ _ = panic "rnStmtsWithFreeVars"
+rnStmtsWithFreeVars ctxt rnBody (lstmt@(L loc _) : lstmts) thing_inside
+  | null lstmts
+  = setSrcSpanA loc $ do
+      lstmt' <- checkLastStmt ctxt lstmt
+      rnStmt ctxt rnBody lstmt' thing_inside
+  | otherwise
+  = do ((stmts1, (stmts2, thing)), fvs) <- setSrcSpanA loc $ do
+         checkStmt ctxt lstmt
+         rnStmt ctxt rnBody lstmt $ \bndrs1 ->
+           rnStmtsWithFreeVars ctxt rnBody lstmts $ \bndrs2 ->
+             thing_inside (bndrs1 ++ bndrs2)
+       return (((stmts1 ++ stmts2), thing), fvs)
+
+rnStmt
+  :: RnStmtsAnnoBody body
+  => CsStmtContextRn
+  -> (body Ps -> RnM (body Rn, FreeVars))
+  -> LStmt Ps (LocatedA (body Ps))
+  -> ([Name] -> RnM (thing, FreeVars))
+  -> RnM (([(LStmt Rn (LocatedA (body Rn)), FreeVars)], thing), FreeVars)
+rnStmt ctxt rnBody (L loc (BodyStmt _ (L lb body))) thing_inside = do
+  (body', fv_expr) <- rnBody body
+  (thing, fvs3) <- thing_inside []
+  return ( ( [(L loc (BodyStmt noExtField (L lb body')), fv_expr)]
+           , thing )
+         , fv_expr `plusFV` fvs3 )
+
+rnStmt ctxt rnBody (L loc (BindStmt _ pat (L lb body))) thing_inside = do
+  (body', fv_expr) <- rnBody body
+  rnPat (StmtCtxt ctxt) pat $ \pat' -> do
+    (thing, fvs3) <- thing_inside (collectPatBinders CollNoDictBinders pat')
+    return ( ( [(L loc (BindStmt noExtField pat' (L lb body')), fv_expr)]
+             , thing )
+           , fv_expr `plusFV` fvs3 )
+
+rnStmt _ _ (L loc (LetStmt _ binds)) thing_inside
+  = rnLocalBindsAndThen binds $ \binds' binds_fvs -> do
+      (thing, fvs) <- thing_inside (collectLocalBinders CollNoDictBinders binds')
+      return ( ( [(L loc (LetStmt noAnn binds'), binds_fvs)]
+               , thing )
+             , fvs )
 
 {- *********************************************************************
 *                                                                      *
@@ -246,6 +286,40 @@ checkEmptyStmts ctxt = mapM_ (panic "addErr . TcRnEmptyStmtsGroup") mb_err
   where
     mb_err = case ctxt of
       PatGuard {} -> Nothing
+
+checkLastStmt
+  :: RnStmtsAnnoBody body
+  => CsStmtContextRn
+  -> LStmt Ps (LocatedA (body Ps))
+  -> RnM (LStmt Ps (LocatedA (body Ps)))
+checkLastStmt ctxt lstmt@(L loc stmt) = case ctxt of
+  _ -> check_other
+  where
+    check_other = do
+      checkStmt ctxt lstmt
+      return lstmt
+
+checkStmt
+  :: RnStmtsAnnoBody body
+  => CsStmtContextRn
+  -> LStmt Ps (LocatedA (body Ps))
+  -> RnM ()
+checkStmt ctxt (L _ stmt) = do
+  dflags <- getDynFlags
+  case okStmt dflags ctxt stmt of
+    True -> return ()
+    False -> panic "addErr $ TcRnUnexpectedStatementInContext ctxt (UnexpectedStatement stmt)"
+
+okStmt :: DynFlags -> CsStmtContextRn -> Stmt Ps (LocatedA (body Ps)) -> Bool
+okStmt dflags ctxt stmt = case ctxt of
+  PatGuard {} -> okPatGuardStmt stmt
+
+okPatGuardStmt :: Stmt Ps (LocatedA (body Ps)) -> Bool
+okPatGuardStmt stmt = case stmt of
+  BodyStmt {} -> True
+  BindStmt {} -> True
+  LetStmt {} -> True
+  _ -> False
 
 sectionErr :: CsExpr Ps -> TcRnMessage
 sectionErr _ = panic "TcRnSectionWithoutParentheses"

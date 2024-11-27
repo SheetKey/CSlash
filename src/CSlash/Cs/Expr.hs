@@ -343,7 +343,8 @@ csExprNeedsParens prec = go
     go (CsIf{}) = prec > topPrec
     go (CsMultiIf{}) = prec > topPrec
     go (ExprWithTySig{}) = prec >= sigPrec
-    go _ = panic "csExpreNeedsParens"
+    go _ = panic "csExprNeedsParens"
+    
 isAtomicCsExpr :: IsPass p => CsExpr (CsPass p) -> Bool
 isAtomicCsExpr (CsVar{}) = True
 isAtomicCsExpr (CsUnboundVar{}) = True
@@ -476,6 +477,7 @@ instance Outputable fn => Outputable (CsMatchContext fn) where
   ppr CaseAlt = text "CaseAlt"
   ppr MultiIfAlt = text "MultiIfAlt"
   ppr TyLamTyAlt = text "TyLamTyAlt"
+  ppr (StmtCtxt _) = text "StmtCtxt _"
 
 pprMatchContext :: CsMatchContext fn -> SDoc
 pprMatchContext ctxt
@@ -490,6 +492,13 @@ pprMatchContextNoun TyLamAlt = text "type lambda abstraction"
 pprMatchContextNoun CaseAlt = text "case alternative"
 pprMatchContextNoun MultiIfAlt = text "multi-way if alternative"
 pprMatchContextNoun TyLamTyAlt = text "type level lambda abstraction"
+pprMatchContextNoun (StmtCtxt ctxt) = text "pattern bindings in" $$ pprAStmtContext ctxt
+
+pprAStmtContext :: CsStmtContext fn -> SDoc
+pprAStmtContext ctxt = text "a" <+> pprStmtContext ctxt
+
+pprStmtContext :: CsStmtContext fn -> SDoc
+pprStmtContext (PatGuard ctxt) = text "pattern guard for" $$ pprMatchContext ctxt
 
 type instance Anno (CsExpr (CsPass p)) = SrcSpanAnnA
 type instance Anno [LocatedA (Match (CsPass p) (LocatedA (CsExpr (CsPass p))))] = SrcSpanAnnL
