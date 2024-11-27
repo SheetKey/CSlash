@@ -65,7 +65,11 @@ instance Diagnostic PsMessage where
            OperatorWhitespaceOccurrence_Suffix -> mk_msg "suffix"
            OperatorWhitespaceOccurrence_TightInfix -> mk_msg "tight infix"
     PsErrEmptyLambda
-      -> mkSimpleDecorated $ text "A lambda requires at least on parameter"
+      -> mkSimpleDecorated $ text "A lambda requires at least one parameter"
+    PsErrEmptyTyLam
+      -> mkSimpleDecorated $ text "A type lambda requires at least one parameter"
+    PsErrEmptyTyLamTy
+      -> mkSimpleDecorated $ text "A type level lambda requires at least one parameter"
     PsErrMissingBlock
       -> mkSimpleDecorated $ text "Missing block"
     PsErrLexer err kind
@@ -111,6 +115,22 @@ instance Diagnostic PsMessage where
               else empty
     PsErrPrecedenceOutOfRange i
       -> mkSimpleDecorated $ text "Precedence out of range: " <> int i
+    PsErrSemiColonsInCondExpr c st t se e
+      -> mkSimpleDecorated
+         $ text "Unexpected space (semi-colons) in conditional:"
+         $$ nest 2 expr
+         where
+           pprOptSemi True = semi
+           pprOptSemi False = empty
+           expr = text "if" <+> ppr c <> pprOptSemi st <+>
+                  text "then" <+> ppr t <> pprOptSemi se <+>
+                  text "else" <+> ppr e
+    PsErrAtInPatPos
+      -> mkSimpleDecorated $ text "Found a binding for the"
+                           <+> quotes (text "@")
+                           <+> text "operator in a pattern position."
+    PsErrUnexpectedAsPat
+      -> mkSimpleDecorated $ text "Unexpected 'as' pattern."
     PsErrTypeInExpr ty
       -> mkSimpleDecorated $
          text "Unexpected type" <+> quotes (ppr ty) <+> text "in an expression."
@@ -159,8 +179,12 @@ instance Diagnostic PsMessage where
       -> mkSimpleDecorated $ text "(case ... of ...)-syntax in kind"
     PsErrKindCon
       -> mkSimpleDecorated $ text "Invalid kind constructor."
+    PsErrLitInType
+      -> mkSimpleDecorated $ text "Invalid literal in type."
     PsErrLitInKind
       -> mkSimpleDecorated $ text "Invalid literal in kind."
+    PsErrOverLitInType
+      -> mkSimpleDecorated $ text "Invalid literal in type."
     PsErrOverLitInKind
       -> mkSimpleDecorated $ text "Invalid literal in kind."
     PsErrSumOrTupleKind
@@ -183,8 +207,14 @@ instance Diagnostic PsMessage where
       -> mkSimpleDecorated $ text "(if ...) in type"
     PsErrIfInKind
       -> mkSimpleDecorated $ text "(if ...) in kind"
+    PsErrInvalidKindRelation rdr_name
+      -> mkSimpleDecorated $ quotes (ppr rdr_name) <+> text "is not a valid kind relation."
     PsErrLambdaInPat
       -> mkSimpleDecorated $ text "Illegal lambda-syntax in pattern"
+    PsErrTyLambdaInPat
+      -> mkSimpleDecorated $ text "Illegal type lambda-syntax in pattern"
+    PsErrArrowExprInPat e
+      -> mkSimpleDecorated $ text "Expression syntax in pattern:" <+> ppr e
     PsErrCaseInPat
       -> mkSimpleDecorated $ text "(case ... of ...)-syntax in pattern"
     PsErrLetInPat
@@ -201,8 +231,19 @@ instance Diagnostic PsMessage where
       -> mkSimpleDecorated $ pp_unexpected_fun_app (text "let expression") a
     PsErrIfInFunAppExpr a
       -> mkSimpleDecorated $ pp_unexpected_fun_app (text "if expression") a
+    PsErrMalformedTyDecl ty
+      -> mkSimpleDecorated $
+         text "Malformed head of type declaration:" <+> ppr ty
     PsErrParseErrorOnInput occ
       -> mkSimpleDecorated $ text "parse error on input" <+> ftext (occNameFS occ)
+    PsErrParseLeftOpSectionInPat sec infixOcc
+      -> mkSimpleDecorated $ case sec of
+                               Left s -> parse_error_in_pat <+> ppr s <> pprInfixOcc infixOcc
+                               Right s -> parse_error_in_ty_pat <+> ppr s <> pprInfixOcc infixOcc
+    PsErrParseRightOpSectionInPat infixOcc sec
+      -> mkSimpleDecorated $ case sec of
+                               Left s -> parse_error_in_pat <+> pprInfixOcc infixOcc <> ppr s
+                               Right s -> parse_error_in_ty_pat <+> pprInfixOcc infixOcc <> ppr s
     PsErrInvalidTypeSignature reason lhs
       -> mkSimpleDecorated $ case reason of
            PsErrInvalidTypeSig_DataCon   -> text "Invalid data constructor" <+> quotes (ppr lhs) <+>
@@ -273,7 +314,7 @@ instance Diagnostic PsMessage where
                 , text "looks like"
                 , text "'" <> text [looks_like_char] <> text "' (" <> text looks_like_char_name <> text ")" <> comma
                 , text "but it is not" ]
-    _ -> mkSimpleDecorated $ text "diagnosticMessage PsMessage"
+
 
   diagnosticReason = \case
     PsUnknownMessage m -> diagnosticReason m
