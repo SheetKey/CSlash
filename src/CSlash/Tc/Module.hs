@@ -331,7 +331,7 @@ type RenamedStuff =
 ********************************************************************* -}
 
 rnDump :: (Outputable a, Data a) => a -> TcRn ()
-rnDump rn = panic "rnDump"
+rnDump rn = dumpOptTcRn Opt_D_dump_rn "Renamer" FormatCSlash (ppr rn)
 
 tcDump :: TcGblEnv -> TcRn ()
 tcDump env = do

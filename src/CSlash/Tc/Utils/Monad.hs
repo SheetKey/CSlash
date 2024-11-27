@@ -360,6 +360,11 @@ traceOptTcRn flag doc =
     dumpTcRn False flag "" FormatText doc
 {-# INLINE traceOptTcRn #-}
 
+dumpOptTcRn :: DumpFlag -> String -> DumpFormat -> SDoc -> TcRn ()
+dumpOptTcRn flag title fmt doc =
+  whenDOptM flag $ dumpTcRn False flag title fmt doc
+{-# INLINE dumpOptTcRn #-}
+
 dumpTcRn :: Bool -> DumpFlag -> String -> DumpFormat -> SDoc -> TcRn ()
 dumpTcRn useUserStyle flag title fmt doc = do
   logger <- getLogger

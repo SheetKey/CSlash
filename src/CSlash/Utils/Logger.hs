@@ -148,7 +148,6 @@ type TraceAction a = LogFlags -> String -> SDoc -> a -> a
 
 data DumpFormat
    = FormatCSlash
-   | FormatByteCode
    | FormatLLVM
    | FormatText
    deriving (Show,Eq)
