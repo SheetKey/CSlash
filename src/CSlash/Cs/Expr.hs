@@ -329,11 +329,13 @@ csExprNeedsParens prec = go
     go (CsVar{}) = False
     go (CsUnboundVar{}) = False
     go (CsLit _ l) = csLitNeedsParens prec l
+    go (CsOverLit _ ol) = csOverLitNeedsParens prec ol
     go (CsLam{}) = prec > topPrec
     go (CsApp{}) = prec >= appPrec
     go (CsTyLam{}) = prec > topPrec
     go (CsTyApp{}) = prec >= appPrec
     go (OpApp{}) = prec >= opPrec
+    go (NegApp{}) = prec > topPrec
     go (CsPar{}) = False
     go (SectionL{}) = True
     go (SectionR{}) = True
@@ -342,8 +344,9 @@ csExprNeedsParens prec = go
     go (CsCase{}) = prec > topPrec
     go (CsIf{}) = prec > topPrec
     go (CsMultiIf{}) = prec > topPrec
+    go (CsLet{}) = prec > topPrec
     go (ExprWithTySig{}) = prec >= sigPrec
-    go _ = panic "csExprNeedsParens"
+    go (CsEmbTy{}) = prec > topPrec
     
 isAtomicCsExpr :: IsPass p => CsExpr (CsPass p) -> Bool
 isAtomicCsExpr (CsVar{}) = True
