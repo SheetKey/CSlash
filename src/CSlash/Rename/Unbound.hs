@@ -147,7 +147,72 @@ similarNameSuggestions
   -> [SimilarName]
 similarNameSuggestions
   looking_for@(LF what_look where_look) dflags global_env local_env tried_rdr_name
-  = panic "similarNameSuggestions"
+  = fuzzyLookup (showPpr dflags tried_rdr_name) all_possibilities
+  where
+    all_possibilities :: [(String, SimilarName)]
+    all_possibilities = case what_look of
+      WL_None -> []
+      _ -> [ (showPpr dflags r, SimilarRdrName r (Just $ LocallyBoundAt loc))
+           | (r, loc) <- local_possibilities local_env ]
+        ++ [ (showPpr dflags r, rp) | (r, rp) <- global_possibilities global_env ]
+
+    tried_occ = rdrNameOcc tried_rdr_name
+    tried_is_sym = isSymOcc tried_occ
+    tried_ns = occNameSpace tried_occ
+    tried_is_qual = isQual tried_rdr_name
+
+    correct_name_space occ =
+      (nameSpacesRelated dflags what_look tried_ns (occNameSpace occ))
+      && isSymOcc occ == tried_is_sym
+
+    local_ok = case where_look of
+                 WL_Anywhere -> True
+                 WL_LocalOnly -> True
+                 _ -> False
+
+    local_possibilities :: LocalRdrEnv -> [(RdrName, SrcSpan)]
+    local_possibilities env
+      | tried_is_qual = []
+      | not local_ok = []
+      | otherwise = [ (mkRdrUnqual occ, nameSrcSpan name)
+                    | name <- localRdrEnvElts env
+                    , let occ = nameOccName name
+                    , correct_name_space occ ]
+
+    global_possibilities :: GlobalRdrEnv -> [(RdrName, SimilarName)]
+    global_possibilities global_env
+      | tried_is_qual = [ (rdr_qual, SimilarRdrName rdr_qual (Just how))
+                        | gre <- globalRdrEnvElts global_env
+                        , isGreOk looking_for gre
+                        , let occ = greOccName gre
+                        , correct_name_space occ
+                        , (mod, how) <- qualsInScope gre
+                        , let rdr_qual = mkRdrQual mod occ ]
+      | otherwise = [ (rdr_unqual, sim)
+                    | gre <- globalRdrEnvElts global_env
+                    , isGreOk looking_for gre
+                    , let occ = greOccName gre
+                          rdr_unqual = mkRdrUnqual occ
+                    , correct_name_space occ
+                    , sim <- case (unquals_in_scope gre, quals_only gre) of
+                               (how : _, _) -> [ SimilarRdrName rdr_unqual (Just how) ]
+                               ([], pr : _) -> [ pr ]
+                               ([], []) -> [] ]
+                    
+    unquals_in_scope :: GlobalRdrElt -> [HowInScope]
+    unquals_in_scope (gre@GRE { gre_lcl = lcl, gre_imp = is })
+      | lcl = [ LocallyBoundAt (greDefinitionSrcSpan gre) ]
+      | otherwise = [ ImportedBy ispec
+                    | i <- bagToList is
+                    , let ispec = is_decl i
+                    , not (is_qual ispec) ]
+
+    quals_only :: GlobalRdrElt -> [SimilarName]
+    quals_only (gre@GRE { gre_imp = is })
+      = [ (SimilarRdrName (mkRdrQual (is_as ispec) (greOccName gre)) (Just $ ImportedBy ispec))
+        | i <- bagToList is
+        , let ispec = is_decl i
+        , is_qual ispec ]
 
 importSuggestions
   :: LookingFor
@@ -229,4 +294,24 @@ isGreOk (LF what_look where_look) gre = what_ok && where_ok
                  WL_LocalTop -> isLocalGRE gre
                  WL_LocalOnly -> False
                  _ -> True
-                
+
+nameSpacesRelated
+  :: DynFlags
+  -> WhatLooking
+  -> NameSpace
+  -> NameSpace
+  -> Bool
+nameSpacesRelated dflags what_looking ns ns'
+  | ns == ns'
+  = True
+  | otherwise
+  = or [ other_ns ns'
+       | (orig_ns, others) <- other_namespaces
+       , orig_ns ns
+       , (other_ns, wls) <- others
+       , what_looking `elem` WL_Anything : wls ]
+  where
+    other_namespaces =
+      [ (isVarNameSpace, [(isDataConNameSpace, [WL_Constructor])])
+      , (isTvNameSpace, [(isTcClsNameSpace, [WL_Constructor])])
+      , (isTcClsNameSpace, [(isTvNameSpace, [])]) ]
