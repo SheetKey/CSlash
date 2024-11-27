@@ -101,11 +101,9 @@ rnSrcDecls group@(CsGroup { cs_valds = val_decls
                              , cs_typeds = rn_type_decls
                              , cs_fixds = rn_fix_decls
                              }
-          tcf_bndrs = csTyForeignBinders rn_type_decls
-          other_defs = (Just (mkNameSet tcf_bndrs), emptyNameSet)
           other_fvs = src_fvs1
 
-          src_dus = unitOL other_defs `plusDU` bind_dus `plusDU` usesOnly other_fvs
+          src_dus = bind_dus `plusDU` usesOnly other_fvs
 
           final_tcg_env = last_tcg_env `addTcgDUs` src_dus
 
