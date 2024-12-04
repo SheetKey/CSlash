@@ -40,7 +40,7 @@ instance Outputable Kind where
   ppr = pprKind
 
 pprKind :: Kind -> SDoc
-pprKind = undefined
+pprKind _ = text "{pprKind not defined}"
 
 data FunKdFlag
   = FKF_K_K -- Kind -> Kind

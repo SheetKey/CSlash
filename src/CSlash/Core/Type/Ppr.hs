@@ -10,7 +10,7 @@ import CSlash.Types.Basic
 
 
 pprType :: Type -> SDoc
-pprType = undefined -- pprPrecType topPrec
+pprType _ = text "pprType not defined"
 
 -- pprPrecType :: PprPrec -> Type -> SDoc
 -- pprPreType = pprPrecTypeX emptyTidyEnv
