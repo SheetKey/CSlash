@@ -29,6 +29,7 @@ import CSlash.Types.Fixity (LexicalFixity(..))
 import CSlash.Language.Syntax.Type
 import {-# SOURCE #-} CSlash.Language.Syntax.Expr
 import CSlash.Language.Syntax.Extension
+import {-# SOURCE #-}  CSlash.Cs.Expr (pprMatches)
 import CSlash.Cs.Extension
 import CSlash.Cs.Kind
 import CSlash.Types.Basic
@@ -248,7 +249,7 @@ ppr_mono_ty (CsOpTy _ ty1 (L _ op) ty2)
 ppr_mono_ty (CsParTy _ ty) = parens (ppr_mono_lty ty)
 ppr_mono_ty (CsKindSig _ ty kind)
   = ppr_mono_lty ty <+> colon <+> ppr kind
-ppr_mono_ty (CsTyLamTy _ _) = text "ppr_mono_ty CsTyLamTy"
+ppr_mono_ty (CsTyLamTy _ matches) = pprMatches matches
 ppr_mono_ty (TySectionL _ ty op)
   | Just pp_op <- ppr_infix_ty (unLoc op)
   = pp_infixly pp_op

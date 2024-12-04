@@ -387,16 +387,16 @@ instance NoAnn GrhsAnn where
 
 type instance XCGRHS (CsPass _) _ = EpAnn GrhsAnn
 
+pprFunBind
+  :: (OutputableBndrId idR)
+  => MatchGroup (CsPass idR) (LCsExpr (CsPass idR)) -> SDoc
+pprFunBind matches = pprMatches matches
+
 pprMatches
   :: (OutputableBndrId idR, Outputable body)
   => MatchGroup (CsPass idR) body
   -> SDoc
 pprMatches MG{ mg_alts = matches } = vcat (map pprMatch (map unLoc (unLoc matches)))
-
-pprFunBind
-  :: (OutputableBndrId idR)
-  => MatchGroup (CsPass idR) (LCsExpr (CsPass idR)) -> SDoc
-pprFunBind matches = pprMatches matches
 
 pprMatch
   :: (OutputableBndrId idR, Outputable body)
@@ -409,7 +409,8 @@ pprMatch (Match{ m_pats = L _ pats, m_ctxt = ctxt, m_grhss = grhss })
     (herald, other_pats)
       = case ctxt of
           LamAlt -> (char '\\', pats)
-          TyLamAlt -> (char '\\', pats)
+          TyLamAlt -> (text "/\\", pats)
+          TyLamTyAlt -> (char '\\', pats)
           _ -> case pats of
                  [] -> (empty, [])
                  [pat] -> (ppr pat, [])

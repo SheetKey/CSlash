@@ -41,6 +41,9 @@ type instance XParKd (CsPass _) = (EpToken "(", EpToken ")")
 type instance XKdLT (CsPass _) = EpToken "<"
 type instance XKdLTEQ (CsPass _) = EpToken "<="
 
+instance (OutputableBndrId p) => Outputable (CsPatSigKind (CsPass p)) where
+  ppr (CsPSK _ (L _ kind)) = ppr kind
+
 instance (OutputableBndrId p) => Outputable (CsKind (CsPass p)) where
   ppr kind = pprCsKind kind
 

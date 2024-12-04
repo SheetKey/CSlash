@@ -26,3 +26,7 @@ pprExpr :: (OutputableBndrId p) => CsExpr (CsPass p) -> SDoc
 
 pprFunBind :: (OutputableBndrId idR)
            => MatchGroup (CsPass idR) (LCsExpr (CsPass idR)) -> SDoc
+
+pprMatches :: (OutputableBndrId idR, Outputable body)
+	   => MatchGroup (CsPass idR) body
+  	   -> SDoc

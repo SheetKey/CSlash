@@ -35,6 +35,7 @@ import CSlash.Language.Syntax.Extension
 import CSlash.Parser.Annotation
 import CSlash.Cs.Extension
 import CSlash.Cs.Type
+import CSlash.Cs.Kind
 import CSlash.Types.Basic
 import CSlash.Types.SrcLoc
 
@@ -201,7 +202,7 @@ pprPat (LitPat _ s) = ppr s
 pprPat (NPat _ l Nothing _) = ppr l
 pprPat (NPat _ l (Just _) _) = char '-' <> ppr l
 pprPat (SigPat _ pat ty) = ppr pat <+> colon <+> ppr ty
-pprPat (KdSigPat _ pat kd) = ppr pat <+> colon <+> text "pprPat ppr kd"
+pprPat (KdSigPat _ pat kd) = ppr pat <+> colon <+> ppr kd
 pprPat (ImpPat _ pat) = braces $ ppr pat
 pprPat (XPat ext) = case csPass @p of
   Rn -> case ext of
