@@ -10,6 +10,7 @@ import CSlash.Cs
 import CSlash.Tc.Errors.Types
 import CSlash.Tc.Utils.Monad
 import CSlash.Rename.CsType
+import CSlash.Rename.CsKind
 import CSlash.Rename.Pat
 import CSlash.Rename.Names
 import CSlash.Rename.Env
@@ -282,31 +283,34 @@ type RnMatchAnnoBody body
 
 rnMatchGroup
   :: RnMatchAnnoBody body
-  => CsMatchContextRn
+  => BindKVs
+  -> CsMatchContextRn
   -> (LocatedA (body Ps) -> RnM (LocatedA (body Rn), FreeVars))
   -> MatchGroup Ps (LocatedA (body Ps))
   -> RnM (MatchGroup Rn (LocatedA (body Rn)), FreeVars)
-rnMatchGroup ctxt rnBody (MG { mg_alts = L lm ms, mg_ext = origin }) = do
+rnMatchGroup bindkvs ctxt rnBody (MG { mg_alts = L lm ms, mg_ext = origin }) = do
   when (null ms) $ panic "addErr (TcRnEmptyCase ctxt)"
-  (new_ms, ms_fvs) <- mapFvRn (rnMatch ctxt rnBody) ms
+  (new_ms, ms_fvs) <- mapFvRn (rnMatch bindkvs ctxt rnBody) ms
   return (mkMatchGroup origin (L lm new_ms), ms_fvs)
 
 rnMatch
   :: RnMatchAnnoBody body
-  => CsMatchContextRn
+  => BindKVs
+  -> CsMatchContextRn
   -> (LocatedA (body Ps) -> RnM (LocatedA (body Rn), FreeVars))
   -> LMatch Ps (LocatedA (body Ps))
   -> RnM (LMatch Rn (LocatedA (body Rn)), FreeVars)
-rnMatch ctxt rnBody = wrapLocFstMA (rnMatch' ctxt rnBody)
+rnMatch bindkvs ctxt rnBody = wrapLocFstMA (rnMatch' bindkvs ctxt rnBody)
 
 rnMatch'
   :: RnMatchAnnoBody body
-  => CsMatchContextRn
+  => BindKVs
+  -> CsMatchContextRn
   -> (LocatedA (body Ps) -> RnM (LocatedA (body Rn), FreeVars))
   -> Match Ps (LocatedA (body Ps))
   -> RnM (Match Rn (LocatedA (body Rn)), FreeVars)
-rnMatch' ctxt rnBody (Match { m_pats = L l pats, m_grhss = grhss })
- = rnPats ctxt pats $ \pats' -> do
+rnMatch' bindkvs ctxt rnBody (Match { m_pats = L l pats, m_grhss = grhss })
+ = rnPats bindkvs ctxt pats $ \pats' -> do
       (grhss', grhss_fvs) <- rnGRHSs ctxt rnBody grhss
       return ( Match { m_ext = noAnn
                     , m_ctxt = ctxt

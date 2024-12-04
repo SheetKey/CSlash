@@ -23,6 +23,7 @@ import CSlash.Rename.Utils
   , genAppType, isIrrefutableCsPat-} )
 import CSlash.Rename.Unbound ( reportUnboundName )
 import CSlash.Rename.CsType
+import CSlash.Rename.CsKind
 import CSlash.Rename.Pat
 import CSlash.Driver.DynFlags
 import CSlash.Builtin.Names
@@ -81,7 +82,7 @@ rnExpr (CsLit x lit) = do
   return (CsLit x (convertLit lit), emptyFVs)
 
 rnExpr (CsLam x matches) = do
-  (matches', fvs_ms) <- rnMatchGroup LamAlt rnLExpr matches
+  (matches', fvs_ms) <- rnMatchGroup DoBindKVs LamAlt rnLExpr matches
   return (CsLam x matches', fvs_ms)
 
 rnExpr (CsApp x fun arg) = do
@@ -90,7 +91,7 @@ rnExpr (CsApp x fun arg) = do
   return (CsApp x fun' arg', fvFun `plusFV` fvArg)
 
 rnExpr (CsTyLam x matches) = do
-  (matches', fvs_ms) <- rnMatchGroup TyLamAlt rnLExpr matches
+  (matches', fvs_ms) <- rnMatchGroup DoBindKVs TyLamAlt rnLExpr matches
   return (CsTyLam x matches', fvs_ms)
 
 rnExpr (CsTyApp {}) = panic "rnExpr CsTyApp"
@@ -151,7 +152,7 @@ rnExpr (ExplicitSum _ alt arity expr) = do
 
 rnExpr (CsCase _ expr matches) = do
   (expr', e_fvs) <- rnLExpr expr
-  (matches', ms_fvs) <- rnMatchGroup CaseAlt rnLExpr matches
+  (matches', ms_fvs) <- rnMatchGroup DoBindKVs CaseAlt rnLExpr matches
   return (CsCase CaseAlt expr' matches', e_fvs `plusFV` ms_fvs)
 
 rnExpr (CsIf _ p b1 b2) = rnCsIf p b1 b2
@@ -262,7 +263,7 @@ rnStmt ctxt rnBody (L loc (BodyStmt _ (L lb body))) thing_inside = do
 
 rnStmt ctxt rnBody (L loc (BindStmt _ pat (L lb body))) thing_inside = do
   (body', fv_expr) <- rnBody body
-  rnPat (StmtCtxt ctxt) pat $ \pat' -> do
+  rnPat DoBindKVs (StmtCtxt ctxt) pat $ \pat' -> do
     (thing, fvs3) <- thing_inside (collectPatBinders CollNoDictBinders pat')
     return ( ( [(L loc (BindStmt noExtField pat' (L lb body')), fv_expr)]
              , thing )

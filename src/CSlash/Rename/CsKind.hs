@@ -41,18 +41,15 @@ import Control.Monad
 *                                                       *
 ****************************************************** -}
 
--- binds kind variables that are not already in scope
--- Consider a TyLam:
--- /\ t : k -> ...
--- We do not allow any explicit binding of kvs.
--- We also do not have 'ScopedKindVariables' analogous to GHC's 'ScopedTypeVariables'.
--- So, we must bind 'k' if it is not already in scope.
+data BindKVs = DoBindKVs | AlreadyBoundKVs
+
 rnCsPatSigKind
-  :: CsDocContext
+  :: BindKVs
+  -> CsDocContext
   -> CsPatSigKind Ps
   -> (CsPatSigKind Rn -> RnM (a, FreeVars))
   -> RnM (a, FreeVars)
-rnCsPatSigKind ctx sig_ki thing_inside = do
+rnCsPatSigKind bindkvs ctx sig_ki thing_inside = do
   let pat_sig_ki = csPatSigKind sig_ki
       env = RKE ctx
   do_first $ \_ -> do
@@ -61,11 +58,11 @@ rnCsPatSigKind ctx sig_ki thing_inside = do
     (res, fvs2) <- thing_inside sig_ki'
     return (res, fvs1 `plusFV` fvs2)                              
   where
-    do_first f = case ctx of
-      PatCtx -> do
+    do_first f = case bindkvs of
+      DoBindKVs -> do
         let kv_occs = extractCsPatSigKindKindVars sig_ki
         rnImplicitKvOccs kv_occs f
-      _ -> f []
+      AlreadyBoundKVs -> f []
 
 {- ******************************************************
 *                                                       *
@@ -140,11 +137,11 @@ rnImplicitKvOccs implicit_vs_with_dups thing_inside = do
     (text "rnImplicitKvOccs: Contains non kind var name:"
      <+> ppr implicit_vs_with_dups)
   let implicit_vs = nubN implicit_vs_with_dups
-  traceRn "rnImplicitKvOccs" $
-    vcat [ ppr implicit_vs_with_dups, ppr implicit_vs ]
   loc <- getSrcSpanM
   let loc' = noAnnSrcSpan loc
   vars <- mapM (newKiVarNameRnImplicit . L loc' . unLoc) implicit_vs
+  traceRn "rnImplicitKvOccs" $
+    vcat [ ppr implicit_vs_with_dups, ppr implicit_vs, ppr vars ]
   bindLocalNamesFV vars $ thing_inside vars
 
 newKiVarNameRnImplicit :: LocatedN RdrName -> RnM Name

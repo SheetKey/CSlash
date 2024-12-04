@@ -137,11 +137,12 @@ newPatName (LetMk is_top fix_env) rdr_name = CpsRn $ \ thing_inside -> do
 {-# INLINE rn_pats_general #-}
 rn_pats_general
   :: Traversable f
-  => CsMatchContextRn
+  => BindKVs
+  -> CsMatchContextRn
   -> f (LPat Ps)
   -> (f (LPat Rn) -> RnM (r, FreeVars))
   -> RnM (r, FreeVars)
-rn_pats_general ctxt pats thing_inside = do
+rn_pats_general bindkvs ctxt pats thing_inside = do
   envs_before <- getRdrEnvs
 
   unCpsRn (rn_pats_fun (matchNameMaker ctxt) pats) $ \ pats' -> do
@@ -154,17 +155,23 @@ rn_pats_general ctxt pats thing_inside = do
     doc_pat = text "In" <+> pprMatchContext ctxt
 
     rn_pats_fun = case ctxt of
-      LamAlt -> mapM . rnLArgPatAndThen
-      TyLamAlt -> mapM . rnLArgPatAndThen -- extract and bind kind vars here?
-      TyLamTyAlt -> mapM . rnLArgPatAndThen
-      _ -> mapM . rnLPatAndThen
+      LamAlt -> mapM . rnLArgPatAndThen bindkvs
+      TyLamAlt -> mapM . rnLArgPatAndThen bindkvs
+      TyLamTyAlt -> mapM . rnLArgPatAndThen bindkvs
+      _ -> mapM . rnLPatAndThen bindkvs
 
-rnPats :: CsMatchContextRn -> [LPat Ps] -> ([LPat Rn] -> RnM (a, FreeVars)) -> RnM (a, FreeVars)
+rnPats
+  :: BindKVs
+  -> CsMatchContextRn
+  -> [LPat Ps]
+  -> ([LPat Rn] -> RnM (a, FreeVars))
+  -> RnM (a, FreeVars)
 rnPats = rn_pats_general
 
 rnPat
   :: forall a.
-     CsMatchContextRn
+     BindKVs
+  -> CsMatchContextRn
   -> LPat Ps
   -> (LPat Rn -> RnM (a, FreeVars))
   -> RnM (a, FreeVars)
@@ -179,53 +186,53 @@ applyNameMaker mk rdr = fst <$> runCps (newPatLName mk rdr)
 *                                                                      *
 ********************************************************************* -}
 
-rnLArgPatAndThen :: NameMaker -> LocatedA (Pat Ps) -> CpsRn (LocatedA (Pat Rn))
-rnLArgPatAndThen mk = wrapSrcSpanCps (rnPatAndThen mk)
+rnLArgPatAndThen :: BindKVs -> NameMaker -> LocatedA (Pat Ps) -> CpsRn (LocatedA (Pat Rn))
+rnLArgPatAndThen bindkvs mk = wrapSrcSpanCps (rnPatAndThen bindkvs mk)
 
-rnLPatsAndThen :: NameMaker -> [LPat Ps] -> CpsRn [LPat Rn]
-rnLPatsAndThen mk = mapM (rnLPatAndThen mk)
+rnLPatsAndThen :: BindKVs -> NameMaker -> [LPat Ps] -> CpsRn [LPat Rn]
+rnLPatsAndThen bindkvs mk = mapM (rnLPatAndThen bindkvs mk)
 
-rnLPatAndThen :: NameMaker -> LPat Ps -> CpsRn (LPat Rn)
-rnLPatAndThen nm lpat = wrapSrcSpanCps (rnPatAndThen nm) lpat
+rnLPatAndThen :: BindKVs -> NameMaker -> LPat Ps -> CpsRn (LPat Rn)
+rnLPatAndThen bindkvs nm lpat = wrapSrcSpanCps (rnPatAndThen bindkvs nm) lpat
 
-rnPatAndThen :: NameMaker -> Pat Ps -> CpsRn (Pat Rn)
+rnPatAndThen :: BindKVs -> NameMaker -> Pat Ps -> CpsRn (Pat Rn)
 
-rnPatAndThen _ (WildPat _) = return $ WildPat noExtField
+rnPatAndThen _ _ (WildPat _) = return $ WildPat noExtField
 
-rnPatAndThen mk (VarPat x (L l rdr)) = do
+rnPatAndThen _ mk (VarPat x (L l rdr)) = do
   loc <- liftCps getSrcSpanM
   name <- newPatName mk (L (noAnnSrcSpan loc) rdr)
   return $ VarPat x (L l name)
 
-rnPatAndThen mk (TyVarPat x (L l rdr)) = do
+rnPatAndThen _ mk (TyVarPat x (L l rdr)) = do
   loc <- liftCps getSrcSpanM
   name <- newPatName mk (L (noAnnSrcSpan loc) rdr)
   return (TyVarPat x (L l name))
 
-rnPatAndThen mk (AsPat _ rdr pat) = do
+rnPatAndThen bindkvs mk (AsPat _ rdr pat) = do
   new_name <- newPatLName mk rdr
-  pat' <- rnLPatAndThen mk pat
+  pat' <- rnLPatAndThen bindkvs mk pat
   return $ AsPat noExtField new_name pat'
 
-rnPatAndThen mk (ParPat _ pat) = do
-  pat' <- rnLPatAndThen mk pat
+rnPatAndThen bindkvs mk (ParPat _ pat) = do
+  pat' <- rnLPatAndThen bindkvs mk pat
   return $ ParPat noExtField pat'
 
-rnPatAndThen mk (TuplePat _ pats) = do
-  pats' <- rnLPatsAndThen mk pats
+rnPatAndThen bindkvs mk (TuplePat _ pats) = do
+  pats' <- rnLPatsAndThen bindkvs mk pats
   return $ TuplePat noExtField pats'
 
-rnPatAndThen mk (SumPat _ pat alt arity) = do
-  pat <- rnLPatAndThen mk pat
+rnPatAndThen bindkvs mk (SumPat _ pat alt arity) = do
+  pat <- rnLPatAndThen bindkvs mk pat
   return $ SumPat noExtField pat alt arity
 
-rnPatAndThen mk (ConPat _ con args) = rnConPatAndThen mk con args
+rnPatAndThen _ mk (ConPat _ con args) = rnConPatAndThen mk con args
 
-rnPatAndThen mk (LitPat x lit) = do
+rnPatAndThen _ mk (LitPat x lit) = do
   liftCps (rnLit lit)
   return (LitPat x (convertLit lit))
 
-rnPatAndThen mk (NPat x (L l lit) mb_neg _) = do
+rnPatAndThen _ mk (NPat x (L l lit) mb_neg _) = do
   (lit', mb_neg') <- liftCpsFV $ rnOverLit lit
   mb_neg' <- let negative = do (neg, fvs) <- lookupSyntax negateName
                                return (Just neg, fvs)
@@ -237,27 +244,27 @@ rnPatAndThen mk (NPat x (L l lit) mb_neg _) = do
                               (Just _, Just _) -> positive
   return (NPat x (L l lit') mb_neg' noSyntaxExpr)
 
-rnPatAndThen mk (SigPat _ pat sig) = do
-  sig' <- rnCsPatSigTypeAndThen sig
-  pat' <- rnLPatAndThen mk pat
+rnPatAndThen bindkvs mk (SigPat _ pat sig) = do
+  sig' <- rnCsPatSigTypeAndThen sig -- binds implicit kvs. Could assert 'bindkvs == DoBindKVs'
+  pat' <- rnLPatAndThen bindkvs mk pat
   return (SigPat noExtField pat' sig')
   where
     rnCsPatSigTypeAndThen :: CsPatSigType Ps -> CpsRn (CsPatSigType Rn)
     rnCsPatSigTypeAndThen sig = liftCpsWithCont (rnCsPatSigType PatCtx sig)
 
-rnPatAndThen mk (KdSigPat _ pat sig) = do
+rnPatAndThen bindkvs mk (KdSigPat _ pat sig) = do
   sig' <- rnCsPatSigKindAndThen sig
-  pat' <- rnLPatAndThen mk pat
+  pat' <- rnLPatAndThen bindkvs mk pat
   return (KdSigPat noExtField pat' sig')
   where
     rnCsPatSigKindAndThen :: CsPatSigKind Ps -> CpsRn (CsPatSigKind Rn)
-    rnCsPatSigKindAndThen sig = liftCpsWithCont (rnCsPatSigKind PatCtx sig)
+    rnCsPatSigKindAndThen sig = liftCpsWithCont (rnCsPatSigKind bindkvs PatCtx sig)
 
-rnPatAndThen mk (ImpPat _ pat) = do
-  pat' <- rnLPatAndThen mk pat
+rnPatAndThen bindkvs mk (ImpPat _ pat) = do
+  pat' <- rnLPatAndThen bindkvs mk pat
   return (ImpPat noExtField pat')
 
-rnPatAndThen _ (XPat _) = panic "rnPatAndThen XPat"
+rnPatAndThen _ _ (XPat _) = panic "rnPatAndThen XPat"
 
 rnConPatAndThen :: NameMaker -> LocatedN RdrName -> CsConPatDetails Ps -> CpsRn (Pat Rn)
 rnConPatAndThen _ _ _ = panic "rnConPatAndThen"

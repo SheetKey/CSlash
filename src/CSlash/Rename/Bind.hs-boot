@@ -3,6 +3,7 @@
 module CSlash.Rename.Bind where
 
 import CSlash.Cs
+import CSlash.Rename.CsKind (BindKVs)
 import CSlash.Types.Name.Set ( FreeVars )
 import CSlash.Tc.Types
 import CSlash.Utils.Outputable  ( Outputable )
@@ -19,7 +20,8 @@ type RnMatchAnnoBody body
 
 rnMatchGroup
   :: RnMatchAnnoBody body
-  => CsMatchContextRn
+  => BindKVs
+  -> CsMatchContextRn
   -> (LocatedA (body Ps) -> RnM (LocatedA (body Rn), FreeVars))
   -> MatchGroup Ps (LocatedA (body Ps))
   -> RnM (MatchGroup Rn (LocatedA (body Rn)), FreeVars)

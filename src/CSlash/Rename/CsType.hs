@@ -194,7 +194,7 @@ rnCsTy env (CsKindSig x ty k) = do
          , lhs_fvs `plusFV` sig_fvs )
 
 rnCsTy env (CsTyLamTy x matches) = do
-  (matches', fvs_ms) <- rnMatchGroup TyLamTyAlt (rnLCsTy env) matches
+  (matches', fvs_ms) <- rnMatchGroup AlreadyBoundKVs TyLamTyAlt (rnLCsTy env) matches
   return (CsTyLamTy x matches', fvs_ms)
 
 rnCsArrow :: RnTyEnv -> CsArrow Ps -> RnM (CsArrow Rn, FreeVars)
