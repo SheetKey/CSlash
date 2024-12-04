@@ -6,6 +6,7 @@ module CSlash.Core.Kind where
 import CSlash.Types.Var
 
 import CSlash.Utils.Outputable
+import CSlash.Utils.Panic
 
 import qualified Data.Data as Data
 
@@ -16,7 +17,7 @@ import qualified Data.Data as Data
 ********************************************************************** -}
 
 data Kind
-  = KdVarKd Var
+  = KiVarKi Var
   | UKd
   | AKd
   | LKd
@@ -62,11 +63,20 @@ isCKind _ = False
 -- 'noFreeVarsOfType' in GHC
 noFreeVarsOfKind :: Kind -> Bool
 noFreeVarsOfKind k = case k of
-  KdVarKd _ -> True
+  KiVarKi _ -> True
   FunKd _ k1 k2 -> noFreeVarsOfKind k1 || noFreeVarsOfKind k2
   -- LTKd k1 k2 -> noFreeVarsOfKind k1 || noFreeVarsOfKind k2
   -- LTEQKd k1 k2 -> noFreeVarsOfKind k1 || noFreeVarsOfKind k2
   _ -> False
+
+{- **********************************************************************
+*                                                                       *
+            Simple constructors
+*                                                                       *
+********************************************************************** -}
+
+mkKiVarKi :: KindVar -> Kind
+mkKiVarKi v = assertPpr (isKiVar v) (ppr v) $ KiVarKi v
 
 {- *********************************************************************
 *                                                                      *
@@ -76,7 +86,7 @@ noFreeVarsOfKind k = case k of
 
 data KindFolder env a = KindFolder
   { kf_view :: Kind -> Maybe Kind
-  , kf_kdvar :: env -> KindVar -> a
+  , kf_kivar :: env -> KindVar -> a
   , kf_UKd :: a
   , kf_AKd :: a
   , kf_LKd :: a
@@ -86,13 +96,13 @@ data KindFolder env a = KindFolder
 {-# INLINE foldKind #-}
 foldKind :: Monoid a => KindFolder env a -> env -> (Kind -> a, [Kind] -> a)
 foldKind (KindFolder { kf_view = view
-                     , kf_kdvar = kdvar
+                     , kf_kivar = kivar
                      , ..
                      }) env
   = (go_kd env, go_kds env)
   where
     go_kd env kd | Just kd' <- view kd = go_kd env kd'
-    go_kd env (KdVarKd kv) = kdvar env kv
+    go_kd env (KiVarKi kv) = kivar env kv
     go_kd env (FunKd FKF_K_K arg res) = go_kd env arg `mappend` go_kd env res
     go_kd env (FunKd FKF_C_K ctxt inner) = go_kd env ctxt `mappend` go_kd env inner
     go_kd env (KdContext rels) = kf_ctxt env rels

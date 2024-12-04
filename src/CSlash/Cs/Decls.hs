@@ -94,6 +94,10 @@ instance OutputableBndrId p => Outputable (TypeGroup (CsPass p)) where
     = hang (text "TypeGroup") 2 $
       ppr kisigs $$ ppr typeds
 
+pprTyDeclFlavor :: CsBind (CsPass p) -> SDoc
+pprTyDeclFlavor (TyFunBind {}) = text "type"
+pprTyDeclFlavor _ = panic "pprTyDeclFlavor"
+
 emptyRdrGroup :: CsGroup (CsPass p)
 emptyRdrGroup = emptyGroup { cs_valds = emptyValBindsIn }
 

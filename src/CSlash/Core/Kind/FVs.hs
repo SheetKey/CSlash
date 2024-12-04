@@ -45,7 +45,7 @@ shallow_kds :: [Kind] -> Endo KdVarSet
 
 shallowKvFolder :: KindFolder KdVarSet (Endo KdVarSet)
 shallowKvFolder = KindFolder { kf_view = noKindView
-                             , kf_kdvar = do_kv
+                             , kf_kivar = do_kv
                              , kf_UKd = mempty
                              , kf_AKd = mempty
                              , kf_LKd = mempty

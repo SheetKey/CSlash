@@ -225,9 +225,14 @@ library
                     , CSlash.SysTools.Tasks
                     , CSlash.SysTools.Terminal
 
+                    , CSlash.Tc.CsType
                     , CSlash.Tc.Errors.Ppr
                     , CSlash.Tc.Errors.Types
+                    , CSlash.Tc.Gen.Bind
+                    , CSlash.Tc.Gen.CsType
+                    , CSlash.Tc.Gen.CsKind
                     , CSlash.Tc.Module
+                    , CSlash.Tc.Solver
                     , CSlash.Tc.Types
                     , CSlash.Tc.Types.BasicTypes
                     , CSlash.Tc.Types.Evidence
@@ -235,8 +240,11 @@ library
                     , CSlash.Tc.Types.LclEnv
                     , CSlash.Tc.Types.Origin
                     , CSlash.Tc.Types.TcRef
+                    , CSlash.Tc.Utils.Env
                     , CSlash.Tc.Utils.Monad
+                    , CSlash.Tc.Utils.TcMType
                     , CSlash.Tc.Utils.TcType
+                    , CSlash.Tc.Validity
                     , CSlash.Tc.Zonk.Monad
                     , CSlash.Tc.Zonk.TcType
 

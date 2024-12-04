@@ -254,6 +254,10 @@ pprScopeError rdr_name scope_err = case scope_err of
                                 , nest 2 $ text "lacks an accompanying binding" ]
   NoTopLevelBinding -> hang (text "No top-level binding for")
                        2 (what <+> quotes (ppr rdr_name) <+> text "in this module")
+  NotInScopeTc env ->
+    vcat [ text "CSL internal error:" <+> quotes (ppr rdr_name)
+           <+> text "is not in scope during type checking, but it passed the renamer"
+         , text "tcl_env of environment:" <+> ppr env ]
   where
     what = pprNonVarNameSpace (occNameSpace (rdrNameOcc rdr_name))
 

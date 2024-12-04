@@ -8,3 +8,4 @@ data VarBndr var argf
 type TypeVar = Var
 type Id = Var
 type TcTyVar = Var
+type TcKiVar = Var

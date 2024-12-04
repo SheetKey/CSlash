@@ -92,10 +92,10 @@ mkTyConTy tycon = tyConNullaryTy tycon
 data TyCon = TyCon
   { tyConUnique :: !Unique
   , tyConName :: !Name
-  , tyConBinders :: [TyConBinder]
-  , tyConResKind :: Kind -- Lin, Aff, Unr, or a variable
+  , tyConBinders :: [TyConBinder] -- should delete
+  , tyConResKind :: Kind
   -- , tyConHasClosedResKind :: Bool
-  , tyConTyVars :: [TypeVar]
+  , tyConTyVars :: [TypeVar] -- should delete
   , tyConKind :: Kind
   , tyConArity :: Arity
   , tyConNullaryTy :: Type
@@ -119,7 +119,7 @@ data TyConDetails
   | PrimTyCon
     -- { primRepName :: TyConRepName } -- this is used to Typeable
   | TcTyCon -- used during type checking only
-    { tctc_scoped_tvs :: [(Name, TcTyVar)]
+    { tctc_scoped_kvs :: [(Name, TcKiVar)]
     , tctc_is_poly :: Bool
     , tctc_flavor :: TyConFlavor TyCon
     }
@@ -194,6 +194,21 @@ mkTyCon name binders res_kind kind details
                , tyConDetails = details
                }
 
+-- this should replace 'mkTyCon' eventually
+mkTyCon' :: Name -> Kind -> Kind -> Arity -> TyConDetails -> TyCon
+mkTyCon' name res_kind full_kind arity details = tc
+  where
+    tc = TyCon { tyConUnique = nameUnique name
+               , tyConName = name
+               , tyConBinders = []
+               , tyConTyVars = []
+               , tyConResKind = res_kind
+               , tyConKind = full_kind
+               , tyConArity = arity
+               , tyConNullaryTy = mkNakedTyConTy tc
+               , tyConDetails = details
+               }
+
 mkAlgTyCon
   :: Name
   -> [TyConBinder]
@@ -237,6 +252,21 @@ mkPrimTyCon :: Name -> [TyConBinder] -> Kind -> Kind -> TyCon
 mkPrimTyCon name binders res_kind kind
   = mkTyCon name binders res_kind kind PrimTyCon
 
+mkTcTyCon
+  :: Name
+  -> Kind -- res kind
+  -> Kind -- full kind
+  -> Arity -- number of args until has res kind (res kind may be 'k1 -> k2')
+  -> [(Name, TcKiVar)] -- implicit kind vars
+  -> Bool -- is the TcTyCon generalized
+  -> TyConFlavor TyCon
+  -> TyCon
+mkTcTyCon name res_kind full_kind arity scoped_kvs poly flav
+  = mkTyCon' name res_kind full_kind arity
+    $ TcTyCon { tctc_scoped_kvs = scoped_kvs
+              , tctc_is_poly = poly
+              , tctc_flavor = flav }
+
 isTypeSynonymTyCon :: TyCon -> Bool
 isTypeSynonymTyCon (TyCon { tyConDetails = details })
   | SynonymTyCon{} <- details = True
@@ -247,6 +277,15 @@ isTupleTyCon :: TyCon -> Bool
 isTupleTyCon (TyCon { tyConDetails = details })
   | AlgTyCon { algTcRhs = TupleTyCon {} } <- details = True
   | otherwise = False
+
+{- --------------------------------------------
+--      TcTyCon
+-------------------------------------------- -}
+
+tcTyConScopedKiVars :: TyCon -> [(Name, TcTyVar)]
+tcTyConScopedKiVars tc@(TyCon { tyConDetails = details })
+  | TcTyCon { tctc_scoped_kvs = scoped_kvs } <- details = scoped_kvs
+  | otherwise = pprPanic "tcTyConScopedKiVars" (ppr tc)
 
 tyConDataCons :: TyCon -> [DataCon]
 tyConDataCons tycon = tyConDataCons_maybe tycon `orElse` []

@@ -38,12 +38,56 @@ import CSlash.Data.Bag
 
 {- *********************************************************************
 *                                                                      *
+                    Writing to metavariables
+*                                                                      *
+********************************************************************* -}
+
+writeMetaKiVar :: HasDebugCallStack => TcKiVar -> TcKind -> ZonkM ()
+writeMetaKiVar kivar ki
+  | not debugIsOn
+  = writeMetaKiVarRef kivar (metaKiVarRef kivar) ki
+  | not (isTcKiVar kivar)
+  = massertPpr False (text "Writing to non-tc kivar" <+> ppr kivar)
+  | MetaKv { mkv_ref = ref } <- tcKiVarDetails kivar
+  = writeMetaKiVarRef kivar ref ki
+  | otherwise
+  = massertPpr False (text "Writing to non-meta kivar" <+> ppr kivar)
+{-# INLINE writeMetaKiVar #-}
+
+writeMetaKiVarRef :: HasDebugCallStack => TcKiVar -> TcRef MetaDetailsK -> TcKind -> ZonkM ()
+writeMetaKiVarRef kivar ref ki
+  | not debugIsOn
+  = do traceZonk "writeMetaKiVar" (ppr kivar <+> text ":=" <+> ppr ki)
+       writeTcRef ref (Indirect ki)
+  | otherwise
+  = do meta_details <- readTcRef ref
+       zonked_ki <- zonkTcKind ki
+       let zonked_ki_lvl = tcKindLevel zonked_ki
+           kv_lvl = tcKiVarLevel kivar
+           level_check_ok = not (zonked_ki_lvl `strictlyDeeperThan` kv_lvl)
+           level_check_msg = ppr zonked_ki_lvl $$ ppr kv_lvl
+                             $$ ppr kivar $$ ppr ki $$ ppr zonked_ki
+
+       traceZonk "writeMetaKiVar" (ppr kivar <+> text ":=" <+> ppr ki)
+
+       massertPpr (isFlexi meta_details) (double_upd_msg meta_details)
+
+       massertPpr level_check_ok level_check_msg
+
+       writeTcRef ref (Indirect ki)
+   where
+     double_upd_msg details = hang (text "Double update of meta kivar")
+                              2 (ppr kivar $$ ppr details)
+{-# INLINE writeMetaKiVarRef #-}
+
+{- *********************************************************************
+*                                                                      *
               Zonking 
 *                                                                      *
 ********************************************************************* -}
 
 zonkTcType :: TcType -> ZonkM TcType
-zonkTcType = undefined
+zonkTcType = panic "zonkTcType"
 
 zonkTcTyVar :: TcTyVar -> ZonkM TcType
 zonkTcTyVar tv

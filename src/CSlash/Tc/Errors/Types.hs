@@ -60,7 +60,7 @@ import CSlash.Types.Name.Env (NameEnv)
 import CSlash.Iface.Errors.Types
 import CSlash.Unit.Module.ModIface (ModIface)
 -- import GHC.Tc.Types.TH
--- import GHC.Tc.Types.BasicTypes
+import CSlash.Tc.Types.BasicTypes
 
 data TcRnMessageOpts = TcRnMessageOpts
   { tcOptsShowContext :: !Bool
@@ -114,6 +114,7 @@ data NotInScopeError
   | SameName [GlobalRdrElt]
   | MissingBinding SDoc [CsHint]
   | NoTopLevelBinding
+  | NotInScopeTc (NameEnv TcTyThing)
   deriving Generic
 
 mkTcRnNotInScope :: RdrName -> NotInScopeError -> TcRnMessage
@@ -135,6 +136,9 @@ data CsDocContext
   | PatCtx
   | ExprWithTySigCtx
   | CsTypeCtx
+
+data WrongThingSort
+  = WrongThingKind
 
 data DodgyImportsReason
   = DodgyImportsEmptyParent !GlobalRdrElt

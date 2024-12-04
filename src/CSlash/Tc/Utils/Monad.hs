@@ -291,6 +291,11 @@ getEpsVar = do
   env <- getTopEnv
   return (euc_eps (ue_eps (cs_unit_env env)))
 
+getEps :: TcRnIf gbl lcl ExternalPackageState
+getEps = do
+  env <- getTopEnv
+  liftIO $ csEPS env
+
 updateEps :: (ExternalPackageState -> (ExternalPackageState, a)) -> TcRnIf gbl lcl a
 updateEps upd = do
   traceIf (text "updating EPS")
@@ -332,6 +337,11 @@ newUnique = do
   env <- getEnv
   let tag = env_ut env
   liftIO $! uniqFromTag tag
+
+newSysName :: OccName -> TcRnIf gbl lcl Name
+newSysName occ = do
+  uniq <- newUnique
+  return $ mkSystemName uniq occ
 
 {- *********************************************************************
 *                                                                      *
@@ -451,6 +461,9 @@ setSrcSpan loc@(UnhelpfulSpan _) thing_inside
 
 setSrcSpanA :: EpAnn ann -> TcRn a -> TcRn a
 setSrcSpanA l = setSrcSpan (locA l)
+
+addLocM :: (HasLoc t) => (a -> TcM b) -> GenLocated t a -> TcM b
+addLocM fn (L loc a) = setSrcSpan (getHasLoc loc) $ fn a
 
 wrapLocMA :: (a -> TcM b) -> GenLocated (EpAnn ann) a -> TcRn (GenLocated (EpAnn ann) b)
 wrapLocMA fn (L loc a) = setSrcSpanA loc $ do
@@ -675,12 +688,22 @@ mkErrInfo env ctxts = go False 0 env ctxts
 mAX_CONTEXTS :: Int
 mAX_CONTEXTS = 3
 
-
+pushTcLevelM :: TcM a -> TcM (TcLevel, a)
+pushTcLevelM thing_inside = do
+  tclvl <- getTcLevel
+  let tclvl' = pushTcLevel tclvl
+  res <- updLclEnv (setLclEnvTcLevel tclvl') thing_inside
+  return (tclvl', res)
 
 getTcLevel :: TcM TcLevel
 getTcLevel = do
   env <- getLclEnv
   return $! getLclEnvTcLevel env 
+
+getLclTypeEnv :: TcM TcTypeEnv
+getLclTypeEnv = do
+  env <- getLclEnv
+  return $ getLclEnvTypeEnv env
 
 {- *********************************************************************
 *                                                                      *

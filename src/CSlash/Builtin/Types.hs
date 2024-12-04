@@ -87,8 +87,8 @@ pcTyCon :: Name -> [TypeVar] -> [DataCon] -> TyCon
 pcTyCon name tyvars cons
   = mkAlgTyCon name
                (mkSpecifiedTyConBinders tyvars)
-               (KdVarKd mkTemplateKindVar)
-               (KdVarKd mkTemplateKindVar)
+               (KiVarKi mkTemplateKindVar)
+               (KiVarKi mkTemplateKindVar)
                (mkDataTyConRhs cons)
                VanillaAlgTyCon
 

@@ -189,11 +189,11 @@ mkTyVarOcc = mkOccName tvName
 mkTyVarOccFS :: FastString -> OccName
 mkTyVarOccFS fs = mkOccNameFS tvName fs
 
-mkKdVarOcc :: String -> OccName
-mkKdVarOcc = mkOccName kvName
+mkKiVarOcc :: String -> OccName
+mkKiVarOcc = mkOccName kvName
 
-mkKdVarOccFS :: FastString -> OccName
-mkKdVarOccFS fs = mkOccNameFS kvName fs
+mkKiVarOccFS :: FastString -> OccName
+mkKiVarOccFS fs = mkOccNameFS kvName fs
 
 mkTcOcc :: String -> OccName
 mkTcOcc = mkOccName tcName

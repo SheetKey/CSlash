@@ -5,6 +5,9 @@ module CSlash.Tc.Types
 
   , ErrCtxt
   , ImportAvails(..)
+
+  , TcTypeEnv, TcBinderStack, TcBinder(..)
+  , TcTyThing(..)
   ) where
 
 import CSlash.Platform
@@ -25,7 +28,7 @@ import CSlash.Tc.Utils.TcType
 -- import GHC.Tc.Types.TH
 import CSlash.Tc.Types.TcRef
 import CSlash.Tc.Types.LclEnv
--- import GHC.Tc.Types.BasicTypes
+import CSlash.Tc.Types.BasicTypes
 import CSlash.Tc.Types.ErrCtxt
 -- import {-# SOURCE #-} GHC.Tc.Errors.Hole.Plugin ( HoleFitPlugin )
 -- import GHC.Tc.Errors.Types

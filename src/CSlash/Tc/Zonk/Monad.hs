@@ -63,3 +63,14 @@ instance MonadIO ZonkM where
 
 getZonkGblEnv :: ZonkM ZonkGblEnv
 getZonkGblEnv = ZonkM return
+
+traceZonk :: String -> SDoc -> ZonkM ()
+traceZonk herald doc = ZonkM $
+  \(ZonkGblEnv { zge_logger = !logger, zge_name_ppr_ctx = ppr_ctx }) -> do
+    let sty = mkDumpStyle ppr_ctx
+        flag = Opt_D_dump_tc_trace
+        title = ""
+        msg = hang (text herald) 2 doc
+    when (logHasDumpFlag logger flag)
+      $ logDumpFile logger sty flag title FormatText msg
+{-# INLINE traceZonk #-}

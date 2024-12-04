@@ -1,0 +1,326 @@
+module CSlash.Tc.CsType where
+
+import CSlash.Driver.Env
+import CSlash.Driver.DynFlags
+-- import GHC.Driver.Config.HsToCore
+
+import CSlash.Cs
+
+import CSlash.Tc.Errors.Types
+-- import GHC.Tc.TyCl.Build
+import CSlash.Tc.Solver ( pushLevelAndSolveEqualities, pushLevelAndSolveEqualitiesX
+                        {-, reportUnsolvedEqualities-} )
+import CSlash.Tc.Utils.Monad
+import CSlash.Tc.Utils.Env
+-- import GHC.Tc.Utils.Unify( unifyType, emitResidualTvConstraint )
+-- import GHC.Tc.Types.Constraint( emptyWC )
+import CSlash.Tc.Validity
+-- import GHC.Tc.Zonk.Type
+import CSlash.Tc.Zonk.TcType
+-- import GHC.Tc.TyCl.Utils
+-- import GHC.Tc.TyCl.Class
+-- import {-# SOURCE #-} GHC.Tc.TyCl.Instance( tcInstDecls1 )
+-- import {-# SOURCE #-} GHC.Tc.Module( checkBootDeclM )
+-- import GHC.Tc.Deriv (DerivInfo(..))
+import CSlash.Tc.Gen.CsType
+import CSlash.Tc.Gen.CsKind
+-- import GHC.Tc.Instance.Class( AssocInstInfo(..) )
+import CSlash.Tc.Utils.TcMType
+import CSlash.Tc.Utils.TcType
+-- import GHC.Tc.Instance.Family
+import CSlash.Tc.Types.Origin
+import CSlash.Tc.Types.LclEnv
+
+-- import CSlash.Builtin.Types (oneDataConTy,  unitTy, makeRecoveryTyCon )
+
+-- import GHC.Rename.Env( lookupConstructorFields )
+
+-- import GHC.Core.Multiplicity
+-- import GHC.Core.FamInstEnv ( mkBranchedCoAxiom, mkCoAxBranch )
+-- import GHC.Core.Coercion
+import CSlash.Core.Type
+import CSlash.Core.Type.Rep   -- for checkValidRoles
+-- import CSlash.Core.Type.Ppr( pprTyVars )
+import CSlash.Core.Kind
+-- import GHC.Core.Class
+-- import GHC.Core.Coercion.Axiom
+import CSlash.Core.TyCon
+import CSlash.Core.DataCon
+-- import GHC.Core.Unify
+
+import CSlash.Types.Error
+import CSlash.Types.Id
+import CSlash.Types.Id.Make
+import CSlash.Types.Var
+import CSlash.Types.Var.Env
+import CSlash.Types.Var.Set
+import CSlash.Types.Name
+import CSlash.Types.Name.Set
+import CSlash.Types.Name.Env
+import CSlash.Types.SrcLoc
+import CSlash.Types.SourceFile
+import CSlash.Types.TypeEnv
+import CSlash.Types.Unique
+import CSlash.Types.Basic
+
+import CSlash.Data.FastString
+import CSlash.Data.Maybe
+import CSlash.Data.List.SetOps( minusList, equivClasses )
+
+import CSlash.Unit
+import CSlash.Unit.Module.ModDetails
+
+import CSlash.Utils.Outputable
+import CSlash.Utils.Panic
+import CSlash.Utils.Constants (debugIsOn)
+import CSlash.Utils.Misc
+
+import Control.Monad
+import Data.Foldable ( toList, traverse_ )
+import Data.Functor.Identity
+import Data.List ( partition)
+import Data.List.NonEmpty ( NonEmpty(..) )
+import qualified Data.List.NonEmpty as NE
+import Data.Traversable ( for )
+import Data.Tuple( swap )
+
+{- *********************************************************************
+*                                                                      *
+            Type checking for type declarations
+*                                                                      *
+********************************************************************* -}
+
+tcTyDecls :: [TypeGroup Rn] -> TcM TcGblEnv
+tcTyDecls typeds_s = checkNoErrs $ fold_env typeds_s
+  where
+    fold_env :: [TypeGroup Rn] -> TcM TcGblEnv
+    fold_env [] = getGblEnv
+    fold_env (typeds : typeds_s) = do
+      tcg_env <- tcTyGroup typeds
+      setGblEnv tcg_env $ fold_env typeds_s
+
+tcTyGroup :: TypeGroup Rn -> TcM TcGblEnv
+tcTyGroup (TypeGroup { group_typeds = typeds, group_kisigs = kisigs }) = do
+  massertPpr (null kisigs) (ppr kisigs)
+
+  traceTc "---- tcTyGroup ---- {" empty
+  traceTc "Decls for" (ppr (map (tydName . unLoc) typeds))
+
+  (tys_with_validity_infos, kindless) <- tcTyDs typeds
+
+  panic "tcTyGroup"
+
+tcTyDs :: [LCsBind Rn] -> TcM ([TyCon], NameSet)
+tcTyDs typeds = do
+  (tc_tycons, kindless) <- checkNoErrs $ kcTyGroup typeds
+
+  panic "tcTyDs"
+
+{- *********************************************************************
+*                                                                      *
+                Kind checking
+*                                                                      *
+********************************************************************* -}
+
+kcTyGroup :: [LCsBind Rn] -> TcM ([PolyTcTyCon], NameSet)
+kcTyGroup kindless_decls = do
+  mod <- getModule
+  traceTc "---- kcTyGroup ---- {" (text "module" <+> ppr mod $$ vcat (map ppr kindless_decls))
+
+  let kindless_names = mkNameSet $ map (tydName . unLoc) kindless_decls
+
+  inferred_tcs <- pushLevelAndSolveEqualities unkSkolAnon [] $ do
+    mono_tcs <- inferInitialKinds kindless_decls
+
+    traceTc "kcTyGroup: initial kinds" $ ppr_tc_kinds mono_tcs
+
+    checkNoErrs $ tcExtendKindEnvWithTyCons mono_tcs $
+      mapM_ kcLTyDecl kindless_decls
+
+    return mono_tcs
+
+  let inferred_tc_env = mkNameEnv $ map (\tc -> (tyConName tc, tc)) inferred_tcs
+  poly_tcs <- concatMapM (generalizeTyDecl inferred_tc_env) kindless_decls
+
+  traceTc "---- kcTyGroup end ---- }" (ppr_tc_kinds poly_tcs)
+  return (poly_tcs, kindless_names)
+  where
+    ppr_tc_kinds tcs = vcat (map pp_tc tcs)
+    pp_tc tc = ppr (tyConName tc) <+> dcolon <+> ppr (tyConKind tc)
+
+type ScopedPairs = [(Name, TcTyVar)]
+
+generalizeTyDecl :: NameEnv MonoTcTyCon -> LCsBind Rn -> TcM [PolyTcTyCon]
+generalizeTyDecl inferred_tc_env (L _ decl) = do
+  let names_in_this_decl = [tydName decl]
+
+  tc_infos <- liftZonkM $ do
+    tc_with_tvs <- mapM skolemize_tc_tycon names_in_this_decl
+    mapM zonk_tc_tycon tc_with_tvs
+
+  swizzled_infos <- tcAddDeclCtxt decl (swizzleTcTyConBndrs tc_infos)
+
+  mapAndReportM generalizeTcTyCon swizzled_infos
+  where
+    skolemize_tc_tycon :: Name -> ZonkM (TcTyCon, SkolemInfo, ScopedPairs)
+    skolemize_tc_tycon tc_name = do
+      let tc = lookupNameEnv_NF inferred_tc_env tc_name
+      skol_info <- mkSkolemInfo (TyConSkol (tyConFlavor tc) tc_name)
+      scoped_pairs <- mapSndM (zonkAndSkolemize skol_info) (tcTyConScopedKiVars tc)
+      return (tc, skol_info, scoped_pairs)
+
+    zonk_tc_tycon
+      :: (TcTyCon, SkolemInfo, ScopedPairs)
+      -> ZonkM (TcTyCon, SkolemInfo, ScopedPairs, TcKind)
+    zonk_tc_tycon (tc, skol_info, scoped_pairs) = do
+      scoped_pairs <- mapSndM zonkTcTyVarToTcTyVar scoped_pairs
+      res_kind <- zonkTcKind (tyConResKind tc)
+      return (tc, skol_info, scoped_pairs, res_kind)
+
+swizzleTcTyConBndrs
+  :: [(TcTyCon, SkolemInfo, ScopedPairs, TcKind)]
+  -> TcM [(TcTyCon, SkolemInfo, ScopedPairs, TcKind)]
+swizzleTcTyConBndrs tc_infos = panic "swizzleTcTyConBndrs"
+  -- | all no_swizzle swizzle_pairs
+  -- = do traceTc "Skipping swizzleTcTyConBndrs for" (ppr_infos tc_infos)
+  --      return tc_infos
+
+  -- | otherwise
+  -- = do checkForDuplicateScope swizzle_pairs
+  --      traceTc "swizzleTcTyConBndrs" $
+  --        vcat [ text "before" <+> ppr_infos tc_infos
+  --             , text "swizzle_pairs" <+> ppr swizzle_pairs
+  --             , text "after" <+> ppr_infos swizzled_infos ]
+  --      return swizzled_infos
+  -- where
+  --   swizzled_infos = [ (tc, skol_info, mapSnd swizzle_var scoped_pairs, swizzle_ty kind)
+  --                    | (tc, skol_info, scoped_pairs, kind) <- tc_infos ]
+
+  --   swizzle_pairs :: [(Name, TypeVar)]
+  --   swizzle_pairs = [ pair | (_, _, pairs, _) <- tc_infos, pair <- pairs ]
+
+  --   no_swizzle :: (Name, TypeVar) -> Bool
+  --   no_swizzle (nm, tv) = nm == tyVarName tv
+
+  --   ppr_infos infos = fvat [ ppr tc <+> pprTyVars (map snd pairs) | (tc, _, pairs, _) <- infos ]
+
+  --   swizzle_env = mkVarEnv (map swap swizzle_pairs)
+
+  --   swizzleMapper :: TypeMapper () Identity
+  --   swizzleMapper = 
+
+generalizeTcTyCon :: (MonoTcTyCon, SkolemInfo, ScopedPairs, TcKind) -> TcM PolyTcTyCon
+generalizeTcTyCon (tc, skol_info, scoped_pairs, tc_res_kind) = panic "generalizeTcTyCon"
+
+
+tcExtendKindEnvWithTyCons :: [TcTyCon] -> TcM a -> TcM a
+tcExtendKindEnvWithTyCons tcs = tcExtendKindEnvList [ (tyConName tc, ATcTyCon tc) | tc <- tcs ]
+
+inferInitialKinds :: [LCsBind Rn] -> TcM [MonoTcTyCon]
+inferInitialKinds decls = do
+  traceTc "inferInitialKinds {" $ ppr (map (tydName . unLoc) decls)
+  tcs <- concatMapM infer_initial_kind decls
+  traceTc "inferInitialKinds done }" empty
+  return tcs
+  where
+    infer_initial_kind = addLocM (getInitialKind InitialKindInfer)
+
+getInitialKind :: InitialKindStrategy -> CsBind Rn -> TcM [TcTyCon]
+getInitialKind strategy (TyFunBind { tyfun_id = L _ name
+                                   , tyfun_body = rhs
+                                   , tyfun_ext = (kv_names, _) }) = do
+  let ctxt = TySynKindCtxt name
+  traceTc "getInitialKind rhs" (ppr rhs)
+  tc <- kcDeclHeader strategy name TypeFunFlavor kv_names $
+        -- case csTyKindSig rhs of
+        --   Just rhs_sig -> TheKind <$> tcLCsKindSig ctxt rhs_sig
+        --   Nothing -> return AnyKind
+        csTyFunResAndFullKinds ctxt rhs
+  return [tc]
+
+getInitialKind _ other = pprPanic "getInitialKind" (ppr other)
+
+csTyFunResAndFullKinds :: UserTypeCtxt -> LCsType Rn -> TcM (Kind, Kind, Arity)
+csTyFunResAndFullKinds ctxt lty =
+  case unLoc lty of
+    CsQualTy _ context ty -> do
+      context' <- tcLCsContext context
+      (res_kind, full_kind, arity) <- csTyFunResAndFullKinds ctxt ty
+      return (addContext context' res_kind, addContext context' full_kind, arity)
+      where
+        addContext :: [KdRel] -> Kind -> Kind
+        addContext context kind = FunKd FKF_C_K (KdContext context) kind
+    CsParTy _ ty -> csTyFunResAndFullKinds ctxt ty
+    CsKindSig _ _ kind -> do
+      kind' <- tcLCsKindSig ctxt kind
+      return (kind', kind', 0)
+    CsTyLamTy _ mg -> case mg of
+      MG _ (L _ [L _ (Match _ _ (L _ pats) (GRHSs _ [L _ (GRHS _ [] body)]))]) -> do
+        res_kind <- case csTyKindSig body of
+                      Just body_sig -> tcLCsKindSig ctxt body_sig
+                      Nothing -> newMetaKindVar
+        full_kind <- mkFullKind pats res_kind
+        let arity = length pats
+        return (res_kind, full_kind, arity)
+        where
+          mkFullKind :: [LPat Rn] -> Kind -> TcM Kind
+          mkFullKind [] k = return k
+          mkFullKind (p:ps) res_k = do
+            k' <- case unLoc p of
+                    TyVarPat _ _ -> newMetaKindVar
+                    ParPat _ p' -> mkFullKind (p' : ps) res_k
+                    ImpPat _ p' -> mkFullKind (p' : ps) res_k
+                    KdSigPat _ _ (CsPSK _ k) -> tcLCsKindSig ctxt k
+                    other -> pprPanic "mkFullKind" (ppr other)
+            (FunKd FKF_K_K k') <$> mkFullKind ps res_k
+      _ -> panic "csTyFunResAndFullKinds"
+    _ -> do
+      kind <- newMetaKindVar
+      return (kind, kind, 0)
+
+-- csTyFunLamBoundArity :: LCsType (CsPass p) -> Arity
+-- csTyFunLamBoundArity lty = case unLoc lty of
+--   CsQualTy _ _ ty -> csTyFunArity ty
+--   CsKindSig _ ty _ -> csTyFunArity ty
+--   CsTyLamTy _ mg -> case mg of
+--     MG _ [Match _ _ pats _] -> length pats
+--     _ -> panic "csTyFunArity"
+--   _ -> 0
+
+kcLTyDecl :: LCsBind Rn -> TcM ()
+kcLTyDecl (L loc decl) = panic "kcLTyDecl"
+
+{- *********************************************************************
+*                                                                      *
+                Sort checking kinds
+*                                                                      *
+********************************************************************* -}
+
+tcLCsKindSig :: UserTypeCtxt -> LCsKind Rn -> TcM Kind
+tcLCsKindSig ctxt cs_kind = do
+  kind <- addErrCtxt (text "In the kind" <+> quotes (ppr cs_kind))
+          $ tcLCsKind cs_kind
+  traceTc "tcLCsKindSig" (ppr cs_kind $$ ppr kind)
+
+  kindGeneralizeNone kind
+  kind <- liftZonkM $ zonkTcKind kind
+
+  checkValidKind ctxt kind
+  traceTc "tcLCsKindSig2" (ppr kind)
+  return kind
+
+tcLCsContext :: LCsContext Rn -> TcM [KdRel]
+tcLCsContext context = panic "tcLCsContext"
+
+{- *********************************************************************
+*                                                                      *
+                Error messages
+*                                                                      *
+********************************************************************* -}
+
+tcMkDeclCtxt :: CsBind Rn -> SDoc
+tcMkDeclCtxt decl = hsep [ text "In the", pprTyDeclFlavor decl
+                         , text "declaration for", quotes (ppr (tydName decl)) ]
+
+tcAddDeclCtxt :: CsBind Rn -> TcM a -> TcM a
+tcAddDeclCtxt decl thing_inside = addErrCtxt (tcMkDeclCtxt decl) thing_inside

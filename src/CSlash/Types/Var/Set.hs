@@ -17,6 +17,8 @@ type TyVarSet = UniqSet TypeVar
 
 type KdVarSet = UniqSet KindVar
 
+type KiVarSet = UniqSet KindVar
+
 emptyVarSet :: VarSet
 emptyVarSet = emptyUniqSet
 
@@ -37,3 +39,19 @@ subVarSet s1 s2 = isEmptyVarSet (s1 `minusVarSet` s2)
 
 pprVarSet :: VarSet -> ([Var] -> SDoc) -> SDoc
 pprVarSet = pprUFM . getUniqSet
+
+type DVarSet = UniqDSet Var
+
+type DKiVarSet = UniqDSet KindVar
+
+emptyDVarSet :: DVarSet
+emptyDVarSet = emptyUniqDSet
+
+extendDVarSet :: DVarSet -> Var -> DVarSet 
+extendDVarSet = addOneToUniqDSet
+
+elemDVarSet :: Var -> DVarSet -> Bool
+elemDVarSet = elementOfUniqDSet
+
+dVarSetToVarSet :: DVarSet -> VarSet
+dVarSetToVarSet = unsafeUFMToUniqSet . udfmToUfm . getUniqDSet

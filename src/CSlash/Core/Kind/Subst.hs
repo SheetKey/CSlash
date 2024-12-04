@@ -97,7 +97,7 @@ subst_kd :: Subst -> Kind -> Kind
 subst_kd subst kd
   = go kd
   where
-    go (KdVarKd kv) = substKdVar subst kv
+    go (KiVarKi kv) = substKdVar subst kv
     go kd@(FunKd { kft_arg = arg, kft_res = res })
       = let !arg' = go arg
             !res' = go res
@@ -112,7 +112,7 @@ subst_kd subst kd
 
 substKdVar :: Subst -> KindVar -> Kind
 substKdVar (Subst _ _ _ kenv) kv
-  = assert (isKdVar kv) $
+  = assert (isKiVar kv) $
     case lookupVarEnv kenv kv of
       Just kd -> kd
-      Nothing -> KdVarKd kv
+      Nothing -> KiVarKi kv

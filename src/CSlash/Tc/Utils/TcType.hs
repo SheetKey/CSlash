@@ -1,11 +1,12 @@
 module CSlash.Tc.Utils.TcType
   ( module CSlash.Tc.Utils.TcType
-  , TcTyVar
+  , TcTyVar, TcKiVar
   ) where
 
 import Prelude hiding ((<>))
 
 import CSlash.Core.Type.Rep
+import CSlash.Core.Kind
 import CSlash.Types.Var
 import CSlash.Core.TyCon
 
@@ -32,6 +33,12 @@ import Data.IORef (IORef)
 ********************************************************************* -}
 
 type TcType = Type
+
+type TcTyCon = TyCon
+type MonoTcTyCon = TcTyCon
+type PolyTcTyCon = TcTyCon
+
+type TcKind = Kind
 
 {- *********************************************************************
 *                                                                      *
@@ -69,17 +76,31 @@ pprTcTyVarDetails (SkolemTv _sk lvl) = text "sk" <> colon <> ppr lvl
 pprTcTyVarDetails (MetaTv { mtv_info = info, mtv_tclvl = tclvl })
   = ppr info <> colon <> ppr tclvl
 
-data MetaDetails
+data MetaDetails' tk
   = Flexi
-  | Indirect TcType
+  | Indirect tk
+
+type MetaDetails = MetaDetails' TcType
 
 data MetaInfo
 
-instance Outputable MetaDetails where
+instance Outputable tk => Outputable (MetaDetails' tk) where
   ppr = undefined
 
 instance Outputable MetaInfo where
   ppr = undefined
+
+data TcKiVarDetails
+  = MetaKv { mkv_info :: MetaInfoK
+           , mkv_ref :: IORef MetaDetailsK
+           , mkv_tclvl :: TcLevel
+           }
+
+type MetaDetailsK = MetaDetails' TcKind
+
+data MetaInfoK
+  = KiVarKind
+  | TauKv
 
 {- *********************************************************************
 *                                                                      *
@@ -94,3 +115,57 @@ instance Outputable TcLevel where
 
 topTcLevel :: TcLevel
 topTcLevel = TcLevel 0
+
+pushTcLevel :: TcLevel -> TcLevel
+pushTcLevel (TcLevel us) = TcLevel (us + 1)
+
+strictlyDeeperThan :: TcLevel -> TcLevel -> Bool
+strictlyDeeperThan (TcLevel lvl) (TcLevel ctxt_lvl) = lvl > ctxt_lvl
+
+tcKiVarLevel :: TcKiVar -> TcLevel
+tcKiVarLevel kv = case tcKiVarDetails kv of
+                    MetaKv { mkv_tclvl = kv_lvl } -> kv_lvl
+
+tcKindLevel :: TcKind -> TcLevel
+tcKindLevel ki = panic "tcKindLevel"
+
+{- *********************************************************************
+*                                                                      *
+                Predicates
+*                                                                      *
+********************************************************************* -}
+
+isPromotableMetaKiVar :: TcKiVar -> Bool
+isPromotableMetaKiVar kv
+  | isKiVar kv
+  , MetaKv { mkv_info = info } <- tcKiVarDetails kv
+  = isTouchableInfoK info
+  | otherwise
+  = False
+
+isMetaKiVar :: TcKiVar -> Bool
+isMetaKiVar kv
+  | isKiVar kv
+  = case tcKiVarDetails kv of
+      MetaKv {} -> True
+  | otherwise = False
+
+isTouchableInfoK :: MetaInfoK -> Bool
+isTouchableInfoK _info = True
+
+metaKiVarRef :: KindVar -> IORef MetaDetailsK
+metaKiVarRef kv = case tcKiVarDetails kv of
+                    MetaKv { mkv_ref = ref } -> ref
+
+setMetaKiVarTcLevel :: TcKiVar -> TcLevel -> TcKiVar
+setMetaKiVarTcLevel kv tclvl = case tcKiVarDetails kv of
+                                 details@(MetaKv {})
+                                   -> setTcKiVarDetails kv (details { mkv_tclvl = tclvl })
+                                 _ -> pprPanic "metaKiVarTcLevel" (ppr kv)
+
+isFlexi :: MetaDetails' tk -> Bool
+isFlexi Flexi = True
+isFlexi _ = False
+
+mkKiVarNamePairs :: [KindVar] -> [(Name, KindVar)]
+mkKiVarNamePairs kvs = [(kiVarName kv, kv) | kv <- kvs ]

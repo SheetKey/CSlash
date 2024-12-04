@@ -146,6 +146,12 @@ csLTyVarLocName
   :: Anno (IdCsP p) ~ SrcSpanAnnN => LCsTyVarBndr (CsPass p) -> LocatedN (IdP (CsPass p))
 csLTyVarLocName (L _ a) = csTyVarLName a
 
+csTyKindSig :: LCsType (CsPass p) -> Maybe (LCsKind (CsPass p))
+csTyKindSig lty = case unLoc lty of
+  CsParTy _ lty' -> csTyKindSig lty'
+  CsKindSig _ _ k -> Just k
+  _ -> Nothing
+
 {- *********************************************************************
 *                                                                      *
                 Building types

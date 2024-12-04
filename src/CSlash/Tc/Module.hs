@@ -25,16 +25,16 @@ import CSlash.Tc.Utils.Monad
 -- import GHC.Tc.Types.Origin
 -- import GHC.Tc.Instance.Family
 -- import GHC.Tc.Gen.Annotation
--- import GHC.Tc.Gen.Bind
+import CSlash.Tc.Gen.Bind
 -- import GHC.Tc.Gen.Default
--- import GHC.Tc.Utils.Env
+import CSlash.Tc.Utils.Env
 -- import GHC.Tc.Gen.Rule
 -- import GHC.Tc.Gen.Foreign
 -- import GHC.Tc.TyCl.Instance
 -- import GHC.Tc.Utils.TcMType
 import CSlash.Tc.Utils.TcType
 -- import GHC.Tc.Solver
--- import GHC.Tc.TyCl
+import CSlash.Tc.CsType
 -- import GHC.Tc.Instance.Typeable ( mkTypeableBinds )
 -- import GHC.Tc.Utils.Backpack
 import CSlash.Tc.Zonk.TcType
@@ -303,8 +303,37 @@ tcTopSrcDecls :: CsGroup Rn -> TcM (TcGblEnv, TcLclEnv)
 tcTopSrcDecls (CsGroup { cs_typeds = type_ds
                        , cs_valds = cs_val_binds@(XValBindsLR (NValBinds val_binds val_sigs))
                        }) = do
-  panic "tcRopSrcDecls"
+  traceTc "Tc2 (src)" empty
+
+  traceTc "Tc3" empty
+
+  tcg_env <- tcTypeDecls type_ds
+  setGblEnv tcg_env $ do
+    traceTc "Tc4" empty
+
+    traceTc "Tc5" empty
+    tc_envs@(tcg_env, tcl_env) <- tcTopBinds val_binds val_sigs
+    restoreEnvs tc_envs $ do
+      traceTc "Tc6" empty
+
+      traceTc "Tc7" empty
+
+      traceTc "Tc7a" empty
+      let sig_names = mkNameSet (collectCsValBinders CollNoDictBinders cs_val_binds)
+                      `minusNameSet` getTypeSigNames val_sigs
+
+          tcg_env' = tcg_env { tcg_sigs = tcg_sigs tcg_env `unionNameSet` sig_names }
+
+      return (tcg_env', tcl_env)
+
 tcTopSrcDecls _ = panic "tcTopSrcDecls: ValBindsIn"
+
+tcTypeDecls :: [TypeGroup Rn] -> TcM TcGblEnv
+tcTypeDecls type_decls = do
+  tcg_env <- tcTyDecls type_decls
+  setGblEnv tcg_env $ do
+    failIfErrsM
+    return tcg_env
 
 {- *********************************************************************
 *                                                                      *

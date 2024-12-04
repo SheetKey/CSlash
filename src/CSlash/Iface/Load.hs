@@ -87,6 +87,59 @@ import Debug.Trace (trace)
 
 {- *********************************************************************
 *                                                                      *
+      tcImportDecl 
+*                                                                      *
+********************************************************************* -}
+
+tcLookupImported_maybe :: Name -> TcM (MaybeErr IfaceMessage TyThing)
+tcLookupImported_maybe name = do
+  cs_env <- getTopEnv
+  mb_thing <- liftIO (lookupType cs_env name)
+  case mb_thing of
+    Just thing -> return (Succeeded thing)
+    Nothing -> tcImportDecl_maybe name
+
+tcImportDecl_maybe :: Name -> TcM (MaybeErr IfaceMessage TyThing)
+tcImportDecl_maybe name
+  | Just thing <- wiredInNameTyThing_maybe name
+  = do when (needWiredInHomeIface thing)
+         $ initIfaceTcRn $ loadWiredInHomeIface name
+       return $ Succeeded thing
+  | otherwise
+  = initIfaceTcRn (importDecl name)
+
+importDecl :: Name -> IfM lcl (MaybeErr IfaceMessage TyThing)
+importDecl name = assert (not (isWiredInName name)) $ do
+  logger <- getLogger
+  let nd_doc = text "Need decl for" <+> ppr name
+  liftIO $ trace_if logger nd_doc
+
+  mb_iface <- assertPpr (isExternalName name) (ppr name) 
+              $ loadInterface nd_doc (nameModule name) ImportBySystem
+
+  case mb_iface of
+    Failed err_msg -> return $ Failed $ Can'tFindInterface err_msg (LookingForName name)
+    Succeeded _ -> do eps <- getEps
+                      case lookupTypeEnv (eps_PTE eps) name of
+                        Just thing -> return $ Succeeded thing
+                        Nothing -> return $ Failed
+                                   $ Can'tFindNameInInterface name
+                                   (filter is_interesting $ nonDetNameEnvElts $ eps_PTE eps)
+  where
+    is_interesting thing = nameModule name == nameModule (getName thing)  
+
+{- *********************************************************************
+*                                                                      *
+           Checks for wired-in things
+*                                                                      *
+********************************************************************* -}
+
+needWiredInHomeIface :: TyThing -> Bool
+needWiredInHomeIface (ATyCon {}) = True
+needWiredInHomeIface _ = False
+
+{- *********************************************************************
+*                                                                      *
         loadSrcInterface, loadOrphanModules, loadInterfaceForName
 
                 These three are called from TcM-land
@@ -126,6 +179,13 @@ loadInterfaceForName doc name = do
         the External Package State
 *                                                                      *
 ********************************************************************* -}
+
+loadWiredInHomeIface :: Name -> IfM lcl ()
+loadWiredInHomeIface name = assert (isWiredInName name) $ do
+  _ <- loadSysInterface doc (nameModule name)
+  return ()
+  where
+    doc = text "Need home interface for wired_in thing" <+> ppr name
 
 loadSysInterface :: SDoc -> Module -> IfM lcl ModIface
 loadSysInterface doc mod_name = loadInterfaceWithException doc mod_name ImportBySystem

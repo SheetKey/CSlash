@@ -131,7 +131,7 @@ mkDataConTy tyvars b_tyvars arg_tys tycon
   = assert (binderVars b_tyvars == tyvars) dc_type
   where
     funKindVars = mkTemplateFunKindVars $ length arg_tys
-    funKinds = KdVarKd <$> funKindVars
+    funKinds = KiVarKi <$> funKindVars
 
     types = Type.TyVarTy <$> tyvars
     res_type = mkTyConApp tycon types
@@ -142,8 +142,8 @@ mkDataConTy tyvars b_tyvars arg_tys tycon
                              _ -> panic "mkDataConType: arg_ty is not 'TyVarTy (TyVar _ _ _)'")
                    <$> arg_tys
     res_kind = case tyConResKind tycon of
-                 kd@(KdVarKd var)
-                   | isKdVar var -> kd
+                 kd@(KiVarKi var)
+                   | isKiVar var -> kd
                  UKd -> UKd
                  AKd -> AKd
                  LKd -> LKd

@@ -5,6 +5,8 @@ import CSlash.Utils.Outputable (SDoc)
 
 data TcTyVarDetails
 
+data TcKiVarDetails
+
 pprTcTyVarDetails :: TcTyVarDetails -> SDoc
 
 vanillaSkolemTvUnk :: HasDebugCallStack => TcTyVarDetails

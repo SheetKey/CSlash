@@ -9,7 +9,7 @@ import CSlash.Core.Kind
 import CSlash.Types.Var
   ( TyVarBinder, TypeVar, KindVar
   , binderVar, binderVars
-  , mkTyVar, mkKdVar
+  , mkTyVar, mkKiVar
   , mkTyVarBinder, mkTyVarBinders )
 import CSlash.Types.Name
 import CSlash.Types.SrcLoc
@@ -64,18 +64,18 @@ exposedPrimTyCons
 ********************************************************************* -}
 
 mkTemplateKindVar :: KindVar
-mkTemplateKindVar = mkKdVar $ mk_kv_name 0 "k"
+mkTemplateKindVar = mkKiVar $ mk_kv_name 0 "k"
 
 mkTemplateKindVars :: Int -> ([KindVar], KindVar)
 mkTemplateKindVars i
-  = ( [ mkKdVar (mk_kv_name u ('k' : show u))
+  = ( [ mkKiVar (mk_kv_name u ('k' : show u))
       | u <- [0..(i-1)]
       ]
-    , mkKdVar (mk_kv_name i ('k' : show i)) )
+    , mkKiVar (mk_kv_name i ('k' : show i)) )
 
 mkTemplateFunKindVars :: Int -> [KindVar]
 mkTemplateFunKindVars i
-  = [ mkKdVar (mk_kv_name u ('k' : 'f' : show u))
+  = [ mkKiVar (mk_kv_name u ('k' : 'f' : show u))
     | u <- [0..(i-1)]
     ]
 
@@ -109,8 +109,8 @@ mkTemplateTyConBinders kds = mkTemplateTyConBindersFrom (length kds) kds
 mkTemplateTyConBindersKind :: Int -> ([TyConBinder], Kind, Kind)
 mkTemplateTyConBindersKind arity
   = let (kind_vars, res_kind_var) = mkTemplateKindVars arity
-        kinds = KdVarKd <$> kind_vars
-        res_kind = KdVarKd res_kind_var
+        kinds = KiVarKi <$> kind_vars
+        res_kind = KiVarKi res_kind_var
         tc_binders = mkTemplateTyConBinders kinds
         tc_kind = foldr (FunKd FKF_K_K) res_kind kinds
     in (tc_binders, res_kind, tc_kind)
@@ -123,7 +123,7 @@ mkTemplateTyConBindersKind arity
 
 {-
 Unlike GHC, we have a single function tycon "FUN" that has a kind.
-Its kind may be UKd, AKd, LKd, or a kdvarkd.
+Its kind may be UKd, AKd, LKd, or a kivarki.
 For kind polymorphism, which we want, we have
   FUN : k1 <= k3, k2 <= k3 => k1 -> k2 -> k3
 
@@ -151,6 +151,6 @@ _mkFUNTyCon :: Kind -> TyCon
 _mkFUNTyCon res_kind = mkPrimTyCon fUNTyConName tc_bndrs res_kind tc_kind
   where
     (kind_vars, _) = mkTemplateKindVars 2
-    kinds = KdVarKd <$> kind_vars
+    kinds = KiVarKi <$> kind_vars
     tc_bndrs = mkTemplateTyConBinders kinds
     tc_kind = foldr (FunKd FKF_K_K) res_kind kinds

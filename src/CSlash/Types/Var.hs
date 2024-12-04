@@ -4,7 +4,7 @@
 
 module CSlash.Types.Var
   ( Var, Id
-  , TypeVar, KindVar, TcTyVar
+  , TypeVar, KindVar, TcTyVar, TcKiVar
 
   , varName, varUnique, varType, varTypeMaybe, varKind, varKindMaybe
   -- , varMult, varMultMaybe
@@ -13,7 +13,7 @@ module CSlash.Types.Var
 
   , mkGlobalVar
 
-  , isTypeVar, isTyVar, isTcTyVar, isKdVar
+  , isTypeVar, isTyVar, isTcTyVar, isKiVar, isTcKiVar
 
   , ForAllTyFlag(..)
   , isVisibleForAllTyFlag, isInvisibleForAllTyFlag
@@ -24,9 +24,10 @@ module CSlash.Types.Var
 
   , ExportFlag(..)
 
-  , mkTyVar, mkKdVar
+  , mkTyVar, mkKiVar, mkTcKiVar
 
   , tyVarName, tyVarKind, tcTyVarDetails
+  , kiVarName, tcKiVarDetails, setTcKiVarDetails
 
   , setTyVarName, setTyVarKind
 
@@ -38,7 +39,7 @@ import Prelude hiding ((<>))
 import {-# SOURCE #-} CSlash.Core.Type.Rep (Type)
 import {-# SOURCE #-} CSlash.Core.Kind (Kind, pprKind)
 import {-# SOURCE #-} CSlash.Tc.Utils.TcType
-  (TcTyVarDetails, pprTcTyVarDetails, vanillaSkolemTvUnk)
+  (TcTyVarDetails, TcKiVarDetails, pprTcTyVarDetails, vanillaSkolemTvUnk)
 import {-# SOURCE #-} CSlash.Types.Id.Info (IdDetails, IdInfo, pprIdDetails)
 
 import CSlash.Types.Name hiding (varName)
@@ -60,6 +61,8 @@ type KindVar = Var
 
 type TcTyVar = Var
 
+type TcKiVar = Var
+
 data Var
   = TyVar
     { varName :: !Name
@@ -75,6 +78,11 @@ data Var
     , realUnique :: {-# UNPACK #-} !Unique
     , varKind :: Kind
     , tc_tv_details :: TcTyVarDetails
+    }
+  | TcKiVar -- for kind inference
+    { varName :: !Name
+    , realUnique :: {-# UNPACK #-} !Unique
+    , tc_kv_details :: TcKiVarDetails
     }
   | Id
     { varName :: !Name
@@ -270,6 +278,9 @@ instance NamedThing tv => NamedThing (VarBndr tv flag) where
 tyVarName :: TypeVar -> Name
 tyVarName = varName
 
+kiVarName :: KindVar -> Name
+kiVarName = varName
+
 tyVarKind :: TypeVar -> Kind
 tyVarKind = varKind
 
@@ -285,13 +296,26 @@ mkTyVar name kind = TyVar { varName = name
                           , varKind = kind
                           }
 
-mkKdVar :: Name -> KindVar
-mkKdVar name = KdVar { varName = name, realUnique = nameUnique name }
+mkKiVar :: Name -> KindVar
+mkKiVar name = KdVar { varName = name, realUnique = nameUnique name }
+
+mkTcKiVar :: Name -> TcKiVarDetails -> TcKiVar
+mkTcKiVar name details
+  = TcKiVar { varName = name
+            , realUnique = nameUnique name
+            , tc_kv_details = details }
 
 tcTyVarDetails :: TypeVar -> TcTyVarDetails
 tcTyVarDetails (TcTyVar { tc_tv_details = details }) = details
 tcTyVarDetails (TyVar {}) = vanillaSkolemTvUnk
 tcTyVarDetails var = pprPanic "tcTyVarDetails" (ppr var <+> colon <+> pprKind (tyVarKind var))
+
+tcKiVarDetails :: KindVar -> TcKiVarDetails
+tcKiVarDetails (TcKiVar { tc_kv_details = details }) = details
+tcKiVarDetails var = pprPanic "tcKiVarDetails" (ppr var)
+
+setTcKiVarDetails :: KindVar -> TcKiVarDetails -> KindVar
+setTcKiVarDetails kv details = kv { tc_kv_details = details }
 
 {- *********************************************************************
 *                                                                      *
@@ -332,6 +356,10 @@ isTcTyVar :: Var -> Bool
 isTcTyVar (TcTyVar {}) = True
 isTcTyVar _ = False
 
-isKdVar :: Var -> Bool
-isKdVar (KdVar {}) = True
-isKdVar _ = False
+isKiVar :: Var -> Bool
+isKiVar (KdVar {}) = True
+isKiVar _ = False
+
+isTcKiVar :: Var -> Bool
+isTcKiVar (TcKiVar {}) = True
+isTcKiVar _ = False

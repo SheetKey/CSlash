@@ -19,11 +19,13 @@ import CSlash.Data.FastString
 import CSlash.Utils.Outputable
 import CSlash.Utils.Panic
 import CSlash.Types.Unique
+import CSlash.Types.Unique.Supply
 
 import GHC.Exception
 import GHC.Stack (callStack)
 
 import CSlash.Utils.Misc
+import Control.Monad.IO.Class ( MonadIO(..) )
 
 data UserTypeCtxt
   = FunSigCtxt Name ReportRedundantConstraints
@@ -36,6 +38,7 @@ data UserTypeCtxt
   | GenSigCtxt
   | SigmaCtxt
   | TyVarBndrKindCtxt Name
+  | TySynKindCtxt Name
   deriving (Eq)
 
 data ReportRedundantConstraints
@@ -59,6 +62,11 @@ unkSkol = SkolemInfo (mkUniqueGrimily 0) unkSkolAnon
 
 unkSkolAnon :: HasDebugCallStack => SkolemInfoAnon
 unkSkolAnon = UnkSkol callStack
+
+mkSkolemInfo :: MonadIO m => SkolemInfoAnon -> m SkolemInfo
+mkSkolemInfo sk_anon = do
+  u <- liftIO $! uniqFromTag 's'
+  return (SkolemInfo u sk_anon)
 
 data TyVarBndrs = CsTyVarBndrsRn [CsTyVarBndr Rn]
 
