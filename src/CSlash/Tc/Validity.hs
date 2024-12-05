@@ -71,4 +71,4 @@ import Data.List.NonEmpty ( NonEmpty(..) )
 ********************************************************************* -}
 
 checkValidKind :: UserTypeCtxt -> Kind -> TcM ()
-checkValidKind ctxt ki = panic "checkValidKind"
+checkValidKind _ctxt ki = traceTc "checkValidKind" (ppr ki)
