@@ -134,8 +134,30 @@ zonkTyVarKind tv = do
 *                                                                      *
 ********************************************************************* -}
 
-zonkTcKind :: Kind -> ZonkM Kind
-zonkTcKind kv = panic "zonkTcKind"
+zonkTcKind :: TcKind -> ZonkM TcKind
+zonkTcKinds :: [TcKind] -> ZonkM [TcKind]
+(zonkTcKind, zonkTcKinds) = mapKind zonkTcKindMapper
+
+zonkTcKindMapper :: KindMapper () ZonkM
+zonkTcKindMapper = KindMapper
+  { km_kivar = const zonkTcKiVar
+  , km_UKd = const $ return UKd
+  , km_AKd = const $ return AKd
+  , km_LKd = const $ return LKd
+  }
+
+zonkTcKiVar :: TcKiVar -> ZonkM TcKind
+zonkTcKiVar kv = do
+  massertPpr (isTcKiVar kv) (ppr kv)
+  case tcKiVarDetails kv of
+    MetaKv { mkv_ref = ref } -> do
+      cts <- readTcRef ref
+      case cts of
+        Flexi -> return $ mkKiVarKi kv
+        Indirect ki -> do
+          zki <- zonkTcKind ki
+          writeTcRef ref (Indirect zki)
+          return zki
 
 {- *********************************************************************
 *                                                                      *

@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 
@@ -115,3 +116,51 @@ foldKind (KindFolder { kf_view = view
 
 noKindView :: Kind -> Maybe Kind
 noKindView _ = Nothing
+
+{- *********************************************************************
+*                                                                      *
+                mapKind
+*                                                                      *
+********************************************************************* -}
+
+data KindMapper env m = KindMapper
+  { km_kivar :: env -> KindVar -> m Kind
+  , km_UKd :: env -> m Kind
+  , km_AKd :: env -> m Kind
+  , km_LKd :: env -> m Kind
+  }
+
+{-# INLINE mapKind #-}
+mapKind :: Monad m => KindMapper () m -> (Kind -> m Kind, [Kind] -> m [Kind])
+mapKind mapper = case mapKindX mapper of
+                   (go_ki, go_kis) -> (go_ki (), go_kis ())
+
+{-# INLINE mapKindX #-}
+mapKindX :: Monad m => KindMapper env m -> (env -> Kind -> m Kind, env -> [Kind] -> m [Kind])
+mapKindX (KindMapper { km_kivar = kivar
+                     , km_UKd = ukd
+                     , km_AKd = akd
+                     , km_LKd = lkd })
+  = (go_ki, go_kis)
+  where
+    go_kis !_ [] = return []
+    go_kis !env (ki:kis) = (:) <$> go_ki env ki <*> go_kis env kis
+
+    go_ki !env (KiVarKi kv) = kivar env kv
+    go_ki !env UKd = ukd env
+    go_ki !env AKd = akd env
+    go_ki !env LKd = lkd env
+    go_ki !env ki@(FunKd _ arg res) = do
+      arg' <- go_ki env arg
+      res' <- go_ki env res
+      return ki { kft_arg = arg', kft_res = res' }
+    go_ki !env (KdContext rels) = KdContext <$> traverse (go_rel env) rels
+
+    go_rel !env (LTKd k1 k2) = do
+      k1' <- go_ki env k1 
+      k2' <- go_ki env k2
+      return $ LTKd k1' k2'
+    go_rel !env (LTEQKd k1 k2) = do
+      k1' <- go_ki env k1 
+      k2' <- go_ki env k2
+      return $ LTKd k1' k2'
