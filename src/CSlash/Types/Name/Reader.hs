@@ -46,27 +46,27 @@ data RdrName
 unknownToVar :: RdrName -> RdrName
 unknownToVar (Unqual (OccName UNKNOWN_NS fs)) = Unqual (OccName VarName fs)
 unknownToVar (Qual mn (OccName UNKNOWN_NS fs)) = Qual mn (OccName VarName fs)
-unknownToVar _ = error "unknownToVar"
+unknownToVar other = pprPanic "unknownToVar" (ppr other)
 
 unknownToTv :: RdrName -> RdrName
 unknownToTv (Unqual (OccName UNKNOWN_NS fs)) = Unqual (OccName TvName fs)  
 unknownToTv (Qual mn (OccName UNKNOWN_NS fs)) = Qual mn (OccName TvName fs)
-unknownToTv _ = error "unknownToVar"
+unknownToTv other = pprPanic "unknownToTv" (ppr other)
 
 unknownToKv :: RdrName -> RdrName
 unknownToKv (Unqual (OccName UNKNOWN_NS fs)) = Unqual (OccName KvName fs)  
 unknownToKv (Qual mn (OccName UNKNOWN_NS fs)) = Qual mn (OccName KvName fs)
-unknownToKv _ = error "unknownToVar"
+unknownToKv other = pprPanic "unknownToKv" (ppr other)
 
 unknownToData :: RdrName -> RdrName
 unknownToData (Unqual (OccName UNKNOWN_NS fs)) = Unqual (OccName DataName fs)  
 unknownToData (Qual mn (OccName UNKNOWN_NS fs)) = Qual mn (OccName DataName fs)
-unknownToData _ = error "unknownToVar"
+unknownToData other = pprPanic "unknownToData" (ppr other)
 
 unknownToTcCls :: RdrName -> RdrName
 unknownToTcCls (Unqual (OccName UNKNOWN_NS fs)) = Unqual (OccName TcClsName fs)  
 unknownToTcCls (Qual mn (OccName UNKNOWN_NS fs)) = Qual mn (OccName TcClsName fs)
-unknownToTcCls _ = error "unknownToVar"
+unknownToTcCls other = pprPanic "unknownToTcCls" (ppr other)
 
 instance HasOccName RdrName where
   occName = rdrNameOcc
