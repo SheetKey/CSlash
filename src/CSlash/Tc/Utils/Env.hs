@@ -95,6 +95,13 @@ tcLookup name = do
     Just thing -> return thing
     Nothing -> AGlobal <$> tcLookupGlobal name
 
+tcLookupTcTyCon :: HasDebugCallStack => Name -> TcM TcTyCon
+tcLookupTcTyCon name = do
+  thing <- tcLookup name
+  case thing of
+    ATcTyCon tc -> return tc
+    _ -> pprPanic "tcLookupTcTyCon" (ppr name)
+
 tcExtendKindEnvList :: [(Name, TcTyThing)] -> TcM r -> TcM r
 tcExtendKindEnvList things thing_inside = do
   traceTc "tcExtendKindEnvList" (ppr things)

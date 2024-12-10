@@ -12,6 +12,8 @@ module CSlash.Core.Type
   , binderVar, binderVars
 
   , coreView, coreFullView
+
+  , typeKind
   ) where
 
 import CSlash.Types.Basic
@@ -20,6 +22,7 @@ import CSlash.Core.Type.Rep
 import CSlash.Core.Type.Subst
 import CSlash.Core.Type.FVs
 
+import CSlash.Core.Kind
 import CSlash.Core.Kind.Subst
 
 import CSlash.Types.Var
@@ -128,6 +131,15 @@ mkAppTys :: Type -> [Type] -> Type
 mkAppTys ty1 [] = ty1
 mkAppTys (TyConApp tc tys1) tys2 = mkTyConApp tc (tys1 ++ tys2)
 mkAppTys ty1 tys2 = foldl' AppTy ty1 tys2
+
+{- *********************************************************************
+*                                                                      *
+        The kind of a type
+*                                                                      *
+********************************************************************* -}
+
+typeKind :: HasDebugCallStack => Type -> Kind
+typeKind _ = panic "typeKind"
 
 {- *********************************************************************
 *                                                                      *

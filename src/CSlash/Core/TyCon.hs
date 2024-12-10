@@ -282,7 +282,7 @@ isTupleTyCon (TyCon { tyConDetails = details })
 --      TcTyCon
 -------------------------------------------- -}
 
-tcTyConScopedKiVars :: TyCon -> [(Name, TcTyVar)]
+tcTyConScopedKiVars :: TyCon -> [(Name, TcKiVar)]
 tcTyConScopedKiVars tc@(TyCon { tyConDetails = details })
   | TcTyCon { tctc_scoped_kvs = scoped_kvs } <- details = scoped_kvs
   | otherwise = pprPanic "tcTyConScopedKiVars" (ppr tc)

@@ -10,3 +10,5 @@ data TcKiVarDetails
 pprTcTyVarDetails :: TcTyVarDetails -> SDoc
 
 vanillaSkolemTvUnk :: HasDebugCallStack => TcTyVarDetails
+
+vanillaSkolemKvUnk :: HasDebugCallStack => TcKiVarDetails

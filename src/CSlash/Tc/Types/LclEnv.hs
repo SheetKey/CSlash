@@ -15,10 +15,9 @@ import CSlash.Types.Basic ( TopLevelFlag )
 import CSlash.Types.Error ( Messages )
 
 import CSlash.Tc.Types.BasicTypes
--- import GHC.Tc.Types.TH
 import CSlash.Tc.Types.TcRef
 import CSlash.Tc.Types.ErrCtxt
--- import GHC.Tc.Types.Constraint ( WantedConstraints )
+import CSlash.Tc.Types.Constraint ( WantedConstraints )
 
 {- *********************************************************************
 *                                                                      *
@@ -29,7 +28,7 @@ import CSlash.Tc.Types.ErrCtxt
 data TcLclEnv = TcLclEnv
   { tcl_lcl_ctxt :: !TcLclCtxt
   , tcl_usage :: TcRef UsageEnv
-  -- , tcl_lie :: TcRef WantedConstraints
+  , tcl_lie :: TcRef WantedConstraints
   , tcl_errs :: TcRef (Messages TcRnMessage)
   }
 

@@ -25,6 +25,48 @@ runKdVars f = appEndo f emptyVarSet
 
 {- *********************************************************************
 *                                                                      *
+          Deep free variables
+*                                                                      *
+********************************************************************* -}
+
+kiVarsOfKind :: Kind -> KdVarSet
+kiVarsOfKind ki = runKdVars (deep_ki ki)
+
+kiVarsOfKinds :: [Kind] -> KdVarSet
+kiVarsOfKinds kis = runKdVars (deep_kis kis)
+
+deep_ki :: Kind -> Endo KdVarSet
+deep_kis :: [Kind] -> Endo KdVarSet
+(deep_ki, deep_kis) = foldKind deepKvFolder emptyVarSet
+
+deepKvFolder :: KindFolder KdVarSet (Endo KdVarSet)
+deepKvFolder = KindFolder { kf_view = noKindView
+                          , kf_kivar = do_kv
+                          , kf_UKd = mempty
+                          , kf_AKd = mempty
+                          , kf_LKd = mempty
+                          , kf_ctxt = do_ctxt }
+  where
+    do_kv is v = Endo do_it
+      where
+        do_it acc | v `elemVarSet` is = acc
+                  | v `elemVarSet` acc = acc
+                  | otherwise = acc `extendVarSet` v
+
+    do_ctxt is ctxt = Endo do_it
+      where
+        get_kinds (LTKd k1 k2) = [k1, k2]
+        get_kinds (LTEQKd k1 k2) = [k1, k2]
+
+        kinds = concatMap get_kinds ctxt
+
+        kvs = kiVarsOfKinds kinds
+
+        do_it acc = let kvs' = kvs `minusVarSet` is
+                    in acc `unionVarSet` kvs'
+
+{- *********************************************************************
+*                                                                      *
           Shallow free variables
 *                                                                      *
 ********************************************************************* -}

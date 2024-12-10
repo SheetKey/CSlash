@@ -146,7 +146,7 @@ kcTyGroup kindless_decls = do
   return (poly_tcs, kindless_names)
   where
     ppr_tc_kinds tcs = vcat (map pp_tc tcs)
-    pp_tc tc = ppr (tyConName tc) <+> dcolon <+> ppr (tyConKind tc)
+    pp_tc tc = ppr (tyConName tc) <+> colon <+> ppr (tyConKind tc)
 
 type ScopedPairs = [(Name, TcTyVar)]
 
@@ -288,29 +288,20 @@ csTyFunResAndFullKinds ctxt lty =
 --   _ -> 0
 
 kcLTyDecl :: LCsBind Rn -> TcM ()
-kcLTyDecl (L loc decl) = panic "kcLTyDecl"
+kcLTyDecl (L loc decl) = setSrcSpanA loc $ do
+  let tc_name = tydName decl
+  tycon <- tcLookupTcTyCon tc_name
+  traceTc "kcTyDecl {" (ppr tc_name)
+  addErrCtxt (tcMkDeclCtxt decl)
+    $ kcTyDecl decl tycon
+  traceTc "kcTyDecl done }" (ppr tc_name)
 
-{- *********************************************************************
-*                                                                      *
-                Sort checking kinds
-*                                                                      *
-********************************************************************* -}
-
-tcLCsKindSig :: UserTypeCtxt -> LCsKind Rn -> TcM Kind
-tcLCsKindSig ctxt cs_kind = do
-  kind <- addErrCtxt (text "In the kind" <+> quotes (ppr cs_kind))
-          $ tcLCsKind cs_kind
-  traceTc "tcLCsKindSig" (ppr cs_kind $$ ppr kind)
-
-  kindGeneralizeNone kind
-  kind <- liftZonkM $ zonkTcKind kind
-
-  checkValidKind ctxt kind
-  traceTc "tcLCsKindSig2" (ppr kind)
-  return kind
-
-tcLCsContext :: LCsContext Rn -> TcM [KdRel]
-tcLCsContext context = panic "tcLCsContext"
+kcTyDecl :: CsBind Rn -> MonoTcTyCon -> TcM ()
+kcTyDecl (TyFunBind { tyfun_body = rhs }) tycon
+  = tcExtendNameKiVarEnv (tcTyConScopedKiVars tycon) $ 
+    let kind = tyConKind tycon
+    in discardResult $ tcCheckLCsType rhs (TheKind kind)
+kcTyDecl _ _ = panic "kcTyDecl/unreachable"
 
 {- *********************************************************************
 *                                                                      *

@@ -61,6 +61,12 @@ mkTyVarTys = map mkTyVarTy
 mkNakedTyConTy :: TyCon -> Type
 mkNakedTyConTy tycon = TyConApp tycon []
 
+mkForAllTys :: [ForAllTyBinder] -> Type -> Type
+mkForAllTys tyvars ty = foldr ForAllTy ty tyvars
+
+tcMkFunTy :: Kind -> Type -> Type -> Type
+tcMkFunTy = FunTy 
+
 {- *********************************************************************
 *                                                                      *
                 foldType

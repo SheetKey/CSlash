@@ -34,6 +34,8 @@ import Data.IORef (IORef)
 
 type TcType = Type
 
+type TcTyVarBinder = TyVarBinder
+
 type TcTyCon = TyCon
 type MonoTcTyCon = TcTyCon
 type PolyTcTyCon = TcTyCon
@@ -91,10 +93,14 @@ instance Outputable MetaInfo where
   ppr = undefined
 
 data TcKiVarDetails
-  = MetaKv { mkv_info :: MetaInfoK
+  = SkolemKv SkolemInfo TcLevel
+  | MetaKv { mkv_info :: MetaInfoK
            , mkv_ref :: IORef MetaDetailsK
            , mkv_tclvl :: TcLevel
            }
+
+vanillaSkolemKvUnk :: HasDebugCallStack => TcKiVarDetails
+vanillaSkolemKvUnk = SkolemKv unkSkol topTcLevel
 
 type MetaDetailsK = MetaDetails' TcKind
 
@@ -122,9 +128,13 @@ pushTcLevel (TcLevel us) = TcLevel (us + 1)
 strictlyDeeperThan :: TcLevel -> TcLevel -> Bool
 strictlyDeeperThan (TcLevel lvl) (TcLevel ctxt_lvl) = lvl > ctxt_lvl
 
+deeperThanOrSame :: TcLevel -> TcLevel -> Bool
+deeperThanOrSame (TcLevel v_tclvl) (TcLevel ctxt_tclvl) = v_tclvl >= ctxt_tclvl
+
 tcKiVarLevel :: TcKiVar -> TcLevel
 tcKiVarLevel kv = case tcKiVarDetails kv of
                     MetaKv { mkv_tclvl = kv_lvl } -> kv_lvl
+                    SkolemKv _ kv_lvl -> kv_lvl
 
 tcKindLevel :: TcKind -> TcLevel
 tcKindLevel ki = panic "tcKindLevel"
@@ -148,6 +158,7 @@ isMetaKiVar kv
   | isKiVar kv
   = case tcKiVarDetails kv of
       MetaKv {} -> True
+      _ -> False
   | otherwise = False
 
 isTouchableInfoK :: MetaInfoK -> Bool
@@ -156,6 +167,7 @@ isTouchableInfoK _info = True
 metaKiVarRef :: KindVar -> IORef MetaDetailsK
 metaKiVarRef kv = case tcKiVarDetails kv of
                     MetaKv { mkv_ref = ref } -> ref
+                    _ -> pprPanic "metaKiVarRef" (ppr kv)
 
 setMetaKiVarTcLevel :: TcKiVar -> TcLevel -> TcKiVar
 setMetaKiVarTcLevel kv tclvl = case tcKiVarDetails kv of
@@ -169,3 +181,12 @@ isFlexi _ = False
 
 mkKiVarNamePairs :: [KindVar] -> [(Name, KindVar)]
 mkKiVarNamePairs kvs = [(kiVarName kv, kv) | kv <- kvs ]
+
+{- *********************************************************************
+*                                                                      *
+          Expanding and splitting
+*                                                                      *
+********************************************************************* -}
+
+tcSplitFunKi_maybe :: Kind -> Maybe (Kind, Kind)
+tcSplitFunKi_maybe = splitFunKi_maybe

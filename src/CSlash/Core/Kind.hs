@@ -43,6 +43,9 @@ instance Outputable Kind where
 pprKind :: Kind -> SDoc
 pprKind _ = text "{pprKind not defined}"
 
+debugPprKind :: Kind -> SDoc
+debugPprKind _ = text "{debugPprKind not defined}"
+
 data FunKdFlag
   = FKF_K_K -- Kind -> Kind
   | FKF_C_K -- Context -> Kind            -- IGNORE TO RIGHT   -- LT/LTEQ -> Kind
@@ -164,3 +167,28 @@ mapKindX (KindMapper { km_kivar = kivar
       k1' <- go_ki env k1 
       k2' <- go_ki env k2
       return $ LTKd k1' k2'
+
+{- *********************************************************************
+*                                                                      *
+                      KiVarKi
+*                                                                      *
+********************************************************************* -}
+
+getKiVar_maybe :: Kind -> Maybe KindVar
+getKiVar_maybe (KiVarKi kv) = Just kv
+getKiVar_maybe _ = Nothing
+
+{- *********************************************************************
+*                                                                      *
+                      FunKd
+*                                                                      *
+********************************************************************* -}
+
+{-# INLINE splitFunKi_maybe #-}
+splitFunKi_maybe :: Kind -> Maybe (Kind, Kind)
+splitFunKi_maybe ki = case ki of
+  FunKd FKF_C_K c ki -> case splitFunKi_maybe ki of
+                               Nothing -> Nothing
+                               Just (k1, k2) -> Just (FunKd FKF_C_K c k1, FunKd FKF_C_K c k2)
+  FunKd FKF_K_K k1 k2 -> Just (k1, k2)
+  _ -> Nothing

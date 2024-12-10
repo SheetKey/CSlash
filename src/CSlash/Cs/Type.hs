@@ -113,6 +113,10 @@ type instance XTyMissing Ps = EpAnn Bool
 type instance XTyMissing Rn = NoExtField
 type instance XTyMissing Tc = NoExtField -- should be Scaled Type
 
+type instance XValArg (CsPass _) = NoExtField
+type instance XTypeArg (CsPass _) = NoExtField
+type instance XArgPar (CsPass _) = SrcSpan
+
 data EpAnnUnboundTyVar = EpAnnUnboundTyVar
   { csUnboundTyBackquotes :: (EpaLocation, EpaLocation)
   , csUnboundTyHole :: EpaLocation
@@ -320,6 +324,11 @@ ppr_fun_ty mult ty1 ty2
         p2 = ppr_mono_lty ty2
         arr = pprCsArrow mult
     in sep [p1, arr <+> p2]
+
+instance (Outputable tm, Outputable ty) => Outputable (CsArg (CsPass p) tm ty) where
+  ppr (CsValArg _ tm) = text "CsValArg" <+> ppr tm
+  ppr (CsTypeArg _ ty) = text "CsTypeArg" <+> ppr ty
+  ppr (CsArgPar sp) = text "CsArgPar" <+> ppr sp
 
 type instance Anno (CsType (CsPass p)) = SrcSpanAnnA
 type instance Anno (CsSigType (CsPass p)) = SrcSpanAnnA

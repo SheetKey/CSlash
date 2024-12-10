@@ -150,6 +150,7 @@ zonkTcKiVar :: TcKiVar -> ZonkM TcKind
 zonkTcKiVar kv = do
   massertPpr (isTcKiVar kv) (ppr kv)
   case tcKiVarDetails kv of
+    SkolemKv {} -> return $ mkKiVarKi kv
     MetaKv { mkv_ref = ref } -> do
       cts <- readTcRef ref
       case cts of

@@ -61,6 +61,11 @@ data TcTyThing
   | AKiVar Name TcKiVar -- should make a new type 'TcKiThing'
   | ATcTyCon TyCon
 
+tcTyThingTyCon_maybe :: TcTyThing -> Maybe TyCon
+tcTyThingTyCon_maybe (AGlobal (ATyCon tc)) = Just tc
+tcTyThingTyCon_maybe (ATcTyCon tc_tc) = Just tc_tc
+tcTyThingTyCon_maybe _ = Nothing
+
 instance Outputable TcTyThing where
   ppr (AGlobal g) = ppr g
   ppr elt@(ATcId {}) = text "Identifier"

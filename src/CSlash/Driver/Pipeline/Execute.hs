@@ -367,7 +367,6 @@ runCsPostTcPhase
   -> IO CsBackendAction
 runCsPostTcPhase cs_env mod_summary tc_result tc_warnings mb_old_hash =
   runCs cs_env $ csDesugarAndSimplify mod_summary tc_result tc_warnings mb_old_hash
-  
 
 phaseOutputFilenameNew :: Phase -> PipeEnv -> CsEnv -> Maybe ModLocation -> IO FilePath
 phaseOutputFilenameNew next_phase pipe_env cs_env maybe_loc =

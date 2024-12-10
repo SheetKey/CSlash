@@ -82,6 +82,22 @@ newMetaKiVarName str = newSysName (mkKiVarOccFS str)
 cloneMetaKiVarName :: Name -> TcM Name
 cloneMetaKiVarName name = newSysName (nameOccName name)
 
+metaInfoToKiVarName :: MetaInfoK -> FastString
+metaInfoToKiVarName meta_info = case meta_info of
+  TauKv -> fsLit "kt"
+  KiVarKind -> fsLit "k"
+
+newAnonMetaKiVar :: MetaInfoK -> TcM TcKiVar
+newAnonMetaKiVar mi = newNamedAnonMetaKiVar (metaInfoToKiVarName mi) mi
+
+newNamedAnonMetaKiVar :: FastString -> MetaInfoK -> TcM TcKiVar
+newNamedAnonMetaKiVar kivar_name meta_info = do
+  name <- newMetaKiVarName kivar_name
+  details <- newMetaDetailsK meta_info
+  let kivar = mkTcKiVar name details
+  traceTc "newAnonMetaKiVar" (ppr kivar)
+  return kivar
+
 newMetaDetailsK :: MetaInfoK -> TcM TcKiVarDetails
 newMetaDetailsK info = do
   ref <- newMutVar Flexi
@@ -109,6 +125,23 @@ isFilledMetaKiVar_maybe kv
          Flexi -> return Nothing
   | otherwise
   = return Nothing
+
+{- *********************************************************************
+*                                                                      *
+        MetaKvs: TauKvs
+*                                                                      *
+********************************************************************* -}
+
+newOpenTypeKind :: TcM TcKind
+newOpenTypeKind = newFlexiKiVarKi
+
+newFlexiKiVar :: TcM TcKiVar
+newFlexiKiVar = newAnonMetaKiVar TauKv
+
+newFlexiKiVarKi :: TcM TcKind
+newFlexiKiVarKi = do
+  tc_kivar <- newFlexiKiVar
+  return $ mkKiVarKi tc_kivar
 
 {- *********************************************************************
 *                                                                      *

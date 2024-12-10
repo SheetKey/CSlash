@@ -39,7 +39,7 @@ import Prelude hiding ((<>))
 import {-# SOURCE #-} CSlash.Core.Type.Rep (Type)
 import {-# SOURCE #-} CSlash.Core.Kind (Kind, pprKind)
 import {-# SOURCE #-} CSlash.Tc.Utils.TcType
-  (TcTyVarDetails, TcKiVarDetails, pprTcTyVarDetails, vanillaSkolemTvUnk)
+  (TcTyVarDetails, TcKiVarDetails, pprTcTyVarDetails, vanillaSkolemTvUnk, vanillaSkolemKvUnk)
 import {-# SOURCE #-} CSlash.Types.Id.Info (IdDetails, IdInfo, pprIdDetails)
 
 import CSlash.Types.Name hiding (varName)
@@ -312,6 +312,7 @@ tcTyVarDetails var = pprPanic "tcTyVarDetails" (ppr var <+> colon <+> pprKind (t
 
 tcKiVarDetails :: KindVar -> TcKiVarDetails
 tcKiVarDetails (TcKiVar { tc_kv_details = details }) = details
+tcKiVarDetails (KdVar {}) = vanillaSkolemKvUnk
 tcKiVarDetails var = pprPanic "tcKiVarDetails" (ppr var)
 
 setTcKiVarDetails :: KindVar -> TcKiVarDetails -> KindVar

@@ -13,7 +13,7 @@ import CSlash.Builtin.Names
 
 import CSlash.Tc.Errors.Types
 import CSlash.Tc.Types     -- Re-export all
--- import GHC.Tc.Types.Constraint
+import CSlash.Tc.Types.Constraint
 -- import GHC.Tc.Types.Evidence
 import CSlash.Tc.Types.Origin
 import CSlash.Tc.Types.TcRef
@@ -161,6 +161,7 @@ initTcWithGbl
   -> TcM r
   -> IO (Messages TcRnMessage, Maybe r)
 initTcWithGbl cs_env gbl_env loc do_this = do
+  lie_var <- newIORef emptyWC
   errs_var <- newIORef emptyMessages
   usage_var <- newIORef zeroUE
   let lcl_env = TcLclEnv
@@ -173,6 +174,7 @@ initTcWithGbl cs_env gbl_env loc do_this = do
                                  , tcl_tclvl = topTcLevel
                                  }
                 , tcl_usage = usage_var
+                , tcl_lie = lie_var
                 , tcl_errs = errs_var
                 }
   maybe_res <- initTcRnIf 'a' cs_env gbl_env lcl_env $ do
@@ -180,6 +182,10 @@ initTcWithGbl cs_env gbl_env loc do_this = do
     case r of
       Right res -> return $ Just res
       Left _ -> return Nothing
+
+  lie <- readIORef (tcl_lie lcl_env)
+  when (isJust maybe_res && not (isEmptyWC lie))
+    $ pprPanic "initTc: unsolved constraints" (ppr lie)
 
   msgs <- readIORef $ tcl_errs lcl_env
 
@@ -208,6 +214,9 @@ initTcRnIf uniq_tag cs_env gbl_env lcl_env thing_inside =
                 Simple accessors
 *                                                                      *
 ********************************************************************* -}
+
+discardResult :: TcM a -> TcM ()
+discardResult a = a >> return ()
 
 getTopEnv :: TcRnIf gbl lcl CsEnv
 getTopEnv = do { env <- getEnv; return (env_top env) }
@@ -576,6 +585,21 @@ pushCtxt ctxt = updLclEnv (updCtxt ctxt)
 
 updCtxt :: ErrCtxt -> TcLclEnv -> TcLclEnv
 updCtxt  ctxt env = addLclEnvErrCtxt ctxt env
+ 
+getCtLocM :: CtOrigin -> TcM CtLoc
+getCtLocM origin = do
+  env <- getLclEnv
+  return $ CtLoc { ctl_origin = origin
+                 , ctl_env = mkCtLocEnv env
+                 , ctl_depth = initialSubGoalDepth }
+
+mkCtLocEnv :: TcLclEnv -> CtLocEnv
+mkCtLocEnv lcl_env = CtLocEnv { ctl_bndrs = getLclEnvBinderStack lcl_env
+                              , ctl_ctxt = getLclEnvErrCtxt lcl_env
+                              , ctl_loc = getLclEnvLoc lcl_env
+                              , ctl_tclvl = getLclEnvTcLevel lcl_env
+                              , ctl_rdr = getLclEnvRdrEnv lcl_env
+                              }
 
 {- *********************************************************************
 *                                                                      *
@@ -687,6 +711,22 @@ mkErrInfo env ctxts = go False 0 env ctxts
 
 mAX_CONTEXTS :: Int
 mAX_CONTEXTS = 3
+
+{- *********************************************************************
+*                                                                      *
+             Type constraints
+*                                                                      *
+********************************************************************* -}
+
+getConstraintVar :: TcM (TcRef WantedConstraints)
+getConstraintVar = do
+  env <- getLclEnv
+  return (tcl_lie env)
+
+emitSimples :: Cts -> TcM ()
+emitSimples cts = do
+  lie_var <- getConstraintVar
+  updTcRef lie_var (`addSimples` cts)
 
 pushTcLevelM :: TcM a -> TcM (TcLevel, a)
 pushTcLevelM thing_inside = do

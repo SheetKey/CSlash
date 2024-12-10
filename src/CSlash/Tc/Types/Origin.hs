@@ -68,7 +68,22 @@ mkSkolemInfo sk_anon = do
   u <- liftIO $! uniqFromTag 's'
   return (SkolemInfo u sk_anon)
 
+{- *********************************************************************
+*                                                                      *
+            CtOrigin
+*                                                                      *
+********************************************************************* -}
+
+data KindedThing
+  = CsTypeRnThing (CsType Rn)
+
 data TyVarBndrs = CsTyVarBndrsRn [CsTyVarBndr Rn]
 
 instance Outputable TyVarBndrs where
   ppr (CsTyVarBndrsRn bndrs) = fsep (map ppr bndrs)
+
+data CtOrigin
+  = KindEqOrigin { keq_actual :: TcKind
+                 , keq_expected :: TcKind
+                 , keq_thing :: Maybe KindedThing
+                 }

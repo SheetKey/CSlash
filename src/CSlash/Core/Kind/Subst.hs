@@ -48,6 +48,9 @@ isEmptySubst (Subst _ id_env tv_env kv_env)
 isEmptyKvSubst :: Subst -> Bool
 isEmptyKvSubst (Subst _ _ _ kv_env) = isEmptyVarEnv kv_env
 
+zapSubst :: Subst -> Subst
+zapSubst (Subst in_scope _ _ _) = Subst in_scope emptyVarEnv emptyVarEnv emptyVarEnv
+
 instance Outputable Subst where
   ppr (Subst in_scope ids tvs kvs)
       =  text "<InScope =" <+> in_scope_doc

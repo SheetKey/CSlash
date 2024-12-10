@@ -67,6 +67,7 @@ library
                     , CSlash.Core.ConLike
                     , CSlash.Core.DataCon
                     , CSlash.Core.Kind
+                    , CSlash.Core.Kind.Compare
                     , CSlash.Core.Kind.FVs
                     , CSlash.Core.Kind.Subst
                     , CSlash.Core.Opt.CallerCC
@@ -235,6 +236,8 @@ library
                     , CSlash.Tc.Solver
                     , CSlash.Tc.Types
                     , CSlash.Tc.Types.BasicTypes
+                    , CSlash.Tc.Types.Constraint
+                    , CSlash.Tc.Types.CtLocEnv
                     , CSlash.Tc.Types.Evidence
                     , CSlash.Tc.Types.ErrCtxt
                     , CSlash.Tc.Types.LclEnv
@@ -244,6 +247,7 @@ library
                     , CSlash.Tc.Utils.Monad
                     , CSlash.Tc.Utils.TcMType
                     , CSlash.Tc.Utils.TcType
+                    , CSlash.Tc.Utils.Unify
                     , CSlash.Tc.Validity
                     , CSlash.Tc.Zonk.Monad
                     , CSlash.Tc.Zonk.TcType

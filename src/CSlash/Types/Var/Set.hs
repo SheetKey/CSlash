@@ -37,6 +37,12 @@ isEmptyVarSet = isEmptyUniqSet
 subVarSet :: VarSet -> VarSet -> Bool
 subVarSet s1 s2 = isEmptyVarSet (s1 `minusVarSet` s2)
 
+unionVarSet :: VarSet -> VarSet -> VarSet
+unionVarSet = unionUniqSets
+
+unionVarSets :: [VarSet] -> VarSet
+unionVarSets = unionManyUniqSets
+
 pprVarSet :: VarSet -> ([Var] -> SDoc) -> SDoc
 pprVarSet = pprUFM . getUniqSet
 
