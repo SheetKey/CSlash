@@ -38,6 +38,12 @@ mkAnId = AnId
 
 pprShortTyThing = undefined
 
+tyThingCategory :: TyThing -> String
+tyThingCategory (ATyCon _) = "type constructor"
+tyThingCategory (AnId _) = "identifier"
+tyThingCategory (AConLike (RealDataCon _)) = "data constructor"
+tyThingCategory (AConLike PatSynCon) = "pattern synonym"
+
 implicitTyConThings :: TyCon -> [TyThing]
 implicitTyConThings tc
   = datacon_stuff

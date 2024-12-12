@@ -37,8 +37,8 @@ import CSlash.Driver.Backend
 import CSlash.Cs
 
 import CSlash.Tc.Errors.Types
--- import GHC.Tc.Types.BasicTypes
--- import GHC.Tc.Types.Constraint
+import CSlash.Tc.Types.BasicTypes
+import CSlash.Tc.Types.Constraint
 import CSlash.Tc.Types.Origin hiding ( Position(..) )
 -- import GHC.Tc.Types.Rank (Rank(..))
 -- import GHC.Tc.Types.TH
@@ -158,6 +158,8 @@ instance Diagnostic TcRnMessage where
            , locations ]
       where
         locations = text "Bound at:" <+> vcat (map ppr (sortBy leftmost_smallest (NE.toList locs)))
+    TcRnTyThingUsedWrong sort thing name -> mkSimpleDecorated $
+      pprTyThingUsedWrong sort thing name
 
   diagnosticReason = \case
     TcRnUnknownMessage m -> diagnosticReason m
@@ -183,6 +185,7 @@ instance Diagnostic TcRnMessage where
     TcRnNotInScope{} -> ErrorWithoutFlag
     TcRnShadowedName{} -> WarningWithFlag Opt_WarnNameShadowing
     TcRnBindingNameConflict{} -> ErrorWithoutFlag
+    TcRnTyThingUsedWrong{} -> ErrorWithoutFlag
 
   diagnosticHints = \case
     TcRnUnknownMessage m -> diagnosticHints m
@@ -213,6 +216,7 @@ instance Diagnostic TcRnMessage where
     TcRnNotInScope err _ _ hints -> scopeErrorHints err ++ hints
     TcRnShadowedName{} -> noHints
     TcRnBindingNameConflict{} -> noHints
+    TcRnTyThingUsedWrong{} -> noHints
 
   diagnosticCode = constructorCode
 
@@ -287,6 +291,16 @@ pprCsDocContext (TySynCtx name) = text "the declaration for type synonym" <+> qu
 pprCsDocContext PatCtx = text "a pattern type-signature"
 pprCsDocContext ExprWithTySigCtx = text "an expression type signature"
 pprCsDocContext CsTypeCtx = text "a type argument"
+
+pprTyThingUsedWrong :: WrongThingSort -> TcTyThing -> Name -> SDoc
+pprTyThingUsedWrong sort thing name =
+  pprTcTyThingCategory thing <+> quotes (ppr name) <+>
+  text "used as a" <+> pprWrongThingSort sort
+
+pprWrongThingSort :: WrongThingSort -> SDoc
+pprWrongThingSort = text . \case
+  WrongThingType -> "type"
+  WrongThingKind -> "kind"
 
 pprImportLookup :: ImportLookupReason -> SDoc
 pprImportLookup _ = panic "pprImportLookup"

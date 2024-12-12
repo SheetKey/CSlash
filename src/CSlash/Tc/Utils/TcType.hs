@@ -85,6 +85,7 @@ data MetaDetails' tk
 type MetaDetails = MetaDetails' TcType
 
 data MetaInfo
+  = TyVarTv
 
 instance Outputable tk => Outputable (MetaDetails' tk) where
   ppr = undefined
@@ -105,7 +106,7 @@ vanillaSkolemKvUnk = SkolemKv unkSkol topTcLevel
 type MetaDetailsK = MetaDetails' TcKind
 
 data MetaInfoK
-  = KiVarKind
+  = KiVarKv
   | TauKv
 
 {- *********************************************************************
@@ -145,6 +146,9 @@ tcKindLevel ki = panic "tcKindLevel"
 *                                                                      *
 ********************************************************************* -}
 
+tcIsTcTyVar :: TcTyVar -> Bool
+tcIsTcTyVar tv = isTyVar tv
+
 isPromotableMetaKiVar :: TcKiVar -> Bool
 isPromotableMetaKiVar kv
   | isKiVar kv
@@ -152,6 +156,12 @@ isPromotableMetaKiVar kv
   = isTouchableInfoK info
   | otherwise
   = False
+
+isSkolemTyVar :: TcTyVar -> Bool
+isSkolemTyVar tv = assertPpr (tcIsTcTyVar tv) (ppr  tv)
+  $ case tcTyVarDetails tv of
+      MetaTv {} -> False
+      _ -> True
 
 isMetaKiVar :: TcKiVar -> Bool
 isMetaKiVar kv
@@ -174,6 +184,11 @@ setMetaKiVarTcLevel kv tclvl = case tcKiVarDetails kv of
                                  details@(MetaKv {})
                                    -> setTcKiVarDetails kv (details { mkv_tclvl = tclvl })
                                  _ -> pprPanic "metaKiVarTcLevel" (ppr kv)
+
+isTyVarTyVar :: Var -> Bool
+isTyVarTyVar tv = case tcTyVarDetails tv of
+                    MetaTv { mtv_info = TyVarTv } -> True
+                    _ -> False
 
 isFlexi :: MetaDetails' tk -> Bool
 isFlexi Flexi = True

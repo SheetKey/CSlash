@@ -7,7 +7,7 @@ import CSlash.Driver.DynFlags
 
 -- import {-# SOURCE #-} GHC.Tc.Utils.Unify( unifyInvisibleType, tcSubMult )
 import CSlash.Tc.Types.Origin
--- import GHC.Tc.Types.Constraint
+import CSlash.Tc.Types.Constraint
 -- import GHC.Tc.Types.Evidence
 import CSlash.Tc.Utils.Monad        -- TcType, amongst others
 import CSlash.Tc.Utils.TcType
@@ -72,6 +72,19 @@ newMetaKindVar = do
 
 {- *********************************************************************
 *                                                                      *
+        Constraints
+*                                                                      *
+********************************************************************* -}
+
+newImplication :: TcM Implication
+newImplication = do
+  env <- getLclEnv
+  warn_inaccessible <- woptM Opt_WarnInaccessibleCode
+  return $ (implicationPrototype (mkCtLocEnv env))
+           { ic_warn_inaccessible = warn_inaccessible }
+
+{- *********************************************************************
+*                                                                      *
         MetaKvs
 *                                                                      *
 ********************************************************************* -}
@@ -85,7 +98,7 @@ cloneMetaKiVarName name = newSysName (nameOccName name)
 metaInfoToKiVarName :: MetaInfoK -> FastString
 metaInfoToKiVarName meta_info = case meta_info of
   TauKv -> fsLit "kt"
-  KiVarKind -> fsLit "k"
+  KiVarKv -> fsLit "k"
 
 newAnonMetaKiVar :: MetaInfoK -> TcM TcKiVar
 newAnonMetaKiVar mi = newNamedAnonMetaKiVar (metaInfoToKiVarName mi) mi
@@ -97,6 +110,14 @@ newNamedAnonMetaKiVar kivar_name meta_info = do
   let kivar = mkTcKiVar name details
   traceTc "newAnonMetaKiVar" (ppr kivar)
   return kivar
+
+newMetaDetails :: MetaInfo -> TcM TcTyVarDetails
+newMetaDetails info = do
+  ref <- newMutVar Flexi
+  tclvl <- getTcLevel
+  return $ MetaTv { mtv_info = info
+                  , mtv_ref = ref
+                  , mtv_tclvl = tclvl }
 
 newMetaDetailsK :: MetaInfoK -> TcM TcKiVarDetails
 newMetaDetailsK info = do

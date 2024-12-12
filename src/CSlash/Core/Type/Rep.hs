@@ -29,7 +29,8 @@ import Control.DeepSeq
 
 data Type
   = TyVarTy Var
-  | AppTy Type Type -- The first arg must be an 'AppTy' or a 'TyVarTy'.
+  | AppTy Type Type -- The first arg must be an 'AppTy' or a 'TyVarTy' or a 'TyLam'
+  | TyLamTy Var Type
   | TyConApp TyCon [Type]
   | ForAllTy {-# UNPACK #-} !ForAllTyBinder Type
   | FunTy
@@ -91,6 +92,7 @@ foldType (TypeFolder { tf_view = view
     go_ty env ty | Just ty' <- view ty = go_ty env ty'
     go_ty env (TyVarTy tv) = tyvar env tv
     go_ty env (AppTy t1 t2) = go_ty env t1 `mappend` go_ty env t2
+    go_ty env (TyLamTy tv ty) = tyvar env tv `mappend` go_ty env ty
     go_ty env (FunTy _ arg res) = go_ty env arg `mappend` go_ty env res
     go_ty env (TyConApp _ tys) = go_tys env tys
     go_ty env (ForAllTy (Bndr tv vis) inner)
@@ -113,6 +115,7 @@ noView _ = Nothing
 typeSize :: Type -> Int
 typeSize (TyVarTy {}) = 1
 typeSize (AppTy t1 t2) = typeSize t1 + typeSize t2
+typeSize (TyLamTy _ t) = 1 + typeSize t
 typeSize (TyConApp _ ts) = 1 + typesSize ts
 typeSize (ForAllTy (Bndr tv _) t) = typeSize (varType tv) + typeSize t
 typeSize (FunTy _ t1 t2) = typeSize t1 + typeSize t2

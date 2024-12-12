@@ -66,6 +66,7 @@ unknownToData other = pprPanic "unknownToData" (ppr other)
 unknownToTcCls :: RdrName -> RdrName
 unknownToTcCls (Unqual (OccName UNKNOWN_NS fs)) = Unqual (OccName TcClsName fs)  
 unknownToTcCls (Qual mn (OccName UNKNOWN_NS fs)) = Qual mn (OccName TcClsName fs)
+unknownToTcCls n@(Exact {}) = n
 unknownToTcCls other = pprPanic "unknownToTcCls" (ppr other)
 
 instance HasOccName RdrName where

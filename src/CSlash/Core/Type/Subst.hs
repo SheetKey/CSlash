@@ -86,6 +86,9 @@ subst_ty subst ty = go ty
   where
     go (TyVarTy tv) = substTyVar subst tv
     go (AppTy fun arg) = (mkAppTy $! (go fun)) $! (go arg)
+    go (TyLamTy tv ty)
+      = case substTyVarBndrUnchecked subst tv of
+          (subst', tv') -> (TyLamTy $! tv') $! (subst_ty subst' ty)
     go ty@(TyConApp tc []) = tc `seq` ty
     go (TyConApp tc tys) = (mkTyConApp $! tc) $! strictMap go tys
     go ty@(FunTy { ft_kind = kind, ft_arg = arg, ft_res = res })

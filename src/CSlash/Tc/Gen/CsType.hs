@@ -110,6 +110,10 @@ tc_infer_cs_type (CsKindSig _ ty sig) = do
   ty' <- tc_lcs_type ty sig'
   return (ty', sig')
 
+tc_infer_cs_type (CsTyLamTy x matches) = do
+  -- tc_infer_tylamty matches
+  panic "unfinished"
+
 tc_infer_cs_type other_ty = do
   kv <- newMetaKindVar
   ty' <- tc_cs_type other_ty kv
@@ -134,7 +138,7 @@ tc_cs_type t@(CsForAllTy { cst_tele = tele, cst_body = ty }) exp_kind
   = tc_cs_forall_ty tele ty exp_kind
   where
     tc_cs_forall_ty tele ty ek = do
-      (tv_bndrs, ty') <- tcTkTelescope tele $ tc_lcs_type ty exp_kind
+      (tv_bndrs, ty') <- tcTelescope tele $ tc_lcs_type ty exp_kind
       return $ mkForAllTys tv_bndrs ty'
 
 tc_cs_type (CsQualTy { cst_ctxt = ctxt, cst_body = rn_ty }) exp_kind = panic "tc_cs_type QualTy"
@@ -160,8 +164,12 @@ tc_cs_type ty@(CsTyVar {}) ek = tc_infer_cs_type_ek ty ek
 tc_cs_type ty@(CsAppTy {}) ek = tc_infer_cs_type_ek ty ek
 tc_cs_type ty@(CsOpTy {}) ek = tc_infer_cs_type_ek ty ek
 tc_cs_type ty@(CsKindSig {}) ek = tc_infer_cs_type_ek ty ek
+tc_cs_type ty@(CsTyLamTy {}) ek = tc_infer_cs_type_ek ty ek
 
-tc_cs_type _ _ = panic "tc_cs_type unfinished"
+tc_cs_type ty@(TySectionL {}) _ = pprPanic "tc_cs_type" (ppr ty)
+tc_cs_type ty@(TySectionR {}) _ = pprPanic "tc_cs_type" (ppr ty)
+
+tc_cs_type other _ = pprPanic "tc_cs_type unfinished" (ppr other)
 
 ------------------------------------------
 tc_fun_type :: CsArrow Rn -> LCsType Rn -> LCsType Rn -> TcKind -> TcM TcType
@@ -290,6 +298,17 @@ tcInferTyAppHead ty = tc_infer_lcs_type ty
 
 {- *********************************************************************
 *                                                                      *
+                TyLamTy
+*                                                                      *
+********************************************************************* -}
+
+------------------------------------------
+tc_infer_tylamty :: MatchGroup Rn (LCsType Rn) -> (TcType, TcKind)
+tc_infer_tylamty (MG _ (L _ [L _ (Match _ _ (L _ pats) grhss)])) = panic "tc_infer_tylamty"
+tc_infer_tylamty _ = panic "unreachable"
+
+{- *********************************************************************
+*                                                                      *
                 checkExpectedKind
 *                                                                      *
 ********************************************************************* -}
@@ -319,7 +338,8 @@ tcTyVar name = do
   case thing of
     ATyVar _ tv -> return (mkTyVarTy tv, tyVarKind tv)
     (tcTyThingTyCon_maybe -> Just tc) -> return (mkTyConTy tc, tyConKind tc)
-    _ -> panic "wrongThingErr WrongThingType thing name"
+    
+    _ -> wrongThingErr WrongThingType thing name
 
 addTypeCtxt :: LCsType Rn -> TcM a -> TcM a
 addTypeCtxt (L _ ty) thing = addErrCtxt doc thing
@@ -387,20 +407,96 @@ newExpectedKind AnyKind = newMetaKindVar
 --    HsForAllTelescope
 --------------------------------------
 
-tcTkTelescope :: CsForAllTelescope Rn -> TcM a -> TcM ([TcTyVarBinder], a)
-tcTkTelescope (CsForAll { csf_bndrs = bndrs }) thing_inside = do
-  -- skol_info <- mkSkolemInfo $ ForAllSkol $ CsTyVarBndrsRn $ unLoc <$> bndrs
-  -- let skol_mode = smVanilla 
-  panic "tcTkTelescope"
+tcTelescope :: CsForAllTelescope Rn -> TcM a -> TcM ([TcTyVarBinder], a)
+tcTelescope (CsForAll { csf_bndrs = bndrs }) thing_inside = do
+  skol_info <- mkSkolemInfo $ ForAllSkol $ CsTyVarBndrsRn $ unLoc <$> bndrs
+  let skol_mode = smVanilla { sm_clone = False, sm_tvtv = SMDSkolemTv skol_info }
+  tcExplicitBndrsX skol_mode bndrs thing_inside
 
-newKiVarBndr :: Name -> TcM TcKiVar
-newKiVarBndr name = do
-  details <- newMetaDetailsK KiVarKind
-  return $ mkTcKiVar name details
+--------------------------------------
+--    Explicit tyvar binders
+--------------------------------------
+
+tcExplicitBndrsX :: SkolemMode -> [LCsTyVarBndr Rn] -> TcM a -> TcM ([TcTyVarBinder], a)
+tcExplicitBndrsX skol_mode bndrs thing_inside = case nonEmpty bndrs of
+  Nothing -> do
+    res <- thing_inside
+    return ([], res)
+  Just bndrs1 -> do
+    (tclvl, wanted, (skol_tvs, res))
+      <- pushLevelAndCaptureConstraints
+         $ bindExplicitBndrsX skol_mode bndrs
+         $ thing_inside
+    let bndr_1 = NE.head bndrs1
+        bndr_n = NE.last bndrs1
+    skol_info <- mkSkolemInfo $ ForAllSkol $ CsTyVarBndrsRn (unLoc <$> bndrs)
+    setSrcSpan (combineSrcSpans (getLocA bndr_1) (getLocA bndr_n))
+      $ emitResidualTvConstraint skol_info (binderVars skol_tvs) tclvl wanted
+    return (skol_tvs, res)
+
+bindExplicitBndrsX :: SkolemMode -> [LCsTyVarBndr Rn] -> TcM a -> TcM ([TcTyVarBinder], a)
+bindExplicitBndrsX skol_mode@(SM { sm_kind = ctxt_kind }) cs_tvs thing_inside = do
+  traceTc "bindExplicitBndrs" (ppr cs_tvs)
+  go cs_tvs
+  where
+    go [] = do
+      res <- thing_inside
+      return ([], res)
+    go (L _ cs_tv : cs_tvs) = do
+      lcl_env <- getLclTypeEnv
+      (tv, flag) <- tc_cs_bndr lcl_env cs_tv
+      (tvs, res) <- tcExtendNameTyVarEnv [(csTyVarName cs_tv, tv)]
+                    $ go cs_tvs
+      return (Bndr tv flag : tvs, res)
+
+    tc_cs_bndr lcl_env bndr
+      = let (name, lcs_kind, flag) = case bndr of
+                                       KindedTyVar _ (L _ name) kind -> (name, kind, Required)
+                                       ImpKindedTyVar _ (L _ name) kind -> (name, kind, Specified)
+        in do kind <- tcLCsKindSig (TyVarBndrKindCtxt name) lcs_kind
+              tv <- newTyVarBndr skol_mode name kind
+              return (tv, flag)
+
+newTyVarBndr :: SkolemMode -> Name -> Kind -> TcM TcTyVar
+newTyVarBndr (SM { sm_clone = clone, sm_tvtv = tvtv }) name kind = do
+  name <- if clone
+          then do uniq <- newUnique
+                  return $ setNameUnique name uniq
+          else return name
+  details <- case tvtv of
+               SMDTyVarTy -> newMetaDetails TyVarTv
+               SMDSkolemTv skol_info -> do
+                 lvl <- getTcLevel
+                 return $ SkolemTv skol_info lvl
+  return $ mkTcTyVar name kind details
+
+--------------------------------------
+--           SkolemMode
+--------------------------------------
   
+data SkolemMode = SM
+  { sm_clone :: Bool
+  , sm_tvtv :: SkolemModeDetails
+  , sm_kind :: ContextKind
+  }
+
+data SkolemModeDetails
+  = SMDTyVarTy
+  | SMDSkolemTv SkolemInfo
+
+smVanilla :: HasCallStack => SkolemMode
+smVanilla = SM { sm_clone = panic "sm_clone"
+               , sm_tvtv = pprPanic "sm_tvtv" callStackDoc
+               , sm_kind = AnyKind }
+
 --------------------------------------
 --    Implicit kind var binders
 --------------------------------------
+
+newKiVarBndr :: Name -> TcM TcKiVar
+newKiVarBndr name = do
+  details <- newMetaDetailsK KiVarKv
+  return $ mkTcKiVar name details  
 
 bindImplicitKinds :: [Name] -> TcM a -> TcM ([TcKiVar], a)
 bindImplicitKinds kv_names thing_inside = do

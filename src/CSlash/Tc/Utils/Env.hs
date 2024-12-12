@@ -109,6 +109,15 @@ tcExtendKindEnvList things thing_inside = do
   where
     upd_env env = env { tcl_env = extendNameEnvList (tcl_env env) things }
 
+tcExtendNameTyVarEnv :: [(Name, TcTyVar)] -> TcM r -> TcM r
+tcExtendNameTyVarEnv binds thing_inside
+  = tc_extend_local_env NotTopLevel names
+    $ tcExtendBinderStack tv_binds
+    $ thing_inside
+  where
+    tv_binds = [TcTvBndr name tv | (name, tv) <- binds]
+    names = [(name, ATyVar name tv) | (name, tv) <- binds]
+
 tcExtendNameKiVarEnv :: [(Name, TcKiVar)] -> TcM r -> TcM r
 tcExtendNameKiVarEnv binds thing_inside
   = tc_extend_local_env NotTopLevel names
@@ -167,4 +176,4 @@ notFound name = do
          mkTcRnNotInScope (getRdrName name) (NotInScopeTc (getLclEnvTypeEnv lcl_env))
 
 wrongThingErr :: WrongThingSort -> TcTyThing -> Name -> TcM a
-wrongThingErr expected thing name = panic "failWithTc (TcRnTyThingUsedWrong expected thing name)"
+wrongThingErr expected thing name = failWithTc (TcRnTyThingUsedWrong expected thing name)

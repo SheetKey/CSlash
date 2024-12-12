@@ -47,6 +47,38 @@ import qualified Data.Semigroup as S ( (<>) )
 
 {- *********************************************************************
 *                                                                      *
+          Skolemisation and matchExpectedFunTys
+*                                                                      *
+********************************************************************* -}
+
+emitResidualTvConstraint :: SkolemInfo -> [TcTyVar] -> TcLevel -> WantedConstraints -> TcM ()
+emitResidualTvConstraint skol_info skol_tvs tclvl wanted
+  | not (isEmptyWC wanted)
+    || checkTelescopeSkol (getSkolemInfo skol_info)
+  = do implic <- buildTvImplication (getSkolemInfo skol_info) skol_tvs tclvl wanted
+       emitImplication implic
+  | otherwise
+  = return ()
+
+buildTvImplication
+  :: SkolemInfoAnon
+  -> [TcTyVar]
+  -> TcLevel
+  -> WantedConstraints
+  -> TcM Implication
+buildTvImplication skol_info skol_tvs tclvl wanted
+  = assertPpr (all (isSkolemTyVar <||> isTyVarTyVar) skol_tvs) (ppr skol_tvs) $ do
+      implic <- newImplication
+      let implic' = implic { ic_tclvl = tclvl
+                           , ic_skols = skol_tvs
+                           , ic_given_eqs = NoGivenEqs
+                           , ic_wanted = wanted
+                           , ic_info = skol_info }
+      checkImplicationInvariants implic'
+      return implic'
+
+{- *********************************************************************
+*                                                                      *
                 Unification
 *                                                                      *
 ********************************************************************* -}
@@ -193,7 +225,7 @@ lhsKiPriority kv = assertPpr (isKiVar kv) (ppr kv) $
   case tcKiVarDetails kv of
     SkolemKv {} -> 0
     MetaKv { mkv_info = info } -> case info of
-                                    KiVarKind -> 1
+                                    KiVarKv -> 1
                                     TauKv -> 3
 
 {- *********************************************************************
@@ -235,10 +267,10 @@ touchabilityAndShapeTestKind given_eq_lvl kv rhs
 checkTopShapeKind :: MetaInfoK -> TcKind -> Bool
 checkTopShapeKind info xi
   = case info of
-      KiVarKind -> case getKiVar_maybe xi of
-                     Nothing -> False
-                     Just kv -> case tcKiVarDetails kv of
-                                  SkolemKv {} -> True
-                                  MetaKv { mkv_info = KiVarKind } -> True
-                                  _ -> False
+      KiVarKv -> case getKiVar_maybe xi of
+                   Nothing -> False
+                   Just kv -> case tcKiVarDetails kv of
+                                SkolemKv {} -> True
+                                MetaKv { mkv_info = KiVarKv } -> True
+                                _ -> False
       _ -> True

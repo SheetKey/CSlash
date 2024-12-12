@@ -24,7 +24,7 @@ module CSlash.Types.Var
 
   , ExportFlag(..)
 
-  , mkTyVar, mkKiVar, mkTcKiVar
+  , mkTyVar, mkTcTyVar, mkKiVar, mkTcKiVar
 
   , tyVarName, tyVarKind, tcTyVarDetails
   , kiVarName, tcKiVarDetails, setTcKiVarDetails
@@ -295,6 +295,12 @@ mkTyVar name kind = TyVar { varName = name
                           , realUnique = nameUnique name
                           , varKind = kind
                           }
+
+mkTcTyVar :: Name -> Kind -> TcTyVarDetails -> TcTyVar
+mkTcTyVar name kind details = TcTyVar { varName = name
+                                      , realUnique = nameUnique name
+                                      , varKind = kind
+                                      , tc_tv_details = details }
 
 mkKiVar :: Name -> KindVar
 mkKiVar name = KdVar { varName = name, realUnique = nameUnique name }

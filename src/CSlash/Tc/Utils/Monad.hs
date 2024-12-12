@@ -614,6 +614,13 @@ tcTryM thing_inside = do
              Left _ -> Nothing
              Right r -> Just r
 
+capture_constraints :: TcM r -> TcM (r, WantedConstraints)
+capture_constraints thing_inside = do
+  lie_var <- newTcRef emptyWC
+  res <- updLclEnv (\env -> env { tcl_lie = lie_var }) thing_inside
+  lie <- readTcRef lie_var
+  return (res, lie)
+
 capture_messages :: TcM r -> TcM (r, Messages TcRnMessage)
 capture_messages thing_inside = do
   msg_var <- newTcRef emptyMessages
@@ -629,6 +636,21 @@ askNoErrs thing_inside = do
     Nothing -> failM
     Just res -> let errs_found = errorsFound msgs
                 in return (res, not errs_found)
+
+tryCaptureConstraints :: TcM a -> TcM (Maybe a, WantedConstraints)
+tryCaptureConstraints thing_inside = do
+  (mb_res, lie) <- capture_constraints $ tcTryM thing_inside
+  let lie_to_keep = case mb_res of
+                       Nothing -> dropMisleading lie
+                       Just {} -> lie
+  return (mb_res, lie_to_keep)
+
+captureConstraints :: TcM a -> TcM (a, WantedConstraints)
+captureConstraints thing_inside = do
+  (mb_res, lie) <- tryCaptureConstraints thing_inside
+  case mb_res of
+    Nothing -> emitConstraints lie >> failM
+    Just res -> return (res, lie)
 
 attemptM :: TcRn r -> TcRn (Maybe r)
 attemptM thing_inside = do
@@ -723,10 +745,37 @@ getConstraintVar = do
   env <- getLclEnv
   return (tcl_lie env)
 
+emitConstraints :: WantedConstraints -> TcM ()
+emitConstraints ct
+  | isEmptyWC ct
+  = return ()
+  | otherwise
+  = do lie_var <- getConstraintVar
+       updTcRef lie_var (`andWC` ct)
+
 emitSimples :: Cts -> TcM ()
 emitSimples cts = do
   lie_var <- getConstraintVar
   updTcRef lie_var (`addSimples` cts)
+
+emitImplication :: Implication -> TcM ()
+emitImplication ct = do
+  lie_var <- getConstraintVar
+  updTcRef lie_var (`addImplics` unitBag ct)
+
+emitImplications :: Bag Implication -> TcM ()
+emitImplications ct = do
+  lie_var <- getConstraintVar
+  updTcRef lie_var (`addImplics` ct)
+
+pushLevelAndCaptureConstraints :: TcM a -> TcM (TcLevel, WantedConstraints, a)
+pushLevelAndCaptureConstraints thing_inside = do
+  tclvl <- getTcLevel
+  let tclvl' = pushTcLevel tclvl
+  traceTc "pushLevelAndCaptureConstraints {" (ppr tclvl')
+  (res, lie) <- updLclEnv (setLclEnvTcLevel tclvl')
+                $ captureConstraints thing_inside
+  return (tclvl', lie, res)
 
 pushTcLevelM :: TcM a -> TcM (TcLevel, a)
 pushTcLevelM thing_inside = do

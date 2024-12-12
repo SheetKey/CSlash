@@ -94,6 +94,7 @@ data TcRnMessage where
   TcRnNotInScope :: NotInScopeError -> RdrName -> [ImportError] -> [CsHint] -> TcRnMessage
   TcRnShadowedName :: OccName -> ShadowedNameProvenance -> TcRnMessage
   TcRnBindingNameConflict :: !RdrName -> !(NE.NonEmpty SrcSpan) -> TcRnMessage
+  TcRnTyThingUsedWrong :: !WrongThingSort -> !TcTyThing -> !Name -> TcRnMessage
   deriving Generic
 
 data ShadowedNameProvenance
@@ -138,7 +139,8 @@ data CsDocContext
   | CsTypeCtx
 
 data WrongThingSort
-  = WrongThingKind
+  = WrongThingType
+  | WrongThingKind
 
 data DodgyImportsReason
   = DodgyImportsEmptyParent !GlobalRdrElt

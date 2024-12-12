@@ -91,3 +91,13 @@ instance Outputable IdBindingInfo where
   ppr NotLetBound = text "NotLetBound"
   ppr ClosedLet = text "TopLevelLet"
   ppr (NonClosedLet fvs closed_type) = text "TopLevelLet" <+> ppr fvs <+> ppr closed_type
+
+pprTcTyThingCategory :: TcTyThing -> SDoc
+pprTcTyThingCategory = text . capitalise . tcTyThingCategory
+
+tcTyThingCategory :: TcTyThing -> String
+tcTyThingCategory (AGlobal thing) = tyThingCategory thing
+tcTyThingCategory (ATyVar {}) = "type variable"
+tcTyThingCategory (AKiVar {}) = "kind variable"
+tcTyThingCategory (ATcId {}) = "local identifier"
+tcTyThingCategory (ATcTyCon {}) = "local tycon"

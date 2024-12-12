@@ -263,6 +263,7 @@ type family CsDiagnosticCode c = n | n -> c where
   CsDiagnosticCode "TcRnMissingImportList"                         = 77037
   CsDiagnosticCode "TcRnShadowedName"                              = 63397
   CsDiagnosticCode "TcRnBindingNameConflict"                       = 10498
+  CsDiagnosticCode "TcRnTyThingUsedWrong"                          = 10969
 
   -- BadImport
   CsDiagnosticCode "BadImportNotExported"                          = 61689

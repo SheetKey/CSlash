@@ -315,7 +315,6 @@ instance Diagnostic PsMessage where
                 , text "'" <> text [looks_like_char] <> text "' (" <> text looks_like_char_name <> text ")" <> comma
                 , text "but it is not" ]
 
-
   diagnosticReason = \case
     PsUnknownMessage m -> diagnosticReason m
     PsHeaderMessage m -> psHeaderMessageReason m

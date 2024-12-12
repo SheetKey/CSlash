@@ -68,6 +68,9 @@ mkSkolemInfo sk_anon = do
   u <- liftIO $! uniqFromTag 's'
   return (SkolemInfo u sk_anon)
 
+getSkolemInfo :: SkolemInfo -> SkolemInfoAnon
+getSkolemInfo (SkolemInfo _ skol_anon) = skol_anon
+
 {- *********************************************************************
 *                                                                      *
             CtOrigin
@@ -87,3 +90,6 @@ data CtOrigin
                  , keq_expected :: TcKind
                  , keq_thing :: Maybe KindedThing
                  }
+
+isGivenOrigin :: CtOrigin -> Bool
+isGivenOrigin (KindEqOrigin {}) = False
