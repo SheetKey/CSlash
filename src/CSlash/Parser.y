@@ -721,8 +721,13 @@ aexp1 :: { ETP }
   | '{' context_exp '}' { ETP $ superBracesPV $
                                 unETP $2 >>= \ $2 ->
                                 mkCsInBracesPV (comb2 $1 $>) $2 [moc $1, mcc $3] }
-  -- these should be part of a_qcon from syscon, but they cannot have type RdrName, since
-  -- they would lose the kind information
+  | '(' ')' { let { l = comb2 $1 $>
+                  ; an = NameAnnOnly NameParens (glAA $1) (glAA $2) [] }
+               in ETP $ mkCsUnitSysConPV l an }
+  | '(' commas ')' { let { l = comb2 $1 $>
+                         ; an = NameAnnCommas NameParens (glAA $1) (map srcSpan2e (fst $2))
+                                (glAA $3) [] }
+                     in ETP $ mkCsTupleSysConPV l an (snd $2 + 1) }
   | '(' ARR_U ')' {% do { kind <- amsA' $ sL1 $2 $ CsUKd noExtField
                         ; name <- amsA' $ sL1 $2 $ getRdrName unrestrictedFUNTyCon
                         ; tyvar <- amsA' $ sL1 $2 $ CsTyVar [] name
@@ -957,17 +962,17 @@ a_qvarsym :: { LocatedN RdrName }
 
 -- Constructors
 
-a_con :: { LocatedN RdrName }
-  : a_conid { $1 }
-  | '(' a_consym ')' {% amsr (sLL $1 $> (unLoc $2))
-                             (NameAnn NameParens (glAA $1) (glAA $2) (glAA $3) []) }
-  | syscon { $1 }
+-- a_con :: { LocatedN RdrName }
+--   : a_conid { $1 }
+--   | '(' a_consym ')' {% amsr (sLL $1 $> (unLoc $2))
+--                              (NameAnn NameParens (glAA $1) (glAA $2) (glAA $3) []) }
+--   | syscon { $1 }
 
 a_qcon :: { LocatedN RdrName }
   : a_qconid { $1 }
   | '(' a_qconsym ')' {% amsr (sLL $1 $> (unLoc $2))
                               (NameAnn NameParens (glAA $1) (glAA $2) (glAA $3) []) }
-  | syscon { $1 }
+  -- | syscon { $1 }
 
 -- Con Ops
 

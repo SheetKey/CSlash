@@ -318,6 +318,9 @@ unitDataCon = head (tyConDataCons unitTyCon)
 unitDataConId :: Id
 unitDataConId = dataConWorkId unitDataCon
 
+unitDataConName :: Name
+unitDataConName = dataConName unitDataCon
+
 soloTyCon :: TyCon
 soloTyCon = tupleTyCon 1
 

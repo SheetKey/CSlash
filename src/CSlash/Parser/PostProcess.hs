@@ -479,6 +479,8 @@ class (b ~ (Body b) Ps, AnnoBody b) => DisambETP b where
   mkCsConSectionR :: SrcSpan -> LocatedN RdrName -> LocatedA b -> PV (LocatedA b)
   mkCsPatListPV :: LocatedA b -> PV (LocatedA b)
   mkCsPatListConsPV :: LocatedA b -> LocatedA b -> PV (LocatedA b)
+  mkCsUnitSysConPV :: SrcSpan -> NameAnn -> PV (LocatedA b)
+  mkCsTupleSysConPV :: SrcSpan -> NameAnn -> Int -> PV (LocatedA b)
 
 instance DisambETP (CsExpr Ps) where
   type Body (CsExpr Ps) = CsExpr
@@ -594,6 +596,16 @@ instance DisambETP (CsExpr Ps) where
     return $ L (EpAnn (spanAsAnchor l) noAnn cs) (SectionR noExtField eop e)
   mkCsPatListPV _ = panic "mkCsPatListPV expr"
   mkCsPatListConsPV _ _ = panic "mkCsPatListConsPV expr"
+  mkCsUnitSysConPV l an = do
+    !cs <- getCommentsFor l
+    let rdrName = nameRdrName unitDataConName
+        lrdrName = L (EpAnn (spanAsAnchor l) an cs) rdrName
+    return $ L (EpAnn (spanAsAnchor l) noAnn cs) (CsVar noExtField lrdrName)
+  mkCsTupleSysConPV l an arity = do
+    !cs <- getCommentsFor l
+    let rdrName = nameRdrName $ tupleDataConName arity
+        lrdrName = L (EpAnn (spanAsAnchor l) an cs) rdrName
+    return $ L (EpAnn (spanAsAnchor l) noAnn cs) (CsVar noExtField lrdrName)
 
 instance DisambETP (CsType Ps) where
   type Body (CsType Ps) = CsType
@@ -685,6 +697,16 @@ instance DisambETP (CsType Ps) where
     return $ L (EpAnn (spanAsAnchor l) noAnn cs) (TySectionL noExtField top t)
   mkCsPatListPV _ = panic "mkCsPatListPV type"
   mkCsPatListConsPV _ _ = panic "mkCsPatListConsPV type"
+  mkCsUnitSysConPV l an = do
+    !cs <- getCommentsFor l
+    let rdrName = nameRdrName unitTyConName
+        lrdrName = L (EpAnn (spanAsAnchor l) an cs) rdrName
+    return $ L (EpAnn (spanAsAnchor l) noAnn cs) (CsTyVar [] lrdrName)
+  mkCsTupleSysConPV l an arity = do
+    !cs <- getCommentsFor l
+    let rdrName = nameRdrName $ tupleTyConName arity
+        lrdrName = L (EpAnn (spanAsAnchor l) an cs) rdrName
+    return $ L (EpAnn (spanAsAnchor l) noAnn cs) (CsTyVar [] lrdrName)
     
 instance DisambETP (CsKind Ps) where
   type Body (CsKind Ps) = CsKind
@@ -728,6 +750,8 @@ instance DisambETP (CsKind Ps) where
   mkCsConSectionR l _ _ = addFatalError $ mkPlainErrorMsgEnvelope l PsErrKindSection
   mkCsPatListPV _ = panic "mkCsPatListPV kind"
   mkCsPatListConsPV _ _ = panic "mkCsPatListConsPV kind"
+  mkCsUnitSysConPV _ _ = panic "mkCsUnitSysConPV kind"
+  mkCsTupleSysConPV _ _ _ = panic "mkCsTupleSysConPV kind"
 
 -- We don't set RdrName namespaces here:
 -- PatBuilder is used to build argument patterns for term and type level lambdas.
@@ -796,6 +820,16 @@ instance DisambETP (PatBuilder Ps) where
     PatBuilderArgList lps -> let lps' = lps ++ [lp]
                             in return $ addCLocA lp0 lp $ PatBuilderArgList lps'
     _ -> panic "mkCsPatListConsPV PB not list"
+  mkCsUnitSysConPV l an = do
+    !cs <- getCommentsFor l
+    let rdrName = nameRdrName unitDataConName
+        v@(L l' _) = L (EpAnn (spanAsAnchor l) an cs) rdrName
+    return $ L (l2l l') (PatBuilderCon v)
+  mkCsTupleSysConPV l an arity = do
+    !cs <- getCommentsFor l
+    let rdrName = nameRdrName $ tupleDataConName arity
+        v@(L l' _) = L (EpAnn (spanAsAnchor l) an cs) rdrName
+    return $ L (l2l l') (PatBuilderCon v)
 
 instance DisambETP (TyPatBuilder Ps) where
   type Body (TyPatBuilder Ps) = TyPatBuilder
@@ -849,6 +883,16 @@ instance DisambETP (TyPatBuilder Ps) where
     TyPatBuilderArgList lps -> let lps' = lps ++ [lp]
                               in return $ addCLocA lp0 lp $ TyPatBuilderArgList lps'
     _ -> panic "mkCsPatListConsPV TPB not list"
+  mkCsUnitSysConPV l an = do
+    !cs <- getCommentsFor l
+    let rdrName = nameRdrName unitTyConName
+        v@(L l' _) = L (EpAnn (spanAsAnchor l) an cs) rdrName
+    return $ L (l2l l') (TyPatBuilderCon v)
+  mkCsTupleSysConPV l an arity = do
+    !cs <- getCommentsFor l
+    let rdrName = nameRdrName $ tupleTyConName arity
+        v@(L l' _) = L (EpAnn (spanAsAnchor l) an cs) rdrName
+    return $ L (l2l l') (TyPatBuilderCon v)
   
 checkLamMatchGroup :: SrcSpan -> MatchGroup Ps (LCsExpr Ps) -> PV ()
 checkLamMatchGroup l (MG { mg_alts = (L _ (matches:_)) }) = do
