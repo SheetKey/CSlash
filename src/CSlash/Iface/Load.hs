@@ -331,9 +331,9 @@ findAndReadIface  cs_env doc_str mod wanted_mod = do
       logger = cs_logger cs_env
       other_fopts = initFinderOpts . homeUnitEnv_dflags <$> (cs_HUG cs_env)
 
-  trace_if logger $sep [ hsep [ text "Reading interface for"
-                              , ppr mod <> semi ]
-                       , nest 4 (text "reason:" <+> doc_str) ]
+  trace_if logger $ sep [ hsep [ text "Reading interface for"
+                               , ppr mod <> semi ]
+                        , nest 4 (text "reason:" <+> doc_str) ]
 
   if mod `installedModuleEq` cSLASH_PRIM
     then return (Succeeded (cslPrimIface, "<built in interface for CSL.Prim>"))

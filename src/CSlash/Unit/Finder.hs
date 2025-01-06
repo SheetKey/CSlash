@@ -327,7 +327,7 @@ findInstalledHomeModule fc fopts home_unit mod_name =
 
   in homeSearchCache fc home_unit mod_name $
      if mod `installedModuleEq` cSLASH_PRIM
-     then return (InstalledFound (error "CSlash.Prim ModLocation") mod)
+     then return (InstalledFound (error "CSL.Prim ModLocation") mod)
      else searchPathExts search_dirs mod exts
 
 augmentImports :: FilePath -> [FilePath] -> [FilePath]
@@ -351,7 +351,7 @@ findPackageModule_ fc fopts mod pkg_conf = do
              (ppr (moduleUnit mod) <+> ppr (unitId pkg_conf))
   modLocationCache fc mod $
     if mod `installedModuleEq` cSLASH_PRIM
-    then return (InstalledFound (error "CSlash.Prim ModLocation") mod)
+    then return (InstalledFound (error "CSL.Prim ModLocation") mod)
     else let tag = waysBuildTag (finder_ways fopts)
              package_hisuf | null tag = "hi"
                           | otherwise = tag ++ "_hi"

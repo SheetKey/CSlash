@@ -59,10 +59,10 @@ basicKnownKeyNames
 ********************************************************************* -}
 
 cSLASH_PRIM :: Module
-cSLASH_PRIM = mkPrimModule (fsLit "CSlash.Prim")
+cSLASH_PRIM = mkPrimModule (fsLit "CSL.Prim")
 
 cSLASH_TYPES :: Module
-cSLASH_TYPES = mkPrimModule (fsLit "CSlash.Types")
+cSLASH_TYPES = mkPrimModule (fsLit "CSL.Types")
 
 rOOT_MAIN :: Module
 rOOT_MAIN= mkMainModule (fsLit ":Main")

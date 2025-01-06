@@ -82,7 +82,7 @@ tc_fun_kind k1 k2 = do
 
 tcKiVar :: Name -> TcM TcKind
 tcKiVar name = do
-  traceTc "lk1" (ppr name)
+  traceTc "lk1k" (ppr name)
   thing <- tcLookup name
   case thing of
     AKiVar _ kv -> return $ mkKiVarKi kv
