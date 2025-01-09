@@ -159,6 +159,8 @@ library
                     , CSlash.Iface.Syntax
                     , CSlash.Iface.Type
 
+                    , CSlash.IfaceToCore
+
                     , CSlash.Language.Syntax
                     , CSlash.Language.Syntax.Basic
                     , CSlash.Language.Syntax.Binds
