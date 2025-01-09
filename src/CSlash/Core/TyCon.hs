@@ -273,6 +273,9 @@ isTypeSynonymTyCon (TyCon { tyConDetails = details })
   | otherwise = False
 {-# INLINE isTypeSynonymTyCon #-}
 
+tyConMustBeSaturated :: TyCon -> Bool
+tyConMustBeSaturated = tcFlavorMustBeSaturated . tyConFlavor
+
 isTupleTyCon :: TyCon -> Bool
 isTupleTyCon (TyCon { tyConDetails = details })
   | AlgTyCon { algTcRhs = TupleTyCon {} } <- details = True
@@ -344,6 +347,14 @@ tyConFlavor (TyCon { tyConDetails = details })
   | SynonymTyCon {} <- details = TypeFunFlavor
   | PrimTyCon {} <- details = BuiltInTypeFlavor
   | TcTyCon { tctc_flavor = flav } <- details = flav
+
+tcFlavorMustBeSaturated :: TyConFlavor tc -> Bool
+tcFlavorMustBeSaturated TupleFlavor = False
+tcFlavorMustBeSaturated SumFlavor = False
+tcFlavorMustBeSaturated DataTypeFlavor = False
+tcFlavorMustBeSaturated AbstractTypeFlavor = False
+tcFlavorMustBeSaturated TypeFunFlavor = True
+tcFlavorMustBeSaturated BuiltInTypeFlavor = False
 
 instance NamedThing TyCon where
   getName = tyConName

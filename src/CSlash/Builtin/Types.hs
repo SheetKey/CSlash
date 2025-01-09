@@ -66,15 +66,15 @@ mkWiredInIdName modu fs unique id
   = mkWiredInName modu (mkOccNameFS Name.varName fs) unique (AnId id) UserSyntax
 
 boolTyConName :: Name
-boolTyConName = mkWiredInTyConName UserSyntax cSLASH_TYPES (fsLit "Bool") boolTyConKey boolTyCon
+boolTyConName = mkWiredInTyConName UserSyntax cSLASH_BUILTIN (fsLit "Bool") boolTyConKey boolTyCon
 
 falseDataConName :: Name
 falseDataConName
-  = mkWiredInDataConName UserSyntax cSLASH_TYPES (fsLit "False") falseDataConKey falseDataCon
+  = mkWiredInDataConName UserSyntax cSLASH_BUILTIN (fsLit "False") falseDataConKey falseDataCon
 
 trueDataConName :: Name
 trueDataConName
-  = mkWiredInDataConName UserSyntax cSLASH_TYPES (fsLit "True") trueDataConKey trueDataCon
+  = mkWiredInDataConName UserSyntax cSLASH_BUILTIN (fsLit "True") trueDataConKey trueDataCon
 
 {- *********************************************************************
 *                                                                      *
@@ -195,7 +195,7 @@ isBuiltInOcc_maybe occ =
 
 isTupleTyOcc_maybe :: Module -> OccName -> Maybe Name
 isTupleTyOcc_maybe mod occ
-  | mod == cSLASH_TYPES
+  | mod == cSLASH_BUILTIN
   = match_occ
   where
     match_occ
@@ -213,7 +213,7 @@ isTupleNTyOcc_maybe occ =
 
 isSumTyOcc_maybe :: Module -> OccName -> Maybe Name
 isSumTyOcc_maybe mod occ
-  | mod == cSLASH_TYPES
+  | mod == cSLASH_BUILTIN
   = isSumNTyOcc_maybe occ
 isSumTyOcc_maybe _ _ = Nothing
 
@@ -241,7 +241,7 @@ arity_from_str s = case s of
 
 isPunOcc_maybe :: Module -> OccName -> Maybe Name
 isPunOcc_maybe mod occ
-  | mod == cSLASH_TYPES, occ == occName soloDataConName
+  | mod == cSLASH_BUILTIN, occ == occName soloDataConName
   = Just soloDataConName
   | otherwise
   = isTupleTyOcc_maybe mod occ <|>
@@ -295,7 +295,7 @@ mk_tuple arity = (tycon, tuple_con)
     flavor = VanillaAlgTyCon
     tuple_con = pcDataCon dc_name dc_tvs tc_binders dc_arg_tys tycon
     
-    modu = cSLASH_TYPES
+    modu = cSLASH_BUILTIN
     tc_name = mkWiredInName modu (mkTupleOcc tcName arity) tc_uniq
                             (ATyCon tycon) UserSyntax
     tc_uniq = mkTupleTyConUnique arity
@@ -385,7 +385,7 @@ mk_sum arity = (tycon, sum_cons)
     dc_tvs = binderVars tc_binders
     dc_arg_tys = mkTyVarTys dc_tvs
 
-    modu = cSLASH_TYPES
+    modu = cSLASH_BUILTIN
     tc_name = mkWiredInName modu (mkSumTyConOcc arity) tc_uniq
                             (ATyCon tycon) UserSyntax
 

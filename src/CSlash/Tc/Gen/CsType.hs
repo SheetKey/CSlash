@@ -214,8 +214,9 @@ finish_tuple rn_ty tau_tys tau_kinds exp_kind = do
 ---------------------------
 tcInferTyApps :: LCsType Rn -> TcType -> [LCsTypeArg Rn] -> TcM (TcType, TcKind)
 tcInferTyApps cs_ty fun cs_args = do
-  (f_args, res_k) <- tcInferTyApps_nosat cs_ty fun cs_args
-  saturateFamApp f_args res_k
+  --(f_args, res_k) <- tcInferTyApps_nosat cs_ty fun cs_args
+  --saturateFamApp f_args res_k
+  tcInferTyApps_nosat cs_ty fun cs_args
 
 tcInferTyApps_nosat :: LCsType Rn -> TcType -> [LCsTypeArg Rn] -> TcM (TcType, TcKind)
 tcInferTyApps_nosat orig_cs_ty fun orig_cs_args = do
@@ -260,8 +261,15 @@ tcInferTyApps_nosat orig_cs_ty fun orig_cs_args = do
 mkAppTyM :: Subst -> TcType -> TcKind -> TcType -> TcM (Subst, TcType)
 mkAppTyM subst fun fun_ki arg = panic "mkAppTyM"
 
-saturateFamApp :: TcType -> TcKind -> TcM (TcType, TcKind)
-saturateFamApp ty kind = panic "saturateFamApp"
+-- saturateFamApp :: TcType -> TcKind -> TcM (TcType, TcKind)
+-- saturateFamApp ty kind 
+--   | Just (tc, args) <- tcSplitTyConApp_maybe ty
+--   , tyConMustBeSaturated tc
+--   , let n_to_inst = tyConArity tc - length args
+--   = do (extra_args, ki') <- tcInstInvisibleTyBindersN n_to_inst kind
+--        return (ty `mkAppTys` extra_args, ki')
+--   | otherwise
+--   = return (ty, kind)
 
 {- *********************************************************************
 *                                                                      *

@@ -27,7 +27,7 @@ takeUniqFromNameCache (NameCache c _) = uniqFromTag c
 
 lookupOrigNameCache :: OrigNameCache -> Module -> OccName -> Maybe Name
 lookupOrigNameCache nc mod occ
-  | mod == cSLASH_TYPES || mod == cSLASH_PRIM 
+  | mod == cSLASH_TYPES || mod == cSLASH_PRIM || mod == cSLASH_BUILTIN
   , Just name <- isBuiltInOcc_maybe occ <|> isPunOcc_maybe mod occ
   = Just name
   | otherwise

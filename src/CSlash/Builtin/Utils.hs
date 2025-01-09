@@ -38,6 +38,7 @@ import CSlash.Data.List.SetOps
 import Control.Applicative ((<|>))
 import Data.List        ( find )
 import Data.Maybe
+import Data.Array (elems)
 
 import Debug.Trace (trace)
 
@@ -110,3 +111,15 @@ knownKeysMap = listToIdentityUFM knownKeyNames
 
 cslPrimExports :: [IfaceExport]
 cslPrimExports = trace "cslPrimExports" []
+
+cslBuiltInExports :: [IfaceExport]
+cslBuiltInExports
+  = [ AvailTC n (n : (dataConName <$> tyConDataCons tc))
+    | tc <- builtInTyCons
+    , let n = tyConName tc ]
+
+builtInTyCons :: [TyCon]
+builtInTyCons
+  = boolTyCon
+  : (fst <$> elems sumArr)
+  ++ (fst <$> elems tupleArr)

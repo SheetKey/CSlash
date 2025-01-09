@@ -1,3 +1,4 @@
+{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE BangPatterns #-}
 
@@ -7,9 +8,9 @@ import CSlash.Platform.Profile
 
 import Prelude hiding ((<>))
 
--- import {-# SOURCE #-} GHC.IfaceToCore
---    ( tcIfaceDecls, tcIfaceRules, tcIfaceInst, tcIfaceFamInst
---    , tcIfaceAnnotations, tcIfaceCompleteMatches )
+import {-# SOURCE #-} CSlash.IfaceToCore
+   ( tcIfaceDecls{-, tcIfaceRules, tcIfaceInst, tcIfaceFamInst
+   , tcIfaceAnnotations-}, tcIfaceCompleteMatches )
 
 import CSlash.Driver.Config.Finder
 import CSlash.Driver.Env
@@ -228,14 +229,14 @@ loadInterface doc_str mod from
                           dontLeakTheHUG $ do
                             massertPpr ((isOneShot (csMode (cs_dflags cs_env)))
                                         || moduleUnitId mod `notElem` cs_all_home_unit_ids cs_env
-                                        || mod == cSLASH_PRIM)
+                                        || mod == cSLASH_PRIM
+                                        || mod == cSLASH_BUILTIN)
                               (text "Attempting to load home package interface into the EPS"
                                $$ ppr hug $$ doc_str $$ ppr mod $$ ppr (moduleUnitId mod))
                             ignore_prags <- goptM Opt_IgnoreInterfacePragmas
-                            new_eps_decls <- panic "tcIfaceDecls"
-                              -- tcIfaceDecls ignore_prags (mi_decls iface)
-                            new_eps_complete_matches <- panic "tcIfaceCompleteMatches"
-                              -- tcIfaceCompleteMatches (mi_complete_matches iface)
+                            new_eps_decls <- tcIfaceDecls ignore_prags (mi_decls iface)
+                            new_eps_complete_matches <-
+                              tcIfaceCompleteMatches (mi_complete_matches iface)
                             let final_iface = iface
                                   { mi_decls = panic "No mi_decls in PIT" }
                             updateEps_ $ \eps ->
@@ -335,30 +336,33 @@ findAndReadIface  cs_env doc_str mod wanted_mod = do
                                , ppr mod <> semi ]
                         , nest 4 (text "reason:" <+> doc_str) ]
 
-  if mod `installedModuleEq` cSLASH_PRIM
-    then return (Succeeded (cslPrimIface, "<built in interface for CSL.Prim>"))
-    else do let fopts = initFinderOpts dflags
-            mb_found <- liftIO (findExactModule fc fopts other_fopts unit_state mhome_unit mod)
-            case mb_found of
-              InstalledFound loc mod ->
-                case mhome_unit of
-                  Just home_unit
-                    | isHomeInstalledModule home_unit mod
-                    , not (isOneShot (csMode dflags))
-                      -> return (Failed (HomeModError mod loc))
-                  _ -> do r <- read_file
-                            logger name_cache unit_state dflags wanted_mod (ml_hi_file loc)
-                          case r of
-                            Failed err -> return $ Failed $ BadIfaceFile err
-                            Succeeded (iface, fp) -> do
-                              r2 <- load_dynamic_too_maybe logger name_cache unit_state
-                                    (setDynamicNow dflags) wanted_mod iface loc
-                              case r2 of
-                                Failed sdoc -> return $ Failed sdoc
-                                Succeeded {} -> return $ Succeeded (iface, fp)
-              err -> do trace_if logger (text "...not found")
-                        return $ Failed $ cannotFindInterface unit_state mhome_unit
-                                          profile (moduleName mod) err
+  if | mod `installedModuleEq` cSLASH_PRIM
+       -> return (Succeeded (cslPrimIface, "<built in interface for CSL.Prim>"))
+     | mod `installedModuleEq` cSLASH_BUILTIN
+       -> return (Succeeded (cslBuiltInIface, "<built in interface for CSL.BuiltIn>"))
+     | otherwise
+       -> do let fopts = initFinderOpts dflags
+             mb_found <- liftIO (findExactModule fc fopts other_fopts unit_state mhome_unit mod)
+             case mb_found of
+               InstalledFound loc mod ->
+                 case mhome_unit of
+                   Just home_unit
+                     | isHomeInstalledModule home_unit mod
+                     , not (isOneShot (csMode dflags))
+                       -> return (Failed (HomeModError mod loc))
+                   _ -> do r <- read_file
+                             logger name_cache unit_state dflags wanted_mod (ml_hi_file loc)
+                           case r of
+                             Failed err -> return $ Failed $ BadIfaceFile err
+                             Succeeded (iface, fp) -> do
+                               r2 <- load_dynamic_too_maybe logger name_cache unit_state
+                                     (setDynamicNow dflags) wanted_mod iface loc
+                               case r2 of
+                                 Failed sdoc -> return $ Failed sdoc
+                                 Succeeded {} -> return $ Succeeded (iface, fp)
+               err -> do trace_if logger (text "...not found")
+                         return $ Failed $ cannotFindInterface unit_state mhome_unit
+                                            profile (moduleName mod) err
 
 load_dynamic_too_maybe
   :: Logger
@@ -447,6 +451,17 @@ cslPrimIface = empty_iface
     empty_iface = emptyFullModIface cSLASH_PRIM
     fixities = trace "cslPrimIface/fixities" []
 
+cslBuiltInIface :: ModIface
+cslBuiltInIface = empty_iface
+  { mi_exports = cslBuiltInExports
+  , mi_decls = []
+  , mi_fixities = fixities
+  , mi_final_exts = (mi_final_exts empty_iface) { mi_fix_fn = mkIfaceFixCache fixities }
+  }
+  where
+    empty_iface = emptyFullModIface cSLASH_BUILTIN
+    fixities = []
+
 {- *********************************************************************
 *                                                                      *
                 Printing interfaces
@@ -534,7 +549,7 @@ pprFixities fixes = text "fixities" <+> pprWithCommas pprFix fixes
     pprFix (occ, fix) = ppr fix <+> ppr occ
 
 pprIfaceAnnotation :: IfaceAnnotation -> SDoc
-pprIfaceAnnotation = undefined
+pprIfaceAnnotation = panic "pprIfaceAnnotation"
 
 data WhereFrom
   = ImportByUser

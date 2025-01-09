@@ -61,6 +61,9 @@ basicKnownKeyNames
 cSLASH_PRIM :: Module
 cSLASH_PRIM = mkPrimModule (fsLit "CSL.Prim")
 
+cSLASH_BUILTIN :: Module
+cSLASH_BUILTIN = mkPrimModule (fsLit "CSL.BuiltIn")
+
 cSLASH_TYPES :: Module
 cSLASH_TYPES = mkPrimModule (fsLit "CSL.Types")
 
