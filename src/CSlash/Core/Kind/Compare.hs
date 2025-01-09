@@ -30,5 +30,5 @@ tcEqKind :: HasDebugCallStack => Kind -> Kind -> Bool
 tcEqKind orig_ki1 orig_ki2 = go orig_env orig_ki1 orig_ki2
   where
 --    go :: RnEnv2 -> Kind -> Kind -> Bool
-    go = undefined
-    orig_env = undefined
+    go = panic "tcEqKind go"
+    orig_env = panic "tcEqKind oe"

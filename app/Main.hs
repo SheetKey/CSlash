@@ -703,7 +703,7 @@ dumpUnitsSimple cs_env = putMsg (cs_logger cs_env) (pprUnitsSimple (cs_units cs_
 -- ABI hash support
 
 abiHash :: [String] -> Csl ()
-abiHash = undefined
+abiHash = panic "abiHash"
 
 -- -----------------------------------------------------------------------------
 -- Util

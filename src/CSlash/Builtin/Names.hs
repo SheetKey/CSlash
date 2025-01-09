@@ -86,7 +86,7 @@ mkMainModule m = mkModule mainUnit (mkModuleNameFS m)
 ********************************************************************* -}
 
 negateName :: Name
-negateName = undefined
+negateName = panic "negateName"
 
 {- *********************************************************************
 *                                                                      *

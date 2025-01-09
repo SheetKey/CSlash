@@ -88,10 +88,10 @@ data MetaInfo
   = TyVarTv
 
 instance Outputable tk => Outputable (MetaDetails' tk) where
-  ppr = undefined
+  ppr = panic "ppr metadetails'"
 
 instance Outputable MetaInfo where
-  ppr = undefined
+  ppr = panic "ppr metainfo"
 
 data TcKiVarDetails
   = SkolemKv SkolemInfo TcLevel
