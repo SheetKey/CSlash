@@ -37,6 +37,12 @@ isEmptyVarSet = isEmptyUniqSet
 subVarSet :: VarSet -> VarSet -> Bool
 subVarSet s1 s2 = isEmptyVarSet (s1 `minusVarSet` s2)
 
+lookupVarSet :: VarSet -> Var -> Maybe Var
+lookupVarSet = lookupUniqSet
+
+anyVarSet :: (Var -> Bool) -> VarSet -> Bool
+anyVarSet = uniqSetAny
+
 unionVarSet :: VarSet -> VarSet -> VarSet
 unionVarSet = unionUniqSets
 

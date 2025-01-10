@@ -40,8 +40,15 @@ extendInScopeSet :: InScopeSet -> Var -> InScopeSet
 extendInScopeSet (InScope in_scope) v
   = InScope (extendVarSet in_scope v)
 
+extendInScopeSetList :: InScopeSet -> [Var] -> InScopeSet
+extendInScopeSetList (InScope in_scope) vs
+   = InScope $ foldl' extendVarSet in_scope vs
+
 elemInScopeSet :: Var -> InScopeSet -> Bool
 elemInScopeSet v (InScope in_scope) = v `elemVarSet` in_scope
+
+lookupInScope :: InScopeSet -> Var -> Maybe Var
+lookupInScope (InScope in_scope) v = lookupVarSet in_scope v
 
 uniqAway :: InScopeSet -> Var -> Var
 uniqAway in_scope var
@@ -60,6 +67,145 @@ unsafeGetFreshLocalUnique (InScope set)
   = incrUnique uniq'
   | otherwise
   = minLocalUnique
+
+{- *********************************************************************
+*                                                                      *
+                Dual renaming
+*                                                                      *
+********************************************************************* -}
+
+data RnEnv2 = RV2
+  { envL :: VarEnv Var
+  , envR :: VarEnv Var
+  , in_scope :: InScopeSet
+  }
+
+mkRnEnv2 :: InScopeSet -> RnEnv2
+mkRnEnv2 vars = RV2 { envL     = emptyVarEnv
+                    , envR     = emptyVarEnv
+                    , in_scope = vars }
+
+extendRnInScopeSetList :: RnEnv2 -> [Var] -> RnEnv2
+extendRnInScopeSetList env vs
+  | null vs   = env
+  | otherwise = env { in_scope = extendInScopeSetList (in_scope env) vs }
+
+rnInScope :: Var -> RnEnv2 -> Bool
+rnInScope x env = x `elemInScopeSet` in_scope env
+
+rnInScopeSet :: RnEnv2 -> InScopeSet
+rnInScopeSet = in_scope
+
+rnEnvL :: RnEnv2 -> VarEnv Var
+rnEnvL = envL
+
+rnEnvR :: RnEnv2 -> VarEnv Var
+rnEnvR = envR
+
+rnBndrs2 :: RnEnv2 -> [Var] -> [Var] -> RnEnv2
+rnBndrs2 env bsL bsR = foldl2 rnBndr2 env bsL bsR
+
+rnBndr2 :: RnEnv2 -> Var -> Var -> RnEnv2
+rnBndr2 env bL bR = fst $ rnBndr2_var env bL bR
+
+rnBndr2_var :: RnEnv2 -> Var -> Var -> (RnEnv2, Var)
+rnBndr2_var (RV2 { envL = envL, envR = envR, in_scope = in_scope }) bL bR
+  = ( RV2 { envL = extendVarEnv envL bL new_b
+          , envR = extendVarEnv envR bR new_b
+          , in_scope = extendInScopeSet in_scope new_b }
+    , new_b)
+  where
+    new_b | not (bR `elemInScopeSet` in_scope) = bR
+          | not (bL `elemInScopeSet` in_scope) = bR `setVarUnique` varUnique bL
+          | otherwise                          = uniqAway' in_scope bR
+
+rnBndrL :: RnEnv2 -> Var -> (RnEnv2, Var)
+rnBndrL (RV2 { envL = envL, envR = envR, in_scope = in_scope }) bL
+  = ( RV2 { envL     = extendVarEnv envL bL new_b
+          , envR     = envR
+          , in_scope = extendInScopeSet in_scope new_b }
+    , new_b)
+  where
+    new_b = uniqAway in_scope bL
+
+rnBndrR :: RnEnv2 -> Var -> (RnEnv2, Var)
+rnBndrR (RV2 { envL = envL, envR = envR, in_scope = in_scope }) bR
+  = ( RV2 { envR     = extendVarEnv envR bR new_b
+          , envL     = envL
+          , in_scope = extendInScopeSet in_scope new_b }
+    , new_b)
+  where
+    new_b = uniqAway in_scope bR
+
+rnEtaL :: RnEnv2 -> Var -> (RnEnv2, Var)
+rnEtaL (RV2 { envL = envL, envR = envR, in_scope = in_scope }) bL
+  = ( RV2 { envL     = extendVarEnv envL bL new_b
+          , envR     = extendVarEnv envR new_b new_b
+          , in_scope = extendInScopeSet in_scope new_b }
+    , new_b)
+  where
+    new_b = uniqAway in_scope bL
+
+rnEtaR :: RnEnv2 -> Var -> (RnEnv2, Var)
+rnEtaR (RV2 { envL = envL, envR = envR, in_scope = in_scope }) bR
+  = ( RV2 { envL     = extendVarEnv envL new_b new_b
+          , envR     = extendVarEnv envR bR new_b
+          , in_scope = extendInScopeSet in_scope new_b }
+    , new_b)
+  where
+    new_b = uniqAway in_scope bR
+
+delBndrL :: RnEnv2 -> Var -> RnEnv2
+delBndrL rn@(RV2 { envL = env, in_scope = in_scope }) v
+  = rn { envL = env `delVarEnv` v, in_scope = in_scope `extendInScopeSet` v }
+
+delBndrR :: RnEnv2 -> Var -> RnEnv2
+delBndrR rn@(RV2 { envR = env, in_scope = in_scope }) v
+  = rn { envR = env `delVarEnv` v, in_scope = in_scope `extendInScopeSet` v }
+
+delBndrsL :: RnEnv2 -> [Var] -> RnEnv2
+delBndrsL rn@(RV2 { envL = env, in_scope = in_scope }) v
+  = rn { envL = env `delVarEnvList` v, in_scope = in_scope `extendInScopeSetList` v }
+
+delBndrsR :: RnEnv2 -> [Var] -> RnEnv2
+delBndrsR rn@(RV2 { envR = env, in_scope = in_scope }) v
+  = rn { envR = env `delVarEnvList` v, in_scope = in_scope `extendInScopeSetList` v }
+
+rnOccL :: RnEnv2 -> Var -> Var
+rnOccL (RV2 { envL = env }) v = lookupVarEnv env v `orElse` v
+
+rnOccR :: RnEnv2 -> Var -> Var
+rnOccR (RV2 { envR = env }) v = lookupVarEnv env v `orElse` v
+
+rnOccL_maybe :: RnEnv2 -> Var -> Maybe Var
+rnOccL_maybe (RV2 { envL = env }) v = lookupVarEnv env v
+
+rnOccR_maybe :: RnEnv2 -> Var -> Maybe Var
+rnOccR_maybe (RV2 { envR = env }) v = lookupVarEnv env v
+
+inRnEnvL :: RnEnv2 -> Var -> Bool
+inRnEnvL (RV2 { envL = env }) v = v `elemVarEnv` env
+
+inRnEnvR :: RnEnv2 -> Var -> Bool
+inRnEnvR (RV2 { envR = env }) v = v `elemVarEnv` env
+
+anyInRnEnvR :: RnEnv2 -> VarSet -> Bool
+anyInRnEnvR (RV2 { envR = env }) vs
+  | isEmptyVarEnv env = False
+  | otherwise         = anyVarSet (`elemVarEnv` env) vs
+
+lookupRnInScope :: RnEnv2 -> Var -> Var
+lookupRnInScope env v = lookupInScope (in_scope env) v `orElse` v
+
+nukeRnEnvL :: RnEnv2 -> RnEnv2
+nukeRnEnvL env = env { envL = emptyVarEnv }
+
+nukeRnEnvR :: RnEnv2 -> RnEnv2
+nukeRnEnvR env = env { envR = emptyVarEnv }
+
+rnSwap :: RnEnv2 -> RnEnv2
+rnSwap (RV2 { envL = envL, envR = envR, in_scope = in_scope })
+  = RV2 { envL = envR, envR = envL, in_scope = in_scope }
 
 {- *********************************************************************
 *                                                                      *
@@ -92,8 +238,14 @@ type KdVarEnv elt = UniqFM Var elt
 emptyVarEnv :: VarEnv a
 emptyVarEnv = emptyUFM
 
+delVarEnvList :: VarEnv a -> [Var] -> VarEnv a
+delVarEnvList = delListFromUFM
+
 isEmptyVarEnv :: VarEnv a -> Bool
 isEmptyVarEnv = isNullUFM
+
+elemVarEnv :: Var -> VarEnv a -> Bool
+elemVarEnv = elemUFM
 
 varSetInScope :: VarSet -> InScopeSet -> Bool
 varSetInScope vars (InScope s1) = vars `subVarSet` s1
