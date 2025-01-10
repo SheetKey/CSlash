@@ -4,8 +4,12 @@
 
 module CSlash.Core.Kind where
 
-import CSlash.Types.Var
+import Prelude hiding ((<>))
 
+import CSlash.Types.Var
+import CSlash.Types.Var.Env
+
+import CSlash.Types.Basic
 import CSlash.Utils.Outputable
 import CSlash.Utils.Panic
 
@@ -30,21 +34,52 @@ data Kind
   | KdContext [KdRel]
   --  | LTKd Kind Kind
   --  | LTEQKd Kind Kind
-  deriving (Eq, Data.Data)
+  deriving Data.Data
 
 data KdRel
   = LTKd Kind Kind
   | LTEQKd Kind Kind
-  deriving (Eq, Data.Data)
+  deriving Data.Data
 
 instance Outputable Kind where
   ppr = pprKind
 
 pprKind :: Kind -> SDoc
-pprKind _ = text "{pprKind not defined}"
+pprKind = pprPrecKind topPrec
+
+pprPrecKind :: PprPrec -> Kind -> SDoc
+pprPrecKind = pprPrecKindX emptyTidyEnv
+
+pprPrecKindX :: TidyEnv -> PprPrec -> Kind -> SDoc
+pprPrecKindX env prec ki
+  = getPprStyle $ \sty ->
+    getPprDebug $ \debug ->
+    if debug
+    then debug_ppr_ki prec ki
+    else text "{pprKind not implemented}"--pprPrecIfaceKind prec (tidyToIfaceKindStyX env ty sty)
 
 debugPprKind :: Kind -> SDoc
-debugPprKind _ = text "{debugPprKind not defined}"
+debugPprKind ki = debug_ppr_ki topPrec ki
+
+debug_ppr_ki :: PprPrec -> Kind -> SDoc
+debug_ppr_ki _ (KiVarKi kv) = ppr kv
+debug_ppr_ki _ UKd = uKindLit
+debug_ppr_ki _ AKd = aKindLit
+debug_ppr_ki _ LKd = lKindLit
+debug_ppr_ki prec (FunKd { fk_af = af, kft_arg = arg, kft_res = res })
+  = maybeParen prec funPrec
+    $ sep [ debug_ppr_ki funPrec arg, arrow <+> debug_ppr_ki prec res]
+debug_ppr_ki prec (KdContext rels) = pprKdRels prec rels
+
+pprKdRels :: PprPrec -> [KdRel] -> SDoc
+pprKdRels _ [] = panic "pprKdRels []"
+pprKdRels prec [rel] = pprKdRel prec rel
+pprKdRels prec (rel:rels) = parens $ sep $ pprKdRel prec rel
+                                           : (((text ", " <>) . pprKdRel prec) <$> rels)
+
+pprKdRel :: PprPrec -> KdRel -> SDoc
+pprKdRel prec (LTKd k1 k2) = sep [debug_ppr_ki prec k1, text "<", debug_ppr_ki prec k2]
+pprKdRel prec (LTEQKd k1 k2) = sep [debug_ppr_ki prec k1, text "<=", debug_ppr_ki prec k2]
 
 data FunKdFlag
   = FKF_K_K -- Kind -> Kind
@@ -81,6 +116,23 @@ noFreeVarsOfKind k = case k of
 
 mkKiVarKi :: KindVar -> Kind
 mkKiVarKi v = assertPpr (isKiVar v) (ppr v) $ KiVarKi v
+
+mkFunKi :: Kind -> Kind -> Kind
+mkFunKi (FunKd FKF_C_K (KdContext c1) k1) (FunKd FKF_C_K (KdContext c2) k2)
+  = FunKd FKF_C_K (KdContext (c1 ++ c2)) $ FunKd FKF_K_K k1 k2
+mkFunKi (FunKd FKF_C_K c1 k1) k2
+  = FunKd FKF_C_K c1 $ FunKd FKF_K_K k1 k2
+mkFunKi k1 (FunKd FKF_C_K c2 k2)
+  = FunKd FKF_C_K c2 $ FunKd FKF_K_K k1 k2
+mkFunKi k1@(KdContext _) _ = pprPanic "mkFunKi" (ppr k1)
+mkFunKi _ k2@(KdContext _) = pprPanic "mkFunKi" (ppr k2)
+mkFunKi k1 k2 = FunKd FKF_K_K k1 k2    
+
+mkContextKi :: Kind -> Kind -> Kind
+mkContextKi k1@(KdContext c1) k2 = case k2 of
+  FunKd FKF_C_K (KdContext c2) k2' -> FunKd FKF_C_K (KdContext (c1 ++ c2)) k2'
+  _ -> FunKd FKF_C_K k1 k2
+mkContextKi k1 _ = pprPanic "mkContextKi" (ppr k1)
 
 {- *********************************************************************
 *                                                                      *
