@@ -134,12 +134,52 @@ mkAppTys ty1 tys2 = foldl' AppTy ty1 tys2
 
 {- *********************************************************************
 *                                                                      *
+                      FunTy
+*                                                                      *
+********************************************************************* -}
+
+piResultTys :: HasDebugCallStack => Kind -> [Type] -> Kind
+piResultTys ki [] = ki
+piResultTys ki orig_args@(arg:args)
+  | FunKd { kft_res = res } <- ki
+  = piResultTys res args
+  | otherwise
+  = pprPanic "piResultTys1" (ppr ki $$ ppr orig_args)
+
+{- *********************************************************************
+*                                                                      *
+        ForAllTy
+*                                                                      *
+********************************************************************* -}
+
+splitForAllTyVars :: Type -> ([TypeVar], Type)
+splitForAllTyVars ty = split ty ty []
+  where
+    split _ (ForAllTy (Bndr tv _) ty) tvs = split ty ty (tv:tvs)
+    split orig_ty ty tvs | Just ty' <- coreView ty = split orig_ty ty' tvs
+    split orig_ty _ tvs = (reverse tvs, orig_ty)
+
+{- *********************************************************************
+*                                                                      *
         The kind of a type
 *                                                                      *
 ********************************************************************* -}
 
 typeKind :: HasDebugCallStack => Type -> Kind
-typeKind _ = panic "typeKind"
+typeKind (TyConApp tc tys) = piResultTys (tyConKind tc) tys
+typeKind (FunTy { ft_kind = kind }) = kind
+typeKind (TyVarTy tyvar) = tyVarKind tyvar
+typeKind (AppTy fun arg)
+  = go fun [arg]
+  where
+    go (AppTy fun arg) args = go fun (arg:args)
+    go fun args = piResultTys (typeKind fun) args
+typeKind ty@(ForAllTy {})
+  = let (tvs, body) = splitForAllTyVars ty
+        body_kind = typeKind body
+    in assertPpr (not (null tvs) && all isTyVar tvs) (ppr ty) body_kind
+typeKind (TyLamTy tv res) = mkFunKi (tyVarKind tv) (typeKind res)
+typeKind (WithContext ctxt ty) = mkContextKi ctxt (typeKind ty)       
 
 {- *********************************************************************
 *                                                                      *
