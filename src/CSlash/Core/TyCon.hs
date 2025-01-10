@@ -8,6 +8,7 @@ import {-# SOURCE #-} CSlash.Core.Type.Rep (Type, mkNakedTyConTy)
 import {-# SOURCE #-} CSlash.Core.DataCon (DataCon, dataConFullSig)
 
 import CSlash.Core.Kind
+import {-# SOURCE #-} CSlash.Core.Kind.Compare (tcEqKind)
 
 import CSlash.Utils.Binary
 import CSlash.Types.Var
@@ -67,10 +68,10 @@ verifyTyConKind bndrs kind =
     no_constrs _ = True
 
     go [Bndr tv _] (FunKd _ arg_kd _)
-      | isTyVar tv = varKind tv == arg_kd
+      | isTyVar tv = varKind tv `tcEqKind` arg_kd
     go ((Bndr tv _):bndrs) (FunKd _ arg_kd res_kd)
-      | isTyVar tv = varKind tv == arg_kd && go bndrs res_kd
-    go _ _ = panic "verifyTyConKind_go"
+      | isTyVar tv = varKind tv `tcEqKind` arg_kd && go bndrs res_kd
+    go _ _ = pprPanic "verifyTyConKind_go" (vcat [ppr bndrs, ppr kind])
 
 -- use like ghc mkAnonTyConBinder
 mkSpecifiedTyConBinder :: TypeVar -> TyConBinder
