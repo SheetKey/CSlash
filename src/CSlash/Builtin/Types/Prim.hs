@@ -81,7 +81,7 @@ mkTemplateFunKindVars i
 
 mk_kv_name :: Int -> String -> Name
 mk_kv_name u s = mkInternalName (mkAlphaTyVarUnique u)
-                                (mkTyVarOccFS (mkFastString s))
+                                (mkKiVarOccFS (mkFastString s))
                                 noSrcSpan
 
 mk_tv_name :: Int -> String -> Name
