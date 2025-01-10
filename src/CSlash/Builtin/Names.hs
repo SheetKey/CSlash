@@ -16,6 +16,8 @@ import qualified CSlash.Data.List.Infinite as Inf
 
 import CSlash.Language.Syntax.Module.Name
 
+import CSlash.Utils.Panic
+
 {- *********************************************************************
 *                                                                      *
      allNameStrings
