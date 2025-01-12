@@ -109,6 +109,9 @@ zonkTcTyVar tv
       z_tv <- zonkTyVarKind tv
       return $ mkTyVarTy z_tv
 
+zonkTcTyVarsToTcTyVars :: HasDebugCallStack => [TcTyVar] -> ZonkM [TcTyVar]
+zonkTcTyVarsToTcTyVars = mapM zonkTcTyVarToTcTyVar
+
 zonkTcTyVarToTcTyVar :: HasDebugCallStack => TcTyVar -> ZonkM TcTyVar
 zonkTcTyVarToTcTyVar tv = do
   ty <- zonkTcTyVar tv
