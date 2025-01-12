@@ -40,7 +40,7 @@ import CSlash.Tc.Types.LclEnv
 -- import GHC.Core.Coercion
 import CSlash.Core.Type
 import CSlash.Core.Type.Rep   -- for checkValidRoles
--- import CSlash.Core.Type.Ppr( pprTyVars )
+import CSlash.Core.Type.Ppr( pprTyVars )
 import CSlash.Core.Kind
 -- import GHC.Core.Class
 -- import GHC.Core.Coercion.Axiom
@@ -83,6 +83,8 @@ import Data.List.NonEmpty ( NonEmpty(..) )
 import qualified Data.List.NonEmpty as NE
 import Data.Traversable ( for )
 import Data.Tuple( swap )
+
+import Debug.Trace (trace)
 
 {- *********************************************************************
 *                                                                      *
@@ -180,38 +182,90 @@ generalizeTyDecl inferred_tc_env (L _ decl) = do
 swizzleTcTyConBndrs
   :: [(TcTyCon, SkolemInfo, ScopedPairs, TcKind)]
   -> TcM [(TcTyCon, SkolemInfo, ScopedPairs, TcKind)]
-swizzleTcTyConBndrs tc_infos = panic "swizzleTcTyConBndrs"
-  -- | all no_swizzle swizzle_pairs
-  -- = do traceTc "Skipping swizzleTcTyConBndrs for" (ppr_infos tc_infos)
-  --      return tc_infos
+swizzleTcTyConBndrs tc_infos 
+  | all no_swizzle swizzle_pairs
+  = do traceTc "Skipping swizzleTcTyConBndrs for" (ppr_infos tc_infos)
+       return tc_infos
 
-  -- | otherwise
-  -- = do checkForDuplicateScope swizzle_pairs
-  --      traceTc "swizzleTcTyConBndrs" $
-  --        vcat [ text "before" <+> ppr_infos tc_infos
-  --             , text "swizzle_pairs" <+> ppr swizzle_pairs
-  --             , text "after" <+> ppr_infos swizzled_infos ]
-  --      return swizzled_infos
-  -- where
-  --   swizzled_infos = [ (tc, skol_info, mapSnd swizzle_var scoped_pairs, swizzle_ty kind)
-  --                    | (tc, skol_info, scoped_pairs, kind) <- tc_infos ]
+  | otherwise
+  = do checkForDuplicateScopedTyVars swizzle_pairs
+       traceTc "swizzleTcTyConBndrs" $
+         vcat [ text "before" <+> ppr_infos tc_infos
+              , text "swizzle_pairs" <+> ppr swizzle_pairs
+              , text "after" <+> ppr_infos swizzled_infos ]
+       return swizzled_infos
+  where
+    swizzled_infos = [ (tc, skol_info, mapSnd swizzle_var scoped_pairs, swizzle_ki kind)
+                     | (tc, skol_info, scoped_pairs, kind) <- tc_infos ]
 
-  --   swizzle_pairs :: [(Name, TypeVar)]
-  --   swizzle_pairs = [ pair | (_, _, pairs, _) <- tc_infos, pair <- pairs ]
+    swizzle_pairs :: [(Name, TypeVar)]
+    swizzle_pairs = [ pair | (_, _, pairs, _) <- tc_infos, pair <- pairs ]
 
-  --   no_swizzle :: (Name, TypeVar) -> Bool
-  --   no_swizzle (nm, tv) = nm == tyVarName tv
+    no_swizzle :: (Name, TypeVar) -> Bool
+    no_swizzle (nm, tv) = nm == tyVarName tv
 
-  --   ppr_infos infos = fvat [ ppr tc <+> pprTyVars (map snd pairs) | (tc, _, pairs, _) <- infos ]
+    ppr_infos infos = vcat [ ppr tc <+> pprTyVars (map snd pairs) | (tc, _, pairs, _) <- infos ]
 
-  --   swizzle_env = mkVarEnv (map swap swizzle_pairs)
+    swizzle_env = mkVarEnv (map swap swizzle_pairs)
 
-  --   swizzleMapper :: TypeMapper () Identity
-  --   swizzleMapper = 
+    swizzleMapper :: TypeMapper () Identity
+    swizzleMapper = TypeMapper { tcm_tyvar = swizzle_tv
+                               , tcm_tybinder = swizzle_bndr
+                               , tcm_tylambinder = swizzle_lam_bndr
+                               , tcm_tycon = swizzle_tycon }
+
+    swizzle_tycon tc = pprPanic "swizzle_tc" (ppr tc)
+
+    swizzle_tv _ tv = return $ mkTyVarTy $ swizzle_var tv
+
+    swizzle_bndr :: () -> TypeVar -> ForAllTyFlag -> (() -> TypeVar -> Identity r) -> Identity r
+    swizzle_bndr _ tv _ k = k () (swizzle_var tv)
+
+    swizzle_lam_bndr :: () -> TypeVar -> (() -> TypeVar -> Identity r) -> Identity r
+    swizzle_lam_bndr _ tv k = k () (swizzle_var tv)
+
+    swizzle_var :: Var -> Var
+    swizzle_var v
+      | Just nm <- lookupVarEnv swizzle_env v
+      = updateVarKind swizzle_ki (v `setVarName` nm)
+      | otherwise
+      = updateVarKind swizzle_ki v
+
+    (map_type, _) = mapType swizzleMapper
+    swizzle_ty ty = runIdentity (map_type ty)
+
+    swizzle_ki ki = trace "swizzle_ki NOT implemented" ki
 
 generalizeTcTyCon :: (MonoTcTyCon, SkolemInfo, ScopedPairs, TcKind) -> TcM PolyTcTyCon
-generalizeTcTyCon (tc, skol_info, scoped_pairs, tc_res_kind) = panic "generalizeTcTyCon"
+generalizeTcTyCon (tc, skol_info, scoped_prs, tc_res_kind)
+  = setSrcSpan (getSrcSpan tc) $ addTyConCtxt tc $ do
+      let spec_req_tvs = map snd scoped_prs
+          n_spec = length spec_req_tvs - tyConArity tc
+          (spec_tvs, req_tvs) = splitAt n_spec spec_req_tvs
 
+      massertPpr (n_spec == 0) $ vcat [ ppr tc
+                                      , ppr skol_info
+                                      , ppr scoped_prs
+                                      , ppr tc_res_kind ]
+
+      traceTc "generalizeTcTyCon: pre zonk"
+        $ vcat [ text "tycon =" <+> ppr tc
+               , text "spec_req_tvs =" <+> pprTyVars spec_req_tvs
+               , text "tc_res_kind =" <+> ppr tc_res_kind ]
+
+      (spec_tvs, req_tvs, tc_res_kind) <- liftZonkM $ do
+        spec_tvs <- zonkTcTyVarsToTcTyVars spec_tvs
+        req_tvs <- zonkTcTyVarsToTcTyVars req_tvs
+        tc_res_kind <- zonkTcKind tc_res_kind
+        return (spec_tvs, req_tvs, tc_res_kind)
+
+      traceTc "generalizeTcTyCon: post zonk"
+        $ vcat [ text "tycon =" <+> ppr tc
+               , text "spec_tvs =" <+> pprTyVars spec_tvs
+               , text "res_tvs =" <+> pprTyVars req_tvs
+               , text "tc_res_kind =" <+> ppr tc_res_kind ]
+
+      panic "generalizeTcTyCon unfinished"
 
 tcExtendKindEnvWithTyCons :: [TcTyCon] -> TcM a -> TcM a
 tcExtendKindEnvWithTyCons tcs = tcExtendKindEnvList [ (tyConName tc, ATcTyCon tc) | tc <- tcs ]
@@ -315,3 +369,9 @@ tcMkDeclCtxt decl = hsep [ text "In the", pprTyDeclFlavor decl
 
 tcAddDeclCtxt :: CsBind Rn -> TcM a -> TcM a
 tcAddDeclCtxt decl thing_inside = addErrCtxt (tcMkDeclCtxt decl) thing_inside
+
+addTyConCtxt :: TyCon -> TcM a -> TcM a
+addTyConCtxt tc = addTyConFlavCtxt name flav
+  where
+    name = getName tc
+    flav = tyConFlavor tc
