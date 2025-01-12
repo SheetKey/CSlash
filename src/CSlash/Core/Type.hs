@@ -1,19 +1,20 @@
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE BangPatterns #-}
+
 module CSlash.Core.Type
   ( Type(..), ForAllTyFlag(..) -- , FunTyFlag(..)
   , Var, TypeVar, isTyVar, ForAllTyBinder
   , KnotTied
 
-  , mkTyVarTy, mkTyVarTys, getTyVar_maybe, repGetTyVar_maybe
+  , mkTyVarTy, mkTyVarTys
 
   , mkAppTy, mkAppTys
 
-  , mkTyConApp, mkTyConTy
+  , mkTyConTy
 
   , binderVar, binderVars
 
-  , coreView, coreFullView
-
-  , typeKind
+  , module CSlash.Core.Type
   ) where
 
 import CSlash.Types.Basic
@@ -103,6 +104,65 @@ expand_syn tvs rhs arg_tys
         rhs' = substTy subst rhs
     go subst (tv:tvs) (ty:tys) = go (extendTvSubst subst tv ty) tvs tys
     go _ (_:_) [] = pprPanic "expand_syn" (ppr tvs $$ ppr rhs $$ ppr arg_tys)
+
+{- *********************************************************************
+*                                                                      *
+                      mapType
+*                                                                      *
+********************************************************************* -}
+
+data TypeMapper env m = TypeMapper
+  { tcm_tyvar :: env -> TypeVar -> m Type
+  , tcm_tybinder :: forall r. env -> TypeVar -> ForAllTyFlag -> (env -> TypeVar -> m r) -> m r
+  , tcm_tylambinder :: forall r. env -> TypeVar -> (env -> TypeVar -> m r) -> m r
+  , tcm_tycon :: TyCon -> m TyCon
+  }
+
+{-# INLINE mapType #-}
+mapType
+  :: Monad m => TypeMapper () m
+  -> ( Type -> m Type
+     , [Type] -> m [Type] )
+mapType mapper = case mapTypeX mapper of
+                   (go_ty, go_tys) -> (go_ty (), go_tys ())
+
+{-# INLINE mapTypeX #-}
+mapTypeX
+  :: Monad m => TypeMapper env m
+  -> ( env -> Type -> m Type
+     , env -> [Type] -> m [Type] )
+mapTypeX (TypeMapper { tcm_tyvar = tyvar
+                     , tcm_tybinder = tybinder
+                     , tcm_tycon = tycon
+                     , tcm_tylambinder = tylambinder })
+  = (go_ty, go_tys)
+  where
+    go_tys !_ [] = return []
+    go_tys !env (ty:tys) = (:) <$> go_ty env ty <*> go_tys env tys
+
+    go_ty !env (TyVarTy tv) = tyvar env tv
+    go_ty !env (AppTy t1 t2) = mkAppTy <$> go_ty env t1 <*> go_ty env t2
+    go_ty !env ty@(FunTy _ arg res) = do
+      arg' <- go_ty env arg
+      res' <- go_ty env res
+      return $ ty { ft_arg = arg', ft_res = res' }
+    go_ty !env ty@(TyConApp tc tys)
+      | isTcTyCon tc
+      = do tc' <- tycon tc
+           mkTyConApp tc' <$> go_tys env tys
+      | null tys
+      = return ty
+      | otherwise
+      = mkTyConApp tc <$> go_tys env tys
+    go_ty !env (ForAllTy (Bndr tv vis) inner) = do
+      tybinder env tv vis $ \env' tv' -> do
+        inner' <- go_ty env' inner
+        return $ ForAllTy (Bndr tv' vis) inner'
+    go_ty !env (TyLamTy tv inner) = do
+      tylambinder env tv $ \env' tv' -> do
+        inner' <- go_ty env' inner
+        return $ TyLamTy tv' inner'
+    go_ty !env (WithContext ki ty) = WithContext ki <$> go_ty env ty
 
 {- *********************************************************************
 *                                                                      *
