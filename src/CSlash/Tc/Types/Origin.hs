@@ -2,6 +2,8 @@
 
 module CSlash.Tc.Types.Origin where
 
+import Prelude hiding ((<>))
+
 import CSlash.Tc.Utils.TcType
 
 import CSlash.Cs
@@ -35,6 +37,7 @@ data UserTypeCtxt
   | TypeAppCtxt
   | ConArgCtxt Name
   | TySynCtxt Name
+  | PatSynCtxt Name
   | GenSigCtxt
   | SigmaCtxt
   | TyVarBndrKindCtxt Name
@@ -45,6 +48,22 @@ data ReportRedundantConstraints
   = NoRRC
   | WantRRC SrcSpan
   deriving (Eq)
+
+pprUserTypeCtxt :: UserTypeCtxt -> SDoc
+pprUserTypeCtxt (FunSigCtxt n _) = text "the type signature for" <+> quotes (ppr n)
+pprUserTypeCtxt (InfSigCtxt n) = text "the inferred type for" <+> quotes (ppr n)
+pprUserTypeCtxt (ExprSigCtxt _) = text "an expression type signature"
+pprUserTypeCtxt KindSigCtxt = text "a kind signature"
+pprUserTypeCtxt TypeAppCtxt = text "a type argument"
+pprUserTypeCtxt (ConArgCtxt c) = text "the type of the constructor" <+> quotes (ppr c)
+pprUserTypeCtxt (TySynCtxt c) = text "the RHS of the type synonym" <+> quotes (ppr c)
+pprUserTypeCtxt (PatSynCtxt _) = panic "currently unreachable"
+pprUserTypeCtxt GenSigCtxt = text "a type expected by the context"
+pprUserTypeCtxt SigmaCtxt = text "the context of a polymorphic type"
+pprUserTypeCtxt (TyVarBndrKindCtxt n) = text "the kind annotation on the type variable"
+                                        <+> quote (ppr n)
+pprUserTypeCtxt (TySynKindCtxt n) = text "the kind annotation on the declaration for"
+                                    <+> quotes (ppr n)
 
 data SkolemInfo = SkolemInfo Unique SkolemInfoAnon
 
@@ -70,6 +89,31 @@ mkSkolemInfo sk_anon = do
 
 getSkolemInfo :: SkolemInfo -> SkolemInfoAnon
 getSkolemInfo (SkolemInfo _ skol_anon) = skol_anon
+
+instance Outputable SkolemInfo where
+  ppr (SkolemInfo _ sk_info) = ppr sk_info
+
+instance Outputable SkolemInfoAnon where
+  ppr = pprSkolInfo
+
+pprSkolInfo :: SkolemInfoAnon -> SDoc
+pprSkolInfo (SigSkol cx ty _) = pprSigSkolInfo cx ty
+pprSkolInfo (SigTypeSkol cx) = pprUserTypeCtxt cx
+pprSkolInfo (ForAllSkol tvs) = text "an explicit forall" <+> ppr tvs
+pprSkolInfo (InferSkol ids) = hang (text "the inferred type" <> plural ids <+> text "of")
+                              2 (vcat [ ppr name <+> colon <+> ppr ty
+                                      | (name, ty) <- ids ])
+pprSkolInfo (UnifyForAllSkol ty) = text "the type" <+> ppr ty
+pprSkolInfo (TyConSkol flav name) = text "the" <+> ppr flav
+                                    <+> text "declaration for" <+> quotes (ppr name)
+pprSkolInfo (UnkSkol cs) = text "UnkSkol (please report this as a bug)" $$ prettyCallStackDoc cs
+
+pprSigSkolInfo :: UserTypeCtxt -> TcType -> SDoc
+pprSigSkolInfo ctxt ty = case ctxt of
+  FunSigCtxt f _ -> vcat [ text "the type signature for:"
+                         , nest 2 (pprPrefixOcc f <+> colon <+> ppr ty) ]
+  PatSynCtxt {} -> panic "currently unreachable"
+  _ -> vcat [ pprUserTypeCtxt ctxt <> colon, nest 2 (ppr ty) ]
 
 {- *********************************************************************
 *                                                                      *
