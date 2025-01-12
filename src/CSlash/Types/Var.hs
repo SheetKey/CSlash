@@ -8,6 +8,7 @@ module CSlash.Types.Var
 
   , varName, varUnique, varType, varTypeMaybe, varKind, varKindMaybe
   -- , varMult, varMultMaybe
+  , updateVarKind
 
   , setVarName, setVarUnique
 
@@ -177,6 +178,9 @@ setVarUnique var uniq = var { realUnique = uniq
 setVarName :: Var -> Name -> Var
 setVarName var new_name = var { realUnique = getUnique new_name
                               , varName = new_name }
+
+updateVarKind :: (Kind -> Kind) -> Var -> Var
+updateVarKind upd var = var { varKind = upd (varKind var) }
 
 {- *********************************************************************
 *                                                                      *
