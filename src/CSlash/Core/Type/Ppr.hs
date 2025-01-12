@@ -34,6 +34,9 @@ pprType _ = text "pprType not defined"
 --     env' = tidyFreeTyVars env free_tvs
 --     free_tvs = tyVarsOfTypeWellScoped ty
 
+pprTyVars :: [TypeVar] -> SDoc
+pprTyVars tvs = sep (map pprTyVar tvs)
+
 pprTyVar :: TypeVar -> SDoc
 pprTyVar tv = parens (ppr tv <+> colon <+> ppr kind)
   where
