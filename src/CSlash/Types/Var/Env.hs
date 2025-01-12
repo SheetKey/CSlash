@@ -235,6 +235,9 @@ type TyVarEnv elt = UniqFM Var elt
 
 type KdVarEnv elt = UniqFM Var elt
 
+mkVarEnv :: [(Var, a)] -> VarEnv a
+mkVarEnv = listToUFM
+
 emptyVarEnv :: VarEnv a
 emptyVarEnv = emptyUFM
 
