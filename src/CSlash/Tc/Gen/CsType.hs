@@ -407,6 +407,27 @@ newExpectedKind AnyKind = newMetaKindVar
 
 {- *********************************************************************
 *                                                                      *
+             Scoped tykivars that map to the same thing
+*                                                                      *
+********************************************************************* -}
+
+checkForDuplicateScopedTyVars :: [(Name, TcTyVar)] -> TcM ()
+checkForDuplicateScopedTyVars scoped_prs
+  = unless (null err_prs) $ do
+      mapM_ report_dup err_prs
+      failM
+  where 
+    err_prs :: [(Name, Name)]
+    err_prs = [ (n1, n2)
+              | prs {-:: NonEmpty (Name, TypeVar)-} <- findDupsEq ((==) `on` snd) scoped_prs
+              , (n1, _) :| ((n2, _) : _) <- [NE.nubBy ((==) `on` fst) prs ] ]
+
+    report_dup :: (Name, Name) -> TcM ()
+    report_dup (n1, n2) = setSrcSpan (getSrcSpan n2)
+                          $ addErrTc $ panic "TcRnDifferentNamesForTyVar n1 n2"
+
+{- *********************************************************************
+*                                                                      *
              Bringing type variables into scope
 *                                                                      *
 ********************************************************************* -}
