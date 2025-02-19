@@ -262,8 +262,19 @@ generalizeTcTyCon (tc, skol_info, scoped_prs, tc_res_kind)
       traceTc "generalizeTcTyCon: post zonk"
         $ vcat [ text "tycon =" <+> ppr tc
                , text "spec_tvs =" <+> pprTyVars spec_tvs
-               , text "res_tvs =" <+> pprTyVars req_tvs
+               , text "req_tvs =" <+> pprTyVars req_tvs
                , text "tc_res_kind =" <+> ppr tc_res_kind ]
+
+      -- let specified_tcbs = mkNamedTyConBinders Specified spec_tvs
+      --     required_tcbs = mkAnonTyConBinders req_tvs
+
+      --     all_tcbs = specified_tcbs ++ required_tcbs
+      --     flav = tyConFlavor tc
+
+      -- etaExpandAlgTyCon flav skol_info all_tcbs tc_res_kind
+
+      -- let final_tcbs = all_tcbs
+      --     tycon = mkTcTyCon (tyConName tc) final
 
       panic "generalizeTcTyCon unfinished"
 

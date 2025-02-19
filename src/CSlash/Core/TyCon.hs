@@ -77,6 +77,20 @@ verifyTyConKind bndrs kind =
       | isTyVar tv = varKind tv `tcEqKind` arg_kd && go bndrs res_kd
     go _ _ = pprPanic "verifyTyConKind_go" (vcat [ppr bndrs, ppr kind])
 
+-- mkAnonTyConBinder :: TypeVar -> TyConBinder
+-- mkAnonTyConBinder tv = assert (isTyVar tv) $
+--                        Bndr tv AnonTCB
+
+-- mkAnonTyConBinders :: [TypeVar] -> [TyConBinder]
+-- mkAnonTyConBinders = map mkAnonTyConBinder
+
+-- mkNamedTyConBinder :: ForAllTyFlag -> TypeVar -> TyConBinder
+-- mkNamedTyConBinder vis tv = assert (isTyVar tv) $
+--                             Bndr tv (NamedTCB vis)
+
+-- mkNamedTyConBinders :: ForAllTyFlag -> [TypeVar] -> [TyConBinder]
+-- mkNamedTyConBinders vis tvs = map (mkNamedTyConBinder vis) tvs
+
 -- use like ghc mkAnonTyConBinder
 mkSpecifiedTyConBinder :: TypeVar -> TyConBinder
 mkSpecifiedTyConBinder tv = assert (isTyVar tv) $

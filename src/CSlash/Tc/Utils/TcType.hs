@@ -39,6 +39,7 @@ type TcTyVarBinder = TyVarBinder
 type TcTyCon = TyCon
 type MonoTcTyCon = TcTyCon
 type PolyTcTyCon = TcTyCon
+type TcTyConBinder = TyConBinder
 
 type TcKind = Kind
 

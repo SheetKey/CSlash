@@ -554,6 +554,41 @@ kindGeneralizeNone kind = do
   _ <- promoteKiVarSet $ dVarSetToVarSet dvs
   return ()
 
+{- Note
+GHC has to do this since GHC allows user written kind signatures
+for top level declarations. E.g., in the declaration of a data/newtype/class
+(which happens more often using GADT syntax).
+We do things differently, and essentially don't have syntax that would introduce
+this issue, nor do we plan to add such syntax.
+However, for the sake of future proofing things, we include some sanity checks here.
+If we add some syntax that would require the compiler to eta expand,
+we should detect it here.
+-}
+etaExpandAlgTyCon
+  :: TyConFlavor tc
+  -> SkolemInfo
+  -> [TcTyConBinder]
+  -> Kind
+  -> TcM ()
+etaExpandAlgTyCon flav skol_info tcbs res_kind
+  | needsEtaExpansion flav
+  = checkNeedsEtaKind res_kind
+  | otherwise
+  = return ()
+
+needsEtaExpansion :: TyConFlavor tc -> Bool
+needsEtaExpansion DataTypeFlavor = True
+needsEtaExpansion TupleFlavor = True
+needsEtaExpansion SumFlavor = True
+needsEtaExpansion AbstractTypeFlavor = True
+needsEtaExpansion TypeFunFlavor = True
+needsEtaExpansion BuiltInTypeFlavor = True
+
+checkNeedsEtaKind :: Kind -> TcM ()
+checkNeedsEtaKind res_kind = case splitFunKi_maybe res_kind of
+  Nothing -> return ()
+  Just _ -> pprPanic "checkNeedsEtaKind" (ppr res_kind)
+
 {- *********************************************************************
 *                                                                      *
                 Sort checking kinds
