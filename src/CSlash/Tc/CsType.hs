@@ -150,7 +150,7 @@ kcTyGroup kindless_decls = do
     ppr_tc_kinds tcs = vcat (map pp_tc tcs)
     pp_tc tc = ppr (tyConName tc) <+> colon <+> ppr (tyConKind tc)
 
-type ScopedPairs = [(Name, TcTyVar)]
+type ScopedPairs = [(Name, TcKiVar)]
 
 generalizeTyDecl :: NameEnv MonoTcTyCon -> LCsBind Rn -> TcM [PolyTcTyCon]
 generalizeTyDecl inferred_tc_env (L _ decl) = do
@@ -173,15 +173,16 @@ generalizeTyDecl inferred_tc_env (L _ decl) = do
 
     zonk_tc_tycon
       :: (TcTyCon, SkolemInfo, ScopedPairs)
-      -> ZonkM (TcTyCon, SkolemInfo, ScopedPairs, TcKind)
+      -> ZonkM (TcTyCon, SkolemInfo, ScopedPairs, TcKind, TcKind)
     zonk_tc_tycon (tc, skol_info, scoped_pairs) = do
-      scoped_pairs <- mapSndM zonkTcTyVarToTcTyVar scoped_pairs
+      scoped_pairs <- mapSndM zonkTcKiVarToTcKiVar scoped_pairs
+      full_kind <- zonkTcKind (tyConKind tc)
       res_kind <- zonkTcKind (tyConResKind tc)
-      return (tc, skol_info, scoped_pairs, res_kind)
+      return (tc, skol_info, scoped_pairs, full_kind, res_kind)
 
 swizzleTcTyConBndrs
-  :: [(TcTyCon, SkolemInfo, ScopedPairs, TcKind)]
-  -> TcM [(TcTyCon, SkolemInfo, ScopedPairs, TcKind)]
+  :: [(TcTyCon, SkolemInfo, ScopedPairs, TcKind, TcKind)]
+  -> TcM [(TcTyCon, SkolemInfo, ScopedPairs, TcKind, TcKind)]
 swizzleTcTyConBndrs tc_infos 
   | all no_swizzle swizzle_pairs
   = do traceTc "Skipping swizzleTcTyConBndrs for" (ppr_infos tc_infos)
@@ -195,16 +196,18 @@ swizzleTcTyConBndrs tc_infos
               , text "after" <+> ppr_infos swizzled_infos ]
        return swizzled_infos
   where
-    swizzled_infos = [ (tc, skol_info, mapSnd swizzle_var scoped_pairs, swizzle_ki kind)
-                     | (tc, skol_info, scoped_pairs, kind) <- tc_infos ]
+    swizzled_infos = [ ( tc, skol_info, mapSnd swizzle_var scoped_pairs
+                       , swizzle_ki full_kind, swizzle_ki res_kind)
+                     | (tc, skol_info, scoped_pairs, full_kind, res_kind) <- tc_infos ]
 
     swizzle_pairs :: [(Name, TypeVar)]
-    swizzle_pairs = [ pair | (_, _, pairs, _) <- tc_infos, pair <- pairs ]
+    swizzle_pairs = [ pair | (_, _, pairs, _, _) <- tc_infos, pair <- pairs ]
 
     no_swizzle :: (Name, TypeVar) -> Bool
     no_swizzle (nm, tv) = nm == tyVarName tv
 
-    ppr_infos infos = vcat [ ppr tc <+> pprTyVars (map snd pairs) | (tc, _, pairs, _) <- infos ]
+    ppr_infos infos = vcat [ ppr tc <+> pprTyVars (map snd pairs)
+                           | (tc, _, pairs, _, _) <- infos ]
 
     swizzle_env = mkVarEnv (map swap swizzle_pairs)
 
@@ -236,47 +239,38 @@ swizzleTcTyConBndrs tc_infos
 
     swizzle_ki ki = trace "swizzle_ki NOT implemented" ki
 
-generalizeTcTyCon :: (MonoTcTyCon, SkolemInfo, ScopedPairs, TcKind) -> TcM PolyTcTyCon
-generalizeTcTyCon (tc, skol_info, scoped_prs, tc_res_kind)
+generalizeTcTyCon :: (MonoTcTyCon, SkolemInfo, ScopedPairs, TcKind, TcKind) -> TcM PolyTcTyCon
+generalizeTcTyCon (tc, skol_info, scoped_prs, tc_full_kind, tc_res_kind)
   = setSrcSpan (getSrcSpan tc) $ addTyConCtxt tc $ do
-      let spec_req_tvs = map snd scoped_prs
-          n_spec = length spec_req_tvs - tyConArity tc
-          (spec_tvs, req_tvs) = splitAt n_spec spec_req_tvs
-
-      massertPpr (n_spec == 0) $ vcat [ ppr tc
-                                      , ppr skol_info
-                                      , ppr scoped_prs
-                                      , ppr tc_res_kind ]
+      let kvs = map snd scoped_prs
 
       traceTc "generalizeTcTyCon: pre zonk"
         $ vcat [ text "tycon =" <+> ppr tc
-               , text "spec_req_tvs =" <+> pprTyVars spec_req_tvs
+               , text "kvs =" <+> sep (map ppr kvs)
+               , text "tc_full_kind" <+> ppr tc_full_kind
                , text "tc_res_kind =" <+> ppr tc_res_kind ]
 
-      (spec_tvs, req_tvs, tc_res_kind) <- liftZonkM $ do
-        spec_tvs <- zonkTcTyVarsToTcTyVars spec_tvs
-        req_tvs <- zonkTcTyVarsToTcTyVars req_tvs
+      (kvs, tc_full_kind, tc_res_kind) <- liftZonkM $ do
+        kvs <- zonkTcKiVarsToTcKiVars kvs
+        tc_full_kind <- zonkTcKind tc_full_kind
         tc_res_kind <- zonkTcKind tc_res_kind
-        return (spec_tvs, req_tvs, tc_res_kind)
+        return (kvs, tc_full_kind, tc_res_kind)
 
-      traceTc "generalizeTcTyCon: post zonk"
+      traceTc "generalizeTcTyCon: post zonk" 
         $ vcat [ text "tycon =" <+> ppr tc
-               , text "spec_tvs =" <+> pprTyVars spec_tvs
-               , text "req_tvs =" <+> pprTyVars req_tvs
+               , text "kvs = " <+> sep (map ppr kvs)
+               , text "tc_full_kind =" <+> ppr tc_full_kind
                , text "tc_res_kind =" <+> ppr tc_res_kind ]
 
-      -- let specified_tcbs = mkNamedTyConBinders Specified spec_tvs
-      --     required_tcbs = mkAnonTyConBinders req_tvs
+      let tycon = mkTcTyCon (tyConName tc)
+                            tc_full_kind
+                            tc_res_kind
+                            (tyConArity tc)
+                            (mkKiVarNamePairs kvs)
+                            True
+                            (tyConFlavor tc)
 
-      --     all_tcbs = specified_tcbs ++ required_tcbs
-      --     flav = tyConFlavor tc
-
-      -- etaExpandAlgTyCon flav skol_info all_tcbs tc_res_kind
-
-      -- let final_tcbs = all_tcbs
-      --     tycon = mkTcTyCon (tyConName tc) final
-
-      panic "generalizeTcTyCon unfinished"
+      return tycon
 
 tcExtendKindEnvWithTyCons :: [TcTyCon] -> TcM a -> TcM a
 tcExtendKindEnvWithTyCons tcs = tcExtendKindEnvList [ (tyConName tc, ATcTyCon tc) | tc <- tcs ]

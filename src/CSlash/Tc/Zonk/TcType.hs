@@ -163,6 +163,17 @@ zonkTcKiVar kv = do
           writeTcRef ref (Indirect zki)
           return zki
 
+zonkTcKiVarsToTcKiVars :: HasDebugCallStack => [TcKiVar] -> ZonkM [TcKiVar]
+zonkTcKiVarsToTcKiVars = mapM zonkTcKiVarToTcKiVar
+
+zonkTcKiVarToTcKiVar :: HasDebugCallStack => TcKiVar -> ZonkM TcKiVar
+zonkTcKiVarToTcKiVar kv = do
+  ki <- zonkTcKiVar kv
+  let kv' = case getKiVar_maybe ki of
+              Just kv' -> kv'
+              Nothing -> pprPanic "zonkTcKiVarToTcKiVar" (ppr kv $$ ppr ki)
+  return kv'
+
 {- *********************************************************************
 *                                                                      *
                  Tidying
