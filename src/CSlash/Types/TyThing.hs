@@ -50,8 +50,8 @@ implicitTyConThings tc
   where
     datacon_stuff :: [TyThing]
     datacon_stuff = [ty_thing | dc <- cons
-                              , ty_thing <- AConLike (RealDataCon dc) :
-                                            dataConImplicitTyThings dc]
+                              , ty_thing <- [ AConLike (RealDataCon dc)
+                                            , dataConImplicitTyThing dc] ]
     cons :: [DataCon]
     cons = tyConDataCons tc
 

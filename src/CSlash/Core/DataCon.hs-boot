@@ -5,11 +5,12 @@ import {-# SOURCE #-} CSlash.Types.Name (Name, NamedThing)
 import CSlash.Types.Unique (Uniquable)
 import CSlash.Utils.Outputable (Outputable, OutputableBndr)
 import {-# SOURCE #-} CSlash.Core.Type.Rep (Type)
+import CSlash.Types.Basic (Arity)
 
 data DataCon
 
 dataConName :: DataCon -> Name
-dataConWorkId :: DataCon -> Id
+dataConId :: DataCon -> Id
 
 instance Eq DataCon
 instance Uniquable DataCon
@@ -17,4 +18,5 @@ instance NamedThing DataCon
 instance Outputable DataCon
 instance OutputableBndr DataCon
 
-dataConFullSig :: DataCon -> ([TypeVar],[Type], Type)
+dataConFullSig :: DataCon -> Type
+dataConArity :: DataCon -> Arity

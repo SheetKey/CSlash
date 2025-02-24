@@ -19,9 +19,7 @@ import Data.Bits
 
 data IdDetails
   = VanillaId
-  | DataConWorkId DataCon
-  --  | DataConWrapId DataCon
-  --  | DataConId DataCon
+  | DataConId DataCon
   | TickBoxOpId TickBoxOp
   | JoinId JoinArity
 
@@ -33,8 +31,7 @@ pprIdDetails VanillaId = empty
 pprIdDetails other = brackets (pp other)
   where
     pp VanillaId = panic "pprIdDetails"
-    pp (DataConWorkId _) = text "DataCon"
-    -- pp (DataConWrapId _) = text "DataConWrapper"
+    pp (DataConId _) = text "DataCon"
     pp (TickBoxOpId _) = text "TickBoxOp"
     pp (JoinId arity) = text "JoinId" <> parens (int arity)
 

@@ -178,7 +178,7 @@ ifaceDeclImplicitBndrs _ = []
 
 ifaceConDeclImplicitBndrs :: IfaceConDecl -> [OccName]
 ifaceConDeclImplicitBndrs (IfCon { ifConName = con_name })
-  = [occName con_name, mkDataConWorkerOcc (occName con_name)]
+  = [occName con_name, mkDataConOcc (occName con_name)]
 
 -- -----------------------------------------------------------------------------
 -- The fingerprints of an IfaceDecl

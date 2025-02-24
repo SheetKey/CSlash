@@ -57,9 +57,9 @@ errorIds = []
 ********************************************************************* -}
 
 -- needs to change if I add newtypes
-mkDataConWorkId :: Name -> DataCon -> Id
-mkDataConWorkId wkr_name data_con
-  = mkGlobalId (DataConWorkId data_con) wkr_name wkr_ty alg_wkr_info
+mkDataConId :: Name -> DataCon -> Id
+mkDataConId wkr_name data_con
+  = mkGlobalId (DataConId data_con) wkr_name wkr_ty alg_wkr_info
   where
     wkr_ty = dataConType data_con
     alg_wkr_info = noCafIdInfo

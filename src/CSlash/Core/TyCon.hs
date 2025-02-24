@@ -5,7 +5,7 @@ module CSlash.Core.TyCon where
 import Prelude hiding ((<>))
 
 import {-# SOURCE #-} CSlash.Core.Type.Rep (Type, mkNakedTyConTy)
-import {-# SOURCE #-} CSlash.Core.DataCon (DataCon, dataConFullSig)
+import {-# SOURCE #-} CSlash.Core.DataCon (DataCon, dataConFullSig, dataConArity)
 
 import CSlash.Core.Kind
 import {-# SOURCE #-} CSlash.Core.Kind.Compare (tcEqKind)
@@ -111,10 +111,7 @@ mkTyConTy tycon = tyConNullaryTy tycon
 data TyCon = TyCon
   { tyConUnique :: !Unique
   , tyConName :: !Name
-  , tyConBinders :: [TyConBinder] -- should delete
   , tyConResKind :: Kind
-  -- , tyConHasClosedResKind :: Bool
-  , tyConTyVars :: [TypeVar] -- should delete
   , tyConKind :: Kind
   , tyConArity :: Arity
   , tyConNullaryTy :: Type
@@ -167,9 +164,7 @@ mkDataTyConRhs cons
     , is_enum = not (null cons) && all is_enum_con cons
     }
   where
-    is_enum_con con
-      = let (_univ_tvs, arg_tys, _res) = dataConFullSig con
-        in null arg_tys
+    is_enum_con con = dataConArity con == 0
       
 data AlgTyConFlav
   = VanillaAlgTyCon -- TyConRepName -- this name is for Typeable
@@ -198,29 +193,11 @@ type TyConRepName = Name
 *                                                                      *
 ********************************************************************* -}
 
-mkTyCon :: Name -> [TyConBinder] -> Kind -> Kind -> TyConDetails -> TyCon
-mkTyCon name binders res_kind kind details
-  = tc
+mkTyCon :: Name -> Kind -> Kind -> Arity -> TyConDetails -> TyCon
+mkTyCon name res_kind full_kind arity details = tc
   where
     tc = TyCon { tyConUnique = nameUnique name
                , tyConName = name
-               , tyConBinders = binders
-               , tyConTyVars = binderVars binders
-               , tyConResKind = res_kind
-               , tyConKind = verifyTyConKind binders kind
-               , tyConArity = length binders
-               , tyConNullaryTy = mkNakedTyConTy tc
-               , tyConDetails = details
-               }
-
--- this should replace 'mkTyCon' eventually
-mkTyCon' :: Name -> Kind -> Kind -> Arity -> TyConDetails -> TyCon
-mkTyCon' name res_kind full_kind arity details = tc
-  where
-    tc = TyCon { tyConUnique = nameUnique name
-               , tyConName = name
-               , tyConBinders = []
-               , tyConTyVars = []
                , tyConResKind = res_kind
                , tyConKind = full_kind
                , tyConArity = arity
@@ -230,58 +207,58 @@ mkTyCon' name res_kind full_kind arity details = tc
 
 mkAlgTyCon
   :: Name
-  -> [TyConBinder]
   -> Kind
   -> Kind
+  -> Arity
   -> AlgTyConRhs
   -> AlgTyConFlav
   -> TyCon
-mkAlgTyCon name binders res_kind kind rhs parent
-  = mkTyCon name binders res_kind kind $
+mkAlgTyCon name res_kind full_kind arity rhs parent
+  = mkTyCon name res_kind full_kind arity $
     AlgTyCon { algTcRhs = rhs
              , algTcFlavor = parent }
 
 mkTupleTyCon
   :: Name
-  -> [TyConBinder]
   -> Kind
   -> Kind
+  -> Arity
   -> DataCon
   -> AlgTyConFlav
   -> TyCon
-mkTupleTyCon name binders res_kind kind con parent
-  = mkTyCon name binders res_kind kind $
+mkTupleTyCon name res_kind kind arity con parent
+  = mkTyCon name res_kind kind arity $
     AlgTyCon { algTcRhs = TupleTyCon { data_con = con }
              , algTcFlavor = parent }
 
 mkSumTyCon
   :: Name
-  -> [TyConBinder]
   -> Kind
   -> Kind
+  -> Arity
   -> [DataCon]
   -> AlgTyConFlav
   -> TyCon
-mkSumTyCon name binders res_kind kind cons parent
-  = mkTyCon name binders res_kind kind $
+mkSumTyCon name res_kind kind arity cons parent
+  = mkTyCon name res_kind kind arity $
     AlgTyCon { algTcRhs = mkSumTyConRhs cons
              , algTcFlavor = parent }
 
-mkPrimTyCon :: Name -> [TyConBinder] -> Kind -> Kind -> TyCon
-mkPrimTyCon name binders res_kind kind
-  = mkTyCon name binders res_kind kind PrimTyCon
+mkPrimTyCon :: Name -> Kind -> Kind -> Arity -> TyCon
+mkPrimTyCon name res_kind kind arity
+  = mkTyCon name res_kind kind arity PrimTyCon
 
 mkTcTyCon
   :: Name
-  -> Kind -- res kind
-  -> Kind -- full kind
-  -> Arity -- number of args until has res kind (res kind may be 'k1 -> k2')
-  -> [(Name, TcKiVar)] -- implicit kind vars
-  -> Bool -- is the TcTyCon generalized
+  -> Kind
+  -> Kind
+  -> Arity
+  -> [(Name, TcKiVar)]
+  -> Bool
   -> TyConFlavor TyCon
   -> TyCon
 mkTcTyCon name res_kind full_kind arity scoped_kvs poly flav
-  = mkTyCon' name res_kind full_kind arity
+  = mkTyCon name res_kind full_kind arity
     $ TcTyCon { tctc_scoped_kvs = scoped_kvs
               , tctc_is_poly = poly
               , tctc_flavor = flav }
@@ -321,10 +298,10 @@ tyConDataCons_maybe (TyCon { tyConDetails = details })
       _ -> Nothing
 tyConDataCons_maybe _ = Nothing      
 
-synTyConDefn_maybe :: TyCon -> Maybe ([TypeVar], Type)
-synTyConDefn_maybe (TyCon { tyConTyVars = tyvars, tyConDetails = details })
+synTyConDefn_maybe :: TyCon -> Maybe Type
+synTyConDefn_maybe (TyCon { tyConDetails = details })
   | SynonymTyCon {synTcRhs = ty} <- details
-  = Just (tyvars, ty)
+  = Just ty
   | otherwise
   = Nothing
 

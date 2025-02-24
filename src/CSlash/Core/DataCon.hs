@@ -3,7 +3,7 @@ module CSlash.Core.DataCon where
 import CSlash.Language.Syntax.Basic
 import CSlash.Language.Syntax.Module.Name
 
-import CSlash.Builtin.Types.Prim (mkTemplateFunKindVars)
+import CSlash.Builtin.Types.Prim (mkTemplateTyVars, mkTemplateKindVars, mkTemplateFunKindVars)
 import CSlash.Core.Type as Type
 import CSlash.Core.Kind
 import CSlash.Core.TyCon
@@ -50,13 +50,10 @@ data DataCon = MkData
   { dcName :: Name
   , dcUnique :: Unique
   , dcTag :: ConTag
-  , dcUnivTyVars :: [TypeVar]
-  , dcWorkId :: Id
-  , dcArity :: Arity -- dcRepArity
-  , dcTyCon :: TyCon -- dcRepTyCon
-  , dcArgTys :: [Type]
-  , dcResTy :: Type
-  , dcType :: Type   -- This is the worker type (dcRepType in GHC, but we have no wrappers)
+  , dcId :: Id
+  , dcArity :: Arity
+  , dcTyCon :: TyCon
+  , dcType :: Type
   , dcInfix :: Bool
   }
 
@@ -97,50 +94,38 @@ instance Data.Data DataCon where
 mkDataCon
   :: Name
   -> Bool
-  -> [TypeVar]
-  -> [KnotTied Type]
-  -> KnotTied Type
   -> KnotTied TyCon
   -> ConTag
   -> Id
   -> Type
+  -> Arity
   -> DataCon
-mkDataCon name declared_infix univ_tvs arg_tys res_type tycon tag work_id work_ty
+mkDataCon name declared_infix tycon tag id ty arity
   = con
   where
     con = MkData { dcName = name
                  , dcUnique = nameUnique name
                  , dcInfix = declared_infix
-                 , dcUnivTyVars = univ_tvs
-                 , dcArgTys = arg_tys
-                 , dcResTy = res_type
                  , dcTyCon = tycon
                  , dcTag = tag
-                 , dcType = work_ty
-                 , dcWorkId = work_id
-                 , dcArity = length arg_tys
+                 , dcType = ty
+                 , dcId = id
+                 , dcArity = arity
                  }
 
-mkDataConTy
-  :: [TypeVar]     -- ^ type arguments
-  -> [ForAllTyBinder] -- ^ bound type arguments
-  -> [Type]        -- ^ types of value arguments
-  -> TyCon         -- ^ the tycon we're constructing
-  -> Type
-mkDataConTy tyvars b_tyvars arg_tys tycon
-  = assert (binderVars b_tyvars == tyvars) dc_type
+mkDataConTy :: TyCon -> Arity -> Type
+mkDataConTy tycon arity = dc_type
   where
-    funKindVars = mkTemplateFunKindVars $ length arg_tys
-    funKinds = KiVarKi <$> funKindVars
+    fun_kind_vars = mkTemplateFunKindVars arity
+    fun_kinds = KiVarKi <$> fun_kind_vars
 
-    types = Type.TyVarTy <$> tyvars
-    res_type = mkTyConApp tycon types
-    
-    arg_ty_kinds = (\ty -> case ty of
-                             Type.TyVarTy tv 
-                               | isTypeVar tv -> varKind tv
-                             _ -> panic "mkDataConType: arg_ty is not 'TyVarTy (TyVar _ _ _)'")
-                   <$> arg_tys
+    arg_kind_vars = mkTemplateKindVars arity
+    arg_kinds = KiVarKi <$> arg_kind_vars
+    ty_vars = mkTemplateTyVars arg_kinds
+    tc_binders = mkSpecifiedTyConBinders ty_vars
+    arg_tys = mkTyVarTys ty_vars
+
+    res_type = mkTyConApp tycon arg_tys
     res_kind = case tyConResKind tycon of
                  kd@(KiVarKi var)
                    | isKiVar var -> kd
@@ -148,15 +133,53 @@ mkDataConTy tyvars b_tyvars arg_tys tycon
                  AKd -> AKd
                  LKd -> LKd
                  _ -> panic "mkDataConType: 'tyConResKind tycon' is not valid"
-    arg_ty_constrs =  (`LTEQKd` res_kind) <$> arg_ty_kinds
-    fun_kind_constrs = concatMap (\ (kf, i) ->
-                                     let kds = take i arg_ty_kinds
-                                     in (`LTEQKd` kf) <$> kds)
-                       $ funKinds `zip` [0..]
-    full_constrs = KdContext $ arg_ty_constrs ++ fun_kind_constrs
 
-    dc_partial_type = foldr2 FunTy res_type funKinds arg_tys
-    dc_type = WithContext full_constrs $ foldr ForAllTy dc_partial_type b_tyvars
+    arg_kind_constrs = (`LTEQKd` res_kind) <$> arg_kinds
+    fun_kind_constrs = concatMap (\ (kf, i) ->
+                                     let kds = take i arg_kinds
+                                     in (`LTEQKd` kf) <$> kds)
+                       $ fun_kinds `zip` [0..]
+    full_constrs = KdContext $ arg_kind_constrs ++ fun_kind_constrs
+
+    dc_partial_type = foldr2 FunTy res_type fun_kinds arg_tys
+    dc_type = WithContext full_constrs $ foldr ForAllTy dc_partial_type tc_binders    
+
+-- mkDataConTy
+--   :: [TypeVar]     -- ^ type arguments
+--   -> [ForAllTyBinder] -- ^ bound type arguments
+--   -> [Type]        -- ^ types of value arguments
+--   -> TyCon         -- ^ the tycon we're constructing
+--   -> Type
+-- mkDataConTy tyvars b_tyvars arg_tys tycon
+--   = assert (binderVars b_tyvars == tyvars) dc_type
+--   where
+--     funKindVars = mkTemplateFunKindVars $ length arg_tys
+--     funKinds = KiVarKi <$> funKindVars
+
+--     types = Type.TyVarTy <$> tyvars
+--     res_type = mkTyConApp tycon types
+    
+--     arg_ty_kinds = (\ty -> case ty of
+--                              Type.TyVarTy tv 
+--                                | isTypeVar tv -> varKind tv
+--                              _ -> panic "mkDataConType: arg_ty is not 'TyVarTy (TyVar _ _ _)'")
+--                    <$> arg_tys
+--     res_kind = case tyConResKind tycon of
+--                  kd@(KiVarKi var)
+--                    | isKiVar var -> kd
+--                  UKd -> UKd
+--                  AKd -> AKd
+--                  LKd -> LKd
+--                  _ -> panic "mkDataConType: 'tyConResKind tycon' is not valid"
+--     arg_ty_constrs =  (`LTEQKd` res_kind) <$> arg_ty_kinds
+--     fun_kind_constrs = concatMap (\ (kf, i) ->
+--                                      let kds = take i arg_ty_kinds
+--                                      in (`LTEQKd` kf) <$> kds)
+--                        $ funKinds `zip` [0..]
+--     full_constrs = KdContext $ arg_ty_constrs ++ fun_kind_constrs
+
+--     dc_partial_type = foldr2 FunTy res_type funKinds arg_tys
+--     dc_type = WithContext full_constrs $ foldr ForAllTy dc_partial_type b_tyvars
 
 dataConName :: DataCon -> Name
 dataConName = dcName
@@ -170,16 +193,11 @@ dataConType = dcType
 dataConArity :: DataCon -> Arity
 dataConArity (MkData { dcArity = arity }) = arity
 
-dataConWorkId :: DataCon -> Id
-dataConWorkId dc = dcWorkId dc
+dataConId :: DataCon -> Id
+dataConId dc = dcId dc
 
-dataConImplicitTyThings :: DataCon -> [TyThing]
-dataConImplicitTyThings (MkData { dcWorkId = work })
-  = [mkAnId work]
+dataConImplicitTyThing :: DataCon -> TyThing
+dataConImplicitTyThing (MkData { dcId = id }) = mkAnId id
 
--- must change if I allow existentials in data type declarations (WHICH I SHOULD NOT DO!!!)
-dataConFullSig :: DataCon -> ([TypeVar],[Type], Type)
-dataConFullSig (MkData { dcUnivTyVars = univ_tvs
-                       , dcArgTys = arg_tys
-                       , dcType = full_ty })
-  = (univ_tvs, arg_tys, full_ty)
+dataConFullSig :: DataCon -> Type
+dataConFullSig (MkData { dcType = full_ty }) = full_ty

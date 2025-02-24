@@ -97,7 +97,7 @@ getTupleDataConName :: Int -> Name
 getTupleDataConName n =
   case n `divMod` 3 of
     (arity, 0) -> dataConName $ tupleDataCon arity
-    (arity, 1) -> idName $ dataConWorkId $ tupleDataCon arity
+    (arity, 1) -> idName $ dataConId $ tupleDataCon arity
     _ -> panic "getTupleDataConName"
 
 mkAlphaTyVarUnique :: Int -> Unique
@@ -132,5 +132,5 @@ mkWiredInTyConUnique i = mkUniqueInt '3' (2*i)
 mkWiredInDataConUnique :: Int -> Unique
 mkWiredInDataConUnique i = mkUniqueInt '6' (3*i)
 
-dataConWorkerUnique :: Unique -> Unique
-dataConWorkerUnique u = incrUnique u
+dataConUnique :: Unique -> Unique
+dataConUnique u = incrUnique u

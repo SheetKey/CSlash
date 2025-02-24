@@ -392,8 +392,8 @@ isDerivedOccName occ = case occNameString occ of
   c:':':_ | isAlphaNum c -> True
   _ -> False
 
-mkDataConWorkerOcc :: OccName -> OccName
-mkDataConWorkerOcc = mk_simple_deriv varName "$W"
+mkDataConOcc :: OccName -> OccName
+mkDataConOcc = mk_simple_deriv varName "$W"
 
 mk_simple_deriv :: NameSpace -> FastString -> OccName -> OccName
 mk_simple_deriv sp px occ = mk_deriv sp px [occNameFS occ]

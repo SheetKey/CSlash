@@ -77,9 +77,9 @@ core_full_view ty
 
 expandSynTyConApp_maybe :: TyCon -> [Type] -> Maybe Type
 expandSynTyConApp_maybe tc arg_tys
-  | Just (tvs, rhs) <- synTyConDefn_maybe tc
+  | Just rhs <- synTyConDefn_maybe tc
   , arg_tys `saturates` tyConArity tc
-  = Just $! (expand_syn tvs rhs arg_tys)
+  = Just $! (expand_syn rhs arg_tys)
   | otherwise
   = Nothing
 
@@ -88,22 +88,18 @@ saturates _ 0 = True
 saturates [] _ = False
 saturates (_:tys) n = assert (n >= 0) $ saturates tys (n-1)
 
-expand_syn :: [TypeVar] -> Type -> [Type] -> Type
-expand_syn tvs rhs arg_tys
-  | null arg_tys = assert (null tvs) rhs
-  | null tvs = mkAppTys rhs arg_tys
-  | otherwise = go empty_subst tvs arg_tys
+expand_syn :: Type -> [Type] -> Type
+expand_syn rhs arg_tys
+  | null arg_tys = rhs
+  | otherwise = go rhs empty_subst arg_tys
   where
     empty_subst = mkEmptySubst in_scope
     in_scope = mkInScopeSet $ shallowTyVarsOfTypes $ arg_tys
 
-    go subst [] tys
-      | null tys = rhs'
-      | otherwise = mkAppTys rhs' tys
-      where
-        rhs' = substTy subst rhs
-    go subst (tv:tvs) (ty:tys) = go (extendTvSubst subst tv ty) tvs tys
-    go _ (_:_) [] = pprPanic "expand_syn" (ppr tvs $$ ppr rhs $$ ppr arg_tys)
+    go (TyLamTy _ _) _ [] = pprPanic "expand_syn" (ppr rhs $$ ppr arg_tys)
+    go ty subst [] = substTy subst ty
+    go (TyLamTy tv ty) subst (arg:args) = go ty (extendTvSubst subst tv arg) args
+    go ty subst args = mkAppTys (substTy subst ty) args
 
 {- *********************************************************************
 *                                                                      *
