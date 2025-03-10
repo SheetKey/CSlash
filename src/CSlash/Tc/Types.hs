@@ -1,5 +1,6 @@
 module CSlash.Tc.Types
   ( module CSlash.Tc.Types
+  , TcRef
 
   , TcGblEnv(..), TcLclEnv(..), TcLclCtxt(..)
 
@@ -23,7 +24,7 @@ import CSlash.Linker.Types
 import CSlash.Cs
 
 import CSlash.Tc.Utils.TcType
--- import GHC.Tc.Types.Constraint
+import CSlash.Tc.Types.Constraint
 -- import GHC.Tc.Types.Evidence
 -- import GHC.Tc.Types.TH
 import CSlash.Tc.Types.TcRef
@@ -31,7 +32,7 @@ import CSlash.Tc.Types.LclEnv
 import CSlash.Tc.Types.BasicTypes
 import CSlash.Tc.Types.ErrCtxt
 -- import {-# SOURCE #-} GHC.Tc.Errors.Hole.Plugin ( HoleFitPlugin )
--- import GHC.Tc.Errors.Types
+import CSlash.Tc.Errors.Types
 
 -- import GHC.Core.Reduction ( Reduction(..) )
 import CSlash.Core.Type
@@ -124,6 +125,18 @@ instance ContainsLogger (Env gbl lcl) where
 
 instance ContainsModule gbl => ContainsModule (Env gbl lcl) where
     extractModule env = extractModule (env_gbl env)
+
+{- *********************************************************************
+*                                                                      *
+*                            RewriteEnv
+*                     The rewriting environment
+*                                                                      *
+********************************************************************* -}
+
+data RewriteEnv = RE
+  { re_loc :: !CtLoc
+  , re_flavor :: !CtFlavor
+  }
 
 {- *********************************************************************
 *                                                                      *

@@ -73,6 +73,7 @@ library
                     , CSlash.Core.Opt.CallerCC
                     , CSlash.Core.Opt.CallerCC.Types
                     , CSlash.Core.Ppr
+                    , CSlash.Core.Reduction
                     , CSlash.Core.TyCon
                     , CSlash.Core.Type
                     , CSlash.Core.Type.FVs
@@ -111,6 +112,7 @@ library
                     , CSlash.Data.List.SetOps
                     , CSlash.Data.Maybe
                     , CSlash.Data.OrdList
+                    , CSlash.Data.Pair
                     , CSlash.Data.Strict
                     , CSlash.Data.StringBuffer
                     , CSlash.Data.Word64Set
@@ -236,6 +238,11 @@ library
                     , CSlash.Tc.Gen.CsKind
                     , CSlash.Tc.Module
                     , CSlash.Tc.Solver
+                    , CSlash.Tc.Solver.Equality
+                    , CSlash.Tc.Solver.InertSet
+                    , CSlash.Tc.Solver.Monad
+                    , CSlash.Tc.Solver.Rewrite
+                    , CSlash.Tc.Solver.Solve
                     , CSlash.Tc.Types
                     , CSlash.Tc.Types.BasicTypes
                     , CSlash.Tc.Types.Constraint

@@ -110,6 +110,12 @@ data MetaInfoK
   = KiVarKv
   | TauKv
 
+instance Outputable MetaInfoK where
+  ppr TauKv = text "tuakv"
+  ppr KiVarKv = text "kiv"
+
+data ConcreteKvOrigin
+
 {- *********************************************************************
 *                                                                      *
                 Untouchable type variables
@@ -120,6 +126,9 @@ newtype TcLevel = TcLevel Int deriving (Eq, Ord)
 
 instance Outputable TcLevel where
   ppr (TcLevel us) = ppr us
+
+minTcLevel :: TcLevel -> TcLevel -> TcLevel
+minTcLevel (TcLevel a) (TcLevel b) = TcLevel (a `min` b)
 
 topTcLevel :: TcLevel
 topTcLevel = TcLevel 0
@@ -132,6 +141,17 @@ strictlyDeeperThan (TcLevel lvl) (TcLevel ctxt_lvl) = lvl > ctxt_lvl
 
 deeperThanOrSame :: TcLevel -> TcLevel -> Bool
 deeperThanOrSame (TcLevel v_tclvl) (TcLevel ctxt_tclvl) = v_tclvl >= ctxt_tclvl
+
+tcVarLevel :: TcVar -> TcLevel
+tcVarLevel v 
+  | isTcTyVar v = tcTyVarLevel v
+  | isTcKiVar v = tcKiVarLevel v
+  | otherwise = pprPanic "tcVarLevel" (ppr v)
+
+tcTyVarLevel :: TcTyVar -> TcLevel
+tcTyVarLevel tv = case tcTyVarDetails tv of
+  MetaTv { mtv_tclvl = tv_lvl } -> tv_lvl
+  SkolemTv _ tv_lvl -> tv_lvl
 
 tcKiVarLevel :: TcKiVar -> TcLevel
 tcKiVarLevel kv = case tcKiVarDetails kv of
@@ -150,6 +170,9 @@ tcKindLevel ki = panic "tcKindLevel"
 tcIsTcTyVar :: TcTyVar -> Bool
 tcIsTcTyVar tv = isTyVar tv
 
+tcIsTcKiVar :: TcKiVar -> Bool
+tcIsTcKiVar kv = isKiVar kv
+
 isPromotableMetaKiVar :: TcKiVar -> Bool
 isPromotableMetaKiVar kv
   | isKiVar kv
@@ -164,6 +187,12 @@ isSkolemTyVar tv = assertPpr (tcIsTcTyVar tv) (ppr  tv)
       MetaTv {} -> False
       _ -> True
 
+isSkolemKiVar :: TcKiVar -> Bool
+isSkolemKiVar kv = assertPpr (tcIsTcKiVar kv) (ppr kv)
+  $ case tcKiVarDetails kv of
+      MetaKv {} -> False
+      _ -> True
+
 isMetaKiVar :: TcKiVar -> Bool
 isMetaKiVar kv
   | isKiVar kv
@@ -171,6 +200,23 @@ isMetaKiVar kv
       MetaKv {} -> True
       _ -> False
   | otherwise = False
+
+isConcreteKiVar_maybe :: TcKiVar -> Maybe (TcKiVar, ConcreteKvOrigin)
+isConcreteKiVar_maybe kv
+  | isTcKiVar kv
+  , MetaKv { mkv_info = info } <- tcKiVarDetails kv
+  = case info of
+      KiVarKv -> Nothing
+      TauKv -> Nothing
+  | otherwise
+  = Nothing
+
+isConcreteInfoK :: MetaInfoK -> Bool
+isConcreteInfoK KiVarKv = False
+isConcreteInfoK TauKv = False
+
+isConcreteKiVar :: TcKiVar -> Bool
+isConcreteKiVar = isJust . isConcreteKiVar_maybe
 
 isTouchableInfoK :: MetaInfoK -> Bool
 isTouchableInfoK _info = True

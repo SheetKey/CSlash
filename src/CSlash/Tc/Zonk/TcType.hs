@@ -42,6 +42,9 @@ import CSlash.Data.Bag
 *                                                                      *
 ********************************************************************* -}
 
+writeMetaTyVar :: HasDebugCallStack => TcTyVar -> TcType -> ZonkM ()
+writeMetaTyVar = undefined
+
 writeMetaKiVar :: HasDebugCallStack => TcKiVar -> TcKind -> ZonkM ()
 writeMetaKiVar kivar ki
   | not debugIsOn

@@ -262,6 +262,7 @@ type family CsDiagnosticCode c = n | n -> c where
   CsDiagnosticCode "TcRnNoExplicitImportList"                      = 16029
   CsDiagnosticCode "TcRnMissingImportList"                         = 77037
   CsDiagnosticCode "TcRnShadowedName"                              = 63397
+  CsDiagnosticCode "TcRnSimplifierTooManyIterations"               = 95822
   CsDiagnosticCode "TcRnBindingNameConflict"                       = 10498
   CsDiagnosticCode "TcRnTyThingUsedWrong"                          = 10969
 

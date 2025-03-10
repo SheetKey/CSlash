@@ -4,7 +4,7 @@
 
 module CSlash.Types.Var
   ( Var, Id
-  , TypeVar, KindVar, TcTyVar, TcKiVar
+  , TypeVar, KindVar, TcTyVar, TcKiVar, TcVar
 
   , varName, varUnique, varType, varTypeMaybe, varKind, varKindMaybe
   -- , varMult, varMultMaybe
@@ -63,6 +63,8 @@ type KindVar = Var
 type TcTyVar = Var
 
 type TcKiVar = Var
+
+type TcVar = Var -- a TcTyVar or TcKiVar
 
 data Var
   = TyVar

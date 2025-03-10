@@ -9,3 +9,4 @@ type TypeVar = Var
 type Id = Var
 type TcTyVar = Var
 type TcKiVar = Var
+type TcVar = Var

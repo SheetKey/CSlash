@@ -93,6 +93,7 @@ data TcRnMessage where
   TcRnImportLookup :: !ImportLookupReason -> TcRnMessage
   TcRnNotInScope :: NotInScopeError -> RdrName -> [ImportError] -> [CsHint] -> TcRnMessage
   TcRnShadowedName :: OccName -> ShadowedNameProvenance -> TcRnMessage
+  TcRnSimplifierTooManyIterations :: Cts -> !IntWithInf -> WantedConstraints -> TcRnMessage
   TcRnBindingNameConflict :: !RdrName -> !(NE.NonEmpty SrcSpan) -> TcRnMessage
   TcRnTyThingUsedWrong :: !WrongThingSort -> !TcTyThing -> !Name -> TcRnMessage
   deriving Generic

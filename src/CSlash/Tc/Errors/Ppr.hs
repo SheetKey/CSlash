@@ -153,6 +153,11 @@ instance Diagnostic TcRnMessage where
          sep [ text "This binding for" <+> quotes (ppr occ)
                <+> text "shadows the existing binding" <> plural shadowed_locs
              , nest 2 (vcat shadowed_locs) ]
+    TcRnSimplifierTooManyIterations simples limit wc -> mkSimpleDecorated $
+      hang (text "solveWanteds: too many iterations"
+            <+> parens (text "limit =" <+> ppr wc))
+           2 (vcat [ text "Unsolved:" <+> ppr wc
+                   , text "Simples:" <+> ppr simples ])
     TcRnBindingNameConflict name locs -> mkSimpleDecorated $
       vcat [ text "Conflicting definitions for" <+> quotes (ppr name)
            , locations ]

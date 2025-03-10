@@ -9,6 +9,7 @@ import Prelude hiding ((<>))
 
 -- import GHC.Core.Predicate
 import CSlash.Core.Type
+import CSlash.Core.Kind
 -- import GHC.Core.Coercion
 -- import GHC.Core.Class
 import CSlash.Core.TyCon
@@ -45,6 +46,7 @@ import Data.List.NonEmpty ( NonEmpty )
 
 -- these are for CheckTyEqResult
 import Data.Word  ( Word8 )
+import Data.Bits
 import Data.List  ( intersperse )
 
 {- *********************************************************************
@@ -53,10 +55,102 @@ import Data.List  ( intersperse )
 *                                                                      *
 ********************************************************************* -}
 
+type KiXi = TcKind
+
 type Cts = Bag Ct
 
 data Ct
   = CNonCanonical CtEvidence
+
+data EqCt = KiEqCt
+  { eq_ev :: CtEvidence
+  , eq_lhs :: CanEqLHS
+  , eq_rhs :: KiXi
+  }
+
+data CanEqLHS
+  = KiVarLHS TcKiVar
+
+instance Outputable CanEqLHS where
+  ppr (KiVarLHS kv) = ppr kv
+
+data IrredCt = IrredCt
+  { ir_ev :: CtEvidence
+  , ir_reason :: CtIrredReason
+  }
+
+data CtIrredReason
+  = NonCanonicalReason CheckTyKiEqResult
+
+inInsolubleReason :: CtIrredReason -> Bool
+inInsolubleReason (NonCanonicalReason ctker) = ctkerIsInsoluble ctker
+
+newtype CheckTyKiEqResult = CTKER Word8
+
+ctkeOK :: CheckTyKiEqResult
+ctkeOK = CTKER zeroBits
+
+ctkerHasNoProblem :: CheckTyKiEqResult -> Bool
+ctkerHasNoProblem (CTKER 0) = True
+ctkerHasNoProblem _ = False
+
+newtype CheckTyKiEqProblem = CTKEP Word8
+
+ctkeImpredicative = CTKEP (bit 0)
+ctkeTypeFamily = CTKEP (bit 1)
+ctkeInsolubleOccurs = CTKEP (bit 2)
+ctkeSolubleOccurs = CTKEP (bit 3)
+ctkeConcrete = CTKEP (bit 5)
+ctkeSkolemEscape = CTKEP (bit 6)
+
+ctkeProblem :: CheckTyKiEqProblem -> CheckTyKiEqResult
+ctkeProblem (CTKEP mask) = CTKER mask
+
+impredicativeProblem :: CheckTyKiEqResult
+impredicativeProblem = ctkeProblem ctkeImpredicative
+
+ctkerHasProblem :: CheckTyKiEqResult -> CheckTyKiEqProblem -> Bool
+ctkerHasProblem (CTKER bits) (CTKEP mask) = (bits .&. mask) /= 0
+
+ctkerIsInsoluble :: CheckTyKiEqResult -> Bool
+ctkerIsInsoluble (CTKER bits) = (bits .&. mask) /= 0
+  where
+    mask = impredicative_mask .|. insoluble_occurs_mask
+    CTKEP impredicative_mask = ctkeImpredicative
+    CTKEP insoluble_occurs_mask = ctkeInsolubleOccurs
+
+instance Semigroup CheckTyKiEqResult where
+  CTKER bits1 <> CTKER bits2 = CTKER (bits1 .|. bits2)
+
+instance Monoid CheckTyKiEqResult where
+  mempty = ctkeOK
+
+instance Eq CheckTyKiEqProblem where
+  (CTKEP b1) == (CTKEP b2) = b1 == b2
+
+instance Outputable CheckTyKiEqProblem where
+  ppr prob@(CTKEP bits) = case lookup prob allBits of
+                            Just s -> text s
+                            Nothing -> text "unknown:" <+> ppr bits
+
+instance Outputable CheckTyKiEqResult where
+  ppr ctker
+    | ctkerHasNoProblem ctker
+    = text "ctkeOK"
+    | otherwise
+    = braces $ fcat $ intersperse vbar
+      $ [ text str
+        | (bitmask, str) <- allBits
+        , ctker `ctkerHasProblem` bitmask ]
+
+allBits :: [(CheckTyKiEqProblem, String)]
+allBits = [ (ctkeImpredicative, "ctkeImpredicative")  
+          , (ctkeTypeFamily, "ctkeTypeFamily")     
+          , (ctkeInsolubleOccurs, "ctkeInsolubleOccurs")
+          , (ctkeSolubleOccurs, "ctkeSolubleOccurs")  
+          , (ctkeConcrete, "ctkeConcrete")   
+          , (ctkeSkolemEscape, "ctkeSkolemEscape") ]
+
 
 mkNonCanonical :: CtEvidence -> Ct
 mkNonCanonical = CNonCanonical
@@ -194,9 +288,35 @@ data HasGivenEqs
   | MaybeGivenEqs
   deriving Eq
 
+instance Outputable Implication where
+  ppr (Implic { ic_tclvl = tclvl
+              , ic_skols = skols
+              , ic_given_eqs = given_eqs
+              , ic_wanted = wanted
+              , ic_status = status
+              , ic_info = info })
+    = hang (text "Implic" <+> lbrace)
+      2 (sep [ text "TcLevel =" <+> ppr tclvl
+             , text "Skolems =" <+> pprTyVars skols
+             , text "Given-eqs =" <+> ppr given_eqs
+             , text "Status =" <+> ppr status
+             , hang (text "Wanted =") 2 (ppr wanted)
+             , pprSkolInfo info ] <+> rbrace)
+
+instance Outputable ImplicStatus where
+  ppr IC_Insoluble = text "Insoluble"
+  ppr IC_BadTelescope = text "Bad telescope"
+  ppr IC_Unsolved = text "Unsolved"
+  ppr IC_Solved = text "Solved"
+
 checkTelescopeSkol :: SkolemInfoAnon -> Bool
 checkTelescopeSkol (ForAllSkol {}) = True
 checkTelescopeSkol _ = False
+
+instance Outputable HasGivenEqs where
+  ppr NoGivenEqs = text "NoGivenEqs"
+  ppr LocalGivenEqs = text "LocalGivenEqs"
+  ppr MaybeGivenEqs = text "MaybeGivenEqs"
 
 {- *********************************************************************
 *                                                                      *
@@ -215,15 +335,15 @@ checkImplicationInvariants implic = when debugIsOn (panic "check_implic implic")
 ********************************************************************* -}
 
 data CtEvidence
-  = CtWantedKind
-    { ctev_pred :: EvPred
+  = CtWanted
+    { ctev_pred :: Pred
     , ctev_loc :: CtLoc
     }
 
-data EvPred
-  = WantKindEq TcKind TcKind
+data Pred
+  = KiEqPred TcKind TcKind
 
-ctEvPred :: CtEvidence -> EvPred
+ctEvPred :: CtEvidence -> Pred
 ctEvPred = ctev_pred
 
 ctEvLoc :: CtEvidence -> CtLoc
@@ -232,8 +352,8 @@ ctEvLoc = ctev_loc
 arisesFromGivens :: Ct -> Bool
 arisesFromGivens ct = isGivenCt ct || isGivenLoc (ctLoc ct)
 
-instance Outputable EvPred where
-  ppr (WantKindEq k1 k2) = ppr k1 <+> ppr k2
+instance Outputable Pred where
+  ppr (KiEqPred k1 k2) = ppr k1 <+> ppr k2
 
 instance Outputable CtEvidence where
   ppr ev = ppr (ctEvFlavor ev)
@@ -241,10 +361,10 @@ instance Outputable CtEvidence where
            <> dcolon <+> ppr (ctEvPred ev)
 
 isWanted :: CtEvidence -> Bool
-isWanted (CtWantedKind {}) = True
+isWanted (CtWanted {}) = True
 
 isGiven :: CtEvidence -> Bool
-isGiven (CtWantedKind {}) = False
+isGiven (CtWanted {}) = False
 
 {- *********************************************************************
 *                                                                      *
@@ -262,7 +382,20 @@ instance Outputable CtFlavor where
   ppr Wanted = text "[W]"
 
 ctEvFlavor :: CtEvidence -> CtFlavor
-ctEvFlavor (CtWantedKind {}) = Wanted
+ctEvFlavor (CtWanted {}) = Wanted
+
+canKiEqLHS_maybe :: KiXi -> Maybe CanEqLHS
+canKiEqLHS_maybe xi
+  | Just kv <- getKiVar_maybe xi
+  = Just $ KiVarLHS kv
+  | otherwise
+  = Nothing
+
+canKiEqLHSKind :: CanEqLHS -> TcKind
+canKiEqLHSKind (KiVarLHS kv) = mkKiVarKi kv
+
+eqCanEqLHS :: CanEqLHS -> CanEqLHS -> Bool
+eqCanEqLHS (KiVarLHS kv1) (KiVarLHS kv2) = kv1 == kv2
 
 {- *********************************************************************
 *                                                                      *
@@ -275,6 +408,9 @@ newtype SubGoalDepth = SubGoalDepth Int
 
 initialSubGoalDepth :: SubGoalDepth
 initialSubGoalDepth = SubGoalDepth 0
+
+bumpSubGoalDepth :: SubGoalDepth -> SubGoalDepth
+bumpSubGoalDepth (SubGoalDepth n) = SubGoalDepth (n + 1)
 
 {- *********************************************************************
 *                                                                      *
@@ -290,3 +426,6 @@ data CtLoc = CtLoc
 
 ctLocOrigin :: CtLoc -> CtOrigin
 ctLocOrigin = ctl_origin
+ 
+bumpCtLocDepth :: CtLoc -> CtLoc
+bumpCtLocDepth loc@(CtLoc { ctl_depth = d }) = loc { ctl_depth = bumpSubGoalDepth d }

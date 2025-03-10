@@ -240,6 +240,14 @@ tcRnSrcDecls :: Maybe (LocatedL [LIE Ps]) -> [LCsDecl Ps] -> TcM TcGblEnv
 tcRnSrcDecls export_ies decls = do
   (tcg_env, tcl_env) <- tc_rn_src_decls decls
 
+  ------ Simplify constraints ---------
+  _ <- {-# SCC "simplifyTop" #-}
+    restoreEnvs (tcg_env, tcl_env) $ do
+      lie_main <- checkMainType tcg_env
+      simplifyTop (lie `andWC` lie_main)
+
+  -- tcg_env <- setGblEnv tcg_env $ mkTypeableBinds
+
   traceTc "Tc9" empty
   failIfErrsM
 
@@ -255,7 +263,10 @@ tcRnSrcDecls export_ies decls = do
   tcg_env <- restoreEnvs (tcg_env, tcl_env) $ panic "rnExports export_ies"
 
   --------- Emit the ':Main.main = runMainIO main' declaration ----------
-  tcg_env <- restoreEnvs (tcg_env, tcl_env) $ checkMain export_ies
+  tcg_env <- restoreEnvs (tcg_env, tcl_env) $ do
+    (tcg_env, lie) <- captureTopConstraints $ checkMain export_ies
+    simplifyTop lie
+    return tcg_env
 
   failIfErrsM
 
@@ -276,7 +287,9 @@ tc_rn_src_decls ds = {-# SCC "tc_rn_src_decls" #-} do
   let group = mkGroup ds
   (tcg_env, rn_decls) <- rnTopSrcDecls group
 
-  (tcg_env, tcl_env) <- setGblEnv tcg_env $ tcTopSrcDecls rn_decls
+  ((tcg_env, tcl_env), lie1) <- setGblEnv tcg_env
+                                $ captureTopConstraints
+                                $ tcTopSrcDecls rn_decls
   
   restoreEnvs (tcg_env, tcl_env) $ return (tcg_env, tcl_env)
 

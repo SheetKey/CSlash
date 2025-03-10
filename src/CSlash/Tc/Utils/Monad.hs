@@ -630,12 +630,18 @@ capture_messages thing_inside = do
 
 askNoErrs :: TcRn a -> TcRn (a, Bool)
 askNoErrs thing_inside = do
-  (mb_res, msgs) <- capture_messages $ tcTryM thing_inside
+  ((mb_res, lie), msgs) <- capture_messages
+                           $ capture_constraints
+                           $ tcTryM thing_inside
   addMessages msgs
   case mb_res of
-    Nothing -> failM
-    Just res -> let errs_found = errorsFound msgs
-                in return (res, not errs_found)
+    Nothing -> do
+      emitConstraints (dropMisleading lie)
+      failM
+    Just res -> do
+      emitConstraints lie
+      let errs_found = errorsFound msgs || insolubleWC lie
+      return (res, not errs_found)
 
 tryCaptureConstraints :: TcM a -> TcM (Maybe a, WantedConstraints)
 tryCaptureConstraints thing_inside = do
@@ -654,8 +660,10 @@ captureConstraints thing_inside = do
 
 attemptM :: TcRn r -> TcRn (Maybe r)
 attemptM thing_inside = do
-  mb_r <- tcTryM thing_inside
-  when (isNothing mb_r) $ traceTc "attemptM recovering with insoluble constraints" empty
+  (mb_r, lie) <- tryCaptureConstraints thing_inside
+  emitConstraints lie
+
+  when (isNothing mb_r) $ traceTc "attemptM recovering with insoluble constraints" (ppr lie)
   return mb_r
 
 mapAndRecoverM :: (a -> TcRn b) -> [a] -> TcRn [b]
@@ -775,6 +783,7 @@ pushLevelAndCaptureConstraints thing_inside = do
   traceTc "pushLevelAndCaptureConstraints {" (ppr tclvl')
   (res, lie) <- updLclEnv (setLclEnvTcLevel tclvl')
                 $ captureConstraints thing_inside
+  traceTc "pushLevelAndCaptureConstraints }" (ppr tclvl')
   return (tclvl', lie, res)
 
 pushTcLevelM :: TcM a -> TcM (TcLevel, a)

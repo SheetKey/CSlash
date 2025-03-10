@@ -1,4 +1,8 @@
+{-# LANGUAGE RecordWildCards #-}
+
 module CSlash.Tc.Utils.Unify where
+
+import Prelude hiding ((<>))
 
 import CSlash.Cs
 
@@ -21,7 +25,7 @@ import CSlash.Core.TyCon
 -- import GHC.Core.Coercion
 import CSlash.Core.Kind
 import CSlash.Core.Kind.Compare (tcEqKind)
--- import GHC.Core.Reduction
+import CSlash.Core.Reduction
 
 import CSlash.Builtin.Types
 import CSlash.Types.Name
@@ -106,11 +110,14 @@ data UnifyEnv = UE
   , u_unified :: Maybe (TcRef [Var])
   }
 
+updUEnvLoc :: UnifyEnv -> (CtLoc -> CtLoc) -> UnifyEnv
+updUEnvLoc  uenv@(UE { u_loc = loc }) upd = uenv { u_loc = upd loc }
+
 uKind_defer :: UnifyEnv -> TcKind -> TcKind -> TcM ()
 uKind_defer (UE { u_loc = loc, u_defer = ref }) ki1 ki2 = do
   let ct = mkNonCanonical
-           $ CtWantedKind { ctev_pred = WantKindEq ki1 ki2
-                          , ctev_loc = loc }
+           $ CtWanted { ctev_pred = KiEqPred ki1 ki2
+                      , ctev_loc = loc }
   updTcRef ref (`snocBag` ct)
   whenDOptM Opt_D_dump_tc_trace $ do
     ctxt <- getErrCtxt
@@ -255,6 +262,152 @@ simpleUnifyCheckKind lhs_kv rhs = go rhs
     go AKd = True
     go LKd = True
 
+{- *********************************************************************
+*                                                                      *
+                 Equality invariant checking
+*                                                                      *
+********************************************************************* -}
+
+data PuResult a b
+  = PuFail CheckTyKiEqResult
+  | PuOK (Bag a) b
+
+instance Functor (PuResult a) where
+  fmap _ (PuFail prob) = PuFail prob
+  fmap f (PuOK cts x) = PuOK cts (f x)
+
+instance Applicative (PuResult a) where
+  pure x = PuOK emptyBag x
+  PuFail p1 <*> PuFail p2 = PuFail (p1 S.<> p2)
+  PuFail p1 <*> PuOK {} = PuFail p1
+  PuOK {} <*> PuFail p2 = PuFail p2
+  PuOK c1 f <*> PuOK c2 x = PuOK (c1 `unionBags` c2) (f x)
+
+instance (Outputable a, Outputable b) => Outputable (PuResult a b) where
+  ppr (PuFail prob) = text "PuFail" <+> (ppr prob)
+  ppr (PuOK cts x) = text "PuOk" <> (braces
+                     $ vcat [ text "redn:" <+> ppr x
+                            , text "cts:" <+> ppr cts ])
+
+okCheckReflKi :: TcKind -> TcM (PuResult a Reduction)
+okCheckReflKi ki = return $ PuOK emptyBag $ mkReflRednKi ki
+
+failCheckWith :: CheckTyKiEqResult -> TcM (PuResult a b)
+failCheckWith p = return $ PuFail p
+
+data KiEqFlags a = KEF
+  { kef_constrs :: Bool
+  , kef_lhs :: CanEqLHS
+  , kef_unifying :: AreUnifying
+  , kef_occurs :: CheckTyKiEqProblem
+  }
+
+data AreUnifying
+  = UnifyingTy MetaInfo TcLevel LevelCheck
+  | UnifyingKi MetaInfoK TcLevel LevelCheck
+  | NotUnifying
+
+data LevelCheck
+  = LC_None
+  | LC_Check
+  | LC_Promote
+
+instance Outputable (KiEqFlags a) where
+  ppr (KEF {..}) = text "KEF" <> (braces
+                   $ vcat [ text "kef_lhs =" <+> ppr kef_lhs
+                          , text "kef_unifying =" <+> ppr kef_unifying
+                          , text "kef_occurs =" <+> ppr kef_occurs ])
+
+instance Outputable AreUnifying where
+  ppr NotUnifying = text "NotUnifying"
+  ppr (UnifyingTy mi lvl lc) = text "UnifyingTy" <+> (braces
+                               $ ppr mi <> comma <+> ppr lvl <> comma <+> ppr lc)
+  ppr (UnifyingKi mi lvl lc) = text "UnifyingKi" <+> (braces
+                               $ ppr mi <> comma <+> ppr lvl <> comma <+> ppr lc)
+
+instance Outputable LevelCheck where
+  ppr LC_None = text "LC_None"
+  ppr LC_Check = text "LC_Check"
+  ppr LC_Promote = text "LC_Promote"
+
+checkKiEqRhs :: KiEqFlags a -> TcKind -> TcM (PuResult a Reduction)
+checkKiEqRhs flags ki = case ki of
+  KiVarKi kv -> checkKiVar flags kv
+  FunKd { fk_af = af, kft_arg = a, kft_res = r }
+    | FKF_C_K <- af
+    , not (kef_constrs flags)
+    -> failCheckWith impredicativeProblem
+    | otherwise
+    -> do a_res <- checkKiEqRhs flags a
+          r_res <- checkKiEqRhs flags r
+          return $ mkFunKiRedn af <$> a_res <*> r_res
+  _ -> panic "checkKiEqRhs unfinished"
+
+checkKiVar :: KiEqFlags a -> TcKiVar -> TcM (PuResult a Reduction)
+checkKiVar (KEF { kef_lhs = lhs, kef_unifying = unifying, kef_occurs = occ_prob }) occ_kv
+  = case lhs of
+      KiVarLHS lhs_kv -> check_kv unifying lhs_kv
+  where
+    lvl_occ = tcKiVarLevel occ_kv
+    success = okCheckReflKi (mkKiVarKi occ_kv)
+
+    check_kv NotUnifying lhs_kv = simple_occurs_check lhs_kv
+    check_kv (UnifyingKi info lvl prom) lhs_kv = do
+      mb_done <- isFilledMetaKiVar_maybe occ_kv
+      case mb_done of
+        Just _ -> success
+        Nothing -> check_unif info lvl prom lhs_kv
+    check_kv (UnifyingTy {}) _ = panic "check_kv (UnifyingTy{})"
+
+    check_unif :: MetaInfoK -> TcLevel -> LevelCheck -> TcKiVar -> TcM (PuResult a Reduction)
+    check_unif lhs_kv_info lhs_kv_lvl prom lhs_kv
+      | isConcreteInfoK lhs_kv_info
+      , not (isConcreteKiVar occ_kv)
+      = if can_make_concrete occ_kv
+        then promote lhs_kv lhs_kv_info lhs_kv_lvl
+        else failCheckWith (ctkeProblem ctkeConcrete)
+
+      | lvl_occ `strictlyDeeperThan` lhs_kv_lvl
+      = case prom of
+          LC_None -> pprPanic "check_unif" (ppr lhs_kv $$ ppr occ_kv)
+          LC_Check -> failCheckWith (ctkeProblem ctkeSkolemEscape)
+          LC_Promote
+            | isSkolemKiVar occ_kv -> failCheckWith (ctkeProblem ctkeSkolemEscape)
+            | otherwise -> promote lhs_kv lhs_kv_info lhs_kv_lvl
+      | otherwise
+      = simple_occurs_check lhs_kv
+
+    simple_occurs_check lhs_kv
+      | lhs_kv == occ_kv
+      = failCheckWith (ctkeProblem occ_prob)
+      | otherwise
+      = success
+
+    can_make_concrete occ_kv = case tcKiVarDetails occ_kv of
+      MetaKv { mkv_info = info } -> case info of
+                                      TauKv {} -> True
+                                      _ -> False
+      _ -> False
+
+    promote lhs_kv lhs_kv_info lhs_kv_lvl
+      | MetaKv { mkv_info = info_occ, mkv_tclvl = lvl_occ } <- tcKiVarDetails occ_kv
+      = do let new_info | isConcreteInfoK lhs_kv_info = lhs_kv_info
+                        | otherwise = info_occ
+               new_lvl = lhs_kv_lvl `minTcLevel` lvl_occ
+
+           new_kv_ki <- promote_meta_kivar new_info new_lvl occ_kv
+           okCheckReflKi new_kv_ki
+      | otherwise = pprPanic "promote" (ppr occ_kv)
+
+promote_meta_kivar :: MetaInfoK -> TcLevel -> TcKiVar -> TcM TcKind
+promote_meta_kivar info dest_lvl occ_kv = do
+  mb_filled <- isFilledMetaKiVar_maybe occ_kv
+  case mb_filled of
+    Just ki -> return ki
+    Nothing -> do new_kv <- cloneMetaKiVarWithInfo info dest_lvl occ_kv
+                  liftZonkM $ writeMetaKiVar occ_kv (mkKiVarKi new_kv)
+                  traceTc "promoteKiVar" (ppr occ_kv <+> text "-->" <+> ppr new_kv)
+                  return $ mkKiVarKi new_kv
 
 touchabilityAndShapeTestKind :: TcLevel -> TcKiVar -> TcKind -> Bool
 touchabilityAndShapeTestKind given_eq_lvl kv rhs

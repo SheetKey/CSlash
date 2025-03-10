@@ -34,6 +34,9 @@ minusVarSet = minusUniqSet
 isEmptyVarSet :: VarSet -> Bool
 isEmptyVarSet = isEmptyUniqSet
 
+mkVarSet :: [Var] -> VarSet
+mkVarSet = mkUniqSet
+
 subVarSet :: VarSet -> VarSet -> Bool
 subVarSet s1 s2 = isEmptyVarSet (s1 `minusVarSet` s2)
 

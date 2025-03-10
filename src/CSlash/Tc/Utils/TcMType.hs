@@ -136,6 +136,17 @@ cloneMetaKiVar kv = assert (isTcKiVar kv) $ do
   traceTc "cloneMetaKiVar" (ppr kivar)
   return kivar
 
+cloneMetaKiVarWithInfo :: MetaInfoK -> TcLevel -> TcKiVar -> TcM TcKiVar
+cloneMetaKiVarWithInfo info tc_lvl kv = assert (isTcKiVar kv) $ do
+  ref <- newMutVar Flexi
+  name' <- cloneMetaKiVarName (kiVarName kv)
+  let details = MetaKv { mkv_info = info
+                       , mkv_ref = ref
+                       , mkv_tclvl = tc_lvl }
+      kivar = mkTcKiVar name' details
+  traceTc "cloneMetaKiVarWithInfo" (ppr kivar)
+  return kivar
+
 isFilledMetaKiVar_maybe :: TcKiVar -> TcM (Maybe Kind)
 isFilledMetaKiVar_maybe kv
   | isTcKiVar kv
