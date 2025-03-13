@@ -50,7 +50,7 @@ instance Outputable CsHint where
     --   -> vcat [ text "Add an INLINE[n] or NOINLINE[n] pragma for" <+> quotes (ppr lhs_id)
     --           , whenPprDebug (ppr (idInlineActivation lhs_id) $$ ppr rule_act)
     --           ]
-    SuggestIncreaseSimplifierIterations
+    SuggestIncreasedSimplifierIterations
       -> text "Set limit with -fconstraint-solver-iterations=n; n=0 for no limit"
     SuggestQualifiedAfterModuleName
       -> text "Place" <+> quotes (text "qualified")

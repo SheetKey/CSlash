@@ -183,6 +183,14 @@ getInertCans = do
 setInertCans :: InertCans -> TcS ()
 setInertCans ics = updInertSet $ \inerts -> inerts { inert_cans = ics }
 
+updInertCans :: (InertCans -> InertCans) -> TcS ()
+updInertCans upd_fn = updInertSet $ \inerts -> inerts { inert_cans = upd_fn (inert_cans inerts) }
+
+getInnermostGivenEqLevel :: TcS TcLevel
+getInnermostGivenEqLevel = do
+  inert <- getInertCans
+  return $ inert_given_eq_lvl inert
+
 getUnsolvedInerts :: TcS (Bag Implication, Cts)
 getUnsolvedInerts = do
   implics <- getWorkListImplics
@@ -246,6 +254,12 @@ traceTcS :: String -> SDoc -> TcS ()
 traceTcS herald doc = wrapTcS (TcM.traceTc herald doc)
 {-# INLINE traceTcS #-}
 
+instance HasDynFlags TcS where
+  getDynFlags = wrapTcS getDynFlags
+
+getGlobalRdrEnvTcS :: TcS GlobalRdrEnv
+getGlobalRdrEnvTcS = wrapTcS TcM.getGlobalRdrEnv
+
 bumpStepCountTcS :: TcS ()
 bumpStepCountTcS = mkTcS $ \env -> do
   let ref = tcs_count env
@@ -263,7 +277,7 @@ traceFireTcS ev doc = mkTcS $ \env -> csTraceTcM $ do
   return $ hang (text "Step" <+> int n
                  <> brackets (text "l:" <> ppr tclvl <> comma <>
                               text "d:" <> ppr (ctLocDepth (ctEvLoc ev)))
-                 <+> doc <> dolon)
+                 <+> doc <> colon)
                 4 (ppr ev)
 {-# INLINE traceFireTcS #-}
 
@@ -275,6 +289,9 @@ csTraceTcM mk_doc = do
     $ do msg <- mk_doc
          TcM.dumpTcRn False Opt_D_dump_cs_trace "" FormatText msg
 {-# INLINE csTraceTcM #-}
+
+runTcSEqualities :: TcS a -> TcM a
+runTcSEqualities thing_inside = runTcS thing_inside
 
 runTcS :: TcS a -> TcM a
 runTcS = runTcSGo  
@@ -360,11 +377,29 @@ emitWork cts
 readTcRef :: TcRef a -> TcS a
 readTcRef ref = wrapTcS (TcM.readTcRef ref)
 
+writeTcRef :: TcRef a -> a -> TcS ()
+writeTcRef ref val = wrapTcS (TcM.writeTcRef ref val)
+
 updTcRef :: TcRef a -> (a -> a) -> TcS ()
 updTcRef ref upd_fn = wrapTcS (TcM.updTcRef ref upd_fn)
 
 getTcLevel :: TcS TcLevel
 getTcLevel = wrapTcS TcM.getTcLevel
+
+unifyKiVar :: TcKiVar -> TcKind -> TcS ()
+unifyKiVar kv ki
+  = assertPpr (isMetaKiVar kv) (ppr kv)
+    $ TcS $ \env -> do TcM.traceTc "unifyKiVar" (ppr kv <+> text ":=" <+> ppr ki)
+                       TcM.liftZonkM $ TcM.writeMetaKiVar kv ki
+                       TcM.updTcRef (tcs_unified env) (+1)
+
+reportUnifications :: TcS a -> TcS (Int, a)
+reportUnifications (TcS thing_inside) = TcS $ \env -> do
+  inner_unified <- TcM.newTcRef 0
+  res <- thing_inside (env { tcs_unified = inner_unified })
+  n_unifs <- TcM.readTcRef inner_unified
+  TcM.updTcRef (tcs_unified env) (+ n_unifs)
+  return (n_unifs, res)
 
 getWorkList :: TcS WorkList
 getWorkList = do
@@ -460,8 +495,7 @@ checkTouchableKiVarEq ev lhs_kv rhs
        traceTcS "checkTouchableKiVarEq }" (ppr lhs_kv $$ ppr check_result)
        case check_result of
          PuFail reason -> return $ PuFail reason
-         PuOK cts redn -> do emitWork cts
-                             return $ pure redn
+         PuOK _ redn -> return $ pure redn
   where
     (lhs_kv_info, lhs_kv_lvl) = case tcKiVarDetails lhs_kv of
       MetaKv { mkv_info = info, mkv_tclvl = lvl } -> (info, lvl)
@@ -473,3 +507,30 @@ checkTouchableKiVarEq ev lhs_kv rhs
                 , kef_unifying = UnifyingKi lhs_kv_info lhs_kv_lvl LC_Promote
                 , kef_lhs = KiVarLHS lhs_kv
                 , kef_occurs = ctkeInsolubleOccurs }
+
+checkKindEq :: CtEvidence -> CanEqLHS -> TcKind -> TcS (PuResult () Reduction)
+checkKindEq ev lhs rhs
+  | isGiven ev
+  = do traceTcS "checkKindEq {" (vcat [ text "lhs:" <+> ppr lhs
+                                      , text "rhs:" <+> ppr rhs ])
+       check_result <- wrapTcS (checkKiEqRhs given_flags rhs)
+       traceTcS "checkKindEq }" (ppr check_result)
+       case check_result of
+         PuFail reason -> return $ PuFail reason
+         PuOK _ redn -> do return $ pure redn
+  | otherwise
+  = do check_result <- wrapTcS (checkKiEqRhs wanted_flags rhs)
+       case check_result of
+         PuFail reason -> return $ PuFail reason
+         PuOK _ redn -> return $ pure redn
+  where
+    given_flags = KEF { kef_lhs = lhs
+                      , kef_constrs = False
+                      , kef_unifying = NotUnifying
+                      , kef_occurs = ctkeInsolubleOccurs }
+
+    wanted_flags = KEF { kef_lhs = lhs
+                       , kef_constrs = False
+                       , kef_unifying = NotUnifying
+                       , kef_occurs = ctkeInsolubleOccurs }
+

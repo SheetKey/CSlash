@@ -14,3 +14,9 @@ data CtLocEnv = CtLocEnv
   , ctl_tclvl :: !TcLevel
   , ctl_rdr :: !LocalRdrEnv
   }
+
+getCtLocEnvLoc :: CtLocEnv -> RealSrcSpan
+getCtLocEnvLoc = ctl_loc
+
+getCtLocEnvLvl :: CtLocEnv -> TcLevel
+getCtLocEnvLvl = ctl_tclvl

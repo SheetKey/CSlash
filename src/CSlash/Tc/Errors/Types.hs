@@ -6,7 +6,7 @@ module CSlash.Tc.Errors.Types where
 import CSlash.Cs
 -- import GHC.Tc.Errors.Types.PromotionErr
 -- import GHC.Tc.Errors.Hole.FitTypes (HoleFit)
--- import GHC.Tc.Types.Constraint
+import CSlash.Tc.Types.Constraint
 -- import GHC.Tc.Types.Evidence (EvBindsVar)
 -- import GHC.Tc.Types.Origin ( CtOrigin (ProvCtxtOrigin), SkolemInfoAnon (SigSkol)
 --                            , UserTypeCtxt (PatSynCtxt), TyVarBndrs, TypedThing

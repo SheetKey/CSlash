@@ -130,6 +130,8 @@ rewrite_reduction :: Reduction -> RewriteM Reduction
 rewrite_reduction (ReductionKi ki xi) = do
   redn <- bumpDepth $ rewrite_one_ki xi
   return $ mkTransRedn ki redn
+rewrite_reduction (ReflRednKi xi) = bumpDepth $ rewrite_one_ki xi
+  
 
 {- *********************************************************************
 *                                                                      *

@@ -189,6 +189,7 @@ instance Diagnostic TcRnMessage where
     TcRnImportLookup{} -> ErrorWithoutFlag
     TcRnNotInScope{} -> ErrorWithoutFlag
     TcRnShadowedName{} -> WarningWithFlag Opt_WarnNameShadowing
+    TcRnSimplifierTooManyIterations{} -> ErrorWithoutFlag
     TcRnBindingNameConflict{} -> ErrorWithoutFlag
     TcRnTyThingUsedWrong{} -> ErrorWithoutFlag
 
@@ -220,6 +221,7 @@ instance Diagnostic TcRnMessage where
     TcRnImportLookup{} -> noHints
     TcRnNotInScope err _ _ hints -> scopeErrorHints err ++ hints
     TcRnShadowedName{} -> noHints
+    TcRnSimplifierTooManyIterations{} -> [SuggestIncreasedSimplifierIterations]
     TcRnBindingNameConflict{} -> noHints
     TcRnTyThingUsedWrong{} -> noHints
 

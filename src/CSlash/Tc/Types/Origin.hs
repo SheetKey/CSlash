@@ -135,5 +135,8 @@ data CtOrigin
                  , keq_thing :: Maybe KindedThing
                  }
 
+isVisibleOrigin :: CtOrigin -> Bool
+isVisibleOrigin (KindEqOrigin {}) = False
+
 isGivenOrigin :: CtOrigin -> Bool
 isGivenOrigin (KindEqOrigin {}) = False

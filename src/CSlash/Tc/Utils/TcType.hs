@@ -142,6 +142,14 @@ strictlyDeeperThan (TcLevel lvl) (TcLevel ctxt_lvl) = lvl > ctxt_lvl
 deeperThanOrSame :: TcLevel -> TcLevel -> Bool
 deeperThanOrSame (TcLevel v_tclvl) (TcLevel ctxt_tclvl) = v_tclvl >= ctxt_tclvl
 
+sameDepthAs :: TcLevel -> TcLevel -> Bool
+sameDepthAs (TcLevel ctxt_tclvl) (TcLevel v_tclvl)
+  = ctxt_tclvl == v_tclvl
+
+checkTcLevelInvariant :: TcLevel -> TcLevel -> Bool
+checkTcLevelInvariant (TcLevel ctxt_tclvl) (TcLevel v_tclvl)
+  = ctxt_tclvl >= v_tclvl
+
 tcVarLevel :: TcVar -> TcLevel
 tcVarLevel v 
   | isTcTyVar v = tcTyVarLevel v
@@ -180,6 +188,16 @@ isPromotableMetaKiVar kv
   = isTouchableInfoK info
   | otherwise
   = False
+
+isTouchableMetaKiVar :: TcLevel -> TcKiVar -> Bool
+isTouchableMetaKiVar ctxt_tclvl kv
+  | isKiVar kv
+  , MetaKv { mkv_tclvl = kv_tclvl, mkv_info = info } <- tcKiVarDetails kv
+  , isTouchableInfoK info
+  = assertPpr (checkTcLevelInvariant ctxt_tclvl kv_tclvl)
+              (ppr kv $$ ppr kv_tclvl $$ ppr ctxt_tclvl)
+    $ kv_tclvl `sameDepthAs` ctxt_tclvl
+  | otherwise = False
 
 isSkolemTyVar :: TcTyVar -> Bool
 isSkolemTyVar tv = assertPpr (tcIsTcTyVar tv) (ppr  tv)
@@ -235,6 +253,11 @@ setMetaKiVarTcLevel kv tclvl = case tcKiVarDetails kv of
 isTyVarTyVar :: Var -> Bool
 isTyVarTyVar tv = case tcTyVarDetails tv of
                     MetaTv { mtv_info = TyVarTv } -> True
+                    _ -> False
+
+isKiVarKiVar :: Var -> Bool
+isKiVarKiVar kv = case tcKiVarDetails kv of
+                    MetaKv { mkv_info = KiVarKv } -> True
                     _ -> False
 
 isFlexi :: MetaDetails' tk -> Bool

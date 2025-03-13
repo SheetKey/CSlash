@@ -262,3 +262,83 @@ delVarEnv = delFromUFM
 lookupVarEnv :: VarEnv a -> Var -> Maybe a
 {-# INLINE lookupVarEnv #-}
 lookupVarEnv = lookupUFM
+
+{- *********************************************************************
+*                                                                      *
+   Deterministic VarEnv (DVarEnv)
+*                                                                      *
+********************************************************************* -}
+
+type DVarEnv elt = UniqDFM Var elt
+
+emptyDVarEnv :: DVarEnv a
+emptyDVarEnv = emptyUDFM
+
+dVarEnvElts :: DVarEnv a -> [a]
+dVarEnvElts = eltsUDFM
+
+mkDVarEnv :: [(Var, a)] -> DVarEnv a
+mkDVarEnv = listToUDFM
+
+extendDVarEnv :: DVarEnv a -> Var -> a -> DVarEnv a
+extendDVarEnv = addToUDFM
+
+minusDVarEnv :: DVarEnv a -> DVarEnv a' -> DVarEnv a
+minusDVarEnv = minusUDFM
+
+lookupDVarEnv :: DVarEnv a -> Var -> Maybe a
+lookupDVarEnv = lookupUDFM
+
+foldDVarEnv :: (a -> b -> b) -> b -> DVarEnv a -> b
+foldDVarEnv = foldUDFM
+
+nonDetStrictFoldDVarEnv :: (a -> b -> b) -> b -> DVarEnv a -> b
+nonDetStrictFoldDVarEnv = nonDetStrictFoldUDFM
+
+mapDVarEnv :: (a -> b) -> DVarEnv a -> DVarEnv b
+mapDVarEnv = mapUDFM
+
+filterDVarEnv :: (a -> Bool) -> DVarEnv a -> DVarEnv a
+filterDVarEnv = filterUDFM
+
+alterDVarEnv :: (Maybe a -> Maybe a) -> DVarEnv a -> Var -> DVarEnv a
+alterDVarEnv = alterUDFM
+
+plusDVarEnv :: DVarEnv a -> DVarEnv a -> DVarEnv a
+plusDVarEnv = plusUDFM
+
+plusDVarEnv_C :: (a -> a -> a) -> DVarEnv a -> DVarEnv a -> DVarEnv a
+plusDVarEnv_C = plusUDFM_C
+
+unitDVarEnv :: Var -> a -> DVarEnv a
+unitDVarEnv = unitUDFM
+
+delDVarEnv :: DVarEnv a -> Var -> DVarEnv a
+delDVarEnv = delFromUDFM
+
+delDVarEnvList :: DVarEnv a -> [Var] -> DVarEnv a
+delDVarEnvList = delListFromUDFM
+
+isEmptyDVarEnv :: DVarEnv a -> Bool
+isEmptyDVarEnv = isNullUDFM
+
+elemDVarEnv :: Var -> DVarEnv a -> Bool
+elemDVarEnv = elemUDFM
+
+extendDVarEnv_C :: (a -> a -> a) -> DVarEnv a -> Var -> a -> DVarEnv a
+extendDVarEnv_C = addToUDFM_C
+
+modifyDVarEnv :: (a -> a) -> DVarEnv a -> Var -> DVarEnv a
+modifyDVarEnv mangle_fn env key
+  = case (lookupDVarEnv env key) of
+      Nothing -> env
+      Just xx -> extendDVarEnv env key (mangle_fn xx)
+
+partitionDVarEnv :: (a -> Bool) -> DVarEnv a -> (DVarEnv a, DVarEnv a)
+partitionDVarEnv = partitionUDFM
+
+extendDVarEnvList :: DVarEnv a -> [(Var, a)] -> DVarEnv a
+extendDVarEnvList = addListToUDFM
+
+anyDVarEnv :: (a -> Bool) -> DVarEnv a -> Bool
+anyDVarEnv = anyUDFM

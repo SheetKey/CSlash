@@ -100,3 +100,23 @@ shallowKvFolder = KindFolder { kf_view = noKindView
                   | v `elemVarSet` acc = acc
                   | otherwise = acc `extendVarSet` v
     do_ctxt _ _ = mempty
+
+{- *********************************************************************
+*                                                                      *
+                 Any free vars
+*                                                                      *
+********************************************************************* -}
+
+{-# INLINE afvFolder #-}
+afvFolder :: (KindVar -> Bool) -> KindFolder KiVarSet DM.Any
+afvFolder check_fv = KindFolder { kf_view = noKindView
+                                , kf_kivar = \is kv -> Any (not (kv `elemVarSet` is)
+                                                            && check_fv kv)
+                                , kf_UKd = Any False
+                                , kf_AKd = Any False
+                                , kf_LKd = Any False
+                                , kf_ctxt = \_ _ -> Any False }
+
+anyFreeVarsOfKind :: (KindVar -> Bool) -> Kind -> Bool
+anyFreeVarsOfKind check_fv ki = DM.getAny (f ki)
+  where (f, _) = foldKind (afvFolder check_fv) emptyVarSet

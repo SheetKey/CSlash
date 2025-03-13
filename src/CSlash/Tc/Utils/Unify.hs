@@ -59,22 +59,25 @@ emitResidualTvConstraint :: SkolemInfo -> [TcTyVar] -> TcLevel -> WantedConstrai
 emitResidualTvConstraint skol_info skol_tvs tclvl wanted
   | not (isEmptyWC wanted)
     || checkTelescopeSkol (getSkolemInfo skol_info)
-  = do implic <- buildTvImplication (getSkolemInfo skol_info) skol_tvs tclvl wanted
+  = do implic <- buildVImplication (getSkolemInfo skol_info) skol_tvs tclvl wanted
        emitImplication implic
   | otherwise
   = return ()
 
-buildTvImplication
+buildVImplication
   :: SkolemInfoAnon
-  -> [TcTyVar]
+  -> [TcVar]
   -> TcLevel
   -> WantedConstraints
   -> TcM Implication
-buildTvImplication skol_info skol_tvs tclvl wanted
-  = assertPpr (all (isSkolemTyVar <||> isTyVarTyVar) skol_tvs) (ppr skol_tvs) $ do
+buildVImplication skol_info skol_vs tclvl wanted
+  = assertPpr (all (isSkolemTyVar
+                    <||> isTyVarTyVar
+                    <||> isSkolemKiVar
+                    <||> isKiVarKiVar) skol_vs) (ppr skol_vs) $ do
       implic <- newImplication
       let implic' = implic { ic_tclvl = tclvl
-                           , ic_skols = skol_tvs
+                           , ic_skols = skol_vs
                            , ic_given_eqs = NoGivenEqs
                            , ic_wanted = wanted
                            , ic_info = skol_info }
@@ -295,7 +298,7 @@ okCheckReflKi ki = return $ PuOK emptyBag $ mkReflRednKi ki
 failCheckWith :: CheckTyKiEqResult -> TcM (PuResult a b)
 failCheckWith p = return $ PuFail p
 
-data KiEqFlags a = KEF
+data KiEqFlags = KEF
   { kef_constrs :: Bool
   , kef_lhs :: CanEqLHS
   , kef_unifying :: AreUnifying
@@ -312,7 +315,7 @@ data LevelCheck
   | LC_Check
   | LC_Promote
 
-instance Outputable (KiEqFlags a) where
+instance Outputable KiEqFlags where
   ppr (KEF {..}) = text "KEF" <> (braces
                    $ vcat [ text "kef_lhs =" <+> ppr kef_lhs
                           , text "kef_unifying =" <+> ppr kef_unifying
@@ -330,7 +333,7 @@ instance Outputable LevelCheck where
   ppr LC_Check = text "LC_Check"
   ppr LC_Promote = text "LC_Promote"
 
-checkKiEqRhs :: KiEqFlags a -> TcKind -> TcM (PuResult a Reduction)
+checkKiEqRhs :: KiEqFlags -> TcKind -> TcM (PuResult () Reduction)
 checkKiEqRhs flags ki = case ki of
   KiVarKi kv -> checkKiVar flags kv
   FunKd { fk_af = af, kft_arg = a, kft_res = r }
@@ -343,7 +346,7 @@ checkKiEqRhs flags ki = case ki of
           return $ mkFunKiRedn af <$> a_res <*> r_res
   _ -> panic "checkKiEqRhs unfinished"
 
-checkKiVar :: KiEqFlags a -> TcKiVar -> TcM (PuResult a Reduction)
+checkKiVar :: KiEqFlags -> TcKiVar -> TcM (PuResult () Reduction)
 checkKiVar (KEF { kef_lhs = lhs, kef_unifying = unifying, kef_occurs = occ_prob }) occ_kv
   = case lhs of
       KiVarLHS lhs_kv -> check_kv unifying lhs_kv

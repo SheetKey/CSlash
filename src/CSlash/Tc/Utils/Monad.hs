@@ -497,6 +497,9 @@ addErr msg = do
   loc <- getSrcSpanM
   addErrAt loc msg
 
+failWith :: TcRnMessage -> TcRn a
+failWith msg = addErr msg >> failM
+
 addErrAt :: SrcSpan -> TcRnMessage -> TcRn ()
 addErrAt loc msg = do
   ctxt <- getErrCtxt

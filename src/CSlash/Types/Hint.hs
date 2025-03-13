@@ -43,7 +43,7 @@ data CsHint
   | SuggestIncreaseMaxPmCheckModels
   | SuggestAddTypeSignatures AvailableBindings
   --  | SuggestAddInlineOrNoInlinePragma !Var !Activation
-  | SuggestIncreaseSimplifierIterations
+  | SuggestIncreasedSimplifierIterations
   | SuggestQualifiedAfterModuleName
   --  | SuggestFixOrphanInst { isFamilyInstance :: Maybe FamFlavor }
   | SuggestTypeSignatureRemoveQualifier

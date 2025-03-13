@@ -43,6 +43,15 @@ import Data.Void( Void )
 *                                                                    *
 ******************************************************************* -}
 
+solveSimpleGivens :: [Ct] -> TcS ()
+solveSimpleGivens givens
+  | null givens
+  = return ()
+  | otherwise
+  = do traceTcS "solveSimpleGivens {" (ppr givens)
+       solveSimples (listToBag givens)
+       traceTcS "End solveSimpleGivens }" empty
+
 solveSimpleWanteds :: Cts -> TcS WantedConstraints
 solveSimpleWanteds simples = do
   traceTcS "solveSimpleWanteds {" (ppr simples)

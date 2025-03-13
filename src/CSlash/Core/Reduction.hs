@@ -57,3 +57,7 @@ mkFunKiRedn f (ReductionKi arg_og arg_new) (ReflRednKi res_new)
 mkFunKiRedn f (ReflRednKi arg_new) (ReflRednKi res_new)
   = mkReflRednKi (FunKd f arg_new res_new)
 {-# INLINE mkFunKiRedn #-}
+
+isReflRedn :: Reduction -> Bool
+isReflRedn (ReflRednKi {}) = True
+isReflRedn (ReductionKi {}) = False

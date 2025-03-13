@@ -1,6 +1,6 @@
 module CSlash.Tc.Solver.Equality (solveKiEquality) where
 
--- import GHC.Tc.Solver.Irred( solveIrred )
+import CSlash.Tc.Solver.Irred( solveIrred )
 -- import GHC.Tc.Solver.Dict( matchLocalInst, chooseInstance )
 -- import GHC.Tc.Solver.Rewrite
 import CSlash.Tc.Solver.Monad
@@ -24,7 +24,7 @@ import CSlash.Core.TyCon
 import CSlash.Core.Type.Rep
 -- import GHC.Core.Coercion
 -- import GHC.Core.Coercion.Axiom
--- import GHC.Core.Reduction
+import CSlash.Core.Reduction
 -- import GHC.Core.Unify( tcUnifyTyWithTFs )
 -- import GHC.Core.FamInstEnv ( FamInstEnvs, FamInst(..), apartnessCheck
 --                            , lookupFamInstEnvByTyCon )
@@ -72,8 +72,16 @@ solveKiEquality ev ki1 ki2 = do
     Left irred_ct -> do tryQCsIrredEqCt irred_ct
                         solveIrred irred_ct
     Right eq_ct -> do tryInertEqs eq_ct
-                      "unfinished"
-  
+                      tryQCsEqCt eq_ct
+                      simpleStage (updInertEqs eq_ct)
+                      stopWithStage (eqCtEvidence eq_ct) "Kept inert EqCt"
+
+updInertEqs :: EqCt -> TcS ()
+updInertEqs eq_ct = do
+  kickOutRewritable (KOAfterAdding (eqCtLHS eq_ct)) (eqCtFlavor eq_ct)
+  tc_lvl <- getTcLevel
+  updInertCans (addEqToCans tc_lvl eq_ct)
+
 {- *********************************************************************
 *                                                                      *
 *           zonkEqKinds
@@ -108,6 +116,8 @@ zonkEqKinds ev ki1 ki2 = Stage $ do
             trace_indirect kv ki'
             unSwap swapped go ki' ki
       _ -> give_up
+      where
+        give_up = return $ Left $ unSwap swapped Pair (mkKiVarKi kv) ki
 
     kivar_kivar kv1 kv2
       | kv1 == kv2 = return $ Right (mkKiVarKi kv1)
@@ -146,7 +156,7 @@ canonicalizeKiEquality :: CtEvidence -> Kind -> Kind -> SolverStage (Either Irre
 canonicalizeKiEquality ev ki1 ki2 = Stage $ do
   traceTcS "canonicalizeKiEquality"
     $ vcat [ ppr ev, ppr ki1, ppr ki2 ]
-  tdr_env <- getGlobalRdrEnvTcS
+  rdr_env <- getGlobalRdrEnvTcS
   can_ki_eq_nc False rdr_env ev ki1 ki1 ki2 ki2
 
 can_ki_eq_nc
@@ -159,7 +169,7 @@ can_ki_eq_nc
   -> Kind
   -> TcS (StopOrContinue (Either IrredCt EqCt))
 
-can_ki_eq_nc _ _ ev (FunKd f1 ki1a ki1b) _ (FunKd f2 ki1b ki2b) _
+can_ki_eq_nc _ _ ev (FunKd f1 ki1a ki1b) _ (FunKd f2 ki2a ki2b) _
   | f1 == f2
   = canDecomposableFunKi ev af1 (ki1a, ki1b) (ki2a, ki2b)
 
@@ -168,13 +178,13 @@ can_ki_eq_nc _ _ ev (FunKd f1 ki1a ki1b) _ (FunKd f2 ki1b ki2b) _
 ------------------
 
 can_ki_eq_nc False rdr_env ev _ ps_ki1 _ ps_ki2 = do
-  (redn1@(Reduction _ xi1), rewriters1) <- rewriteKi ev ps_ki1
-  (redn2@(Reduction _ xi2), rewriters2) <- rewriteKi ev ps_ki2
+  (redn1@(ReductionKi _ xi1), rewriters1) <- rewriteKi ev ps_ki1
+  (redn2@(ReductionKi _ xi2), rewriters2) <- rewriteKi ev ps_ki2
   new_ev <- rewriteEqEvidence (rewriters1 S.<> rewriters2) ev NotSwapped redn1 redn2
   traceTcS "can_ki_eq_nc: go round again" (ppr new_ev $$ ppr xi1 $$ ppr xi2)
   can_ki_eq_nc True rdr_env new_ev xi1 xi1 xi2 xi2
 
-can_ki_eq_nc True _ ev ki1 ps_ki2 ki2 ps_ki2
+can_ki_eq_nc True _ ev ki1 ps_ki1 ki2 ps_ki2
   | Just can_eq_lhs1 <- canKiEqLHS_maybe ki1
   = do traceTcS "can_ki_eq1" (ppr ki1 $$ ppr ki2)
        canKiEqCanLHSHomo ev NotSwapped can_eq_lhs1 ps_ki1 ki2 ps_ki2
@@ -187,7 +197,7 @@ can_ki_eq_nc True _ ev ki1 ps_ki2 ki2 ps_ki2
 -- Failed
 ------------------
 
-can_ki_eq_nc True _ ev _ _ ps_ki1 _ ps_ki2 = do
+can_ki_eq_nc True _ ev _ ps_ki1 _ ps_ki2 = do
   traceTcS "can_ki_eq_nc catch-all case" (ppr ps_ki1 $$ ppr ps_ki2)
   finishCanWithIrred ShapeMismatchReason ev
 
@@ -220,7 +230,7 @@ canKiEqCanLHSHomo ev swapped lhs1 ps_xi1 xi2 ps_xi2
   | otherwise
   = canKiEqCanLHSFinish ev swapped lhs1 ps_xi2
 
-canKiCanEqLHS2
+canKiEqCanLHS2
   :: CtEvidence
   -> SwapFlag
   -> CanEqLHS
@@ -228,9 +238,9 @@ canKiCanEqLHS2
   -> CanEqLHS
   -> TcKind
   -> TcS (StopOrContinue (Either IrredCt EqCt))
-canKiCanEqLHS2 ev swapped lhs1 ps_xi1 lhs2 ps_xi2
+canKiEqCanLHS2 ev swapped lhs1 ps_xi1 lhs2 ps_xi2
   | lhs1 `eqCanEqLHS` lhs2
-  = canEqReflexive ev lhs1_ki
+  = canKiEqReflexive ev lhs1_ki
   | KiVarLHS kv1 <- lhs1
   , KiVarLHS kv2 <- lhs2
   = do traceTcS "canEqLHS2 swapOver" (ppr kv1 $$ ppr kv2 $$ ppr swapped)
@@ -280,7 +290,7 @@ canKiEqCanLHSFinish_try_unification ev swapped lhs rhs
             case check_result of
               PuFail reason
                 | reason `ctkerHasOnlyProblems` do_not_prevent_rewriting
-                -> canEqCanLHSFinish_no_unification ev swapped lhs rhs
+                -> canKiEqCanLHSFinish_no_unification ev swapped lhs rhs
                 | otherwise
                 -> tryIrredInstead reason ev swapped lhs rhs
               PuOK _ rhs_redn ->
@@ -302,7 +312,7 @@ canKiEqCanLHSFinish_try_unification ev swapped lhs rhs
   | otherwise
   = canKiEqCanLHSFinish_no_unification ev swapped lhs rhs
   where
-    do_not_prevent_rewriting = cteProblem cteSkolemEscape S.<> cteProblem cteConcrete
+    do_not_prevent_rewriting = ctkeProblem ctkeSkolemEscape S.<> ctkeProblem ctkeConcrete
 
 canKiEqCanLHSFinish_no_unification
   :: CtEvidence
@@ -315,9 +325,9 @@ canKiEqCanLHSFinish_no_unification ev swapped lhs rhs = do
   case check_result of
     PuFail reason -> tryIrredInstead reason ev swapped lhs rhs
     PuOK _ rhs_redn -> do
-      let lhs_ki = canEqLHSKind lhs
+      let lhs_ki = canKiEqLHSKind lhs
       new_ev <- rewriteKiEqEvidence ev swapped (mkReflRednKi lhs_ki) rhs_redn
-      continueWith $ Right $ EqCt { eq_ev = new_ev
+      continueWith $ Right $ KiEqCt { eq_ev = new_ev
                                   , eq_lhs = lhs
                                   , eq_rhs = reductionReducedKind rhs_redn }
 
@@ -330,7 +340,7 @@ tryIrredInstead
   -> TcS (StopOrContinue (Either IrredCt a))
 tryIrredInstead reason ev swapped lhs rhs = do
   traceTcS "cantMakeCaconical" (ppr reason $$ ppr lhs $$ ppr rhs)
-  new_ev <- rewriteKiEqEvidence ev swapped (mkReflRednKi $ canEqLHSKind lhs) (mkReflRednKi rhs)
+  new_ev <- rewriteKiEqEvidence ev swapped (mkReflRednKi $ canKiEqLHSKind lhs) (mkReflRednKi rhs)
   finishCanWithIrred (NonCanonicalReason reason) new_ev
 
 finishCanWithIrred :: CtIrredReason -> CtEvidence -> TcS (StopOrContinue (Either IrredCt a))
@@ -353,7 +363,7 @@ rewriteKiEqEvidence old_ev swapped (ReflRednKi nlhs) (ReflRednKi nrhs)
   = return $ setCtEvPred old_ev (KiEqPred nlhs nrhs)
 rewriteKiEqEvidence old_ev swapped lhs rhs
   | CtWanted {} <- old_ev
-  , let nlhs = reducitonReducedKind lhs
+  , let nlhs = reductionReducedKind lhs
         nrhs = reductionReducedKind rhs
   = do traceTcS "rewriteKiEqEvidence"
          $ vcat [ ppr old_ev
@@ -376,18 +386,18 @@ tryInertEqs work_item@(KiEqCt { eq_ev = ev }) = Stage $ do
     Just (ev_i, swapped) -> stopWith ev "Solved from inert"
     Nothing -> continueWith ()
 
-inertsCanDischarge :: InertCans -> Eqct -> Maybe (CtEvidence, SwapFlag)
-inertsCanDischarge inerts (KiEqCt { eq_lhs = lhs_w, eq_rhs = rhs_w, eq_ev = ev })
+inertsCanDischarge :: InertCans -> EqCt -> Maybe (CtEvidence, SwapFlag)
+inertsCanDischarge inerts (KiEqCt { eq_lhs = lhs_w, eq_rhs = rhs_w, eq_ev = ev_w })
   | (ev_i : _) <- [ ev_i | KiEqCt { eq_ev = ev_i, eq_rhs = rhs_i }
-                           <- findKiEq inerts lhs_w
+                           <- findEq inerts lhs_w
                          , rhs_i `tcEqKind` rhs_w
                          , inert_beats_wanted ev_i ]
   = Just (ev_i, NotSwapped)
 
   | Just rhs_lhs <- canKiEqLHS_maybe rhs_w
   , (ev_i : _) <- [ ev_i | KiEqCt { eq_ev = ev_i, eq_rhs = rhs_i }
-                           <- findKiEq inerts rhs_lhs
-                         , rhs_i `tcEqKind` canEqLHSKind lhs_w
+                           <- findEq inerts rhs_lhs
+                         , rhs_i `tcEqKind` canKiEqLHSKind lhs_w
                          , inert_beats_wanted ev_i ]
   = Just (ev_i, IsSwapped)
   where
@@ -401,4 +411,29 @@ inertsCanDischarge inerts (KiEqCt { eq_lhs = lhs_w, eq_rhs = rhs_w, eq_ev = ev }
       where
         f_i = ctEvFlavor ev_i
 
+    strictly_more_visible loc1 loc2
+      = not (isVisibleOrigin (ctLocOrigin loc2))
+        && isVisibleOrigin (ctLocOrigin loc1)
+
 inertsCanDischarge _ _ = Nothing
+
+{-********************************************************************
+*                                                                    *
+          Final wrap-up for equalities
+*                                                                    *
+********************************************************************-}
+
+tryQCsIrredEqCt :: IrredCt -> SolverStage ()
+tryQCsIrredEqCt irred@(IrredCt { ir_ev = ev })
+  = case ctEvPred ev of
+      KiEqPred k1 k2 -> panic "lookup_ki_in_qcis"
+
+tryQCsEqCt :: EqCt -> SolverStage ()
+tryQCsEqCt work_item@(KiEqCt { eq_lhs = lhs, eq_rhs = rhs })
+  = panic "lookup_ki_eq_in_qcis (CEqCan work_item) (canKiEqLHSKind lhs) rhs"
+
+-- lookup_ki_eq_in_qcis :: Ct -> TcKind -> TcKind -> SolverStage ()
+-- lookup_ki_eq_in_qcis work_ct lhs rhs = Stage $ do
+--   ics <- getInertCans
+--   if isWanted ev
+--      && not (null (inert_in

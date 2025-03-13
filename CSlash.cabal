@@ -231,6 +231,7 @@ library
                     , CSlash.SysTools.Terminal
 
                     , CSlash.Tc.CsType
+                    , CSlash.Tc.Errors
                     , CSlash.Tc.Errors.Ppr
                     , CSlash.Tc.Errors.Types
                     , CSlash.Tc.Gen.Bind
@@ -240,9 +241,11 @@ library
                     , CSlash.Tc.Solver
                     , CSlash.Tc.Solver.Equality
                     , CSlash.Tc.Solver.InertSet
+                    , CSlash.Tc.Solver.Irred
                     , CSlash.Tc.Solver.Monad
                     , CSlash.Tc.Solver.Rewrite
                     , CSlash.Tc.Solver.Solve
+                    , CSlash.Tc.Solver.Types
                     , CSlash.Tc.Types
                     , CSlash.Tc.Types.BasicTypes
                     , CSlash.Tc.Types.Constraint

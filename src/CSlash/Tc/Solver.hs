@@ -1,5 +1,7 @@
 module CSlash.Tc.Solver where
 
+import Prelude hiding ((<>))
+
 import CSlash.Data.Bag
 -- import GHC.Core.Class
 import CSlash.Core
@@ -14,13 +16,13 @@ import CSlash.Types.Id
 import CSlash.Utils.Outputable
 import CSlash.Builtin.Utils
 import CSlash.Builtin.Names
--- import CSlash.Tc.Errors
+import CSlash.Tc.Errors
 import CSlash.Tc.Errors.Types
 -- import GHC.Tc.Types.Evidence
--- import GHC.Tc.Solver.Solve   ( solveSimpleGivens, solveSimpleWanteds )
+import CSlash.Tc.Solver.Solve ( solveSimpleGivens, solveSimpleWanteds )
 -- import GHC.Tc.Solver.Dict    ( makeSuperClasses, solveCallStack )
 -- import GHC.Tc.Solver.Rewrite ( rewriteType )
--- import GHC.Tc.Utils.Unify    ( buildTvImplication )
+import CSlash.Tc.Utils.Unify    ( buildVImplication )
 -- import GHC.Tc.Utils.TcMType as TcM
 import CSlash.Tc.Utils.Monad   as TcM
 import CSlash.Tc.Zonk.TcType     as TcM
@@ -65,28 +67,10 @@ import CSlash.Data.Maybe     ( mapMaybe, runMaybeT, MaybeT )
 simplifyTop :: WantedConstraints -> TcM ()
 simplifyTop wanteds = do
   traceTc "simplifyTop {" $ text "wanted = " <+> ppr wanteds
-  ((final_wc, unsafe_ol), binds1) <- runTcS $ do
-    final_wc <- simplifyTopWanteds wanteds
-    unsafe_ol <- getSafeOverlapFailures
-    return (final_wc, unsafe_ol)
+  final_wc <- runTcS $ simplifyTopWanteds wanteds
   traceTc "End simplifyTop }" empty
 
-  binds2 <- reportUnsolved final_wc
-
-  traceTc "reportUnsolved (unsafe overlapping) {" empty
-  unless (isEmptyBag unsafe_ol) $ do
-    errs_var <- getErrsVar
-    saved_msg <- TcM.readTcRef errs_var
-    TcM.writeTcRef errs_var emptyMessages
-
-    warnAllUnsolved
-
-    whyUnsafe <- getWarningMessages <$> TcM.readTcRef errs_var
-    TcM.writeTcRef errs_var saved_msg
-    recordUnsafeInfer (mkMessages whyUnsafe)
-  traceTc "reportUnsolved (unsafe overlapping) }" empty
-
-  return (evBindsMapBinds binds1 `unionBags` binds2)
+  reportUnsolved final_wc
 
 pushLevelAndSolveEqualities :: SkolemInfoAnon -> [TyConBinder] -> TcM a -> TcM a
 pushLevelAndSolveEqualities skol_info_anon tcbs thing_inside = do
@@ -106,28 +90,37 @@ pushLevelAndSolveEqualitiesX callsite thing_inside = do
   return (tclvl, wanted, res)
 
 report_unsolved_equalities
-  :: SkolemInfoAnon -> [TcTyVar] -> TcLevel -> WantedConstraints -> TcM ()
-report_unsolved_equalities skol_info_anon skol_tvs tclvl wanted
+  :: SkolemInfoAnon -> [TcVar] -> TcLevel -> WantedConstraints -> TcM ()
+report_unsolved_equalities skol_info_anon skol_vs tclvl wanted
   | isEmptyWC wanted
   = return ()
   | otherwise
   = checkNoErrs $ do
-      implic <- buildTvImplication skol_info_anon skol_tvs tclvl wanted
+      implic <- buildVImplication skol_info_anon skol_vs tclvl wanted
       reportAllUnsolved (mkImplicWC (unitBag implic))
 
 simplifyTopWanteds :: WantedConstraints -> TcS WantedConstraints
 simplifyTopWanteds wanteds = do
   wc_first_go <- nestTcS (solveWanteds wanteds)
-  dflags <- getDynFlags
-  wc_defaulted <- try_tyvar_defaulting dflags wc_first_go
-  useUnsatisfiableGivens wc_defaulted
+  useUnsatisfiableGivens wc_first_go
+
+useUnsatisfiableGivens :: WantedConstraints -> TcS WantedConstraints
+useUnsatisfiableGivens wc = do
+  (final_wc, did_work) <- (`runStateT` False) $ go_wc wc
+  if did_work
+    then nestTcS (solveWanteds final_wc)
+    else return final_wc
   where
-    try_tyvar_defaulting :: DynFlags -> WantedConstraints -> TcS WantedConstraints
-    try_tyvar_defaulting dflags wc
-      | isEmptyWC wc
-      = return wc
+    go_wc (WC { wc_simple = wtds, wc_impl = impls }) = do
+      impls' <- mapMaybeBagM go_impl impls
+      return $ WC { wc_simple = wtds, wc_impl = impls' }
+
+    go_impl impl
+      | isSolvedStatus (ic_status impl)
+      = return $ Just impl
       | otherwise
-      = do free_tvs <- TcS.zonkTyVarsAndFVList 
+      = do wcs' <- go_wc (ic_wanted impl)
+           lift $ setImplicationStatus $ impl { ic_wanted = wcs' }    
 
 {- *********************************************************************
 *                                                                      *
@@ -135,8 +128,8 @@ simplifyTopWanteds wanteds = do
 *                                                                      *
 ********************************************************************* -}
  
-simplifyWanteds :: WantedConstraints -> TcS WantedConstraints
-simplifyWanteds wc
+solveWanteds :: WantedConstraints -> TcS WantedConstraints
+solveWanteds wc
   | isEmptyWC wc
   = return wc
   | otherwise
@@ -148,17 +141,71 @@ simplifyWanteds wc
        dflags <- getDynFlags
        solved_wc <- simplify_loop 0 (solverIterations dflags) True wc
 
-       "unfinished"
+       traceTcS "solveWanteds }"
+         $ vcat [ text "final wc =" <+> ppr solved_wc ]
+
+       return solved_wc
 
 simplify_loop :: Int -> IntWithInf -> Bool -> WantedConstraints -> TcS WantedConstraints
-simplify_loop n limit redo_implications wc@(WC { wc_simple = simple, wc_impl = implics }) = do
+simplify_loop n limit redo_implications wc@(WC { wc_simple = simples, wc_impl = implics }) = do
   csTraceTcS $ text "simplify_loop iteration=" <> int n
                <+> (parens $ hsep [ text "definitely_redo ="
                                     <+> ppr redo_implications
                                     <> comma
                                   , int (lengthBag simples) <+> text "simples to solve" ])
-  traceTcs "simplify_loop: wc =" (ppr wc)
+  traceTcS "simplify_loop: wc =" (ppr wc)
 
   (unifs1, wc1) <- reportUnifications $ solveSimpleWanteds simples
 
   "unfinished"
+
+setImplicationStatus :: Implication -> TcS (Maybe Implication)
+setImplicationStatus implic@(Implic { ic_status = status
+                                    , ic_info = info
+                                    , ic_wanted = wc })
+  | assertPpr (not (isSolvedStatus status)) (ppr info)
+    $ not (isSolvedWC pruned_wc)
+  = do traceTcS "setImplicationStatus(not-all-solved) {" (ppr implic)
+       let new_status | insolubleWC pruned_wc = IC_Insoluble
+                      | otherwise = IC_Unsolved
+           new_implic = implic { ic_status = new_status
+                               , ic_wanted = pruned_wc }
+
+       traceTcS "setImplicationStatus(not-all-solved) }" (ppr new_implic)
+
+  | otherwise
+  = do traceTcS "setImplicationStatus(all-solved) {" (ppr implic)
+       bad_telescope <- checkBadTelescope implic
+
+       let discard_entire_implication
+             = not bad_telescope
+               && isEmptyWC pruned_wc
+
+           final_status
+             | bad_telescope = IC_BadTelescope
+             | otherwise = IC_Solved
+
+           final_implic = implic { ic_status = final_staus
+                                 , ic_wanted = pruned_wc }
+
+       traceTcS "setImplicationStatus(all-solved) }"
+         $ vcat [ text "discard:" <+> ppr discard_entire_implication
+                , text "new_implic:" <+> ppr final_implic ]
+
+       return $ if discard_entire implication
+                then Nothing
+                else Just final_implic
+  where
+    WC { wc_simples = sipmles, wc_impl = implics } = wc
+
+    pruned_implics = filterBag keep_me implics
+
+    pruned_wc = WC { wc_simple = simples
+                   , wc_impl = pruned_implics }
+
+    keep_me ic
+      | IC_Solved
+      , isEmptyBag (wc_impl (ic_wanted ic))
+      = False
+      | otherwise
+      = True

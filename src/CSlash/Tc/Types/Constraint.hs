@@ -60,7 +60,9 @@ type KiXi = TcKind
 type Cts = Bag Ct
 
 data Ct
-  = CNonCanonical CtEvidence
+  = CIrredCan IrredCt
+  | CEqCan EqCt
+  | CNonCanonical CtEvidence
 
 data EqCt = KiEqCt
   { eq_ev :: CtEvidence
@@ -74,16 +76,34 @@ data CanEqLHS
 instance Outputable CanEqLHS where
   ppr (KiVarLHS kv) = ppr kv
 
+eqCtEvidence :: EqCt -> CtEvidence
+eqCtEvidence = eq_ev
+
+eqCtLHS :: EqCt -> CanEqLHS
+eqCtLHS = eq_lhs
+
 data IrredCt = IrredCt
   { ir_ev :: CtEvidence
   , ir_reason :: CtIrredReason
   }
 
+irredCtEvidence :: IrredCt -> CtEvidence
+irredCtEvidence = ir_ev
+
+irredCtPred :: IrredCt -> Pred
+irredCtPred = ctEvPred . irredCtEvidence
+
+instance Outputable IrredCt where
+  ppr irred = ppr (CIrredCan irred)
+
 data CtIrredReason
   = NonCanonicalReason CheckTyKiEqResult
 
-inInsolubleReason :: CtIrredReason -> Bool
-inInsolubleReason (NonCanonicalReason ctker) = ctkerIsInsoluble ctker
+instance Outputable CtIrredReason where
+  ppr (NonCanonicalReason ctker) = ppr ctker
+
+isInsolubleReason :: CtIrredReason -> Bool
+isInsolubleReason (NonCanonicalReason ctker) = ctkerIsInsoluble ctker
 
 newtype CheckTyKiEqResult = CTKER Word8
 
@@ -111,6 +131,9 @@ impredicativeProblem = ctkeProblem ctkeImpredicative
 
 ctkerHasProblem :: CheckTyKiEqResult -> CheckTyKiEqProblem -> Bool
 ctkerHasProblem (CTKER bits) (CTKEP mask) = (bits .&. mask) /= 0
+
+ctkerHasOnlyProblems :: CheckTyKiEqResult -> CheckTyKiEqResult -> Bool
+ctkerHasOnlyProblems (CTKER bits) (CTKER mask) = (bits .&. complement mask) == 0
 
 ctkerIsInsoluble :: CheckTyKiEqResult -> Bool
 ctkerIsInsoluble (CTKER bits) = (bits .&. mask) /= 0
@@ -156,16 +179,26 @@ mkNonCanonical :: CtEvidence -> Ct
 mkNonCanonical = CNonCanonical
 
 ctEvidence :: Ct -> CtEvidence
+ctEvidence (CEqCan (KiEqCt { eq_ev = ev })) = ev
+ctEvidence (CIrredCan (IrredCt { ir_ev = ev })) = ev
 ctEvidence (CNonCanonical ev) = ev
 
 ctLoc :: Ct -> CtLoc
 ctLoc = ctEvLoc . ctEvidence
 
+ctOrigin :: Ct -> CtOrigin
+ctOrigin = ctLocOrigin . ctLoc
+
 instance Outputable Ct where
   ppr ct = ppr (ctEvidence ct) <+> parens pp_short
     where
       pp_short = case ct of
+                   CEqCan {} -> text "CEqCan"
                    CNonCanonical {} -> text "CNonCanonical"
+                   CIrredCan (IrredCt { ir_reason = reason }) -> text "CIrredCan" <> ppr reason
+
+instance Outputable EqCt where
+  ppr (KiEqCt { eq_ev = ev }) = ppr ev
 
 isGivenLoc :: CtLoc -> Bool
 isGivenLoc loc = isGivenOrigin (ctLocOrigin loc)
@@ -175,6 +208,14 @@ isWantedCt = isWanted . ctEvidence
 
 isGivenCt :: Ct -> Bool
 isGivenCt = isGiven . ctEvidence
+
+isTopLevelUserTypeError :: Pred -> Bool
+isTopLevelUserTypeError pred
+  = isJust (userTypeError_maybe pred)
+    || isJust (isUnsatisfiableCt_maybe pred)
+
+isUnsatisfiableCt_maybe :: Pred -> Maybe ErrorMsgType
+isUnsatisfiableCt_maybe (KiEqPred _ _) = Nothing  
 
 {- *********************************************************************
 *                                                                      *
@@ -190,6 +231,9 @@ data WantedConstraints = WC
 emptyWC :: WantedConstraints
 emptyWC = WC { wc_simple = emptyBag
              , wc_impl = emptyBag }
+
+mkImplicWC :: Bag Implication -> WantedConstraints
+mkImplicWC implic = emptyWC { wc_impl = implic }
 
 isEmptyWC :: WantedConstraints -> Bool
 isEmptyWC (WC { wc_simple = f }) = isEmptyBag f
@@ -217,6 +261,10 @@ dropMisleading (WC { wc_simple = simples, wc_impl = implics })
 
     keep_ct _ct = True
 
+isSolvedStatus :: ImplicStatus -> Bool
+isSolvedStatus IC_Solved = True
+isSolvedStatus _ = False
+
 isInsolubleStatus :: ImplicStatus -> Bool
 isInsolubleStatus IC_Insoluble = True
 isInsolubleStatus IC_BadTelescope = True
@@ -235,8 +283,14 @@ insolubleWantedCt ct
   = insolubleCt ct
     && not (arisesFromGivens ct)
 
+insolubleIrredCt :: IrredCt -> Bool
+insolubleIrredCt (IrredCt { ir_ev = ev, ir_reason = reason })
+  = isInsolubleReason reason
+    || isTopLevelUserTypeError (ctEvPred ev)
+
 insolubleCt :: Ct -> Bool
-insolubleCt (CNonCanonical {}) = False
+insolubleCt (CIrredCan ir_ct) = insolubleIrredCt ir_ct
+insolubleCt _ = False
 
 instance Outputable WantedConstraints where
   ppr (WC { wc_simple = s })
@@ -256,7 +310,7 @@ ppr_bag doc bag
 data Implication = Implic
   { ic_tclvl :: TcLevel
   , ic_info :: SkolemInfoAnon
-  , ic_skols :: [TcTyVar]
+  , ic_skols :: [TcVar]
   , ic_given_eqs :: HasGivenEqs
   , ic_warn_inaccessible :: Bool
   , ic_env :: !CtLocEnv
@@ -343,14 +397,23 @@ data CtEvidence
 data Pred
   = KiEqPred TcKind TcKind
 
+userTypeError_maybe :: Pred -> Maybe ErrorMsgType
+userTypeError_maybe (KiEqPred _ _) = Nothing
+
 ctEvPred :: CtEvidence -> Pred
 ctEvPred = ctev_pred
+
+ctEvPredKind_maybe :: CtEvidence -> Maybe (Kind, Kind)
+ctEvPredKind_maybe (CtWanted  (KiEqPred ki1 ki2) _) = Just (ki1, ki2)
 
 ctEvLoc :: CtEvidence -> CtLoc
 ctEvLoc = ctev_loc
 
 arisesFromGivens :: Ct -> Bool
 arisesFromGivens ct = isGivenCt ct || isGivenLoc (ctLoc ct)
+
+setCtEvPred :: CtEvidence -> Pred -> CtEvidence
+setCtEvPred old_ctev@(CtWanted{}) pred = old_ctev { ctev_pred = pred }
 
 instance Outputable Pred where
   ppr (KiEqPred k1 k2) = ppr k1 <+> ppr k2
@@ -384,6 +447,9 @@ instance Outputable CtFlavor where
 ctEvFlavor :: CtEvidence -> CtFlavor
 ctEvFlavor (CtWanted {}) = Wanted
 
+eqCtFlavor :: EqCt -> CtFlavor
+eqCtFlavor (KiEqCt { eq_ev = ev }) = ctEvFlavor ev
+
 canKiEqLHS_maybe :: KiXi -> Maybe CanEqLHS
 canKiEqLHS_maybe xi
   | Just kv <- getKiVar_maybe xi
@@ -396,6 +462,11 @@ canKiEqLHSKind (KiVarLHS kv) = mkKiVarKi kv
 
 eqCanEqLHS :: CanEqLHS -> CanEqLHS -> Bool
 eqCanEqLHS (KiVarLHS kv1) (KiVarLHS kv2) = kv1 == kv2
+
+eqCanRewriteF :: CtFlavor -> CtFlavor -> Bool
+eqCanRewriteF Given _ = True
+eqCanRewriteF Wanted Wanted = True
+eqCanRewriteF Wanted Given = False
 
 {- *********************************************************************
 *                                                                      *
@@ -424,8 +495,20 @@ data CtLoc = CtLoc
   , ctl_depth :: !SubGoalDepth
   }
 
+ctLocEnv :: CtLoc -> CtLocEnv
+ctLocEnv = ctl_env
+
+ctLocLevel :: CtLoc -> TcLevel
+ctLocLevel loc = getCtLocEnvLvl (ctLocEnv loc)
+
+ctLocDepth :: CtLoc -> SubGoalDepth
+ctLocDepth = ctl_depth
+
 ctLocOrigin :: CtLoc -> CtOrigin
 ctLocOrigin = ctl_origin
+
+ctLocSpan :: CtLoc -> RealSrcSpan
+ctLocSpan (CtLoc { ctl_env = lcl }) = getCtLocEnvLoc lcl
  
 bumpCtLocDepth :: CtLoc -> CtLoc
 bumpCtLocDepth loc@(CtLoc { ctl_depth = d }) = loc { ctl_depth = bumpSubGoalDepth d }
