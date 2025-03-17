@@ -105,6 +105,8 @@ initTc cs_env cs_src keep_rn_syntax mod loc do_this = do
   infer_reasons_var <- newIORef emptyMessages
   dfun_n_var <- newIORef emptyOccSet
   let type_env_var = cs_type_env_vars cs_env
+
+  static_wc_var <- newIORef emptyWC
   next_wrapper_num <- newIORef emptyModuleEnv
   let !dflags = cs_dflags cs_env
       !mhome_unit = cs_home_unit_maybe cs_env
@@ -141,15 +143,11 @@ initTc cs_env cs_src keep_rn_syntax mod loc do_this = do
                 , tcg_sigs = emptyNameSet
                 , tcg_tcs = []
                 , tcg_ksigs = emptyNameSet
-                                      
                 , tcg_hdr_info = Nothing
-                                      
                 , tcg_pc = False
-                                      
                 , tcg_main = Nothing
-                                      
                 , tcg_top_loc = loc
-                                      
+                , tcg_static_wc = static_wc_var   
                 , tcg_complete_matches = []
                 }                     
   initTcWithGbl cs_env gbl_env loc do_this
@@ -800,6 +798,9 @@ getTcLevel :: TcM TcLevel
 getTcLevel = do
   env <- getLclEnv
   return $! getLclEnvTcLevel env 
+
+setTcLevel :: TcLevel -> TcM a -> TcM a
+setTcLevel tclvl thing_inside = updLclEnv (setLclEnvTcLevel tclvl) thing_inside
 
 getLclTypeEnv :: TcM TcTypeEnv
 getLclTypeEnv = do

@@ -2,7 +2,7 @@ module CSlash.Tc.Solver.Equality (solveKiEquality) where
 
 import CSlash.Tc.Solver.Irred( solveIrred )
 -- import GHC.Tc.Solver.Dict( matchLocalInst, chooseInstance )
--- import GHC.Tc.Solver.Rewrite
+import CSlash.Tc.Solver.Rewrite
 import CSlash.Tc.Solver.Monad
 import CSlash.Tc.Solver.InertSet
 -- import GHC.Tc.Solver.Types( findFunEqsByTyCon )
@@ -17,6 +17,7 @@ import qualified CSlash.Tc.Utils.Monad as TcM
 
 import CSlash.Core.Type
 import CSlash.Core.Kind
+import CSlash.Core.Kind.Compare
 -- import GHC.Core.Predicate
 -- import GHC.Core.Class
 import CSlash.Core.DataCon ( dataConName )
@@ -105,9 +106,10 @@ zonkEqKinds ev ki1 ki2 = Stage $ do
       = do res_a <- go arg1 arg2
            res_b <- go res1 res2
            return $ combine_rev (FunKd f1) res_b res_a
+    go _ _ = panic "zonkEqKinds"
 
     kivar :: SwapFlag -> TcKiVar -> TcKind -> TcS (Either (Pair TcKind) TcKind)
-    kivar swapped kv ki = case tcKiVarDetails of
+    kivar swapped kv ki = case tcKiVarDetails kv of
       MetaKv { mkv_ref = ref } -> do
         cts <- readTcRef ref
         case cts of
@@ -171,16 +173,16 @@ can_ki_eq_nc
 
 can_ki_eq_nc _ _ ev (FunKd f1 ki1a ki1b) _ (FunKd f2 ki2a ki2b) _
   | f1 == f2
-  = canDecomposableFunKi ev af1 (ki1a, ki1b) (ki2a, ki2b)
+  = canDecomposableFunKi ev f1 (ki1a, ki1b) (ki2a, ki2b)
 
 ------------------
 -- Can't decompose
 ------------------
 
 can_ki_eq_nc False rdr_env ev _ ps_ki1 _ ps_ki2 = do
-  (redn1@(ReductionKi _ xi1), rewriters1) <- rewriteKi ev ps_ki1
-  (redn2@(ReductionKi _ xi2), rewriters2) <- rewriteKi ev ps_ki2
-  new_ev <- rewriteEqEvidence (rewriters1 S.<> rewriters2) ev NotSwapped redn1 redn2
+  redn1@(ReductionKi _ xi1) <- rewriteKi ev ps_ki1
+  redn2@(ReductionKi _ xi2) <- rewriteKi ev ps_ki2
+  new_ev <- rewriteKiEqEvidence ev NotSwapped redn1 redn2
   traceTcS "can_ki_eq_nc: go round again" (ppr new_ev $$ ppr xi1 $$ ppr xi2)
   can_ki_eq_nc True rdr_env new_ev xi1 xi1 xi2 xi2
 

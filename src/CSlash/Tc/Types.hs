@@ -191,15 +191,11 @@ data TcGblEnv = TcGblEnv
   , tcg_sigs :: NameSet
   , tcg_tcs :: [TyCon]
   , tcg_ksigs :: NameSet
-
   , tcg_hdr_info :: Maybe (XRec Rn ModuleName)
-
   , tcg_pc :: !AnyPcUsage
-
   , tcg_main :: Maybe Name
-
   , tcg_top_loc :: RealSrcSpan
-
+  , tcg_static_wc :: TcRef WantedConstraints
   , tcg_complete_matches :: !CompleteMatches
   }
 

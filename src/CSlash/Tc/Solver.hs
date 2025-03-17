@@ -24,10 +24,10 @@ import CSlash.Tc.Solver.Solve ( solveSimpleGivens, solveSimpleWanteds )
 -- import GHC.Tc.Solver.Rewrite ( rewriteType )
 import CSlash.Tc.Utils.Unify    ( buildVImplication )
 -- import GHC.Tc.Utils.TcMType as TcM
-import CSlash.Tc.Utils.Monad   as TcM
-import CSlash.Tc.Zonk.TcType     as TcM
+import CSlash.Tc.Utils.Monad as TcM
+import CSlash.Tc.Zonk.TcType as TcM
 import CSlash.Tc.Solver.InertSet
-import CSlash.Tc.Solver.Monad  as TcS
+import CSlash.Tc.Solver.Monad as TcS
 import CSlash.Tc.Types.Constraint
 -- import GHC.Tc.Instance.FunDeps
 -- import GHC.Core.Predicate
@@ -63,6 +63,17 @@ import CSlash.Data.Maybe     ( mapMaybe, runMaybeT, MaybeT )
 *                           External interface                                  *
 *                                                                               *
 ****************************************************************************** -}
+
+captureTopConstraints :: TcM a -> TcM (a, WantedConstraints)
+captureTopConstraints thing_inside = do
+  static_wc_var <- TcM.newTcRef emptyWC
+  (mb_res, lie) <- TcM.updGblEnv (\env -> env { tcg_static_wc = static_wc_var })
+                                 $ TcM.tryCaptureConstraints thing_inside
+  stWC <- TcM.readTcRef static_wc_var
+  case mb_res of
+    Just res -> return (res, lie `andWC` stWC)
+    Nothing -> do _ <- simplifyTop lie
+                  failM
 
 simplifyTop :: WantedConstraints -> TcM ()
 simplifyTop wanteds = do
@@ -147,17 +158,88 @@ solveWanteds wc
        return solved_wc
 
 simplify_loop :: Int -> IntWithInf -> Bool -> WantedConstraints -> TcS WantedConstraints
-simplify_loop n limit redo_implications wc@(WC { wc_simple = simples, wc_impl = implics }) = do
+simplify_loop n limit definitely_redo_implications
+              wc@(WC { wc_simple = simples, wc_impl = implics }) = do
   csTraceTcS $ text "simplify_loop iteration=" <> int n
                <+> (parens $ hsep [ text "definitely_redo ="
-                                    <+> ppr redo_implications
+                                    <+> ppr definitely_redo_implications
                                     <> comma
                                   , int (lengthBag simples) <+> text "simples to solve" ])
   traceTcS "simplify_loop: wc =" (ppr wc)
 
   (unifs1, wc1) <- reportUnifications $ solveSimpleWanteds simples
 
-  "unfinished"
+  wc2 <- if not definitely_redo_implications
+            && unifs1 == 0
+            && isEmptyBag (wc_impl wc1)
+         then return $ wc { wc_simple = wc_simple wc1 }
+         else do implics2 <- solveNestedImplications
+                             $ implics `unionBags` (wc_impl wc1)
+                 return $ wc { wc_simple = wc_simple wc1
+                             , wc_impl = implics2 }
+
+  unif_happened <- resetUnificationFlag
+  csTraceTcS $ text "unif_happened" <+> ppr unif_happened
+
+  maybe_simplify_again (n+1) limit unif_happened wc2
+  
+maybe_simplify_again
+  :: Int
+  -> IntWithInf
+  -> Bool
+  -> WantedConstraints
+  -> TcS WantedConstraints
+maybe_simplify_again n limit unif_happened wc@(WC { wc_simple = simples })
+  | n `intGtLimit` limit
+  = do addErrTcS $ TcRnSimplifierTooManyIterations simples limit wc
+       return wc
+  | unif_happened
+  = simplify_loop n limit True wc
+  | otherwise
+  = return wc
+
+solveNestedImplications :: Bag Implication -> TcS (Bag Implication)
+solveNestedImplications implics
+  | isEmptyBag implics
+  = return emptyBag
+  | otherwise
+  = do traceTcS "solveNestedImplications starting {" empty
+       unsolved_implics <- mapBagM solveImplication implics
+       traceTcS "solveNestedImplications end }"
+         $ vcat [ text "unsolved_implics =" <+> ppr unsolved_implics ]
+
+       return (catBagMaybes unsolved_implics)
+
+solveImplication :: Implication -> TcS (Maybe Implication)
+solveImplication imp@(Implic { ic_tclvl = tclvl
+                             , ic_wanted = wanteds
+                             , ic_info = info
+                             , ic_status = status })
+  | isSolvedStatus status
+  = return $ Just imp
+  | otherwise
+  = do inerts <- getInertSet
+       traceTcS "solveImplication {" (ppr imp $$ text "Inerts" <+> ppr inerts)
+
+       (has_given_eqs, given_insols, residual_wanted)
+         <- nestImplicTcS tclvl $ 
+            do residual_wanted <- solveWanteds wanteds
+               (has_eqs, given_insols) <- getHasGivenEqs tclvl
+               return (has_eqs, given_insols, residual_wanted)
+
+       traceTcS "solveImplication 2"
+         (ppr given_insols $$ ppr residual_wanted)
+
+       let final_wanted = residual_wanted `addInsols` given_insols
+
+       res_implic <- setImplicationStatus (imp { ic_given_eqs = has_given_eqs
+                                               , ic_wanted = final_wanted })
+
+       traceTcS "solveImplication end }"
+         $ vcat [ text "has_given_eqs =" <+> ppr has_given_eqs
+                , text "res_implic =" <+> ppr res_implic ]
+
+       return res_implic                   
 
 setImplicationStatus :: Implication -> TcS (Maybe Implication)
 setImplicationStatus implic@(Implic { ic_status = status
@@ -173,6 +255,8 @@ setImplicationStatus implic@(Implic { ic_status = status
 
        traceTcS "setImplicationStatus(not-all-solved) }" (ppr new_implic)
 
+       return $ Just new_implic
+
   | otherwise
   = do traceTcS "setImplicationStatus(all-solved) {" (ppr implic)
        bad_telescope <- checkBadTelescope implic
@@ -185,18 +269,18 @@ setImplicationStatus implic@(Implic { ic_status = status
              | bad_telescope = IC_BadTelescope
              | otherwise = IC_Solved
 
-           final_implic = implic { ic_status = final_staus
+           final_implic = implic { ic_status = final_status
                                  , ic_wanted = pruned_wc }
 
        traceTcS "setImplicationStatus(all-solved) }"
          $ vcat [ text "discard:" <+> ppr discard_entire_implication
                 , text "new_implic:" <+> ppr final_implic ]
 
-       return $ if discard_entire implication
+       return $ if discard_entire_implication
                 then Nothing
                 else Just final_implic
   where
-    WC { wc_simples = sipmles, wc_impl = implics } = wc
+    WC { wc_simple = simples, wc_impl = implics } = wc
 
     pruned_implics = filterBag keep_me implics
 
@@ -204,8 +288,15 @@ setImplicationStatus implic@(Implic { ic_status = status
                    , wc_impl = pruned_implics }
 
     keep_me ic
-      | IC_Solved
+      | IC_Solved <- ic_status ic
       , isEmptyBag (wc_impl (ic_wanted ic))
       = False
       | otherwise
       = True
+
+checkBadTelescope :: Implication -> TcS Bool
+checkBadTelescope (Implic { ic_info = info, ic_skols = skols })
+  | checkTelescopeSkol info
+  = panic "checkBadTelescope"
+  | otherwise
+  = return False

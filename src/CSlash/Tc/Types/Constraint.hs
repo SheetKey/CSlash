@@ -98,12 +98,15 @@ instance Outputable IrredCt where
 
 data CtIrredReason
   = NonCanonicalReason CheckTyKiEqResult
+  | ShapeMismatchReason
 
 instance Outputable CtIrredReason where
   ppr (NonCanonicalReason ctker) = ppr ctker
+  ppr ShapeMismatchReason = text "(shape)"
 
 isInsolubleReason :: CtIrredReason -> Bool
 isInsolubleReason (NonCanonicalReason ctker) = ctkerIsInsoluble ctker
+isInsolubleReason ShapeMismatchReason = True
 
 newtype CheckTyKiEqResult = CTKER Word8
 
@@ -238,6 +241,9 @@ mkImplicWC implic = emptyWC { wc_impl = implic }
 isEmptyWC :: WantedConstraints -> Bool
 isEmptyWC (WC { wc_simple = f }) = isEmptyBag f
 
+isSolvedWC :: WantedConstraints -> Bool
+isSolvedWC (WC simple impl) = isEmptyBag simple && allBag (isSolvedStatus . ic_status) impl
+
 andWC :: WantedConstraints -> WantedConstraints -> WantedConstraints
 andWC (WC { wc_simple = f1, wc_impl = i1 }) (WC { wc_simple = f2, wc_impl = i2 })
   = WC { wc_simple = f1 `unionBags` f2
@@ -248,6 +254,9 @@ addSimples wc cts = wc { wc_simple = wc_simple wc `unionBags` cts }
 
 addImplics :: WantedConstraints -> Bag Implication -> WantedConstraints
 addImplics wc implic = wc { wc_impl = wc_impl wc `unionBags` implic }
+
+addInsols :: WantedConstraints -> Bag IrredCt -> WantedConstraints
+addInsols wc insols = wc { wc_simple = wc_simple wc `unionBags` fmap CIrredCan insols }
 
 dropMisleading :: WantedConstraints -> WantedConstraints
 dropMisleading (WC { wc_simple = simples, wc_impl = implics })

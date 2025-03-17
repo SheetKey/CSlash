@@ -200,6 +200,31 @@ getUnsolvedInerts = do
 
   return (implics, emptyBag)
 
+getHasGivenEqs :: TcLevel -> TcS (HasGivenEqs, InertIrreds) 
+getHasGivenEqs tclvl = do
+  inerts@(IC { inert_irreds = irreds
+             , inert_given_eqs = given_eqs
+             , inert_given_eq_lvl = ge_lvl })
+    <- getInertCans
+
+  let given_insols = filterBag insoluble_given_equality irreds
+
+      has_ge | ge_lvl == tclvl = MaybeGivenEqs
+             | given_eqs = LocalGivenEqs
+             | otherwise = NoGivenEqs
+
+  traceTcS "getHasGivenEqs"
+    $ vcat [ text "given_eqs:" <+> ppr given_eqs
+           , text "ge_lvl:" <+> ppr ge_lvl
+           , text "ambient level:" <+> ppr tclvl
+           , text "Inerts:" <+> ppr inerts
+           , text "Insols:" <+> ppr given_insols ]
+
+  return (has_ge, given_insols)
+  where
+    insoluble_given_equality (IrredCt { ir_ev = ev, ir_reason = reason })
+      = isInsolubleReason reason && isGiven ev
+
 {- *********************************************************************
 *                                                                      *
 *              The TcS solver monad                                    *
@@ -246,6 +271,9 @@ wrapTcS action = mkTcS $ \_ -> action
 
 failTcS :: TcRnMessage -> TcS a
 failTcS = wrapTcS . TcM.failWith
+
+addErrTcS :: TcRnMessage -> TcS ()
+addErrTcS = wrapTcS . TcM.addErr
 
 tryEarlyAbortTcS :: TcS ()
 tryEarlyAbortTcS = mkTcS $ \env -> when (tcs_abort_on_insoluble env) TcM.failM
@@ -322,6 +350,32 @@ runTcSGo' restore_cycles abort_on_insoluble tcs = do
   when restore_cycles $ do
     inert_set <- TcM.readTcRef inert_var
     restoreTyVarCycles inert_set
+
+  return res
+
+nestImplicTcS :: TcLevel -> TcS a -> TcS a
+nestImplicTcS inner_tclvl (TcS thing_inside)
+  = TcS $ \TcSEnv { tcs_unified = unified_var
+                  , tcs_inerts = old_inert_var
+                  , tcs_count = count
+                  , tcs_unif_lvl = unif_lvl
+                  , tcs_abort_on_insoluble = abort_on_insoluble } -> do
+  inerts <- TcM.readTcRef old_inert_var
+  let nest_inert = inerts { inert_cycle_breakers = pushCycleBreakerVarStack
+                                                     (inert_cycle_breakers inerts)
+                          , inert_cans = (inert_cans inerts) { inert_given_eqs = False }}
+  new_inert_var <- TcM.newTcRef nest_inert
+  new_wl_var <- TcM.newTcRef emptyWorkList
+  let nest_env = TcSEnv { tcs_count = count
+                        , tcs_unif_lvl = unif_lvl
+                        , tcs_unified = unified_var
+                        , tcs_inerts = new_inert_var
+                        , tcs_abort_on_insoluble = abort_on_insoluble
+                        , tcs_worklist = new_wl_var }
+  res <- TcM.setTcLevel inner_tclvl $ thing_inside nest_env
+
+  out_inert_set <- TcM.readTcRef new_inert_var
+  restoreTyVarCycles out_inert_set
 
   return res
 
@@ -423,6 +477,22 @@ isFilledMetaKiVar_maybe kv = wrapTcS (TcM.isFilledMetaKiVar_maybe kv)
 *              The Unification Level Flag                              *
 *                                                                      *
 ********************************************************************* -}
+
+resetUnificationFlag :: TcS Bool
+resetUnificationFlag = TcS $ \env -> do
+  let ref = tcs_unif_lvl env
+  ambient_lvl <- TcM.getTcLevel
+  mb_lvl <- TcM.readTcRef ref
+  TcM.traceTc "resetUnificationFlag"
+    $ vcat [ text "ambient:" <+> ppr ambient_lvl
+           , text "unif_lvl:" <+> ppr mb_lvl ]
+  case mb_lvl of
+    Nothing -> return False
+    Just unif_lvl | ambient_lvl `strictlyDeeperThan` unif_lvl
+                    -> return False
+                  | otherwise
+                    -> do TcM.writeTcRef ref Nothing
+                          return True    
 
 setUnificationFlag :: TcLevel -> TcS ()
 setUnificationFlag lvl = TcS $ \env -> do

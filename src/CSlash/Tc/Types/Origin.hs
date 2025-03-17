@@ -140,3 +140,14 @@ isVisibleOrigin (KindEqOrigin {}) = False
 
 isGivenOrigin :: CtOrigin -> Bool
 isGivenOrigin (KindEqOrigin {}) = False
+
+instance Outputable CtOrigin where
+  ppr = pprCtOrigin
+
+ctoHerald :: SDoc
+ctoHerald = text "arising from"
+
+pprCtOrigin :: CtOrigin -> SDoc
+pprCtOrigin (KindEqOrigin k1 k2 _)
+  = hang (ctoHerald <+> text "a kind equality")
+         2 (sep [ppr k1, char '~', ppr k2])

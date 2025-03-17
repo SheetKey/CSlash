@@ -138,7 +138,7 @@ instance (OutputableBndrId p) => Outputable (CsArrow (CsPass p)) where
   ppr arr = parens (pprCsArrow arr)
 
 pprCsArrow :: (OutputableBndrId p) => CsArrow (CsPass p) -> SDoc
-pprCsArrow (CsArrow _ kind) = ppr kind
+pprCsArrow (CsArrow _ kind) = char '-' <> ppr kind <> char '>'
 
 csTyVarLName :: CsTyVarBndr (CsPass p) -> LIdP (CsPass p)
 csTyVarLName (KindedTyVar _ n _) = n

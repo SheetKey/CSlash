@@ -68,3 +68,7 @@ tyConFlavorAssoc_maybe _ = Nothing
 instance Outputable TopLevelFlag where
   ppr TopLevel = text "<TopLevel>"
   ppr NotTopLevel = text "<NotTopLevel>"
+
+instance Outputable SwapFlag where
+  ppr IsSwapped = text "Is-swapped"
+  ppr NotSwapped = text "Not-swapped"

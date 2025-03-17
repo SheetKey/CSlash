@@ -59,8 +59,8 @@ try_inert_irreds inerts irred_w@(IrredCt { ir_ev = ev_w, ir_reason = reason })
                 , text "inert: " <+> (ppr ct_i $$ ppr (ctOrigin ct_i)) ]
        case solveOneFromTheOther ct_i ct_w of
          KeepInert -> return $ Stop ev_w (text "Irred equal:KeptInert" <+> ppr ct_w)
-         KeepWork -> do updInertCans (updInertIrreds (\_ -> others))
-                        continureWith ()
+         KeepWork -> do updInertCans (updIrreds (\_ -> others))
+                        continueWith ()
   | otherwise
   = continueWith ()
 

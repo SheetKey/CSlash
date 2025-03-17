@@ -16,6 +16,7 @@ import CSlash.Types.Basic( SwapFlag(..) )
 -- import GHC.Core.Predicate
 import CSlash.Core.Type.FVs
 import CSlash.Core.Kind.FVs
+import CSlash.Core.Kind.Compare
 import qualified CSlash.Core.Type.Rep as Rep
 -- import GHC.Core.Class( Class )
 import CSlash.Core.TyCon
@@ -68,6 +69,18 @@ selectWorkItem wl@(WL { wl_eqs = eqs, wl_rest = rest })
   | ct : cts <- rest = Just (ct, wl { wl_rest = cts })
   | otherwise = Nothing
 
+instance Outputable WorkList where
+  ppr (WL { wl_eqs = eqs, wl_rest = rest, wl_implics = implics })
+    = text "WL" <+> (braces $
+                     vcat [ ppUnless (null eqs)
+                            $ text "Eqs =" <+> vcat (map ppr eqs)
+                          , ppUnless (null rest)
+                            $ text "Non-eqs" <+> vcat (map ppr rest)
+                          , ppUnless (isEmptyBag implics)
+                            $ ifPprDebug (text "Implics ="
+                                          <+> vcat (map ppr (bagToList implics)))
+                                         (text "(Implics omitted)") ])
+
 {- *********************************************************************
 *                                                                      *
                   InertSet
@@ -80,6 +93,10 @@ data InertSet = IS
   { inert_cans :: InertCans
   , inert_cycle_breakers :: CycleBreakerVarStack
   }
+
+instance Outputable InertSet where
+  ppr (IS { inert_cans = ics })
+    = vcat [ ppr ics ]
 
 emptyInertCans :: InertCans
 emptyInertCans = IC { inert_eqs = emptyEqs
@@ -163,7 +180,7 @@ foldEqs k eqs z = foldDVarEnv (\cts z -> foldr k z cts) z eqs
 addIrredToCans :: TcLevel -> IrredCt -> InertCans -> InertCans
 addIrredToCans tc_lvl irred ics
   = updGivenEqs tc_lvl (CIrredCan irred)
-    $ updIrreds (addIrred irred ics)
+    $ updIrreds (addIrred irred) ics
 
 addIrreds :: [IrredCt] -> InertIrreds -> InertIrreds
 addIrreds extras irreds
@@ -194,8 +211,6 @@ findMatchingIrreds irreds ev = case ctEvPred ev of
       = Just IsSwapped
       | otherwise
       = Nothing
-      
-
 
 {- *********************************************************************
 *                                                                      *
@@ -224,7 +239,7 @@ data KickOutSpec
   | KOAfterAdding CanEqLHS
 
 kickOutRewritableLHS :: KickOutSpec -> CtFlavor -> InertCans -> (Cts, InertCans)
-kickOutRewritableLHS _ _ ics@(IC _ _ _) = panic "kickOutRewritableLHS"
+kickOutRewritableLHS _ _ ics@(IC _ _ _ _) = panic "kickOutRewritableLHS"
 
 {- *********************************************************************
 *                                                                      *
@@ -251,6 +266,9 @@ isOuterKiVar tclvl kv
     Cycle breakers
 *                                                                      *
 ********************************************************************* -}
+
+pushCycleBreakerVarStack :: CycleBreakerVarStack -> CycleBreakerVarStack
+pushCycleBreakerVarStack = (emptyBag <|)
 
 forAllCycleBreakerBindings_
   :: Monad m => CycleBreakerVarStack -> (TcTyVar -> TcType -> m ()) -> m ()

@@ -21,8 +21,8 @@ import CSlash.Tc.Errors.Types
 import CSlash.Tc.Utils.Monad
 -- import GHC.Tc.Gen.Export
 -- import GHC.Tc.Types.Evidence
--- import GHC.Tc.Types.Constraint
--- import GHC.Tc.Types.Origin
+import CSlash.Tc.Types.Constraint
+import CSlash.Tc.Types.Origin
 -- import GHC.Tc.Instance.Family
 -- import GHC.Tc.Gen.Annotation
 import CSlash.Tc.Gen.Bind
@@ -31,9 +31,9 @@ import CSlash.Tc.Utils.Env
 -- import GHC.Tc.Gen.Rule
 -- import GHC.Tc.Gen.Foreign
 -- import GHC.Tc.TyCl.Instance
--- import GHC.Tc.Utils.TcMType
+import CSlash.Tc.Utils.TcMType
 import CSlash.Tc.Utils.TcType
--- import GHC.Tc.Solver
+import CSlash.Tc.Solver
 import CSlash.Tc.CsType
 -- import GHC.Tc.Instance.Typeable ( mkTypeableBinds )
 -- import GHC.Tc.Utils.Backpack
@@ -238,7 +238,7 @@ tcRnImports cs_env import_decls = do
                
 tcRnSrcDecls :: Maybe (LocatedL [LIE Ps]) -> [LCsDecl Ps] -> TcM TcGblEnv
 tcRnSrcDecls export_ies decls = do
-  (tcg_env, tcl_env) <- tc_rn_src_decls decls
+  (tcg_env, tcl_env, lie) <- tc_rn_src_decls decls
 
   ------ Simplify constraints ---------
   _ <- {-# SCC "simplifyTop" #-}
@@ -282,7 +282,7 @@ zonkTcGblEnv :: TcGblEnv -> TcM (TypeEnv, LCsBinds Tc)
 zonkTcGblEnv tcg_env@(TcGblEnv { tcg_binds = binds }) = {-# SCC zonkTopDecls #-}
   setGblEnv tcg_env $ panic "zonkTopDecls binds"
 
-tc_rn_src_decls :: [LCsDecl Ps] -> TcM (TcGblEnv, TcLclEnv)
+tc_rn_src_decls :: [LCsDecl Ps] -> TcM (TcGblEnv, TcLclEnv, WantedConstraints)
 tc_rn_src_decls ds = {-# SCC "tc_rn_src_decls" #-} do
   let group = mkGroup ds
   (tcg_env, rn_decls) <- rnTopSrcDecls group
@@ -291,7 +291,7 @@ tc_rn_src_decls ds = {-# SCC "tc_rn_src_decls" #-} do
                                 $ captureTopConstraints
                                 $ tcTopSrcDecls rn_decls
   
-  restoreEnvs (tcg_env, tcl_env) $ return (tcg_env, tcl_env)
+  restoreEnvs (tcg_env, tcl_env) $ return (tcg_env, tcl_env, lie1)
 
 {- *********************************************************************
 *                                                                      *
@@ -353,6 +353,9 @@ tcTypeDecls type_decls = do
             Checking for 'main'
 *                                                                      *
 ********************************************************************* -}
+
+checkMainType :: TcGblEnv -> TcRn WantedConstraints
+checkMainType tcg_env = panic "checkMainType"
 
 checkMain :: Maybe (LocatedL [LIE Ps]) -> TcM TcGblEnv
 checkMain export_ies = do

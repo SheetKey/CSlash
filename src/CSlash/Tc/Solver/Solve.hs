@@ -133,6 +133,9 @@ solveOne workItem = do
 
 solveCt :: Ct -> SolverStage Void
 solveCt (CNonCanonical ev) = solveNC ev
+solveCt (CIrredCan (IrredCt { ir_ev = ev })) = solveNC ev
+solveCt (CEqCan (KiEqCt { eq_ev = ev, eq_lhs = lhs, eq_rhs = rhs }))
+  = solveKiEquality ev (canKiEqLHSKind lhs) rhs
 
 solveNC :: CtEvidence -> SolverStage Void
 solveNC ev = case ctEvPred ev of

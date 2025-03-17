@@ -609,8 +609,24 @@ tcLCsKindSig ctxt cs_kind = do
   return kind
 
 tcLCsContext :: LCsContext Rn -> TcM [KdRel]
-tcLCsContext context = panic "tcLCsContext"
+tcLCsContext context = tc_cs_context (unLoc context)
 
+tc_cs_context :: [LCsKdRel Rn] -> TcM [KdRel]
+tc_cs_context = mapM tc_lcs_kdrel
+
+tc_lcs_kdrel :: LCsKdRel Rn -> TcM KdRel
+tc_lcs_kdrel rel = tc_cs_kdrel (unLoc rel)
+
+tc_cs_kdrel :: CsKdRel Rn -> TcM KdRel
+tc_cs_kdrel (CsKdLT _ k1 k2) = do
+  k1' <- tcLCsKind k1
+  k2' <- tcLCsKind k2
+  return $ LTKd k1' k2'
+tc_cs_kdrel (CsKdLTEQ _ k1 k2) = do
+  k1' <- tcLCsKind k1
+  k2' <- tcLCsKind k2
+  return $ LTEQKd k1' k2'
+  
 {- *********************************************************************
 *                                                                      *
              Error messages
