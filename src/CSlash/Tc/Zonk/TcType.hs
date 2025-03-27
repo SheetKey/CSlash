@@ -153,18 +153,20 @@ zonkTcKindMapper = KindMapper
   }
 
 zonkTcKiVar :: TcKiVar -> ZonkM TcKind
-zonkTcKiVar kv = do
-  massertPpr (isTcKiVar kv) (ppr kv)
-  case tcKiVarDetails kv of
-    SkolemKv {} -> return $ mkKiVarKi kv
-    MetaKv { mkv_ref = ref } -> do
-      cts <- readTcRef ref
-      case cts of
-        Flexi -> return $ mkKiVarKi kv
-        Indirect ki -> do
-          zki <- zonkTcKind ki
-          writeTcRef ref (Indirect zki)
-          return zki
+zonkTcKiVar kv 
+  | isTcKiVar kv
+  = case tcKiVarDetails kv of
+      SkolemKv {} -> return $ mkKiVarKi kv
+      MetaKv { mkv_ref = ref } -> do
+        cts <- readTcRef ref
+        case cts of
+          Flexi -> return $ mkKiVarKi kv
+          Indirect ki -> do
+            zki <- zonkTcKind ki
+            writeTcRef ref (Indirect zki)
+            return zki
+  | otherwise
+  = return $ mkKiVarKi kv
 
 zonkTcKiVarsToTcKiVars :: HasDebugCallStack => [TcKiVar] -> ZonkM [TcKiVar]
 zonkTcKiVarsToTcKiVars = mapM zonkTcKiVarToTcKiVar

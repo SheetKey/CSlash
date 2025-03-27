@@ -97,6 +97,9 @@ zonkEqKinds ev ki1 ki2 = Stage $ do
     Right ki -> canKiEqReflexive ev ki
   where
     go :: TcKind -> TcKind -> TcS (Either (Pair TcKind) TcKind)
+    go UKd UKd = return $ Right UKd
+    go AKd AKd = return $ Right AKd
+    go LKd LKd = return $ Right LKd
     go (KiVarKi kv1) (KiVarKi kv2) = kivar_kivar kv1 kv2
     go (KiVarKi kv1) ki2 = kivar NotSwapped kv1 ki2
     go ki1 (KiVarKi kv2) = kivar IsSwapped kv2 ki1
@@ -106,7 +109,30 @@ zonkEqKinds ev ki1 ki2 = Stage $ do
       = do res_a <- go arg1 arg2
            res_b <- go res1 res2
            return $ combine_rev (FunKd f1) res_b res_a
-    go _ _ = panic "zonkEqKinds"
+    go (KdContext rels1) (KdContext rels2) = go_rels rels1 rels2
+    go ki1 ki2 = bale_out ki1 ki2
+
+    bale_out ki1 ki2 = return $ Left (Pair ki1 ki2)
+
+    go_rels [] [] = return $ Right $ KdContext []
+    go_rels rels1 rels2
+      | length rels1 /= length rels2
+      = bale_out (KdContext rels1) (KdContext rels2)
+      | otherwise
+      = do rels <- zipWithM go_rel rels1 rels2
+           return $ case combine_results rels of
+                      Left rels -> Left (KdContext <$> rels)
+                      Right rels -> Right $ KdContext rels
+
+    go_rel (LTKd lk1 rk1) (LTKd lk2 rk2) = do
+      lk <- go lk1 lk2
+      rk <- go rk1 rk2
+      return $ combine_rev LTKd lk rk 
+    go_rel (LTEQKd lk1 rk1) (LTEQKd lk2 rk2) = do
+      lk <- go lk1 lk2
+      rk <- go rk1 rk2
+      return $ combine_rev LTEQKd lk rk
+    go_rel rel1 rel2 = return $ Left (Pair rel1 rel2)
 
     kivar :: SwapFlag -> TcKiVar -> TcKind -> TcS (Either (Pair TcKind) TcKind)
     kivar swapped kv ki = case tcKiVarDetails kv of
@@ -141,6 +167,10 @@ zonkEqKinds ev ki1 ki2 = Stage $ do
           Indirect ki' -> do trace_indirect kv ki'
                              return (ki', True)
       _ -> return (KiVarKi kv, False)
+
+    combine_results :: [Either (Pair KdRel) KdRel] -> Either (Pair [KdRel]) [KdRel]
+    combine_results = bimap (fmap reverse) reverse .
+                      foldl' (combine_rev (:)) (Right [])
 
     combine_rev :: (a -> b -> c) -> Either (Pair b) b -> Either (Pair a) a -> Either (Pair c) c
     combine_rev f (Left list) (Left elt) = Left (f <$> elt <*> list)
@@ -180,8 +210,10 @@ can_ki_eq_nc _ _ ev (FunKd f1 ki1a ki1b) _ (FunKd f2 ki2a ki2b) _
 ------------------
 
 can_ki_eq_nc False rdr_env ev _ ps_ki1 _ ps_ki2 = do
-  redn1@(ReductionKi _ xi1) <- rewriteKi ev ps_ki1
-  redn2@(ReductionKi _ xi2) <- rewriteKi ev ps_ki2
+  redn1 <- rewriteKi ev ps_ki1
+  let xi1 = reductionReducedKind redn1
+  redn2 <- rewriteKi ev ps_ki2
+  let xi2 = reductionReducedKind redn2
   new_ev <- rewriteKiEqEvidence ev NotSwapped redn1 redn2
   traceTcS "can_ki_eq_nc: go round again" (ppr new_ev $$ ppr xi1 $$ ppr xi2)
   can_ki_eq_nc True rdr_env new_ev xi1 xi1 xi2 xi2
@@ -428,14 +460,11 @@ inertsCanDischarge _ _ = Nothing
 tryQCsIrredEqCt :: IrredCt -> SolverStage ()
 tryQCsIrredEqCt irred@(IrredCt { ir_ev = ev })
   = case ctEvPred ev of
-      KiEqPred k1 k2 -> panic "lookup_ki_in_qcis"
+      KiEqPred k1 k2 -> lookup_ki_eq_in_qcis (CIrredCan irred) k1 k2
 
 tryQCsEqCt :: EqCt -> SolverStage ()
 tryQCsEqCt work_item@(KiEqCt { eq_lhs = lhs, eq_rhs = rhs })
-  = panic "lookup_ki_eq_in_qcis (CEqCan work_item) (canKiEqLHSKind lhs) rhs"
+  = lookup_ki_eq_in_qcis (CEqCan work_item) (canKiEqLHSKind lhs) rhs
 
--- lookup_ki_eq_in_qcis :: Ct -> TcKind -> TcKind -> SolverStage ()
--- lookup_ki_eq_in_qcis work_ct lhs rhs = Stage $ do
---   ics <- getInertCans
---   if isWanted ev
---      && not (null (inert_in
+lookup_ki_eq_in_qcis :: Ct -> TcKind -> TcKind -> SolverStage ()
+lookup_ki_eq_in_qcis _ _ _ = Stage $ continueWith ()

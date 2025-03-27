@@ -320,7 +320,8 @@ mkTcKiVar name details
 tcTyVarDetails :: TypeVar -> TcTyVarDetails
 tcTyVarDetails (TcTyVar { tc_tv_details = details }) = details
 tcTyVarDetails (TyVar {}) = vanillaSkolemTvUnk
-tcTyVarDetails var = pprPanic "tcTyVarDetails" (ppr var <+> colon <+> pprKind (tyVarKind var))
+tcTyVarDetails var
+  = pprPanic "tcTyVarDetails" (ppr var <+> colon <+> ppr (varKindMaybe var))
 
 tcKiVarDetails :: KindVar -> TcKiVarDetails
 tcKiVarDetails (TcKiVar { tc_kv_details = details }) = details
@@ -371,6 +372,7 @@ isTcTyVar _ = False
 
 isKiVar :: Var -> Bool
 isKiVar (KdVar {}) = True
+isKiVar (TcKiVar {}) = True
 isKiVar _ = False
 
 isTcKiVar :: Var -> Bool

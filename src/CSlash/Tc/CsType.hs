@@ -305,10 +305,7 @@ csTyFunResAndFullKinds ctxt lty =
     CsQualTy _ context ty -> do
       context' <- tcLCsContext context
       (res_kind, full_kind, arity) <- csTyFunResAndFullKinds ctxt ty
-      return (addContext context' res_kind, addContext context' full_kind, arity)
-      where
-        addContext :: [KdRel] -> Kind -> Kind
-        addContext context kind = FunKd FKF_C_K (KdContext context) kind
+      return (addKindContext context' res_kind, addKindContext context' full_kind, arity)
     CsParTy _ ty -> csTyFunResAndFullKinds ctxt ty
     CsKindSig _ _ kind -> do
       kind' <- tcLCsKindSig ctxt kind

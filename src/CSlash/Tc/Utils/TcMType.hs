@@ -46,6 +46,7 @@ import CSlash.Data.FastString
 import CSlash.Data.Bag
 
 import CSlash.Utils.Misc
+import CSlash.Utils.Trace
 import CSlash.Utils.Outputable
 import CSlash.Utils.Panic
 import CSlash.Utils.Constants (debugIsOn)
@@ -147,6 +148,18 @@ cloneMetaKiVarWithInfo info tc_lvl kv = assert (isTcKiVar kv) $ do
   traceTc "cloneMetaKiVarWithInfo" (ppr kivar)
   return kivar
 
+readMetaTyVar :: MonadIO m => TypeVar -> m MetaDetails
+readMetaTyVar tyvar = assertPpr (isMetaTyVar tyvar) (ppr tyvar)
+  $ liftIO $ readIORef (metaTyVarRef tyvar)
+{-# SPECIALIZE readMetaTyVar :: TypeVar -> TcM MetaDetails #-}
+{-# SPECIALIZE readMetaTyVar :: TypeVar -> ZonkM MetaDetails #-}
+
+readMetaKiVar :: MonadIO m => KindVar -> m MetaDetailsK
+readMetaKiVar kivar = assertPpr (isMetaKiVar kivar) (ppr kivar)
+  $ liftIO $ readIORef (metaKiVarRef kivar)
+{-# SPECIALIZE readMetaKiVar :: KindVar -> TcM MetaDetailsK #-}
+{-# SPECIALIZE readMetaKiVar :: KindVar -> ZonkM MetaDetailsK #-}
+
 isFilledMetaKiVar_maybe :: TcKiVar -> TcM (Maybe Kind)
 isFilledMetaKiVar_maybe kv
   | isTcKiVar kv
@@ -229,9 +242,81 @@ collect_cand_qkvs orig_ki cur_lvl bound dvs ki = go dvs ki
 *                                                                      *
 ********************************************************************* -}
 
+zonkAndSkolemize :: SkolemInfo -> TcVar -> ZonkM TcTyVar
+zonkAndSkolemize skol_info var
+  | isTyVarTyVar var
+  = do zonked_tyvar <- zonkTcTyVarToTcTyVar var
+       skolemizeQuantifiedTyVar skol_info zonked_tyvar
+  | isKiVarKiVar var
+  = do zonked_kivar <- zonkTcKiVarToTcKiVar var
+       skolemizeQuantifiedKiVar skol_info zonked_kivar
+  | otherwise
+  = assertPpr (isImmutableTyVar var) (pprTyVar var)
+    $ zonkTyVarKind var
 
-zonkAndSkolemize :: SkolemInfo -> TcTyVar -> ZonkM TcTyVar
-zonkAndSkolemize skol_info tyvar = panic "zonkAndSkolemize"
+skolemizeQuantifiedTyVar :: SkolemInfo -> TcTyVar -> ZonkM TcTyVar
+skolemizeQuantifiedTyVar skol_info tv
+  = case tcTyVarDetails tv of
+      MetaTv {} -> skolemizeUnboundMetaTyVar skol_info tv
+      SkolemTv _ lvl -> do kind <- zonkTcKind (tyVarKind tv)
+                           let details = SkolemTv skol_info lvl
+                               name = tyVarName tv
+                           return $ mkTcTyVar name kind details
+
+skolemizeQuantifiedKiVar :: SkolemInfo -> TcKiVar -> ZonkM TcKiVar
+skolemizeQuantifiedKiVar skol_info kv
+  = case tcKiVarDetails kv of
+      MetaKv {} -> skolemizeUnboundMetaKiVar skol_info kv
+      SkolemKv _ lvl -> do let details = SkolemKv skol_info lvl
+                               name = kiVarName kv
+                           return $ mkTcKiVar name details
+
+skolemizeUnboundMetaTyVar :: SkolemInfo -> TcTyVar -> ZonkM TypeVar
+skolemizeUnboundMetaTyVar skol_info tv = assertPpr (isMetaTyVar tv) (ppr tv) $ do
+  check_empty tv
+  ZonkGblEnv { zge_src_span = here, zge_tc_level = tc_lvl } <- getZonkGblEnv
+  kind <- zonkTcKind (tyVarKind tv)
+  let tv_name = tyVarName tv
+      final_name | isSystemName tv_name
+                 = mkInternalName (nameUnique tv_name) (nameOccName tv_name) here
+                 | otherwise
+                 = tv_name
+      details = SkolemTv skol_info (pushTcLevel tc_lvl)
+      final_tv = mkTcTyVar final_name kind details
+
+  traceZonk "Skolemizing" (ppr tv <+> text ":=" <+> ppr final_tv)
+  writeMetaTyVar tv (mkTyVarTy final_tv)
+  return final_tv
+  where
+    check_empty tv = when debugIsOn $ do
+      cts <- readMetaTyVar tv
+      case cts of
+        Flexi -> return ()
+        Indirect ty -> warnPprTrace True "skolemizeUnboundMetaTyVar" (ppr tv $$ ppr ty)
+                       $ return ()
+                   
+skolemizeUnboundMetaKiVar :: SkolemInfo -> TcKiVar -> ZonkM KindVar
+skolemizeUnboundMetaKiVar skol_info kv = assertPpr (isMetaKiVar kv) (ppr kv) $ do
+  check_empty kv
+  ZonkGblEnv { zge_src_span = here, zge_tc_level = tc_lvl } <- getZonkGblEnv
+  let kv_name = kiVarName kv
+      final_name | isSystemName kv_name
+                 = mkInternalName (nameUnique kv_name) (nameOccName kv_name) here
+                 | otherwise
+                 = kv_name
+      details = SkolemKv skol_info (pushTcLevel tc_lvl)
+      final_kv = mkTcKiVar final_name details
+
+  traceZonk "Skolemizing" (ppr kv <+> text ":=" <+> ppr final_kv)
+  writeMetaKiVar kv (mkKiVarKi final_kv)
+  return final_kv
+  where
+    check_empty kv = when debugIsOn $ do
+      cts <- readMetaKiVar kv
+      case cts of
+        Flexi -> return ()
+        Indirect ki -> warnPprTrace True "skolemizeUnboundMetaKiVar" (ppr kv $$ ppr ki)
+                       $ return ()
 
 {- *********************************************************************
 *                                                                      *

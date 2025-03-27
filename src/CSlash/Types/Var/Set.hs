@@ -62,11 +62,17 @@ type DKiVarSet = UniqDSet KindVar
 emptyDVarSet :: DVarSet
 emptyDVarSet = emptyUniqDSet
 
+mkDVarSet :: [Var] -> DVarSet
+mkDVarSet = mkUniqDSet
+
 extendDVarSet :: DVarSet -> Var -> DVarSet 
 extendDVarSet = addOneToUniqDSet
 
 elemDVarSet :: Var -> DVarSet -> Bool
 elemDVarSet = elementOfUniqDSet
+
+nonDetStrictFoldDVarSet :: (Var -> a -> a) -> a -> DVarSet -> a
+nonDetStrictFoldDVarSet = nonDetStrictFoldUniqDSet
 
 dVarSetToVarSet :: DVarSet -> VarSet
 dVarSetToVarSet = unsafeUFMToUniqSet . udfmToUfm . getUniqDSet

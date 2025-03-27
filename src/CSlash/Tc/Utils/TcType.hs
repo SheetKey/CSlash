@@ -7,7 +7,9 @@ import Prelude hiding ((<>))
 
 import CSlash.Core.Type.Rep
 import CSlash.Core.Kind
+import CSlash.Core.Kind.FVs
 import CSlash.Types.Var
+import CSlash.Types.Var.Set
 import CSlash.Core.TyCon
 
 import {-# SOURCE #-} CSlash.Tc.Types.Origin
@@ -92,7 +94,7 @@ instance Outputable tk => Outputable (MetaDetails' tk) where
   ppr = panic "ppr metadetails'"
 
 instance Outputable MetaInfo where
-  ppr = panic "ppr metainfo"
+  ppr TyVarTv = text "tyv"
 
 data TcKiVarDetails
   = SkolemKv SkolemInfo TcLevel
@@ -100,6 +102,14 @@ data TcKiVarDetails
            , mkv_ref :: IORef MetaDetailsK
            , mkv_tclvl :: TcLevel
            }
+
+instance Outputable TcKiVarDetails where
+  ppr = pprTcKiVarDetails
+
+pprTcKiVarDetails :: TcKiVarDetails -> SDoc
+pprTcKiVarDetails (SkolemKv _sk lvl) = text "sk" <> colon <> ppr lvl
+pprTcKiVarDetails (MetaKv { mkv_info = info, mkv_tclvl = tclvl })
+  = ppr info <> colon <> ppr tclvl
 
 vanillaSkolemKvUnk :: HasDebugCallStack => TcKiVarDetails
 vanillaSkolemKvUnk = SkolemKv unkSkol topTcLevel
@@ -126,6 +136,9 @@ newtype TcLevel = TcLevel Int deriving (Eq, Ord)
 
 instance Outputable TcLevel where
   ppr (TcLevel us) = ppr us
+
+maxTcLevel :: TcLevel -> TcLevel -> TcLevel
+maxTcLevel (TcLevel a) (TcLevel b) = TcLevel (a `max` b)
 
 minTcLevel :: TcLevel -> TcLevel -> TcLevel
 minTcLevel (TcLevel a) (TcLevel b) = TcLevel (a `min` b)
@@ -167,7 +180,30 @@ tcKiVarLevel kv = case tcKiVarDetails kv of
                     SkolemKv _ kv_lvl -> kv_lvl
 
 tcKindLevel :: TcKind -> TcLevel
-tcKindLevel ki = panic "tcKindLevel"
+tcKindLevel ki = nonDetStrictFoldDVarSet add topTcLevel (kiVarsOfKindDSet ki)
+  where
+    add v lvl
+      | isTcKiVar v = lvl `maxTcLevel` tcKiVarLevel v
+      | otherwise = lvl
+
+{-# INLINE any_rewritable_ki #-}
+any_rewritable_ki :: (TcKiVar -> Bool) -> TcKind -> Bool
+any_rewritable_ki kv_pred = go 
+  where
+    go (KiVarKi kv) = kv_pred kv
+    go UKd = False
+    go AKd = False
+    go LKd = False
+    go (FunKd _ arg res) = go arg || go res
+    go (KdContext rels) = go_rels rels
+
+    go_rels = any go_rel
+
+    go_rel (LTKd ki1 ki2) = go ki1 || go ki2
+    go_rel (LTEQKd ki1 ki2) = go ki1 || go ki2
+
+anyRewritableKiVar :: (TcKiVar -> Bool) -> TcKind -> Bool
+anyRewritableKiVar = any_rewritable_ki
 
 {- *********************************************************************
 *                                                                      *
@@ -199,8 +235,11 @@ isTouchableMetaKiVar ctxt_tclvl kv
     $ kv_tclvl `sameDepthAs` ctxt_tclvl
   | otherwise = False
 
+isImmutableTyVar :: TypeVar -> Bool
+isImmutableTyVar tv = isSkolemTyVar tv
+
 isSkolemTyVar :: TcTyVar -> Bool
-isSkolemTyVar tv = assertPpr (tcIsTcTyVar tv) (ppr  tv)
+isSkolemTyVar tv = assertPpr (tcIsTcTyVar tv) (ppr tv)
   $ case tcTyVarDetails tv of
       MetaTv {} -> False
       _ -> True
@@ -210,6 +249,15 @@ isSkolemKiVar kv = assertPpr (tcIsTcKiVar kv) (ppr kv)
   $ case tcKiVarDetails kv of
       MetaKv {} -> False
       _ -> True
+
+isMetaTyVar :: TypeVar -> Bool
+isMetaTyVar tv
+  | isTyVar tv
+  = case tcTyVarDetails tv of
+      MetaTv {} -> True
+      _ -> False
+  | otherwise
+  = False
 
 isMetaKiVar :: TcKiVar -> Bool
 isMetaKiVar kv
@@ -239,6 +287,11 @@ isConcreteKiVar = isJust . isConcreteKiVar_maybe
 isTouchableInfoK :: MetaInfoK -> Bool
 isTouchableInfoK _info = True
 
+metaTyVarRef :: TypeVar -> IORef MetaDetails
+metaTyVarRef tv = case tcTyVarDetails tv of
+                    MetaTv { mtv_ref = ref } -> ref
+                    _ -> pprPanic "metaTyVarRef" (ppr tv)
+
 metaKiVarRef :: KindVar -> IORef MetaDetailsK
 metaKiVarRef kv = case tcKiVarDetails kv of
                     MetaKv { mkv_ref = ref } -> ref
@@ -251,14 +304,22 @@ setMetaKiVarTcLevel kv tclvl = case tcKiVarDetails kv of
                                  _ -> pprPanic "metaKiVarTcLevel" (ppr kv)
 
 isTyVarTyVar :: Var -> Bool
-isTyVarTyVar tv = case tcTyVarDetails tv of
-                    MetaTv { mtv_info = TyVarTv } -> True
-                    _ -> False
+isTyVarTyVar tv
+  | isTcTyVar tv
+  = case tcTyVarDetails tv of
+      MetaTv { mtv_info = TyVarTv } -> True
+      _ -> False
+  | otherwise
+  = False
 
 isKiVarKiVar :: Var -> Bool
-isKiVarKiVar kv = case tcKiVarDetails kv of
-                    MetaKv { mkv_info = KiVarKv } -> True
-                    _ -> False
+isKiVarKiVar kv
+  | isTcKiVar kv
+  = case tcKiVarDetails kv of
+      MetaKv { mkv_info = KiVarKv } -> True
+      _ -> False
+  | otherwise
+  = False
 
 isFlexi :: MetaDetails' tk -> Bool
 isFlexi Flexi = True

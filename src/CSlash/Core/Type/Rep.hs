@@ -53,7 +53,7 @@ type KnotTied ty = ty
 ********************************************************************** -}
 
 mkTyVarTy :: TypeVar -> Type
-mkTyVarTy v = assertPpr (isTyVar v) (ppr v <+> colon <+> ppr (varKind v)) $
+mkTyVarTy v = assertPpr (isTyVar v) (ppr v <+> colon <+> ppr (varKindMaybe v)) $
               TyVarTy v
 
 mkTyVarTys :: [TypeVar] -> [Type]
@@ -67,6 +67,12 @@ mkForAllTys tyvars ty = foldr ForAllTy ty tyvars
 
 tcMkFunTy :: Kind -> Type -> Type -> Type
 tcMkFunTy = FunTy 
+
+mkTyLamTy :: TypeVar -> Type -> Type
+mkTyLamTy = TyLamTy
+
+mkTyLamTys :: [TypeVar] -> Type -> Type
+mkTyLamTys = flip (foldr mkTyLamTy)
 
 {- *********************************************************************
 *                                                                      *

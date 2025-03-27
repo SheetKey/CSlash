@@ -8,7 +8,6 @@ import CSlash.Utils.Outputable
 import CSlash.Utils.Misc
 import CSlash.Types.Basic
 
-
 pprType :: Type -> SDoc
 pprType _ = text "pprType not defined"
 
@@ -40,4 +39,4 @@ pprTyVars tvs = sep (map pprTyVar tvs)
 pprTyVar :: TypeVar -> SDoc
 pprTyVar tv = parens (ppr tv <+> colon <+> ppr kind)
   where
-    kind = varKind tv
+    kind = varKindMaybe tv

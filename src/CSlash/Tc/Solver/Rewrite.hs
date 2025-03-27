@@ -117,21 +117,36 @@ rewriteKi ev ki = do
 
 rewrite_one_ki :: TcKind -> RewriteM Reduction
 
+rewrite_one_ki UKd = return $ mkReflRednKi UKd
+rewrite_one_ki AKd = return $ mkReflRednKi AKd
+rewrite_one_ki LKd = return $ mkReflRednKi LKd
+
 rewrite_one_ki (KiVarKi kv) = rewriteKiVar kv
 
 rewrite_one_ki (FunKd { fk_af = vis, kft_arg = ki1, kft_res = ki2 }) = do
   arg_redn <- rewrite_one_ki ki1
   res_redn <- rewrite_one_ki ki2
   return $ mkFunKiRedn vis arg_redn res_redn
+
+rewrite_one_ki (KdContext old_rels) = do
+  new_rels <- mapM rewriteKiRel old_rels
+  return $ ReductionKi (KdContext old_rels) (KdContext new_rels)
   
-rewrite_one_ki _ = panic "rewrite_one_ki"
+  where
+    rewriteKiRel (LTKd k1 k2) = do
+      k1 <- rewrite_one_ki k1
+      k2 <- rewrite_one_ki k2
+      return $ LTKd (reductionReducedKind k1) (reductionReducedKind k2)
+    rewriteKiRel (LTEQKd k1 k2) = do
+      k1 <- rewrite_one_ki k1
+      k2 <- rewrite_one_ki k2
+      return $ LTEQKd (reductionReducedKind k1) (reductionReducedKind k2)
 
 rewrite_reduction :: Reduction -> RewriteM Reduction
 rewrite_reduction (ReductionKi ki xi) = do
   redn <- bumpDepth $ rewrite_one_ki xi
   return $ mkTransRedn ki redn
 rewrite_reduction (ReflRednKi xi) = bumpDepth $ rewrite_one_ki xi
-  
 
 {- *********************************************************************
 *                                                                      *

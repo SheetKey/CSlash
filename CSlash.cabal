@@ -348,6 +348,7 @@ library
                     , CSlash.Utils.Error
                     , CSlash.Utils.Exception
                     , CSlash.Utils.Fingerprint
+                    , CSlash.Utils.FV
                     , CSlash.Utils.GlobalVars
                     , CSlash.Utils.Lexeme
                     , CSlash.Utils.Logger
@@ -359,6 +360,7 @@ library
                     , CSlash.Utils.Ppr
                     , CSlash.Utils.Ppr.Color
                     , CSlash.Utils.TmpFs
+                    , CSlash.Utils.Trace
                     , CSlash.Utils.Word64
 
                     , CSlash.Version

@@ -11,6 +11,7 @@ import CSlash.Types.Unique.Set
 import CSlash.Types.Var.Set
 import CSlash.Types.Var.Env
 import CSlash.Utils.Misc
+import CSlash.Utils.FV
 import CSlash.Utils.Panic
 
 {- *********************************************************************
@@ -100,6 +101,33 @@ shallowKvFolder = KindFolder { kf_view = noKindView
                   | v `elemVarSet` acc = acc
                   | otherwise = acc `extendVarSet` v
     do_ctxt _ _ = mempty
+
+{- *********************************************************************
+*                                                                      *
+          The FV versions return deterministic results
+*                                                                      *
+********************************************************************* -}
+
+kiVarsOfKindDSet :: Kind -> DKiVarSet 
+kiVarsOfKindDSet ki = fvDVarSet $ kiFVsOfKind ki
+
+kiFVsOfKind :: Kind -> FV
+kiFVsOfKind (KiVarKi v) f bound_vars (acc_list, acc_set)
+  | not (f v) = (acc_list, acc_set)
+  | v `elemVarSet` bound_vars = (acc_list, acc_set)
+  | v `elemVarSet` acc_set = (acc_list, acc_set)
+  | otherwise = (v:acc_list, extendVarSet acc_set v)
+kiFVsOfKind UKd _ _ acc = acc
+kiFVsOfKind AKd _ _ acc = acc
+kiFVsOfKind LKd _ _ acc = acc
+kiFVsOfKind (FunKd _ arg res) f bound_var acc
+  = (kiFVsOfKind arg `unionFV` kiFVsOfKind res) f bound_var acc
+kiFVsOfKind (KdContext rels) f bound_vars acc = (mapUnionFV go_rel rels) f bound_vars acc
+  where
+    go_rel (LTKd k1 k2) f bound_vars acc
+      = (kiFVsOfKind k1 `unionFV` kiFVsOfKind k2) f bound_vars acc
+    go_rel (LTEQKd k1 k2) f bound_vars acc
+      = (kiFVsOfKind k1 `unionFV` kiFVsOfKind k2) f bound_vars acc
 
 {- *********************************************************************
 *                                                                      *

@@ -192,6 +192,9 @@ ctLoc = ctEvLoc . ctEvidence
 ctOrigin :: Ct -> CtOrigin
 ctOrigin = ctLocOrigin . ctLoc
 
+ctPred :: Ct -> Pred
+ctPred ct = ctEvPred (ctEvidence ct)
+
 instance Outputable Ct where
   ppr ct = ppr (ctEvidence ct) <+> parens pp_short
     where
@@ -219,6 +222,10 @@ isTopLevelUserTypeError pred
 
 isUnsatisfiableCt_maybe :: Pred -> Maybe ErrorMsgType
 isUnsatisfiableCt_maybe (KiEqPred _ _) = Nothing  
+
+extendCtsList :: Cts -> [Ct] -> Cts
+extendCtsList cts xs | null xs = cts
+                     | otherwise = cts `unionBags` listToBag xs
 
 {- *********************************************************************
 *                                                                      *
@@ -389,8 +396,71 @@ instance Outputable HasGivenEqs where
 
 {-# INLINE checkImplicationInvariants #-}
 checkImplicationInvariants :: (HasCallStack, Applicative m) => Implication -> m ()
-checkImplicationInvariants implic = when debugIsOn (panic "check_implic implic")
+checkImplicationInvariants implic = when debugIsOn (check_implic implic)
 
+check_implic :: (HasCallStack, Applicative m) => Implication -> m ()
+check_implic implic@(Implic { ic_tclvl = lvl, ic_info = skol_info, ic_skols = skols })
+  | null bads = pure ()
+  | otherwise = massertPpr False (vcat [ text "checkImplicationInvariants failure"
+                                       , nest 2 (vcat bads)
+                                       , ppr implic ])
+  where
+    bads = mapMaybe check skols
+
+    check :: TcVar -> Maybe SDoc
+    check v | not (isTcTyVar v || isTcKiVar v)
+            = Just (ppr v <+> text "is not a TcTyVar or TcKiVar")
+            | isTcTyVar v
+            = check_details v (tcTyVarDetails v)
+            | otherwise
+            = check_details_ki v (tcKiVarDetails v)
+
+    check_details :: TcTyVar -> TcTyVarDetails -> Maybe SDoc
+    check_details tv (SkolemTv tv_skol_info tv_lvl)
+      | not (tv_lvl == lvl)
+      = Just (vcat [ ppr tv <+> text "has level" <+> ppr tv_lvl
+                   , text "ic_lvl" <+> ppr lvl ])
+      | not (skol_info `checkSkolInfoAnon` skol_info_anon)
+      = Just (vcat [ ppr tv <+> text "has skol info" <+> ppr skol_info_anon
+                   , text "ic_info" <+> ppr skol_info ])
+      | otherwise
+      = Nothing
+      where
+        skol_info_anon = getSkolemInfo tv_skol_info
+    check_details tv details = Just (ppr tv <+> text "is not a SkolemTv" <+> ppr details)
+
+    check_details_ki :: TcKiVar -> TcKiVarDetails -> Maybe SDoc
+    check_details_ki kv (SkolemKv kv_skol_info kv_lvl)
+      | not (kv_lvl == lvl)
+      = Just (vcat [ ppr kv <+> text "has level" <+> ppr kv_lvl
+                   , text "ic_lvl" <+> ppr lvl ])
+      | not (skol_info `checkSkolInfoAnon` skol_info_anon)
+      = Just (vcat [ ppr kv <+> text "has skol info" <+> ppr skol_info_anon
+                   , text "ic_info" <+> ppr skol_info ])
+      | otherwise
+      = Nothing
+      where
+        skol_info_anon = getSkolemInfo kv_skol_info
+    check_details_ki kv details = Just (ppr kv <+> text "is not a SkolemKv" <+> ppr details)
+
+checkSkolInfoAnon :: SkolemInfoAnon -> SkolemInfoAnon -> Bool
+checkSkolInfoAnon sk1 sk2 = go sk1 sk2
+  where
+    go (SigSkol c1 t1 s1) (SigSkol c2 t2 s2) = c1 == c2 && panic "t1 `tcEqType` tc" && s1 == s2
+    go (SigTypeSkol cx1) (SigTypeSkol cx2) = cx1 == cx2
+    go (ForAllSkol _) (ForAllSkol _) = True
+    go (TyLamTySkol ids1) (TyLamTySkol ids2)
+      = equalLength ids1 ids2 && and (zipWith (==) ids1 ids2)
+    go (InferSkol ids1) (InferSkol ids2)
+      = equalLength ids1 ids2 && and (zipWith eq_pr ids1 ids2)
+    go (UnifyForAllSkol t1) (UnifyForAllSkol t2) = panic "t1 `tcEqType` t2"
+    go (TyConSkol f1 n1) (TyConSkol f2 n2) = f1 == f2 && n1 == n2
+    go (UnkSkol _) (UnkSkol _) = True
+    go (ForAllSkol _) _ = True
+    go _ _ = False
+
+    eq_pr (i1, _) (i2, _) = i1 == i2
+  
 {- *********************************************************************
 *                                                                      *
             CtEvidence
@@ -425,7 +495,7 @@ setCtEvPred :: CtEvidence -> Pred -> CtEvidence
 setCtEvPred old_ctev@(CtWanted{}) pred = old_ctev { ctev_pred = pred }
 
 instance Outputable Pred where
-  ppr (KiEqPred k1 k2) = ppr k1 <+> ppr k2
+  ppr (KiEqPred k1 k2) = parens (ppr k1) <+> text "~" <+> parens (ppr k2)
 
 instance Outputable CtEvidence where
   ppr ev = ppr (ctEvFlavor ev)
@@ -437,6 +507,10 @@ isWanted (CtWanted {}) = True
 
 isGiven :: CtEvidence -> Bool
 isGiven (CtWanted {}) = False
+
+anyRewritableVar :: (TcVar -> Bool) -> Pred -> Bool
+anyRewritableVar pred (KiEqPred ki1 ki2) = any_rewritable_ki pred ki1
+                                           || any_rewritable_ki pred ki2
 
 {- *********************************************************************
 *                                                                      *
@@ -458,6 +532,10 @@ ctEvFlavor (CtWanted {}) = Wanted
 
 eqCtFlavor :: EqCt -> CtFlavor
 eqCtFlavor (KiEqCt { eq_ev = ev }) = ctEvFlavor ev
+
+ctFlavor :: Ct -> CtFlavor
+ctFlavor (CEqCan eq_ct) = eqCtFlavor eq_ct
+ctFlavor ct = ctEvFlavor (ctEvidence ct)
 
 canKiEqLHS_maybe :: KiXi -> Maybe CanEqLHS
 canKiEqLHS_maybe xi

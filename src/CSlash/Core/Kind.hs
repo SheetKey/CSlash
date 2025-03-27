@@ -44,6 +44,12 @@ data KdRel
 instance Outputable Kind where
   ppr = pprKind
 
+addKindContext :: [KdRel] -> Kind -> Kind
+addKindContext [] ki = ki
+addKindContext ctxt (FunKd FKF_C_K (KdContext og_ctxt) ki)
+  = FunKd FKF_C_K (KdContext (ctxt ++ og_ctxt)) ki
+addKindContext ctxt ki = FunKd FKF_C_K (KdContext ctxt) ki
+
 pprKind :: Kind -> SDoc
 pprKind = pprPrecKind topPrec
 
@@ -68,7 +74,11 @@ debug_ppr_ki _ AKd = aKindLit
 debug_ppr_ki _ LKd = lKindLit
 debug_ppr_ki prec (FunKd { fk_af = af, kft_arg = arg, kft_res = res })
   = maybeParen prec funPrec
-    $ sep [ debug_ppr_ki funPrec arg, arrow <+> debug_ppr_ki prec res]
+    $ sep [ debug_ppr_ki funPrec arg, fun_arrow <+> debug_ppr_ki prec res]
+  where
+    fun_arrow = case af of
+                  FKF_C_K -> darrow
+                  FKF_K_K -> arrow
 debug_ppr_ki prec (KdContext rels) = pprKdRels prec rels
 
 pprKdRels :: PprPrec -> [KdRel] -> SDoc
@@ -118,15 +128,18 @@ mkKiVarKi :: KindVar -> Kind
 mkKiVarKi v = assertPpr (isKiVar v) (ppr v) $ KiVarKi v
 
 mkFunKi :: Kind -> Kind -> Kind
+mkFunKi k1@(KdContext _) _ = pprPanic "mkFunKi" (ppr k1)
+mkFunKi _ k2@(KdContext _) = pprPanic "mkFunKi" (ppr k2)
 mkFunKi (FunKd FKF_C_K (KdContext c1) k1) (FunKd FKF_C_K (KdContext c2) k2)
   = FunKd FKF_C_K (KdContext (c1 ++ c2)) $ FunKd FKF_K_K k1 k2
 mkFunKi (FunKd FKF_C_K c1 k1) k2
   = FunKd FKF_C_K c1 $ FunKd FKF_K_K k1 k2
 mkFunKi k1 (FunKd FKF_C_K c2 k2)
   = FunKd FKF_C_K c2 $ FunKd FKF_K_K k1 k2
-mkFunKi k1@(KdContext _) _ = pprPanic "mkFunKi" (ppr k1)
-mkFunKi _ k2@(KdContext _) = pprPanic "mkFunKi" (ppr k2)
 mkFunKi k1 k2 = FunKd FKF_K_K k1 k2    
+
+mkFunKis :: [Kind] -> Kind -> Kind
+mkFunKis = flip (foldr mkFunKi)
 
 mkContextKi :: Kind -> Kind -> Kind
 mkContextKi k1@(KdContext c1) k2 = case k2 of
@@ -218,7 +231,7 @@ mapKindX (KindMapper { km_kivar = kivar
     go_rel !env (LTEQKd k1 k2) = do
       k1' <- go_ki env k1 
       k2' <- go_ki env k2
-      return $ LTKd k1' k2'
+      return $ LTEQKd k1' k2'
 
 {- *********************************************************************
 *                                                                      *

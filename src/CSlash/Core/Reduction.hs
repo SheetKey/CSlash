@@ -29,7 +29,7 @@ data Reduction
   = ReductionKi
     { reductionKind :: Kind
     , reductionReducedKind :: !Kind }
-  | ReflRednKi !Kind
+  | ReflRednKi { reductionReducedKind :: !Kind }
 
 mkReductionKi :: Kind -> Kind -> Reduction
 mkReductionKi = ReductionKi

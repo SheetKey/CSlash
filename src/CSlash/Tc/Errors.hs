@@ -74,7 +74,40 @@ import qualified Data.Semigroup as S
 ********************************************************************* -}
 
 reportUnsolved :: WantedConstraints -> TcM ()
-reportUnsolved wanted = panic "reportUnsolved"  
+reportUnsolved wanted = do
+  defer_errors <- goptM Opt_DeferTypeErrors
+  let type_errors | not defer_errors = ErrorWithoutFlag
+                  | otherwise = panic "reportUnsolved DeferTypeErrors"
+
+  defer_holes <- goptM Opt_DeferTypedHoles
+  let expr_holes | not defer_holes = ErrorWithoutFlag
+                 | otherwise = panic "reportUnsolved DeferTypedHoles"
+
+  defer_out_of_scope <- goptM Opt_DeferOutOfScopeVariables
+  let out_of_scope_holes | not defer_out_of_scope = ErrorWithoutFlag
+                         | otherwise = panic "reportUnsolved DeferOutOfScopeVariables"
+
+  report_unsolved type_errors expr_holes out_of_scope_holes wanted
 
 reportAllUnsolved :: WantedConstraints -> TcM ()
 reportAllUnsolved wanted = panic "reportAllUnsolved"
+
+report_unsolved
+  :: DiagnosticReason
+  -> DiagnosticReason
+  -> DiagnosticReason
+  -> WantedConstraints
+  -> TcM ()
+report_unsolved type_erros expr_holes out_of_scope_holes wanted
+  | isEmptyWC wanted
+  = return ()
+  | otherwise = panic "report_unsolved"
+  -- = do traceTc "reportUnsolved {" 
+  --        $ vcat [ text "type errors:" <+> ppr type_errors
+  --               , text "expr holes:" <+> ppr expr_holes
+  --               , text "type holes:" <+> ppr type_holes
+  --               , text "scope holes:" <+> ppr out_of_scope_holes ]
+  --      traceTc "reportUnsolved (before zonking and tidying)" (ppr wanted)
+
+  --      wanted <- liftZonkM $ zonkWC wanted
+       

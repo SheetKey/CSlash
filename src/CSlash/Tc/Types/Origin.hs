@@ -71,6 +71,7 @@ data SkolemInfoAnon
   = SigSkol UserTypeCtxt TcType [(Name, TcTyVar)]
   | SigTypeSkol UserTypeCtxt
   | ForAllSkol TyVarBndrs
+  | TyLamTySkol [Name]
   | InferSkol [(Name, TcType)]
   | UnifyForAllSkol TcType
   | TyConSkol (TyConFlavor TyCon) Name
@@ -100,6 +101,7 @@ pprSkolInfo :: SkolemInfoAnon -> SDoc
 pprSkolInfo (SigSkol cx ty _) = pprSigSkolInfo cx ty
 pprSkolInfo (SigTypeSkol cx) = pprUserTypeCtxt cx
 pprSkolInfo (ForAllSkol tvs) = text "an explicit forall" <+> ppr tvs
+pprSkolInfo (TyLamTySkol tvs) = text "an explicit type lambda" <+> ppr tvs
 pprSkolInfo (InferSkol ids) = hang (text "the inferred type" <> plural ids <+> text "of")
                               2 (vcat [ ppr name <+> colon <+> ppr ty
                                       | (name, ty) <- ids ])

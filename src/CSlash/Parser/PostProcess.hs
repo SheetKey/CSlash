@@ -60,7 +60,7 @@ mkKvRel loc k1@(L l1 _) (L lr rel) k2@(L l2 _)
   | rdrNameOcc rel == mkUnknownOcc "<="
   = let cs =  emptyComments Semi.<> comments l1 Semi.<> comments l2
         loc' = EpAnn (spanAsAnchor loc) noAnn cs
-    in return $ L loc' (CsKdLT (EpTok $ entry lr) k1 k2)
+    in return $ L loc' (CsKdLTEQ (EpTok $ entry lr) k1 k2)
   | otherwise
   = addFatalError $ mkPlainErrorMsgEnvelope (locA lr) $ PsErrInvalidKindRelation rel
 

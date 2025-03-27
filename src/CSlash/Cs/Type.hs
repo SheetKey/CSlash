@@ -231,7 +231,7 @@ ppr_mono_lty ty = ppr_mono_ty (unLoc ty)
 ppr_mono_ty :: (OutputableBndrId p) => CsType (CsPass p) -> SDoc
 ppr_mono_ty (CsForAllTy {cst_tele = tele, cst_body = ty})
   = sep [pprCsForAll tele, ppr_mono_lty ty]
-ppr_mono_ty (CsQualTy _ ctxt ty) = sep [text "ppr_mono_ty CTXT", ppr_mono_lty ty]
+ppr_mono_ty (CsQualTy _ ctxt ty) = sep [pprLCsContextAlways ctxt, ppr_mono_lty ty]
 ppr_mono_ty (CsTyVar _ (L _ name)) = pprPrefixOcc name
 ppr_mono_ty (CsUnboundTyVar _ v) = pprPrefixOcc v
 ppr_mono_ty (CsAppTy _ fun_ty arg_ty)

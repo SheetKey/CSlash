@@ -95,7 +95,12 @@ mkTemplateTyConKind arity res_kind
 mkTemplateTyConKindRes :: Int -> (Kind, Kind)
 mkTemplateTyConKindRes arity
   = let res_kind = KiVarKi $ mkKiVar (mk_kv_name arity ('k' : show arity))
-    in (mkTemplateTyConKind arity res_kind, res_kind)
+        kind_vars = mkTemplateKindVars arity
+        kinds = KiVarKi <$> kind_vars
+        full_kind = foldr (FunKd FKF_K_K) res_kind kinds
+        ctxt = KdContext $ (`LTEQKd` res_kind) <$> kinds
+        addCtxt = FunKd FKF_C_K ctxt
+    in (addCtxt full_kind, addCtxt res_kind)
 
 mk_kv_name :: Int -> String -> Name
 mk_kv_name u s = mkInternalName (mkAlphaTyVarUnique u)

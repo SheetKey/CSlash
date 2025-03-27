@@ -110,10 +110,6 @@ tc_infer_cs_type (CsKindSig _ ty sig) = do
   ty' <- tc_lcs_type ty sig'
   return (ty', sig')
 
-tc_infer_cs_type (CsTyLamTy x matches) = do
-  -- tc_infer_tylamty matches
-  panic "unfinished"
-
 tc_infer_cs_type other_ty = do
   kv <- newMetaKindVar
   ty' <- tc_cs_type other_ty kv
@@ -141,7 +137,14 @@ tc_cs_type t@(CsForAllTy { cst_tele = tele, cst_body = ty }) exp_kind
       (tv_bndrs, ty') <- tcTelescope tele $ tc_lcs_type ty exp_kind
       return $ mkForAllTys tv_bndrs ty'
 
-tc_cs_type (CsQualTy { cst_ctxt = ctxt, cst_body = rn_ty }) exp_kind = panic "tc_cs_type QualTy"
+tc_cs_type (CsQualTy { cst_ctxt = ctxt, cst_body = rn_ty }) exp_kind
+  | null (unLoc ctxt)
+  = tc_lcs_type rn_ty exp_kind
+  | otherwise
+  = do ctxt' <- tcLCsContext ctxt
+       ek <- newOpenTypeKind
+       (ty', ki) <- tc_infer_lcs_type rn_ty
+       checkExpectedKind (unLoc rn_ty) ty' (addKindContext ctxt' ki) exp_kind
 
 tc_cs_type rn_ty@(CsTupleTy _ tup_args) exp_kind
   | all tyTupArgPresent tup_args
@@ -160,11 +163,12 @@ tc_cs_type rn_ty@(CsSumTy _ cs_tys) exp_kind = do
       sum_kind = panic "sum_kind"
   checkExpectedKind rn_ty sum_ty sum_kind exp_kind
 
+tc_cs_type ty@(CsTyLamTy _ matches) ek = tcTyLamMatches ty matches ek
+
 tc_cs_type ty@(CsTyVar {}) ek = tc_infer_cs_type_ek ty ek
 tc_cs_type ty@(CsAppTy {}) ek = tc_infer_cs_type_ek ty ek
 tc_cs_type ty@(CsOpTy {}) ek = tc_infer_cs_type_ek ty ek
 tc_cs_type ty@(CsKindSig {}) ek = tc_infer_cs_type_ek ty ek
-tc_cs_type ty@(CsTyLamTy {}) ek = tc_infer_cs_type_ek ty ek
 
 tc_cs_type ty@(TySectionL {}) _ = pprPanic "tc_cs_type" (ppr ty)
 tc_cs_type ty@(TySectionR {}) _ = pprPanic "tc_cs_type" (ppr ty)
@@ -207,7 +211,7 @@ finish_tuple rn_ty tau_tys tau_kinds exp_kind = do
   traceTc "finish_tuple" (ppr tau_kinds $$ ppr exp_kind)
   let arity = length tau_tys
       tycon = tupleTyCon arity
-      res_kind = panic "tuple_kind"
+      res_kind = tyConResKind tycon
   checkTupSize arity
   checkExpectedKind rn_ty (mkTyConApp tycon tau_tys) res_kind exp_kind
 
@@ -310,10 +314,24 @@ tcInferTyAppHead ty = tc_infer_lcs_type ty
 *                                                                      *
 ********************************************************************* -}
 
-------------------------------------------
-tc_infer_tylamty :: MatchGroup Rn (LCsType Rn) -> (TcType, TcKind)
-tc_infer_tylamty (MG _ (L _ [L _ (Match _ _ (L _ pats) grhss)])) = panic "tc_infer_tylamty"
-tc_infer_tylamty _ = panic "unreachable"
+tcTyLamMatches :: CsType Rn -> MatchGroup Rn (LCsType Rn) -> TcKind -> TcM TcType
+tcTyLamMatches cs_type (MG _
+                (L _
+                 [L _
+                  (Match _
+                         TyLamTyAlt
+                         (L _ pats)
+                         (GRHSs _ [L _ (GRHS _ [] body_ty)]))]))
+  exp_kind = do
+  (bndrs, (body_ty', inf_ki)) <- tcTyLamTyBndrs pats $ tc_infer_lcs_type body_ty
+
+  let bndr_kinds = varKind <$> bndrs
+      act_kind = mkFunKis bndr_kinds inf_ki
+      full_ty = mkTyLamTys bndrs body_ty'
+
+  checkExpectedKind cs_type full_ty act_kind exp_kind
+
+tcTyLamMatches _ _ _ = panic "unreachable"
 
 {- *********************************************************************
 *                                                                      *
@@ -443,6 +461,72 @@ tcTelescope (CsForAll { csf_bndrs = bndrs }) thing_inside = do
   tcExplicitBndrsX skol_mode bndrs thing_inside
 
 --------------------------------------
+--    TyLamTy binders
+--------------------------------------
+
+tcTyLamTyBndrs :: [LPat Rn] -> TcM a -> TcM ([TcTyVar], a)
+tcTyLamTyBndrs pats thing_inside = do
+  let bndrs = explicitTvsFromPats pats
+  skol_info <- mkSkolemInfo $ TyLamTySkol $ fmap fst bndrs
+  let skol_mode = smVanilla { sm_clone = False, sm_tvtv = SMDSkolemTv skol_info }
+  case nonEmpty bndrs of
+    Nothing -> do
+      res <- thing_inside
+      return ([], res)
+    Just bndrs1 -> do
+      (tclvl, wanted, (skol_tvs, res))
+        <- pushLevelAndCaptureConstraints
+           $ bindTyLamTyBndrsX skol_mode bndrs thing_inside
+      let bndr_1 = head pats
+          bndr_n = last pats
+      setSrcSpan (combineSrcSpans (getLocA bndr_1) (getLocA bndr_n))
+        $ emitResidualTvConstraint skol_info skol_tvs tclvl wanted
+      return (skol_tvs, res)
+
+bindTyLamTyBndrs :: [LPat Rn] -> TcM a -> TcM ([TcTyVar], a)
+bindTyLamTyBndrs pats thing_inside = do
+  let tvs = explicitTvsFromPats pats
+      skol_mode = smVanilla { sm_clone = False, sm_tvtv = SMDTyVarTy }
+  bindTyLamTyBndrsX skol_mode tvs thing_inside
+
+bindTyLamTyBndrsX :: SkolemMode -> [(Name, Maybe (LCsKind Rn))] -> TcM a -> TcM ([TcTyVar], a) 
+bindTyLamTyBndrsX skol_mode@(SM { sm_kind = ctxt_kind }) cs_tvs thing_inside = do
+  traceTc "bindTyLamTyBndrs" (ppr cs_tvs)
+  go cs_tvs
+  where
+    go [] = do
+      res <- thing_inside
+      return ([], res)
+    go ((name, mb_cs_kind) : cs_tvs) = do
+      lcl_env <- getLclTypeEnv
+      tv <- tc_cs_bndr lcl_env name mb_cs_kind
+      (tvs, res) <- tcExtendNameTyVarEnv [(name, tv)]
+                    $ go cs_tvs
+      return (tv : tvs, res)
+
+    tc_cs_bndr lcl_env name mb_cs_kind
+      = case mb_cs_kind of
+          Just lcs_kind -> do kind <- tcLCsKindSig (TyVarBndrKindCtxt name) lcs_kind
+                              newTyVarBndr skol_mode name kind
+          Nothing -> do kind <- newExpectedKind ctxt_kind
+                        newTyVarBndr skol_mode name kind
+
+explicitTvsFromPats :: [LPat Rn] -> [(Name, Maybe (LCsKind Rn))]
+explicitTvsFromPats = catMaybes . map explicitTvFromPat
+
+explicitTvFromPat :: LPat Rn -> Maybe (Name, Maybe (LCsKind Rn))
+explicitTvFromPat = go . unLoc
+  where
+    go :: Pat Rn -> Maybe (Name, Maybe (LCsKind Rn))
+    go (WildPat {}) = Nothing
+    go (TyVarPat _ (L _ name)) = Just (name, Nothing)
+    go (ParPat _ pat) = go (unLoc pat)
+    go (KdSigPat _ pat ki) = case go (unLoc pat) of
+                               Just (name, Nothing) -> Just (name, Just (cspsk_body ki))
+                               other -> pprPanic "explicitTvFromPat" (ppr other)
+    go other = pprPanic "explicitTvFromPat" (ppr other)
+    
+--------------------------------------
 --    Explicit tyvar binders
 --------------------------------------
 
@@ -480,8 +564,8 @@ bindExplicitBndrsX skol_mode@(SM { sm_kind = ctxt_kind }) cs_tvs thing_inside = 
 
     tc_cs_bndr lcl_env bndr
       = let (name, lcs_kind, flag) = case bndr of
-                                       KindedTyVar _ (L _ name) kind -> (name, kind, Required)
-                                       ImpKindedTyVar _ (L _ name) kind -> (name, kind, Specified)
+              KindedTyVar _ (L _ name) kind -> (name, kind, Required)
+              ImpKindedTyVar _ (L _ name) kind -> (name, kind, Specified)
         in do kind <- tcLCsKindSig (TyVarBndrKindCtxt name) lcs_kind
               tv <- newTyVarBndr skol_mode name kind
               return (tv, flag)

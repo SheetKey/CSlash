@@ -360,7 +360,6 @@ rnGRHS' ctxt rnBody (GRHS _ guards rhs) = do
       <+> ppr guards
   ((guards', rhs'), fvs) <- rnStmts (PatGuard ctxt) rnExpr guards $ \_ -> rnBody rhs
   return (GRHS noAnn guards' rhs', fvs)
-    
 
 {- ******************************************************
 *                                                       *
