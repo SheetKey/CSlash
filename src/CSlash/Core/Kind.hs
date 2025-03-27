@@ -41,6 +41,10 @@ data KdRel
   | LTEQKd Kind Kind
   deriving Data.Data
 
+instance Outputable KdRel where
+  ppr (LTKd k1 k2) = ppr k1 <+> text "<" <+> ppr k2
+  ppr (LTEQKd k1 k2) = ppr k1 <+> text "<=" <+> ppr k2
+
 instance Outputable Kind where
   ppr = pprKind
 
