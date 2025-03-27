@@ -304,31 +304,47 @@ csTyFunResAndFullKinds ctxt lty =
   case unLoc lty of
     CsQualTy _ context ty -> do
       context' <- tcLCsContext context
+      traceTc "csTyFunResAndFullKinds QualTy"
+        $ vcat [ text "ctxt" <+> ppr context
+               , text "ctxt'" <+> ppr context'
+               , text "rest" <+> ppr ty ]
       (res_kind, full_kind, arity) <- csTyFunResAndFullKinds ctxt ty
       return (addKindContext context' res_kind, addKindContext context' full_kind, arity)
     CsParTy _ ty -> csTyFunResAndFullKinds ctxt ty
     CsKindSig _ _ kind -> do
       kind' <- tcLCsKindSig ctxt kind
+      traceTc "csTyFunResAndFullKinds KindSig"
+        $ vcat [ text "kind" <+> ppr kind
+               , text "kind'" <+> ppr kind' ]
       return (kind', kind', 0)
     CsTyLamTy _ mg -> case mg of
-      MG _ (L _ [L _ (Match _ _ (L _ pats) (GRHSs _ [L _ (GRHS _ [] body)]))]) -> do
-        res_kind <- case csTyKindSig body of
-                      Just body_sig -> tcLCsKindSig ctxt body_sig
-                      Nothing -> newMetaKindVar
+      MG _ (L _ [L _ m@(Match _ _ (L _ pats) (GRHSs _ [L _ (GRHS _ [] body)]))]) -> do
+        traceTc "csTyFunResAndFullKinds TyLamTy {" (ppr m)
+        -- res_kind <- case csTyKindSig body of
+        --               Just body_sig -> tcLCsKindSig ctxt body_sig
+        --               Nothing -> newMetaKindVar
+        (_, res_kind, _) <- csTyFunResAndFullKinds ctxt body
         full_kind <- mkFullKind pats res_kind
         let arity = length pats
+
+        traceTc "csTyFunResAndFullKinds TyLamTy }" 
+          $ vcat [ text "res_kind" <+> ppr res_kind
+                 , text "full_kind" <+> ppr full_kind ]
         return (res_kind, full_kind, arity)
         where
           mkFullKind :: [LPat Rn] -> Kind -> TcM Kind
           mkFullKind [] k = return k
           mkFullKind (p:ps) res_k = do
-            k' <- case unLoc p of
-                    TyVarPat _ _ -> newMetaKindVar
-                    ParPat _ p' -> mkFullKind (p' : ps) res_k
-                    ImpPat _ p' -> mkFullKind (p' : ps) res_k
-                    KdSigPat _ _ (CsPSK _ k) -> tcLCsKindSig ctxt k
-                    other -> pprPanic "mkFullKind" (ppr other)
+            k' <- go p
             (FunKd FKF_K_K k') <$> mkFullKind ps res_k
+            where
+              go :: LPat Rn -> TcM Kind
+              go p = case unLoc p of
+                TyVarPat _ _ -> newMetaKindVar
+                ParPat _ p -> go p
+                ImpPat _ p -> go p
+                KdSigPat _ _ (CsPSK _ k) -> tcLCsKindSig ctxt k
+                other -> pprPanic "mkFullKind" (ppr other)
       _ -> panic "csTyFunResAndFullKinds"
     _ -> do
       kind <- newMetaKindVar
