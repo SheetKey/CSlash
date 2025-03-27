@@ -108,6 +108,21 @@ mkTyConTy tycon = tyConNullaryTy tycon
 *                                                                      *
 ********************************************************************* -}
 
+{-
+Invariants:
+The arity is the number of type arguments that must be supplied to the TC to have the res kind.
+The res kind CAN be a function kind.
+Consider: type f = \x -> \y -> (x, y)
+  - full kind: k1 -> k2 -> k3
+  - res kind: k2 -> k3
+  - arity: 1
+
+Similarly: type g = \x y -> \z -> (x, y, z)
+  - full kind: k1 -> k2 -> k3 -> k4
+  - res kind: k3 -> k4
+  - arity: 2
+-}
+
 data TyCon = TyCon
   { tyConUnique :: !Unique
   , tyConName :: !Name

@@ -263,8 +263,8 @@ generalizeTcTyCon (tc, skol_info, scoped_prs, tc_full_kind, tc_res_kind)
                , text "tc_res_kind =" <+> ppr tc_res_kind ]
 
       let tycon = mkTcTyCon (tyConName tc)
-                            tc_full_kind
                             tc_res_kind
+                            tc_full_kind
                             (tyConArity tc)
                             (mkKiVarNamePairs kvs)
                             True
