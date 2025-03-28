@@ -2,6 +2,8 @@
 
 module CSlash.Tc.CsType where
 
+import Prelude hiding ((<>))
+
 import CSlash.Driver.Env
 import CSlash.Driver.DynFlags
 -- import GHC.Driver.Config.HsToCore
