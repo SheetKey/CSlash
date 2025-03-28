@@ -126,8 +126,9 @@ Similarly: type g = \x y -> \z -> (x, y, z)
 data TyCon = TyCon
   { tyConUnique :: !Unique
   , tyConName :: !Name
-  , tyConResKind :: Kind
+  , tyConKindBinders :: [KindVar] -- the implicitly bound kind vars
   , tyConKind :: Kind
+  , tyConResKind :: Kind
   , tyConArity :: Arity
   , tyConNullaryTy :: Type
   , tyConDetails :: !TyConDetails
@@ -208,11 +209,12 @@ type TyConRepName = Name
 *                                                                      *
 ********************************************************************* -}
 
-mkTyCon :: Name -> Kind -> Kind -> Arity -> TyConDetails -> TyCon
-mkTyCon name res_kind full_kind arity details = tc
+mkTyCon :: Name -> [KindVar] -> Kind -> Kind -> Arity -> TyConDetails -> TyCon
+mkTyCon name binders res_kind full_kind arity details = tc
   where
     tc = TyCon { tyConUnique = nameUnique name
                , tyConName = name
+               , tyConKindBinders = binders
                , tyConResKind = res_kind
                , tyConKind = full_kind
                , tyConArity = arity
@@ -222,49 +224,49 @@ mkTyCon name res_kind full_kind arity details = tc
 
 mkAlgTyCon
   :: Name
+  -> [KindVar]
   -> Kind
   -> Kind
   -> Arity
   -> AlgTyConRhs
   -> AlgTyConFlav
   -> TyCon
-mkAlgTyCon name res_kind full_kind arity rhs parent
-  = mkTyCon name res_kind full_kind arity $
+mkAlgTyCon name binders res_kind full_kind arity rhs parent
+  = mkTyCon name binders res_kind full_kind arity $
     AlgTyCon { algTcRhs = rhs
              , algTcFlavor = parent }
 
 mkTupleTyCon
   :: Name
+  -> [KindVar]
   -> Kind
   -> Kind
   -> Arity
   -> DataCon
   -> AlgTyConFlav
   -> TyCon
-mkTupleTyCon name res_kind kind arity con parent
-  = mkTyCon name res_kind kind arity $
+mkTupleTyCon name binders res_kind kind arity con parent
+  = mkTyCon name binders res_kind kind arity $
     AlgTyCon { algTcRhs = TupleTyCon { data_con = con }
              , algTcFlavor = parent }
 
 mkSumTyCon
   :: Name
+  -> [KindVar]
   -> Kind
   -> Kind
   -> Arity
   -> [DataCon]
   -> AlgTyConFlav
   -> TyCon
-mkSumTyCon name res_kind kind arity cons parent
-  = mkTyCon name res_kind kind arity $
+mkSumTyCon name binders res_kind kind arity cons parent
+  = mkTyCon name binders res_kind kind arity $
     AlgTyCon { algTcRhs = mkSumTyConRhs cons
              , algTcFlavor = parent }
 
-mkPrimTyCon :: Name -> Kind -> Kind -> Arity -> TyCon
-mkPrimTyCon name res_kind kind arity
-  = mkTyCon name res_kind kind arity PrimTyCon
-
 mkTcTyCon
   :: Name
+  -> [KindVar]
   -> Kind
   -> Kind
   -> Arity
@@ -272,11 +274,15 @@ mkTcTyCon
   -> Bool
   -> TyConFlavor TyCon
   -> TyCon
-mkTcTyCon name res_kind full_kind arity scoped_kvs poly flav
-  = mkTyCon name res_kind full_kind arity
+mkTcTyCon name binders res_kind full_kind arity scoped_kvs poly flav
+  = mkTyCon name binders res_kind full_kind arity
     $ TcTyCon { tctc_scoped_kvs = scoped_kvs
               , tctc_is_poly = poly
               , tctc_flavor = flav }
+
+mkPrimTyCon :: Name -> [KindVar] -> Kind -> Kind -> Arity -> TyCon
+mkPrimTyCon name binders res_kind kind arity
+  = mkTyCon name binders res_kind kind arity PrimTyCon
 
 isTypeSynonymTyCon :: TyCon -> Bool
 isTypeSynonymTyCon (TyCon { tyConDetails = details })

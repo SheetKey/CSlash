@@ -85,14 +85,14 @@ mkTemplateFunKindVars i
     | u <- [0..(i-1)]
     ]
 
-mkTemplateTyConKind :: Int -> Kind -> Kind
-mkTemplateTyConKind arity res_kind
-  = let kind_vars = mkTemplateKindVars arity
-        kinds = KiVarKi <$> kind_vars
-        tc_kind = foldr (FunKd FKF_K_K) res_kind kinds
-    in tc_kind
+-- mkTemplateTyConKind :: Int -> Kind -> Kind
+-- mkTemplateTyConKind arity res_kind
+--   = let kind_vars = mkTemplateKindVars arity
+--         kinds = KiVarKi <$> kind_vars
+--         tc_kind = foldr (FunKd FKF_K_K) res_kind kinds
+--     in tc_kind
 
-mkTemplateTyConKindRes :: Int -> (Kind, Kind)
+mkTemplateTyConKindRes :: Int -> ([KindVar], Kind, Kind)
 mkTemplateTyConKindRes arity
   = let res_kind = KiVarKi $ mkKiVar (mk_kv_name arity ('k' : show arity))
         kind_vars = mkTemplateKindVars arity
@@ -100,7 +100,7 @@ mkTemplateTyConKindRes arity
         full_kind = foldr (FunKd FKF_K_K) res_kind kinds
         ctxt = KdContext $ (`LTEQKd` res_kind) <$> kinds
         addCtxt = FunKd FKF_C_K ctxt
-    in (addCtxt full_kind, addCtxt res_kind)
+    in (kind_vars, addCtxt full_kind, addCtxt res_kind)
 
 mk_kv_name :: Int -> String -> Name
 mk_kv_name u s = mkInternalName (mkAlphaTyVarUnique u)
@@ -160,9 +160,9 @@ fUNTyConName :: Name
 fUNTyConName = mkPrimTc (fsLit "FUN") fUNTyConKey fUNTyCon
 
 fUNTyCon :: TyCon
-fUNTyCon = mkPrimTyCon fUNTyConName res_kind tc_kind 2
+fUNTyCon = mkPrimTyCon fUNTyConName binders res_kind tc_kind 2
   where
-    (tc_kind, res_kind) = mkTemplateTyConKindRes 2
+    (binders, tc_kind, res_kind) = mkTemplateTyConKindRes 2
 
 unrestrictedFUNTyCon :: TyCon
 unrestrictedFUNTyCon = _mkFUNTyCon UKd
@@ -174,7 +174,7 @@ linearFUNTyCon :: TyCon
 linearFUNTyCon = _mkFUNTyCon LKd
 
 _mkFUNTyCon :: Kind -> TyCon
-_mkFUNTyCon res_kind = mkPrimTyCon fUNTyConName res_kind tc_kind 2
+_mkFUNTyCon res_kind = mkPrimTyCon fUNTyConName kind_vars res_kind tc_kind 2
   where
     kind_vars = mkTemplateKindVars 2
     kinds = KiVarKi <$> kind_vars

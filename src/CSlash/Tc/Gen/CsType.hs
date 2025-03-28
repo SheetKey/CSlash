@@ -402,7 +402,7 @@ kcInferDeclHeader name flav kv_ns kc_res_ki = addTyConFlavCtxt name flav $ do
   (scoped_kvs, (res_kind, full_kind, arity)) <- bindImplicitKinds kv_ns kc_res_ki
 
   let kv_pairs = mkKiVarNamePairs scoped_kvs
-      tycon = mkTcTyCon name res_kind full_kind arity kv_pairs False flav
+      tycon = mkTcTyCon name scoped_kvs res_kind full_kind arity kv_pairs False flav
   
   traceTc "kcInferDeclHeader"
     $ vcat [ ppr name, ppr kv_ns, ppr scoped_kvs, ppr res_kind, ppr full_kind, ppr arity ]
