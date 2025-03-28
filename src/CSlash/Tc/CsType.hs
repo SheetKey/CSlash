@@ -1,3 +1,5 @@
+{-# LANGUAGE BangPatterns #-}
+
 module CSlash.Tc.CsType where
 
 import CSlash.Driver.Env
@@ -108,7 +110,7 @@ tcTyGroup (TypeGroup { group_typeds = typeds, group_kisigs = kisigs }) = do
   traceTc "---- tcTyGroup ---- {" empty
   traceTc "Decls for" (ppr (map (tydName . unLoc) typeds))
 
-  (tys_with_validity_infos, kindless) <- tcTyDs typeds
+  (tys, kindless) <- tcTyDs typeds
 
   panic "tcTyGroup"
 
@@ -116,7 +118,39 @@ tcTyDs :: [LCsBind Rn] -> TcM ([TyCon], NameSet)
 tcTyDs typeds = do
   (tc_tycons, kindless) <- checkNoErrs $ kcTyGroup typeds
 
-  panic "tcTyDs"
+  traceTc "tcTy generalized kind" (vcat (map ppr_tc_tycon tc_tycons))
+
+  fixM $ \ ~(rec_tys, _) -> do
+    tcg_env <- getGblEnv
+    let !src = tcg_src tcg_env
+
+    tycons <- tcExtendRecEnv (zipRecTys tc_tycons rec_tys)
+              $ tcExtendKindEnvWithTyCons tc_tycons
+              $ mapAndUnzipM tcTyDecl typeds
+
+    return (tycons, kindless)
+  where
+    ppr_tc_tycon tc = parens (sep [ ppr (tyConName tc) <> comma
+                                  , ppr (tyConResKind tc) <> comma
+                                  , ppr (tyConKind tc)
+                                  , ppr (isTcTyCon tc) ])
+
+zipRecTys :: [TcTyCon] -> [TyCon] -> [(Name, TyThing)]
+zipRecTys tc_tycons rec_tycons
+  = [ (name, ATyCon (get name)) | tc_tycon <- tc_tycons, let name = getName tc_tycon ]
+  where
+    add_one_tc :: TyCon -> NameEnv TyCon -> NameEnv TyCon
+    add_one_tc tc env = extendNameEnv env (tyConName tc) tc
+
+    add_tc :: TyCon -> NameEnv TyCon -> NameEnv TyCon
+    add_tc tc env = add_one_tc tc env --foldr add_one_tc env (tc : tyConATs tc)
+
+    rec_tc_env :: NameEnv TyCon
+    rec_tc_env = foldr add_tc emptyNameEnv rec_tycons
+
+    get name = case lookupNameEnv rec_tc_env name of
+                 Just tc -> tc
+                 other -> pprPanic "zipRecTys" (ppr name <+> ppr other)
 
 {- *********************************************************************
 *                                                                      *
@@ -374,6 +408,45 @@ kcTyDecl (TyFunBind { tyfun_body = rhs }) tycon
     let kind = tyConKind tycon
     in discardResult $ tcCheckLCsType rhs (TheKind kind)
 kcTyDecl _ _ = panic "kcTyDecl/unreachable"
+
+{- *********************************************************************
+*                                                                      *
+            Type checking
+*                                                                      *
+********************************************************************* -}
+
+tcTyDecl :: LCsBind Rn -> TcM TyCon
+tcTyDecl (L loc bind)
+  | Just thing <- wiredInNameTyThing_maybe (tydName decl)
+  = case thing of
+      ATyCon tc -> return tc
+      _ -> pprPanic "tcTyDecl" (ppr thing)
+  | otherwise
+  = setSrcSpanA loc $ tcAddDeclCtxt bind $ do
+      traceTc "---- tcTyDecl ---- {" (ppr bind)
+      tc <- tcTyDecl1 bind
+      traceTc "---- tcTyDecl ---- }" (ppr tc)
+      return tc
+
+tcTyDecl1 :: CsBind Rn -> TcM TyCon
+tcTyDecl1 (TyFunBind { tyfun_id = L _ tc_name, tyfun_body = rhs })
+  = tcTyFunRhs tc_name rhs
+
+tcTyDecl1 other = pprPanic "tcTyDecl1" (ppr other)
+
+{- *********************************************************************
+*                                                                      *
+          Type fun declarations
+*                                                                      *
+********************************************************************* -}
+
+tcTyFunRhs :: Name -> LCsType Rn -> TcM TyCon
+tcTyFunRhs tc_name cs_ty = bindTyFunKiVars tc_name $ \ tc_ki_bndrs rhs_kind -> do
+  env <- getLclEnv
+  traceTc "tc-tyfun" (ppr tc_name $$ ppr (getLclEnvRdrEnv env))
+  rhs_ty <- pushLevelAndSolveEqualities skol_info [check other calls to this func]
+            $ tcCheckLCsType cs_ty (TheKind res_kind)
+  
 
 {- *********************************************************************
 *                                                                      *

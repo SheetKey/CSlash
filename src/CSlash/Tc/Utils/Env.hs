@@ -1,4 +1,7 @@
-module CSlash.Tc.Utils.Env where
+module CSlash.Tc.Utils.Env
+  ( TyThing (..), TcTyThing(..)
+  , module CSlash.Tc.Utils.Env
+  ) where
 
 import CSlash.Driver.Env
 import CSlash.Driver.Env.KnotVars
@@ -81,6 +84,13 @@ tcLookupGlobal name = do
                        case mb_thing of
                          Succeeded thing -> return thing
                          Failed msg -> failWithTc (TcRnInterfaceError msg)
+
+tcExtendRecEnv :: [(Name, TyThing)] -> TcM r -> TcM r
+tcExtendRecEnv gbl_stuff thing_inside = do
+  tcg_env <- getGblEnv
+  let ge' = extendNameEnvList (tcg_type_env tcg_env) gbl_stuff
+      tcg_env' = tcg_env { tcg_type_env = ge' }
+  setGblEnv tcg_env' thing_inside
 
 {- *********************************************************************
 *                                                                      *
