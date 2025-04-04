@@ -3,7 +3,7 @@
 {-# LANGUAGE MultiWayIf #-}
 
 module CSlash.Types.Var
-  ( Var, Id
+  {-( Var, Id
   , TypeVar, KindVar, TcTyVar, TcKiVar, TcVar
 
   , varName, varUnique, varType, varTypeMaybe, varKind, varKindMaybe
@@ -33,7 +33,7 @@ module CSlash.Types.Var
   , setTyVarName, setTyVarKind
 
   , nonDetCmpVar
-  ) where
+  )-} where
 
 import Prelude hiding ((<>))
 
@@ -295,6 +295,11 @@ setTyVarName = setVarName
 
 setTyVarKind :: TypeVar -> Kind -> TypeVar
 setTyVarKind tv k = tv { varKind = k }
+
+updateTyVarKindM :: Monad m => (Kind -> m Kind) -> TypeVar -> m TypeVar
+updateTyVarKindM update tv = do
+  k' <- update (tyVarKind tv)
+  return $ tv { varKind = k' }
 
 mkTyVar :: Name -> Kind -> TypeVar
 mkTyVar name kind = TyVar { varName = name

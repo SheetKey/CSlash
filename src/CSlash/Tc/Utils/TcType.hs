@@ -6,6 +6,7 @@ module CSlash.Tc.Utils.TcType
 import Prelude hiding ((<>))
 
 import CSlash.Core.Type.Rep
+import CSlash.Core.Type.FVs
 import CSlash.Core.Kind
 import CSlash.Core.Kind.FVs
 import CSlash.Types.Var
@@ -179,6 +180,14 @@ tcKiVarLevel kv = case tcKiVarDetails kv of
                     MetaKv { mkv_tclvl = kv_lvl } -> kv_lvl
                     SkolemKv _ kv_lvl -> kv_lvl
 
+tcTypeLevel :: TcType -> TcLevel
+tcTypeLevel ty = nonDetStrictFoldDVarSet add topTcLevel (tyKiVarsOfTypeDSet ty)
+  where
+    add v lvl
+      | isTcTyVar v = lvl `maxTcLevel` tcTyVarLevel v
+      | isTcKiVar v = lvl `maxTcLevel` tcKiVarLevel v
+      | otherwise = lvl
+
 tcKindLevel :: TcKind -> TcLevel
 tcKindLevel ki = nonDetStrictFoldDVarSet add topTcLevel (kiVarsOfKindDSet ki)
   where
@@ -237,6 +246,9 @@ isTouchableMetaKiVar ctxt_tclvl kv
 
 isImmutableTyVar :: TypeVar -> Bool
 isImmutableTyVar tv = isSkolemTyVar tv
+
+isImmutableKiVar :: KindVar -> Bool
+isImmutableKiVar tv = isSkolemKiVar tv
 
 isSkolemTyVar :: TcTyVar -> Bool
 isSkolemTyVar tv = assertPpr (tcIsTcTyVar tv) (ppr tv)

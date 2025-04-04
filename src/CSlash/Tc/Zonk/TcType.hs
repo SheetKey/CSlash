@@ -24,6 +24,7 @@ import CSlash.Core.Type.Rep
 import CSlash.Core.TyCon
 import CSlash.Core.Type
 import CSlash.Core.Kind
+import CSlash.Core.Kind.Compare
 -- import GHC.Core.Coercion
 -- import GHC.Core.Predicate
 
@@ -44,6 +45,42 @@ import CSlash.Data.Bag
 
 writeMetaTyVar :: HasDebugCallStack => TcTyVar -> TcType -> ZonkM ()
 writeMetaTyVar = undefined
+
+writeMetaTyVarRef :: HasDebugCallStack => TcTyVar -> TcRef MetaDetails -> TcType -> ZonkM ()
+writeMetaTyVarRef tyvar ref ty
+  | not debugIsOn
+  = do traceZonk "writeMetaTyVar" (ppr tyvar <+> colon <+> ppr (tyVarKind tyvar)
+                                   <+> text ":=" <+> ppr ty)
+       writeTcRef ref (Indirect ty)
+  | otherwise
+  = do meta_details <- readTcRef ref
+       let tv_kind = tyVarKind tyvar
+           tv_lvl = tcTyVarLevel tyvar
+       zonked_tv_kind <- zonkTcKind tv_kind
+       zonked_ty <- zonkTcType ty
+       let zonked_ty_kind = typeKind zonked_ty
+           zonked_ty_lvl = tcTypeLevel zonked_ty
+           level_check_ok = not (zonked_ty_lvl `strictlyDeeperThan` tv_lvl)
+           level_check_msg = ppr zonked_ty_lvl $$ ppr tv_lvl
+                             $$ ppr tyvar $$ ppr ty $$ ppr zonked_ty
+           kind_check_ok = zonked_ty_kind `eqKind` zonked_tv_kind
+           kind_msg = hang (text "Ill-kinded update to meta tyvar")
+                           2 (ppr tyvar <+> colon <+> (ppr tv_kind $$ ppr zonked_tv_kind)
+                              <+> text ":="
+                              <+> ppr ty <+> colon <+> (ppr zonked_ty_kind))
+       traceZonk "writeMetaTyVar" (ppr tyvar <+> text ":=" <+> ppr ty)
+
+       massertPpr (isFlexi meta_details) (double_upd_msg meta_details)
+
+       massertPpr level_check_ok level_check_msg
+
+       massertPpr kind_check_ok kind_msg
+
+       writeTcRef ref (Indirect ty)
+  where
+    double_upd_msg details = hang (text "Double update of meta tyvar")
+                                  2 (ppr tyvar $$ ppr details)
+{-# INLINE writeMetaTyVarRef #-}
 
 writeMetaKiVar :: HasDebugCallStack => TcKiVar -> TcKind -> ZonkM ()
 writeMetaKiVar kivar ki

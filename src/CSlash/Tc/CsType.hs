@@ -19,7 +19,7 @@ import CSlash.Tc.Utils.Env
 -- import GHC.Tc.Utils.Unify( unifyType, emitResidualTvConstraint )
 -- import GHC.Tc.Types.Constraint( emptyWC )
 import CSlash.Tc.Validity
--- import GHC.Tc.Zonk.Type
+import CSlash.Tc.Zonk.Type
 import CSlash.Tc.Zonk.TcType
 -- import GHC.Tc.TyCl.Utils
 -- import GHC.Tc.TyCl.Class
@@ -128,7 +128,7 @@ tcTyDs typeds = do
 
     tycons <- tcExtendRecEnv (zipRecTys tc_tycons rec_tys)
               $ tcExtendKindEnvWithTyCons tc_tycons
-              $ mapAndUnzipM tcTyDecl typeds
+              $ mapM tcTyDecl typeds
 
     return (tycons, kindless)
   where
@@ -299,6 +299,7 @@ generalizeTcTyCon (tc, skol_info, scoped_prs, tc_full_kind, tc_res_kind)
                , text "tc_res_kind =" <+> ppr tc_res_kind ]
 
       let tycon = mkTcTyCon (tyConName tc)
+                            kvs
                             tc_res_kind
                             tc_full_kind
                             (tyConArity tc)
@@ -419,7 +420,7 @@ kcTyDecl _ _ = panic "kcTyDecl/unreachable"
 
 tcTyDecl :: LCsBind Rn -> TcM TyCon
 tcTyDecl (L loc bind)
-  | Just thing <- wiredInNameTyThing_maybe (tydName decl)
+  | Just thing <- wiredInNameTyThing_maybe (tydName bind)
   = case thing of
       ATyCon tc -> return tc
       _ -> pprPanic "tcTyDecl" (ppr thing)
@@ -443,12 +444,19 @@ tcTyDecl1 other = pprPanic "tcTyDecl1" (ppr other)
 ********************************************************************* -}
 
 tcTyFunRhs :: Name -> LCsType Rn -> TcM TyCon
-tcTyFunRhs tc_name cs_ty = bindTyFunKiVars tc_name $ \ tc_ki_bndrs rhs_kind -> do
+tcTyFunRhs tc_name cs_ty = bindImplicitTyConKiVars tc_name
+                           $ \ tc_ki_bndrs res_kind rhs_kind arity -> do
   env <- getLclEnv
   traceTc "tc-tyfun" (ppr tc_name $$ ppr (getLclEnvRdrEnv env))
-  rhs_ty <- pushLevelAndSolveEqualities skol_info [check other calls to this func]
-            $ tcCheckLCsType cs_ty (TheKind res_kind)
-  
+  let skol_info = TyConSkol TypeFunFlavor tc_name
+  rhs_ty <- pushLevelAndSolveEqualities skol_info tc_ki_bndrs
+            $ tcCheckLCsType cs_ty (TheKind rhs_kind)
+
+  (ki_bndrs, rhs_ty) <- initZonkEnv NoFlexi
+                        $ runZonkBndrT (zonkKiVarBindersX tc_ki_bndrs)
+                        $ \bndrs -> do rhs_ty <- zonkTcTypeToTypeX rhs_ty
+                                       return (bndrs, rhs_ty)
+  return $ buildSynTyCon tc_name ki_bndrs res_kind rhs_kind arity rhs_ty
 
 {- *********************************************************************
 *                                                                      *

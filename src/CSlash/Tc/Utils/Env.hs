@@ -85,6 +85,13 @@ tcLookupGlobal name = do
                          Succeeded thing -> return thing
                          Failed msg -> failWithTc (TcRnInterfaceError msg)
 
+tcLookupGlobalOnly :: Name -> TcM TyThing
+tcLookupGlobalOnly name = do
+  env <- getGblEnv
+  return $ case lookupNameEnv (tcg_type_env env) name of
+             Just thing -> thing
+             Nothing -> pprPanic "tcLookupGlobalOnly" (ppr name)
+
 tcExtendRecEnv :: [(Name, TyThing)] -> TcM r -> TcM r
 tcExtendRecEnv gbl_stuff thing_inside = do
   tcg_env <- getGblEnv
@@ -118,6 +125,9 @@ tcExtendKindEnvList things thing_inside = do
   updLclCtxt upd_env thing_inside
   where
     upd_env env = env { tcl_env = extendNameEnvList (tcl_env env) things }
+
+tcExtendKiVarEnv :: [TcKiVar] -> TcM r -> TcM r
+tcExtendKiVarEnv kvs thing_inside = tcExtendNameKiVarEnv (mkKiVarNamePairs kvs) thing_inside
 
 tcExtendNameTyVarEnv :: [(Name, TcTyVar)] -> TcM r -> TcM r
 tcExtendNameTyVarEnv binds thing_inside

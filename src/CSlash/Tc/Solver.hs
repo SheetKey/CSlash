@@ -83,10 +83,10 @@ simplifyTop wanteds = do
 
   reportUnsolved final_wc
 
-pushLevelAndSolveEqualities :: SkolemInfoAnon -> [TyConBinder] -> TcM a -> TcM a
+pushLevelAndSolveEqualities :: SkolemInfoAnon -> [TcKiVar] -> TcM a -> TcM a
 pushLevelAndSolveEqualities skol_info_anon tcbs thing_inside = do
   (tclvl, wanted, res) <- pushLevelAndSolveEqualitiesX "pushLevelAndSolveEqualities" thing_inside
-  report_unsolved_equalities skol_info_anon (binderVars tcbs) tclvl wanted
+  report_unsolved_equalities skol_info_anon tcbs tclvl wanted
   return res
 
 pushLevelAndSolveEqualitiesX :: String -> TcM a -> TcM (TcLevel, WantedConstraints, a)
@@ -101,7 +101,7 @@ pushLevelAndSolveEqualitiesX callsite thing_inside = do
   return (tclvl, wanted, res)
 
 report_unsolved_equalities
-  :: SkolemInfoAnon -> [TcVar] -> TcLevel -> WantedConstraints -> TcM ()
+  :: SkolemInfoAnon -> [TcKiVar] -> TcLevel -> WantedConstraints -> TcM ()
 report_unsolved_equalities skol_info_anon skol_vs tclvl wanted
   | isEmptyWC wanted
   = return ()

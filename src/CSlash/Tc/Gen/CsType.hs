@@ -625,6 +625,17 @@ bindImplicitKinds kv_names thing_inside = do
       | otherwise
       = newKiVarBndr name
 
+bindImplicitTyConKiVars :: Name -> ([TcKiVar] -> TcKind -> TcKind -> Arity -> TcM a) -> TcM a
+bindImplicitTyConKiVars tycon_name thing_inside = do
+  tycon <- tcLookupTcTyCon tycon_name
+  let rhs_kind = tyConKind tycon
+      res_kind = tyConResKind tycon
+      arity = tyConArity tycon
+      binders = tyConKindBinders tycon
+  traceTc "bindImplicitTyConKiVars" (ppr tycon_name $$ ppr binders)
+  tcExtendKiVarEnv binders
+    $ thing_inside binders res_kind rhs_kind arity
+
 {- *********************************************************************
 *                                                                      *
              Kind generalization

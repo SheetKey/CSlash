@@ -21,6 +21,7 @@ import CSlash.Types.Basic
 import CSlash.Types.GREInfo
 import CSlash.Types.SrcLoc
 import CSlash.Types.Unique
+import CSlash.Types.Unique.FM
 import CSlash.Types.Unique.Set
 import CSlash.Types.Name
 import CSlash.Types.Name.Set
@@ -210,6 +211,15 @@ data LocalRdrEnv = LRE
   { lre_env :: OccEnv Name
   , lre_in_scope :: NameSet
   }
+
+instance Outputable LocalRdrEnv where
+  ppr (LRE { lre_env = env, lre_in_scope = ns })
+    = hang (text "LocalRdrEnv {")
+           2 (vcat [ text "env =" <+> pprOccEnv ppr_elt env
+                   , text "in_scope =" <+> pprUFM (getUniqSet ns) (braces . pprWithCommas ppr)
+                   ] <+> char '}')
+    where
+      ppr_elt name = parens (ppr (nameOccName name)) <+> ppr name  
 
 emptyLocalRdrEnv :: LocalRdrEnv
 emptyLocalRdrEnv = LRE

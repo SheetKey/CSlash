@@ -284,11 +284,30 @@ mkPrimTyCon :: Name -> [KindVar] -> Kind -> Kind -> Arity -> TyCon
 mkPrimTyCon name binders res_kind kind arity
   = mkTyCon name binders res_kind kind arity PrimTyCon
 
+mkSynonymTyCon
+  :: Name -> [KindVar] -> Kind -> Kind -> Arity -> Type -> Bool -> Bool -> Bool -> TyCon
+mkSynonymTyCon name binders res_kind rhs_kind arity rhs is_tau is_forgetful is_concrete
+  = mkTyCon name binders res_kind rhs_kind arity
+    $ SynonymTyCon { synTcRhs = rhs
+                   , synIsTau = is_tau
+                   , synIsForgetful = is_forgetful
+                   , synIsConcrete = is_concrete }
+
 isTypeSynonymTyCon :: TyCon -> Bool
 isTypeSynonymTyCon (TyCon { tyConDetails = details })
   | SynonymTyCon{} <- details = True
   | otherwise = False
 {-# INLINE isTypeSynonymTyCon #-}
+
+isTauTyCon :: TyCon -> Bool
+isTauTyCon (TyCon { tyConDetails = details })
+  | SynonymTyCon { synIsTau = is_tau } <- details = is_tau
+  | otherwise = True
+
+isForgetfulSynTyCon :: TyCon -> Bool
+isForgetfulSynTyCon (TyCon { tyConDetails = details })
+  | SynonymTyCon { synIsForgetful = forget } <- details = forget
+  | otherwise = False
 
 tyConMustBeSaturated :: TyCon -> Bool
 tyConMustBeSaturated = tcFlavorMustBeSaturated . tyConFlavor
@@ -297,6 +316,14 @@ isTupleTyCon :: TyCon -> Bool
 isTupleTyCon (TyCon { tyConDetails = details })
   | AlgTyCon { algTcRhs = TupleTyCon {} } <- details = True
   | otherwise = False
+
+isConcreteTyCon :: TyCon -> Bool
+isConcreteTyCon tc@(TyCon { tyConDetails = details })
+  = case details of
+      AlgTyCon {} -> True
+      PrimTyCon {} -> True
+      SynonymTyCon { synIsConcrete = is_conc } -> is_conc
+      TcTyCon {} -> pprPanic "isConcreteTyCon" (ppr tc)
 
 {- --------------------------------------------
 --      TcTyCon

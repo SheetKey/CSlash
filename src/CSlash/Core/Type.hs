@@ -223,6 +223,50 @@ splitForAllTyVars ty = split ty ty []
     split orig_ty ty tvs | Just ty' <- coreView ty = split orig_ty ty' tvs
     split orig_ty _ tvs = (reverse tvs, orig_ty)
 
+isTauTy :: Type -> Bool
+isTauTy ty | Just ty' <- coreView ty = isTauTy ty'
+isTauTy (TyVarTy _) = True
+isTauTy (TyConApp tc tys) = all isTauTy tys && isTauTyCon tc
+isTauTy (AppTy a b) = isTauTy a && isTauTy b
+isTauTy (FunTy _ a b) = isTauTy a && isTauTy b
+isTauTy (ForAllTy {}) = False
+isTauTy (TyLamTy _ ty) = isTauTy ty
+isTauTy other = pprPanic "isTauTy" (ppr other)
+
+isForgetfulTy :: Type -> Bool
+isForgetfulTy (TyVarTy _) = False
+isForgetfulTy (TyConApp tc tys) = isForgetfulSynTyCon tc || any isForgetfulTy tys
+isForgetfulTy (AppTy a b) = isForgetfulTy a || isForgetfulTy b
+isForgetfulTy (FunTy _ a b) = isForgetfulTy a || isForgetfulTy b
+isForgetfulTy (ForAllTy (Bndr tv _) ty)
+  = (not $ tv `elemVarSet` tyVarsOfType ty) || isForgetfulTy ty
+isForgetfulTy (TyLamTy tv ty) = (not $ tv `elemVarSet` tyVarsOfType ty) || isForgetfulTy ty
+isForgetfulTy other = pprPanic "isForgetfulTy" (ppr other)
+
+{- *********************************************************************
+*                                                                      *
+            Type families
+*                                                                      *
+********************************************************************* -}
+
+{- NOTE:
+We do note need the type to be KnotTied.
+This is because we do not have recursive things the same way haskell does.
+-}
+buildSynTyCon :: Name -> [KindVar] -> Kind -> Kind -> Arity -> Type -> TyCon
+buildSynTyCon name binders res_kind full_kind arity rhs
+  = assertPpr (not $ uniqSetAny ((name ==) . tyConName) rhs_tycons)
+    (vcat [ text "'buildSynTyCon' found a recursive tycon"
+          , ppr name
+          , ppr rhs ])
+    mkSynonymTyCon name binders res_kind full_kind arity rhs is_tau is_forgetful is_concrete
+  where
+    is_tau = isTauTy rhs
+    is_concrete = uniqSetAll isConcreteTyCon rhs_tycons
+    is_forgetful = isForgetfulTy rhs
+
+    rhs_tycons = tyConsOfType rhs
+
 {- *********************************************************************
 *                                                                      *
         The kind of a type

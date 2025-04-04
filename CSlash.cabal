@@ -261,8 +261,10 @@ library
                     , CSlash.Tc.Utils.TcType
                     , CSlash.Tc.Utils.Unify
                     , CSlash.Tc.Validity
+                    , CSlash.Tc.Zonk.Env
                     , CSlash.Tc.Zonk.Monad
                     , CSlash.Tc.Zonk.TcType
+                    , CSlash.Tc.Zonk.Type
 
                     , CSlash.Types
                     , CSlash.Types.Avail
@@ -354,6 +356,7 @@ library
                     , CSlash.Utils.Logger
                     , CSlash.Utils.Misc
                     , CSlash.Utils.Monad
+                    , CSlash.Utils.Monad.Codensity
                     , CSlash.Utils.Outputable
                     , CSlash.Utils.Panic
                     , CSlash.Utils.Panic.Plain
