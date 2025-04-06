@@ -242,6 +242,26 @@ collect_cand_qkvs orig_ki cur_lvl bound dvs ki = go dvs ki
 *                                                                      *
 ********************************************************************* -}
 
+quantifyKiVars :: SkolemInfo -> DKiVarSet -> TcM [TcKiVar]
+quantifyKiVars skol_info kvs
+  | isEmptyDVarSet kvs
+  = do traceTc "quantifyKiVars has nothing to quantify" empty
+       return []
+  | otherwise
+  = do traceTc "quantifyKiVars {"
+         $ vcat [ text "kvs =" <+> ppr kvs ]
+
+       final_qkvs <- liftZonkM $ mapMaybeM zonk_quant (dVarSetElems kvs)
+
+       traceTc "quantifyKiVars }"
+         $ vcat [ text "final_qkvs =" <+> (sep $ map ppr final_qkvs) ]
+
+       return final_qkvs
+  where
+    zonk_quant kv
+      | not (isKiVar kv) = return Nothing
+      | otherwise = Just <$> skolemizeQuantifiedKiVar skol_info kv
+
 zonkAndSkolemize :: SkolemInfo -> TcVar -> ZonkM TcTyVar
 zonkAndSkolemize skol_info var
   | isTyVarTyVar var

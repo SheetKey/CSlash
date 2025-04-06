@@ -278,34 +278,49 @@ swizzleTcTyConBndrs tc_infos
 generalizeTcTyCon :: (MonoTcTyCon, SkolemInfo, ScopedPairs, TcKind, TcKind) -> TcM PolyTcTyCon
 generalizeTcTyCon (tc, skol_info, scoped_prs, tc_full_kind, tc_res_kind)
   = setSrcSpan (getSrcSpan tc) $ addTyConCtxt tc $ do
-      let kvs = map snd scoped_prs
-
+      let spec_kvs = map snd scoped_prs -- kvs that appear in user code (specified by user)
+      all_kvs <- candidateQKiVarsOfKind tc_full_kind
+      let inf_kvs = all_kvs `delDVarSetList` spec_kvs
+      inferred <- quantifyKiVars skol_info inf_kvs
+      
       traceTc "generalizeTcTyCon: pre zonk"
         $ vcat [ text "tycon =" <+> ppr tc
-               , text "kvs =" <+> sep (map ppr kvs)
+               , text "spec_kvs =" <+> sep (map ppr spec_kvs)
+               , text "inferred =" <+> sep (map ppr inferred)
+               , text "all_kvs =" <+> ppr all_kvs
                , text "tc_full_kind" <+> ppr tc_full_kind
                , text "tc_res_kind =" <+> ppr tc_res_kind ]
 
-      (kvs, tc_full_kind, tc_res_kind) <- liftZonkM $ do
-        kvs <- zonkTcKiVarsToTcKiVars kvs
+      (inferred, spec_kvs, tc_full_kind, tc_res_kind) <- liftZonkM $ do
+        inferred <- zonkTcKiVarsToTcKiVars inferred
+        spec_kvs <- zonkTcKiVarsToTcKiVars spec_kvs
         tc_full_kind <- zonkTcKind tc_full_kind
         tc_res_kind <- zonkTcKind tc_res_kind
-        return (kvs, tc_full_kind, tc_res_kind)
+        return (inferred, spec_kvs, tc_full_kind, tc_res_kind)
 
       traceTc "generalizeTcTyCon: post zonk" 
         $ vcat [ text "tycon =" <+> ppr tc
-               , text "kvs = " <+> sep (map ppr kvs)
+               , text "inferred =" <+> sep (map ppr inferred)
+               , text "spec_kvs = " <+> sep (map ppr spec_kvs)
                , text "tc_full_kind =" <+> ppr tc_full_kind
                , text "tc_res_kind =" <+> ppr tc_res_kind ]
 
+      let all_tckvs = inferred ++ spec_kvs
+
       let tycon = mkTcTyCon (tyConName tc)
-                            kvs
+                            all_tckvs
                             tc_res_kind
                             tc_full_kind
                             (tyConArity tc)
-                            (mkKiVarNamePairs kvs)
+                            (mkKiVarNamePairs spec_kvs)
                             True
                             (tyConFlavor tc)
+
+      traceTc "generalizeTcTyCon done"
+        $ vcat [ text "tycon =" <+> ppr tc
+               , text "tc_full_kind =" <+> ppr tc_full_kind
+               , text "tc_res_kind =" <+> ppr tc_res_kind
+               , text "all_tckvs =" <+> ppr all_tckvs ]
 
       return tycon
 

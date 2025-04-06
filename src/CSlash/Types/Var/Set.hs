@@ -71,8 +71,17 @@ extendDVarSet = addOneToUniqDSet
 elemDVarSet :: Var -> DVarSet -> Bool
 elemDVarSet = elementOfUniqDSet
 
+dVarSetElems :: DVarSet -> [Var]
+dVarSetElems = uniqDSetToList
+
+isEmptyDVarSet :: DVarSet -> Bool
+isEmptyDVarSet = isEmptyUniqDSet
+
 nonDetStrictFoldDVarSet :: (Var -> a -> a) -> a -> DVarSet -> a
 nonDetStrictFoldDVarSet = nonDetStrictFoldUniqDSet
+
+delDVarSetList :: DVarSet -> [Var] -> DVarSet
+delDVarSetList = delListFromUniqDSet
 
 dVarSetToVarSet :: DVarSet -> VarSet
 dVarSetToVarSet = unsafeUFMToUniqSet . udfmToUfm . getUniqDSet
