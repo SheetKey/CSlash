@@ -75,6 +75,7 @@ library
                     , CSlash.Core.Ppr
                     , CSlash.Core.Reduction
                     , CSlash.Core.TyCon
+                    , CSlash.Core.TyCon.Set
                     , CSlash.Core.Type
                     , CSlash.Core.Type.FVs
                     , CSlash.Core.Type.Ppr
@@ -231,6 +232,7 @@ library
                     , CSlash.SysTools.Terminal
 
                     , CSlash.Tc.CsType
+                    , CSlash.Tc.CsType.Utils
                     , CSlash.Tc.Errors
                     , CSlash.Tc.Errors.Ppr
                     , CSlash.Tc.Errors.Types

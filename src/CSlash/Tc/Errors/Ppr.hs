@@ -127,6 +127,14 @@ instance Diagnostic TcRnMessage where
       [ text "Module does not have a RealSrcSpan:" <+> ppr mod ]
     TcRnImplicitImportOfPrelude -> mkSimpleDecorated $
       text "Module" <+> quotes (text "Prelude") <+> text "implicitly imported."
+    TcRnTypeSynonymCycle bind_or_tcs -> mkSimpleDecorated $
+      sep [ text "Cycle in type synonym declarations:"
+          , nest 2 (vcat (map ppr_bind bind_or_tcs)) ]
+      where
+        ppr_bind = \case
+          Right (L loc bind) -> ppr (locA loc) <> colon <+> ppr bind
+          Left tc -> let n = tyConName tc
+                     in ppr (getSrcSpan n) <> colon <+> ppr n <+> text "from external module"
     TcRnInterfaceError reason ->
       diagnosticMessage (tcOptsIfaceOpts opts) reason
     TcRnSelfImport imp_mod_name -> mkSimpleDecorated $
@@ -181,6 +189,7 @@ instance Diagnostic TcRnMessage where
       UnusedNameLocalBind -> Opt_WarnUnusedLocalBinds
     TcRnModMissingRealSrcSpan{} -> ErrorWithoutFlag
     TcRnImplicitImportOfPrelude{} -> WarningWithFlag Opt_WarnImplicitPrelude
+    TcRnTypeSynonymCycle{} -> ErrorWithoutFlag
     TcRnInterfaceError err -> interfaceErrorReason err
     TcRnSelfImport{} -> ErrorWithoutFlag
     TcRnNoExplicitImportList{} -> WarningWithFlag Opt_WarnMissingImportList
@@ -203,6 +212,7 @@ instance Diagnostic TcRnMessage where
     TcRnUnusedName{} -> noHints
     TcRnModMissingRealSrcSpan{} -> noHints
     TcRnImplicitImportOfPrelude{} -> noHints
+    TcRnTypeSynonymCycle{} -> noHints
     TcRnInterfaceError reason -> interfaceErrorHints reason
     TcRnSelfImport{} -> noHints
     TcRnNoExplicitImportList{} -> noHints

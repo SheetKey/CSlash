@@ -21,7 +21,7 @@ import CSlash.Tc.Utils.Env
 import CSlash.Tc.Validity
 import CSlash.Tc.Zonk.Type
 import CSlash.Tc.Zonk.TcType
--- import GHC.Tc.TyCl.Utils
+import CSlash.Tc.CsType.Utils
 -- import GHC.Tc.TyCl.Class
 -- import {-# SOURCE #-} GHC.Tc.TyCl.Instance( tcInstDecls1 )
 -- import {-# SOURCE #-} GHC.Tc.Module( checkBootDeclM )
@@ -114,7 +114,12 @@ tcTyGroup (TypeGroup { group_typeds = typeds, group_kisigs = kisigs }) = do
 
   (tys, kindless) <- tcTyDs typeds
 
-  panic "tcTyGroup"
+  traceTc "Starting synonym cycle check" (ppr tys)
+  home_unit <- cs_home_unit <$> getTopEnv
+  checkSynCycles (homeUnitAsUnit home_unit) tys typeds
+  traceTc "Done synonym cycle check" (ppr tys)
+
+  panic "tcTyGroup unfinished"
 
 tcTyDs :: [LCsBind Rn] -> TcM ([TyCon], NameSet)
 tcTyDs typeds = do

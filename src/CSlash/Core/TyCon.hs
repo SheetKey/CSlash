@@ -353,6 +353,13 @@ synTyConDefn_maybe (TyCon { tyConDetails = details })
   | otherwise
   = Nothing
 
+synTyConRhs_maybe :: TyCon -> Maybe Type
+synTyConRhs_maybe (TyCon { tyConDetails = details })
+  | SynonymTyCon {synTcRhs = ty} <- details
+  = Just ty
+  | otherwise
+  = Nothing
+
 mkTyConTagMap :: TyCon -> NameEnv ConTag
 mkTyConTagMap tycon =
   mkNameEnv $ map getName (tyConDataCons tycon) `zip` [fIRST_TAG..]

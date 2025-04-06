@@ -255,11 +255,7 @@ This is because we do not have recursive things the same way haskell does.
 -}
 buildSynTyCon :: Name -> [KindVar] -> Kind -> Kind -> Arity -> Type -> TyCon
 buildSynTyCon name binders res_kind full_kind arity rhs
-  = assertPpr (not $ uniqSetAny ((name ==) . tyConName) rhs_tycons)
-    (vcat [ text "'buildSynTyCon' found a recursive tycon"
-          , ppr name
-          , ppr rhs ])
-    mkSynonymTyCon name binders res_kind full_kind arity rhs is_tau is_forgetful is_concrete
+  = mkSynonymTyCon name binders res_kind full_kind arity rhs is_tau is_forgetful is_concrete
   where
     is_tau = isTauTy rhs
     is_concrete = uniqSetAll isConcreteTyCon rhs_tycons

@@ -85,6 +85,7 @@ data TcRnMessage where
   TcRnUnusedName :: !OccName -> !UnusedNameProv -> TcRnMessage
   TcRnModMissingRealSrcSpan :: Module -> TcRnMessage
   TcRnImplicitImportOfPrelude :: TcRnMessage
+  TcRnTypeSynonymCycle :: !TySynCycleTyCons -> TcRnMessage
   TcRnInterfaceError :: !IfaceMessage -> TcRnMessage
   TcRnSelfImport :: !ModuleName -> TcRnMessage
   TcRnNoExplicitImportList :: !ModuleName -> TcRnMessage
@@ -142,6 +143,8 @@ data CsDocContext
 data WrongThingSort
   = WrongThingType
   | WrongThingKind
+
+type TySynCycleTyCons = [Either TyCon (LCsBind Rn)]
 
 data DodgyImportsReason
   = DodgyImportsEmptyParent !GlobalRdrElt
