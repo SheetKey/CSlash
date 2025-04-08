@@ -263,7 +263,18 @@ tcInferTyApps_nosat orig_cs_ty fun orig_cs_args = do
         substed_fun_ki = substKd subst fun_ki
 
 mkAppTyM :: Subst -> TcType -> TcKind -> TcType -> TcM (Subst, TcType)
-mkAppTyM subst fun fun_ki arg = panic "mkAppTyM"
+mkAppTyM subst fun arg_ki arg
+  | TyConApp tc args <- fun
+  , isTypeSynonymTyCon tc
+  = panic "mkAppTyM"
+
+mkAppTyM subst fun arg_ki arg = return (subst, mk_app_ty fun arg)
+
+mk_app_ty :: TcType -> TcType -> TcType
+mk_app_ty fun arg = assertPpr (isFunKi fun_kind)
+                              (ppr fun <+> colon <+> ppr fun_kind $$ ppr arg)
+                    $ mkAppTy fun arg
+  where fun_kind = typeKind fun
 
 -- saturateFamApp :: TcType -> TcKind -> TcM (TcType, TcKind)
 -- saturateFamApp ty kind 

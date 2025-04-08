@@ -113,6 +113,10 @@ isCKind :: Kind -> Bool
 isCKind (KdContext _) = True
 isCKind _ = False
 
+isFunKi :: Kind -> Bool
+isFunKi (FunKd {}) = True
+isFunKi _ = False
+
 -- 'noFreeVarsOfType' in GHC
 noFreeVarsOfKind :: Kind -> Bool
 noFreeVarsOfKind k = case k of
