@@ -173,6 +173,20 @@ instance Diagnostic TcRnMessage where
         locations = text "Bound at:" <+> vcat (map ppr (sortBy leftmost_smallest (NE.toList locs)))
     TcRnTyThingUsedWrong sort thing name -> mkSimpleDecorated $
       pprTyThingUsedWrong sort thing name
+    TcRnArityMismatch thing thing_arity nb_args -> mkSimpleDecorated $
+      hsep [ text "The" <+> what, quotes (ppr $ getName thing)
+           , text "should have"
+           , n_arguments <> comma
+           , text "but has been given"
+           , if nb_args == 0 then text "none" else int nb_args ]
+
+      where
+        what = case thing of
+                 ATyCon tc -> ppr (tyConFlavor tc)
+                 _ -> text (tyThingCategory thing)
+        n_arguments | thing_arity == 0 = text "no arguments"
+                    | thing_arity == 1 = text "1 argument"
+                    | otherwise = hsep [int thing_arity, text "arguments"]
 
   diagnosticReason = \case
     TcRnUnknownMessage m -> diagnosticReason m
@@ -201,6 +215,7 @@ instance Diagnostic TcRnMessage where
     TcRnSimplifierTooManyIterations{} -> ErrorWithoutFlag
     TcRnBindingNameConflict{} -> ErrorWithoutFlag
     TcRnTyThingUsedWrong{} -> ErrorWithoutFlag
+    TcRnArityMismatch{} -> ErrorWithoutFlag
 
   diagnosticHints = \case
     TcRnUnknownMessage m -> diagnosticHints m
@@ -234,6 +249,7 @@ instance Diagnostic TcRnMessage where
     TcRnSimplifierTooManyIterations{} -> [SuggestIncreasedSimplifierIterations]
     TcRnBindingNameConflict{} -> noHints
     TcRnTyThingUsedWrong{} -> noHints
+    TcRnArityMismatch{} -> noHints
 
   diagnosticCode = constructorCode
 

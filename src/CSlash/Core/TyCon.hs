@@ -293,6 +293,11 @@ mkSynonymTyCon name binders res_kind rhs_kind arity rhs is_tau is_forgetful is_c
                    , synIsForgetful = is_forgetful
                    , synIsConcrete = is_concrete }
 
+isPrimTyCon :: TyCon -> Bool
+isPrimTyCon (TyCon { tyConDetails = details })
+  | PrimTyCon {} <- details = True
+  | otherwise = False
+
 isTypeSynonymTyCon :: TyCon -> Bool
 isTypeSynonymTyCon (TyCon { tyConDetails = details })
   | SynonymTyCon{} <- details = True

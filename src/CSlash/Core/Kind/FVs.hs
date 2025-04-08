@@ -111,6 +111,9 @@ shallowKvFolder = KindFolder { kf_view = noKindView
 kiVarsOfKindDSet :: Kind -> DKiVarSet 
 kiVarsOfKindDSet ki = fvDVarSet $ kiFVsOfKind ki
 
+kiVarsOfKindList :: Kind -> [KindVar]
+kiVarsOfKindList ki = fvVarList $ kiFVsOfKind ki
+
 kiFVsOfKind :: Kind -> FV
 kiFVsOfKind (KiVarKi v) f bound_vars (acc_list, acc_set)
   | not (f v) = (acc_list, acc_set)

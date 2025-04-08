@@ -104,6 +104,9 @@ shallowTvFolder = TypeFolder { tf_view = noView
 tyKiVarsOfTypeDSet :: Type -> DVarSet
 tyKiVarsOfTypeDSet ty = fvDVarSet $ tyKiFVsOfType ty
 
+tyKiVarsOfTypeList :: Type -> [Var]
+tyKiVarsOfTypeList ty = fvVarList $ tyKiFVsOfType ty
+
 tyKiFVsOfType :: Type -> FV
 tyKiFVsOfType (TyVarTy v) f bound_vars (acc_list, acc_set)
   | not (f v) = (acc_list, acc_set)

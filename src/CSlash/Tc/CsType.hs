@@ -35,7 +35,7 @@ import CSlash.Tc.Utils.TcType
 import CSlash.Tc.Types.Origin
 import CSlash.Tc.Types.LclEnv
 
--- import CSlash.Builtin.Types (oneDataConTy,  unitTy, makeRecoveryTyCon )
+import CSlash.Builtin.Types ({-oneDataConTy,  unitTy, -}makeRecoveryTyCon )
 
 -- import GHC.Rename.Env( lookupConstructorFields )
 
@@ -118,6 +118,13 @@ tcTyGroup (TypeGroup { group_typeds = typeds, group_kisigs = kisigs }) = do
   home_unit <- cs_home_unit <$> getTopEnv
   checkSynCycles (homeUnitAsUnit home_unit) tys typeds
   traceTc "Done synonym cycle check" (ppr tys)
+
+  traceTc "Starting validity check" (ppr tys)
+  tys <- tcExtendTyConEnv tys
+         $ for tys
+         $ \tycon -> checkValidTyCon tycon
+  traceTc "Done validity check" (ppr tys)
+             
 
   panic "tcTyGroup unfinished"
 
@@ -477,6 +484,43 @@ tcTyFunRhs tc_name cs_ty = bindImplicitTyConKiVars tc_name
                         $ \bndrs -> do rhs_ty <- zonkTcTypeToTypeX rhs_ty
                                        return (bndrs, rhs_ty)
   return $ buildSynTyCon tc_name ki_bndrs res_kind rhs_kind arity rhs_ty
+
+{- *********************************************************************
+*                                                                      *
+                Validity checking
+*                                                                      *
+********************************************************************* -}
+
+checkValidTyCon :: TyCon -> TcM TyCon
+checkValidTyCon tc = setSrcSpan (getSrcSpan tc)
+                     $ addTyConCtxt tc
+                     $ recoverM recovery $ do
+  traceTc "Starting validity for tycon" (ppr tc)
+  checkValidTyCon' tc
+  traceTc "Done validity for tycon" (ppr tc)
+  return tc
+  where
+    recovery = do
+      traceTc "Aborted validity for tycon" (ppr tc)
+      return $ mk_fake_tc tc
+
+    mk_fake_tc = makeRecoveryTyCon
+
+checkValidTyCon' :: TyCon -> TcM ()
+checkValidTyCon' tc
+  | isPrimTyCon tc
+  = return ()
+  | isWiredIn tc
+  = traceTc "Skipping validity check for wired-in" (ppr tc)
+  | otherwise
+  = do traceTc "checkValidTyCon" (ppr tc)
+       case synTyConRhs_maybe tc of
+         Just syn_rhs -> do checkValidType syn_ctxt syn_rhs
+                            checkTySynRhs syn_ctxt syn_rhs
+         Nothing -> pprPanic "checkValidTyCon'" (ppr tc)
+  where
+    syn_ctxt = TySynCtxt name
+    name = tyConName tc
 
 {- *********************************************************************
 *                                                                      *

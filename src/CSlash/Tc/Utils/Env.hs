@@ -92,6 +92,32 @@ tcLookupGlobalOnly name = do
              Just thing -> thing
              Nothing -> pprPanic "tcLookupGlobalOnly" (ppr name)
 
+{- *********************************************************************
+*                                                                      *
+                Extending the global environment
+*                                                                      *
+********************************************************************* -}
+
+setGlobalTypeEnv :: TcGblEnv -> TypeEnv -> TcM TcGblEnv
+setGlobalTypeEnv tcg_env new_type_env = do
+  case lookupKnotVars (tcg_type_env_var tcg_env) (tcg_mod tcg_env) of
+    Just tcg_env_var -> writeMutVar tcg_env_var new_type_env
+    Nothing -> return ()
+  return $ tcg_env { tcg_type_env = new_type_env }
+
+tcExtendGlobalEnvImplicit :: [TyThing] -> TcM r -> TcM r
+tcExtendGlobalEnvImplicit things thing_inside = do
+  tcg_env <- getGblEnv
+  let ge' = extendTypeEnvList (tcg_type_env tcg_env) things
+  tcg_env' <- setGlobalTypeEnv tcg_env ge'
+  setGblEnv tcg_env' thing_inside
+
+tcExtendTyConEnv :: [TyCon] -> TcM r -> TcM r
+tcExtendTyConEnv tycons thing_inside = do
+  env <- getGblEnv
+  let env' = env { tcg_tcs = tycons ++ tcg_tcs env }
+  setGblEnv env' $ tcExtendGlobalEnvImplicit (map ATyCon tycons) thing_inside
+
 tcExtendRecEnv :: [(Name, TyThing)] -> TcM r -> TcM r
 tcExtendRecEnv gbl_stuff thing_inside = do
   tcg_env <- getGblEnv

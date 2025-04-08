@@ -667,6 +667,13 @@ attemptM thing_inside = do
   when (isNothing mb_r) $ traceTc "attemptM recovering with insoluble constraints" (ppr lie)
   return mb_r
 
+recoverM :: TcRn r -> TcRn r -> TcRn r
+recoverM recover thing = do
+  mb_res <- attemptM thing
+  case mb_res of
+    Nothing -> recover
+    Just res -> return res
+
 mapAndRecoverM :: (a -> TcRn b) -> [a] -> TcRn [b]
 mapAndRecoverM f xs = do
   mb_rs <- mapM (attemptM . f) xs

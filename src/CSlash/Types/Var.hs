@@ -184,6 +184,11 @@ setVarName var new_name = var { realUnique = getUnique new_name
 updateVarKind :: (Kind -> Kind) -> Var -> Var
 updateVarKind upd var = var { varKind = upd (varKind var) }
 
+updateVarKindSafe :: (Kind -> Kind) -> Var -> Var
+updateVarKindSafe upd var
+  | isTyVar var = var { varKind = upd (varKind var) }
+  | otherwise = var
+
 {- *********************************************************************
 *                                                                      *
 *                   ForAllTyFlag
@@ -254,6 +259,9 @@ binderVar (Bndr v _) = v
 
 binderVars :: [VarBndr tv argf] -> [tv]
 binderVars tvbs = map binderVar tvbs
+
+isTyVarBinder :: VarBndr TypeVar argf -> Bool
+isTyVarBinder (Bndr v _) = isTyVar v
 
 mkTyVarBinder :: vis -> TypeVar -> VarBndr TypeVar vis
 mkTyVarBinder vis var

@@ -21,6 +21,7 @@ import CSlash.Tc.Zonk.Monad
 
 -- import GHC.Core.InstEnv (ClsInst(is_tys))
 import CSlash.Core.Type.Rep
+import CSlash.Core.Type.Tidy
 import CSlash.Core.TyCon
 import CSlash.Core.Type
 import CSlash.Core.Kind
@@ -237,3 +238,9 @@ tcInitTidyEnv = do
            go (env', extendVarEnv subst tyvar tyvar2) bs
       | otherwise
       = go (env, subst) bs
+
+tcInitOpenTidyEnv :: [Var] -> ZonkM TidyEnv
+tcInitOpenTidyEnv vs = do
+  env1 <- tcInitTidyEnv
+  let env2 = tidyFreeTyKiVars env1 vs
+  return env2

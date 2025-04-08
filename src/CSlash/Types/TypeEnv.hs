@@ -23,3 +23,9 @@ plusTypeEnv env1 env2 = plusNameEnv env1 env2
 
 lookupTypeEnv :: TypeEnv -> Name -> Maybe TyThing
 lookupTypeEnv = lookupNameEnv
+
+extendTypeEnv :: TypeEnv -> TyThing -> TypeEnv
+extendTypeEnv env thing = extendNameEnv env (getName thing) thing
+
+extendTypeEnvList :: TypeEnv -> [TyThing] -> TypeEnv
+extendTypeEnvList env things = foldl' extendTypeEnv env things

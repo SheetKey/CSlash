@@ -266,6 +266,7 @@ type family CsDiagnosticCode c = n | n -> c where
   CsDiagnosticCode "TcRnSimplifierTooManyIterations"               = 95822
   CsDiagnosticCode "TcRnBindingNameConflict"                       = 10498
   CsDiagnosticCode "TcRnTyThingUsedWrong"                          = 10969
+  CsDiagnosticCode "TcRnArityMismatch"                             = 27346
 
   -- BadImport
   CsDiagnosticCode "BadImportNotExported"                          = 61689

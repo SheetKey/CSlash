@@ -76,6 +76,16 @@ trueDataConName :: Name
 trueDataConName
   = mkWiredInDataConName UserSyntax cSLASH_BUILTIN (fsLit "True") trueDataConKey trueDataCon
 
+makeRecoveryTyCon :: TyCon -> TyCon
+makeRecoveryTyCon tc = mkTcTyCon (tyConName tc)
+                                 (tyConKindBinders tc)
+                                 (tyConResKind tc)
+                                 (tyConKind tc)
+                                 (tyConArity tc)
+                                 []
+                                 True
+                                 (tyConFlavor tc)
+
 {- *********************************************************************
 *                                                                      *
             mkWiredInTyCon

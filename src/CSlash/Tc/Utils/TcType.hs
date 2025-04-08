@@ -5,6 +5,7 @@ module CSlash.Tc.Utils.TcType
 
 import Prelude hiding ((<>))
 
+import CSlash.Core.Type
 import CSlash.Core.Type.Rep
 import CSlash.Core.Type.FVs
 import CSlash.Core.Kind
@@ -342,9 +343,23 @@ mkKiVarNamePairs kvs = [(kiVarName kv, kv) | kv <- kvs ]
 
 {- *********************************************************************
 *                                                                      *
-          Expanding and splitting
+          Expanding and splitting kinds
 *                                                                      *
 ********************************************************************* -}
 
 tcSplitFunKi_maybe :: Kind -> Maybe (Kind, Kind)
 tcSplitFunKi_maybe = splitFunKi_maybe
+
+{- *********************************************************************
+*                                                                      *
+          Expanding and splitting 
+*                                                                      *
+********************************************************************* -}
+
+tcSplitForAllTyVarBinders :: Type -> ([TyVarBinder], Type)
+tcSplitForAllTyVarBinders ty = assert (all isTyVarBinder (fst sty)) sty
+  where sty = splitForAllForAllTyBinders ty
+
+tcSplitTyLamTyVarBinders :: Type -> ([TypeVar], Type)
+tcSplitTyLamTyVarBinders ty = assert (all isTyVar (fst sty)) sty
+  where sty = splitTyLamTyBinders ty

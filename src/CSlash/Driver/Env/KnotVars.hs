@@ -25,3 +25,7 @@ emptyKnotVars = NoKnotVars
 knotVarsFromModuleEnv :: ModuleEnv a -> KnotVars a
 knotVarsFromModuleEnv me | isEmptyModuleEnv me = NoKnotVars
 knotVarsFromModuleEnv me = KnotVars (moduleEnvKeys me) (lookupModuleEnv me)
+
+lookupKnotVars :: KnotVars a -> Module -> Maybe a
+lookupKnotVars (KnotVars _ lookup) x = lookup x
+lookupKnotVars NoKnotVars _ = Nothing

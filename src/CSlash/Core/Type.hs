@@ -216,6 +216,21 @@ piResultTys ki orig_args@(arg:args)
 *                                                                      *
 ********************************************************************* -}
 
+splitForAllForAllTyBinders :: Type -> ([ForAllTyBinder], Type)
+splitForAllForAllTyBinders ty = split ty ty []
+  where
+    split _ (ForAllTy b res) bs = split res res (b : bs)
+    split orig_ty ty bs | Just ty' <- coreView ty = split orig_ty ty' bs
+    split orig_ty _ bs = (reverse bs, orig_ty)
+{-# INLINE splitForAllForAllTyBinders #-}
+
+splitTyLamTyBinders :: Type -> ([TypeVar], Type)
+splitTyLamTyBinders ty = split ty ty []
+  where
+    split _ (TyLamTy b res) bs = split res res (b : bs)
+    split orig_ty ty bs | Just ty' <- coreView ty = split orig_ty ty' bs
+    split orig_ty _ bs = (reverse bs, orig_ty)
+
 splitForAllTyVars :: Type -> ([TypeVar], Type)
 splitForAllTyVars ty = split ty ty []
   where
