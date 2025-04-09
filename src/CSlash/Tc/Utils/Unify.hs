@@ -130,7 +130,7 @@ uKind_defer (UE { u_loc = loc, u_defer = ref }) ki1 ki2 = do
 uKind :: UnifyEnv -> TcKind -> TcKind -> TcM ()
 uKind env orig_ki1 orig_ki2 = do
   tclvl <- getTcLevel
-  traceTc "u_tys"
+  traceTc "u_kis"
     $ vcat [ text "tclvl" <+> ppr tclvl
            , sep [ ppr orig_ki1, text "~", ppr orig_ki2 ] ]
   go orig_ki1 orig_ki2

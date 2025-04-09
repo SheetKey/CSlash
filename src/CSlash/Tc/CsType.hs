@@ -474,7 +474,13 @@ tcTyFunRhs :: Name -> LCsType Rn -> TcM TyCon
 tcTyFunRhs tc_name cs_ty = bindImplicitTyConKiVars tc_name
                            $ \ tc_ki_bndrs res_kind rhs_kind arity -> do
   env <- getLclEnv
-  traceTc "tc-tyfun" (ppr tc_name $$ ppr (getLclEnvRdrEnv env))
+  traceTc "tc-tyfun"
+    $ vcat [ ppr tc_name
+           , ppr rhs_kind
+           , ppr res_kind
+           , ppr tc_ki_bndrs
+           , ppr (getLclEnvRdrEnv env) ]
+
   let skol_info = TyConSkol TypeFunFlavor tc_name
   rhs_ty <- pushLevelAndSolveEqualities skol_info tc_ki_bndrs
             $ tcCheckLCsType cs_ty (TheKind rhs_kind)

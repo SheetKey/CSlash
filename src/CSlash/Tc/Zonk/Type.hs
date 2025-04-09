@@ -74,8 +74,9 @@ zonkTyBndrX tv = assertPpr (isImmutableTyVar tv) (ppr tv) $ do
 {-# INLINE zonkKiBndrX #-}
 zonkKiBndrX :: TcKiVar -> ZonkBndrTcM KindVar
 zonkKiBndrX kv = assertPpr (isImmutableKiVar kv) (ppr kv) $ do
-  extendKiZonkEnv kv
-  return kv
+  let kv' = mkKiVar (kiVarName kv)
+  extendKiZonkEnv kv'
+  return kv'
 
 {-# INLINE zonkKiVarBindersX #-}
 zonkKiVarBindersX :: [TcKiVar] -> ZonkBndrTcM [KindVar]
