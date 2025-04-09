@@ -197,7 +197,8 @@ uUnfilledKiVar2 env swapped kv1 ki2 = do
   if not (touchabilityAndShapeTestKind cur_lvl kv1 ki2
           && simpleUnifyCheckKind kv1 ki2)
     then not_ok_so_defer
-    else do liftZonkM $ writeMetaKiVar kv1 ki2
+    else do traceTc "uUnfilledKiVar2 ok" $ vcat [ ppr kv1, ppr ki2 ]
+            liftZonkM $ writeMetaKiVar kv1 ki2
             case u_unified env of
               Nothing -> return ()
               Just uref -> updTcRef uref (kv1 :)
