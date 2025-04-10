@@ -90,6 +90,23 @@ newImplication = do
 *                                                                      *
 ********************************************************************* -}
 
+isFilledMetaTyVar_maybe :: TcTyVar -> TcM (Maybe Type)
+isFilledMetaTyVar_maybe tv
+  | isTcTyVar tv
+  , MetaTv { mtv_ref = ref } <- tcTyVarDetails tv
+  = do cts <- readTcRef ref
+       case cts of
+         Indirect ty -> return $ Just ty
+         Flexi -> return Nothing
+  | otherwise
+  = return Nothing
+
+{- *********************************************************************
+*                                                                      *
+        MetaKvs
+*                                                                      *
+********************************************************************* -}
+
 newMetaKiVarName :: FastString -> TcM Name
 newMetaKiVarName str = newSysName (mkKiVarOccFS str)
 
@@ -194,6 +211,53 @@ newFlexiKiVarKi = do
 *                                                                      *
 ********************************************************************* -}
 
+candidateQKiVarsOfType :: TcType -> TcM DKiVarSet
+candidateQKiVarsOfType ty = do
+  cur_lvl <- getTcLevel
+  collect_cand_qkvs_ty ty cur_lvl emptyVarSet emptyDVarSet ty
+
+collect_cand_qkvs_ty :: TcType -> TcLevel -> VarSet -> DKiVarSet -> Type -> TcM DKiVarSet
+collect_cand_qkvs_ty orig_ty cur_lvl bound dvs ty = go dvs ty
+  where
+    is_bound kv = kv `elemVarSet` bound
+
+    go :: DKiVarSet -> TcType -> TcM DKiVarSet
+    go dv (AppTy t1 t2) = foldM go dv [t1, t2]
+    go dv (TyConApp tc tys) = go_tc_args dv (tyConKindBinders tc) tys
+    go dv (FunTy ki arg res) = do
+      dv1 <- collect_cand_qkvs ki cur_lvl bound dvs ki
+      foldlM go dv1 [arg, res]
+    go dv (TyVarTy tv)
+      | is_bound tv = return dv
+      | otherwise = do m_contents <- isFilledMetaTyVar_maybe tv
+                       case m_contents of
+                         Just ind_ty -> go dv ind_ty
+                         Nothing -> go_tv dv tv
+    go dv (ForAllTy (Bndr tv _) ty) = do
+      dv1 <- collect_cand_qkvs (tyVarKind tv) cur_lvl bound dv (tyVarKind tv)
+      collect_cand_qkvs_ty orig_ty cur_lvl (bound `extendVarSet` tv) dv1 ty
+
+    go dv (TyLamTy tv ty) = do
+      dv1 <- collect_cand_qkvs (tyVarKind tv) cur_lvl bound dv (tyVarKind tv)
+      collect_cand_qkvs_ty orig_ty cur_lvl (bound `extendVarSet` tv) dv1 ty
+    go _ other = pprPanic "collect_cand_qkvs_ty" (ppr other)
+
+    go_tc_args dv tc_bndrs (ty:tys) = do
+      dv1 <- collect_cand_qkvs_ty orig_ty cur_lvl (bound `extendVarSetList` tc_bndrs) dv ty
+      go_tc_args dv1 tc_bndrs tys
+    go_tc_args dv _bndrs [] = return dv
+
+    go_tv dv tv
+      | tcTyVarLevel tv <= cur_lvl
+      = return dv
+      | case tcTyVarDetails tv of
+          SkolemTv _ lvl -> lvl > pushTcLevel cur_lvl
+          _ -> False
+      = return dv
+      | otherwise
+      = do tv_kind <- liftZonkM $ zonkTcKind (tyVarKind tv)
+           collect_cand_qkvs tv_kind cur_lvl bound dv tv_kind
+
 candidateQKiVarsOfKind :: TcKind -> TcM DKiVarSet
 candidateQKiVarsOfKind ki = do
   cur_lvl <- getTcLevel
@@ -289,6 +353,26 @@ skolemizeQuantifiedKiVar skol_info kv
                                name = kiVarName kv
                            return $ mkTcKiVar name details
 
+defaultKiVar :: TcKiVar -> TcM Bool
+defaultKiVar kv
+  | not (isMetaKiVar kv)
+    || isKiVarKiVar kv
+  = return False
+  | isConcreteKiVar kv
+  = do lvl <- getTcLevel
+       _ <- promoteMetaKiVarTo lvl kv
+       return True
+  | otherwise
+  = do traceTc "Defaulting a kind var to ANYKind" (ppr kv)
+       liftZonkM $ writeMetaKiVar kv (KiCon ANYKind)
+       return True
+
+defaultKiVars :: DKiVarSet -> TcM [TcKiVar]
+defaultKiVars dvs = do
+  let kvs = dVarSetElems dvs
+  defaulted_kvs <- mapM defaultKiVar kvs
+  return [ kv | (kv, False) <- kvs `zip` defaulted_kvs ]
+
 skolemizeUnboundMetaTyVar :: SkolemInfo -> TcTyVar -> ZonkM TypeVar
 skolemizeUnboundMetaTyVar skol_info tv = assertPpr (isMetaTyVar tv) (ppr tv) $ do
   check_empty tv
@@ -335,6 +419,19 @@ skolemizeUnboundMetaKiVar skol_info kv = assertPpr (isMetaKiVar kv) (ppr kv) $ d
         Flexi -> return ()
         Indirect ki -> warnPprTrace True "skolemizeUnboundMetaKiVar" (ppr kv $$ ppr ki)
                        $ return ()
+
+doNotQuantifyKiVars :: DKiVarSet -> TcM ()
+doNotQuantifyKiVars dvs
+  | isEmptyDVarSet dvs
+  = traceTc "doNotQuantifyKiVars has nothing" empty
+  | otherwise
+  = do traceTc "doNotQuantifyKiVars" (ppr dvs)
+       undefaulted <- defaultKiVars dvs
+       let leftover_metas = filter isMetaKiVar undefaulted
+       massertPpr (null leftover_metas)
+         $ vcat [ text "doNotQuantifyKiVars has leftover_metas"
+                , ppr leftover_metas ]
+       traceTc "doNotQuantifyKiVars success" empty
 
 {- *********************************************************************
 *                                                                      *

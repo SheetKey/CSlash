@@ -25,6 +25,9 @@ emptyVarSet = emptyUniqSet
 extendVarSet :: VarSet -> Var -> VarSet
 extendVarSet = addOneToUniqSet
 
+extendVarSetList :: VarSet -> [Var] -> VarSet
+extendVarSetList = addListToUniqSet
+
 elemVarSet :: Var -> VarSet -> Bool
 elemVarSet = elementOfUniqSet
 

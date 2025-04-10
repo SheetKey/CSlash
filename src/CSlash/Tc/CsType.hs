@@ -485,6 +485,11 @@ tcTyFunRhs tc_name cs_ty = bindImplicitTyConKiVars tc_name
   rhs_ty <- pushLevelAndSolveEqualities skol_info tc_ki_bndrs
             $ tcCheckLCsType cs_ty (TheKind rhs_kind)
 
+  kvs <- candidateQKiVarsOfType rhs_ty
+  -- let err_ctxt tidy_env = do (tidy_env2, rhs_ty) <- zonkTidyTcType tidy_env rhs_ty
+  --                            return (tidy_env2, UnifyTyCtx_TySynRhs rhs_ty)
+  doNotQuantifyKiVars kvs 
+
   (ki_bndrs, rhs_ty) <- initZonkEnv NoFlexi
                         $ runZonkBndrT (zonkKiVarBindersX tc_ki_bndrs)
                         $ \bndrs -> do rhs_ty <- zonkTcTypeToTypeX rhs_ty
