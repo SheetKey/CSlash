@@ -129,9 +129,7 @@ mkDataConTy tycon arity = dc_type
     res_kind = case tyConResKind tycon of
                  kd@(KiVarKi var)
                    | isKiVar var -> kd
-                 UKd -> UKd
-                 AKd -> AKd
-                 LKd -> LKd
+                 kc@(KiCon _) -> kc
                  _ -> panic "mkDataConType: 'tyConResKind tycon' is not valid"
 
     arg_kind_constrs = (`LTEQKd` res_kind) <$> arg_kinds

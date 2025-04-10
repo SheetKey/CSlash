@@ -67,9 +67,9 @@ tcLCsKind :: LCsKind Rn -> TcM TcKind
 tcLCsKind (L span ki) = setSrcSpanA span $ tcCsKind ki
 
 tcCsKind :: CsKind Rn -> TcM TcKind
-tcCsKind CsUKd {} = return UKd
-tcCsKind CsAKd {} = return AKd
-tcCsKind CsLKd {} = return LKd
+tcCsKind CsUKd {} = return $ KiCon UKd
+tcCsKind CsAKd {} = return $ KiCon AKd
+tcCsKind CsLKd {} = return $ KiCon LKd
 tcCsKind (CsKdVar _ kv) = tcKiVar (unLoc kv)
 tcCsKind (CsFunKd _ k1 k2) = tc_fun_kind k1 k2
 tcCsKind (CsParKd _ ki) = tcLCsKind ki

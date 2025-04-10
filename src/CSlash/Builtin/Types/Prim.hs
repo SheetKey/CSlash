@@ -165,13 +165,13 @@ fUNTyCon = mkPrimTyCon fUNTyConName binders res_kind tc_kind 2
     (binders, tc_kind, res_kind) = mkTemplateTyConKindRes 2
 
 unrestrictedFUNTyCon :: TyCon
-unrestrictedFUNTyCon = _mkFUNTyCon UKd
+unrestrictedFUNTyCon = _mkFUNTyCon (KiCon UKd)
 
 affineFUNTyCon :: TyCon
-affineFUNTyCon = _mkFUNTyCon AKd
+affineFUNTyCon = _mkFUNTyCon (KiCon AKd)
 
 linearFUNTyCon :: TyCon
-linearFUNTyCon = _mkFUNTyCon LKd
+linearFUNTyCon = _mkFUNTyCon (KiCon LKd)
 
 _mkFUNTyCon :: Kind -> TyCon
 _mkFUNTyCon res_kind = mkPrimTyCon fUNTyConName kind_vars res_kind tc_kind 2

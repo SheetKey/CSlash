@@ -201,9 +201,7 @@ any_rewritable_ki :: (TcKiVar -> Bool) -> TcKind -> Bool
 any_rewritable_ki kv_pred = go 
   where
     go (KiVarKi kv) = kv_pred kv
-    go UKd = False
-    go AKd = False
-    go LKd = False
+    go (KiCon _) = False
     go (FunKd _ arg res) = go arg || go res
     go (KdContext rels) = go_rels rels
 

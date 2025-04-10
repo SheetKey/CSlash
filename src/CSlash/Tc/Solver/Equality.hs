@@ -97,9 +97,8 @@ zonkEqKinds ev ki1 ki2 = Stage $ do
     Right ki -> canKiEqReflexive ev ki
   where
     go :: TcKind -> TcKind -> TcS (Either (Pair TcKind) TcKind)
-    go UKd UKd = return $ Right UKd
-    go AKd AKd = return $ Right AKd
-    go LKd LKd = return $ Right LKd
+    go ki1@(KiCon kc1) (KiCon kc2)
+      | kc1 == kc2 = return $ Right ki1
     go (KiVarKi kv1) (KiVarKi kv2) = kivar_kivar kv1 kv2
     go (KiVarKi kv1) ki2 = kivar NotSwapped kv1 ki2
     go ki1 (KiVarKi kv2) = kivar IsSwapped kv2 ki1

@@ -86,9 +86,7 @@ tidyTyKiVarOcc env@(_, subst) v = case lookupVarEnv subst v of
 
 tidyKind :: TidyEnv -> Kind -> Kind
 tidyKind env (KiVarKi kv) = KiVarKi $! tidyTyKiVarOcc env kv
-tidyKind _ UKd = UKd
-tidyKind _ AKd = AKd
-tidyKind _ LKd = LKd
+tidyKind _ kc@(KiCon _) = kc
 tidyKind env ki@(FunKd _ arg res) = let !arg' = tidyKind env arg
                                         !res' = tidyKind env res
                                     in ki { kft_arg = arg', kft_res = res' }

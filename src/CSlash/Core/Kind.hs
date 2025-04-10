@@ -23,9 +23,7 @@ import qualified Data.Data as Data
 
 data Kind
   = KiVarKi Var
-  | UKd
-  | AKd
-  | LKd
+  | KiCon KiCon
   | FunKd
     { fk_af :: FunKdFlag
     , kft_arg :: Kind
@@ -35,6 +33,19 @@ data Kind
   --  | LTKd Kind Kind
   --  | LTEQKd Kind Kind
   deriving Data.Data
+
+data KiCon
+  = UKd
+  | AKd
+  | LKd
+  | ANYKind
+  deriving (Eq, Data.Data)
+
+instance Outputable KiCon where
+  ppr UKd = uKindLit
+  ppr AKd = aKindLit
+  ppr LKd = lKindLit
+  ppr ANYKind = text "ANYKind"
 
 data KdRel
   = LTKd Kind Kind
@@ -73,9 +84,10 @@ debugPprKind ki = debug_ppr_ki topPrec ki
 
 debug_ppr_ki :: PprPrec -> Kind -> SDoc
 debug_ppr_ki _ (KiVarKi kv) = ppr kv
-debug_ppr_ki _ UKd = uKindLit
-debug_ppr_ki _ AKd = aKindLit
-debug_ppr_ki _ LKd = lKindLit
+debug_ppr_ki _ (KiCon con) = ppr con
+-- debug_ppr_ki _ UKd = uKindLit
+-- debug_ppr_ki _ AKd = aKindLit
+-- debug_ppr_ki _ LKd = lKindLit
 debug_ppr_ki prec (FunKd { fk_af = af, kft_arg = arg, kft_res = res })
   = maybeParen prec funPrec
     $ sep [ debug_ppr_ki funPrec arg, fun_arrow <+> debug_ppr_ki prec res]
@@ -164,9 +176,6 @@ mkContextKi k1 _ = pprPanic "mkContextKi" (ppr k1)
 data KindFolder env a = KindFolder
   { kf_view :: Kind -> Maybe Kind
   , kf_kivar :: env -> KindVar -> a
-  , kf_UKd :: a
-  , kf_AKd :: a
-  , kf_LKd :: a
   , kf_ctxt :: env -> [KdRel] -> a
   }
 
@@ -183,9 +192,7 @@ foldKind (KindFolder { kf_view = view
     go_kd env (FunKd FKF_K_K arg res) = go_kd env arg `mappend` go_kd env res
     go_kd env (FunKd FKF_C_K ctxt inner) = go_kd env ctxt `mappend` go_kd env inner
     go_kd env (KdContext rels) = kf_ctxt env rels
-    go_kd _ UKd = kf_UKd
-    go_kd _ AKd = kf_AKd
-    go_kd _ LKd = kf_LKd
+    go_kd _ (KiCon _) = mempty
 
     go_kds _ [] = mempty
     go_kds env (k:ks) = go_kd env k `mappend` go_kds env ks
@@ -201,9 +208,6 @@ noKindView _ = Nothing
 
 data KindMapper env m = KindMapper
   { km_kivar :: env -> KindVar -> m Kind
-  , km_UKd :: env -> m Kind
-  , km_AKd :: env -> m Kind
-  , km_LKd :: env -> m Kind
   }
 
 {-# INLINE mapKind #-}
@@ -213,19 +217,14 @@ mapKind mapper = case mapKindX mapper of
 
 {-# INLINE mapKindX #-}
 mapKindX :: Monad m => KindMapper env m -> (env -> Kind -> m Kind, env -> [Kind] -> m [Kind])
-mapKindX (KindMapper { km_kivar = kivar
-                     , km_UKd = ukd
-                     , km_AKd = akd
-                     , km_LKd = lkd })
+mapKindX (KindMapper { km_kivar = kivar })
   = (go_ki, go_kis)
   where
     go_kis !_ [] = return []
     go_kis !env (ki:kis) = (:) <$> go_ki env ki <*> go_kis env kis
 
     go_ki !env (KiVarKi kv) = kivar env kv
-    go_ki !env UKd = ukd env
-    go_ki !env AKd = akd env
-    go_ki !env LKd = lkd env
+    go_ki !_ kc@(KiCon _) = return kc
     go_ki !env ki@(FunKd _ arg res) = do
       arg' <- go_ki env arg
       res' <- go_ki env res

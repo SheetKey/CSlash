@@ -212,9 +212,7 @@ collect_cand_qkvs orig_ki cur_lvl bound dvs ki = go dvs ki
 
     -----------------
     go :: DKiVarSet -> TcKind -> TcM DKiVarSet
-    go dv UKd = return dv
-    go dv AKd = return dv
-    go dv LKd = return dv
+    go dv (KiCon _) = return dv
     go dv (KiVarKi kv)
       | is_bound kv = return dv
       | otherwise = do

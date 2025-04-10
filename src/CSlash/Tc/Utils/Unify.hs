@@ -150,9 +150,9 @@ uKind env orig_ki1 orig_ki2 = do
                        uKind env orig_ki1 ki2
         Nothing -> uUnfilledKiVar env IsSwapped kv2 ki1
 
-    go UKd UKd = return ()
-    go AKd AKd = return ()
-    go LKd LKd = return ()
+    go (KiCon kc1) (KiCon kc2)
+      | kc1 == kc2
+      = return ()
 
     go (FunKd FKF_K_K arg1 res1) (FunKd FKF_K_K arg2 res2) = do
       uKind env arg1 arg2
@@ -262,9 +262,7 @@ simpleUnifyCheckKind lhs_kv rhs = go rhs
 
     go (KdContext {}) = panic "simpleUnifyCheckKind"
 
-    go UKd = True
-    go AKd = True
-    go LKd = True
+    go (KiCon _) = True
 
 {- *********************************************************************
 *                                                                      *

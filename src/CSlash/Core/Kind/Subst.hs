@@ -106,9 +106,7 @@ subst_kd subst kd
             !res' = go res
         in kd { kft_arg = arg', kft_res = res' }
     go (KdContext rels) = KdContext $ go_rel <$> rels
-    go UKd = UKd
-    go AKd = AKd
-    go LKd = LKd
+    go kc@(KiCon _) = kc
 
     go_rel (LTKd k1 k2) = LTKd (go k1) (go k2)
     go_rel (LTEQKd k1 k2) = LTEQKd (go k1) (go k2)

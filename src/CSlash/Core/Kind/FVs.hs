@@ -43,9 +43,6 @@ deep_kis :: [Kind] -> Endo KdVarSet
 deepKvFolder :: KindFolder KdVarSet (Endo KdVarSet)
 deepKvFolder = KindFolder { kf_view = noKindView
                           , kf_kivar = do_kv
-                          , kf_UKd = mempty
-                          , kf_AKd = mempty
-                          , kf_LKd = mempty
                           , kf_ctxt = do_ctxt }
   where
     do_kv is v = Endo do_it
@@ -89,9 +86,6 @@ shallow_kds :: [Kind] -> Endo KdVarSet
 shallowKvFolder :: KindFolder KdVarSet (Endo KdVarSet)
 shallowKvFolder = KindFolder { kf_view = noKindView
                              , kf_kivar = do_kv
-                             , kf_UKd = mempty
-                             , kf_AKd = mempty
-                             , kf_LKd = mempty
                              , kf_ctxt = do_ctxt
                              }
   where
@@ -120,9 +114,7 @@ kiFVsOfKind (KiVarKi v) f bound_vars (acc_list, acc_set)
   | v `elemVarSet` bound_vars = (acc_list, acc_set)
   | v `elemVarSet` acc_set = (acc_list, acc_set)
   | otherwise = (v:acc_list, extendVarSet acc_set v)
-kiFVsOfKind UKd _ _ acc = acc
-kiFVsOfKind AKd _ _ acc = acc
-kiFVsOfKind LKd _ _ acc = acc
+kiFVsOfKind (KiCon _) _ _ acc = acc
 kiFVsOfKind (FunKd _ arg res) f bound_var acc
   = (kiFVsOfKind arg `unionFV` kiFVsOfKind res) f bound_var acc
 kiFVsOfKind (KdContext rels) f bound_vars acc = (mapUnionFV go_rel rels) f bound_vars acc
@@ -143,9 +135,6 @@ afvFolder :: (KindVar -> Bool) -> KindFolder KiVarSet DM.Any
 afvFolder check_fv = KindFolder { kf_view = noKindView
                                 , kf_kivar = \is kv -> Any (not (kv `elemVarSet` is)
                                                             && check_fv kv)
-                                , kf_UKd = Any False
-                                , kf_AKd = Any False
-                                , kf_LKd = Any False
                                 , kf_ctxt = \_ _ -> Any False }
 
 anyFreeVarsOfKind :: (KindVar -> Bool) -> Kind -> Bool

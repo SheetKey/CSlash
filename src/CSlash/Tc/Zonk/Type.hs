@@ -206,9 +206,6 @@ commitFlexiKv kv = do
 zonk_kindmapper :: KindMapper ZonkEnv TcM
 zonk_kindmapper = KindMapper
   { km_kivar = \env kv -> runZonkT (zonkKiVarOcc kv) env
-  , km_UKd = \_ -> return UKd
-  , km_AKd = \_ -> return AKd
-  , km_LKd = \_ -> return LKd
   }
 
 zonkTcKindToKindX :: TcKind -> ZonkTcM Kind

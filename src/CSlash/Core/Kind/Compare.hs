@@ -32,9 +32,7 @@ tcEqKind :: HasDebugCallStack => Kind -> Kind -> Bool
 tcEqKind orig_ki1 orig_ki2 = go orig_env orig_ki1 orig_ki2
   where
     go :: RnEnv2 -> Kind -> Kind -> Bool
-    go _ UKd UKd = True
-    go _ AKd AKd = True
-    go _ LKd LKd = True
+    go _ (KiCon kc1) (KiCon kc2) = kc1 == kc2
     go env (KiVarKi kv1) (KiVarKi kv2)
       = rnOccL env kv1 == rnOccR env kv2
     go env (FunKd _ arg1 res1) (FunKd _ arg2 res2)
@@ -73,15 +71,8 @@ nonDetCmpKindX :: RnEnv2 -> Kind -> Kind -> Ordering
 nonDetCmpKindX env orig_k1 orig_k2 = go env orig_k1 orig_k2
   where
     go :: RnEnv2 -> Kind -> Kind -> Ordering
-    go _ UKd UKd = EQ
-    go _ AKd AKd = EQ
-    go _ LKd LKd = EQ
-    -- go UKd AKd = LT
-    -- go UKd LKd = LT
-    -- go AKd LKd = LT
-    -- go AKd UKd = GT
-    -- go LKd AKd = GT
-    -- go LKd
+    go _ (KiCon kc1) (KiCon kc2)
+      | kc1 == kc2 = EQ
     go env (KiVarKi kv1) (KiVarKi kv2)
       = rnOccL env kv1 `nonDetCmpVar` rnOccR env kv2
     go env (FunKd _ a1 r1) (FunKd _ a2 r2)
@@ -91,11 +82,9 @@ nonDetCmpKindX env orig_k1 orig_k2 = go env orig_k1 orig_k2
       where
         get_rank :: Kind -> Int
         get_rank (KiVarKi {}) = 0
-        get_rank UKd = 1
-        get_rank AKd = 2
-        get_rank LKd = 3
-        get_rank (KdContext {}) = 4
-        get_rank (FunKd {}) = 5
+        get_rank (KiCon _) = 1
+        get_rank (KdContext {}) = 2
+        get_rank (FunKd {}) = 3
 
     {- NOTE: Comparing contexts is very hard.
              What if we have 'go_rels env [r1, r2] [r2, r1]'?

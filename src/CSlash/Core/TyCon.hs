@@ -68,9 +68,7 @@ verifyTyConKind bndrs kind =
     no_constrs _ = True
 
     go [] (KiVarKi {}) = True
-    go [] UKd = True
-    go [] AKd = True
-    go [] LKd = True
+    go [] (KiCon _) = True
     go [Bndr tv _] (FunKd _ arg_kd _)
       | isTyVar tv = varKind tv `tcEqKind` arg_kd
     go ((Bndr tv _):bndrs) (FunKd _ arg_kd res_kd)

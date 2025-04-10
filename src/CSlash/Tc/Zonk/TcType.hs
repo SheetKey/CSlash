@@ -185,9 +185,6 @@ zonkTcKinds :: [TcKind] -> ZonkM [TcKind]
 zonkTcKindMapper :: KindMapper () ZonkM
 zonkTcKindMapper = KindMapper
   { km_kivar = const zonkTcKiVar
-  , km_UKd = const $ return UKd
-  , km_AKd = const $ return AKd
-  , km_LKd = const $ return LKd
   }
 
 zonkTcKiVar :: TcKiVar -> ZonkM TcKind

@@ -117,9 +117,7 @@ rewriteKi ev ki = do
 
 rewrite_one_ki :: TcKind -> RewriteM Reduction
 
-rewrite_one_ki UKd = return $ mkReflRednKi UKd
-rewrite_one_ki AKd = return $ mkReflRednKi AKd
-rewrite_one_ki LKd = return $ mkReflRednKi LKd
+rewrite_one_ki kc@(KiCon _) = return $ mkReflRednKi kc
 
 rewrite_one_ki (KiVarKi kv) = rewriteKiVar kv
 
