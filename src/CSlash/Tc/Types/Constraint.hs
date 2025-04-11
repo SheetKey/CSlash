@@ -246,7 +246,7 @@ mkImplicWC :: Bag Implication -> WantedConstraints
 mkImplicWC implic = emptyWC { wc_impl = implic }
 
 isEmptyWC :: WantedConstraints -> Bool
-isEmptyWC (WC { wc_simple = f }) = isEmptyBag f
+isEmptyWC (WC { wc_simple = f, wc_impl = i }) = isEmptyBag f && isEmptyBag i
 
 isSolvedWC :: WantedConstraints -> Bool
 isSolvedWC (WC simple impl) = isEmptyBag simple && allBag (isSolvedStatus . ic_status) impl
@@ -309,8 +309,9 @@ insolubleCt (CIrredCan ir_ct) = insolubleIrredCt ir_ct
 insolubleCt _ = False
 
 instance Outputable WantedConstraints where
-  ppr (WC { wc_simple = s })
-    = text "WC" <+> braces (vcat [ ppr_bag (text "wc_simple") s ])
+  ppr (WC { wc_simple = s, wc_impl = i })
+    = text "WC" <+> braces (vcat [ ppr_bag (text "wc_simple") s
+                                 , ppr_bag (text "wc_impl") i ])
 
 ppr_bag :: Outputable a => SDoc -> Bag a -> SDoc
 ppr_bag doc bag
