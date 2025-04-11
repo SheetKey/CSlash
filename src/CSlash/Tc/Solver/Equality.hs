@@ -126,11 +126,11 @@ zonkEqKinds ev ki1 ki2 = Stage $ do
     go_rel (LTKd lk1 rk1) (LTKd lk2 rk2) = do
       lk <- go lk1 lk2
       rk <- go rk1 rk2
-      return $ combine_rev LTKd lk rk 
+      return $ combine_rev LTKd rk lk 
     go_rel (LTEQKd lk1 rk1) (LTEQKd lk2 rk2) = do
       lk <- go lk1 lk2
       rk <- go rk1 rk2
-      return $ combine_rev LTEQKd lk rk
+      return $ combine_rev LTEQKd rk lk
     go_rel rel1 rel2 = return $ Left (Pair rel1 rel2)
 
     kivar :: SwapFlag -> TcKiVar -> TcKind -> TcS (Either (Pair TcKind) TcKind)
