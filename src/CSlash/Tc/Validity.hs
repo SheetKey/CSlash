@@ -81,7 +81,7 @@ checkValidKind _ctxt ki = traceTc "checkValidKind" (ppr ki)
 *********************************************************************_-}
 
 checkAmbiguity :: UserTypeCtxt -> Type -> TcM ()
-checkAmbiguity ctxt ty = panic "checkAmbiguity"
+checkAmbiguity ctxt ty = traceTc "Ambiguity check NOT IMPLEMENTED" empty
 
 checkUserTypeError :: UserTypeCtxt -> Type -> TcM ()
 checkUserTypeError ctxt ty
