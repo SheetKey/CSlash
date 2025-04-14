@@ -129,3 +129,18 @@ synonymTyConsOfType ty = nonDetNameEnvElts (go ty)
              | otherwise = emptyNameEnv
 
     go_s tys = foldr (plusNameEnv . go) emptyNameEnv tys
+
+{- *********************************************************************
+*                                                                      *
+                Building implicits
+*                                                                      *
+********************************************************************* -}
+
+addTyConsToGblEnv :: [TyCon] -> TcM TcGblEnv
+addTyConsToGblEnv tys = assertPpr (all isTypeSynonymTyCon tys) (ppr tys) -- temporary
+                        $ tcExtendTyConEnv tys
+                        --  $ tcExtendGlobalEnvImplicit implicit_things
+                        $ do traceTc "tcAddTyCons"
+                               $ vcat [ text "tycons" <+> ppr tys ]
+                                      -- , text "implicits" <+> ppr implicit_things ]
+                             getGblEnv

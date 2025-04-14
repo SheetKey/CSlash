@@ -266,6 +266,7 @@ mkAppTyM :: Subst -> TcType -> TcKind -> TcType -> TcM (Subst, TcType)
 mkAppTyM subst fun arg_ki arg
   | TyConApp tc args <- fun
   , isTypeSynonymTyCon tc
+  , args `lengthIs` (tyConArity tc - 1)
   = panic "mkAppTyM"
 
 mkAppTyM subst fun arg_ki arg = return (subst, mk_app_ty fun arg)

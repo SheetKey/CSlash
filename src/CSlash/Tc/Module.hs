@@ -355,11 +355,27 @@ tcTypeDecls type_decls = do
 ********************************************************************* -}
 
 checkMainType :: TcGblEnv -> TcRn WantedConstraints
-checkMainType tcg_env = panic "checkMainType"
+checkMainType tcg_env = do
+  cs_env <- getTopEnv
+  if tcg_mod tcg_env /= mainModIs (cs_HUE cs_env)
+    then return emptyWC
+    else do rdr_env <- getGlobalRdrEnv
+            let dflags = cs_dflags cs_env
+                main_occ = getMainOcc dflags
+                main_gres = lookupGRE rdr_env (LookupOccName main_occ SameNameSpace)
+            case filter isLocalGRE main_gres of
+              [] -> return emptyWC
+              (_:_:_) -> return emptyWC
+              [main_gre] -> panic "checkMainType"
 
 checkMain :: Maybe (LocatedL [LIE Ps]) -> TcM TcGblEnv
 checkMain export_ies = do
   panic "checkMain"
+
+getMainOcc :: DynFlags -> OccName
+getMainOcc dflags = case mainFunIs dflags of
+                      Just fn -> mkVarOccFS (mkFastString fn)
+                      Nothing -> mkVarOccFS (fsLit "main")
 
 type RenamedStuff =
   Maybe ( CsGroup Rn

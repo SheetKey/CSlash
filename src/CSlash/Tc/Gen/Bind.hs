@@ -73,4 +73,5 @@ import Control.Monad
 import Data.Foldable (find)
 
 tcTopBinds :: [(RecFlag, LCsBinds Rn)] -> [LSig Rn] -> TcM (TcGblEnv, TcLclEnv)
-tcTopBinds binds sigs = panic "tcTopBinds"
+tcTopBinds binds sigs = assertPpr (null binds && null sigs) (ppr (snd <$> binds) $$ ppr sigs)
+                        $ getEnvs

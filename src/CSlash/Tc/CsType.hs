@@ -125,8 +125,12 @@ tcTyGroup (TypeGroup { group_typeds = typeds, group_kisigs = kisigs }) = do
          $ \tycon -> checkValidTyCon tycon
   traceTc "Done validity check" (ppr tys)
              
+  traceTc "---- end tcTyGroup ---- }" empty
 
-  panic "tcTyGroup unfinished"
+  gbl_env <- addTyConsToGblEnv tys
+
+  let gbl_env' = gbl_env { tcg_ksigs = tcg_ksigs gbl_env `unionNameSet` kindless }
+  return gbl_env'
 
 tcTyDs :: [LCsBind Rn] -> TcM ([TyCon], NameSet)
 tcTyDs typeds = do

@@ -188,7 +188,7 @@ canonicalizeKiEquality ev ki1 ki2 = Stage $ do
   traceTcS "canonicalizeKiEquality"
     $ vcat [ ppr ev, ppr ki1, ppr ki2 ]
   rdr_env <- getGlobalRdrEnvTcS
-  can_ki_eq_nc False rdr_env ev ki1 ki1 ki2 ki2
+  can_ki_eq_nc False rdr_env ev ki1 ki2
 
 can_ki_eq_nc
   :: Bool
@@ -196,11 +196,21 @@ can_ki_eq_nc
   -> CtEvidence
   -> Kind
   -> Kind
-  -> Kind
-  -> Kind
   -> TcS (StopOrContinue (Either IrredCt EqCt))
 
-can_ki_eq_nc _ _ ev (FunKd f1 ki1a ki1b) _ (FunKd f2 ki2a ki2b) _
+can_ki_eq_nc _ _ ev ki1@(KiCon kc1) (KiCon kc2)
+  | kc1 == kc2
+  = canKiEqReflexive ev ki1
+
+can_ki_eq_nc True _ ev ki1 ki2
+  | ki1 `tcEqKind` ki2
+  = canKiEqReflexive ev ki1
+
+----------------------
+-- Otherwise try to decompose
+----------------------
+
+can_ki_eq_nc _ _ ev (FunKd f1 ki1a ki1b) (FunKd f2 ki2a ki2b)
   | f1 == f2
   = canDecomposableFunKi ev f1 (ki1a, ki1b) (ki2a, ki2b)
 
@@ -208,29 +218,29 @@ can_ki_eq_nc _ _ ev (FunKd f1 ki1a ki1b) _ (FunKd f2 ki2a ki2b) _
 -- Can't decompose
 ------------------
 
-can_ki_eq_nc False rdr_env ev _ ps_ki1 _ ps_ki2 = do
+can_ki_eq_nc False rdr_env ev ps_ki1 ps_ki2 = do
   redn1 <- rewriteKi ev ps_ki1
   let xi1 = reductionReducedKind redn1
   redn2 <- rewriteKi ev ps_ki2
   let xi2 = reductionReducedKind redn2
   new_ev <- rewriteKiEqEvidence ev NotSwapped redn1 redn2
   traceTcS "can_ki_eq_nc: go round again" (ppr new_ev $$ ppr xi1 $$ ppr xi2)
-  can_ki_eq_nc True rdr_env new_ev xi1 xi1 xi2 xi2
+  can_ki_eq_nc True rdr_env new_ev xi1 xi2 
 
-can_ki_eq_nc True _ ev ki1 ps_ki1 ki2 ps_ki2
+can_ki_eq_nc True _ ev ki1 ki2
   | Just can_eq_lhs1 <- canKiEqLHS_maybe ki1
   = do traceTcS "can_ki_eq1" (ppr ki1 $$ ppr ki2)
-       canKiEqCanLHSHomo ev NotSwapped can_eq_lhs1 ps_ki1 ki2 ps_ki2
+       canKiEqCanLHSHomo ev NotSwapped can_eq_lhs1 ki1 ki2 ki2
 
   | Just can_eq_lhs2 <- canKiEqLHS_maybe ki2
   = do traceTcS "can_ki_eq2" (ppr ki1 $$ ppr ki2)
-       canKiEqCanLHSHomo ev IsSwapped can_eq_lhs2 ps_ki2 ki1 ps_ki1
+       canKiEqCanLHSHomo ev IsSwapped can_eq_lhs2 ki2 ki1 ki1
 
 ------------------
 -- Failed
 ------------------
 
-can_ki_eq_nc True _ ev _ ps_ki1 _ ps_ki2 = do
+can_ki_eq_nc True _ ev ps_ki1 ps_ki2 = do
   traceTcS "can_ki_eq_nc catch-all case" (ppr ps_ki1 $$ ppr ps_ki2)
   finishCanWithIrred ShapeMismatchReason ev
 
