@@ -128,7 +128,22 @@ writeMetaKiVarRef kivar ref ki
 ********************************************************************* -}
 
 zonkTcType :: TcType -> ZonkM TcType
-zonkTcType = panic "zonkTcType"
+zonkTcTypes :: [TcType] -> ZonkM [TcType]
+(zonkTcType, zonkTcTypes) = mapType zonkTcTypeMapper
+  where
+    zonkTcTypeMapper :: TypeMapper () ZonkM
+    zonkTcTypeMapper = TypeMapper
+      { tcm_tyvar = const zonkTcTyVar
+      , tcm_tybinder = \_ tv _ k -> zonkTyVarKind tv >>= k ()
+      , tcm_tylambinder = \_ tv k -> zonkTyVarKind tv >>= k ()
+      , tcm_tycon = zonkTcTyCon }
+
+zonkTcTyCon :: TcTyCon -> ZonkM TcTyCon
+zonkTcTyCon tc
+  | isMonoTcTyCon tc = do tck' <- zonkTcKind (tyConKind tc)
+                          tck_res' <- zonkTcKind (tyConResKind tc)
+                          return $ setTcTyConKind tc tck' tck_res'
+  | otherwise = return tc
 
 zonkTcTyVar :: TcTyVar -> ZonkM TcType
 zonkTcTyVar tv

@@ -193,6 +193,16 @@ isTcTyCon (TyCon { tyConDetails = details })
   | TcTyCon {} <- details = True
   | otherwise = False
 
+setTcTyConKind :: TyCon -> Kind -> Kind -> TyCon
+setTcTyConKind tc kind res_kind = assert (isMonoTcTyCon tc) $
+  let tc' = tc { tyConKind = kind, tyConResKind = res_kind, tyConNullaryTy = mkNakedTyConTy tc' }
+  in tc'
+  
+isMonoTcTyCon :: TyCon -> Bool
+isMonoTcTyCon (TyCon { tyConDetails = details })
+  | TcTyCon { tctc_is_poly = is_poly } <- details = not is_poly
+  | otherwise = False
+
 {- *********************************************************************
 *                                                                      *
                  TyConRepName
