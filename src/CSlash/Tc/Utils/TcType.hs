@@ -46,6 +46,7 @@ type PolyTcTyCon = TcTyCon
 type TcTyConBinder = TyConBinder
 
 type TcKind = Kind
+type TcMonoKind = MonoKind
 
 {- *********************************************************************
 *                                                                      *
@@ -116,7 +117,7 @@ pprTcKiVarDetails (MetaKv { mkv_info = info, mkv_tclvl = tclvl })
 vanillaSkolemKvUnk :: HasDebugCallStack => TcKiVarDetails
 vanillaSkolemKvUnk = SkolemKv unkSkol topTcLevel
 
-type MetaDetailsK = MetaDetails' TcKind
+type MetaDetailsK = MetaDetails' TcMonoKind
 
 data MetaInfoK
   = KiVarKv
@@ -189,6 +190,13 @@ tcTypeLevel ty = nonDetStrictFoldDVarSet add topTcLevel (tyKiVarsOfTypeDSet ty)
       | isTcKiVar v = lvl `maxTcLevel` tcKiVarLevel v
       | otherwise = lvl
 
+tcMonoKindLevel :: TcMonoKind -> TcLevel
+tcMonoKindLevel ki = nonDetStrictFoldDVarSet add topTcLevel (kiVarsOfMonoKindDSet ki)
+  where
+    add v lvl
+      | isTcKiVar v = lvl `maxTcLevel` tcKiVarLevel v
+      | otherwise = lvl
+
 tcKindLevel :: TcKind -> TcLevel
 tcKindLevel ki = nonDetStrictFoldDVarSet add topTcLevel (kiVarsOfKindDSet ki)
   where
@@ -198,17 +206,22 @@ tcKindLevel ki = nonDetStrictFoldDVarSet add topTcLevel (kiVarsOfKindDSet ki)
 
 {-# INLINE any_rewritable_ki #-}
 any_rewritable_ki :: (TcKiVar -> Bool) -> TcKind -> Bool
-any_rewritable_ki kv_pred = go 
+any_rewritable_ki kv_pred = go emptyVarSet
   where
-    go (KiVarKi kv) = kv_pred kv
-    go (KiCon _) = False
-    go (FunKd _ arg res) = go arg || go res
-    go (KdContext rels) = go_rels rels
+    go :: VarSet -> TcKind -> Bool
+    go bvs (Mono ki) = go_mono bvs ki
+    go bvs (ForAllKi kv ki) = go (bvs `extendVarSet` kv) ki
 
-    go_rels = any go_rel
+    go_mono :: VarSet -> TcMonoKind -> Bool
+    go_mono bvs (KiConApp kc kis) = go_kc bvs kc kis
+    go_mono bvs (KiVarKi kv) = go_kv bvs kv
+    go_mono bvs (FunKi _ arg res) = go_mono bvs arg || go_mono bvs res
 
-    go_rel (LTKd ki1 ki2) = go ki1 || go ki2
-    go_rel (LTEQKd ki1 ki2) = go ki1 || go ki2
+    go_kv bvs kv | kv `elemVarSet` bvs = False
+                 | otherwise = kv_pred kv
+
+    go_kc :: VarSet -> KiCon -> [TcMonoKind] -> Bool
+    go_kc bvs _ kis = any (go_mono bvs) kis
 
 anyRewritableKiVar :: (TcKiVar -> Bool) -> TcKind -> Bool
 anyRewritableKiVar = any_rewritable_ki
@@ -345,7 +358,7 @@ mkKiVarNamePairs kvs = [(kiVarName kv, kv) | kv <- kvs ]
 *                                                                      *
 ********************************************************************* -}
 
-tcSplitFunKi_maybe :: Kind -> Maybe (Kind, Kind)
+tcSplitFunKi_maybe :: Kind -> Maybe (FunKiFlag, MonoKind, MonoKind)
 tcSplitFunKi_maybe = splitFunKi_maybe
 
 {- *********************************************************************

@@ -30,15 +30,16 @@ import Control.DeepSeq
 data Type
   = TyVarTy Var
   | AppTy Type Type -- The first arg must be an 'AppTy' or a 'TyVarTy' or a 'TyLam'
-  | TyLamTy Var Type
+  | TyLamTy TypeVar Type
+  | BigTyLamTy KindVar Type
   | TyConApp TyCon [Type]
   | ForAllTy {-# UNPACK #-} !ForAllTyBinder Type
   | FunTy
-    { ft_kind :: Kind
+    { ft_kind :: MonoKind
     , ft_arg :: Type
     , ft_res :: Type
     }
-  | WithContext Kind Type -- this should occure at most once per type and always as the first cons
+  | Embed MonoKind -- for application to a 'BigTyLamTy
   deriving Data.Data
 
 instance Outputable Type where
@@ -65,7 +66,7 @@ mkNakedTyConTy tycon = TyConApp tycon []
 mkForAllTys :: [ForAllTyBinder] -> Type -> Type
 mkForAllTys tyvars ty = foldr ForAllTy ty tyvars
 
-tcMkFunTy :: Kind -> Type -> Type -> Type
+tcMkFunTy :: MonoKind -> Type -> Type -> Type
 tcMkFunTy = FunTy 
 
 mkTyLamTy :: TypeVar -> Type -> Type
@@ -84,6 +85,9 @@ data TypeFolder env a = TypeFolder
   { tf_view :: Type -> Maybe Type
   , tf_tyvar :: env -> TypeVar -> a
   , tf_tybinder :: env -> TypeVar -> ForAllTyFlag -> env
+  , tf_tylambinder :: env -> TypeVar -> env
+  , tf_tylamkibinder :: env -> KindVar -> env
+  , tf_embed_mono_ki :: env -> MonoKind -> a
   }
 
 -- Unlike GHC, we do not deal with kind variables here.
@@ -92,19 +96,26 @@ data TypeFolder env a = TypeFolder
 foldType :: Monoid a => TypeFolder env a -> env -> (Type -> a, [Type] -> a)
 foldType (TypeFolder { tf_view = view
                      , tf_tyvar = tyvar
-                     , tf_tybinder = tybinder }) env
+                     , tf_tybinder = tybinder
+                     , tf_tylambinder = tylambinder
+                     , tf_tylamkibinder = tylamkibinder }) env
   = (go_ty env, go_tys env)
   where
     go_ty env ty | Just ty' <- view ty = go_ty env ty'
     go_ty env (TyVarTy tv) = tyvar env tv
     go_ty env (AppTy t1 t2) = go_ty env t1 `mappend` go_ty env t2
-    go_ty env (TyLamTy tv ty) = tyvar env tv `mappend` go_ty env ty
+    go_ty env (TyLamTy tv ty) 
+      = let !env' = tylambinder env tv
+        in go_ty env' ty
+    go_ty env (BigTyLamTy kv ty)
+      = let !env' = tylamkibinder env kv
+        in go_ty env' ty
     go_ty env (FunTy _ arg res) = go_ty env arg `mappend` go_ty env res
     go_ty env (TyConApp _ tys) = go_tys env tys
     go_ty env (ForAllTy (Bndr tv vis) inner)
       = let !env' = tybinder env tv vis
         in go_ty env' inner
-    go_ty env (WithContext _ ty) = go_ty env ty
+    go_ty _ (Embed _) = mempty
 
     go_tys _ [] = mempty
     go_tys env (t:ts) = go_ty env t `mappend` go_tys env ts
@@ -122,10 +133,11 @@ typeSize :: Type -> Int
 typeSize (TyVarTy {}) = 1
 typeSize (AppTy t1 t2) = typeSize t1 + typeSize t2
 typeSize (TyLamTy _ t) = 1 + typeSize t
+typeSize (BigTyLamTy _ t) = 1 + typeSize t
 typeSize (TyConApp _ ts) = 1 + typesSize ts
 typeSize (ForAllTy (Bndr tv _) t) = typeSize (varType tv) + typeSize t
 typeSize (FunTy _ t1 t2) = typeSize t1 + typeSize t2
-typeSize (WithContext _ t) = typeSize t
+typeSize (Embed _) = 1
 
 typesSize :: [Type] -> Int
 typesSize tys = foldr ((+) . typeSize) 0 tys

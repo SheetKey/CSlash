@@ -96,7 +96,7 @@ data TcRnMessage where
   TcRnShadowedName :: OccName -> ShadowedNameProvenance -> TcRnMessage
   TcRnSimplifierTooManyIterations :: Cts -> !IntWithInf -> WantedConstraints -> TcRnMessage
   TcRnBindingNameConflict :: !RdrName -> !(NE.NonEmpty SrcSpan) -> TcRnMessage
-  TcRnTyThingUsedWrong :: !WrongThingSort -> !TcTyThing -> !Name -> TcRnMessage
+  TcRnTyThingUsedWrong :: !WrongThingSort -> !TcTyKiThing -> !Name -> TcRnMessage
   TcRnArityMismatch :: !TyThing -> !Arity -> !Arity -> TcRnMessage
   deriving Generic
 
@@ -118,7 +118,7 @@ data NotInScopeError
   | SameName [GlobalRdrElt]
   | MissingBinding SDoc [CsHint]
   | NoTopLevelBinding
-  | NotInScopeTc (NameEnv TcTyThing)
+  | NotInScopeTc (NameEnv TcTyKiThing)
   deriving Generic
 
 mkTcRnNotInScope :: RdrName -> NotInScopeError -> TcRnMessage

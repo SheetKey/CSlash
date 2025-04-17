@@ -47,11 +47,11 @@ instance HasOccName TcBinder where
 
 {- *********************************************************************
 *                                                                      *
-             TcTyThing
+             TcTyKiThing
 *                                                                      *
 ********************************************************************* -}
 
-data TcTyThing
+data TcTyKiThing
   = AGlobal TyThing
   | ATcId
     { tct_id :: Id
@@ -61,12 +61,12 @@ data TcTyThing
   | AKiVar Name TcKiVar -- should make a new type 'TcKiThing'
   | ATcTyCon TyCon
 
-tcTyThingTyCon_maybe :: TcTyThing -> Maybe TyCon
+tcTyThingTyCon_maybe :: TcTyKiThing -> Maybe TyCon
 tcTyThingTyCon_maybe (AGlobal (ATyCon tc)) = Just tc
 tcTyThingTyCon_maybe (ATcTyCon tc_tc) = Just tc_tc
 tcTyThingTyCon_maybe _ = Nothing
 
-instance Outputable TcTyThing where
+instance Outputable TcTyKiThing where
   ppr (AGlobal g) = ppr g
   ppr elt@(ATcId {}) = text "Identifier"
                         <> brackets (ppr (tct_id elt) <> colon
@@ -92,12 +92,12 @@ instance Outputable IdBindingInfo where
   ppr ClosedLet = text "TopLevelLet"
   ppr (NonClosedLet fvs closed_type) = text "TopLevelLet" <+> ppr fvs <+> ppr closed_type
 
-pprTcTyThingCategory :: TcTyThing -> SDoc
-pprTcTyThingCategory = text . capitalise . tcTyThingCategory
+pprTcTyKiThingCategory :: TcTyKiThing -> SDoc
+pprTcTyKiThingCategory = text . capitalise . tcTyKiThingCategory
 
-tcTyThingCategory :: TcTyThing -> String
-tcTyThingCategory (AGlobal thing) = tyThingCategory thing
-tcTyThingCategory (ATyVar {}) = "type variable"
-tcTyThingCategory (AKiVar {}) = "kind variable"
-tcTyThingCategory (ATcId {}) = "local identifier"
-tcTyThingCategory (ATcTyCon {}) = "local tycon"
+tcTyKiThingCategory :: TcTyKiThing -> String
+tcTyKiThingCategory (AGlobal thing) = tyThingCategory thing
+tcTyKiThingCategory (ATyVar {}) = "type variable"
+tcTyKiThingCategory (AKiVar {}) = "kind variable"
+tcTyKiThingCategory (ATcId {}) = "local identifier"
+tcTyKiThingCategory (ATcTyCon {}) = "local tycon"

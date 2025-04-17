@@ -24,6 +24,7 @@ import CSlash.Core.Type.Subst
 import CSlash.Core.Type.FVs
 
 import CSlash.Core.Kind
+import CSlash.Core.Kind.FVs
 import CSlash.Core.Kind.Subst
 
 import CSlash.Types.Var
@@ -51,7 +52,7 @@ import CSlash.Utils.Outputable
 import CSlash.Utils.Panic
 import CSlash.Data.FastString
 
-import CSlash.Data.Maybe ( orElse, isJust, firstJust )
+import CSlash.Data.Maybe ( orElse, isJust, firstJust, fromJust )
 
 {- *********************************************************************
 *                                                                      *
@@ -111,7 +112,9 @@ data TypeMapper env m = TypeMapper
   { tcm_tyvar :: env -> TypeVar -> m Type
   , tcm_tybinder :: forall r. env -> TypeVar -> ForAllTyFlag -> (env -> TypeVar -> m r) -> m r
   , tcm_tylambinder :: forall r. env -> TypeVar -> (env -> TypeVar -> m r) -> m r
+  , tcm_tylamkibinder :: forall r. env -> KindVar -> (env -> KindVar -> m r) -> m r
   , tcm_tycon :: TyCon -> m TyCon
+  , tcm_embed_mono_ki :: env -> MonoKind -> m MonoKind
   }
 
 {-# INLINE mapType #-}
@@ -130,7 +133,9 @@ mapTypeX
 mapTypeX (TypeMapper { tcm_tyvar = tyvar
                      , tcm_tybinder = tybinder
                      , tcm_tycon = tycon
-                     , tcm_tylambinder = tylambinder })
+                     , tcm_embed_mono_ki = mono_ki
+                     , tcm_tylambinder = tylambinder
+                     , tcm_tylamkibinder = kibinder })
   = (go_ty, go_tys)
   where
     go_tys !_ [] = return []
@@ -158,7 +163,11 @@ mapTypeX (TypeMapper { tcm_tyvar = tyvar
       tylambinder env tv $ \env' tv' -> do
         inner' <- go_ty env' inner
         return $ TyLamTy tv' inner'
-    go_ty !env (WithContext ki ty) = WithContext ki <$> go_ty env ty
+    go_ty !env (BigTyLamTy kv inner) = do
+      kibinder env kv $ \env' kv' -> do
+        inner' <- go_ty env' inner
+        return $ BigTyLamTy kv' inner'
+    go_ty !env (Embed ki) = Embed <$> mono_ki env ki
 
 {- *********************************************************************
 *                                                                      *
@@ -202,13 +211,46 @@ type ErrorMsgType = Type
 *                                                                      *
 ********************************************************************* -}
 
-piResultTys :: HasDebugCallStack => Kind -> [Type] -> Kind
-piResultTys ki [] = ki
-piResultTys ki orig_args@(arg:args)
-  | FunKd { kft_res = res } <- ki
-  = piResultTys res args
+piResultTys :: HasDebugCallStack => Kind -> [Type] -> MonoKind
+piResultTys ki []
+  | Mono ki' <- ki
+  = ki'
   | otherwise
-  = pprPanic "piResultTys1" (ppr ki $$ ppr orig_args)
+  = pprPanic "piResultTys1" (ppr ki)
+piResultTys ki orig_args@(arg:args)
+  | Mono mki <- ki
+  = monoPiResultTys mki orig_args
+  | ForAllKi kv res <- ki
+  , Embed mki <- arg
+  = go (extendKvSubst init_subst kv mki) res args
+  | otherwise
+  = pprPanic "piResultTys2" (ppr ki $$ ppr orig_args)
+  where
+    init_subst = mkEmptySubst $ mkInScopeSet $
+                 (kiVarsOfKind ki) `unionVarSet` (tyKiVarsOfTypes orig_args)
+
+    go :: Subst -> Kind -> [Type] -> MonoKind
+    go subst ki []
+      | Mono ki' <- ki
+      = substMonoKiUnchecked subst ki'
+      | otherwise
+      = pprPanic "piResultTys3" (ppr ki)
+    go subst ki all_args@(arg:args)
+      | Mono (FunKi { fk_res = res }) <- ki
+      = go subst (Mono res) args
+      | ForAllKi kv res <- ki
+      , Embed mono_ki <- arg
+      = go (extendKvSubst subst kv mono_ki) res args
+      | otherwise
+      = pprPanic "piResultTys4" (ppr ki $$ ppr orig_args $$ ppr all_args)
+
+monoPiResultTys :: MonoKind -> [Type] -> MonoKind
+monoPiResultTys ki [] = ki
+monoPiResultTys ki orig_args@(arg:args)
+  | FunKi { fk_res = res } <- ki
+  = monoPiResultTys res args
+  | otherwise
+  = pprPanic "monoPiResultTys1" (ppr ki $$ ppr orig_args)
 
 {- *********************************************************************
 *                                                                      *
@@ -268,9 +310,9 @@ isForgetfulTy other = pprPanic "isForgetfulTy" (ppr other)
 We do note need the type to be KnotTied.
 This is because we do not have recursive things the same way haskell does.
 -}
-buildSynTyCon :: Name -> [KindVar] -> Kind -> Kind -> Arity -> Type -> TyCon
-buildSynTyCon name binders res_kind full_kind arity rhs
-  = mkSynonymTyCon name binders res_kind full_kind arity rhs is_tau is_forgetful is_concrete
+buildSynTyCon :: Name -> Kind -> Arity -> Type -> TyCon
+buildSynTyCon name kind arity rhs
+  = mkSynonymTyCon name kind arity rhs is_tau is_forgetful is_concrete
   where
     is_tau = isTauTy rhs
     is_concrete = uniqSetAll isConcreteTyCon rhs_tycons
@@ -285,20 +327,29 @@ buildSynTyCon name binders res_kind full_kind arity rhs
 ********************************************************************* -}
 
 typeKind :: HasDebugCallStack => Type -> Kind
-typeKind (TyConApp tc tys) = piResultTys (tyConKind tc) tys
-typeKind (FunTy { ft_kind = kind }) = kind
-typeKind (TyVarTy tyvar) = tyVarKind tyvar
-typeKind (AppTy fun arg)
+typeKind (BigTyLamTy kv res) = mkForAllKi kv (typeKind res)
+typeKind ty = Mono $ typeMonoKind ty
+
+typeMonoKind :: HasDebugCallStack => Type -> MonoKind
+typeMonoKind (TyConApp tc tys) = piResultTys (tyConKind tc) tys
+typeMonoKind (FunTy { ft_kind = kind }) = kind
+typeMonoKind (TyVarTy tyvar) = tyVarKind tyvar
+typeMonoKind (AppTy fun arg)
   = go fun [arg]
   where
     go (AppTy fun arg) args = go fun (arg:args)
     go fun args = piResultTys (typeKind fun) args
-typeKind ty@(ForAllTy {})
+typeMonoKind ty@(ForAllTy {})
   = let (tvs, body) = splitForAllTyVars ty
-        body_kind = typeKind body
+        body_kind = typeMonoKind body
     in assertPpr (not (null tvs) && all isTyVar tvs) (ppr ty) body_kind
-typeKind (TyLamTy tv res) = mkFunKi (tyVarKind tv) (typeKind res)
-typeKind (WithContext ctxt ty) = mkContextKi ctxt (typeKind ty)       
+typeMonoKind ty@(TyLamTy tv res) =
+  let tvKind = tyVarKind tv
+      res_kind = typeMonoKind res
+      flag = chooseFunKiFlag tvKind res_kind
+  in mkFunKi flag tvKind res_kind
+typeMonoKind ty@(BigTyLamTy _ _) = pprPanic "typeMonoKind" (ppr ty)
+typeMonoKind ty@(Embed _) = pprPanic "typeMonoKind" (ppr ty)
 
 {- *********************************************************************
 *                                                                      *

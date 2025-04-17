@@ -4,6 +4,7 @@ import {-# SOURCE #-} CSlash.Core.Type (coreView)
 
 import Data.Monoid as DM ( Endo(..), Any(..) )
 import CSlash.Core.Type.Rep
+import CSlash.Core.Kind
 import CSlash.Core.Kind.FVs
 import CSlash.Core.TyCon
 
@@ -54,7 +55,10 @@ deep_tys :: [Type] -> Endo TyVarSet
 deepTvFolder :: TypeFolder TyVarSet (Endo TyVarSet)
 deepTvFolder = TypeFolder { tf_view = noView
                           , tf_tyvar = do_tv
-                          , tf_tybinder = do_bndr }
+                          , tf_tybinder = do_bndr
+                          , tf_tylambinder = do_tylambndr
+                          , tf_tylamkibinder = do_kilambndr
+                          , tf_embed_mono_ki = do_mono_ki }
   where
     do_tv is v = Endo do_it
       where
@@ -62,6 +66,37 @@ deepTvFolder = TypeFolder { tf_view = noView
                   | v `elemVarSet` acc = acc
                   | otherwise = acc `extendVarSet` v
     do_bndr is tv _ = extendVarSet is tv
+    do_tylambndr is tv = extendVarSet is tv
+    do_kilambndr is _ = is
+    do_mono_ki _ _ = mempty
+
+tyKiVarsOfTypes :: [Type] -> TyKiVarSet
+tyKiVarsOfTypes tys = runTyVars (deep_tykis tys)
+
+deep_tyki :: Type -> Endo TyKiVarSet
+deep_tykis :: [Type] -> Endo TyKiVarSet
+(deep_tyki, deep_tykis) = foldType deepTKvFolder emptyVarSet
+
+deepTKvFolder :: TypeFolder TyKiVarSet (Endo TyKiVarSet)
+deepTKvFolder = TypeFolder { tf_view = noView
+                           , tf_tyvar = do_tv
+                           , tf_tybinder = do_bndr
+                           , tf_tylambinder = do_tylambndr
+                           , tf_tylamkibinder = do_kilambndr
+                           , tf_embed_mono_ki = do_mono_ki }
+  where
+    do_tv is v = Endo do_it
+      where
+        do_it acc | v `elemVarSet` is = acc
+                  | v `elemVarSet` acc = acc
+                  | otherwise = appEndo (deep_ki (Mono $ tyVarKind v))
+                                $ acc `extendVarSet` v
+
+    do_bndr is tv _ = extendVarSet is tv
+    do_tylambndr is tv = extendVarSet is tv
+    do_kilambndr is kv = extendVarSet is kv
+    do_mono_ki is ki = Endo do_it
+      where do_it = appEndo (deep_ki (Mono ki)) 
 
 {- *********************************************************************
 *                                                                      *
@@ -86,7 +121,10 @@ shallow_tys :: [Type] -> Endo TyVarSet
 shallowTvFolder :: TypeFolder TyVarSet (Endo TyVarSet)
 shallowTvFolder = TypeFolder { tf_view = noView
                              , tf_tyvar = do_tv
-                             , tf_tybinder = do_bndr }
+                             , tf_tybinder = do_bndr
+                             , tf_tylambinder = do_tylambndr
+                             , tf_tylamkibinder = do_kilambndr
+                             , tf_embed_mono_ki = do_mono_ki }
   where
     do_tv is v = Endo do_it
       where
@@ -94,6 +132,9 @@ shallowTvFolder = TypeFolder { tf_view = noView
                   | v `elemVarSet` acc = acc
                   | otherwise = acc `extendVarSet` v
     do_bndr is tv _ = extendVarSet is tv
+    do_tylambndr is tv = extendVarSet is tv
+    do_kilambndr is _ = is
+    do_mono_ki _ _ = mempty
 
 {- *********************************************************************
 *                                                                      *
@@ -112,12 +153,12 @@ tyKiFVsOfType (TyVarTy v) f bound_vars (acc_list, acc_set)
   | not (f v) = (acc_list, acc_set)
   | v `elemVarSet` bound_vars = (acc_list, acc_set)
   | v `elemVarSet` acc_set = (acc_list, acc_set)
-  | otherwise = kiFVsOfKind (tyVarKind v) f emptyVarSet (v:acc_list, extendVarSet acc_set v)
+  | otherwise = kiFVsOfMonoKind (tyVarKind v) f emptyVarSet (v:acc_list, extendVarSet acc_set v)
 tyKiFVsOfType (TyConApp _ tys) f bound_vars acc = tyKiFVsOfTypes tys f bound_vars acc
 tyKiFVsOfType (AppTy fun arg) f bound_vars acc
   = (tyKiFVsOfType fun `unionFV` tyKiFVsOfType arg) f bound_vars acc
 tyKiFVsOfType (FunTy k arg res) f bound_vars acc
-  = (kiFVsOfKind k `unionFV` tyKiFVsOfType arg `unionFV` tyKiFVsOfType res) f bound_vars acc
+  = (kiFVsOfMonoKind k `unionFV` tyKiFVsOfType arg `unionFV` tyKiFVsOfType res) f bound_vars acc
 tyKiFVsOfType (ForAllTy bndr ty) f bound_vars acc
   = tyKiFVsBndr bndr (tyKiFVsOfType ty) f bound_vars acc
 tyKiFVsOfType (TyLamTy v ty) f bound_vars acc
@@ -128,7 +169,7 @@ tyKiFVsBndr :: ForAllTyBinder -> FV -> FV
 tyKiFVsBndr (Bndr tv _) fvs = tyKiFVsVarBndr tv fvs
 
 tyKiFVsVarBndr :: Var -> FV -> FV
-tyKiFVsVarBndr var fvs = kiFVsOfKind (varKind var) `unionFV` delFV var fvs
+tyKiFVsVarBndr var fvs = kiFVsOfMonoKind (varKind var) `unionFV` delFV var fvs
 
 tyKiFVsOfTypes :: [Type] -> FV
 tyKiFVsOfTypes [] fv_cand in_scope acc = emptyFV fv_cand in_scope acc

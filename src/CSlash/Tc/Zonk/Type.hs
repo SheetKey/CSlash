@@ -66,7 +66,7 @@ type ZonkBndrTcM = ZonkBndrT TcM
 {-# INLINE zonkTyBndrX #-}
 zonkTyBndrX :: TcTyVar -> ZonkBndrTcM TypeVar
 zonkTyBndrX tv = assertPpr (isImmutableTyVar tv) (ppr tv) $ do
-  ki <- noBinders $ zonkTcKindToKindX (tyVarKind tv)
+  ki <- noBinders $ zonkTcMonoKindToMonoKindX (tyVarKind tv)
   let tv' = mkTyVar (tyVarName tv) ki
   extendTyZonkEnv tv'
   return tv'
@@ -90,7 +90,7 @@ zonkTyVarOcc :: HasDebugCallStack => TcTyVar -> ZonkTcM Type
 zonkTyVarOcc tv = do
   ZonkEnv { ze_tv_env = tv_env } <- getZonkEnv
   let lookup_in_tv_env = case lookupVarEnv tv_env tv of
-                           Nothing -> mkTyVarTy <$> updateTyVarKindM zonkTcKindToKindX tv
+                           Nothing -> mkTyVarTy <$> updateTyVarKindM zonkTcMonoKindToMonoKindX tv
                            Just tv' -> return $ mkTyVarTy tv'
 
       finish_meta ty = do
@@ -98,7 +98,7 @@ zonkTyVarOcc tv = do
         return ty
 
       zonk_meta ref Flexi = do
-        kind <- zonkTcKindToKindX (tyVarKind tv)
+        kind <- zonkTcMonoKindToMonoKindX (tyVarKind tv)
         ty <- commitFlexiTv tv kind
         lift $ liftZonkM $ writeMetaTyVarRef tv ref ty
         finish_meta ty
@@ -127,7 +127,7 @@ lookupMetaTv tv = ZonkT $ \ (ZonkEnv { ze_meta_tv_env = mtv_env_ref }) -> do
   mtv_env <- readTcRef mtv_env_ref
   return $ lookupVarEnv mtv_env tv
 
-commitFlexiTv :: TcTyVar -> Kind -> ZonkTcM Type
+commitFlexiTv :: TcTyVar -> MonoKind -> ZonkTcM Type
 commitFlexiTv tv zonked_kind = do
   flexi <- ze_flexi <$> getZonkEnv
   lift $ case flexi of
@@ -140,7 +140,10 @@ zonk_typemapper = TypeMapper
                                   $ \tv' -> ZonkT $ \env' -> (k env' tv')
   , tcm_tylambinder = \env tv k -> flip runZonkT env $ runZonkBndrT (zonkTyBndrX tv)
                                    $ \tv' -> ZonkT $ \env' -> (k env' tv')
+  , tcm_tylamkibinder = \env kv k -> flip runZonkT env $ runZonkBndrT (zonkKiBndrX kv)
+                                     $ \kv' -> ZonkT $ \env' -> (k env' kv')
   , tcm_tycon = \tc -> zonkTcTyConToTyCon tc
+  , tcm_embed_mono_ki = \env ki -> runZonkT (zonkTcMonoKindToMonoKindX ki) env
   }
 
 zonkTcTyConToTyCon :: TcTyCon -> TcM TyCon
@@ -157,12 +160,12 @@ zonkTcTypesToTypesX :: [TcType] -> ZonkTcM [Type]
 (zonkTcTypeToTypeX, zonkTcTypesToTypesX) = case mapTypeX zonk_typemapper of
   (zty, ztys) -> (ZonkT . flip zty, ZonkT . flip ztys)
 
-zonkKiVarOcc :: HasDebugCallStack => TcKiVar -> ZonkTcM Kind
+zonkKiVarOcc :: HasDebugCallStack => TcKiVar -> ZonkTcM MonoKind
 zonkKiVarOcc kv = do
   ZonkEnv { ze_kv_env = kv_env } <- getZonkEnv
   let lookup_in_kv_env = case lookupVarEnv kv_env kv of
-                           Nothing -> return $ mkKiVarKi kv
-                           Just kv' -> return $ mkKiVarKi kv'
+                           Nothing -> return $ mkKiVarMKi kv
+                           Just kv' -> return $ mkKiVarMKi kv'
 
       finish_meta ki = do
         extendMetaKvEnv kv ki
@@ -174,7 +177,7 @@ zonkKiVarOcc kv = do
         finish_meta ki
 
       zonk_meta _ (Indirect ki) = do
-        zki <- zonkTcKindToKindX ki
+        zki <- zonkTcMonoKindToMonoKindX ki
         finish_meta zki
 
   if isTcKiVar kv
@@ -188,16 +191,16 @@ zonkKiVarOcc kv = do
                              zonk_meta ref mkv_details
     else lookup_in_kv_env
 
-extendMetaKvEnv :: TcKiVar -> Kind -> ZonkTcM ()
+extendMetaKvEnv :: TcKiVar -> MonoKind -> ZonkTcM ()
 extendMetaKvEnv kv ki = ZonkT $ \ (ZonkEnv { ze_meta_kv_env = mkv_env_ref }) ->
   updTcRef mkv_env_ref (\env -> extendVarEnv env kv ki)
 
-lookupMetaKv :: TcKiVar -> ZonkTcM (Maybe Kind)
+lookupMetaKv :: TcKiVar -> ZonkTcM (Maybe MonoKind)
 lookupMetaKv kv = ZonkT $ \ (ZonkEnv { ze_meta_kv_env = mkv_env_ref }) -> do
   mkv_env <- readTcRef mkv_env_ref
   return $ lookupVarEnv mkv_env kv
 
-commitFlexiKv :: TcKiVar -> ZonkTcM Kind
+commitFlexiKv :: TcKiVar -> ZonkTcM MonoKind
 commitFlexiKv kv = do
   flexi <- ze_flexi <$> getZonkEnv
   lift $ case flexi of
@@ -206,9 +209,18 @@ commitFlexiKv kv = do
 zonk_kindmapper :: KindMapper ZonkEnv TcM
 zonk_kindmapper = KindMapper
   { km_kivar = \env kv -> runZonkT (zonkKiVarOcc kv) env
+  , km_kibinder = \env kv k -> flip runZonkT env $ runZonkBndrT (zonkKiBndrX kv)
+                               $ \kv' -> ZonkT $ \env' -> (k env' kv')
   }
 
 zonkTcKindToKindX :: TcKind -> ZonkTcM Kind
 zonkTcKindsToKindsX :: [TcKind] -> ZonkTcM [Kind]
 (zonkTcKindToKindX, zonkTcKindsToKindsX) = case mapKindX zonk_kindmapper of
   (zki, zkis) -> (ZonkT . flip zki, ZonkT . flip zkis)
+
+zonkTcMonoKindToMonoKindX :: TcMonoKind -> ZonkTcM MonoKind
+zonkTcMonoKindToMonoKindX ki = do
+  ki' <- zonkTcKindToKindX $ Mono ki
+  case ki' of
+    Mono mki -> return mki
+    _ -> pprPanic "zonkTcMonoKindToMonoKindX" (ppr ki $$ ppr ki')

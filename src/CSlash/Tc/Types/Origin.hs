@@ -140,6 +140,9 @@ data CtOrigin
 isVisibleOrigin :: CtOrigin -> Bool
 isVisibleOrigin (KindEqOrigin {}) = False
 
+toInvisibleOrigin :: CtOrigin -> CtOrigin
+toInvisibleOrigin o@(KindEqOrigin {}) = o
+
 isGivenOrigin :: CtOrigin -> Bool
 isGivenOrigin (KindEqOrigin {}) = False
 

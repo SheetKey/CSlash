@@ -243,8 +243,8 @@ type family XIETyName p
 type family XUKd x
 type family XAKd x
 type family XLKd x
-type family XKdVar x
-type family XFunKd x
+type family XKiVar x
+type family XFunKi x
 type family XQualKd x
 type family XParKd x
 

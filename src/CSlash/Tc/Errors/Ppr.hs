@@ -325,9 +325,9 @@ pprCsDocContext PatCtx = text "a pattern type-signature"
 pprCsDocContext ExprWithTySigCtx = text "an expression type signature"
 pprCsDocContext CsTypeCtx = text "a type argument"
 
-pprTyThingUsedWrong :: WrongThingSort -> TcTyThing -> Name -> SDoc
+pprTyThingUsedWrong :: WrongThingSort -> TcTyKiThing -> Name -> SDoc
 pprTyThingUsedWrong sort thing name =
-  pprTcTyThingCategory thing <+> quotes (ppr name) <+>
+  pprTcTyKiThingCategory thing <+> quotes (ppr name) <+>
   text "used as a" <+> pprWrongThingSort sort
 
 pprWrongThingSort :: WrongThingSort -> SDoc

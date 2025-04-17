@@ -114,33 +114,33 @@ mkDataCon name declared_infix tycon tag id ty arity
                  }
 
 mkDataConTy :: TyCon -> Arity -> Type
-mkDataConTy tycon arity = dc_type
-  where
-    fun_kind_vars = mkTemplateFunKindVars arity
-    fun_kinds = KiVarKi <$> fun_kind_vars
+mkDataConTy tycon arity = panic "dc_type"
+  -- where
+  --   fun_kind_vars = mkTemplateFunKindVars arity
+  --   fun_kinds = KiVarKi <$> fun_kind_vars
 
-    arg_kind_vars = mkTemplateKindVars arity
-    arg_kinds = KiVarKi <$> arg_kind_vars
-    ty_vars = mkTemplateTyVars arg_kinds
-    tc_binders = mkSpecifiedTyConBinders ty_vars
-    arg_tys = mkTyVarTys ty_vars
+  --   arg_kind_vars = mkTemplateKindVars arity
+  --   arg_kinds = KiVarKi <$> arg_kind_vars
+  --   ty_vars = mkTemplateTyVars arg_kinds
+  --   tc_binders = mkSpecifiedTyConBinders ty_vars
+  --   arg_tys = mkTyVarTys ty_vars
 
-    res_type = mkTyConApp tycon arg_tys
-    res_kind = case tyConResKind tycon of
-                 kd@(KiVarKi var)
-                   | isKiVar var -> kd
-                 kc@(KiCon _) -> kc
-                 _ -> panic "mkDataConType: 'tyConResKind tycon' is not valid"
+  --   res_type = mkTyConApp tycon arg_tys
+  --   res_kind = case tyConResKind tycon of
+  --                kd@(KiVarKi var)
+  --                  | isKiVar var -> kd
+  --                kc@(KiCon _) -> kc
+  --                _ -> panic "mkDataConType: 'tyConResKind tycon' is not valid"
 
-    arg_kind_constrs = (`LTEQKd` res_kind) <$> arg_kinds
-    fun_kind_constrs = concatMap (\ (kf, i) ->
-                                     let kds = take i arg_kinds
-                                     in (`LTEQKd` kf) <$> kds)
-                       $ fun_kinds `zip` [0..]
-    full_constrs = KdContext $ arg_kind_constrs ++ fun_kind_constrs
+  --   arg_kind_constrs = (`LTEQKd` res_kind) <$> arg_kinds
+  --   fun_kind_constrs = concatMap (\ (kf, i) ->
+  --                                    let kds = take i arg_kinds
+  --                                    in (`LTEQKd` kf) <$> kds)
+  --                      $ fun_kinds `zip` [0..]
+  --   full_constrs = KdContext $ arg_kind_constrs ++ fun_kind_constrs
 
-    dc_partial_type = foldr2 FunTy res_type fun_kinds arg_tys
-    dc_type = WithContext full_constrs $ foldr ForAllTy dc_partial_type tc_binders    
+  --   dc_partial_type = foldr2 FunTy res_type fun_kinds arg_tys
+  --   dc_type = WithContext full_constrs $ foldr ForAllTy dc_partial_type tc_binders    
 
 -- mkDataConTy
 --   :: [TypeVar]     -- ^ type arguments

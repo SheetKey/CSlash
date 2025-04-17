@@ -6,7 +6,7 @@
 module CSlash.Tc.Zonk.Env where
 
 import CSlash.Core.Type.Rep ( Type )
-import CSlash.Core.Kind ( Kind )
+import CSlash.Core.Kind ( Kind, MonoKind )
 import CSlash.Types.Var ( TypeVar, KindVar, Var )
 
 import CSlash.Types.Var ( Id, isTyVar )
@@ -27,10 +27,10 @@ import GHC.Exts                  ( oneShot )
 data ZonkEnv = ZonkEnv
   { ze_flexi :: !ZonkFlexi
   , ze_tv_env :: TyVarEnv TypeVar
-  , ze_kv_env :: KdVarEnv KindVar
+  , ze_kv_env :: KiVarEnv KindVar
   , ze_id_env :: IdEnv Id
   , ze_meta_tv_env :: IORef (TyVarEnv Type)
-  , ze_meta_kv_env :: IORef (KdVarEnv Kind)
+  , ze_meta_kv_env :: IORef (KiVarEnv MonoKind)
   }
 
 data ZonkFlexi

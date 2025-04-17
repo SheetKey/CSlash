@@ -15,9 +15,9 @@ type IdSet = UniqSet Id
 
 type TyVarSet = UniqSet TypeVar
 
-type KdVarSet = UniqSet KindVar
-
 type KiVarSet = UniqSet KindVar
+
+type TyKiVarSet = UniqSet Var
 
 emptyVarSet :: VarSet
 emptyVarSet = emptyUniqSet

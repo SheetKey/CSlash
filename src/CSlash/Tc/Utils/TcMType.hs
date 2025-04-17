@@ -177,7 +177,7 @@ readMetaKiVar kivar = assertPpr (isMetaKiVar kivar) (ppr kivar)
 {-# SPECIALIZE readMetaKiVar :: KindVar -> TcM MetaDetailsK #-}
 {-# SPECIALIZE readMetaKiVar :: KindVar -> ZonkM MetaDetailsK #-}
 
-isFilledMetaKiVar_maybe :: TcKiVar -> TcM (Maybe Kind)
+isFilledMetaKiVar_maybe :: TcKiVar -> TcM (Maybe MonoKind)
 isFilledMetaKiVar_maybe kv
   | isTcKiVar kv
   , MetaKv { mkv_ref = ref } <- tcKiVarDetails kv
@@ -222,10 +222,10 @@ collect_cand_qkvs_ty orig_ty cur_lvl bound dvs ty = go dvs ty
     is_bound kv = kv `elemVarSet` bound
 
     go :: DKiVarSet -> TcType -> TcM DKiVarSet
-    go dv (AppTy t1 t2) = foldM go dv [t1, t2]
-    go dv (TyConApp tc tys) = go_tc_args dv (tyConKindBinders tc) tys
+    go dv (AppTy t1 t2) = foldlM go dv [t1, t2]
+    go dv (TyConApp _ tys) = foldlM go dv tys
     go dv (FunTy ki arg res) = do
-      dv1 <- collect_cand_qkvs ki cur_lvl bound dvs ki
+      dv1 <- collect_cand_qkvs (Mono ki) cur_lvl bound dvs (Mono ki)
       foldlM go dv1 [arg, res]
     go dv (TyVarTy tv)
       | is_bound tv = return dv
@@ -234,18 +234,13 @@ collect_cand_qkvs_ty orig_ty cur_lvl bound dvs ty = go dvs ty
                          Just ind_ty -> go dv ind_ty
                          Nothing -> go_tv dv tv
     go dv (ForAllTy (Bndr tv _) ty) = do
-      dv1 <- collect_cand_qkvs (tyVarKind tv) cur_lvl bound dv (tyVarKind tv)
+      dv1 <- collect_cand_qkvs (Mono $ tyVarKind tv) cur_lvl bound dv (Mono $ tyVarKind tv)
       collect_cand_qkvs_ty orig_ty cur_lvl (bound `extendVarSet` tv) dv1 ty
 
     go dv (TyLamTy tv ty) = do
-      dv1 <- collect_cand_qkvs (tyVarKind tv) cur_lvl bound dv (tyVarKind tv)
+      dv1 <- collect_cand_qkvs (Mono $ tyVarKind tv) cur_lvl bound dv (Mono $ tyVarKind tv)
       collect_cand_qkvs_ty orig_ty cur_lvl (bound `extendVarSet` tv) dv1 ty
     go _ other = pprPanic "collect_cand_qkvs_ty" (ppr other)
-
-    go_tc_args dv tc_bndrs (ty:tys) = do
-      dv1 <- collect_cand_qkvs_ty orig_ty cur_lvl (bound `extendVarSetList` tc_bndrs) dv ty
-      go_tc_args dv1 tc_bndrs tys
-    go_tc_args dv _bndrs [] = return dv
 
     go_tv dv tv
       | tcTyVarLevel tv <= cur_lvl
@@ -255,8 +250,8 @@ collect_cand_qkvs_ty orig_ty cur_lvl bound dvs ty = go dvs ty
           _ -> False
       = return dv
       | otherwise
-      = do tv_kind <- liftZonkM $ zonkTcKind (tyVarKind tv)
-           collect_cand_qkvs tv_kind cur_lvl bound dv tv_kind
+      = do tv_kind <- liftZonkM $ zonkTcMonoKind (tyVarKind tv)
+           collect_cand_qkvs (Mono tv_kind) cur_lvl bound dv (Mono tv_kind)
 
 candidateQKiVarsOfKind :: TcKind -> TcM DKiVarSet
 candidateQKiVarsOfKind ki = do
@@ -276,22 +271,28 @@ collect_cand_qkvs orig_ki cur_lvl bound dvs ki = go dvs ki
 
     -----------------
     go :: DKiVarSet -> TcKind -> TcM DKiVarSet
-    go dv (KiCon _) = return dv
-    go dv (KiVarKi kv)
+    go dv (Mono ki) = go_mono dv ki
+    go dv (ForAllKi kv ki) = collect_cand_qkvs orig_ki cur_lvl (bound `extendVarSet` kv) dv ki
+
+    go_mono :: DKiVarSet -> TcMonoKind -> TcM DKiVarSet
+    go_mono dv (KiConApp kc kis) = foldlM go_mono dv kis
+    go_mono dv (FunKi _ k1 k2) = foldlM go_mono dv [k1, k2]
+    go_mono dv (KiVarKi kv)
       | is_bound kv = return dv
       | otherwise = do
           m_contents <- isFilledMetaKiVar_maybe kv
           case m_contents of
-            Just ind_ki -> go dv ind_ki
+            Just ind_ki -> go_mono dv ind_ki
             Nothing -> go_kv dv kv
-    go dv (FunKd _ k1 k2) = foldM go dv [k1, k2]
-    go dv (KdContext rels) = foldM go_rel dv rels
 
-    go_rel dv (LTKd k1 k2) = foldM go dv [k1, k2]
-    go_rel dv (LTEQKd k1 k2) = foldM go dv [k1, k2]
+
 
     go_kv dv kv
       | tcKiVarLevel kv <= cur_lvl
+      = return dv
+      | case tcKiVarDetails kv of
+          SkolemKv _ lvl -> lvl `strictlyDeeperThan` pushTcLevel cur_lvl
+          _ -> False
       = return dv
       | kv `elemDVarSet` dv
       = return dv
@@ -340,7 +341,7 @@ skolemizeQuantifiedTyVar :: SkolemInfo -> TcTyVar -> ZonkM TcTyVar
 skolemizeQuantifiedTyVar skol_info tv
   = case tcTyVarDetails tv of
       MetaTv {} -> skolemizeUnboundMetaTyVar skol_info tv
-      SkolemTv _ lvl -> do kind <- zonkTcKind (tyVarKind tv)
+      SkolemTv _ lvl -> do kind <- zonkTcMonoKind (tyVarKind tv)
                            let details = SkolemTv skol_info lvl
                                name = tyVarName tv
                            return $ mkTcTyVar name kind details
@@ -364,8 +365,9 @@ defaultKiVar kv
        return True
   | otherwise
   = do traceTc "Defaulting a kind var to ANYKind" (ppr kv)
-       liftZonkM $ writeMetaKiVar kv (KiCon ANYKind)
-       return True
+       panic "defaultKiVar"
+       -- liftZonkM $ writeMetaKiVar kv (KiCon ANYKind)
+       -- return True
 
 defaultKiVars :: DKiVarSet -> TcM [TcKiVar]
 defaultKiVars dvs = do
@@ -377,7 +379,7 @@ skolemizeUnboundMetaTyVar :: SkolemInfo -> TcTyVar -> ZonkM TypeVar
 skolemizeUnboundMetaTyVar skol_info tv = assertPpr (isMetaTyVar tv) (ppr tv) $ do
   check_empty tv
   ZonkGblEnv { zge_src_span = here, zge_tc_level = tc_lvl } <- getZonkGblEnv
-  kind <- zonkTcKind (tyVarKind tv)
+  kind <- zonkTcMonoKind (tyVarKind tv)
   let tv_name = tyVarName tv
       final_name | isSystemName tv_name
                  = mkInternalName (nameUnique tv_name) (nameOccName tv_name) here
@@ -410,7 +412,7 @@ skolemizeUnboundMetaKiVar skol_info kv = assertPpr (isMetaKiVar kv) (ppr kv) $ d
       final_kv = mkTcKiVar final_name details
 
   traceZonk "Skolemizing" (ppr kv <+> text ":=" <+> ppr final_kv)
-  writeMetaKiVar kv (mkKiVarKi final_kv)
+  writeMetaKiVar kv (mkKiVarMKi final_kv)
   return final_kv
   where
     check_empty kv = when debugIsOn $ do
@@ -445,7 +447,7 @@ promoteMetaKiVarTo tclvl kv
     $ tcKiVarLevel kv `strictlyDeeperThan` tclvl
   = do cloned_kv <- cloneMetaKiVar kv
        let rhs_kv = setMetaKiVarTcLevel cloned_kv tclvl
-       liftZonkM $ writeMetaKiVar kv (mkKiVarKi rhs_kv)
+       liftZonkM $ writeMetaKiVar kv (mkKiVarMKi rhs_kv)
        traceTc "promoteKiVar" (ppr kv <+> text "-->" <+> ppr rhs_kv)
        return True
   | otherwise

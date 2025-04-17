@@ -67,7 +67,7 @@ import CSlash.Types.Name.Ppr
 import CSlash.Types.Unique.FM ( emptyUFM )
 import CSlash.Types.Unique.Supply
 -- import GHC.Types.Annotations
-import CSlash.Types.Basic( TopLevelFlag{-, TypeOrKind(..)-} )
+import CSlash.Types.Basic( TopLevelFlag, TypeOrKind(..) )
 -- import GHC.Types.CostCentre.State
 import CSlash.Types.SourceFile
 
@@ -587,11 +587,12 @@ pushCtxt ctxt = updLclEnv (updCtxt ctxt)
 updCtxt :: ErrCtxt -> TcLclEnv -> TcLclEnv
 updCtxt  ctxt env = addLclEnvErrCtxt ctxt env
  
-getCtLocM :: CtOrigin -> TcM CtLoc
-getCtLocM origin = do
+getCtLocM :: CtOrigin -> Maybe TypeOrKind -> TcM CtLoc
+getCtLocM origin t_or_k = do
   env <- getLclEnv
   return $ CtLoc { ctl_origin = origin
                  , ctl_env = mkCtLocEnv env
+                 , ctl_t_or_k = t_or_k
                  , ctl_depth = initialSubGoalDepth }
 
 mkCtLocEnv :: TcLclEnv -> CtLocEnv
@@ -809,8 +810,8 @@ getTcLevel = do
 setTcLevel :: TcLevel -> TcM a -> TcM a
 setTcLevel tclvl thing_inside = updLclEnv (setLclEnvTcLevel tclvl) thing_inside
 
-getLclTypeEnv :: TcM TcTypeEnv
-getLclTypeEnv = do
+getLclTyKiEnv :: TcM TcTyKiEnv
+getLclTyKiEnv = do
   env <- getLclEnv
   return $ getLclEnvTypeEnv env
 

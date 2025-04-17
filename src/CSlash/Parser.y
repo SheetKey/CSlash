@@ -597,7 +597,7 @@ fun_exp :: { ETP }
                                                      $ CsFunTy noExtField
                                                        (CsArrow (EpL $ epUniTok $2)
                                                                 (L (noAnnSrcSpan loc)
-                                                                 $ CsKdVar []
+                                                                 $ CsKiVar []
                                                                      (L (noAnnSrcSpan loc)
                                                                       $ mkUnqual kvName
                                                                       $ getARRK $2)))
@@ -617,7 +617,7 @@ fun_exp :: { ETP }
   --              ; return $ etpFromTy res } }
   | fun_exp '->' aexp1 {% runPV $ unETP $1 >>= \ ($1 :: LCsKind Ps) ->
                                   unETP $3 >>= \ ($3 :: LCsKind Ps) -> do
-                                  { res <- amsA' (sLL $1 $3 $ CsFunKd noExtField $1 $3)
+                                  { res <- amsA' (sLL $1 $3 $ CsFunKi noExtField $1 $3)
                                   ; return $ etpFromKd res } }
 
 sig_exp :: { ETP }
@@ -750,7 +750,7 @@ aexp1 :: { ETP }
                                  $ CsParTy (epTok $1, epTok $3) funty
                         ; return $ etpFromTy res } }
   | '(' PREFIX_MINUS a_varid SUFFIX_ARR ')'
-                  {% do { kind <- amsA' $ sL1 $3 $ CsKdVar [] (fmap unknownToKv $3)
+                  {% do { kind <- amsA' $ sL1 $3 $ CsKiVar [] (fmap unknownToKv $3)
                         ; name <- amsA' $ sLL $2 $4 $ getRdrName fUNTyCon
                         ; tyvar <- amsA' $ sLL $2 $4 $ CsTyVar [] name
                         ; funty <- amsA' $ sLL $2 $4 $ CsKindSig [] tyvar kind

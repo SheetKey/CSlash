@@ -11,6 +11,7 @@ import CSlash.Core.Type.FVs
 import CSlash.Core.TyCon
 
 import CSlash.Types.Var
+import CSlash.Types.Var.Set
 import CSlash.Types.Unique
 import CSlash.Types.Var.Env
 
@@ -29,76 +30,64 @@ import qualified Data.Semigroup as S
 ********************************************************************* -}
 
 tcEqKind :: HasDebugCallStack => Kind -> Kind -> Bool
-tcEqKind orig_ki1 orig_ki2 = go orig_env orig_ki1 orig_ki2
-  where
-    go :: RnEnv2 -> Kind -> Kind -> Bool
-    go _ (KiCon kc1) (KiCon kc2) = kc1 == kc2
-    go env (KiVarKi kv1) (KiVarKi kv2)
-      = rnOccL env kv1 == rnOccR env kv2
-    go env (FunKd _ arg1 res1) (FunKd _ arg2 res2)
-      = go env arg1 arg2 && go env res1 res2
-    go env (KdContext rels1) (KdContext rels2)
-      = all2 (go_rel env) rels1 rels2
-    go _ _ _ = False
+tcEqKind = eqKind
 
-    go_rel env (LTKd k1 k2) (LTKd k1' k2')
-      = go env k1 k1' && go env k2 k2'
-    go_rel env (LTEQKd k1 k2) (LTEQKd k1' k2')
-      = go env k1 k1' && go env k2 k2'
-    go_rel _ _ _ = False
+initRnEnv :: Kind -> Kind -> RnEnv2
+initRnEnv ka kb = mkRnEnv2 $ mkInScopeSet $
+                  kiVarsOfKind ka `unionVarSet` kiVarsOfKind kb
 
-    orig_env = mkRnEnv2 $ mkInScopeSet $ kiVarsOfKinds [orig_ki1, orig_ki2]
+eqKind :: HasCallStack => Kind -> Kind -> Bool
+eqKind ka kb = eq_kind ka kb
 
-{- *********************************************************************
-*                                                                      *
-                Comparison for kinds
-*                                                                      *
-********************************************************************* -}
+eq_kind :: Kind -> Kind -> Bool
+eq_kind = inline_generic_eq_kind_x Nothing
 
-eqKind :: Kind -> Kind -> Bool
-eqKind k1 k2 = isEqual $ nonDetCmpKind k1 k2
+{-# NOINLINE generic_eq_kind_x #-}
+generic_eq_kind_x :: Maybe RnEnv2 -> Kind -> Kind -> Bool
+generic_eq_kind_x = inline_generic_eq_kind_x
 
-nonDetCmpKind :: Kind -> Kind -> Ordering
-nonDetCmpKind !k1 !k2
-  | 1# <- reallyUnsafePtrEquality# k1 k2
-  = EQ
-nonDetCmpKind k1 k2 = nonDetCmpKindX rn_env k1 k2
-  where
-    rn_env = mkRnEnv2 (mkInScopeSet (kiVarsOfKinds [k1, k2]))
-{-# INLINE nonDetCmpKind #-}
+{-# INLINE inline_generic_eq_kind_x #-}
+inline_generic_eq_kind_x :: Maybe RnEnv2 -> Kind -> Kind -> Bool
+inline_generic_eq_kind_x mb_env = \k1 k2 -> k1 `seq` k2 `seq`
+  let go = generic_eq_kind_x mb_env
+      go_mono = generic_eq_mono_kind_x mb_env
+  in case (k1, k2) of
+       (Mono k1, Mono k2) -> go_mono k1 k2
+       (ForAllKi kv1 body1, ForAllKi kv2 body2)
+         -> case mb_env of
+              Nothing -> generic_eq_kind_x (Just (initRnEnv k1 k2)) k1 k2
+              Just env -> generic_eq_kind_x (Just (rnBndr2 env kv1 kv2)) body1 body2
+       _ -> False
 
-nonDetCmpKindX :: RnEnv2 -> Kind -> Kind -> Ordering
-nonDetCmpKindX env orig_k1 orig_k2 = go env orig_k1 orig_k2
-  where
-    go :: RnEnv2 -> Kind -> Kind -> Ordering
-    go _ (KiCon kc1) (KiCon kc2)
-      | kc1 == kc2 = EQ
-    go env (KiVarKi kv1) (KiVarKi kv2)
-      = rnOccL env kv1 `nonDetCmpVar` rnOccR env kv2
-    go env (FunKd _ a1 r1) (FunKd _ a2 r2)
-      = nonDetCmpKindX env a1 a2 S.<> nonDetCmpKindX env r1 r2
-    -- go env (KdContext rels1) (KdContext rels2) = go_rels env rels1 rels2
-    go _ k1 k2 = get_rank k1 `compare` get_rank k2
-      where
-        get_rank :: Kind -> Int
-        get_rank (KiVarKi {}) = 0
-        get_rank (KiCon _) = 1
-        get_rank (KdContext {}) = 2
-        get_rank (FunKd {}) = 3
+{-# NOINLINE generic_eq_mono_kind_x #-}
+generic_eq_mono_kind_x :: Maybe RnEnv2 -> MonoKind -> MonoKind -> Bool
+generic_eq_mono_kind_x = inline_generic_eq_mono_kind_x
 
-    {- NOTE: Comparing contexts is very hard.
-             What if we have 'go_rels env [r1, r2] [r2, r1]'?
-             What if the number of rels mismatch?
-             What if we have 'go_rel (LTKd k1 AKd) (LTEQKd k1 AKd)?
-             Tough!
-    -}
+{-# INLINE inline_generic_eq_mono_kind_x #-}
+inline_generic_eq_mono_kind_x :: Maybe RnEnv2 -> MonoKind -> MonoKind -> Bool
+inline_generic_eq_mono_kind_x mb_env = \k1 k2 -> k1 `seq` k2 `seq`
+  let go = generic_eq_mono_kind_x mb_env
 
-    -- go_rels :: RnEnv2 -> [KdRel] -> [KdRel] -> Ordering
-    -- go_rels _ _ _ = EQ
-    -- go_rels env rels1 rels2 = foldr1 (S.<>) $ zipWith (go_rel env) rels1 rels2
+      gos [] [] = True
+      gos (k1:ks1) (k2:ks2) = go k1 k2 && gos ks1 ks2
+      gos _ _ = False
 
-    -- go_rel env (LTKd lk1 lk2) (LTKd rk1 rk2) = go env lk1 rk1 || go env lk2 rk2
-    -- go_rel env (LTEQKd lk1 lk2) (LTEQKd rk1 rk2) = go env lk1 rk1 || go env lk2 rk2
-    -- go_rel _ (LTKd _ _) (LTEQKd _ _) = LT
-    -- go_rel _ (LTEQKd _ _) (LTKd _ _) = GT
+  in case (k1, k2) of
+       _ | 1# <- reallyUnsafePtrEquality# k1 k2 -> True
 
+       (KiConApp kc1 kis1, KiConApp kc2 kis2)
+         | kc1 == kc2
+           -> gos kis1 kis2
+         | otherwise
+           -> False
+           
+       (KiVarKi kv1, KiVarKi kv2)
+         -> case mb_env of
+              Nothing -> kv1 == kv2
+              Just env -> rnOccL env kv1 == rnOccR env kv2
+
+       (FunKi _ arg1 res1, FunKi _ arg2 res2)
+         -> go arg1 arg2
+            && go res1 res2
+
+       _ -> False

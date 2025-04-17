@@ -233,7 +233,7 @@ type IdEnv elt = UniqFM Id elt
 
 type TyVarEnv elt = UniqFM Var elt
 
-type KdVarEnv elt = UniqFM Var elt
+type KiVarEnv elt = UniqFM Var elt
 
 mkVarEnv :: [(Var, a)] -> VarEnv a
 mkVarEnv = listToUFM

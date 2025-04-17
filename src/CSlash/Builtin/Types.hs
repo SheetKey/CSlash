@@ -78,8 +78,6 @@ trueDataConName
 
 makeRecoveryTyCon :: TyCon -> TyCon
 makeRecoveryTyCon tc = mkTcTyCon (tyConName tc)
-                                 (tyConKindBinders tc)
-                                 (tyConResKind tc)
                                  (tyConKind tc)
                                  (tyConArity tc)
                                  []
@@ -96,14 +94,12 @@ makeRecoveryTyCon tc = mkTcTyCon (tyConName tc)
 pcTyCon :: Name -> [DataCon] -> Arity -> TyCon
 pcTyCon name cons arity
   = mkAlgTyCon name
-               binders
-               res_kind
                kind
                arity
                (mkDataTyConRhs cons)
                VanillaAlgTyCon
   where
-    (binders, kind, res_kind) = mkTemplateTyConKindRes arity
+    kind = mkTemplateTyConKind arity
 
 pcDataCon :: Name -> TyCon -> Arity -> DataCon
 pcDataCon n tycon arity
@@ -293,9 +289,9 @@ tupleArr = listArray (0, mAX_TUPLE_SIZE) [mk_tuple i | i <- [0..mAX_TUPLE_SIZE]]
 mk_tuple :: Int -> (TyCon, DataCon)
 mk_tuple arity = (tycon, tuple_con)
   where
-    tycon = mkTupleTyCon tc_name binders tc_res_kind tc_kind arity tuple_con flavor
+    tycon = mkTupleTyCon tc_name tc_kind arity tuple_con flavor
 
-    (binders, tc_kind, tc_res_kind) = mkTemplateTyConKindRes arity
+    tc_kind = mkTemplateTyConKind arity
 
     flavor = VanillaAlgTyCon
     tuple_con = pcDataCon dc_name tycon arity
@@ -383,9 +379,9 @@ sumArr = listArray (2, mAX_SUM_SIZE) [mk_sum i | i <- [2..mAX_SUM_SIZE]]
 mk_sum :: Arity -> (TyCon, Array ConTagZ DataCon)
 mk_sum arity = (tycon, sum_cons)
   where
-    tycon = mkSumTyCon tc_name binders tc_res_kind tc_kind arity (elems sum_cons) AlgSumTyCon
+    tycon = mkSumTyCon tc_name tc_kind arity (elems sum_cons) AlgSumTyCon
   
-    (binders, tc_kind, tc_res_kind) = mkTemplateTyConKindRes arity
+    tc_kind = mkTemplateTyConKind arity
 
     modu = cSLASH_BUILTIN
     tc_name = mkWiredInName modu (mkSumTyConOcc arity) tc_uniq

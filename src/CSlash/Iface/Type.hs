@@ -11,7 +11,7 @@ import {-# SOURCE #-} CSlash.Builtin.Types
   , tupleDataConName
   , sumTyCon )
 -- import GHC.Core.Type ( isRuntimeRepTy, isMultiplicityTy, isLevityTy, funTyFlagTyCon )
-import CSlash.Core.Kind (FunKdFlag)
+import CSlash.Core.Kind (FunKiFlag)
 -- import GHC.Core.TyCo.Rep( CoSel )
 -- import GHC.Core.TyCo.Compare( eqForAllVis )
 import CSlash.Core.TyCon
@@ -57,11 +57,11 @@ type IfaceTvBndr = (IfLclName, IfaceKind)
 ********************************************************************** -}
 
 data IfaceKind
-  = IfaceKdVar IfLclName
+  = IfaceKiVar IfLclName
   | IfaceUKd
   | IfaceAKd
   | IfaceLKd
-  | IfaceFunKd FunKdFlag IfaceKind IfaceKind
+  | IfaceFunKi FunKiFlag IfaceKind IfaceKind
   | IfaceKdContext [IfaceKdRel]
 
 data IfaceKdRel
@@ -247,7 +247,7 @@ pprTypeArrow :: IfaceKind -> SDoc
 pprTypeArrow IfaceLKd = linarrow
 pprTypeArrow IfaceAKd = affarrow
 pprTypeArrow IfaceUKd = unrarrow
-pprTypeArrow (IfaceKdVar kv) = char '-' <> ppr kv <> char '>'
+pprTypeArrow (IfaceKiVar kv) = char '-' <> ppr kv <> char '>'
 pprTypeArrow _ = panic "pprTypeArrow"
 
 ppr_ty :: PprPrec -> IfaceType -> SDoc
