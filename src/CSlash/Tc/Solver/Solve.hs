@@ -1,9 +1,9 @@
 module CSlash.Tc.Solver.Solve where
 
-import CSlash.Tc.Solver.Relation
+-- import GHC.Tc.Solver.Dict
 import CSlash.Tc.Solver.Equality( solveKiEquality )
-import CSlash.Tc.Solver.Irred( solveIrred )
-import CSlash.Tc.Solver.Rewrite( rewriteKi )
+-- import GHC.Tc.Solver.Irred( solveIrred )
+-- import GHC.Tc.Solver.Rewrite( rewrite )
 import CSlash.Tc.Errors.Types
 import CSlash.Tc.Utils.TcType
 -- import GHC.Tc.Types.Evidence
@@ -13,8 +13,7 @@ import CSlash.Tc.Types.Constraint
 import CSlash.Tc.Solver.InertSet
 import CSlash.Tc.Solver.Monad
 
-import CSlash.Core.Kind
-import CSlash.Core.Predicate
+-- import GHC.Core.Predicate
 import CSlash.Core.Reduction
 -- import GHC.Core.Coercion
 -- import GHC.Core.Class( classHasSCs )
@@ -37,7 +36,8 @@ import Control.Monad
 import Data.Semigroup as S
 import Data.Void( Void )
 
-{- *******************************************************************
+{-
+**********************************************************************
 *                                                                    *
 *                      Main Solver                                   *
 *                                                                    *
@@ -136,41 +136,7 @@ solveCt (CNonCanonical ev) = solveNC ev
 solveCt (CIrredCan (IrredCt { ir_ev = ev })) = solveNC ev
 solveCt (CEqCan (KiEqCt { eq_ev = ev, eq_lhs = lhs, eq_rhs = rhs }))
   = solveKiEquality ev (canKiEqLHSKind lhs) rhs
-solveCt (CRelCan (RelCt { rl_ev = ev })) = do
-  ev <- rewriteEvidence ev
-  case classifyPredKind (ctEvPred ev) of
-    RelPred kc k1 k2 -> solveRel (RelCt { rl_ev = ev, rl_kc = kc, rl_ki1 = k1, rl_ki2 = k2 })
-    _ -> pprPanic "solveCt" (ppr ev)
 
 solveNC :: CtEvidence -> SolverStage Void
-solveNC ev = case classifyPredKind (ctEvPred ev) of
-  EqPred ki1 ki2 -> solveKiEquality ev ki1 ki2
-  _ -> do ev <- rewriteEvidence ev
-          let irred = IrredCt { ir_ev = ev, ir_reason = IrredShapeReason }
-          case classifyPredKind (ctEvPred ev) of
-            RelPred kc ki1 ki2 -> solveRelNC ev kc ki1 ki2
-            IrredPred {} -> solveIrred irred
-            EqPred ki1 ki2 -> solveKiEquality ev ki1 ki2
-
-{- *********************************************************************
-*                                                                      *
-                  Evidence transformation
-*                                                                      *
-********************************************************************* -}
-
-rewriteEvidence :: CtEvidence -> SolverStage CtEvidence
-rewriteEvidence ev = Stage $ do
-  traceTcS "rewriteEvidence" (ppr ev)
-  (redn, rewriters) <- rewriteKi ev (ctEvPred ev)
-  finish_rewrite ev redn rewriters
-
-finish_rewrite :: CtEvidence -> Reduction -> RewriterSet -> TcS (StopOrContinue CtEvidence)
-finish_rewrite old_ev (ReductionKi co new_pred) rewriters
-  | isReflKiCo co
-  = assert (isEmptyRewriterSet rewriters)
-    $ continueWith (setCtEvPredKind old_ev new_pred)
-
-finish_rewrite ev@(CtWanted { ctev_dest = dest, ctev_loc = loc, ctev_rewriters = rewriters })
-               (ReductionKi co new_pred) new_rewriters
-  = do mb_new_ev <- panic "newWanted loc rewriters' new_pred"
-       panic "finish_rewrite"
+solveNC ev = case ctEvPred ev of
+  KiEqPred ki1 ki2 -> solveKiEquality ev ki1 ki2

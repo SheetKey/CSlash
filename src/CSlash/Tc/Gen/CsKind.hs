@@ -63,27 +63,27 @@ import Data.List ( mapAccumL )
 import Control.Monad
 import Data.Tuple( swap )
 
-tcLCsKind :: LCsKind Rn -> TcM TcMonoKind
+tcLCsKind :: LCsKind Rn -> TcM TcKind
 tcLCsKind (L span ki) = setSrcSpanA span $ tcCsKind ki
 
-tcCsKind :: CsKind Rn -> TcM TcMonoKind
-tcCsKind CsUKd {} = return $ KiConApp UKd []
-tcCsKind CsAKd {} = return $ KiConApp AKd []
-tcCsKind CsLKd {} = return $ KiConApp LKd []
+tcCsKind :: CsKind Rn -> TcM TcKind
+tcCsKind CsUKd {} = return $ KiCon UKd
+tcCsKind CsAKd {} = return $ KiCon AKd
+tcCsKind CsLKd {} = return $ KiCon LKd
 tcCsKind (CsKiVar _ kv) = tcKiVar (unLoc kv)
 tcCsKind (CsFunKi _ k1 k2) = tc_fun_kind k1 k2
 tcCsKind (CsParKd _ ki) = tcLCsKind ki
 
-tc_fun_kind :: LCsKind Rn -> LCsKind Rn -> TcM TcMonoKind
+tc_fun_kind :: LCsKind Rn -> LCsKind Rn -> TcM TcKind
 tc_fun_kind k1 k2 = do
   k1' <- tcLCsKind k1 
   k2' <- tcLCsKind k2
   return $ FunKi FKF_K_K k1' k2'
 
-tcKiVar :: Name -> TcM TcMonoKind
+tcKiVar :: Name -> TcM TcKind
 tcKiVar name = do
   traceTc "lk1k" (ppr name)
   thing <- tcLookup name
   case thing of
-    AKiVar _ kv -> return $ mkKiVarMKi kv
+    AKiVar _ kv -> return $ mkKiVarKi kv
     _ -> wrongThingErr WrongThingKind thing name

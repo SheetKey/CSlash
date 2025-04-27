@@ -14,7 +14,7 @@ import CSlash.Builtin.Names
 import CSlash.Tc.Errors.Types
 import CSlash.Tc.Types     -- Re-export all
 import CSlash.Tc.Types.Constraint
-import CSlash.Tc.Types.Evidence
+-- import GHC.Tc.Types.Evidence
 import CSlash.Tc.Types.Origin
 import CSlash.Tc.Types.TcRef
 import CSlash.Tc.Utils.TcType
@@ -753,17 +753,9 @@ mAX_CONTEXTS = 3
 
 {- *********************************************************************
 *                                                                      *
-             Type/Kind constraints
+             Type constraints
 *                                                                      *
 ********************************************************************* -}
-
-newTcKiEvBinds :: TcM KiEvBindsVar
-newTcKiEvBinds = do
-  kcvs_ref <- newTcRef emptyVarSet
-  uniq <- newUnique
-  traceTc "newTcKiEvBinds" (text "unique =" <+> ppr uniq)
-  return $ KiCoEvBindsVar { ebv_kcvs = kcvs_ref
-                          , ebv_uniq = uniq }
 
 getConstraintVar :: TcM (TcRef WantedConstraints)
 getConstraintVar = do

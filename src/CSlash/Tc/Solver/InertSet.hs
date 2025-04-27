@@ -15,7 +15,7 @@ import CSlash.Types.Var.Set
 import CSlash.Types.Basic( SwapFlag(..) )
 
 -- import GHC.Core.Reduction
-import CSlash.Core.Predicate
+-- import GHC.Core.Predicate
 import CSlash.Core.Type.FVs
 import CSlash.Core.Kind.FVs
 import CSlash.Core.Kind
@@ -46,56 +46,37 @@ import Control.Monad ( forM_ )
 
 data WorkList = WL
   { wl_eqs :: [Ct]
-  , wl_rw_eqs :: [Ct]
   , wl_rest :: [Ct]
   , wl_implics :: Bag Implication
   }
 
-extendWorkListEq :: RewriterSet -> Ct -> WorkList -> WorkList
-extendWorkListEq rewriters ct wl
-  | isEmptyRewriterSet rewriters
-  = wl { wl_eqs = ct : wl_eqs wl }
-  | otherwise
-  = wl { wl_rw_eqs = ct : wl_rw_eqs wl }
+extendWorkListEq :: Ct -> WorkList -> WorkList
+extendWorkListEq ct wl = wl { wl_eqs = ct : wl_eqs wl }
 
-extendWorkListEqs :: RewriterSet -> Bag Ct -> WorkList -> WorkList
-extendWorkListEqs rewriters eqs wl
-  | isEmptyRewriterSet rewriters
-  = wl { wl_eqs = foldr (:) (wl_eqs wl) eqs }
-  | otherwise
-  = wl { wl_rw_eqs = foldr (:) (wl_rw_eqs wl) eqs }
-
-extendWorkListNonEq :: Ct -> WorkList -> WorkList
-extendWorkListNonEq ct wl = wl { wl_rest = ct : wl_rest wl }
+extendWorkListEqs :: Bag Ct -> WorkList -> WorkList
+extendWorkListEqs eqs wl = wl { wl_eqs = foldr (:) (wl_eqs wl) eqs }
 
 extendWorkListCt :: Ct -> WorkList -> WorkList
-extendWorkListCt ct wl = case classifyPredKind (ctEvPred ev) of
-  EqPred {} -> extendWorkListEq rewriters ct wl
-  _ -> extendWorkListNonEq ct wl
-  where
-    ev = ctEvidence ct
-    rewriters = ctEvRewriters ev  
+extendWorkListCt ct wl = case ctEvPred (ctEvidence ct) of
+  KiEqPred {} -> extendWorkListEq ct wl
 
 extendWorkListCts :: Cts -> WorkList -> WorkList
 extendWorkListCts cts wl = foldr extendWorkListCt wl cts
 
 emptyWorkList :: WorkList
-emptyWorkList = WL { wl_eqs = [], wl_rw_eqs = [], wl_rest = [], wl_implics = emptyBag }
+emptyWorkList = WL { wl_eqs = [], wl_rest = [], wl_implics = emptyBag }
 
 selectWorkItem :: WorkList -> Maybe (Ct, WorkList)
-selectWorkItem wl@(WL { wl_eqs = eqs, wl_rw_eqs = rw_eqs, wl_rest = rest })
+selectWorkItem wl@(WL { wl_eqs = eqs, wl_rest = rest })
   | ct : cts <- eqs = Just (ct, wl { wl_eqs = cts })
-  | ct:cts <- rw_eqs = Just (ct, wl { wl_rw_eqs = cts })
   | ct : cts <- rest = Just (ct, wl { wl_rest = cts })
   | otherwise = Nothing
 
 instance Outputable WorkList where
-  ppr (WL { wl_eqs = eqs, wl_rw_eqs = rw_eqs, wl_rest = rest, wl_implics = implics })
+  ppr (WL { wl_eqs = eqs, wl_rest = rest, wl_implics = implics })
     = text "WL" <+> (braces $
                      vcat [ ppUnless (null eqs)
                             $ text "Eqs =" <+> vcat (map ppr eqs)
-                          , ppUnless (null rw_eqs)
-                            $ text "RwEqs =" <+> vcat (map ppr rw_eqs)
                           , ppUnless (null rest)
                             $ text "Non-eqs" <+> vcat (map ppr rest)
                           , ppUnless (isEmptyBag implics)
@@ -114,20 +95,14 @@ type CycleBreakerVarStack = NonEmpty (Bag (TcTyVar, TcType))
 data InertSet = IS
   { inert_cans :: InertCans
   , inert_cycle_breakers :: CycleBreakerVarStack
-  , inert_solved_rels :: RelMap RelCt
   }
 
 instance Outputable InertSet where
-  ppr (IS { inert_cans = ics, inert_solved_rels = solved_rels })
-    = vcat [ ppr ics
-           , ppUnless (null rels)
-           $ text "Solved rels =" <+> vcat (map ppr rels) ]
-    where
-      rels = bagToList $ relsToBag solved_rels
+  ppr (IS { inert_cans = ics })
+    = vcat [ ppr ics ]
 
 emptyInertCans :: InertCans
 emptyInertCans = IC { inert_eqs = emptyEqs
-                    , inert_rels = emptyRelMap
                     , inert_irreds = emptyBag
                     , inert_given_eq_lvl = topTcLevel
                     , inert_given_eqs = False
@@ -136,7 +111,6 @@ emptyInertCans = IC { inert_eqs = emptyEqs
 emptyInert :: InertSet
 emptyInert = IS { inert_cans = emptyInertCans
                 , inert_cycle_breakers = emptyBag :| []
-                , inert_solved_rels = emptyRelMap
                 }
 
 {- *********************************************************************
@@ -147,7 +121,6 @@ emptyInert = IS { inert_cans = emptyInertCans
 
 data InertCans = IC
   { inert_eqs :: InertEqs
-  , inert_rels :: RelMap RelCt
   , inert_irreds :: InertIrreds
   , inert_given_eq_lvl :: TcLevel
   , inert_given_eqs :: Bool
@@ -247,29 +220,20 @@ updIrreds :: (InertIrreds -> InertIrreds) -> InertCans -> InertCans
 updIrreds upd ics = ics { inert_irreds = upd (inert_irreds ics) }
 
 findMatchingIrreds :: InertIrreds -> CtEvidence -> (Bag (IrredCt, SwapFlag), InertIrreds)
-findMatchingIrreds irreds ev 
-  | EqPred lki1 rki1 <- classifyPredKind pred
-  = partitionBagWith (match_eq lki1 rki1) irreds
-  | otherwise
-  = partitionBagWith match_non_eq irreds
+findMatchingIrreds irreds ev = case ctEvPred ev of
+  KiEqPred lki1 rki1 -> partitionBagWith (match_eq lki1 rki1) irreds
   where
-    pred = ctEvPred ev
-
-    match_non_eq irred
-      | irredCtPred irred `tcEqMonoKind` pred = Left (irred, NotSwapped)
-      | otherwise = Right irred
-
-    match_eq lki1 rki1 irred
-      | EqPred lki2 rki2 <- classifyPredKind (irredCtPred irred)
-      , Just swap <- match_eq_help lki1 rki1 lki2 rki2
-      = Left (irred, swap)
-      | otherwise
-      = Right irred
+    match_eq lki1 rki1 irred = case irredCtPred irred of
+      KiEqPred lki2 rki2
+        | Just swap <- match_eq_help lki1 rki1 lki2 rki2
+          -> Left (irred, swap)
+        | otherwise
+          -> Right irred
 
     match_eq_help lki1 rki1 lki2 rki2
-      | lki1 `tcEqMonoKind` lki2, rki1 `tcEqMonoKind` rki2
+      | lki1 `tcEqKind` lki2, rki1 `tcEqKind` rki2
       = Just NotSwapped
-      | lki1 `tcEqMonoKind` rki2, rki1 `tcEqMonoKind` lki2
+      | lki1 `tcEqKind` rki2, rki1 `tcEqKind` lki2
       = Just IsSwapped
       | otherwise
       = Nothing
@@ -302,54 +266,61 @@ data KickOutSpec
 
 kickOutRewritableLHS :: KickOutSpec -> CtFlavor -> InertCans -> (Cts, InertCans)
 kickOutRewritableLHS ko_spec new_f ics@(IC { inert_eqs = v_eqs, inert_irreds = irreds })
-  = panic "kickOutRewritableLHS"
-  -- = (kicked_out, inert_cans_in)
-  -- where
-  --   inert_cans_in = ics { inert_eqs = v_eqs_in
-  --                       , inert_irreds = irs_in }
+  = (kicked_out, inert_cans_in)
+  where
+    inert_cans_in = ics {inert_eqs = v_eqs_in
+                        , inert_irreds = irs_in }
 
-  --   kicked_out :: Cts
-  --   kicked_out = fmap CIrredCan irs_out `extendCtsList` fmap CEqCan v_eqs_out
+    kicked_out = fmap CIrredCan irs_out `extendCtsList` fmap CEqCan v_eqs_out
 
-  --   (v_eqs_out, v_eqs_in) = partitionInertEqs kick_out_eq v_eqs
-  --   (irs_out, irs_in) = partitionBag (kick_out_ct . CIrredCan) irreds
+    (v_eqs_out, v_eqs_in) = partitionInertEqs kick_out_eq v_eqs
+    (irs_out, irs_in) = partitionBag (kick_out_ct . CIrredCan) irreds
 
-  --   f_v_can_rewrite_ki :: (KindVar -> Bool) -> Kind -> Bool
-  --   f_v_can_rewrite_ki = anyRewritableKiVar 
+    f_v_can_rewrite_pred :: (Var -> Bool) -> Pred -> Bool
+    f_v_can_rewrite_pred ok_v pred
+      = anyRewritableVar ok_v pred
 
-  --   {-# INLINE f_can_rewrite_ki #-}
-  --   f_can_rewrite_ki :: Kind -> Bool
-  --   f_can_rewrite_ki = case ko_spec of
-  --     KOAfterUnify vs -> f_v_can_rewrite_ki (`elemVarSet` vs)
-  --     KOAfterAdding (KiVarLHS kv) -> f_v_can_rewrite_ki (== kv)
+    f_v_can_rewrite_ki :: (KindVar -> Bool) -> Kind -> Bool
+    f_v_can_rewrite_ki = anyRewritableKiVar 
 
-  --   f_may_rewrite f = new_f `eqCanRewriteF` f
+    {-# INLINE f_can_rewrite_pred #-}
+    f_can_rewrite_pred = case ko_spec of
+      KOAfterUnify vs -> f_v_can_rewrite_pred (`elemVarSet` vs)
+      KOAfterAdding (KiVarLHS kv) -> f_v_can_rewrite_pred (== kv)
 
-  --   kick_out_ct ct = f_may_rewrite (ctFlavor ct) && f_can_rewrite_ki (ctPred ct)
+    {-# INLINE f_can_rewrite_ki #-}
+    f_can_rewrite_ki :: Kind -> Bool
+    f_can_rewrite_ki = case ko_spec of
+      KOAfterUnify vs -> f_v_can_rewrite_ki (`elemVarSet` vs)
+      KOAfterAdding (KiVarLHS kv) -> f_v_can_rewrite_ki (== kv)
 
-  --   kick_out_eq (KiEqCt { eq_lhs = lhs, eq_rhs = rhs_ki, eq_ev = ev })
-  --     | not (f_may_rewrite f)
-  --     = False
-  --     | KiVarLHS _ <- lhs
-  --     , f `eqCanRewriteF` new_f
-  --     = False
-  --     | f_can_rewrite_ki (canKiEqLHSKind lhs)
-  --     = True
-  --     | kick_out_for_inertness = True
-  --     | kick_out_for_completeness = True
-  --     | otherwise = False
-  --     where
-  --       f = ctEvFlavor ev
-  --       kick_out_for_inertness = (f `eqCanRewriteF` f) && f_can_rewrite_ki rhs_ki
-  --       kick_out_for_completeness = is_new_lhs_ki rhs_ki
+    f_may_rewrite f = new_f `eqCanRewriteF` f
 
-  --   is_new_lhs_ki = case ko_spec of
-  --     KOAfterUnify vs -> is_kivar_ki_for vs
-  --     KOAfterAdding lhs -> (`eqKind` canKiEqLHSKind lhs)
+    kick_out_ct ct = f_may_rewrite (ctFlavor ct) && f_can_rewrite_pred (ctPred ct)
 
-  --   is_kivar_ki_for vs ki = case getKiVar_maybe ki of
-  --                             Nothing -> False
-  --                             Just kv -> kv `elemVarSet` vs
+    kick_out_eq (KiEqCt { eq_lhs = lhs, eq_rhs = rhs_ki, eq_ev = ev })
+      | not (f_may_rewrite f)
+      = False
+      | KiVarLHS _ <- lhs
+      , f `eqCanRewriteF` new_f
+      = False
+      | f_can_rewrite_ki (canKiEqLHSKind lhs)
+      = True
+      | kick_out_for_inertness = True
+      | kick_out_for_completeness = True
+      | otherwise = False
+      where
+        f = ctEvFlavor ev
+        kick_out_for_inertness = (f `eqCanRewriteF` f) && f_can_rewrite_ki rhs_ki
+        kick_out_for_completeness = is_new_lhs_ki rhs_ki
+
+    is_new_lhs_ki = case ko_spec of
+      KOAfterUnify vs -> is_kivar_ki_for vs
+      KOAfterAdding lhs -> (`eqKind` canKiEqLHSKind lhs)
+
+    is_kivar_ki_for vs ki = case getKiVar_maybe ki of
+                              Nothing -> False
+                              Just kv -> kv `elemVarSet` vs
 
 {- *********************************************************************
 *                                                                      *
@@ -358,7 +329,12 @@ kickOutRewritableLHS ko_spec new_f ics@(IC { inert_eqs = v_eqs, inert_irreds = i
 ********************************************************************* -}
 
 mentionsOuterVar :: TcLevel -> CtEvidence -> Bool
-mentionsOuterVar tclvl ev = anyFreeVarsOfMonoKind (isOuterKiVar tclvl) $ ctEvPred ev
+mentionsOuterVar tclvl ev
+  | Just (ki1, ki2) <- ctEvPredKind_maybe ev
+  = anyFreeVarsOfKind (isOuterKiVar tclvl) ki1
+    || anyFreeVarsOfKind (isOuterKiVar tclvl) ki2
+  | otherwise
+  = panic "mentionsOuterVar"
 
 isOuterKiVar :: TcLevel -> KindVar -> Bool
 isOuterKiVar tclvl kv

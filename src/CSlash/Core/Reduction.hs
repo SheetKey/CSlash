@@ -25,45 +25,40 @@ import CSlash.Utils.Panic
 *                                                                      *
 ********************************************************************* -}
 
-data Reduction = ReductionKi
-  { reductionKindCoercion :: KindCoercion
-  , reductionReducedKind :: !MonoKind }
+data Reduction
+  = ReductionKi
+    { reductionKind :: Kind
+    , reductionReducedKind :: !Kind }
+  | ReflRednKi { reductionReducedKind :: !Kind }
 
-mkReductionKi :: KindCoercion -> MonoKind -> Reduction
-mkReductionKi co ki = ReductionKi co ki
+mkReductionKi :: Kind -> Kind -> Reduction
+mkReductionKi = ReductionKi
 {-# INLINE mkReductionKi #-}
 
 instance Outputable Reduction where
-  ppr redn@(ReductionKi {}) = braces $ vcat
-    [ text "reductionOriginalKind:" <+> ppr (reductionOriginalKind redn)
-    , text "reductionReducedKind:" <+> ppr (reductionReducedKind redn)
-    , text "reductionKindCoercion:" <+> ppr (reductionKindCoercion redn) ]
+  ppr (ReductionKi og new) = braces $ vcat [ text "reductionOriginalKind:" <+> ppr og
+                                           , text "reductionReducedKind:" <+> ppr new ]
+  ppr (ReflRednKi new) = braces $ vcat [ text "reductionReducedKind:" <+> ppr new ]
 
-reductionOriginalKind :: Reduction -> MonoKind
-reductionOriginalKind = kicoercionLKind . reductionKindCoercion
-{-# INLINE reductionOriginalKind #-}
+mkTransRedn :: Kind -> Reduction -> Reduction
+mkTransRedn og_kind (ReductionKi _ newest_kind) = ReductionKi og_kind newest_kind
+mkTransRedn og_kind (ReflRednKi newest_kind) = ReductionKi og_kind newest_kind
 
-mkTransRedn :: KindCoercion -> Reduction -> Reduction
-mkTransRedn co1 redn@(ReductionKi co2 _) = redn { reductionKindCoercion = co1 `mkTransKiCo` co2 }
-{-# INLINE mkTransRedn #-}
-
-mkReflRednKi :: MonoKind -> Reduction
-mkReflRednKi ki = mkReductionKi (mkReflKiCo ki) ki
+mkReflRednKi :: Kind -> Reduction
+mkReflRednKi = ReflRednKi
 
 mkFunKiRedn :: FunKiFlag -> Reduction -> Reduction -> Reduction
-mkFunKiRedn af (ReductionKi arg_co arg_ki) (ReductionKi res_co res_ki)
-  = mkReductionKi (mkFunKiCo af arg_co res_co) (mkFunKi af arg_ki res_ki)
+-- mkFunKiRedn f (ReductionKi arg_og arg_new) (ReductionKi res_og res_new)
+--   = mkReductionKi (FunKi f arg_og res_og) (FunKi f arg_new res_new)
+-- mkFunKiRedn f (ReflRednKi arg_new) (ReductionKi res_og res_new)
+--   = mkReductionKi (FunKi f arg_new res_og) (FunKi f arg_new res_new)
+-- mkFunKiRedn f (ReductionKi arg_og arg_new) (ReflRednKi res_new)
+--   = mkReductionKi (FunKi f arg_og res_new) (FunKi f arg_new res_new)
+-- mkFunKiRedn f (ReflRednKi arg_new) (ReflRednKi res_new)
+--   = mkReflRednKi (FunKi f arg_new res_new)
+mkFunKiRedn = panic "mkFunKiRedn"
 {-# INLINE mkFunKiRedn #-}
 
-data Reductions = Reductions [KindCoercion] [MonoKind]
-
-mkKiConAppRedn :: KiCon -> Reductions -> Reduction
-mkKiConAppRedn kc (Reductions cos kis) = mkReductionKi (mkKiConAppCo kc cos) (mkKiConApp kc kis)
-{-# INLINE mkKiConAppRedn #-}
-
-{-# INLINE unzipRedns #-}
-unzipRedns :: [Reduction] -> Reductions
-unzipRedns = foldr accRedn (Reductions [] [])
-  where
-    accRedn (ReductionKi co ki) (Reductions cos kis)
-      = Reductions (co:cos) (ki:kis)
+isReflRedn :: Reduction -> Bool
+isReflRedn (ReflRednKi {}) = True
+isReflRedn (ReductionKi {}) = False

@@ -74,9 +74,6 @@ import Data.List.NonEmpty ( NonEmpty(..) )
 checkValidKind :: UserTypeCtxt -> Kind -> TcM ()
 checkValidKind _ctxt ki = traceTc "checkValidKind" (ppr ki)
 
-checkValidMonoKind :: UserTypeCtxt -> MonoKind -> TcM ()
-checkValidMonoKind _ctxt ki = traceTc "checkValidKind" (ppr ki)
-
 {- *********************************************************************
 *                                                                      *
           Checking for ambiguity

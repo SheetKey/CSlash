@@ -132,8 +132,8 @@ instance Outputable TyVarBndrs where
   ppr (CsTyVarBndrsRn bndrs) = fsep (map ppr bndrs)
 
 data CtOrigin
-  = KindEqOrigin { keq_actual :: TcMonoKind
-                 , keq_expected :: TcMonoKind
+  = KindEqOrigin { keq_actual :: TcKind
+                 , keq_expected :: TcKind
                  , keq_thing :: Maybe KindedThing
                  }
 
@@ -156,19 +156,3 @@ pprCtOrigin :: CtOrigin -> SDoc
 pprCtOrigin (KindEqOrigin k1 k2 _)
   = hang (ctoHerald <+> text "a kind equality")
          2 (sep [ppr k1, char '~', ppr k2])
-
-{- *******************************************************************
-*                                                                    *
-                       InstanceWhat
-*                                                                    *
-******************************************************************* -}
-
-data InstanceWhat
-  = BuiltinEqInstance
-  | BuiltinInstance
-  | LocalInstance
-
-instance Outputable InstanceWhat where
-  ppr BuiltinEqInstance = text "a built-in equality instance"
-  ppr BuiltinInstance = text "a built-in instance"
-  ppr LocalInstance = text "a locally-quantified instance"

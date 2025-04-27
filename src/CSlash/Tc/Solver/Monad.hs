@@ -20,16 +20,16 @@ import qualified CSlash.Tc.Utils.TcMType as TcM
 --   , topIdLvl )
 import CSlash.Tc.Zonk.Monad ( ZonkM )
 import qualified CSlash.Tc.Zonk.TcType as TcM
-import qualified CSlash.Tc.Zonk.Type as TcM
+-- import qualified CSlash.Tc.Zonk.Type as TcM
 
 import CSlash.Driver.DynFlags
 
 -- import GHC.Tc.Instance.Class( safeOverlap, instanceReturnsDictCon )
 -- import GHC.Tc.Instance.FunDeps( FunDepEqn(..) )
 import CSlash.Tc.Utils.TcType
-import CSlash.Tc.Solver.Types
+-- import GHC.Tc.Solver.Types
 import CSlash.Tc.Solver.InertSet
-import CSlash.Tc.Types.Evidence
+-- import GHC.Tc.Types.Evidence
 import CSlash.Tc.Errors.Types
 import CSlash.Tc.Types
 import CSlash.Tc.Types.Origin
@@ -41,7 +41,6 @@ import CSlash.Tc.Utils.Unify
 import CSlash.Core.Type
 import CSlash.Core.Type.Rep as Rep
 import CSlash.Core.Kind
-import CSlash.Core.Kind.FVs
 -- import GHC.Core.Coercion
 -- import GHC.Core.Coercion.Axiom( TypeEqn )
 -- import GHC.Core.Predicate
@@ -163,41 +162,6 @@ kickOutAfterUnification vs
          $ setUnificationFlag min_v_lvl
        return ()
 
-kickOutAfterFillingCoercionHole :: KindCoercionHole -> TcS ()
-kickOutAfterFillingCoercionHole hole = do
-  ics <- getInertCans
-  let (kicked_out, ics') = kick_out ics
-      n_kicked = lengthBag kicked_out
-  unless (n_kicked == 0) $ do
-    updWorkListTcS (extendWorkListCts (fmap CIrredCan kicked_out))
-    csTraceTcS $
-      hang (text "Kick out, hole =" <+> ppr hole)
-           2 (vcat [ text "n-kicked =" <+> int n_kicked
-                   , text "kicked_out =" <+> ppr kicked_out
-                   , text "Residual inerts =" <+> ppr ics' ])
-  setInertCans ics'
-  where
-    kick_out :: InertCans -> (Bag IrredCt, InertCans)
-    kick_out ics@(IC { inert_irreds = irreds })
-      = (irreds_to_kick, ics { inert_irreds = irreds_to_keep })
-      where
-        (irreds_to_kick, irreds_to_keep) = partitionBag kick_ct irreds
-
-    kick_ct :: IrredCt -> Bool
-    kick_ct ct
-      | IrredCt { ir_ev = ev, ir_reason = reason } <- ct
-      , CtWanted { ctev_rewriters = RewriterSet rewriters } <- ev
-      , NonCanonicalReason ctyeq <- reason
-      , ctyeq `ctkerHasProblem` ctkeCoercionHole
-      , hole `elementOfUniqSet` rewriters
-      = True
-      | otherwise
-      = False
-
-updSolvedRels :: InstanceWhat -> RelCt -> TcS ()
-updSolvedRels what rel_ct@(RelCt { rl_ev = ev }) =
-  traceTcS "updSolvedRels: NOT ADDING DICT" empty 
-
 {- *********************************************************************
 *                                                                      *
                   Other inert-set operations
@@ -221,11 +185,6 @@ setInertCans ics = updInertSet $ \inerts -> inerts { inert_cans = ics }
 
 updInertCans :: (InertCans -> InertCans) -> TcS ()
 updInertCans upd_fn = updInertSet $ \inerts -> inerts { inert_cans = upd_fn (inert_cans inerts) }
-
-getInertEqs :: TcS InertEqs
-getInertEqs = do
-  inert <- getInertCans
-  return $ inert_eqs inert
 
 getInnermostGivenEqLevel :: TcS TcLevel
 getInnermostGivenEqLevel = do
@@ -266,13 +225,6 @@ getHasGivenEqs tclvl = do
     insoluble_given_equality (IrredCt { ir_ev = ev, ir_reason = reason })
       = isInsolubleReason reason && isGiven ev
 
-lookupInertRel :: InertCans -> CtLoc -> KiCon -> MonoKind -> MonoKind -> Maybe RelCt
-lookupInertRel (IC { inert_rels = rels }) loc kc ki1 ki2 = findRel rels loc kc ki1 ki2
-
-lookupSolvedRel :: InertSet -> CtLoc -> KiCon -> MonoKind -> MonoKind -> Maybe CtEvidence
-lookupSolvedRel (IS { inert_solved_rels = solved }) loc kc k1 k2
-  = fmap relCtEvidence (findRel solved loc kc k1 k2)
-
 {- *********************************************************************
 *                                                                      *
 *              The TcS solver monad                                    *
@@ -280,8 +232,7 @@ lookupSolvedRel (IS { inert_solved_rels = solved }) loc kc k1 k2
 ********************************************************************* -}
 
 data TcSEnv = TcSEnv
-  { tcs_ki_ev_binds :: KiEvBindsVar
-  , tcs_unified :: IORef Int
+  { tcs_unified :: IORef Int
   , tcs_unif_lvl :: IORef (Maybe TcLevel)
   , tcs_count :: IORef Int
   , tcs_inerts :: IORef InertSet
@@ -371,22 +322,19 @@ runTcSEqualities :: TcS a -> TcM a
 runTcSEqualities thing_inside = runTcS thing_inside
 
 runTcS :: TcS a -> TcM a
-runTcS tcs = do
-  ev_binds_var <- TcM.newTcKiEvBinds
-  runTcSWithKiEvBinds ev_binds_var tcs
+runTcS = runTcSGo  
+  
+runTcSGo :: TcS a -> TcM a
+runTcSGo = runTcSGo' True False
 
-runTcSWithKiEvBinds :: KiEvBindsVar -> TcS a -> TcM a
-runTcSWithKiEvBinds = runTcSWithKiEvBinds' True False
-
-runTcSWithKiEvBinds' :: Bool -> Bool -> KiEvBindsVar -> TcS a -> TcM a
-runTcSWithKiEvBinds' restore_cycles abort_on_insoluble ev_binds_var tcs = do
+runTcSGo' :: Bool -> Bool -> TcS a -> TcM a
+runTcSGo' restore_cycles abort_on_insoluble tcs = do
   unified_var <- TcM.newTcRef 0
   step_count <- TcM.newTcRef 0
   inert_var <- TcM.newTcRef emptyInert
   wl_var <- TcM.newTcRef emptyWorkList
   unif_lvl_var <- TcM.newTcRef Nothing
-  let env = TcSEnv { tcs_ki_ev_binds = ev_binds_var
-                   , tcs_unified = unified_var
+  let env = TcSEnv { tcs_unified = unified_var
                    , tcs_unif_lvl = unif_lvl_var
                    , tcs_count = step_count
                    , tcs_inerts = inert_var
@@ -405,8 +353,8 @@ runTcSWithKiEvBinds' restore_cycles abort_on_insoluble ev_binds_var tcs = do
 
   return res
 
-nestImplicTcS :: KiEvBindsVar -> TcLevel -> TcS a -> TcS a
-nestImplicTcS ref inner_tclvl (TcS thing_inside)
+nestImplicTcS :: TcLevel -> TcS a -> TcS a
+nestImplicTcS inner_tclvl (TcS thing_inside)
   = TcS $ \TcSEnv { tcs_unified = unified_var
                   , tcs_inerts = old_inert_var
                   , tcs_count = count
@@ -420,7 +368,6 @@ nestImplicTcS ref inner_tclvl (TcS thing_inside)
   new_wl_var <- TcM.newTcRef emptyWorkList
   let nest_env = TcSEnv { tcs_count = count
                         , tcs_unif_lvl = unif_lvl
-                        , tcs_ki_ev_binds = ref
                         , tcs_unified = unified_var
                         , tcs_inerts = new_inert_var
                         , tcs_abort_on_insoluble = abort_on_insoluble
@@ -481,9 +428,6 @@ emitWork cts
   = do traceTcS "Emitting fresh work" (pprBag cts)
        updWorkListTcS (extendWorkListCts cts)
 
-newTcRef :: a -> TcS (TcRef a)
-newTcRef x = wrapTcS (TcM.newTcRef x)
-
 readTcRef :: TcRef a -> TcS a
 readTcRef ref = wrapTcS (TcM.readTcRef ref)
 
@@ -493,13 +437,10 @@ writeTcRef ref val = wrapTcS (TcM.writeTcRef ref val)
 updTcRef :: TcRef a -> (a -> a) -> TcS ()
 updTcRef ref upd_fn = wrapTcS (TcM.updTcRef ref upd_fn)
 
-getTcKiEvBindsVar :: TcS KiEvBindsVar
-getTcKiEvBindsVar = TcS (return . tcs_ki_ev_binds)
-
 getTcLevel :: TcS TcLevel
 getTcLevel = wrapTcS TcM.getTcLevel
 
-unifyKiVar :: TcKiVar -> TcMonoKind -> TcS ()
+unifyKiVar :: TcKiVar -> TcKind -> TcS ()
 unifyKiVar kv ki
   = assertPpr (isMetaKiVar kv) (ppr kv)
     $ TcS $ \env -> do TcM.traceTc "unifyKiVar" (ppr kv <+> text ":=" <+> ppr ki)
@@ -528,7 +469,7 @@ selectNextWorkItem = do
     Just (ct, new_wl) -> do writeTcRef wl_var new_wl
                             return (Just ct)
 
-isFilledMetaKiVar_maybe :: TcKiVar -> TcS (Maybe MonoKind)
+isFilledMetaKiVar_maybe :: TcKiVar -> TcS (Maybe Kind)
 isFilledMetaKiVar_maybe kv = wrapTcS (TcM.isFilledMetaKiVar_maybe kv)
 
 {- *********************************************************************
@@ -564,71 +505,28 @@ setUnificationFlag lvl = TcS $ \env -> do
 
 {- *********************************************************************
 *                                                                      *
-*                Instantiation etc.
-*                                                                      *
-********************************************************************* -}
-
--- Creating and setting evidence variables and CtFlavors
--- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-useVars :: KiCoVarSet -> TcS ()
-useVars co_vars = do
-  ev_binds_var <- getTcKiEvBindsVar
-  let ref = ebv_kcvs ev_binds_var
-  wrapTcS $ do
-    kcvs <- TcM.readTcRef ref
-    let kcvs' = kcvs `unionVarSet` co_vars
-    TcM.writeTcRef ref kcvs'
-
-setWantedEq :: TcEvDest -> KindCoercion -> TcS ()
-setWantedEq (HoleDest hole) co = do
-  useVars (coVarsOfKiCo co)
-  fillKiCoercionHole hole co
-setWantedEq (EvVarDest ev) _ = pprPanic "setWantedEq: EvVarDest" (ppr ev)
-
-fillKiCoercionHole :: KindCoercionHole -> KindCoercion -> TcS ()
-fillKiCoercionHole hole co = do
-  wrapTcS $ TcM.fillKiCoercionHole hole co
-  kickOutAfterFillingCoercionHole hole
-
-newWantedKiEq
-  :: CtLoc -> RewriterSet -> TcMonoKind -> TcMonoKind -> TcS (CtEvidence, KindCoercion)
-newWantedKiEq loc rewriters ki1 ki2 = do
-  hole <- wrapTcS $ TcM.newKiCoercionHole pki
-  return ( CtWanted { ctev_pred = pki
-                    , ctev_dest = HoleDest hole
-                    , ctev_loc = loc
-                    , ctev_rewriters = rewriters }
-         , mkKiHoleCo hole )
-  where
-    pki = mkKiEqPred ki1 ki2
-
-{- *********************************************************************
-*                                                                      *
               Unification
 *                                                                      *
 ********************************************************************* -}
 
 wrapUnifierTcS :: CtEvidence -> (UnifyEnv -> TcM a) -> TcS (a, Bag Ct, [TcVar])
 wrapUnifierTcS ev do_unifications = do
-  (res, cts, unified, rewriters) <- wrapUnifierX ev do_unifications
+  (res, cts, unified) <- wrapUnifierX ev do_unifications
 
   unless (isEmptyBag cts)
-    $ updWorkListTcS (extendWorkListEqs rewriters cts)
+    $ updWorkListTcS (extendWorkListEqs cts)
 
   _ <- kickOutAfterUnification unified
 
   return (res, cts, unified)
 
-wrapUnifierX :: CtEvidence -> (UnifyEnv -> TcM a) -> TcS (a, Bag Ct, [TcVar], RewriterSet)
+wrapUnifierX :: CtEvidence -> (UnifyEnv -> TcM a) -> TcS (a, Bag Ct, [TcVar])
 wrapUnifierX ev do_unifications = do
   unif_count_ref <- getUnifiedRef
   wrapTcS $ do
     defer_ref <- TcM.newTcRef emptyBag
     unified_ref <- TcM.newTcRef []
-    rewriters <- TcM.zonkRewriterSet (ctEvRewriters ev)
     let env = UE { u_loc = ctEvLoc ev
-                 , u_rewriters = rewriters
                  , u_defer = defer_ref
                  , u_unified = Just unified_ref }
 
@@ -640,7 +538,7 @@ wrapUnifierX ev do_unifications = do
     unless (null unified)
       $ TcM.updTcRef unif_count_ref (+ (length unified))
 
-    return (res, cts, unified, rewriters)
+    return (res, cts, unified)
 
 restoreTyVarCycles :: InertSet -> TcM ()
 restoreTyVarCycles is = TcM.liftZonkM $
@@ -655,7 +553,7 @@ restoreTyVarCycles is = TcM.liftZonkM $
 checkTouchableKiVarEq
   :: CtEvidence
   -> TcKiVar
-  -> TcMonoKind
+  -> TcKind
   -> TcS (PuResult () Reduction)
 checkTouchableKiVarEq ev lhs_kv rhs
   | simpleUnifyCheckKind lhs_kv rhs
@@ -675,12 +573,12 @@ checkTouchableKiVarEq ev lhs_kv rhs
 
     check_rhs rhs = checkKiEqRhs flags rhs
 
-    flags = KEF { kef_foralls = False
+    flags = KEF { kef_constrs = False
                 , kef_unifying = UnifyingKi lhs_kv_info lhs_kv_lvl LC_Promote
                 , kef_lhs = KiVarLHS lhs_kv
                 , kef_occurs = ctkeInsolubleOccurs }
 
-checkKindEq :: CtEvidence -> CanEqLHS -> TcMonoKind -> TcS (PuResult () Reduction)
+checkKindEq :: CtEvidence -> CanEqLHS -> TcKind -> TcS (PuResult () Reduction)
 checkKindEq ev lhs rhs
   | isGiven ev
   = do traceTcS "checkKindEq {" (vcat [ text "lhs:" <+> ppr lhs
@@ -697,12 +595,12 @@ checkKindEq ev lhs rhs
          PuOK _ redn -> return $ pure redn
   where
     given_flags = KEF { kef_lhs = lhs
-                      , kef_foralls = False
+                      , kef_constrs = False
                       , kef_unifying = NotUnifying
                       , kef_occurs = ctkeInsolubleOccurs }
 
     wanted_flags = KEF { kef_lhs = lhs
-                       , kef_foralls = False
+                       , kef_constrs = False
                        , kef_unifying = NotUnifying
                        , kef_occurs = ctkeInsolubleOccurs }
 

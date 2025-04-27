@@ -212,7 +212,6 @@ solveNestedImplications implics
 
 solveImplication :: Implication -> TcS (Maybe Implication)
 solveImplication imp@(Implic { ic_tclvl = tclvl
-                             , ic_binds = ev_binds_var
                              , ic_wanted = wanteds
                              , ic_info = info
                              , ic_status = status })
@@ -223,7 +222,7 @@ solveImplication imp@(Implic { ic_tclvl = tclvl
        traceTcS "solveImplication {" (ppr imp $$ text "Inerts" <+> ppr inerts)
 
        (has_given_eqs, given_insols, residual_wanted)
-         <- nestImplicTcS ev_binds_var tclvl $ 
+         <- nestImplicTcS tclvl $ 
             do residual_wanted <- solveWanteds wanteds
                (has_eqs, given_insols) <- getHasGivenEqs tclvl
                return (has_eqs, given_insols, residual_wanted)

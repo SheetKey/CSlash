@@ -1,5 +1,3 @@
-{-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE GeneralisedNewtypeDeriving #-}
 
 module CSlash.Tc.Types.Constraint
@@ -9,7 +7,7 @@ module CSlash.Tc.Types.Constraint
 
 import Prelude hiding ((<>))
 
-import CSlash.Core.Predicate
+-- import GHC.Core.Predicate
 import CSlash.Core.Type
 import CSlash.Core.Kind
 -- import GHC.Core.Coercion
@@ -19,7 +17,7 @@ import CSlash.Types.Name
 import CSlash.Types.Var
 
 import CSlash.Tc.Utils.TcType
-import CSlash.Tc.Types.Evidence
+-- import GHC.Tc.Types.Evidence
 import CSlash.Tc.Types.Origin
 import CSlash.Tc.Types.CtLocEnv
 
@@ -57,28 +55,14 @@ import Data.List  ( intersperse )
 *                                                                      *
 ********************************************************************* -}
 
-type KiXi = TcMonoKind
+type KiXi = TcKind
 
 type Cts = Bag Ct
 
 data Ct
   = CIrredCan IrredCt
   | CEqCan EqCt
-  | CRelCan RelCt
   | CNonCanonical CtEvidence
-
-data RelCt = RelCt
-  { rl_ev :: CtEvidence
-  , rl_kc :: KiCon
-  , rl_ki1 :: KiXi
-  , rl_ki2 :: KiXi
-  }
-  
-relCtEvidence :: RelCt -> CtEvidence
-relCtEvidence = rl_ev
-
-instance Outputable RelCt where
-  ppr rel = ppr (CRelCan rel)
 
 data EqCt = KiEqCt
   { eq_ev :: CtEvidence
@@ -106,24 +90,21 @@ data IrredCt = IrredCt
 irredCtEvidence :: IrredCt -> CtEvidence
 irredCtEvidence = ir_ev
 
-irredCtPred :: IrredCt -> PredKind
+irredCtPred :: IrredCt -> Pred
 irredCtPred = ctEvPred . irredCtEvidence
 
 instance Outputable IrredCt where
   ppr irred = ppr (CIrredCan irred)
 
 data CtIrredReason
-  = IrredShapeReason
-  | NonCanonicalReason CheckTyKiEqResult
+  = NonCanonicalReason CheckTyKiEqResult
   | ShapeMismatchReason
 
 instance Outputable CtIrredReason where
-  ppr IrredShapeReason = text "(irred)"
   ppr (NonCanonicalReason ctker) = ppr ctker
   ppr ShapeMismatchReason = text "(shape)"
 
 isInsolubleReason :: CtIrredReason -> Bool
-isInsolubleReason IrredShapeReason = False
 isInsolubleReason (NonCanonicalReason ctker) = ctkerIsInsoluble ctker
 isInsolubleReason ShapeMismatchReason = True
 
@@ -142,7 +123,6 @@ ctkeImpredicative = CTKEP (bit 0)
 ctkeTypeFamily = CTKEP (bit 1)
 ctkeInsolubleOccurs = CTKEP (bit 2)
 ctkeSolubleOccurs = CTKEP (bit 3)
-ctkeCoercionHole = CTKEP (bit 4)
 ctkeConcrete = CTKEP (bit 5)
 ctkeSkolemEscape = CTKEP (bit 6)
 
@@ -205,7 +185,6 @@ ctEvidence :: Ct -> CtEvidence
 ctEvidence (CEqCan (KiEqCt { eq_ev = ev })) = ev
 ctEvidence (CIrredCan (IrredCt { ir_ev = ev })) = ev
 ctEvidence (CNonCanonical ev) = ev
-ctEvidence (CRelCan (RelCt { rl_ev = ev })) = ev
 
 ctLoc :: Ct -> CtLoc
 ctLoc = ctEvLoc . ctEvidence
@@ -213,7 +192,7 @@ ctLoc = ctEvLoc . ctEvidence
 ctOrigin :: Ct -> CtOrigin
 ctOrigin = ctLocOrigin . ctLoc
 
-ctPred :: Ct -> PredKind
+ctPred :: Ct -> Pred
 ctPred ct = ctEvPred (ctEvidence ct)
 
 instance Outputable Ct where
@@ -221,7 +200,6 @@ instance Outputable Ct where
     where
       pp_short = case ct of
                    CEqCan {} -> text "CEqCan"
-                   CRelCan {} -> text "CRelCan"
                    CNonCanonical {} -> text "CNonCanonical"
                    CIrredCan (IrredCt { ir_reason = reason }) -> text "CIrredCan" <> ppr reason
 
@@ -236,6 +214,14 @@ isWantedCt = isWanted . ctEvidence
 
 isGivenCt :: Ct -> Bool
 isGivenCt = isGiven . ctEvidence
+
+isTopLevelUserTypeError :: Pred -> Bool
+isTopLevelUserTypeError pred
+  = isJust (userTypeError_maybe pred)
+    || isJust (isUnsatisfiableCt_maybe pred)
+
+isUnsatisfiableCt_maybe :: Pred -> Maybe ErrorMsgType
+isUnsatisfiableCt_maybe (KiEqPred _ _) = Nothing  
 
 extendCtsList :: Cts -> [Ct] -> Cts
 extendCtsList cts xs | null xs = cts
@@ -316,6 +302,7 @@ insolubleWantedCt ct
 insolubleIrredCt :: IrredCt -> Bool
 insolubleIrredCt (IrredCt { ir_ev = ev, ir_reason = reason })
   = isInsolubleReason reason
+    || isTopLevelUserTypeError (ctEvPred ev)
 
 insolubleCt :: Ct -> Bool
 insolubleCt (CIrredCan ir_ct) = insolubleIrredCt ir_ct
@@ -345,14 +332,12 @@ data Implication = Implic
   , ic_warn_inaccessible :: Bool
   , ic_env :: !CtLocEnv
   , ic_wanted :: WantedConstraints
-  , ic_binds :: KiEvBindsVar
   , ic_status :: ImplicStatus
   }
 
 implicationPrototype :: CtLocEnv -> Implication
 implicationPrototype ct_loc_env = Implic
   { ic_tclvl = panic "newImplic:tclvl"
-  , ic_binds = panic "newImplic:binds"
   , ic_info = panic "newImplic:info"
   , ic_skols = []
   , ic_given_eqs = MaybeGivenEqs
@@ -483,45 +468,35 @@ checkSkolInfoAnon sk1 sk2 = go sk1 sk2
 *                                                                      *
 ********************************************************************* -}
 
-data TcEvDest
-  = EvVarDest KiEvVar
-  | HoleDest KindCoercionHole
-
 data CtEvidence
   = CtWanted
-    { ctev_pred :: TcPredKind
-    , ctev_dest :: TcEvDest 
+    { ctev_pred :: Pred
     , ctev_loc :: CtLoc
-    , ctev_rewriters :: RewriterSet
     }
 
-ctEvPred :: CtEvidence -> TcPredKind
+data Pred
+  = KiEqPred TcKind TcKind
+
+userTypeError_maybe :: Pred -> Maybe ErrorMsgType
+userTypeError_maybe (KiEqPred _ _) = Nothing
+
+ctEvPred :: CtEvidence -> Pred
 ctEvPred = ctev_pred
+
+ctEvPredKind_maybe :: CtEvidence -> Maybe (Kind, Kind)
+ctEvPredKind_maybe (CtWanted  (KiEqPred ki1 ki2) _) = Just (ki1, ki2)
 
 ctEvLoc :: CtEvidence -> CtLoc
 ctEvLoc = ctev_loc
 
-ctEvRewriters :: CtEvidence -> RewriterSet
-ctEvRewriters (CtWanted { ctev_rewriters = rewriters }) = rewriters
-ctEvRewriters _ = emptyRewriterSet
-
-ctEvKiCoercion :: HasDebugCallStack => CtEvidence -> KindCoercion
-ctEvKiCoercion (CtWanted { ctev_dest = dest })
-  | HoleDest hole <- dest
-  = mkKiHoleCo hole
-  | otherwise
-  = panic "ctEvKiCoercion"
-
 arisesFromGivens :: Ct -> Bool
 arisesFromGivens ct = isGivenCt ct || isGivenLoc (ctLoc ct)
 
-setCtEvPredKind :: CtEvidence -> TcPredKind -> CtEvidence
-setCtEvPredKind old_ctev@(CtWanted { ctev_dest = dest }) new_pred
-  = old_ctev { ctev_pred = new_pred, ctev_dest = new_dest }
-  where
-    new_dest = case dest of
-      EvVarDest ev -> EvVarDest (setTyVarKind ev new_pred)
-      HoleDest h -> HoleDest (setCoHoleKind h new_pred)
+setCtEvPred :: CtEvidence -> Pred -> CtEvidence
+setCtEvPred old_ctev@(CtWanted{}) pred = old_ctev { ctev_pred = pred }
+
+instance Outputable Pred where
+  ppr (KiEqPred k1 k2) = parens (ppr k1) <+> text "~" <+> parens (ppr k2)
 
 instance Outputable CtEvidence where
   ppr ev = ppr (ctEvFlavor ev)
@@ -534,36 +509,9 @@ isWanted (CtWanted {}) = True
 isGiven :: CtEvidence -> Bool
 isGiven (CtWanted {}) = False
 
-{- *********************************************************************
-*                                                                      *
-           RewriterSet
-*                                                                      *
-********************************************************************* -}
-
-newtype RewriterSet = RewriterSet (UniqSet KindCoercionHole)
-  deriving newtype (Outputable, Semigroup, Monoid)
-
-emptyRewriterSet :: RewriterSet
-emptyRewriterSet = RewriterSet emptyUniqSet
-
-unitRewriterSet :: KindCoercionHole -> RewriterSet
-unitRewriterSet = coerce (unitUniqSet @KindCoercionHole)
-
-unionRewriterSet :: RewriterSet -> RewriterSet -> RewriterSet
-unionRewriterSet = coerce (unionUniqSets @KindCoercionHole)
-
-isEmptyRewriterSet :: RewriterSet -> Bool
-isEmptyRewriterSet = coerce (isEmptyUniqSet @KindCoercionHole)
-
-addRewriter :: RewriterSet -> KindCoercionHole -> RewriterSet
-addRewriter = coerce (addOneToUniqSet @KindCoercionHole)
-
-rewriterSetFromCts :: Bag Ct -> RewriterSet
-rewriterSetFromCts cts = foldr add emptyRewriterSet cts
-  where
-    add ct rw_set = case ctEvidence ct of
-                      CtWanted { ctev_dest = HoleDest hole } -> rw_set `addRewriter` hole
-                      _ -> rw_set
+anyRewritableVar :: (TcVar -> Bool) -> Pred -> Bool
+anyRewritableVar pred (KiEqPred ki1 ki2) = any_rewritable_ki pred ki1
+                                           || any_rewritable_ki pred ki2
 
 {- *********************************************************************
 *                                                                      *
@@ -592,13 +540,13 @@ ctFlavor ct = ctEvFlavor (ctEvidence ct)
 
 canKiEqLHS_maybe :: KiXi -> Maybe CanEqLHS
 canKiEqLHS_maybe xi
-  | Just kv <- getKiVarMono_maybe xi
+  | Just kv <- getKiVar_maybe xi
   = Just $ KiVarLHS kv
   | otherwise
   = Nothing
 
-canKiEqLHSKind :: CanEqLHS -> TcMonoKind
-canKiEqLHSKind (KiVarLHS kv) = mkKiVarMKi kv
+canKiEqLHSKind :: CanEqLHS -> TcKind
+canKiEqLHSKind (KiVarLHS kv) = mkKiVarKi kv
 
 eqCanEqLHS :: CanEqLHS -> CanEqLHS -> Bool
 eqCanEqLHS (KiVarLHS kv1) (KiVarLHS kv2) = kv1 == kv2
@@ -636,13 +584,6 @@ data CtLoc = CtLoc
   , ctl_depth :: !SubGoalDepth
   }
 
-adjustCtLoc :: Bool -> Bool -> CtLoc -> CtLoc
-adjustCtLoc is_vis is_kind loc = loc2
-  where
-    loc1 | is_kind = toKindLoc loc
-         | otherwise = loc
-    loc2 | is_vis = loc1
-         | otherwise = toInvisibleLoc loc1
 
 adjustCtLocKind :: CtLoc -> CtLoc
 adjustCtLocKind = toInvisibleLoc . toKindLoc
