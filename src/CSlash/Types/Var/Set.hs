@@ -1,6 +1,6 @@
 module CSlash.Types.Var.Set where
 
-import CSlash.Types.Var ( Var, TypeVar, KindVar, Id )
+import CSlash.Types.Var ( Var, TypeVar, KindVar, KiCoVar, Id )
 import CSlash.Types.Unique
 import CSlash.Types.Name ( Name )
 import CSlash.Types.Unique.Set
@@ -16,6 +16,8 @@ type IdSet = UniqSet Id
 type TyVarSet = UniqSet TypeVar
 
 type KiVarSet = UniqSet KindVar
+
+type KiCoVarSet = UniqSet KiCoVar
 
 type TyKiVarSet = UniqSet Var
 

@@ -26,7 +26,7 @@ import CSlash.Core.Kind
 import CSlash.Core.TyCon
 -- import GHC.Core.Coercion
 -- import GHC.Core.Class
--- import GHC.Core.Predicate
+import CSlash.Core.Predicate
 import CSlash.Core.UsageEnv
 
 import CSlash.Types.Var
@@ -63,13 +63,52 @@ import CSlash.Types.Name.Reader
 *                                                                      *
 ********************************************************************* -}
 
-newMetaKindVar :: TcM TcKind
+newMetaKindVar :: TcM TcMonoKind
 newMetaKindVar = do
   details <- newMetaDetailsK TauKv
   name <- newMetaKiVarName (fsLit "k")
   let kv = mkTcKiVar name details
   traceTc "newMetaKindVar" (ppr kv)
-  return (mkKiVarKi kv)
+  return (mkKiVarMKi kv)
+
+{- **********************************************************************
+*                                                                       *
+            Evidence variables
+*                                                                       *
+********************************************************************** -}
+
+newKiEvVar :: TcPredKind -> TcRnIf gbl lcl KiEvVar
+newKiEvVar ki = do
+  name <- newSysName (predKindOccName ki)
+  return $ mkKiCoVar name ki
+
+predKindOccName :: PredKind -> OccName
+predKindOccName ki = case classifyPredKind ki of
+  EqPred {} -> mkVarOccFS (fsLit "co")
+  IrredPred {} -> mkVarOccFS (fsLit "irred")
+  RelPred {} -> mkVarOccFS (fsLit "relco")
+
+{- *********************************************************************
+*                                                                      *
+        Coercion holes
+*                                                                      *
+********************************************************************* -}
+
+newKiCoercionHole :: TcPredKind -> TcM KindCoercionHole
+newKiCoercionHole pred_ki = do
+  co_var <- newKiEvVar pred_ki
+  traceTc "New coercion hole:" (ppr co_var <+> colon <+> ppr pred_ki)
+  ref <- newMutVar Nothing
+  return $ CoercionHole { ch_co_var = co_var, ch_ref = ref }
+
+fillKiCoercionHole :: KindCoercionHole -> KindCoercion -> TcM ()
+fillKiCoercionHole (CoercionHole { ch_ref = ref, ch_co_var = cv }) co = do
+  when debugIsOn $ do
+    cts <- readTcRef ref
+    whenIsJust cts $ \old_co ->
+      pprPanic "Filling a filled coercion hole" (ppr cv $$ ppr co $$ ppr old_co)
+  traceTc "Filling coercion hole" (ppr cv <+> text ":=" <+> ppr co)
+  writeTcRef ref (Just co)
 
 {- *********************************************************************
 *                                                                      *
@@ -194,16 +233,16 @@ isFilledMetaKiVar_maybe kv
 *                                                                      *
 ********************************************************************* -}
 
-newOpenTypeKind :: TcM TcKind
+newOpenTypeKind :: TcM TcMonoKind
 newOpenTypeKind = newFlexiKiVarKi
 
 newFlexiKiVar :: TcM TcKiVar
 newFlexiKiVar = newAnonMetaKiVar TauKv
 
-newFlexiKiVarKi :: TcM TcKind
+newFlexiKiVarKi :: TcM TcMonoKind
 newFlexiKiVarKi = do
   tc_kivar <- newFlexiKiVar
-  return $ mkKiVarKi tc_kivar
+  return $ mkKiVarMKi tc_kivar
 
 {- *********************************************************************
 *                                                                      *
@@ -284,8 +323,6 @@ collect_cand_qkvs orig_ki cur_lvl bound dvs ki = go dvs ki
           case m_contents of
             Just ind_ki -> go_mono dv ind_ki
             Nothing -> go_kv dv kv
-
-
 
     go_kv dv kv
       | tcKiVarLevel kv <= cur_lvl

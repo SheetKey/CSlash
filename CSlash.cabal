@@ -70,9 +70,11 @@ library
                     , CSlash.Core.Kind.Compare
                     , CSlash.Core.Kind.FVs
                     , CSlash.Core.Kind.Subst
+                    , CSlash.Core.Map.Kind
                     , CSlash.Core.Opt.CallerCC
                     , CSlash.Core.Opt.CallerCC.Types
                     , CSlash.Core.Ppr
+                    , CSlash.Core.Predicate
                     , CSlash.Core.Reduction
                     , CSlash.Core.TyCon
                     , CSlash.Core.TyCon.Set
@@ -117,6 +119,7 @@ library
                     , CSlash.Data.Pair
                     , CSlash.Data.Strict
                     , CSlash.Data.StringBuffer
+                    , CSlash.Data.TrieMap
                     , CSlash.Data.Word64Set
 
                     , CSlash.Driver.Backend
@@ -240,12 +243,14 @@ library
                     , CSlash.Tc.Gen.Bind
                     , CSlash.Tc.Gen.CsType
                     , CSlash.Tc.Gen.CsKind
+                    , CSlash.Tc.Instance.Relation
                     , CSlash.Tc.Module
                     , CSlash.Tc.Solver
                     , CSlash.Tc.Solver.Equality
                     , CSlash.Tc.Solver.InertSet
                     , CSlash.Tc.Solver.Irred
                     , CSlash.Tc.Solver.Monad
+                    , CSlash.Tc.Solver.Relation
                     , CSlash.Tc.Solver.Rewrite
                     , CSlash.Tc.Solver.Solve
                     , CSlash.Tc.Solver.Types

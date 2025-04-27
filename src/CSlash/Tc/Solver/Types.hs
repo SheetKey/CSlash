@@ -1,3 +1,5 @@
+{-# LANGUAGE ScopedTypeVariables #-}
+
 module CSlash.Tc.Solver.Types where
 
 import CSlash.Tc.Types.Constraint
@@ -8,17 +10,84 @@ import CSlash.Types.Unique
 import CSlash.Types.Unique.DFM
 
 -- import GHC.Core.Class
--- import CSlash.Core.Map.Type
--- import GHC.Core.Predicate
+import CSlash.Core.Map.Kind
+import CSlash.Core.Predicate
 import CSlash.Core.TyCon
+import CSlash.Core.Kind
 -- import CSlash.Core.TyCon.Env
 
 import CSlash.Data.Bag
 import CSlash.Data.Maybe
--- import GHC.Data.TrieMap
+import CSlash.Data.TrieMap
 import CSlash.Utils.Constants
 import CSlash.Utils.Outputable
 import CSlash.Utils.Panic
+
+{- *********************************************************************
+*                                                                      *
+                   KcAppMap
+*                                                                      *
+********************************************************************* -}
+
+type KcAppMap a = DKiConEnv (ListMap KindMap a)
+
+isEmptyKcAppMap :: KcAppMap a -> Bool
+isEmptyKcAppMap m = isEmptyDKiConEnv m
+
+emptyKcAppMap :: KcAppMap a
+emptyKcAppMap = emptyDKiConEnv
+
+findKcApp :: KcAppMap a -> KiCon -> MonoKind -> MonoKind -> Maybe a
+findKcApp m kc ki1 ki2 = do
+  kis_map <- lookupDKiConEnv m kc
+  lookupTM [ki1, ki2] kis_map
+
+delKcApp :: KcAppMap a -> KiCon -> MonoKind -> MonoKind -> KcAppMap a
+delKcApp m kc ki1 ki2 = adjustDKiConEnv (deleteTM [ki1, ki2]) m kc
+
+insertKcApp :: KcAppMap a -> KiCon -> MonoKind -> MonoKind -> a -> KcAppMap a
+insertKcApp m kc ki1 ki2 ct = alterDKiConEnv alter_km m kc
+  where
+    alter_km mb_km = Just (insertTM [ki1, ki2] ct (mb_km `orElse` emptyTM))
+
+alterKcApp :: forall a. KcAppMap a -> KiCon -> MonoKind -> MonoKind -> XT a -> KcAppMap a
+alterKcApp m kc ki1 ki2 upd = alterDKiConEnv alter_km m kc
+  where
+    alter_km :: Maybe (ListMap KindMap a) -> Maybe (ListMap KindMap a)
+    alter_km m_elt = Just (alterTM [ki1, ki2] upd (m_elt `orElse` emptyTM))
+
+filterKcAppMap :: forall a. (a -> Bool) -> KcAppMap a -> KcAppMap a
+filterKcAppMap f m = mapMaybeDKiConEnv one_kicon m
+  where
+    one_kicon :: ListMap KindMap a -> Maybe (ListMap KindMap a)
+    one_kicon km
+      | isEmptyTM filtered_km = Nothing
+      | otherwise = Just filtered_km
+      where
+        filtered_km = filterTM f km
+
+kcAppMapToBag :: KcAppMap a -> Bag a
+kcAppMapToBag m = foldKcAppMap consBag m emptyBag
+
+foldKcAppMap :: (a -> b -> b) -> KcAppMap a -> b -> b
+foldKcAppMap k m z = foldDKiConEnv (foldTM k) z m
+
+{- *********************************************************************
+*                                                                      *
+                   RelMap
+*                                                                      *
+********************************************************************* -}
+
+type RelMap a = KcAppMap a
+
+emptyRelMap :: RelMap a
+emptyRelMap = emptyKcAppMap
+
+findRel :: RelMap a -> CtLoc -> KiCon -> MonoKind -> MonoKind -> Maybe a
+findRel m loc kc ki1 ki2 = findKcApp m kc ki1 ki2
+ 
+relsToBag :: RelMap a -> Bag a
+relsToBag = kcAppMapToBag
 
 {- *********************************************************************
 *                                                                      *

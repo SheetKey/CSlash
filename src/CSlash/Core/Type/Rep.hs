@@ -40,6 +40,7 @@ data Type
     , ft_res :: Type
     }
   | Embed MonoKind -- for application to a 'BigTyLamTy
+  | CastTy Type KindCoercion
   deriving Data.Data
 
 instance Outputable Type where
@@ -116,6 +117,7 @@ foldType (TypeFolder { tf_view = view
       = let !env' = tybinder env tv vis
         in go_ty env' inner
     go_ty _ (Embed _) = mempty
+    go_ty env (CastTy ty _) = go_ty env ty
 
     go_tys _ [] = mempty
     go_tys env (t:ts) = go_ty env t `mappend` go_tys env ts
@@ -138,6 +140,7 @@ typeSize (TyConApp _ ts) = 1 + typesSize ts
 typeSize (ForAllTy (Bndr tv _) t) = typeSize (varType tv) + typeSize t
 typeSize (FunTy _ t1 t2) = typeSize t1 + typeSize t2
 typeSize (Embed _) = 1
+typeSize (CastTy ty _) = typeSize ty
 
 typesSize :: [Type] -> Int
 typesSize tys = foldr ((+) . typeSize) 0 tys

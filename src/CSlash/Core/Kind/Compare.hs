@@ -32,6 +32,9 @@ import qualified Data.Semigroup as S
 tcEqKind :: HasDebugCallStack => Kind -> Kind -> Bool
 tcEqKind = eqKind
 
+tcEqMonoKind :: HasDebugCallStack => MonoKind -> MonoKind -> Bool
+tcEqMonoKind = eqMonoKind
+
 initRnEnv :: Kind -> Kind -> RnEnv2
 initRnEnv ka kb = mkRnEnv2 $ mkInScopeSet $
                   kiVarsOfKind ka `unionVarSet` kiVarsOfKind kb
@@ -39,8 +42,14 @@ initRnEnv ka kb = mkRnEnv2 $ mkInScopeSet $
 eqKind :: HasCallStack => Kind -> Kind -> Bool
 eqKind ka kb = eq_kind ka kb
 
+eqMonoKind :: HasCallStack => MonoKind -> MonoKind -> Bool
+eqMonoKind ka kb = eq_mono_kind ka kb
+
 eq_kind :: Kind -> Kind -> Bool
 eq_kind = inline_generic_eq_kind_x Nothing
+
+eq_mono_kind :: MonoKind -> MonoKind -> Bool
+eq_mono_kind = inline_generic_eq_mono_kind_x Nothing
 
 {-# NOINLINE generic_eq_kind_x #-}
 generic_eq_kind_x :: Maybe RnEnv2 -> Kind -> Kind -> Bool

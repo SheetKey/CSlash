@@ -47,6 +47,7 @@ type TcTyConBinder = TyConBinder
 
 type TcKind = Kind
 type TcMonoKind = MonoKind
+type TcPredKind = PredKind
 
 {- *********************************************************************
 *                                                                      *

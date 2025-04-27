@@ -66,14 +66,18 @@ instance HasDynFlags RewriteM where
 liftTcS :: TcS a -> RewriteM a
 liftTcS thing_inside = mkRewriteM $ \_ -> thing_inside
 
-runRewriteCtEv :: CtEvidence -> RewriteM a -> TcS a
+runRewriteCtEv :: CtEvidence -> RewriteM a -> TcS (a, RewriterSet)
 runRewriteCtEv ev = runRewrite (ctEvLoc ev) (ctEvFlavor ev)
 
-runRewrite :: CtLoc -> CtFlavor -> RewriteM a -> TcS a
+runRewrite :: CtLoc -> CtFlavor -> RewriteM a -> TcS (a, RewriterSet)
 runRewrite loc flav thing_inside = do
+  rewriters_ref <- newTcRef emptyRewriterSet
   let fmode = RE { re_loc = loc
-                 , re_flavor = flav }
-  runRewriteM thing_inside fmode
+                 , re_flavor = flav
+                 , re_rewriters = rewriters_ref }
+  res <- runRewriteM thing_inside fmode
+  rewriters <- readTcRef rewriters_ref
+  return (res, rewriters)
 
 traceRewriteM :: String -> SDoc -> RewriteM ()
 traceRewriteM herald doc = liftTcS $ traceTcS herald doc
@@ -96,18 +100,23 @@ bumpDepth (RewriteM thing_inside) = mkRewriteM $ \env ->
   let !env' = env { re_loc = bumpCtLocDepth (re_loc env) }
   in thing_inside env'
 
+recordRewriter :: CtEvidence -> RewriteM ()
+recordRewriter (CtWanted { ctev_dest = HoleDest hole })
+  = RewriteM $ \env -> updTcRef (re_rewriters env) (`addRewriter` hole)
+recordRewriter other = pprPanic "recordRewriter" (ppr other)
+
 {- *********************************************************************
 *                                                                      *
 *      Externally callable rewriting functions                         *
 *                                                                      *
 ********************************************************************* -}
 
-rewriteKi :: CtEvidence -> TcKind -> TcS Reduction
+rewriteKi :: CtEvidence -> TcMonoKind -> TcS (Reduction, RewriterSet)
 rewriteKi ev ki = do
   traceTcS "rewriteKi {" (ppr ki)
-  redn <- runRewriteCtEv ev (rewrite_one_ki ki)
+  result@(redn, _) <- runRewriteCtEv ev (rewrite_one_ki ki)
   traceTcS "rewriteKi }" (ppr $ reductionReducedKind redn)
-  return redn
+  return result
 
 {- *********************************************************************
 *                                                                      *
@@ -115,36 +124,41 @@ rewriteKi ev ki = do
 *                                                                      *
 ********************************************************************* -}
 
-rewrite_one_ki :: TcKind -> RewriteM Reduction
+{-# INLINE rewrite_args_kc #-}
+rewrite_args_kc :: KiCon -> [MonoKind] -> RewriteM Reductions
+rewrite_args_kc _ = rewrite_args_fast
 
-rewrite_one_ki kc@(KiCon _) = return $ mkReflRednKi kc
+{-# INLINE rewrite_args_fast #-}
+rewrite_args_fast :: [MonoKind] -> RewriteM Reductions
+rewrite_args_fast orig_kis = iterate orig_kis
+  where
+    iterate :: [MonoKind] -> RewriteM Reductions
+    iterate (ki:kis) = do
+      ReductionKi co xi <- rewrite_one_ki ki
+      Reductions cos xis <- iterate kis
+      pure $ Reductions (co : cos) (xi : xis)
+    iterate [] = pure $ Reductions [] []
+
+rewrite_one_ki :: TcMonoKind -> RewriteM Reduction
 
 rewrite_one_ki (KiVarKi kv) = rewriteKiVar kv
 
-rewrite_one_ki (FunKi { fk_af = vis, kft_arg = ki1, kft_res = ki2 }) = do
+rewrite_one_ki (KiConApp kc kis) = rewrite_ki_con_app kc kis
+
+rewrite_one_ki (FunKi { fk_f = vis, fk_arg = ki1, fk_res = ki2 }) = do
   arg_redn <- rewrite_one_ki ki1
   res_redn <- rewrite_one_ki ki2
   return $ mkFunKiRedn vis arg_redn res_redn
 
-rewrite_one_ki (KdContext old_rels) = do
-  new_rels <- mapM rewriteKiRel old_rels
-  return $ ReductionKi (KdContext old_rels) (KdContext new_rels)
-  
-  where
-    rewriteKiRel (LTKd k1 k2) = do
-      k1 <- rewrite_one_ki k1
-      k2 <- rewrite_one_ki k2
-      return $ LTKd (reductionReducedKind k1) (reductionReducedKind k2)
-    rewriteKiRel (LTEQKd k1 k2) = do
-      k1 <- rewrite_one_ki k1
-      k2 <- rewrite_one_ki k2
-      return $ LTEQKd (reductionReducedKind k1) (reductionReducedKind k2)
-
 rewrite_reduction :: Reduction -> RewriteM Reduction
-rewrite_reduction (ReductionKi ki xi) = do
-  redn <- bumpDepth $ rewrite_one_ki xi
-  return $ mkTransRedn ki redn
-rewrite_reduction (ReflRednKi xi) = bumpDepth $ rewrite_one_ki xi
+rewrite_reduction (ReductionKi co ki) = do
+  redn <- bumpDepth $ rewrite_one_ki ki
+  return $ co `mkTransRedn` redn
+
+rewrite_ki_con_app :: KiCon -> [TcMonoKind] -> RewriteM Reduction
+rewrite_ki_con_app kc kis = do
+  redns <- rewrite_args_kc kc kis
+  return $ mkKiConAppRedn kc redns
 
 {- *********************************************************************
 *                                                                      *
@@ -161,7 +175,7 @@ rewriteKiVar kv = do
   mb_yes <- rewrite_kivar1 kv
   case mb_yes of
     RKRFollowed redn -> rewrite_reduction redn
-    RKRNotFollowed -> return $ mkReflRednKi $ mkKiVarKi kv
+    RKRNotFollowed -> return $ mkReflRednKi $ mkKiVarMKi kv
 
 rewrite_kivar1 :: TcKiVar -> RewriteM RewriteKvResult
 rewrite_kivar1 kv = do
@@ -177,4 +191,22 @@ rewrite_kivar1 kv = do
       rewrite_kivar2 kv f
 
 rewrite_kivar2 :: TcKiVar -> CtFlavor -> RewriteM RewriteKvResult
-rewrite_kivar2 _ _ = return RKRNotFollowed
+rewrite_kivar2 kv f = do
+  ieqs <- liftTcS $ getInertEqs
+  case lookupDVarEnv ieqs kv of
+    Just equal_ct_list
+      | Just ct <- find can_rewrite equal_ct_list
+      , KiEqCt { eq_ev = ctev, eq_lhs = KiVarLHS kv, eq_rhs = rhs_ki } <- ct
+      -> do let wrw = isWanted ctev
+            traceRewriteM "Following inert kivar"
+              $ vcat [ ppr kv <+> equals <+> ppr rhs_ki
+                     , ppr ctev
+                     , text "wanted_rewrite_wanted:" <+> ppr wrw ]
+            when wrw $ recordRewriter ctev
+
+            let rewriting_co = ctEvKiCoercion ctev
+            return $ RKRFollowed $ mkReductionKi rewriting_co rhs_ki
+    _ -> return RKRNotFollowed
+  where
+    can_rewrite :: EqCt -> Bool
+    can_rewrite ct = eqCtFlavor ct `eqCanRewriteF` f

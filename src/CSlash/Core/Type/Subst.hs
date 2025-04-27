@@ -2,7 +2,7 @@
 
 module CSlash.Core.Type.Subst where
 
-import {-# SOURCE #-} CSlash.Core.Type ( mkAppTy, mkTyConApp )
+import {-# SOURCE #-} CSlash.Core.Type ( mkAppTy, mkTyConApp, mkCastTy )
 import {-# SOURCE #-} CSlash.Core.Type.Ppr ( pprTyVar )
 import {-# SOURCE #-} CSlash.Core ( CoreExpr )
 
@@ -104,6 +104,7 @@ subst_ty subst ty = go ty
           (subst', tv') -> (ForAllTy $! ((Bndr $! tv') vis))
                                      $! (subst_ty subst' ty)
     go (Embed mki) = Embed $! substMonoKi subst mki
+    go (CastTy ty co) = (mkCastTy $! (go ty)) $! co
 
 substTyVar :: Subst -> TypeVar -> Type
 substTyVar (Subst _ _ tenv _) tv

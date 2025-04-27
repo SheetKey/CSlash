@@ -136,6 +136,7 @@ instance ContainsModule gbl => ContainsModule (Env gbl lcl) where
 data RewriteEnv = RE
   { re_loc :: !CtLoc
   , re_flavor :: !CtFlavor
+  , re_rewriters :: !(TcRef RewriterSet)
   }
 
 {- *********************************************************************

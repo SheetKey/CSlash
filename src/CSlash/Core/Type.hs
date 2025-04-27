@@ -168,6 +168,7 @@ mapTypeX (TypeMapper { tcm_tyvar = tyvar
         inner' <- go_ty env' inner
         return $ BigTyLamTy kv' inner'
     go_ty !env (Embed ki) = Embed <$> mono_ki env ki
+    go_ty !env (CastTy ty co) = mkCastTy <$> go_ty env ty <*> pure co
 
 {- *********************************************************************
 *                                                                      *
@@ -251,6 +252,25 @@ monoPiResultTys ki orig_args@(arg:args)
   = monoPiResultTys res args
   | otherwise
   = pprPanic "monoPiResultTys1" (ppr ki $$ ppr orig_args)
+
+{- *********************************************************************
+*                                                                      *
+                      CastTy
+*                                                                      *
+********************************************************************* -}
+
+mkCastTy :: Type -> KindCoercion -> Type
+mkCastTy orig_ty co | isReflKiCo co = orig_ty
+mkCastTy orig_ty co = mk_cast_ty orig_ty co
+
+mk_cast_ty :: Type -> KindCoercion -> Type
+mk_cast_ty orig_ty co = go orig_ty
+  where
+    go :: Type -> Type
+    go ty | Just ty' <- coreView ty = go ty'
+    go (CastTy ty co1) = mkCastTy ty (co1 `mkTransKiCo` co)
+    go (ForAllTy bndr inner_ty) = ForAllTy bndr (inner_ty `mk_cast_ty` co)
+    go _ = CastTy orig_ty co
 
 {- *********************************************************************
 *                                                                      *
@@ -350,6 +370,7 @@ typeMonoKind ty@(TyLamTy tv res) =
   in mkFunKi flag tvKind res_kind
 typeMonoKind ty@(BigTyLamTy _ _) = pprPanic "typeMonoKind" (ppr ty)
 typeMonoKind ty@(Embed _) = pprPanic "typeMonoKind" (ppr ty)
+typeMonoKind (CastTy _ co) = kicoercionRKind co
 
 {- *********************************************************************
 *                                                                      *

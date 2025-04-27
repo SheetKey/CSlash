@@ -11,6 +11,7 @@ import CSlash.Types.Var
 import CSlash.Core.Ppr ()   -- Instance OutputableBndr TyVar
 import CSlash.Tc.Utils.TcType
 import CSlash.Core.Type
+import CSlash.Core.Kind
 import CSlash.Core.TyCon
 import CSlash.Core.DataCon ( DataCon{-, dataConWrapId-} )
 import CSlash.Builtin.Names
@@ -39,24 +40,18 @@ import CSlash.Types.Unique.Set
 
 import qualified Data.Semigroup as S
 
+maybeSymCo :: SwapFlag -> KindCoercion -> KindCoercion
+maybeSymCo IsSwapped co = mkSymKiCo co
+maybeSymCo NotSwapped co = co
+
 {- *********************************************************************
 *                                                                      *
                   Evidence bindings
 *                                                                      *
 ********************************************************************* -}
-
--- data TcEvBinds
---   = TcEvBinds EvBindsVar
---   | EvBinds (Bag EvBind)
   
--- data EvBindsVar
---   = EvBindsVar
---     { ebv_uniq :: Uniq
---     , ebv_binds :: IORef EvBindMap
---     , ebv_tcvs :: IORef Co
-
--- data EvBind = EvBind
---   { eb_lhs :: EvVar
---   , eb_rhs :: EvTerm
---   , eb_info :: EvBindInfo
---   }
+data KiEvBindsVar
+  = KiCoEvBindsVar
+    { ebv_uniq :: Unique
+    , ebv_kcvs :: IORef KiCoVarSet
+    }

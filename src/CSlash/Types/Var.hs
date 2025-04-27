@@ -38,7 +38,7 @@ module CSlash.Types.Var
 import Prelude hiding ((<>))
 
 import {-# SOURCE #-} CSlash.Core.Type.Rep (Type)
-import {-# SOURCE #-} CSlash.Core.Kind (Kind, MonoKind, pprKind)
+import {-# SOURCE #-} CSlash.Core.Kind (Kind, MonoKind, pprKind, isCoVarKind)
 import {-# SOURCE #-} CSlash.Tc.Utils.TcType
   (TcTyVarDetails, TcKiVarDetails, pprTcTyVarDetails, vanillaSkolemTvUnk, vanillaSkolemKvUnk)
 import {-# SOURCE #-} CSlash.Types.Id.Info (IdDetails, IdInfo, pprIdDetails)
@@ -65,6 +65,9 @@ type TcTyVar = Var
 type TcKiVar = Var
 
 type TcVar = Var -- a TcTyVar or TcKiVar
+
+type KiEvVar = Var
+type KiCoVar = Var
 
 data Var
   = TyVar
@@ -343,6 +346,10 @@ tcKiVarDetails var = pprPanic "tcKiVarDetails" (ppr var)
 
 setTcKiVarDetails :: KindVar -> TcKiVarDetails -> KindVar
 setTcKiVarDetails kv details = kv { tc_kv_details = details }
+
+mkKiCoVar :: Name -> MonoKind -> Var
+mkKiCoVar name ki = assert (isCoVarKind ki) $
+                    TyVar name (nameUnique name) ki
 
 {- *********************************************************************
 *                                                                      *

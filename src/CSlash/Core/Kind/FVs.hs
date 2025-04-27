@@ -33,6 +33,9 @@ runKiVars f = appEndo f emptyVarSet
 kiVarsOfKind :: Kind -> KiVarSet
 kiVarsOfKind ki = runKiVars (deep_ki ki)
 
+kiVarsOfMonoKind :: MonoKind -> KiVarSet
+kiVarsOfMonoKind ki = runKiVars (deep_ki (Mono ki))
+
 kiVarsOfKinds :: [Kind] -> KiVarSet
 kiVarsOfKinds kis = runKiVars (deep_kis kis)
 
@@ -97,6 +100,36 @@ shallowKvFolder = KindFolder { kf_view = noKindView
 
 {- *********************************************************************
 *                                                                      *
+          Free coercion variables
+*                                                                      *
+********************************************************************* -}
+
+runCoVars :: Endo KiCoVarSet -> KiCoVarSet
+runCoVars f = appEndo f emptyVarSet
+{-# INLINE runCoVars #-}
+
+coVarsOfKiCo :: KindCoercion -> KiCoVarSet
+coVarsOfKiCo co = runCoVars (deep_cv_co co)
+
+deep_cv_ki :: MonoKind -> Endo KiCoVarSet
+deep_cv_kis :: [MonoKind] -> Endo KiCoVarSet
+deep_cv_co :: KindCoercion -> Endo KiCoVarSet
+deep_cv_cos :: [KindCoercion] -> Endo KiCoVarSet
+(deep_cv_ki, deep_cv_kis, deep_cv_co, deep_cv_cos) = foldMonoKiCo deepKiCoVarFolder emptyVarSet
+
+deepKiCoVarFolder :: MonoKiCoFolder KiCoVarSet (Endo KiCoVarSet)
+deepKiCoVarFolder = MKiCoFolder { kcf_kivar = do_kivar, kcf_hole = do_hole }
+  where
+    do_kivar _ _ = mempty
+    do_covar is v = Endo do_it
+      where
+        do_it acc | v `elemVarSet` is = acc
+                  | v `elemVarSet` acc = acc
+                  | otherwise = acc `extendVarSet` v
+    do_hole is hole = do_covar is (coHoleCoVar hole)
+
+{- *********************************************************************
+*                                                                      *
           The FV versions return deterministic results
 *                                                                      *
 ********************************************************************* -}
@@ -151,6 +184,10 @@ afvFolder check_fv = KindFolder { kf_view = noKindView
 
 anyFreeVarsOfKind :: (KindVar -> Bool) -> Kind -> Bool
 anyFreeVarsOfKind check_fv ki = DM.getAny (f ki)
+  where (f, _) = foldKind (afvFolder check_fv) emptyVarSet
+
+anyFreeVarsOfMonoKind :: (KindVar -> Bool) -> MonoKind -> Bool
+anyFreeVarsOfMonoKind check_fv ki = DM.getAny (f (Mono ki))
   where (f, _) = foldKind (afvFolder check_fv) emptyVarSet
 
 noFreeVarsOfKind :: Kind -> Bool
