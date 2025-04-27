@@ -38,13 +38,13 @@ data TcLclCtxt = TcLclCtxt
   , tcl_tclvl :: TcLevel
   , tcl_bndrs :: TcBinderStack
   , tcl_rdr :: LocalRdrEnv
-  , tcl_env :: TcTyKiEnv
+  , tcl_env :: TcTypeEnv
   }
 
-getLclEnvTypeEnv :: TcLclEnv -> TcTyKiEnv
+getLclEnvTypeEnv :: TcLclEnv -> TcTypeEnv
 getLclEnvTypeEnv = tcl_env . tcl_lcl_ctxt
 
-setLclEnvTypeEnv :: TcTyKiEnv -> TcLclEnv -> TcLclEnv
+setLclEnvTypeEnv :: TcTypeEnv -> TcLclEnv -> TcLclEnv
 setLclEnvTypeEnv ty_env = modifyLclCtxt (\env -> env { tcl_env = ty_env})
 
 setLclEnvTcLevel :: TcLevel -> TcLclEnv -> TcLclEnv
@@ -88,4 +88,5 @@ modifyLclCtxt upd env =
   let !res = upd (tcl_lcl_ctxt env)
   in env { tcl_lcl_ctxt = res }
 
-type TcTyKiEnv = NameEnv TcTyKiThing
+type TcTypeEnv = NameEnv TcTyThing
+

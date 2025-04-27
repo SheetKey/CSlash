@@ -17,7 +17,7 @@ import CSlash.Types.Var.Set ( TyVarSet )
 
 import CSlash.Utils.Misc ( HasDebugCallStack, equalLength )
 import CSlash.Utils.Outputable
-import CSlash.Utils.Panic
+import CSlash.Utils.Panic ( assertPpr )
 
 {- *********************************************************************
 *                                                                      *
@@ -47,16 +47,15 @@ mkTransRedn og_kind (ReflRednKi newest_kind) = ReductionKi og_kind newest_kind
 mkReflRednKi :: Kind -> Reduction
 mkReflRednKi = ReflRednKi
 
-mkFunKiRedn :: FunKiFlag -> Reduction -> Reduction -> Reduction
--- mkFunKiRedn f (ReductionKi arg_og arg_new) (ReductionKi res_og res_new)
---   = mkReductionKi (FunKi f arg_og res_og) (FunKi f arg_new res_new)
--- mkFunKiRedn f (ReflRednKi arg_new) (ReductionKi res_og res_new)
---   = mkReductionKi (FunKi f arg_new res_og) (FunKi f arg_new res_new)
--- mkFunKiRedn f (ReductionKi arg_og arg_new) (ReflRednKi res_new)
---   = mkReductionKi (FunKi f arg_og res_new) (FunKi f arg_new res_new)
--- mkFunKiRedn f (ReflRednKi arg_new) (ReflRednKi res_new)
---   = mkReflRednKi (FunKi f arg_new res_new)
-mkFunKiRedn = panic "mkFunKiRedn"
+mkFunKiRedn :: FunKdFlag -> Reduction -> Reduction -> Reduction
+mkFunKiRedn f (ReductionKi arg_og arg_new) (ReductionKi res_og res_new)
+  = mkReductionKi (FunKd f arg_og res_og) (FunKd f arg_new res_new)
+mkFunKiRedn f (ReflRednKi arg_new) (ReductionKi res_og res_new)
+  = mkReductionKi (FunKd f arg_new res_og) (FunKd f arg_new res_new)
+mkFunKiRedn f (ReductionKi arg_og arg_new) (ReflRednKi res_new)
+  = mkReductionKi (FunKd f arg_og res_new) (FunKd f arg_new res_new)
+mkFunKiRedn f (ReflRednKi arg_new) (ReflRednKi res_new)
+  = mkReflRednKi (FunKd f arg_new res_new)
 {-# INLINE mkFunKiRedn #-}
 
 isReflRedn :: Reduction -> Bool

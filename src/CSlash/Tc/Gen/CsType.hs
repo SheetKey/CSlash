@@ -399,7 +399,7 @@ kcDeclHeader
   -> Name
   -> TyConFlavor TyCon
   -> [Name]
-  -> TcM ContextKind
+  -> TcM (Kind, Kind, Arity)
   -> TcM TcTyCon
 kcDeclHeader InitialKindInfer = kcInferDeclHeader
 
@@ -407,20 +407,18 @@ kcDeclHeader InitialKindInfer = kcInferDeclHeader
 -- it is the number of args the TyCon accepts before its kind is the result kind
 kcInferDeclHeader
   :: Name
-  -> Arity
   -> TyConFlavor TyCon
   -> [Name]
-  -> TcM ContextKind
+  -> TcM (Kind, Kind, Arity) -- (resultkind, fullkind, arity)
   -> TcM MonoTcTyCon
-kcInferDeclHeader name arity flav kv_ns kc_res_ki = addTyConFlavCtxt name flav $ do
-  (scoped_kvs, res_kind) <- bindImplicitKBndrs_Q_Kv kv_ns
-                            $ newExpectedKind =<< kc_res_ki
+kcInferDeclHeader name flav kv_ns kc_res_ki = addTyConFlavCtxt name flav $ do
+  (scoped_kvs, (res_kind, full_kind, arity)) <- bindImplicitKinds kv_ns kc_res_ki
 
   let kv_pairs = mkKiVarNamePairs scoped_kvs
-      tycon = mkTcTyCon name res_kind arity kv_pairs False flav
+      tycon = mkTcTyCon name scoped_kvs res_kind full_kind arity kv_pairs False flav
   
   traceTc "kcInferDeclHeader"
-    $ vcat [ ppr name, ppr kv_ns, ppr scoped_kvs, ppr res_kind, ppr arity ]
+    $ vcat [ ppr name, ppr kv_ns, ppr scoped_kvs, ppr res_kind, ppr full_kind, ppr arity ]
 
   return tycon
 
@@ -513,7 +511,7 @@ bindTyLamTyBndrsX skol_mode@(SM { sm_kind = ctxt_kind }) cs_tvs thing_inside = d
       res <- thing_inside
       return ([], res)
     go ((name, mb_cs_kind) : cs_tvs) = do
-      lcl_env <- getLclTyKiEnv
+      lcl_env <- getLclTypeEnv
       tv <- tc_cs_bndr lcl_env name mb_cs_kind
       (tvs, res) <- tcExtendNameTyVarEnv [(name, tv)]
                     $ go cs_tvs
@@ -571,7 +569,7 @@ bindExplicitBndrsX skol_mode@(SM { sm_kind = ctxt_kind }) cs_tvs thing_inside = 
       res <- thing_inside
       return ([], res)
     go (L _ cs_tv : cs_tvs) = do
-      lcl_env <- getLclTyKiEnv
+      lcl_env <- getLclTypeEnv
       (tv, flag) <- tc_cs_bndr lcl_env cs_tv
       (tvs, res) <- tcExtendNameTyVarEnv [(csTyVarName cs_tv, tv)]
                     $ go cs_tvs
@@ -609,7 +607,7 @@ data SkolemMode = SM
   }
 
 data SkolemModeDetails
-  = SMDTyVarTv
+  = SMDTyVarTy
   | SMDSkolemTv SkolemInfo
 
 smVanilla :: HasCallStack => SkolemMode
@@ -621,70 +619,35 @@ smVanilla = SM { sm_clone = panic "sm_clone"
 --    Implicit kind var binders
 --------------------------------------
 
-newKiVarBndr :: SkoleModeK -> Name -> TcM TcKiVar
-newKiVarBndr (SMK { sm_clone = clone, sm_kvkv = kvkv }) name = do
-  name <- case clone of
-            True -> do uniq <- newUnique
-                       return $ setNameUnique name uniq
-            False -> return name
-  details <- case kvkv of
-               SMDKiVarKv -> newMetaDetailsK KiVarKv
-  return $ mkTcKiVar name details
+newKiVarBndr :: Name -> TcM TcKiVar
+newKiVarBndr name = do
+  details <- newMetaDetailsK KiVarKv
+  return $ mkTcKiVar name details  
 
--- bindImplicitKinds :: [Name] -> TcM a -> TcM ([TcKiVar], a)
--- bindImplicitKinds kv_names thing_inside = do
---   lcl_env <- getLclTypeEnv
---   kvs <- mapM (new_kv lcl_env) kv_names
---   traceTc "bindImplicitKinds" (ppr kv_names $$ ppr kvs)
---   res <- tcExtendNameKiVarEnv (kv_names `zip` kvs) thing_inside
---   return (kvs, res)
---   where
---     new_kv lcl_env name
---       | Just (AKiVar _ kv) <- lookupNameEnv lcl_env name
---       = return kv
---       | otherwise
---       = newKiVarBndr name
-
--- bindImplicitTyConKiVars :: Name -> ([TcKiVar] -> TcKind -> TcKind -> Arity -> TcM a) -> TcM a
--- bindImplicitTyConKiVars tycon_name thing_inside = do
---   tycon <- tcLookupTcTyCon tycon_name
---   let rhs_kind = tyConKind tycon
---       res_kind = tyConResKind tycon
---       arity = tyConArity tycon
---       binders = tyConKindBinders tycon
---   traceTc "bindImplicitTyConKiVars" (ppr tycon_name $$ ppr binders)
---   tcExtendKiVarEnv binders
---     $ thing_inside binders res_kind rhs_kind arity
-
-bindImplicitKBndrs_Q_Kv :: [Name] -> TcM a -> TcM ([TcKiVar], a)
-bindImplicitKBndrs_Q_Kv = bindImplicitKBndrsX (smkVanilla { smk_clone = False
-                                                          , smk_kvkv = SMDKiVarKv })
-
-bindImplicitKBndrsX :: SkolemModeK -> [Name] -> TcM a -> TcM ([TcKiVar], a)
-bindImplicitKBndrsX skol_mode kv_names thing_inside = do
-  lcl_env <- getLclTyKiEnv
+bindImplicitKinds :: [Name] -> TcM a -> TcM ([TcKiVar], a)
+bindImplicitKinds kv_names thing_inside = do
+  lcl_env <- getLclTypeEnv
   kvs <- mapM (new_kv lcl_env) kv_names
-  traceTc "bindImplicitKBndrsX" (ppr kv_names $$ ppr kvs)
+  traceTc "bindImplicitKinds" (ppr kv_names $$ ppr kvs)
   res <- tcExtendNameKiVarEnv (kv_names `zip` kvs) thing_inside
   return (kvs, res)
   where
-    new_kv lcl_env name = newKiVarBndr skol_mode name      
+    new_kv lcl_env name
+      | Just (AKiVar _ kv) <- lookupNameEnv lcl_env name
+      = return kv
+      | otherwise
+      = newKiVarBndr name
 
---------------------------------------
---           SkolemModeK
---------------------------------------
-  
-data SkolemModeK = SMK
-  { smk_clone :: Bool
-  , smk_tvtv :: SkolemModeKDetails
-  }
-
-data SkolemModeKDetails
-  = SMDKiVarKv
-
-smkVanilla :: HasCallStack => SkolemModeK
-smkVanilla = SMK { smk_clone = panic "sm_clone"
-                 , smk_tvtv = pprPanic "sm_tvtv" callStackDoc 
+bindImplicitTyConKiVars :: Name -> ([TcKiVar] -> TcKind -> TcKind -> Arity -> TcM a) -> TcM a
+bindImplicitTyConKiVars tycon_name thing_inside = do
+  tycon <- tcLookupTcTyCon tycon_name
+  let rhs_kind = tyConKind tycon
+      res_kind = tyConResKind tycon
+      arity = tyConArity tycon
+      binders = tyConKindBinders tycon
+  traceTc "bindImplicitTyConKiVars" (ppr tycon_name $$ ppr binders)
+  tcExtendKiVarEnv binders
+    $ thing_inside binders res_kind rhs_kind arity
 
 {- *********************************************************************
 *                                                                      *
@@ -740,7 +703,7 @@ checkNeedsEtaKind res_kind = case splitFunKi_maybe res_kind of
 *                                                                      *
 ********************************************************************* -}
 
-tcLCsKindSig :: UserTypeCtxt -> LCsKind Rn -> TcM MonoKind
+tcLCsKindSig :: UserTypeCtxt -> LCsKind Rn -> TcM Kind
 tcLCsKindSig ctxt cs_kind = do
   kind <- addErrCtxt (text "In the kind" <+> quotes (ppr cs_kind))
           $ tcLCsKind cs_kind

@@ -7,8 +7,8 @@ module CSlash.Tc.Types
   , ErrCtxt
   , ImportAvails(..)
 
-  , TcTyKiEnv, TcBinderStack, TcBinder(..)
-  , TcTyKiThing(..)
+  , TcTypeEnv, TcBinderStack, TcBinder(..)
+  , TcTyThing(..)
   ) where
 
 import CSlash.Platform

@@ -46,34 +46,34 @@ This change should be reflected in Iface.Type
 -}
 type TyConBinder = VarBndr TypeVar ForAllTyFlag
 
--- verifyTyConKind :: [TyConBinder] -> Kind -> Kind
--- verifyTyConKind bndrs kind =
---   let kind' = remove_constrs kind
---   in if no_constrs kind'
---      then if go bndrs kind'
---           then kind
---           else panic "verifyTyConKind"
---      else panic "verifyTyConKind"
---   where
---     remove_constrs (FunKd _ (KdContext _) k2) = remove_constrs k2
---     remove_constrs (KdContext _) = panic "remove_constrs"
---     remove_constrs k = k
+verifyTyConKind :: [TyConBinder] -> Kind -> Kind
+verifyTyConKind bndrs kind =
+  let kind' = remove_constrs kind
+  in if no_constrs kind'
+     then if go bndrs kind'
+          then kind
+          else panic "verifyTyConKind"
+     else panic "verifyTyConKind"
+  where
+    remove_constrs (FunKd _ (KdContext _) k2) = remove_constrs k2
+    remove_constrs (KdContext _) = panic "remove_constrs"
+    remove_constrs k = k
 
---     no_constrs (KdContext _) = False
---     no_constrs (FunKd FKF_C_K _ _) = False
---     no_constrs (FunKd _ k1 k2) = no_constrs k1 && no_constrs k2 -- this shouldn't be necessary
---                                                                 -- if there are constraints
---                                                                 -- they should only appear
---                                                                 -- once and at the 'top'
---     no_constrs _ = True
+    no_constrs (KdContext _) = False
+    no_constrs (FunKd FKF_C_K _ _) = False
+    no_constrs (FunKd _ k1 k2) = no_constrs k1 && no_constrs k2 -- this shouldn't be necessary
+                                                                -- if there are constraints
+                                                                -- they should only appear
+                                                                -- once and at the 'top'
+    no_constrs _ = True
 
---     go [] (KiVarKi {}) = True
---     go [] (KiCon _) = True
---     go [Bndr tv _] (FunKd _ arg_kd _)
---       | isTyVar tv = varKind tv `tcEqKind` arg_kd
---     go ((Bndr tv _):bndrs) (FunKd _ arg_kd res_kd)
---       | isTyVar tv = varKind tv `tcEqKind` arg_kd && go bndrs res_kd
---     go _ _ = pprPanic "verifyTyConKind_go" (vcat [ppr bndrs, ppr kind])
+    go [] (KiVarKi {}) = True
+    go [] (KiCon _) = True
+    go [Bndr tv _] (FunKd _ arg_kd _)
+      | isTyVar tv = varKind tv `tcEqKind` arg_kd
+    go ((Bndr tv _):bndrs) (FunKd _ arg_kd res_kd)
+      | isTyVar tv = varKind tv `tcEqKind` arg_kd && go bndrs res_kd
+    go _ _ = pprPanic "verifyTyConKind_go" (vcat [ppr bndrs, ppr kind])
 
 -- mkAnonTyConBinder :: TypeVar -> TyConBinder
 -- mkAnonTyConBinder tv = assert (isTyVar tv) $
@@ -124,7 +124,9 @@ Similarly: type g = \x y -> \z -> (x, y, z)
 data TyCon = TyCon
   { tyConUnique :: !Unique
   , tyConName :: !Name
+  , tyConKindBinders :: [KindVar] -- the implicitly bound kind vars
   , tyConKind :: Kind
+  , tyConResKind :: Kind
   , tyConArity :: Arity
   , tyConNullaryTy :: Type
   , tyConDetails :: !TyConDetails
@@ -191,9 +193,9 @@ isTcTyCon (TyCon { tyConDetails = details })
   | TcTyCon {} <- details = True
   | otherwise = False
 
-setTcTyConKind :: TyCon -> Kind -> TyCon
-setTcTyConKind tc kind = assert (isMonoTcTyCon tc) $
-  let tc' = tc { tyConKind = kind, tyConNullaryTy = mkNakedTyConTy tc' }
+setTcTyConKind :: TyCon -> Kind -> Kind -> TyCon
+setTcTyConKind tc kind res_kind = assert (isMonoTcTyCon tc) $
+  let tc' = tc { tyConKind = kind, tyConResKind = res_kind, tyConNullaryTy = mkNakedTyConTy tc' }
   in tc'
   
 isMonoTcTyCon :: TyCon -> Bool
@@ -215,11 +217,13 @@ type TyConRepName = Name
 *                                                                      *
 ********************************************************************* -}
 
-mkTyCon :: Name -> Kind -> Arity -> TyConDetails -> TyCon
-mkTyCon name full_kind arity details = tc
+mkTyCon :: Name -> [KindVar] -> Kind -> Kind -> Arity -> TyConDetails -> TyCon
+mkTyCon name binders res_kind full_kind arity details = tc
   where
     tc = TyCon { tyConUnique = nameUnique name
                , tyConName = name
+               , tyConKindBinders = binders
+               , tyConResKind = res_kind
                , tyConKind = full_kind
                , tyConArity = arity
                , tyConNullaryTy = mkNakedTyConTy tc
@@ -228,62 +232,70 @@ mkTyCon name full_kind arity details = tc
 
 mkAlgTyCon
   :: Name
+  -> [KindVar]
+  -> Kind
   -> Kind
   -> Arity
   -> AlgTyConRhs
   -> AlgTyConFlav
   -> TyCon
-mkAlgTyCon name full_kind arity rhs parent
-  = mkTyCon name full_kind arity $
+mkAlgTyCon name binders res_kind full_kind arity rhs parent
+  = mkTyCon name binders res_kind full_kind arity $
     AlgTyCon { algTcRhs = rhs
              , algTcFlavor = parent }
 
 mkTupleTyCon
   :: Name
+  -> [KindVar]
+  -> Kind
   -> Kind
   -> Arity
   -> DataCon
   -> AlgTyConFlav
   -> TyCon
-mkTupleTyCon name kind arity con parent
-  = mkTyCon name kind arity $
+mkTupleTyCon name binders res_kind kind arity con parent
+  = mkTyCon name binders res_kind kind arity $
     AlgTyCon { algTcRhs = TupleTyCon { data_con = con }
              , algTcFlavor = parent }
 
 mkSumTyCon
   :: Name
+  -> [KindVar]
+  -> Kind
   -> Kind
   -> Arity
   -> [DataCon]
   -> AlgTyConFlav
   -> TyCon
-mkSumTyCon name kind arity cons parent
-  = mkTyCon name kind arity $
+mkSumTyCon name binders res_kind kind arity cons parent
+  = mkTyCon name binders res_kind kind arity $
     AlgTyCon { algTcRhs = mkSumTyConRhs cons
              , algTcFlavor = parent }
 
 mkTcTyCon
   :: Name
+  -> [KindVar]
+  -> Kind
   -> Kind
   -> Arity
   -> [(Name, TcKiVar)]
   -> Bool
   -> TyConFlavor TyCon
   -> TyCon
-mkTcTyCon name full_kind arity scoped_kvs poly flav
-  = mkTyCon name full_kind arity
+mkTcTyCon name binders res_kind full_kind arity scoped_kvs poly flav
+  = mkTyCon name binders res_kind full_kind arity
     $ TcTyCon { tctc_scoped_kvs = scoped_kvs
               , tctc_is_poly = poly
               , tctc_flavor = flav }
 
-mkPrimTyCon :: Name -> Kind -> Arity -> TyCon
-mkPrimTyCon name kind arity
-  = mkTyCon name kind arity PrimTyCon
+mkPrimTyCon :: Name -> [KindVar] -> Kind -> Kind -> Arity -> TyCon
+mkPrimTyCon name binders res_kind kind arity
+  = mkTyCon name binders res_kind kind arity PrimTyCon
 
 mkSynonymTyCon
-  :: Name -> Kind -> Arity -> Type -> Bool -> Bool -> Bool -> TyCon
-mkSynonymTyCon name rhs_kind arity rhs is_tau is_forgetful is_concrete
-  = mkTyCon name rhs_kind arity
+  :: Name -> [KindVar] -> Kind -> Kind -> Arity -> Type -> Bool -> Bool -> Bool -> TyCon
+mkSynonymTyCon name binders res_kind rhs_kind arity rhs is_tau is_forgetful is_concrete
+  = mkTyCon name binders res_kind rhs_kind arity
     $ SynonymTyCon { synTcRhs = rhs
                    , synIsTau = is_tau
                    , synIsForgetful = is_forgetful

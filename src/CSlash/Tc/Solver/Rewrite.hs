@@ -121,7 +121,7 @@ rewrite_one_ki kc@(KiCon _) = return $ mkReflRednKi kc
 
 rewrite_one_ki (KiVarKi kv) = rewriteKiVar kv
 
-rewrite_one_ki (FunKi { fk_af = vis, kft_arg = ki1, kft_res = ki2 }) = do
+rewrite_one_ki (FunKd { fk_af = vis, kft_arg = ki1, kft_res = ki2 }) = do
   arg_redn <- rewrite_one_ki ki1
   res_redn <- rewrite_one_ki ki2
   return $ mkFunKiRedn vis arg_redn res_redn

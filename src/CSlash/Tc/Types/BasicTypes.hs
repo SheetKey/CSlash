@@ -47,11 +47,11 @@ instance HasOccName TcBinder where
 
 {- *********************************************************************
 *                                                                      *
-             TcTyKiThing
+             TcTyThing
 *                                                                      *
 ********************************************************************* -}
 
-data TcTyKiThing
+data TcTyThing
   = AGlobal TyThing
   | ATcId
     { tct_id :: Id
@@ -61,12 +61,12 @@ data TcTyKiThing
   | AKiVar Name TcKiVar -- should make a new type 'TcKiThing'
   | ATcTyCon TyCon
 
-tcTyThingTyCon_maybe :: TcTyKiThing -> Maybe TyCon
+tcTyThingTyCon_maybe :: TcTyThing -> Maybe TyCon
 tcTyThingTyCon_maybe (AGlobal (ATyCon tc)) = Just tc
 tcTyThingTyCon_maybe (ATcTyCon tc_tc) = Just tc_tc
 tcTyThingTyCon_maybe _ = Nothing
 
-instance Outputable TcTyKiThing where
+instance Outputable TcTyThing where
   ppr (AGlobal g) = ppr g
   ppr elt@(ATcId {}) = text "Identifier"
                         <> brackets (ppr (tct_id elt) <> colon
@@ -92,12 +92,12 @@ instance Outputable IdBindingInfo where
   ppr ClosedLet = text "TopLevelLet"
   ppr (NonClosedLet fvs closed_type) = text "TopLevelLet" <+> ppr fvs <+> ppr closed_type
 
-pprTcTyKiThingCategory :: TcTyKiThing -> SDoc
-pprTcTyKiThingCategory = text . capitalise . tcTyKiThingCategory
+pprTcTyThingCategory :: TcTyThing -> SDoc
+pprTcTyThingCategory = text . capitalise . tcTyThingCategory
 
-tcTyKiThingCategory :: TcTyKiThing -> String
-tcTyKiThingCategory (AGlobal thing) = tyThingCategory thing
-tcTyKiThingCategory (ATyVar {}) = "type variable"
-tcTyKiThingCategory (AKiVar {}) = "kind variable"
-tcTyKiThingCategory (ATcId {}) = "local identifier"
-tcTyKiThingCategory (ATcTyCon {}) = "local tycon"
+tcTyThingCategory :: TcTyThing -> String
+tcTyThingCategory (AGlobal thing) = tyThingCategory thing
+tcTyThingCategory (ATyVar {}) = "type variable"
+tcTyThingCategory (AKiVar {}) = "kind variable"
+tcTyThingCategory (ATcId {}) = "local identifier"
+tcTyThingCategory (ATcTyCon {}) = "local tycon"

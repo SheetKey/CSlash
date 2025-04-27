@@ -150,16 +150,11 @@ uKind env orig_ki1 orig_ki2 = do
                        uKind env orig_ki1 ki2
         Nothing -> uUnfilledKiVar env IsSwapped kv2 ki1
 
-    go (KiConApp kc1 []) (KiConApp kc2 [])
+    go (KiCon kc1) (KiCon kc2)
       | kc1 == kc2
       = return ()
 
-    go (KiConApp kc1 kis1) (KiConApp kc2 kis2)
-      | kc1 == kc2, equalLength kis1 kis2
-      = do traceTc "go-kicon" (ppr kc1 $$ ppr kis1 $$ ppr kis2)
-           zipWith u_kc_arg kis1 kis2
-
-    go (FunKi FKF_K_K arg1 res1) (FunKi FKF_K_K arg2 res2) = do
+    go (FunKd FKF_K_K arg1 res1) (FunKd FKF_K_K arg2 res2) = do
       uKind env arg1 arg2
       uKind env res1 res2
 
@@ -169,13 +164,6 @@ uKind env orig_ki1 orig_ki2 = do
     defer ki1 ki2
       | ki1 `tcEqKind` ki2 = return ()
       | otherwise = uKind_defer env orig_ki1 orig_ki2
-
-    ------------------
-    u_kc_arg ki1 ki2 = do
-      traceTc "u_tc_arg" (ppr ki1 $$ ppr ki2)
-      uKind env_arg ki1 ki2
-      where
-        env_arg = env { u_loc = adjustCtLoc (u_loc env) }
 
 {- *********************************************************************
 *                                                                      *
@@ -268,9 +256,13 @@ simpleUnifyCheckKind lhs_kv rhs = go rhs
       | tcKiVarLevel kv > lhs_kv_lvl = False
       | otherwise = True
 
-    go (FunKi { fk_f = af, fk_arg = a, fk_res = r })
+    go (FunKd { fk_af = af, kft_arg = a, kft_res = r })
       | af == FKF_C_K = False
       | otherwise = go a && go r
+
+    go (KdContext {}) = panic "simpleUnifyCheckKind"
+
+    go (KiCon _) = True
 
 {- *********************************************************************
 *                                                                      *
@@ -343,7 +335,7 @@ instance Outputable LevelCheck where
 checkKiEqRhs :: KiEqFlags -> TcKind -> TcM (PuResult () Reduction)
 checkKiEqRhs flags ki = case ki of
   KiVarKi kv -> checkKiVar flags kv
-  FunKi { fk_f = af, fk_arg = a, fk_res = r }
+  FunKd { fk_af = af, kft_arg = a, kft_res = r }
     | FKF_C_K <- af
     , not (kef_constrs flags)
     -> failCheckWith impredicativeProblem

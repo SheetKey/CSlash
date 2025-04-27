@@ -89,14 +89,14 @@ rnCsKi :: RnKiEnv -> CsKind Ps -> RnM (CsKind Rn, FreeVars)
 rnCsKi _ (CsUKd {}) = return (CsUKd noExtField, emptyFVs)
 rnCsKi _ (CsAKd {}) = return (CsAKd noExtField, emptyFVs)
 rnCsKi _ (CsLKd {}) = return (CsLKd noExtField, emptyFVs)
-rnCsKi env (CsKiVar _ ln@(L loc rdr_name)) = do
-  massertPpr (isRdrKiVar rdr_name) (text "rnCsKi CsKiVar" <+> ppr ln)
+rnCsKi env (CsKdVar _ ln@(L loc rdr_name)) = do
+  massertPpr (isRdrKiVar rdr_name) (text "rnCsKi CsKdVar" <+> ppr ln)
   name <- rnKiVar env rdr_name
-  return (CsKiVar noAnn (L loc name), unitFV name)  
-rnCsKi env (CsFunKi _ ki1 ki2) = do
+  return (CsKdVar noAnn (L loc name), unitFV name)  
+rnCsKi env (CsFunKd _ ki1 ki2) = do
   (ki1', fvs1) <- rnLCsKi env ki1
   (ki2', fvs2) <- rnLCsKi env ki2
-  return (CsFunKi noExtField ki1' ki2', fvs1 `plusFV` fvs2)
+  return (CsFunKd noExtField ki1' ki2', fvs1 `plusFV` fvs2)
 rnCsKi env (CsParKd _ ki) = do
   (ki', fvs) <- rnLCsKi env ki
   return (CsParKd noAnn ki', fvs)
@@ -189,8 +189,8 @@ extract_lki (L _ ki) acc = case ki of
   CsUKd {} -> acc
   CsAKd {} -> acc
   CsLKd {} -> acc
-  CsKiVar _ lkv -> extract_kv lkv acc
-  CsFunKi _ ki1 ki2 -> extract_lki ki1 $ extract_lki ki2 acc
+  CsKdVar _ lkv -> extract_kv lkv acc
+  CsFunKd _ ki1 ki2 -> extract_lki ki1 $ extract_lki ki2 acc
   CsParKd _ ki -> extract_lki ki acc
 
 extract_kv :: LocatedN RdrName -> FreeKiVars -> FreeKiVars

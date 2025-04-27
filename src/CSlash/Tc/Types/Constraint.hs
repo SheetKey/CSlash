@@ -580,19 +580,8 @@ bumpSubGoalDepth (SubGoalDepth n) = SubGoalDepth (n + 1)
 data CtLoc = CtLoc
   { ctl_origin :: CtOrigin
   , ctl_env :: CtLocEnv
-  , ctl_t_or_k :: Maybe TypeOrKind
   , ctl_depth :: !SubGoalDepth
   }
-
-
-adjustCtLocKind :: CtLoc -> CtLoc
-adjustCtLocKind = toInvisibleLoc . toKindLoc
-
-toKindLoc :: CtLoc -> CtLoc
-toKindLoc loc = loc { ctl_t_or_k = Just KindLevel }
-
-toInvisibleLoc :: CtLoc -> CtLoc
-toInvisibleLoc loc = updateCtLocOrigin loc toInvisibleOrigin
 
 ctLocEnv :: CtLoc -> CtLocEnv
 ctLocEnv = ctl_env
@@ -611,7 +600,3 @@ ctLocSpan (CtLoc { ctl_env = lcl }) = getCtLocEnvLoc lcl
  
 bumpCtLocDepth :: CtLoc -> CtLoc
 bumpCtLocDepth loc@(CtLoc { ctl_depth = d }) = loc { ctl_depth = bumpSubGoalDepth d }
-
-updateCtLocOrigin :: CtLoc -> (CtOrigin -> CtOrigin) -> CtLoc
-updateCtLocOrigin ctl@(CtLoc { ctl_origin = orig }) upd
-  = ctl { ctl_origin = upd orig }

@@ -38,7 +38,7 @@ module CSlash.Types.Var
 import Prelude hiding ((<>))
 
 import {-# SOURCE #-} CSlash.Core.Type.Rep (Type)
-import {-# SOURCE #-} CSlash.Core.Kind (Kind, MonoKind, pprKind)
+import {-# SOURCE #-} CSlash.Core.Kind (Kind, pprKind)
 import {-# SOURCE #-} CSlash.Tc.Utils.TcType
   (TcTyVarDetails, TcKiVarDetails, pprTcTyVarDetails, vanillaSkolemTvUnk, vanillaSkolemKvUnk)
 import {-# SOURCE #-} CSlash.Types.Id.Info (IdDetails, IdInfo, pprIdDetails)
@@ -70,16 +70,16 @@ data Var
   = TyVar
     { varName :: !Name
     , realUnique :: {-# UNPACK #-} !Unique
-    , varKind :: MonoKind
+    , varKind :: Kind
     }
-  | KiVar
+  | KdVar
     { varName :: !Name
     , realUnique :: {-# UNPACK #-} !Unique
     }
   | TcTyVar -- for type inference
     { varName :: !Name
     , realUnique :: {-# UNPACK #-} !Unique
-    , varKind :: MonoKind
+    , varKind :: Kind
     , tc_tv_details :: TcTyVarDetails
     }
   | TcKiVar -- for kind inference
@@ -111,7 +111,7 @@ instance Outputable Var where
     getPprStyle $ \ sty ->
     let ppr_var = case var of
           (TyVar {}) | debug -> brackets (text "tv")
-          (KiVar {}) | debug -> brackets (text "kv")
+          (KdVar {}) | debug -> brackets (text "kv")
           (TcTyVar {tc_tv_details = d})
             | dumpStyle sty || debug
             -> brackets (pprTcTyVarDetails d)
@@ -168,7 +168,7 @@ varTypeMaybe :: Id -> Maybe Type
 varTypeMaybe (Id { varType = ty }) = Just ty
 varTypeMaybe _ = Nothing
 
-varKindMaybe :: Id -> Maybe MonoKind
+varKindMaybe :: Id -> Maybe Kind
 varKindMaybe (TyVar { varKind = kd }) = Just kd
 varKindMaybe (TcTyVar { varKind = kd }) = Just kd
 varKindMaybe _ = Nothing
@@ -181,10 +181,10 @@ setVarName :: Var -> Name -> Var
 setVarName var new_name = var { realUnique = getUnique new_name
                               , varName = new_name }
 
-updateVarKind :: (MonoKind -> MonoKind) -> Var -> Var
+updateVarKind :: (Kind -> Kind) -> Var -> Var
 updateVarKind upd var = var { varKind = upd (varKind var) }
 
-updateVarKindSafe :: (MonoKind -> MonoKind) -> Var -> Var
+updateVarKindSafe :: (Kind -> Kind) -> Var -> Var
 updateVarKindSafe upd var
   | isTyVar var = var { varKind = upd (varKind var) }
   | otherwise = var
@@ -295,34 +295,34 @@ tyVarName = varName
 kiVarName :: KindVar -> Name
 kiVarName = varName
 
-tyVarKind :: TypeVar -> MonoKind
+tyVarKind :: TypeVar -> Kind
 tyVarKind = varKind
 
 setTyVarName :: TypeVar -> Name -> TypeVar
 setTyVarName = setVarName
 
-setTyVarKind :: TypeVar -> MonoKind -> TypeVar
+setTyVarKind :: TypeVar -> Kind -> TypeVar
 setTyVarKind tv k = tv { varKind = k }
 
-updateTyVarKindM :: Monad m => (MonoKind -> m MonoKind) -> TypeVar -> m TypeVar
+updateTyVarKindM :: Monad m => (Kind -> m Kind) -> TypeVar -> m TypeVar
 updateTyVarKindM update tv = do
   k' <- update (tyVarKind tv)
   return $ tv { varKind = k' }
 
-mkTyVar :: Name -> MonoKind -> TypeVar
+mkTyVar :: Name -> Kind -> TypeVar
 mkTyVar name kind = TyVar { varName = name
                           , realUnique = nameUnique name
                           , varKind = kind
                           }
 
-mkTcTyVar :: Name -> MonoKind -> TcTyVarDetails -> TcTyVar
+mkTcTyVar :: Name -> Kind -> TcTyVarDetails -> TcTyVar
 mkTcTyVar name kind details = TcTyVar { varName = name
                                       , realUnique = nameUnique name
                                       , varKind = kind
                                       , tc_tv_details = details }
 
 mkKiVar :: Name -> KindVar
-mkKiVar name = KiVar { varName = name, realUnique = nameUnique name }
+mkKiVar name = KdVar { varName = name, realUnique = nameUnique name }
 
 mkTcKiVar :: Name -> TcKiVarDetails -> TcKiVar
 mkTcKiVar name details
@@ -338,7 +338,7 @@ tcTyVarDetails var
 
 tcKiVarDetails :: KindVar -> TcKiVarDetails
 tcKiVarDetails (TcKiVar { tc_kv_details = details }) = details
-tcKiVarDetails (KiVar {}) = vanillaSkolemKvUnk
+tcKiVarDetails (KdVar {}) = vanillaSkolemKvUnk
 tcKiVarDetails var = pprPanic "tcKiVarDetails" (ppr var)
 
 setTcKiVarDetails :: KindVar -> TcKiVarDetails -> KindVar
@@ -384,7 +384,7 @@ isTcTyVar (TcTyVar {}) = True
 isTcTyVar _ = False
 
 isKiVar :: Var -> Bool
-isKiVar (KiVar {}) = True
+isKiVar (KdVar {}) = True
 isKiVar (TcKiVar {}) = True
 isKiVar _ = False
 

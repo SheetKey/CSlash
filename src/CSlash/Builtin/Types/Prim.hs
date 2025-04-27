@@ -92,20 +92,15 @@ mkTemplateFunKindVars i
 --         tc_kind = foldr (FunKd FKF_K_K) res_kind kinds
 --     in tc_kind
 
-mkTemplateTyConKindFromRes :: Int -> MonoKind -> Kind
-mkTemplateTyConKindFromRes arity res_kind
-  = let kind_vars = mkTemplateKindVars arity
-        kinds = KiVarKi <$> kind_vars
-        constraints = ((KiConApp LTEQKi) . (: [res_kind])) <$> kinds
-        full_kind_no_constraints = foldr (FunKi FKF_K_K) res_kind kinds
-        full_kind = foldr (FunKi FKF_C_K) full_kind_no_constraints constraints 
-        q_full_kind = foldr ForAllKi (Mono full_kind) kind_vars
-    in q_full_kind
-
-mkTemplateTyConKind :: Int -> Kind
-mkTemplateTyConKind arity
+mkTemplateTyConKindRes :: Int -> ([KindVar], Kind, Kind)
+mkTemplateTyConKindRes arity
   = let res_kind = KiVarKi $ mkKiVar (mk_kv_name arity ('k' : show arity))
-    in mkTemplateTyConKindFromRes arity res_kind
+        kind_vars = mkTemplateKindVars arity
+        kinds = KiVarKi <$> kind_vars
+        full_kind = foldr (FunKd FKF_K_K) res_kind kinds
+        ctxt = KdContext $ (`LTEQKd` res_kind) <$> kinds
+        addCtxt = FunKd FKF_C_K ctxt
+    in (kind_vars, addCtxt full_kind, addCtxt res_kind)
 
 mk_kv_name :: Int -> String -> Name
 mk_kv_name u s = mkInternalName (mkAlphaTyVarUnique u)
@@ -117,7 +112,7 @@ mk_tv_name u s = mkInternalName (mkAlphaTyVarUnique u)
                                 (mkTyVarOccFS (mkFastString s))
                                 noSrcSpan
 
-mkTemplateTyVarsFrom :: Int -> [MonoKind] -> [TypeVar]
+mkTemplateTyVarsFrom :: Int -> [Kind] -> [TypeVar]
 mkTemplateTyVarsFrom i kinds
   = [ mkTyVar name kind
     | (kind, index) <- zip kinds [0..(i-1)]
@@ -127,7 +122,7 @@ mkTemplateTyVarsFrom i kinds
           name = mk_tv_name (index + i + 1) name_str
     ]
 
-mkTemplateTyVars :: [MonoKind] -> [TypeVar]
+mkTemplateTyVars :: [Kind] -> [TypeVar]
 mkTemplateTyVars kinds = mkTemplateTyVarsFrom (length kinds) kinds
 
 -- mkTemplateTyConBindersFrom :: Int -> [Kind] -> [TyConBinder]
@@ -152,25 +147,35 @@ mkTemplateTyVars kinds = mkTemplateTyVarsFrom (length kinds) kinds
 *                                                                      *
 ********************************************************************* -}
 
--- this stuff seems wrong: "FUN" shouldn't have any constraints?
+{-
+Unlike GHC, we have a single function tycon "FUN" that has a kind.
+Its kind may be UKd, AKd, LKd, or a kivarki.
+For kind polymorphism, which we want, we have
+  FUN : k1 <= k3, k2 <= k3 => k1 -> k2 -> k3
+
+NOTE: THIS ISN'T RIGHT!!! WE DO NOT NEED CONSTRAINTS HERE
+-}
+
 fUNTyConName :: Name
 fUNTyConName = mkPrimTc (fsLit "FUN") fUNTyConKey fUNTyCon
 
 fUNTyCon :: TyCon
-fUNTyCon = mkPrimTyCon fUNTyConName tc_kind 2
+fUNTyCon = mkPrimTyCon fUNTyConName binders res_kind tc_kind 2
   where
-    tc_kind = mkTemplateTyConKind 2
+    (binders, tc_kind, res_kind) = mkTemplateTyConKindRes 2
 
 unrestrictedFUNTyCon :: TyCon
-unrestrictedFUNTyCon = _mkFUNTyCon (KiConApp UKd [])
+unrestrictedFUNTyCon = _mkFUNTyCon (KiCon UKd)
 
 affineFUNTyCon :: TyCon
-affineFUNTyCon = _mkFUNTyCon (KiConApp AKd [])
+affineFUNTyCon = _mkFUNTyCon (KiCon AKd)
 
 linearFUNTyCon :: TyCon
-linearFUNTyCon = _mkFUNTyCon (KiConApp LKd [])
+linearFUNTyCon = _mkFUNTyCon (KiCon LKd)
 
-_mkFUNTyCon :: MonoKind -> TyCon
-_mkFUNTyCon res_kind = mkPrimTyCon fUNTyConName tc_kind 2
+_mkFUNTyCon :: Kind -> TyCon
+_mkFUNTyCon res_kind = mkPrimTyCon fUNTyConName kind_vars res_kind tc_kind 2
   where
-    tc_kind = mkTemplateTyConKindFromRes 2 res_kind
+    kind_vars = mkTemplateKindVars 2
+    kinds = KiVarKi <$> kind_vars
+    tc_kind = foldr (FunKd FKF_K_K) res_kind kinds

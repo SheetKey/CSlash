@@ -7,7 +7,7 @@ import CSlash.Data.FastString
 import CSlash.Core.Type.Rep
 import CSlash.Core.Kind
 import CSlash.Core.Type.FVs (tyKiVarsOfTypeList)
-import CSlash.Core.Kind.FVs (kiVarsOfKindList, kiVarsOfMonoKindList)
+import CSlash.Core.Kind.FVs (kiVarsOfKindList)
 
 import CSlash.Types.Name hiding (varName)
 import CSlash.Types.Var
@@ -22,16 +22,13 @@ import Data.List (mapAccumL)
 *                                                                      *
 ********************************************************************* -}
 
-tidyVarBndrs :: TidyEnv -> [Var] -> (TidyEnv, [Var])
-tidyVarBndrs tidy_env vs = mapAccumL tidyVarBndr (avoidNameClashes vs tidy_env) vs
-
 tidyVarBndr :: TidyEnv -> Var -> (TidyEnv, Var)
 tidyVarBndr tidy_env@(occ_env, subst) var
   = case tidyOccName occ_env (getHelpfulOccName var) of
       (occ_env', occ') -> ((occ_env', subst'), var')
         where
           subst' = extendVarEnv subst var var'
-          var' = updateVarKindSafe (tidyMonoKind tidy_env) (setVarName var name')
+          var' = updateVarKindSafe (tidyKind tidy_env) (setVarName var name')
           name' = tidyNameOcc name occ'
           name = varName var
 
@@ -78,43 +75,30 @@ tidyOpenTyKiVar :: TidyEnv -> Var -> (TidyEnv, Var)
 tidyOpenTyKiVar env@(_, subst) var = case lookupVarEnv subst var of
   Just var' -> (env, var')
   Nothing -> let env' = if isTyVar var
-                        then tidyFreeTyKiVars env (kiVarsOfMonoKindList (tyVarKind var))
+                        then tidyFreeTyKiVars env (kiVarsOfKindList (tyVarKind var))
                         else env
              in tidyVarBndr env' var
 
 tidyTyKiVarOcc :: TidyEnv -> Var -> Var
 tidyTyKiVarOcc env@(_, subst) v = case lookupVarEnv subst v of
-                                    Nothing -> updateVarKindSafe (tidyMonoKind env) v
+                                    Nothing -> updateVarKindSafe (tidyKind env) v
                                     Just v' -> v'
 
 tidyKind :: TidyEnv -> Kind -> Kind
-tidyKind env (Mono mki) = Mono $ tidyMonoKind env mki
-tidyKind env ki@(ForAllKi {}) = tidyForAllKind env ki
+tidyKind env (KiVarKi kv) = KiVarKi $! tidyTyKiVarOcc env kv
+tidyKind _ kc@(KiCon _) = kc
+tidyKind env ki@(FunKd _ arg res) = let !arg' = tidyKind env arg
+                                        !res' = tidyKind env res
+                                    in ki { kft_arg = arg', kft_res = res' }
+tidyKind env (KdContext rels) = KdContext $! tidyKindRels env rels
 
-tidyForAllKind :: TidyEnv -> Kind -> Kind
-tidyForAllKind env ki = (mkForAllKis' $! kvs') $! tidyMonoKind body_env body_ki
-  where
-    (kvs, body_ki) = splitForAllKiVars' ki
-    (body_env, kvs') = tidyVarBndrs env kvs
+tidyKindRels :: TidyEnv -> [KdRel] -> [KdRel]
+tidyKindRels env = map (tidyKindRel env)
 
-mkForAllKis' :: [KindVar] -> MonoKind -> Kind
-mkForAllKis' kvs ki = foldr strictMkForAllKi (Mono ki) kvs
-  where
-    strictMkForAllKi kv ki = (ForAllKi $! kv) $! ki
-
-splitForAllKiVars' :: Kind -> ([KindVar], MonoKind)
-splitForAllKiVars' ki = go ki []
-  where
-    go (ForAllKi kv ki) kvs = go ki (kv : kvs)
-    go (Mono ki) kvs = (reverse kvs, ki)
-
-tidyMonoKinds :: TidyEnv -> [MonoKind] -> [MonoKind]
-tidyMonoKinds env kis = strictMap (tidyMonoKind env) kis
-
-tidyMonoKind :: TidyEnv -> MonoKind -> MonoKind
-tidyMonoKind env (KiVarKi kv) = KiVarKi $! tidyTyKiVarOcc env kv
-tidyMonoKind _ kc@(KiConApp _ []) = kc
-tidyMonoKind env (KiConApp kc kis) = KiConApp kc $! tidyMonoKinds env kis
-tidyMonoKind env ki@(FunKi _ arg res) = let !arg' = tidyMonoKind env arg
-                                            !res' = tidyMonoKind env res
-                                        in ki { fk_arg = arg', fk_res = res' }
+tidyKindRel :: TidyEnv -> KdRel -> KdRel
+tidyKindRel env (LTKd k1 k2) = let !k1' = tidyKind env k1
+                                   !k2' = tidyKind env k2
+                               in LTKd k1' k2'
+tidyKindRel env (LTEQKd k1 k2) = let !k1' = tidyKind env k1
+                                     !k2' = tidyKind env k2
+                                 in LTKd k1' k2'

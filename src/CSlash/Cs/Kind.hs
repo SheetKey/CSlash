@@ -32,8 +32,8 @@ mkCsPatSigKind ann x = CsPSK { cspsk_ext = ann
 type instance XUKd (CsPass _) = NoExtField
 type instance XAKd (CsPass _) = NoExtField
 type instance XLKd (CsPass _) = NoExtField
-type instance XKiVar (CsPass _) = [AddEpAnn]
-type instance XFunKi (CsPass _) = NoExtField
+type instance XKdVar (CsPass _) = [AddEpAnn]
+type instance XFunKd (CsPass _) = NoExtField
 type instance XQualKd (CsPass _) = NoExtField
 type instance XParKd (CsPass _) = (EpToken "(", EpToken ")")
 
@@ -57,8 +57,8 @@ ppr_kind :: (OutputableBndrId p) => CsKind (CsPass p) -> SDoc
 ppr_kind (CsUKd _) = uKindLit
 ppr_kind (CsAKd _) = aKindLit
 ppr_kind (CsLKd _) = lKindLit
-ppr_kind (CsKiVar _ (L _ name)) = pprPrefixOcc name
-ppr_kind (CsFunKi _ kd1 kd2)
+ppr_kind (CsKdVar _ (L _ name)) = pprPrefixOcc name
+ppr_kind (CsFunKd _ kd1 kd2)
   = sep [ppr_lkind kd1, arrow <+> ppr_lkind kd2]
 -- ppr_kind (CsQualKd{ csk_ctxt = ctxt, csk_body = kind })
 --   = sep [pprLCsContextAlways ctxt, ppr_lkind kind]

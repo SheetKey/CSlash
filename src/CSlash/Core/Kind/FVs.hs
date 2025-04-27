@@ -20,9 +20,9 @@ import CSlash.Utils.Panic
 *                                                                      *
 ********************************************************************* -}
 
-runKiVars :: Endo KiVarSet -> KiVarSet
-{-# INLINE runKiVars #-}
-runKiVars f = appEndo f emptyVarSet
+runKdVars :: Endo KdVarSet -> KdVarSet
+{-# INLINE runKdVars #-}
+runKdVars f = appEndo f emptyVarSet
 
 {- *********************************************************************
 *                                                                      *
@@ -30,20 +30,20 @@ runKiVars f = appEndo f emptyVarSet
 *                                                                      *
 ********************************************************************* -}
 
-kiVarsOfKind :: Kind -> KiVarSet
-kiVarsOfKind ki = runKiVars (deep_ki ki)
+kiVarsOfKind :: Kind -> KdVarSet
+kiVarsOfKind ki = runKdVars (deep_ki ki)
 
-kiVarsOfKinds :: [Kind] -> KiVarSet
-kiVarsOfKinds kis = runKiVars (deep_kis kis)
+kiVarsOfKinds :: [Kind] -> KdVarSet
+kiVarsOfKinds kis = runKdVars (deep_kis kis)
 
-deep_ki :: Kind -> Endo KiVarSet
-deep_kis :: [Kind] -> Endo KiVarSet
+deep_ki :: Kind -> Endo KdVarSet
+deep_kis :: [Kind] -> Endo KdVarSet
 (deep_ki, deep_kis) = foldKind deepKvFolder emptyVarSet
 
-deepKvFolder :: KindFolder KiVarSet (Endo KiVarSet)
+deepKvFolder :: KindFolder KdVarSet (Endo KdVarSet)
 deepKvFolder = KindFolder { kf_view = noKindView
                           , kf_kivar = do_kv
-                          , kf_kibinder = do_bndr }
+                          , kf_ctxt = do_ctxt }
   where
     do_kv is v = Endo do_it
       where
@@ -51,7 +51,17 @@ deepKvFolder = KindFolder { kf_view = noKindView
                   | v `elemVarSet` acc = acc
                   | otherwise = acc `extendVarSet` v
 
-    do_bndr is kv = extendVarSet is kv
+    do_ctxt is ctxt = Endo do_it
+      where
+        get_kinds (LTKd k1 k2) = [k1, k2]
+        get_kinds (LTEQKd k1 k2) = [k1, k2]
+
+        kinds = concatMap get_kinds ctxt
+
+        kvs = kiVarsOfKinds kinds
+
+        do_it acc = let kvs' = kvs `minusVarSet` is
+                    in acc `unionVarSet` kvs'
 
 {- *********************************************************************
 *                                                                      *
@@ -59,33 +69,24 @@ deepKvFolder = KindFolder { kf_view = noKindView
 *                                                                      *
 ********************************************************************* -}
 
-shallowKiVarsOfMonoKind :: MonoKind -> KiVarSet
-shallowKiVarsOfMonoKind ki = runKiVars (shallow_ki (Mono ki))
+shallowKdVarsOfKind :: Kind -> KdVarSet
+shallowKdVarsOfKind kd = runKdVars (shallow_kd kd)
 
-shallowKiVarsOfKind :: Kind -> KiVarSet
-shallowKiVarsOfKind ki = runKiVars (shallow_ki ki)
+shallowKdVarsOfKinds :: [Kind] -> KdVarSet
+shallowKdVarsOfKinds kds = runKdVars (shallow_kds kds)
 
-shallowKiVarsOfKinds :: [Kind] -> KiVarSet
-shallowKiVarsOfKinds kis = runKiVars (shallow_kis kis)
+shallowKdVarsOfKdVarEnv :: KdVarEnv Kind -> KdVarSet
+shallowKdVarsOfKdVarEnv kds = shallowKdVarsOfKinds (nonDetEltsUFM kds)
 
-shallowKiVarsOfMonoKinds :: [MonoKind] -> KiVarSet
-shallowKiVarsOfMonoKinds kis = runKiVars (shallow_kis (Mono <$> kis))
+shallow_kd :: Kind -> Endo KdVarSet
+shallow_kds :: [Kind] -> Endo KdVarSet
 
-shallowKiVarsOfKiVarEnv :: KiVarEnv Kind -> KiVarSet
-shallowKiVarsOfKiVarEnv kis = shallowKiVarsOfKinds (nonDetEltsUFM kis)
+(shallow_kd, shallow_kds) = foldKind shallowKvFolder emptyVarSet
 
-shallowKiVarsOfMonoKiVarEnv :: KiVarEnv MonoKind -> KiVarSet
-shallowKiVarsOfMonoKiVarEnv kis = shallowKiVarsOfMonoKinds (nonDetEltsUFM kis)
-
-shallow_ki :: Kind -> Endo KiVarSet
-shallow_kis :: [Kind] -> Endo KiVarSet
-
-(shallow_ki, shallow_kis) = foldKind shallowKvFolder emptyVarSet
-
-shallowKvFolder :: KindFolder KiVarSet (Endo KiVarSet)
+shallowKvFolder :: KindFolder KdVarSet (Endo KdVarSet)
 shallowKvFolder = KindFolder { kf_view = noKindView
                              , kf_kivar = do_kv
-                             , kf_kibinder = do_bndr
+                             , kf_ctxt = do_ctxt
                              }
   where
     do_kv is v = Endo do_it
@@ -93,7 +94,7 @@ shallowKvFolder = KindFolder { kf_view = noKindView
         do_it acc | v `elemVarSet` is = acc
                   | v `elemVarSet` acc = acc
                   | otherwise = acc `extendVarSet` v
-    do_bndr is kv = extendVarSet is kv
+    do_ctxt _ _ = mempty
 
 {- *********************************************************************
 *                                                                      *
@@ -108,33 +109,20 @@ kiVarsOfKindList :: Kind -> [KindVar]
 kiVarsOfKindList ki = fvVarList $ kiFVsOfKind ki
 
 kiFVsOfKind :: Kind -> FV
-kiFVsOfKind (Mono ki) f bound_vars acc = kiFVsOfMonoKind ki f bound_vars acc
-kiFVsOfKind (ForAllKi kv ki) f bound_vars acc
-  = kiFVsVarBndr kv (kiFVsOfKind ki) f bound_vars acc
-
-kiVarsOfMonoKindDSet :: MonoKind -> DKiVarSet 
-kiVarsOfMonoKindDSet ki = fvDVarSet $ kiFVsOfMonoKind ki
-
-kiVarsOfMonoKindList :: MonoKind -> [KindVar]
-kiVarsOfMonoKindList ki = fvVarList $ kiFVsOfMonoKind ki
-
-kiFVsOfMonoKind :: MonoKind -> FV
-kiFVsOfMonoKind (KiVarKi v) f bound_vars (acc_list, acc_set)
+kiFVsOfKind (KiVarKi v) f bound_vars (acc_list, acc_set)
   | not (f v) = (acc_list, acc_set)
   | v `elemVarSet` bound_vars = (acc_list, acc_set)
   | v `elemVarSet` acc_set = (acc_list, acc_set)
   | otherwise = (v:acc_list, extendVarSet acc_set v)
-kiFVsOfMonoKind (KiConApp _ kis) f bound_vars acc = kiFVsOfMonoKinds kis f bound_vars acc
-kiFVsOfMonoKind (FunKi _ arg res) f bound_var acc
-  = (kiFVsOfMonoKind arg `unionFV` kiFVsOfMonoKind res) f bound_var acc
-
-kiFVsVarBndr :: KindVar -> FV -> FV
-kiFVsVarBndr kv fvs = delFV kv fvs
-
-kiFVsOfMonoKinds :: [MonoKind] -> FV
-kiFVsOfMonoKinds (ki:kis) fv_cand in_scope acc
-  = (kiFVsOfMonoKind ki `unionFV` kiFVsOfMonoKinds kis) fv_cand in_scope acc
-kiFVsOfMonoKinds [] fv_cand in_scope acc = emptyFV fv_cand in_scope acc
+kiFVsOfKind (KiCon _) _ _ acc = acc
+kiFVsOfKind (FunKd _ arg res) f bound_var acc
+  = (kiFVsOfKind arg `unionFV` kiFVsOfKind res) f bound_var acc
+kiFVsOfKind (KdContext rels) f bound_vars acc = (mapUnionFV go_rel rels) f bound_vars acc
+  where
+    go_rel (LTKd k1 k2) f bound_vars acc
+      = (kiFVsOfKind k1 `unionFV` kiFVsOfKind k2) f bound_vars acc
+    go_rel (LTEQKd k1 k2) f bound_vars acc
+      = (kiFVsOfKind k1 `unionFV` kiFVsOfKind k2) f bound_vars acc
 
 {- *********************************************************************
 *                                                                      *
@@ -147,16 +135,8 @@ afvFolder :: (KindVar -> Bool) -> KindFolder KiVarSet DM.Any
 afvFolder check_fv = KindFolder { kf_view = noKindView
                                 , kf_kivar = \is kv -> Any (not (kv `elemVarSet` is)
                                                             && check_fv kv)
-                                , kf_kibinder = \is kv -> is `extendVarSet` kv }
+                                , kf_ctxt = \_ _ -> Any False }
 
 anyFreeVarsOfKind :: (KindVar -> Bool) -> Kind -> Bool
 anyFreeVarsOfKind check_fv ki = DM.getAny (f ki)
   where (f, _) = foldKind (afvFolder check_fv) emptyVarSet
-
-noFreeVarsOfKind :: Kind -> Bool
-noFreeVarsOfKind ki = not $ DM.getAny (f ki)
-  where (f, _) = foldKind (afvFolder (const True)) emptyVarSet
-
-noFreeVarsOfMonoKind :: MonoKind -> Bool
-noFreeVarsOfMonoKind ki = not $ DM.getAny (f (Mono ki))
-  where (f, _) = foldKind (afvFolder (const True)) emptyVarSet

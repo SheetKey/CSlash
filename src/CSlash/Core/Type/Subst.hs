@@ -50,7 +50,7 @@ isValidTvSubst (Subst in_scope _ tenv kenv) =
   (kenvFVs `varSetInScope` in_scope)
   where
     tenvFVs = shallowTyVarsOfTyVarEnv tenv
-    kenvFVs = shallowKiVarsOfMonoKiVarEnv kenv
+    kenvFVs = shallowKdVarsOfKdVarEnv kenv
 
 checkValidSubst :: HasDebugCallStack => Subst -> [Type] -> a -> a
 checkValidSubst subst@(Subst in_scope _ tenv _) tys a
@@ -89,13 +89,10 @@ subst_ty subst ty = go ty
     go (TyLamTy tv ty)
       = case substTyVarBndrUnchecked subst tv of
           (subst', tv') -> (TyLamTy $! tv') $! (subst_ty subst' ty)
-    go (BigTyLamTy kv ty)
-      = case substKiVarBndrUnchecked subst kv of
-          (subst', kv') -> (BigTyLamTy $! kv') $! (subst_ty subst' ty)
     go ty@(TyConApp tc []) = tc `seq` ty
     go (TyConApp tc tys) = (mkTyConApp $! tc) $! strictMap go tys
     go ty@(FunTy { ft_kind = kind, ft_arg = arg, ft_res = res })
-      = let !kind' = substMonoKi subst kind
+      = let !kind' = substKd subst kind
             !arg' = go arg
             !res' = go res
         in ty { ft_kind = kind', ft_arg = arg', ft_res = res' }
@@ -103,7 +100,10 @@ subst_ty subst ty = go ty
       = case substTyVarBndrUnchecked subst tv of
           (subst', tv') -> (ForAllTy $! ((Bndr $! tv') vis))
                                      $! (subst_ty subst' ty)
-    go (Embed mki) = Embed $! substMonoKi subst mki
+    go (WithContext kdctxt ty)
+      = let !kdctxt' = substKd subst kdctxt
+            !ty' = go ty
+        in WithContext kdctxt' ty'
 
 substTyVar :: Subst -> TypeVar -> Type
 substTyVar (Subst _ _ tenv _) tv
@@ -113,10 +113,10 @@ substTyVar (Subst _ _ tenv _) tv
       Nothing -> TyVarTy tv
 
 substTyVarBndrUnchecked :: Subst -> TypeVar -> (Subst, TypeVar)
-substTyVarBndrUnchecked = substTyVarBndrUsing substMonoKi
+substTyVarBndrUnchecked = substTyVarBndrUsing substKd
 
 substTyVarBndrUsing
-  :: (Subst -> MonoKind -> MonoKind)
+  :: (Subst -> Kind -> Kind)
   -> Subst -> TypeVar -> (Subst, TypeVar)
 substTyVarBndrUsing subst_fn subst@(Subst in_scope idenv tenv kenv) old_var
   = assertPpr _no_capture (pprTyVar old_var $$ pprTyVar new_var $$ ppr subst) $
@@ -129,7 +129,7 @@ substTyVarBndrUsing subst_fn subst@(Subst in_scope idenv tenv kenv) old_var
     _no_capture = not (new_var `elemVarSet` shallowTyVarsOfTyVarEnv tenv)
 
     old_ki = varKind old_var
-    no_kind_change = noFreeVarsOfMonoKind old_ki
+    no_kind_change = noFreeVarsOfKind old_ki
     no_change = no_kind_change && (new_var == old_var)
 
     new_var | no_kind_change = uniqAway in_scope old_var

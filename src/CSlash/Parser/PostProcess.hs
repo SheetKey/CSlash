@@ -732,7 +732,7 @@ instance DisambETP (CsKind Ps) where
     !cs <- getCommentsFor (getHasLoc l)
     massert (isRdrUnknown n)
     let v' = L l (unknownToKv n)
-    return $ L (EpAnn anc noAnn cs) (CsKiVar [] v')
+    return $ L (EpAnn anc noAnn cs) (CsKdVar [] v')
   mkCsConPV (L l _) = addFatalError $ mkPlainErrorMsgEnvelope (locA l) PsErrKindCon
   mkCsLitPV (L l _) = addFatalError $ mkPlainErrorMsgEnvelope (locA l) PsErrLitInKind
   mkCsOverLitPV (L l _) = addFatalError $ mkPlainErrorMsgEnvelope (locA l) PsErrOverLitInKind

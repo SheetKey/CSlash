@@ -103,11 +103,11 @@ zonkEqKinds ev ki1 ki2 = Stage $ do
     go (KiVarKi kv1) ki2 = kivar NotSwapped kv1 ki2
     go ki1 (KiVarKi kv2) = kivar IsSwapped kv2 ki1
 
-    go (FunKi f1 arg1 res1) (FunKi f2 arg2 res2)
+    go (FunKd f1 arg1 res1) (FunKd f2 arg2 res2)
       | f1 == f2
       = do res_a <- go arg1 arg2
            res_b <- go res1 res2
-           return $ combine_rev (FunKi f1) res_b res_a
+           return $ combine_rev (FunKd f1) res_b res_a
     go (KdContext rels1) (KdContext rels2) = go_rels rels1 rels2
     go ki1 ki2 = bale_out ki1 ki2
 
@@ -210,7 +210,7 @@ can_ki_eq_nc True _ ev ki1 ki2
 -- Otherwise try to decompose
 ----------------------
 
-can_ki_eq_nc _ _ ev (FunKi f1 ki1a ki1b) (FunKi f2 ki2a ki2b)
+can_ki_eq_nc _ _ ev (FunKd f1 ki1a ki1b) (FunKd f2 ki2a ki2b)
   | f1 == f2
   = canDecomposableFunKi ev f1 (ki1a, ki1b) (ki2a, ki2b)
 
@@ -246,7 +246,7 @@ can_ki_eq_nc True _ ev ps_ki1 ps_ki2 = do
 
 canDecomposableFunKi
   :: CtEvidence
-  -> FunKiFlag
+  -> FunKdFlag
   -> (Kind, Kind)
   -> (Kind, Kind)
   -> TcS (StopOrContinue a)
@@ -257,7 +257,7 @@ canDecomposableFunKi ev f f1@(a1, r1) f2@(a2, r2) = do
     CtWanted {} -> wrapUnifierTcS ev $ \uenv -> do
       uKind uenv a1 a2
       uKind uenv r1 r2
-  stopWith ev "Decomposed FunKi"
+  stopWith ev "Decomposed FunKd"
 
 canKiEqCanLHSHomo
   :: CtEvidence

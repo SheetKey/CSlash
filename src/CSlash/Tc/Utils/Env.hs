@@ -1,5 +1,5 @@
 module CSlash.Tc.Utils.Env
-  ( TyThing (..), TcTyKiThing(..)
+  ( TyThing (..), TcTyThing(..)
   , module CSlash.Tc.Utils.Env
   ) where
 
@@ -131,9 +131,9 @@ tcExtendRecEnv gbl_stuff thing_inside = do
 *                                                                      *
 ********************************************************************* -}
 
-tcLookup :: Name -> TcM TcTyKiThing
+tcLookup :: Name -> TcM TcTyThing
 tcLookup name = do
-  local_env <- getLclTyKiEnv
+  local_env <- getLclTypeEnv
   case lookupNameEnv local_env name of
     Just thing -> return thing
     Nothing -> AGlobal <$> tcLookupGlobal name
@@ -145,7 +145,7 @@ tcLookupTcTyCon name = do
     ATcTyCon tc -> return tc
     _ -> pprPanic "tcLookupTcTyCon" (ppr name)
 
-tcExtendKindEnvList :: [(Name, TcTyKiThing)] -> TcM r -> TcM r
+tcExtendKindEnvList :: [(Name, TcTyThing)] -> TcM r -> TcM r
 tcExtendKindEnvList things thing_inside = do
   traceTc "tcExtendKindEnvList" (ppr things)
   updLclCtxt upd_env thing_inside
@@ -173,7 +173,7 @@ tcExtendNameKiVarEnv binds thing_inside
     kv_binds = [TcKvBndr name kv | (name, kv) <- binds]
     names = [(name, AKiVar name kv) | (name, kv) <- binds]
 
-tc_extend_local_env :: TopLevelFlag -> [(Name, TcTyKiThing)] -> TcM a -> TcM a
+tc_extend_local_env :: TopLevelFlag -> [(Name, TcTyThing)] -> TcM a -> TcM a
 tc_extend_local_env top_lvl extra_env thing_inside = do
   traceTc "tc_extend_local_env" (ppr extra_env)
   updLclCtxt upd_lcl_env thing_inside
@@ -221,5 +221,5 @@ notFound name = do
     else failWithTc $ 
          mkTcRnNotInScope (getRdrName name) (NotInScopeTc (getLclEnvTypeEnv lcl_env))
 
-wrongThingErr :: WrongThingSort -> TcTyKiThing -> Name -> TcM a
+wrongThingErr :: WrongThingSort -> TcTyThing -> Name -> TcM a
 wrongThingErr expected thing name = failWithTc (TcRnTyThingUsedWrong expected thing name)

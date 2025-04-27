@@ -32,7 +32,7 @@ data Expr b
   = Var Id
   | Lit Literal
   | App (Expr b) (Arg b)
-  | Lam b (Expr b) -- can bind term, type, or kind vars
+  | Lam b (Expr b)
   | Let (Bind b) (Expr b)
   | Case (Expr b) b Type [Alt b]
   deriving Data

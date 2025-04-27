@@ -70,15 +70,15 @@ tcCsKind :: CsKind Rn -> TcM TcKind
 tcCsKind CsUKd {} = return $ KiCon UKd
 tcCsKind CsAKd {} = return $ KiCon AKd
 tcCsKind CsLKd {} = return $ KiCon LKd
-tcCsKind (CsKiVar _ kv) = tcKiVar (unLoc kv)
-tcCsKind (CsFunKi _ k1 k2) = tc_fun_kind k1 k2
+tcCsKind (CsKdVar _ kv) = tcKiVar (unLoc kv)
+tcCsKind (CsFunKd _ k1 k2) = tc_fun_kind k1 k2
 tcCsKind (CsParKd _ ki) = tcLCsKind ki
 
 tc_fun_kind :: LCsKind Rn -> LCsKind Rn -> TcM TcKind
 tc_fun_kind k1 k2 = do
   k1' <- tcLCsKind k1 
   k2' <- tcLCsKind k2
-  return $ FunKi FKF_K_K k1' k2'
+  return $ FunKd FKF_K_K k1' k2'
 
 tcKiVar :: Name -> TcM TcKind
 tcKiVar name = do

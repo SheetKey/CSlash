@@ -57,14 +57,14 @@ writeMetaTyVarRef tyvar ref ty
   = do meta_details <- readTcRef ref
        let tv_kind = tyVarKind tyvar
            tv_lvl = tcTyVarLevel tyvar
-       zonked_tv_kind <- zonkTcMonoKind tv_kind
+       zonked_tv_kind <- zonkTcKind tv_kind
        zonked_ty <- zonkTcType ty
        let zonked_ty_kind = typeKind zonked_ty
            zonked_ty_lvl = tcTypeLevel zonked_ty
            level_check_ok = not (zonked_ty_lvl `strictlyDeeperThan` tv_lvl)
            level_check_msg = ppr zonked_ty_lvl $$ ppr tv_lvl
                              $$ ppr tyvar $$ ppr ty $$ ppr zonked_ty
-           kind_check_ok = zonked_ty_kind `eqKind` Mono zonked_tv_kind
+           kind_check_ok = zonked_ty_kind `eqKind` zonked_tv_kind
            kind_msg = hang (text "Ill-kinded update to meta tyvar")
                            2 (ppr tyvar <+> colon <+> (ppr tv_kind $$ ppr zonked_tv_kind)
                               <+> text ":="
@@ -83,7 +83,7 @@ writeMetaTyVarRef tyvar ref ty
                                   2 (ppr tyvar $$ ppr details)
 {-# INLINE writeMetaTyVarRef #-}
 
-writeMetaKiVar :: HasDebugCallStack => TcKiVar -> TcMonoKind -> ZonkM ()
+writeMetaKiVar :: HasDebugCallStack => TcKiVar -> TcKind -> ZonkM ()
 writeMetaKiVar kivar ki
   | not debugIsOn
   = writeMetaKiVarRef kivar (metaKiVarRef kivar) ki
@@ -95,15 +95,15 @@ writeMetaKiVar kivar ki
   = massertPpr False (text "Writing to non-meta kivar" <+> ppr kivar)
 {-# INLINE writeMetaKiVar #-}
 
-writeMetaKiVarRef :: HasDebugCallStack => TcKiVar -> TcRef MetaDetailsK -> TcMonoKind -> ZonkM ()
+writeMetaKiVarRef :: HasDebugCallStack => TcKiVar -> TcRef MetaDetailsK -> TcKind -> ZonkM ()
 writeMetaKiVarRef kivar ref ki
   | not debugIsOn
   = do traceZonk "writeMetaKiVar" (ppr kivar <+> text ":=" <+> ppr ki)
        writeTcRef ref (Indirect ki)
   | otherwise
   = do meta_details <- readTcRef ref
-       zonked_ki <- zonkTcMonoKind ki
-       let zonked_ki_lvl = tcMonoKindLevel zonked_ki
+       zonked_ki <- zonkTcKind ki
+       let zonked_ki_lvl = tcKindLevel zonked_ki
            kv_lvl = tcKiVarLevel kivar
            level_check_ok = not (zonked_ki_lvl `strictlyDeeperThan` kv_lvl)
            level_check_msg = ppr zonked_ki_lvl $$ ppr kv_lvl
@@ -136,15 +136,13 @@ zonkTcTypes :: [TcType] -> ZonkM [TcType]
       { tcm_tyvar = const zonkTcTyVar
       , tcm_tybinder = \_ tv _ k -> zonkTyVarKind tv >>= k ()
       , tcm_tylambinder = \_ tv k -> zonkTyVarKind tv >>= k ()
-      , tcm_tylamkibinder = \_ kv k -> k () kv
-      , tcm_tycon = zonkTcTyCon
-      , tcm_embed_mono_ki = const zonkTcMonoKind
-      }
+      , tcm_tycon = zonkTcTyCon }
 
 zonkTcTyCon :: TcTyCon -> ZonkM TcTyCon
 zonkTcTyCon tc
   | isMonoTcTyCon tc = do tck' <- zonkTcKind (tyConKind tc)
-                          return $ setTcTyConKind tc tck'
+                          tck_res' <- zonkTcKind (tyConResKind tc)
+                          return $ setTcTyConKind tc tck' tck_res'
   | otherwise = return tc
 
 zonkTcTyVar :: TcTyVar -> ZonkM TcType
@@ -186,7 +184,7 @@ zonkTcTyVarToTcTyVar tv = do
 
 zonkTyVarKind :: TypeVar -> ZonkM TypeVar
 zonkTyVarKind tv = do
-  kind' <- zonkTcMonoKind $ tyVarKind tv
+  kind' <- zonkTcKind $ tyVarKind tv
   return $ setTyVarKind tv kind'
 
 {- *********************************************************************
@@ -195,13 +193,6 @@ zonkTyVarKind tv = do
 *                                                                      *
 ********************************************************************* -}
 
-zonkTcMonoKind :: TcMonoKind -> ZonkM TcMonoKind
-zonkTcMonoKind ki = do
-  ki' <- zonkTcKind $ Mono ki
-  case ki' of
-    Mono mki -> return mki
-    _ -> pprPanic "zonkTcMonoKind" (ppr ki $$ ppr ki')
-
 zonkTcKind :: TcKind -> ZonkM TcKind
 zonkTcKinds :: [TcKind] -> ZonkM [TcKind]
 (zonkTcKind, zonkTcKinds) = mapKind zonkTcKindMapper
@@ -209,24 +200,23 @@ zonkTcKinds :: [TcKind] -> ZonkM [TcKind]
 zonkTcKindMapper :: KindMapper () ZonkM
 zonkTcKindMapper = KindMapper
   { km_kivar = const zonkTcKiVar
-  , km_kibinder = \_ kv k -> k () kv
   }
 
-zonkTcKiVar :: TcKiVar -> ZonkM TcMonoKind
+zonkTcKiVar :: TcKiVar -> ZonkM TcKind
 zonkTcKiVar kv 
   | isTcKiVar kv
   = case tcKiVarDetails kv of
-      SkolemKv {} -> return $ mkKiVarMKi kv
+      SkolemKv {} -> return $ mkKiVarKi kv
       MetaKv { mkv_ref = ref } -> do
         cts <- readTcRef ref
         case cts of
-          Flexi -> return $ mkKiVarMKi kv
+          Flexi -> return $ mkKiVarKi kv
           Indirect ki -> do
-            zki <- zonkTcMonoKind ki
+            zki <- zonkTcKind ki
             writeTcRef ref (Indirect zki)
             return zki
   | otherwise
-  = return $ mkKiVarMKi kv
+  = return $ mkKiVarKi kv
 
 zonkTcKiVarsToTcKiVars :: HasDebugCallStack => [TcKiVar] -> ZonkM [TcKiVar]
 zonkTcKiVarsToTcKiVars = mapM zonkTcKiVarToTcKiVar
@@ -234,7 +224,7 @@ zonkTcKiVarsToTcKiVars = mapM zonkTcKiVarToTcKiVar
 zonkTcKiVarToTcKiVar :: HasDebugCallStack => TcKiVar -> ZonkM TcKiVar
 zonkTcKiVarToTcKiVar kv = do
   ki <- zonkTcKiVar kv
-  let kv' = case getKiVarMono_maybe ki of
+  let kv' = case getKiVar_maybe ki of
               Just kv' -> kv'
               Nothing -> pprPanic "zonkTcKiVarToTcKiVar" (ppr kv $$ ppr ki)
   return kv'
