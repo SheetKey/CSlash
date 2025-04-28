@@ -544,5 +544,8 @@ splitInvisFunKis ki = split ki []
       | isInvisibleKiFunArg f = split res (arg:bs)
     split ki bs = (reverse bs, ki)
 
-mkForAllKis :: [KindVar] -> MonoKind -> Kind
-mkForAllKis kis mki = assertPpr (all isKiVar kis) (ppr kis) $ foldr ForAllKi (Mono mki) kis
+mkForAllKis :: [KindVar] -> Kind -> Kind
+mkForAllKis kis ki = assertPpr (all isKiVar kis) (ppr kis) $ foldr ForAllKi ki kis
+
+mkForAllKisMono :: [KindVar] -> MonoKind -> Kind
+mkForAllKisMono kis mki = assertPpr (all isKiVar kis) (ppr kis) $ foldr ForAllKi (Mono mki) kis

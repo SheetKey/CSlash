@@ -280,11 +280,10 @@ swizzleTcTyConBndrs tc_infos
     swizzle_lam_bndr _ tv k = k () (swizzle_var tv)
 
     swizzle_var :: Var -> Var
-    swizzle_var v
-      | Just nm <- lookupVarEnv swizzle_env v
-      = updateVarKind swizzle_ki (v `setVarName` nm)
-      | otherwise
-      = updateVarKind swizzle_ki v
+    swizzle_var v = assertPpr (isKiVar v) (ppr v)
+      $ case lookupVarEnv swizzle_env v of
+          Just nm -> v `setVarName` nm
+          Nothing -> v
 
     (map_type, _) = mapType swizzleMapper
     swizzle_ty ty = runIdentity (map_type ty)
@@ -319,9 +318,10 @@ generalizeTcTyCon (tc, skol_info, scoped_prs, tc_full_kind)
                , text "tc_full_kind =" <+> ppr tc_full_kind ]
 
       let all_tckvs = inferred ++ spec_kvs
+          full_kind = mkForAllKis all_tckvs tc_full_kind
 
       let tycon = mkTcTyCon (tyConName tc)
-                            tc_full_kind
+                            full_kind
                             (tyConArity tc)
                             (mkKiVarNamePairs spec_kvs)
                             True
@@ -329,7 +329,7 @@ generalizeTcTyCon (tc, skol_info, scoped_prs, tc_full_kind)
 
       traceTc "generalizeTcTyCon done"
         $ vcat [ text "tycon =" <+> ppr tc
-               , text "tc_full_kind =" <+> ppr tc_full_kind
+               , text "tc_full_kind =" <+> ppr full_kind
                , text "all_tckvs =" <+> ppr all_tckvs ]
 
       return tycon
@@ -493,7 +493,7 @@ tcTyFunRhs tc_name cs_ty = bindTyConKiVars tc_name
                         $ runZonkBndrT (zonkKiVarBindersX tc_ki_bndrs)
                         $ \bndrs -> do rhs_ty <- zonkTcTypeToTypeX rhs_ty
                                        return (bndrs, rhs_ty)
-  let rhs_kind' = mkForAllKis ki_bndrs rhs_kind
+  let rhs_kind' = mkForAllKisMono ki_bndrs rhs_kind
   return $ buildSynTyCon tc_name rhs_kind' arity rhs_ty
 
 {- *********************************************************************
