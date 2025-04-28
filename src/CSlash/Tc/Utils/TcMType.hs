@@ -23,6 +23,7 @@ import CSlash.Core.Type.Rep
 import CSlash.Core.Type.Ppr
 import CSlash.Core.Type
 import CSlash.Core.Kind
+import CSlash.Core.Kind.Subst
 import CSlash.Core.TyCon
 -- import GHC.Core.Coercion
 -- import GHC.Core.Class
@@ -229,6 +230,20 @@ isFilledMetaKiVar_maybe kv
 
 {- *********************************************************************
 *                                                                      *
+        MetaKvs (meta kind variables; mutable)
+*                                                                      *
+********************************************************************* -}
+
+cloneAnonMetaKiVar :: MetaInfoK -> KindVar -> TcM TcKiVar
+cloneAnonMetaKiVar info kv = do
+  details <- newMetaDetailsK info
+  name <- cloneMetaKiVarName (kiVarName kv)
+  let kivar = mkTcKiVar name details
+  traceTc "cloneAnonMetaKiVar" (ppr kivar)
+  return kivar
+
+{- *********************************************************************
+*                                                                      *
         MetaKvs: TauKvs
 *                                                                      *
 ********************************************************************* -}
@@ -243,6 +258,15 @@ newFlexiKiVarKi :: TcM TcMonoKind
 newFlexiKiVarKi = do
   tc_kivar <- newFlexiKiVar
   return $ mkKiVarMKi tc_kivar
+
+newMetaKiVarX :: Subst -> KindVar -> TcM (Subst, TcKiVar)
+newMetaKiVarX = new_meta_kv_x TauKv
+
+new_meta_kv_x :: MetaInfoK -> Subst -> KindVar -> TcM (Subst, TcKiVar)
+new_meta_kv_x info subst kv = do
+  new_kv <- cloneAnonMetaKiVar info kv
+  let subst1 = extendKvSubstWithClone subst kv new_kv
+  return (subst1, new_kv)
 
 {- *********************************************************************
 *                                                                      *

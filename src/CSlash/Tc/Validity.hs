@@ -144,6 +144,8 @@ check_type ve ty@(TyConApp tc tys)
   | otherwise
   = mapM_ (check_arg_type ve) tys
 
+check_type ve (CastTy ty _) = check_type ve ty
+
 check_type ve@(ValidityEnv { ve_tidy_env = env }) ty
   | not (null tvbs)
   = do traceTc "check_type" (ppr ty)

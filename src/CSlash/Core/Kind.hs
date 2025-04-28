@@ -506,6 +506,12 @@ splitFunKi_maybe ki = case ki of
   (Mono (FunKi f arg res)) -> Just (f, arg, res)
   _ -> Nothing
 
+{-# INLINE splitMonoFunKi_maybe #-}
+splitMonoFunKi_maybe :: MonoKind -> Maybe  (FunKiFlag, MonoKind, MonoKind)
+splitMonoFunKi_maybe ki = case ki of
+  FunKi f arg res -> Just (f, arg, res)
+  _ -> Nothing
+
 mkKiConApp :: KiCon -> [MonoKind] -> MonoKind
 mkKiConApp kicon kis = KiConApp kicon kis
 
@@ -521,6 +527,12 @@ isVisibleKiFunArg FKF_C_K = False
                       ForAllKi
 *                                                                      *
 ********************************************************************* -}
+
+splitPiKi_maybe :: Kind -> Maybe (Either (KindVar, Kind) (FunKiFlag, MonoKind, MonoKind))
+splitPiKi_maybe ki = case ki of
+  ForAllKi kv ki -> Just $ Left (kv, ki)
+  Mono (FunKi { fk_f = af, fk_arg = arg, fk_res = res }) -> Just $ Right (af, arg, res)
+  _ -> Nothing
 
 splitForAllKiVars :: Kind -> ([KindVar], MonoKind)
 splitForAllKiVars ki = split ki []

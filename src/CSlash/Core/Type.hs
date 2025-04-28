@@ -212,15 +212,11 @@ type ErrorMsgType = Type
 *                                                                      *
 ********************************************************************* -}
 
-piResultTys :: HasDebugCallStack => Kind -> [Type] -> MonoKind
-piResultTys ki []
-  | Mono ki' <- ki
-  = ki'
-  | otherwise
-  = pprPanic "piResultTys1" (ppr ki)
+piResultTys :: HasDebugCallStack => Kind -> [Type] -> Kind
+piResultTys ki [] = ki
 piResultTys ki orig_args@(arg:args)
   | Mono mki <- ki
-  = monoPiResultTys mki orig_args
+  = Mono $ monoPiResultTys mki orig_args
   | ForAllKi kv res <- ki
   , Embed mki <- arg
   = go (extendKvSubst init_subst kv mki) res args
@@ -230,10 +226,10 @@ piResultTys ki orig_args@(arg:args)
     init_subst = mkEmptySubst $ mkInScopeSet $
                  (kiVarsOfKind ki) `unionVarSet` (tyKiVarsOfTypes orig_args)
 
-    go :: Subst -> Kind -> [Type] -> MonoKind
+    go :: Subst -> Kind -> [Type] -> Kind
     go subst ki []
       | Mono ki' <- ki
-      = substMonoKiUnchecked subst ki'
+      = Mono $ substMonoKiUnchecked subst ki'
       | otherwise
       = pprPanic "piResultTys3" (ppr ki)
     go subst ki all_args@(arg:args)
@@ -348,17 +344,23 @@ buildSynTyCon name kind arity rhs
 
 typeKind :: HasDebugCallStack => Type -> Kind
 typeKind (BigTyLamTy kv res) = mkForAllKi kv (typeKind res)
+typeKind (TyConApp tc []) = tyConKind tc
 typeKind ty = Mono $ typeMonoKind ty
 
 typeMonoKind :: HasDebugCallStack => Type -> MonoKind
-typeMonoKind (TyConApp tc tys) = piResultTys (tyConKind tc) tys
+typeMonoKind (TyConApp tc tys) = handle_non_mono (piResultTys (tyConKind tc) tys)
+                                 $ \ki -> vcat [ ppr tc <+> colon <+> ppr ki
+                                                , ppr tys ]
+  
 typeMonoKind (FunTy { ft_kind = kind }) = kind
 typeMonoKind (TyVarTy tyvar) = tyVarKind tyvar
 typeMonoKind (AppTy fun arg)
   = go fun [arg]
   where
     go (AppTy fun arg) args = go fun (arg:args)
-    go fun args = piResultTys (typeKind fun) args
+    go fun args = handle_non_mono (piResultTys (typeKind fun) args)
+                  $ \ki -> vcat [ ppr fun <+> colon <+> ppr ki
+                                , ppr args ]
 typeMonoKind ty@(ForAllTy {})
   = let (tvs, body) = splitForAllTyVars ty
         body_kind = typeMonoKind body
@@ -371,6 +373,11 @@ typeMonoKind ty@(TyLamTy tv res) =
 typeMonoKind ty@(BigTyLamTy _ _) = pprPanic "typeMonoKind" (ppr ty)
 typeMonoKind ty@(Embed _) = pprPanic "typeMonoKind" (ppr ty)
 typeMonoKind (CastTy _ co) = kicoercionRKind co
+
+handle_non_mono :: Kind -> (Kind -> SDoc) -> MonoKind
+handle_non_mono ki doc = case ki of
+                           Mono ki -> ki
+                           other -> pprPanic "typeMonoKind" (doc other)
 
 {- *********************************************************************
 *                                                                      *

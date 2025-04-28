@@ -53,6 +53,13 @@ extendKvSubst (Subst in_scope ids tvs kvs) kv ki
   = assertPpr (isKiVar kv) (text "extendKvSubst") $
     Subst in_scope ids tvs (extendVarEnv kvs kv ki)
 
+extendKvSubstWithClone :: Subst -> KindVar -> KindVar -> Subst
+extendKvSubstWithClone (Subst in_scope ids tvs kvs) kv kv'
+  = Subst (extendInScopeSet in_scope kv')
+          ids
+          tvs
+          (extendVarEnv kvs kv (mkKiVarMKi kv'))
+
 zapSubst :: Subst -> Subst
 zapSubst (Subst in_scope _ _ _) = Subst in_scope emptyVarEnv emptyVarEnv emptyVarEnv
 

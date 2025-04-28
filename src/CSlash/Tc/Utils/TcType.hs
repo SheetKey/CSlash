@@ -358,6 +358,17 @@ mkKiVarNamePairs kvs = [(kiVarName kv, kv) | kv <- kvs ]
 tcSplitFunKi_maybe :: Kind -> Maybe (FunKiFlag, MonoKind, MonoKind)
 tcSplitFunKi_maybe = splitFunKi_maybe
 
+tcSplitMonoFunKi_maybe :: MonoKind -> Maybe (FunKiFlag, MonoKind, MonoKind)
+tcSplitMonoFunKi_maybe = splitMonoFunKi_maybe
+
+tcSplitPiKi_maybe :: Kind -> Maybe (Either (KindVar, Kind) (FunKiFlag, MonoKind, MonoKind))
+tcSplitPiKi_maybe ki = assert (isMaybeKiBinder ski) ski
+  where
+    ski = splitPiKi_maybe ki
+
+    isMaybeKiBinder (Just (Left (kv, _))) = isKiVar kv
+    isMaybeKiBinder _ = True
+
 {- *********************************************************************
 *                                                                      *
           Expanding and splitting 
