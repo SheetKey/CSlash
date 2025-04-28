@@ -231,8 +231,8 @@ zonkTcMonoKindToMonoKindX ki = do
 *                                                                      *
 ********************************************************************* -}
 
-unpackCoercionHole_maybe :: KindCoercionHole -> TcM (Maybe KindCoercion)
-unpackCoercionHole_maybe (CoercionHole { ch_ref = ref }) = readTcRef ref
+unpackKiCoercionHole_maybe :: KindCoercionHole -> TcM (Maybe KindCoercion)
+unpackKiCoercionHole_maybe (CoercionHole { ch_ref = ref }) = readTcRef ref
 
 zonkRewriterSet :: RewriterSet -> TcM RewriterSet
 zonkRewriterSet (RewriterSet set) = nonDetStrictFoldUniqSet go (return emptyRewriterSet) set
@@ -242,7 +242,7 @@ zonkRewriterSet (RewriterSet set) = nonDetStrictFoldUniqSet go (return emptyRewr
 
     check_hole :: KindCoercionHole -> TcM RewriterSet
     check_hole hole = do
-      m_co <- unpackCoercionHole_maybe hole
+      m_co <- unpackKiCoercionHole_maybe hole
       case m_co of
         Nothing -> return $ unitRewriterSet hole
         Just co -> unUCHM (check_co co)

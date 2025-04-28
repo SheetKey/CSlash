@@ -12,7 +12,7 @@ import CSlash.Tc.Types.Constraint
 import CSlash.Tc.Utils.Monad        -- TcType, amongst others
 import CSlash.Tc.Utils.TcType
 import CSlash.Tc.Errors.Types
--- import CSlash.Tc.Zonk.Type
+import CSlash.Tc.Zonk.Type
 import CSlash.Tc.Zonk.TcType
 
 import CSlash.Builtin.Names
@@ -279,6 +279,9 @@ collect_cand_qkvs_ty orig_ty cur_lvl bound dvs ty = go dvs ty
     go dv (TyLamTy tv ty) = do
       dv1 <- collect_cand_qkvs (Mono $ tyVarKind tv) cur_lvl bound dv (Mono $ tyVarKind tv)
       collect_cand_qkvs_ty orig_ty cur_lvl (bound `extendVarSet` tv) dv1 ty
+    go dv (CastTy ty co) = do
+      dv1 <- go dv ty
+      collect_cand_qkvs_co co cur_lvl bound dv co
     go _ other = pprPanic "collect_cand_qkvs_ty" (ppr other)
 
     go_tv dv tv
@@ -335,6 +338,37 @@ collect_cand_qkvs orig_ki cur_lvl bound dvs ki = go dvs ki
       = return dv
       | otherwise
       = return $ dv `extendDVarSet` kv
+
+collect_cand_qkvs_co
+  :: KindCoercion
+  -> TcLevel
+  -> VarSet
+  -> DKiVarSet
+  -> KindCoercion
+  -> TcM DKiVarSet
+collect_cand_qkvs_co orig_co cur_lvl bound = go_co
+  where
+    go_co dv (Refl ki) = collect_cand_qkvs (Mono ki) cur_lvl bound dv (Mono ki)
+    go_co dv (KiConAppCo _ cos) = foldM go_co dv cos
+    go_co dv (FunCo _ _ co1 co2) = foldM go_co dv [co1, co2]
+
+    go_co dv (SymCo co) = go_co dv co
+    go_co dv (TransCo co1 co2) = foldM go_co dv [co1, co2]
+
+    go_co dv (HoleCo hole) = do
+      m_co <- unpackKiCoercionHole_maybe hole
+      case m_co of
+        Just co -> go_co dv co
+        Nothing -> go_cv dv (coHoleCoVar hole)
+
+    go_cv :: DKiVarSet -> KiCoVar -> TcM DKiVarSet
+    go_cv dv cv
+      | is_bound cv = return dv
+      | otherwise = do
+          traceTc "COLLECTING KICOVAR" (ppr cv)
+          collect_cand_qkvs (Mono $ varKind cv) cur_lvl bound dv (Mono $ varKind cv)
+
+    is_bound v = v `elemVarSet` bound
 
 {- *********************************************************************
 *                                                                      *
