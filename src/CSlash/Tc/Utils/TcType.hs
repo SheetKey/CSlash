@@ -206,13 +206,9 @@ tcKindLevel ki = nonDetStrictFoldDVarSet add topTcLevel (kiVarsOfKindDSet ki)
       | otherwise = lvl
 
 {-# INLINE any_rewritable_ki #-}
-any_rewritable_ki :: (TcKiVar -> Bool) -> TcKind -> Bool
-any_rewritable_ki kv_pred = go emptyVarSet
+any_rewritable_ki :: (TcKiVar -> Bool) -> TcMonoKind -> Bool
+any_rewritable_ki kv_pred = go_mono emptyVarSet
   where
-    go :: VarSet -> TcKind -> Bool
-    go bvs (Mono ki) = go_mono bvs ki
-    go bvs (ForAllKi kv ki) = go (bvs `extendVarSet` kv) ki
-
     go_mono :: VarSet -> TcMonoKind -> Bool
     go_mono bvs (KiConApp kc kis) = go_kc bvs kc kis
     go_mono bvs (KiVarKi kv) = go_kv bvs kv
@@ -224,7 +220,7 @@ any_rewritable_ki kv_pred = go emptyVarSet
     go_kc :: VarSet -> KiCon -> [TcMonoKind] -> Bool
     go_kc bvs _ kis = any (go_mono bvs) kis
 
-anyRewritableKiVar :: (TcKiVar -> Bool) -> TcKind -> Bool
+anyRewritableKiVar :: (TcKiVar -> Bool) -> TcMonoKind -> Bool
 anyRewritableKiVar = any_rewritable_ki
 
 {- *********************************************************************

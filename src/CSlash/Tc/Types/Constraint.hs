@@ -241,6 +241,9 @@ extendCtsList :: Cts -> [Ct] -> Cts
 extendCtsList cts xs | null xs = cts
                      | otherwise = cts `unionBags` listToBag xs
 
+andCts :: Cts -> Cts -> Cts
+andCts = unionBags
+
 {- *********************************************************************
 *                                                                      *
                 Wanted constraints

@@ -226,6 +226,22 @@ addInertEqs  eq_ct@(KiEqCt { eq_lhs = KiVarLHS kv }) eqs = addEq eqs kv eq_ct
 
 {- *********************************************************************
 *                                                                      *
+                   Inert Rels
+*                                                                      *
+********************************************************************* -}
+
+addRel :: RelCt -> RelMap RelCt -> RelMap RelCt
+addRel item@(RelCt { rl_kc = kc, rl_ki1 = k1, rl_ki2 = k2 }) rm
+  = insertKcApp rm kc k1 k2 item
+
+partitionRels :: (RelCt -> Bool) -> RelMap RelCt -> (Bag RelCt, RelMap RelCt)
+partitionRels f m = foldKcAppMap k m (emptyBag, emptyRelMap)
+  where
+    k ct (yeses, noes) | f ct = (ct `consBag` yeses, noes)
+                       | otherwise = (yeses, addRel ct noes)
+
+{- *********************************************************************
+*                                                                      *
                    Inert Irreds
 *                                                                      *
 ********************************************************************* -}
@@ -301,55 +317,59 @@ data KickOutSpec
   | KOAfterAdding CanEqLHS
 
 kickOutRewritableLHS :: KickOutSpec -> CtFlavor -> InertCans -> (Cts, InertCans)
-kickOutRewritableLHS ko_spec new_f ics@(IC { inert_eqs = v_eqs, inert_irreds = irreds })
-  = panic "kickOutRewritableLHS"
-  -- = (kicked_out, inert_cans_in)
-  -- where
-  --   inert_cans_in = ics { inert_eqs = v_eqs_in
-  --                       , inert_irreds = irs_in }
+kickOutRewritableLHS ko_spec new_f ics@(IC { inert_eqs = kv_eqs
+                                           , inert_rels = relmap
+                                           , inert_irreds = irreds })
+  = (kicked_out, inert_cans_in)
+  where
+    inert_cans_in = ics { inert_eqs = kv_eqs_in
+                        , inert_rels = rels_in
+                        , inert_irreds = irs_in }
 
-  --   kicked_out :: Cts
-  --   kicked_out = fmap CIrredCan irs_out `extendCtsList` fmap CEqCan v_eqs_out
+    kicked_out :: Cts
+    kicked_out = (fmap CRelCan rels_out `andCts` fmap CIrredCan irs_out)
+                 `extendCtsList` fmap CEqCan kv_eqs_out
 
-  --   (v_eqs_out, v_eqs_in) = partitionInertEqs kick_out_eq v_eqs
-  --   (irs_out, irs_in) = partitionBag (kick_out_ct . CIrredCan) irreds
+    (kv_eqs_out, kv_eqs_in) = partitionInertEqs kick_out_eq kv_eqs
+    (rels_out, rels_in) = partitionRels (kick_out_ct . CRelCan) relmap
+    (irs_out, irs_in) = partitionBag (kick_out_ct . CIrredCan) irreds
 
-  --   f_v_can_rewrite_ki :: (KindVar -> Bool) -> Kind -> Bool
-  --   f_v_can_rewrite_ki = anyRewritableKiVar 
+    f_kv_can_rewrite_ki :: (KindVar -> Bool) -> MonoKind -> Bool
+    f_kv_can_rewrite_ki = anyRewritableKiVar 
 
-  --   {-# INLINE f_can_rewrite_ki #-}
-  --   f_can_rewrite_ki :: Kind -> Bool
-  --   f_can_rewrite_ki = case ko_spec of
-  --     KOAfterUnify vs -> f_v_can_rewrite_ki (`elemVarSet` vs)
-  --     KOAfterAdding (KiVarLHS kv) -> f_v_can_rewrite_ki (== kv)
+    {-# INLINE f_can_rewrite_ki #-}
+    f_can_rewrite_ki :: MonoKind -> Bool
+    f_can_rewrite_ki = case ko_spec of
+      KOAfterUnify kvs -> f_kv_can_rewrite_ki (`elemVarSet` kvs)
+      KOAfterAdding (KiVarLHS kv) -> f_kv_can_rewrite_ki (== kv)
 
-  --   f_may_rewrite f = new_f `eqCanRewriteF` f
+    f_may_rewrite f = new_f `eqCanRewriteF` f
 
-  --   kick_out_ct ct = f_may_rewrite (ctFlavor ct) && f_can_rewrite_ki (ctPred ct)
+    kick_out_ct ct = f_may_rewrite (ctFlavor ct) && f_can_rewrite_ki (ctPred ct)
 
-  --   kick_out_eq (KiEqCt { eq_lhs = lhs, eq_rhs = rhs_ki, eq_ev = ev })
-  --     | not (f_may_rewrite f)
-  --     = False
-  --     | KiVarLHS _ <- lhs
-  --     , f `eqCanRewriteF` new_f
-  --     = False
-  --     | f_can_rewrite_ki (canKiEqLHSKind lhs)
-  --     = True
-  --     | kick_out_for_inertness = True
-  --     | kick_out_for_completeness = True
-  --     | otherwise = False
-  --     where
-  --       f = ctEvFlavor ev
-  --       kick_out_for_inertness = (f `eqCanRewriteF` f) && f_can_rewrite_ki rhs_ki
-  --       kick_out_for_completeness = is_new_lhs_ki rhs_ki
+    kick_out_eq (KiEqCt { eq_lhs = lhs, eq_rhs = rhs_ki, eq_ev = ev })
+      | not (f_may_rewrite f)
+      = False
+      | KiVarLHS _ <- lhs
+      , f `eqCanRewriteF` new_f
+      = False
+      | f_can_rewrite_ki (canKiEqLHSKind lhs)
+      = True
+      | kick_out_for_inertness = True
+      | kick_out_for_completeness = True
+      | otherwise = False
+      where
+        f = ctEvFlavor ev
+        kick_out_for_inertness = (f `eqCanRewriteF` f) && f_can_rewrite_ki rhs_ki
+        kick_out_for_completeness = is_new_lhs_ki rhs_ki
 
-  --   is_new_lhs_ki = case ko_spec of
-  --     KOAfterUnify vs -> is_kivar_ki_for vs
-  --     KOAfterAdding lhs -> (`eqKind` canKiEqLHSKind lhs)
+    is_new_lhs_ki = case ko_spec of
+      KOAfterUnify vs -> is_kivar_ki_for vs
+      KOAfterAdding lhs -> (`eqMonoKind` canKiEqLHSKind lhs)
 
-  --   is_kivar_ki_for vs ki = case getKiVar_maybe ki of
-  --                             Nothing -> False
-  --                             Just kv -> kv `elemVarSet` vs
+    is_kivar_ki_for vs ki = case getKiVarMono_maybe ki of
+                              Nothing -> False
+                              Just kv -> kv `elemVarSet` vs
 
 {- *********************************************************************
 *                                                                      *
