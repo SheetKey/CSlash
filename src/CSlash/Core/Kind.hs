@@ -82,7 +82,12 @@ instance Uniquable KiCon where
   getUnique kc = getUnique $ mkFastString $ show kc
 
 instance Outputable KiCon where
-  ppr _ = text "Outputable KiCon"
+  ppr UKd = uKindLit
+  ppr AKd = aKindLit
+  ppr LKd = lKindLit
+  ppr LTKi = char '<'
+  ppr LTEQKi = text "<="
+  ppr EQKi = char '~'
 
 instance Outputable Kind where
   ppr = pprKind
@@ -132,6 +137,19 @@ pprPrecMonoKindX env prec ki
     then debug_ppr_mono_ki prec ki
     else text "{pprKind not implemented}"--pprPrecIfaceKind prec (tidyToIfaceKindStyX env ty sty)
 
+pprKiCo :: KindCoercion -> SDoc
+pprKiCo = pprPrecKiCo topPrec
+
+pprPrecKiCo :: PprPrec -> KindCoercion -> SDoc
+pprPrecKiCo = pprPrecKiCoX emptyTidyEnv
+
+pprPrecKiCoX :: TidyEnv -> PprPrec -> KindCoercion -> SDoc
+pprPrecKiCoX _ prec co = getPprStyle $ \sty ->
+                       getPprDebug $ \debug ->
+                       if debug
+                       then debug_ppr_ki_co prec co
+                       else panic "pprPrecKiCoX"
+
 debugPprKind :: Kind -> SDoc
 debugPprKind ki = debug_ppr_ki topPrec ki
 
@@ -180,6 +198,33 @@ debug_ppr_mono_ki prec (FunKi { fk_f = f, fk_arg = arg, fk_res = res })
                   FKF_C_K -> darrow
                   FKF_K_K -> arrow
 
+debug_ppr_ki_co :: PprPrec -> KindCoercion -> SDoc
+debug_ppr_ki_co _ (Refl ki) = angleBrackets (ppr ki)
+debug_ppr_ki_co prec (FunCo _ _ co1 co2)
+  = maybeParen prec funPrec
+    $ sep (debug_ppr_ki_co funPrec co1 : ppr_fun_tail co2)
+  where
+    ppr_fun_tail (FunCo _ _ co1 co2)
+      = (arrow <+> debug_ppr_ki_co funPrec co1)
+        : ppr_fun_tail co2
+    ppr_fun_tail other = [ arrow <+> ppr other ]
+debug_ppr_ki_co prec (KiConAppCo kc [co1, co2]) = case kc of
+  LTKi -> maybeParen prec appPrec (debug_ppr_ki_co prec co1) <+> char '<' <+>
+          maybeParen prec appPrec (debug_ppr_ki_co prec co2)
+  LTEQKi -> maybeParen prec appPrec (debug_ppr_ki_co prec co1) <+> text "<=" <+>
+            maybeParen prec appPrec (debug_ppr_ki_co prec co2)
+  EQKi -> maybeParen prec appPrec (debug_ppr_ki_co prec co1) <+> char '~' <+>
+          maybeParen prec appPrec (debug_ppr_ki_co prec co2)
+  other -> pprPanic "debug_ppr_ki_co kcappco" (ppr other)
+debug_ppr_ki_co prec (SymCo co) = maybeParen prec appPrec $ sep [ text "Sym"
+                                                                , nest 4 (ppr co) ]
+debug_ppr_ki_co prec (TransCo co1 co2)
+  = let ppr_trans (TransCo c1 c2) = semi <+> debug_ppr_ki_co topPrec c1 : ppr_trans c2
+        ppr_trans c = [semi <+> debug_ppr_ki_co opPrec c]
+  in maybeParen prec opPrec
+     $ vcat (debug_ppr_ki_co topPrec co1 : ppr_trans co2)
+debug_ppr_ki_co _ (HoleCo co) = ppr co
+debug_ppr_ki_co _ _ = panic "debug_ppr_ki_co"
 
 data FunKiFlag
   = FKF_K_K -- Kind -> Kind
@@ -310,10 +355,10 @@ kicoercionRKind co = go co
     go (HoleCo h) = coVarRKind (coHoleCoVar h)
 
 instance Outputable KindCoercion where
-  ppr _ = text "Outputable KindCoercion"
+  ppr = pprKiCo
 
 instance Outputable KindCoercionHole where
-  ppr _ = text "Outputable KindCoercionHole"
+  ppr (CoercionHole { ch_co_var = cv }) = braces (ppr cv)
 
 instance Uniquable KindCoercionHole where
   getUnique (CoercionHole { ch_co_var = cv }) = getUnique cv
