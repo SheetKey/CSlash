@@ -40,6 +40,7 @@ import CSlash.Utils.Error
 import CSlash.Utils.Misc
 import CSlash.Utils.Outputable as Outputable
 import CSlash.Utils.Panic
+import CSlash.Utils.Trace
 
 import CSlash.Driver.DynFlags
 import CSlash.Data.Bag
@@ -489,15 +490,16 @@ touchabilityAndShapeTestKind given_eq_lvl kv rhs
   , checkTopShapeKind info rhs
   = kv_lvl `deeperThanOrSame` given_eq_lvl
   | otherwise
-  = False
+  = warnPprTrace True "touchabilityTestKind" (ppr kv $$ ppr rhs) False
 
 checkTopShapeKind :: MetaInfoK -> TcMonoKind -> Bool
 checkTopShapeKind info xi
   = case info of
       KiVarKv -> case getKiVarMono_maybe xi of
-                   Nothing -> False
+                   Nothing -> warnPprTrace True "checkTopShapeKind1" (ppr info $$ ppr xi) False
                    Just kv -> case tcKiVarDetails kv of
                                 SkolemKv {} -> True
                                 MetaKv { mkv_info = KiVarKv } -> True
-                                _ -> False
+                                _ -> warnPprTrace True "checkTopShapeKind2"
+                                     (ppr info $$ ppr xi) False
       _ -> True

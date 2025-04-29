@@ -234,12 +234,32 @@ getInnermostGivenEqLevel = do
 
 getUnsolvedInerts :: TcS (Bag Implication, Cts)
 getUnsolvedInerts = do
+  IC { inert_eqs = kv_eqs
+     , inert_irreds = irreds
+     , inert_rels = irels } <- getInertCans
+
+  let unsolved_kv_eqs = foldKiEqs (add_if_unsolved CEqCan) kv_eqs emptyCts
+      unsolved_irreds = foldr (add_if_unsolved CIrredCan) emptyCts irreds
+      unsolved_rels = foldRels (add_if_unsolved CRelCan) irels emptyCts
+
   implics <- getWorkListImplics
 
   traceTcS "getUnsolvedInerts"
-    $ vcat [ text "implics =" <+> ppr implics ]
+    $ vcat [ text "kv eqs =" <+> ppr unsolved_kv_eqs
+           , text "rels =" <+> ppr unsolved_rels
+           , text "irreds =" <+> ppr unsolved_irreds 
+           , text "implics =" <+> ppr implics ]
 
-  return (implics, emptyBag)
+  return ( implics
+         , unsolved_kv_eqs `andCts`
+           unsolved_irreds `andCts`
+           unsolved_rels )
+  where
+    add_if_unsolved :: (a -> Ct) -> a -> Cts -> Cts
+    add_if_unsolved mk_ct thing cts
+      | isWantedCt ct = ct `consCts` cts
+      | otherwise = cts
+      where ct = mk_ct thing
 
 getHasGivenEqs :: TcLevel -> TcS (HasGivenEqs, InertIrreds) 
 getHasGivenEqs tclvl = do

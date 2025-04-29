@@ -244,6 +244,12 @@ extendCtsList cts xs | null xs = cts
 andCts :: Cts -> Cts -> Cts
 andCts = unionBags
 
+consCts :: Ct -> Cts -> Cts
+consCts = consBag
+
+emptyCts :: Cts
+emptyCts = emptyBag
+
 {- *********************************************************************
 *                                                                      *
                 Wanted constraints

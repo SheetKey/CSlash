@@ -164,7 +164,7 @@ instance Outputable InertCans where
     = braces $ vcat
       [ ppUnless (isEmptyDVarEnv eqs)
         $ text "Equalities ="
-        <+> pprBag (foldEqs consBag eqs emptyBag)
+        <+> pprBag (foldKiEqs consBag eqs emptyBag)
       , ppUnless (isEmptyBag irreds)
         $ text "Irreds =" <+> pprBag irreds
       , text "Innermost given equalities =" <+> ppr ge_lvl
@@ -192,8 +192,8 @@ addEq old_eqs v ct
   where
     add_eq old_eqs _ = addToEqualCtList ct old_eqs
 
-foldEqs :: (EqCt -> b -> b) -> InertEqs -> b -> b
-foldEqs k eqs z = foldDVarEnv (\cts z -> foldr k z cts) z eqs
+foldKiEqs :: (EqCt -> b -> b) -> InertEqs -> b -> b
+foldKiEqs k eqs z = foldDVarEnv (\cts z -> foldr k z cts) z eqs
 
 findKiEqs :: InertCans -> KindVar -> [EqCt]
 findKiEqs icans kv = concat @Maybe (lookupDVarEnv (inert_eqs icans) kv)
@@ -219,7 +219,7 @@ partition_eqs_container empty_container fold_container extend_container pred ori
       | otherwise = (acc_true, extend_container eq_ct acc_false)
 
 partitionInertEqs :: (EqCt -> Bool) -> InertEqs -> ([EqCt], InertEqs)
-partitionInertEqs = partition_eqs_container emptyEqs foldEqs addInertEqs
+partitionInertEqs = partition_eqs_container emptyEqs foldKiEqs addInertEqs
 
 addInertEqs :: EqCt -> InertEqs -> InertEqs
 addInertEqs  eq_ct@(KiEqCt { eq_lhs = KiVarLHS kv }) eqs = addEq eqs kv eq_ct

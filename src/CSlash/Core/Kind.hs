@@ -183,7 +183,7 @@ debug_ppr_mono_ki prec ki@(KiConApp kc args)
     $ debug_ppr_mono_ki appPrec k1 <+> text "<" <+> debug_ppr_mono_ki appPrec k2
   | LTEQKi <- kc
   , [k1, k2] <- args
-  = debug_ppr_mono_ki prec k1 <+> text "<" <+> debug_ppr_mono_ki prec k2
+  = debug_ppr_mono_ki prec k1 <+> text "<=" <+> debug_ppr_mono_ki prec k2
   | EQKi <- kc
   , [k1, k2] <- args
   = debug_ppr_mono_ki prec k1 <+> text "~" <+> debug_ppr_mono_ki prec k2

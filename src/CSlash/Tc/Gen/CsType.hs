@@ -140,8 +140,8 @@ tc_cs_type (CsQualTy { cst_ctxt = ctxt, cst_body = rn_ty }) exp_kind
   = tc_lcs_type rn_ty exp_kind
   | otherwise
   = do add_ki_constraints <- tcLCsContext ctxt
-       ek <- newOpenTypeKind
        (ty', ki) <- tc_infer_lcs_type rn_ty
+       ki <- liftZonkM $ zonkTcMonoKind ki
        checkExpectedKind (unLoc rn_ty) ty' (add_ki_constraints ki) exp_kind
 
 tc_cs_type rn_ty@(CsTupleTy _ tup_args) exp_kind

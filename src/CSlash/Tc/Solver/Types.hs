@@ -89,6 +89,9 @@ findRel m loc kc ki1 ki2 = findKcApp m kc ki1 ki2
 relsToBag :: RelMap a -> Bag a
 relsToBag = kcAppMapToBag
 
+foldRels :: (a -> b -> b) -> RelMap a -> b -> b
+foldRels = foldKcAppMap
+
 {- *********************************************************************
 *                                                                      *
                    EqualCtList
