@@ -72,6 +72,9 @@ newMetaKindVar = do
   traceTc "newMetaKindVar" (ppr kv)
   return (mkKiVarMKi kv)
 
+newMetaKindVars :: Int -> TcM [TcMonoKind]
+newMetaKindVars n = replicateM n newMetaKindVar
+
 {- **********************************************************************
 *                                                                       *
             Evidence variables
@@ -260,7 +263,8 @@ newFlexiKiVarKi = do
   return $ mkKiVarMKi tc_kivar
 
 newMetaKiVarX :: Subst -> KindVar -> TcM (Subst, TcKiVar)
-newMetaKiVarX = new_meta_kv_x TauKv
+--newMetaKiVarX = new_meta_kv_x TauKv
+newMetaKiVarX s k = return (s, k)
 
 new_meta_kv_x :: MetaInfoK -> Subst -> KindVar -> TcM (Subst, TcKiVar)
 new_meta_kv_x info subst kv = do
@@ -303,9 +307,16 @@ collect_cand_qkvs_ty orig_ty cur_lvl bound dvs ty = go dvs ty
     go dv (TyLamTy tv ty) = do
       dv1 <- collect_cand_qkvs (Mono $ tyVarKind tv) cur_lvl bound dv (Mono $ tyVarKind tv)
       collect_cand_qkvs_ty orig_ty cur_lvl (bound `extendVarSet` tv) dv1 ty
+
+    go dv (BigTyLamTy kv ty) = 
+      collect_cand_qkvs_ty orig_ty cur_lvl (bound `extendVarSet` kv) dv ty
+
     go dv (CastTy ty co) = do
       dv1 <- go dv ty
       collect_cand_qkvs_co co cur_lvl bound dv co
+
+    go dv (Embed ki) = collect_cand_qkvs (Mono ki) cur_lvl bound dv (Mono ki)
+
     go _ other = pprPanic "collect_cand_qkvs_ty" (ppr other)
 
     go_tv dv tv
@@ -459,10 +470,7 @@ defaultKiVar kv
        _ <- promoteMetaKiVarTo lvl kv
        return True
   | otherwise
-  = do traceTc "Defaulting a kind var to ANYKind" (ppr kv)
-       panic "defaultKiVar"
-       -- liftZonkM $ writeMetaKiVar kv (KiCon ANYKind)
-       -- return True
+  = return False
 
 defaultKiVars :: DKiVarSet -> TcM [TcKiVar]
 defaultKiVars dvs = do

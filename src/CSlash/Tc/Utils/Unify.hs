@@ -270,6 +270,33 @@ lhsKiPriority kv = assertPpr (isKiVar kv) (ppr kv) $
                                     KiVarKv -> 1
                                     TauKv -> 3
 
+matchExpectedFunKind :: KindedThing -> Arity -> TcMonoKind -> TcM KindCoercion
+matchExpectedFunKind cs_ty n k = go n k
+  where
+    go 0 k = return (mkReflKiCo k)
+    go n k@(KiVarKi kvar)
+      | isMetaKiVar kvar
+      = do maybe_kind <- readMetaKiVar kvar
+           case maybe_kind of
+             Indirect fun_kind -> go n fun_kind
+             Flexi -> defer n k
+    go n (FunKi { fk_f = af, fk_arg = arg, fk_res = res })
+      | isVisibleKiFunArg af
+      = do co <- go (n-1) res
+           return $ mkFunKiCo af (mkReflKiCo arg) co
+    go n other = defer n other
+
+    defer n k = do
+      arg_kinds <- newMetaKindVars n
+      res_kind <- newMetaKindVar
+      let new_fun = mkVisFunKis arg_kinds res_kind
+          origin = KindEqOrigin { keq_actual = k
+                                , keq_expected = new_fun
+                                , keq_thing = Just cs_ty
+                                , keq_visible = True
+                                }
+      unifyKindAndEmit origin k new_fun
+
 {- *********************************************************************
 *                                                                      *
                  Checking alpha ~ ki

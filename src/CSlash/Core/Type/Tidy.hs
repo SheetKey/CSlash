@@ -64,9 +64,17 @@ tidyTyLamTyBinder :: TidyEnv -> TypeVar -> (TidyEnv, TypeVar)
 tidyTyLamTyBinder tidy_env tv = (tidy_env', tv')
   where (tidy_env', tv') = tidyVarBndr tidy_env tv
 
+tidyBigLamTyBinder :: TidyEnv -> KindVar -> (TidyEnv, KindVar)
+tidyBigLamTyBinder tidy_env kv = (tidy_env', kv')
+  where (tidy_env', kv') = tidyVarBndr tidy_env kv
+
 tidyTyLamTyBinders :: TidyEnv -> [TypeVar] -> (TidyEnv, [TypeVar])
 tidyTyLamTyBinders tidy_env tvbs
   = mapAccumL tidyTyLamTyBinder (avoidNameClashes tvbs tidy_env) tvbs
+
+tidyBigLamTyBinders :: TidyEnv -> [KindVar] -> (TidyEnv, [KindVar])
+tidyBigLamTyBinders tidy_env kvbs
+  = mapAccumL tidyBigLamTyBinder (avoidNameClashes kvbs tidy_env) kvbs
 
 tidyFreeTyKiVars :: TidyEnv -> [Var] -> TidyEnv
 tidyFreeTyKiVars tidy_env vars = fst (tidyOpenTyKiVars tidy_env vars)

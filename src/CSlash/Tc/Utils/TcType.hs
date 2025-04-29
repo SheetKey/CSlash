@@ -361,6 +361,9 @@ tcSplitFunKi_maybe = splitFunKi_maybe
 tcSplitMonoFunKi_maybe :: MonoKind -> Maybe (FunKiFlag, MonoKind, MonoKind)
 tcSplitMonoFunKi_maybe = splitMonoFunKi_maybe
 
+tcSplitForAllKi_maybe :: Kind -> Maybe (KindVar, Kind)
+tcSplitForAllKi_maybe = splitForAllKi_maybe
+
 tcSplitPiKi_maybe :: Kind -> Maybe (Either (KindVar, Kind) (FunKiFlag, MonoKind, MonoKind))
 tcSplitPiKi_maybe ki = assert (isMaybeKiBinder ski) ski
   where
@@ -382,3 +385,7 @@ tcSplitForAllTyVarBinders ty = assert (all isTyVarBinder (fst sty)) sty
 tcSplitTyLamTyVarBinders :: Type -> ([TypeVar], Type)
 tcSplitTyLamTyVarBinders ty = assert (all isTyVar (fst sty)) sty
   where sty = splitTyLamTyBinders ty
+
+tcSplitBigLamTyVarBinders :: Type -> ([KindVar], Type)
+tcSplitBigLamTyVarBinders ty = assert (all isKiVar (fst sty)) sty
+  where sty = splitBigLamTyBinders ty

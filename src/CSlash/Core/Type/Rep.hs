@@ -76,6 +76,12 @@ mkTyLamTy = TyLamTy
 mkTyLamTys :: [TypeVar] -> Type -> Type
 mkTyLamTys = flip (foldr mkTyLamTy)
 
+mkBigLamTy :: KindVar -> Type -> Type
+mkBigLamTy = BigTyLamTy
+
+mkBigLamTys  :: [KindVar] -> Type -> Type
+mkBigLamTys = flip (foldr mkBigLamTy)
+
 {- *********************************************************************
 *                                                                      *
                 foldType

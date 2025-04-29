@@ -289,6 +289,13 @@ splitTyLamTyBinders ty = split ty ty []
     split orig_ty ty bs | Just ty' <- coreView ty = split orig_ty ty' bs
     split orig_ty _ bs = (reverse bs, orig_ty)
 
+splitBigLamTyBinders :: Type -> ([KindVar], Type)
+splitBigLamTyBinders ty = split ty ty []
+  where
+    split _ (BigTyLamTy b res) bs = split res res (b : bs)
+    split orig_ty ty bs | Just ty' <- coreView ty = split orig_ty ty' bs
+    split orig_ty _ bs = (reverse bs, orig_ty)
+
 splitForAllTyVars :: Type -> ([TypeVar], Type)
 splitForAllTyVars ty = split ty ty []
   where

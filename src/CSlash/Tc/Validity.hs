@@ -134,6 +134,8 @@ check_type :: ValidityEnv -> Type -> TcM ()
 
 check_type _ (TyVarTy _) = return ()
 
+check_type _ (Embed _) = return ()
+
 check_type ve (AppTy ty1 ty2) = do
   check_type ve ty1
   check_arg_type ve ty2
@@ -148,7 +150,7 @@ check_type ve (CastTy ty _) = check_type ve ty
 
 check_type ve@(ValidityEnv { ve_tidy_env = env }) ty
   | not (null tvbs)
-  = do traceTc "check_type" (ppr ty)
+  = do traceTc "check_type/FA" (ppr ty)
        check_type (ve { ve_tidy_env = env' }) tau
   where
     (tvbs, tau) = tcSplitForAllTyVarBinders ty
@@ -156,19 +158,28 @@ check_type ve@(ValidityEnv { ve_tidy_env = env }) ty
 
 check_type ve@(ValidityEnv { ve_tidy_env = env }) ty
   | not (null tvbs)
-  = do traceTc "check_type" (ppr ty)
+  = do traceTc "check_type/TL" (ppr ty)
        check_type (ve { ve_tidy_env = env' }) rhs
   where
     (tvbs, rhs) = tcSplitTyLamTyVarBinders ty
     (env', _) = tidyTyLamTyBinders env tvbs
 
+check_type ve@(ValidityEnv { ve_tidy_env = env }) ty
+  | not (null kvbs)
+  = do traceTc "check_type/BTL" (ppr ty)
+       check_type (ve { ve_tidy_env = env' }) rhs
+  where
+    (kvbs, rhs) = tcSplitBigLamTyVarBinders ty
+    (env', _) = tidyBigLamTyBinders env kvbs
+
 check_type ve ty@(FunTy _ arg_ty res_ty) = do
   check_type ve arg_ty
   check_type ve res_ty
 
-check_type _ ty@(ForAllTy {}) = pprPanic "check_type" (ppr ty)
-check_type _ ty@(TyLamTy {}) = pprPanic "check_type" (ppr ty)
-check_type _ other = pprPanic "check_type" (ppr other)
+check_type _ ty@(ForAllTy {}) = pprPanic "check_type/FA2" (ppr ty)
+check_type _ ty@(TyLamTy {}) = pprPanic "check_type/TL2" (ppr ty)
+check_type _ ty@(BigTyLamTy {}) = pprPanic "check_type/BTL2" (ppr ty)
+check_type _ other = pprPanic "check_type/O" (ppr other)
 
 check_syn_tc_app :: ValidityEnv -> Type -> TyCon -> [Type] -> TcM ()
 check_syn_tc_app (ve@ValidityEnv { ve_ctxt = ctxt }) ty tc tys

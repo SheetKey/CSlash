@@ -235,37 +235,30 @@ tcInferTyApps_nosat orig_cs_ty fun orig_cs_args = do
         empty_subst = mkEmptySubst $ mkInScopeSet $ kiVarsOfKind fun_ki
 
     go :: Int -> TcType -> Subst -> TcKind -> [LCsTypeArg Rn] -> TcM (TcType, TcMonoKind)
-    go n fun subst fun_ki all_args = case (all_args, tcSplitPiKi_maybe fun_ki) of
+    go n fun subst fun_ki all_args = case (all_args, tcSplitForAllKi_maybe fun_ki) of
       -- need to instantiate invisible kind var
-      (CsValArg _ arg : args, Just (Left (ki_binder, inner_ki))) -> do
+      (CsValArg _ arg : args, Just (ki_binder, inner_ki)) -> do
         traceTc "tcInferTyApps (need to instantiate)"
           $ vcat [ ppr ki_binder, ppr subst ]
         (subst', arg') <- tcInstInvisibleKiBinder subst ki_binder
         go n (mkAppTy fun arg') subst' inner_ki all_args
 
-      -- just a mono ki
-      (_, Just (Right _))
-        | Mono mki <- fun_ki
-          -> go_mono n fun subst mki all_args
-
-      (CsValArg _ _ : _, Nothing) -> try_again_after_substing_or $ do
-        panic "body"
+      _ | Mono mono_fun_ki <- fun_ki -> go_mono n fun subst mono_fun_ki all_args
 
       _ -> pprPanic "tcInferTyApps_nosat"
            $ vcat [ ppr fun
                   , ppr subst
                   , ppr fun_ki
                   , ppr all_args ]
-      where
-        try_again_after_substing_or fallthrough
-          | not (isEmptyKvSubst subst)
-          = go n fun zapped_subst substed_fun_ki all_args
-          | otherwise
-          = fallthrough
+      -- where
+      --   try_again_after_substing_or fallthrough
+      --     | not (isEmptyKvSubst subst)
+      --     = go n fun zapped_subst substed_fun_ki all_args
+      --     | otherwise
+      --     = fallthrough
 
-        zapped_subst = zapSubst subst
-        substed_fun_ki = substKi subst fun_ki
-        
+      --   zapped_subst = zapSubst subst
+      --   substed_fun_ki = substKi subst fun_ki
 
     go_mono
       :: Int -> TcType -> Subst -> TcMonoKind -> [LCsTypeArg Rn] -> TcM (TcType, TcMonoKind)
@@ -285,7 +278,18 @@ tcInferTyApps_nosat orig_cs_ty fun orig_cs_args = do
         go_mono (n + 1) fun' subst' res_ki args
 
       (CsValArg _ _ : _, Nothing) -> try_again_after_substing_or $ do
-        panic "body"
+        let arrows_needed = n_initial_val_args all_args
+        co <- matchExpectedFunKind (CsTypeRnThing $ unLoc cs_ty) arrows_needed substed_fun_ki
+
+        fun' <- liftZonkM $ zonkTcType (fun `mkCastTy` co)
+
+        traceTc "tcInferTyApps (no binder)"
+          $ vcat [ ppr fun <+> colon <+> ppr fun_ki
+                 , ppr arrows_needed
+                 , ppr co
+                 , ppr fun' <+> colon <+> ppr (typeKind fun') ]
+
+        go_init n fun' all_args
 
       -- visible kind application in user code (not possible)
       (CsTypeArg {} : _, _) -> panic "tcInferTyApps/go_mono/CsTypeArg"
@@ -299,6 +303,12 @@ tcInferTyApps_nosat orig_cs_ty fun orig_cs_args = do
 
         zapped_subst = zapSubst subst
         substed_fun_ki = substMonoKi subst fun_ki
+        cs_ty = appTypeToArg orig_cs_ty (take (n-1) orig_cs_args)
+
+    n_initial_val_args :: [CsArg p tm ty] -> Arity
+    n_initial_val_args (CsValArg {} : args) = 1 + n_initial_val_args args
+    n_initial_val_args (CsArgPar {} : args) = n_initial_val_args args
+    n_initial_val_args _ = 0
 
 mkAppTyM :: Subst -> TcType -> TcMonoKind -> TcType -> TcM (Subst, TcType)
 mkAppTyM subst fun arg_ki arg
@@ -311,7 +321,7 @@ mkAppTyM subst fun arg_ki arg
 mkAppTyM subst fun arg_ki arg = return (subst, mk_app_ty fun arg)
 
 mk_app_ty :: TcType -> TcType -> TcType
-mk_app_ty fun arg = assertPpr (panic "isFunKi fun_kind")
+mk_app_ty fun arg = assertPpr (isFunKi fun_kind)
                               (ppr fun <+> colon <+> ppr fun_kind $$ ppr arg)
                     $ mkAppTy fun arg
   where fun_kind = typeKind fun
@@ -325,6 +335,13 @@ mk_app_ty fun arg = assertPpr (panic "isFunKi fun_kind")
 --        return (ty `mkAppTys` extra_args, ki')
 --   | otherwise
 --   = return (ty, kind)
+
+appTypeToArg :: LCsType Rn -> [LCsTypeArg Rn] -> LCsType Rn
+appTypeToArg f [] = f
+appTypeToArg f (CsValArg _ arg : args) = appTypeToArg (mkCsAppTy f arg) args
+appTypeToArg f (CsArgPar _ : args) = appTypeToArg f args
+appTypeToArg f args@(CsTypeArg _ _ : _) = pprPanic "appTypeToArg" $ vcat [ ppr f, ppr args ]
+
 
 {- *********************************************************************
 *                                                                      *
@@ -377,7 +394,7 @@ tcTyLamMatches cs_type (MG _
   (bndrs, (body_ty', inf_ki)) <- tcTyLamTyBndrs pats $ tc_infer_lcs_type body_ty
 
   let bndr_kinds = varKind <$> bndrs
-      act_kind = mkFunKis bndr_kinds inf_ki
+      act_kind = mkVisFunKis bndr_kinds inf_ki
       full_ty = mkTyLamTys bndrs body_ty'
 
   checkExpectedKind cs_type full_ty act_kind exp_kind
@@ -402,7 +419,8 @@ checkExpectedKind cs_ty ty act_kind exp_kind = do
 
   let origin = KindEqOrigin { keq_actual = act_kind
                             , keq_expected = exp_kind
-                            , keq_thing = Just $ CsTypeRnThing cs_ty }
+                            , keq_thing = Just $ CsTypeRnThing cs_ty
+                            , keq_visible = True }
 
   traceTc "checkExpectedKindX"
     $ vcat [ ppr cs_ty

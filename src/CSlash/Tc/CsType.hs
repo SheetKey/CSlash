@@ -494,7 +494,8 @@ tcTyFunRhs tc_name cs_ty = bindTyConKiVars tc_name
                         $ \bndrs -> do rhs_ty <- zonkTcTypeToTypeX rhs_ty
                                        return (bndrs, rhs_ty)
   let rhs_kind' = mkForAllKisMono ki_bndrs rhs_kind
-  return $ buildSynTyCon tc_name rhs_kind' arity rhs_ty
+      rhs_ty' = mkBigLamTys ki_bndrs rhs_ty
+  return $ buildSynTyCon tc_name rhs_kind' arity rhs_ty'
 
 {- *********************************************************************
 *                                                                      *

@@ -135,6 +135,7 @@ data CtOrigin
   = KindEqOrigin { keq_actual :: TcMonoKind
                  , keq_expected :: TcMonoKind
                  , keq_thing :: Maybe KindedThing
+                 , keq_visible :: Bool
                  }
 
 isVisibleOrigin :: CtOrigin -> Bool
@@ -153,7 +154,7 @@ ctoHerald :: SDoc
 ctoHerald = text "arising from"
 
 pprCtOrigin :: CtOrigin -> SDoc
-pprCtOrigin (KindEqOrigin k1 k2 _)
+pprCtOrigin (KindEqOrigin k1 k2 _ _)
   = hang (ctoHerald <+> text "a kind equality")
          2 (sep [ppr k1, char '~', ppr k2])
 

@@ -210,8 +210,8 @@ mkFunKi f arg res = assertPpr (f == chooseFunKiFlag arg res)
                           , text "res" <+> ppr res ])
                     $ FunKi { fk_f = f, fk_arg = arg, fk_res = res }
 
-mkFunKis :: [MonoKind] -> MonoKind -> MonoKind
-mkFunKis args res = foldr (mkFunKi FKF_K_K) res args
+mkVisFunKis :: [MonoKind] -> MonoKind -> MonoKind
+mkVisFunKis args res = foldr (mkFunKi FKF_K_K) res args
 
 mkForAllKi :: KindVar -> Kind -> Kind
 mkForAllKi v k = assertPpr (isKiVar v) (ppr v) $ ForAllKi v k
@@ -500,6 +500,11 @@ chooseFunKiFlag arg_ki res_ki
   | otherwise
   = FKF_K_K  
 
+isFunKi :: Kind -> Bool
+isFunKi ki = case ki of
+               (Mono (FunKi {})) -> True
+               _ -> False
+
 {-# INLINE splitFunKi_maybe #-}
 splitFunKi_maybe :: Kind -> Maybe (FunKiFlag, MonoKind, MonoKind)
 splitFunKi_maybe ki = case ki of
@@ -532,6 +537,11 @@ splitPiKi_maybe :: Kind -> Maybe (Either (KindVar, Kind) (FunKiFlag, MonoKind, M
 splitPiKi_maybe ki = case ki of
   ForAllKi kv ki -> Just $ Left (kv, ki)
   Mono (FunKi { fk_f = af, fk_arg = arg, fk_res = res }) -> Just $ Right (af, arg, res)
+  _ -> Nothing
+
+splitForAllKi_maybe :: Kind -> Maybe (KindVar, Kind)
+splitForAllKi_maybe ki = case ki of
+  ForAllKi kv ki -> Just (kv, ki)
   _ -> Nothing
 
 splitForAllKiVars :: Kind -> ([KindVar], MonoKind)
