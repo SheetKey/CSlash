@@ -31,7 +31,7 @@ module CSlash.Utils.Outputable (
   semi, comma, colon, dcolon, space, equals, dot, vbar,
   arrow, linarrow, affarrow, unrarrow, lollipop, larrow, darrow, arrowt, larrowt,
   arrowtt, larrowtt,
-  lambda,
+  lambda, biglambda,
   lparen, rparen, lbrack, rbrack, lbrace, rbrace, underscore,
   blankLine, forAllLit,
   uKindLit, aKindLit, lKindLit,
@@ -605,6 +605,7 @@ larrowt    = unicodeSyntax (char '⤙') (text "-<")
 arrowtt    = unicodeSyntax (char '⤜') (text ">>-")
 larrowtt   = unicodeSyntax (char '⤛') (text "-<<")
 lambda     = unicodeSyntax (char 'λ') (char '\\')
+biglambda     = unicodeSyntax (char 'Λ') (text "/\\")
 
 semi, comma, colon, equals, space, underscore, dot, vbar :: IsLine doc => doc
 lparen, rparen, lbrack, rbrack, lbrace, rbrace :: IsLine doc => doc

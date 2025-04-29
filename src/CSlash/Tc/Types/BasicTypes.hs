@@ -74,7 +74,7 @@ instance Outputable TcTyKiThing where
                                      <> comma
                                      <+> ppr (tct_info elt))
   ppr (ATyVar n tv) = text "Type variable" <+> quotes (ppr n) <+> equals <+> ppr tv
-                      <+> colon <+> ppr (varType tv)
+                      <+> colon <+> ppr (varKind tv)
   ppr (AKiVar n kv) = text "Kind variable" <+> quotes (ppr n) <+> equals <+> ppr kv
   ppr (ATcTyCon tc) = text "ATcTyCon" <+> ppr tc <+> colon <+> ppr (tyConKind tc)
 
