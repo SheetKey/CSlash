@@ -84,7 +84,7 @@ newMetaKindVars n = replicateM n newMetaKindVar
 newKiEvVar :: TcPredKind -> TcRnIf gbl lcl KiEvVar
 newKiEvVar ki = do
   name <- newSysName (predKindOccName ki)
-  return $ mkKiCoVar name ki
+  return $ mkLocalVarOrKiCoVar name ki
 
 predKindOccName :: PredKind -> OccName
 predKindOccName ki = case classifyPredKind ki of
@@ -366,7 +366,7 @@ collect_cand_qkvs orig_ki cur_lvl bound dvs ki = go dvs ki
       | tcKiVarLevel kv <= cur_lvl
       = return dv
       | case tcKiVarDetails kv of
-          SkolemKv _ lvl -> lvl `strictlyDeeperThan` pushTcLevel cur_lvl
+          SkolemKv _ lvl -> lvl > pushTcLevel cur_lvl
           _ -> False
       = return dv
       | kv `elemDVarSet` dv

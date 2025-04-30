@@ -135,14 +135,18 @@ tc_cs_type t@(CsForAllTy { cst_tele = tele, cst_body = ty }) exp_kind
       (tv_bndrs, ty') <- tcTelescope tele $ tc_lcs_type ty exp_kind
       return $ mkForAllTys tv_bndrs ty'
 
-tc_cs_type (CsQualTy { cst_ctxt = ctxt, cst_body = rn_ty }) exp_kind
+tc_cs_type rn_ty@(CsQualTy { cst_ctxt = ctxt, cst_body = body_ty }) exp_kind
   | null (unLoc ctxt)
-  = tc_lcs_type rn_ty exp_kind
+  = tc_lcs_type body_ty exp_kind
   | otherwise
-  = do add_ki_constraints <- tcLCsContext ctxt
-       (ty', ki) <- tc_infer_lcs_type rn_ty
-       ki <- liftZonkM $ zonkTcMonoKind ki
-       checkExpectedKind (unLoc rn_ty) ty' (add_ki_constraints ki) exp_kind
+  = do let (ctxt_kis, _) = splitInvisFunKis exp_kind
+       massertPpr (ctxt_kis `equalLength` unLoc ctxt)
+         $ vcat [ text "tc_cs_type CsQualTy", ppr ctxt, ppr exp_kind ]
+       (evVars, evVarKis) <- tcLCsContext ctxt
+       (ty', body_ki) <- tc_infer_lcs_type body_ty
+       let final_ty = mkTyLamTys evVars ty'
+           final_ki = mkInvisFunKis evVarKis body_ki
+       checkExpectedKind rn_ty final_ty final_ki exp_kind
 
 tc_cs_type rn_ty@(CsTupleTy _ tup_args) exp_kind
   | all tyTupArgPresent tup_args
@@ -827,14 +831,15 @@ tcLCsKindSig ctxt cs_kind = do
   traceTc "tcLCsKindSig2" (ppr kind)
   return kind
 
-tcLCsContext :: LCsContext Rn -> TcM (MonoKind -> MonoKind)
+tcLCsContext :: LCsContext Rn -> TcM ([KiEvVar], [MonoKind])
 tcLCsContext = tcCsContext . unLoc
 
-tcCsContext :: CsContext Rn -> TcM (MonoKind -> MonoKind)
-tcCsContext [] = return id
+tcCsContext :: CsContext Rn -> TcM ([KiEvVar], [MonoKind])
+tcCsContext [] = panic "tcCsContext empty"
 tcCsContext ctxt = do
-  rels <- mapM tc_lcs_kdrel ctxt
-  return $ \ki -> foldr (mkFunKi FKF_C_K) ki rels
+  rels <- mapM tc_lcs_kdrel ctxt 
+  evVars <- mapM newKiEvVar rels
+  return $ (evVars, rels)
 
 tc_lcs_kdrel :: LCsKdRel Rn -> TcM MonoKind
 tc_lcs_kdrel rel = tc_cs_kdrel (unLoc rel)
@@ -848,7 +853,6 @@ tc_cs_kdrel (CsKdLTEQ _ k1 k2) = do
   k1' <- tcLCsKind k1
   k2' <- tcLCsKind k2
   return $ mkKiConApp LTEQKi [k1', k2']
-                         
 
 {- *********************************************************************
 *                                                                      *

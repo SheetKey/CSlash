@@ -255,8 +255,17 @@ mkFunKi f arg res = assertPpr (f == chooseFunKiFlag arg res)
                           , text "res" <+> ppr res ])
                     $ FunKi { fk_f = f, fk_arg = arg, fk_res = res }
 
+mkFunKi_nc :: FunKiFlag -> MonoKind -> MonoKind -> MonoKind
+mkFunKi_nc f arg res = FunKi { fk_f = f, fk_arg = arg, fk_res = res }
+
 mkVisFunKis :: [MonoKind] -> MonoKind -> MonoKind
 mkVisFunKis args res = foldr (mkFunKi FKF_K_K) res args
+
+mkInvisFunKis :: [MonoKind] -> MonoKind -> MonoKind
+mkInvisFunKis args res = foldr (mkFunKi FKF_C_K) res args
+
+mkInvisFunKis_nc :: [MonoKind] -> MonoKind -> MonoKind
+mkInvisFunKis_nc args res = foldr (mkFunKi_nc FKF_C_K) res args
 
 mkForAllKi :: KindVar -> Kind -> Kind
 mkForAllKi v k = assertPpr (isKiVar v) (ppr v) $ ForAllKi v k

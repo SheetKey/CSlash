@@ -355,7 +355,13 @@ getInitialKind strategy (TyFunBind { tyfun_id = L _ name
   tc <- kcDeclHeader strategy name TypeFunFlavor kv_names $
         case csTyKindSig rhs of
           Just rhs_sig -> TheMonoKind <$> tcLCsKindSig ctxt rhs_sig
-          Nothing -> return AnyMonoKind
+          Nothing -> case unLoc rhs of
+                       CsQualTy { cst_ctxt = ctxt, cst_body = rn_ty }
+                         | not (null (unLoc ctxt)) -> do
+                             arg_kinds <- newMetaKindVars (length (unLoc ctxt))
+                             res_kind <- newMetaKindVar
+                             return $ TheMonoKind $ mkInvisFunKis_nc arg_kinds res_kind
+                       _ -> return AnyMonoKind
         -- csTyFunResAndFullKinds ctxt rhs
   return [tc]
 

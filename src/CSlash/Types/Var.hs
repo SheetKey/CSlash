@@ -347,9 +347,16 @@ tcKiVarDetails var = pprPanic "tcKiVarDetails" (ppr var)
 setTcKiVarDetails :: KindVar -> TcKiVarDetails -> KindVar
 setTcKiVarDetails kv details = kv { tc_kv_details = details }
 
-mkKiCoVar :: Name -> MonoKind -> Var
-mkKiCoVar name ki = assert (isCoVarKind ki) $
-                    TyVar name (nameUnique name) ki
+mkLocalVar :: Name -> MonoKind -> Var
+mkLocalVar name ki = assert (not (isCoVarKind ki)) $ TyVar name (nameUnique name) ki
+
+mkLocalKiCoVar :: Name -> MonoKind -> Var
+mkLocalKiCoVar name ki = assert (isCoVarKind ki) $ TyVar name (nameUnique name) ki
+
+mkLocalVarOrKiCoVar :: Name -> MonoKind -> Var
+mkLocalVarOrKiCoVar name ki
+  | (isCoVarKind ki) = mkLocalKiCoVar name ki
+  | otherwise = mkLocalVar name ki
 
 {- *********************************************************************
 *                                                                      *
