@@ -187,9 +187,9 @@ can_ki_eq_nc
   -> MonoKind
   -> TcS (StopOrContinue (Either IrredCt EqCt))
 
-can_ki_eq_nc _ _ ev ki1@(KiConApp kc1 _) (KiConApp kc2 _) = panic "can_ki_eq_nc"
---   | kc1 == kc2
---   = canKiEqReflexive ev ki1
+can_ki_eq_nc _ _ ev ki1@(KiConApp kc1 []) (KiConApp kc2 []) 
+  | kc1 == kc2
+  = canKiEqReflexive ev ki1
 
 can_ki_eq_nc True _ ev ki1 ki2
   | ki1 `tcEqMonoKind` ki2
@@ -202,6 +202,9 @@ can_ki_eq_nc True _ ev ki1 ki2
 can_ki_eq_nc _ _ ev (FunKi f1 ki1a ki1b) (FunKi f2 ki2a ki2b)
   | f1 == f2
   = canDecomposableFunKi ev f1 (ki1a, ki1b) (ki2a, ki2b)
+
+can_ki_eq_nc _ _ ev (KiConApp kc1 kis1) (KiConApp kc2 kis2)
+  = canKiConApp ev  kc1 kis1 kc2 kis2
 
 ------------------
 -- Can't decompose
@@ -231,6 +234,47 @@ can_ki_eq_nc True _ ev ps_ki1 ps_ki2 = do
   traceTcS "can_ki_eq_nc catch-all case" (ppr ps_ki1 $$ ppr ps_ki2)
   finishCanWithIrred ShapeMismatchReason ev
 
+canKiConApp
+  :: CtEvidence
+  -> KiCon
+  -> [TcMonoKind]
+  -> KiCon
+  -> [TcMonoKind]
+  -> TcS (StopOrContinue (Either IrredCt EqCt))
+canKiConApp ev kc1 kis1 kc2 kis2
+  | kc1 == kc2
+  , kis1 `equalLength` kis2
+  = canDecomposableKiConAppOK ev kc1 kis1 kis2
+  | otherwise
+  = canKiEqHardFailure ev ki1 ki2
+  where
+    ki1 = mkKiConApp kc1 kis1
+    ki2 = mkKiConApp kc2 kis2
+
+canDecomposableKiConAppOK
+  :: CtEvidence
+  -> KiCon
+  -> [TcMonoKind]
+  -> [TcMonoKind]
+  -> TcS (StopOrContinue a)
+canDecomposableKiConAppOK ev kc kis1 kis2 = assert (kis1 `equalLength` kis2) $ do
+  traceTcS "canDecomposableKiConAppOK"
+    (ppr ev $$ ppr kc $$ ppr kis1 $$ ppr kis2)
+  case ev of
+    CtWanted { ctev_dest = dest } -> do
+      (co, _, _) <- wrapUnifierTcS ev $ \uenv -> do
+        cos <- zipWithM (u_arg uenv) kis1 kis2
+        return $ mkKiConAppCo kc cos
+      setWantedEq dest co
+  stopWith ev "Decomposed KiConApp"
+  where
+    loc = ctEvLoc ev
+
+    u_arg uenv = uKind arg_env
+      where arg_env = uenv `updUEnvLoc` const arg_loc
+
+    arg_loc = adjustCtLoc True True loc      
+
 canDecomposableFunKi
   :: CtEvidence
   -> FunKiFlag
@@ -245,6 +289,18 @@ canDecomposableFunKi ev f f1@(a1, r1) f2@(a2, r2) = do
       uKind uenv a1 a2
       uKind uenv r1 r2
   stopWith ev "Decomposed FunKi"
+
+canKiEqHardFailure
+  :: CtEvidence
+  -> TcMonoKind
+  -> TcMonoKind
+  -> TcS (StopOrContinue (Either IrredCt a))
+canKiEqHardFailure ev ki1 ki2 = do
+  traceTcS "canKiEqHardFailure" (ppr ki1 $$ ppr ki2)
+  (redn1, rewriters1) <- rewriteKiForErrors ev ki1
+  (redn2, rewriters2) <- rewriteKiForErrors ev ki2
+  new_ev <- rewriteKiEqEvidence (rewriters1 S.<> rewriters2) ev NotSwapped redn1 redn2
+  finishCanWithIrred ShapeMismatchReason new_ev
 
 canKiEqCanLHSHomo
   :: CtEvidence

@@ -118,6 +118,13 @@ rewriteKi ev ki = do
   traceTcS "rewriteKi }" (ppr $ reductionReducedKind redn)
   return result
 
+rewriteKiForErrors :: CtEvidence -> TcMonoKind -> TcS (Reduction, RewriterSet)
+rewriteKiForErrors ev ki = do
+  traceTcS "rewriteKiForErrors {" (ppr ki)
+  result@(redn, rewriters) <- runRewrite (ctEvLoc ev) (ctEvFlavor ev) (rewrite_one_ki ki)
+  traceTcS "rewriteKiForErrors }" (ppr $ reductionReducedKind redn)
+  return result
+
 {- *********************************************************************
 *                                                                      *
 *           The main rewriting functions
