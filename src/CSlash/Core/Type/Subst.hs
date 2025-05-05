@@ -105,6 +105,7 @@ subst_ty subst ty = go ty
                                      $! (subst_ty subst' ty)
     go (Embed mki) = Embed $! substMonoKi subst mki
     go (CastTy ty co) = (mkCastTy $! (go ty)) $! co
+    go co@(KindCoercion {}) = pprPanic "subst_ty" (ppr co)
 
 substTyVar :: Subst -> TypeVar -> Type
 substTyVar (Subst _ _ tenv _) tv

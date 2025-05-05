@@ -1,5 +1,7 @@
 module CSlash.Core.Kind.FVs where
 
+import {-# SOURCE #-} CSlash.Core.Type.FVs (deep_ty)
+
 import Data.Monoid as DM ( Endo(..), Any(..) )
 import CSlash.Core.Kind
 import CSlash.Core.TyCon
@@ -118,15 +120,18 @@ deep_cv_cos :: [KindCoercion] -> Endo KiCoVarSet
 (deep_cv_ki, deep_cv_kis, deep_cv_co, deep_cv_cos) = foldMonoKiCo deepKiCoVarFolder emptyVarSet
 
 deepKiCoVarFolder :: MonoKiCoFolder KiCoVarSet (Endo KiCoVarSet)
-deepKiCoVarFolder = MKiCoFolder { kcf_kivar = do_kivar, kcf_hole = do_hole }
+deepKiCoVarFolder = MKiCoFolder { kcf_kivar = do_kcv
+                                , kcf_covar = do_kcv
+                                , kcf_hole = do_hole }
   where
-    do_kivar _ _ = mempty
-    do_covar is v = Endo do_it
+    do_kcv is v = Endo do_it
       where
         do_it acc | v `elemVarSet` is = acc
                   | v `elemVarSet` acc = acc
+                  | isTyVar v = appEndo (deep_ty (varType v)) $
+                                acc `extendVarSet` v
                   | otherwise = acc `extendVarSet` v
-    do_hole is hole = do_covar is (coHoleCoVar hole)
+    do_hole is hole = do_kcv is (coHoleCoVar hole)
 
 {- *********************************************************************
 *                                                                      *

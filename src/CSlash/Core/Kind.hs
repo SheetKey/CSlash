@@ -284,6 +284,7 @@ data KindCoercion
     , fco_afr :: FunKiFlag
     , fco_arg :: KindCoercion
     , fco_res :: KindCoercion }
+  | KiCoVarCo KiCoVar
   | SymCo KindCoercion
   | TransCo KindCoercion KindCoercion
   | HoleCo KindCoercionHole
@@ -338,6 +339,9 @@ mkFunKiCo2 afl afr arg_co res_co
   = FunCo { fco_afl = afl, fco_afr = afr
           , fco_arg = arg_co, fco_res = res_co }
 
+mkKiCoVarCo :: KiCoVar -> KindCoercion
+mkKiCoVarCo cv = KiCoVarCo cv
+
 mkKiEqPred :: MonoKind -> MonoKind -> PredKind
 mkKiEqPred ki1 ki2 = mkKiConApp EQKi [ki1, ki2]
 
@@ -348,6 +352,7 @@ kicoercionLKind co = go co
     go (KiConAppCo kc cos) = mkKiConApp kc (map go cos)
     go (FunCo { fco_afl = af, fco_arg = arg, fco_res = res })
       = FunKi { fk_f = af, fk_arg = go arg, fk_res = go res }
+    go (KiCoVarCo cv) = coVarLKind cv
     go (SymCo co) = kicoercionRKind co
     go (TransCo co1 _) = go co1
     go (HoleCo h) = coVarLKind (coHoleCoVar h)
@@ -359,6 +364,7 @@ kicoercionRKind co = go co
     go (KiConAppCo kc cos) = mkKiConApp kc (map go cos)
     go (FunCo { fco_afr = af, fco_arg = arg, fco_res = res })
       = FunKi { fk_f = af, fk_arg = go arg, fk_res = go res }
+    go (KiCoVarCo cv) = coVarRKind cv
     go (SymCo co) = kicoercionLKind co
     go (TransCo _ co2) = go co2
     go (HoleCo h) = coVarRKind (coHoleCoVar h)
@@ -447,6 +453,7 @@ noKindView _ = Nothing
 
 data MonoKiCoFolder env a = MKiCoFolder
   { kcf_kivar :: env -> KindVar -> a
+  , kcf_covar :: env -> KiCoVar -> a
   , kcf_hole :: env -> KindCoercionHole -> a
   }
 
@@ -457,6 +464,7 @@ foldMonoKiCo
   -> env
   -> (MonoKind -> a, [MonoKind] -> a, KindCoercion -> a, [KindCoercion] -> a)
 foldMonoKiCo (MKiCoFolder { kcf_kivar = kivar
+                          , kcf_covar = covar
                           , kcf_hole = cohole }) env
   = (go_ki env, go_kis env, go_co env, go_cos env)
   where
@@ -474,6 +482,7 @@ foldMonoKiCo (MKiCoFolder { kcf_kivar = kivar
     go_co env (KiConAppCo _ args) = go_cos env args
     go_co env (HoleCo hole) = cohole env hole
     go_co env (FunCo { fco_arg = c1, fco_res = c2 }) = go_co env c1 `mappend` go_co env c2
+    go_co env (KiCoVarCo cv) = covar env cv
 
     go_co env (SymCo co) = go_co env co
     go_co env (TransCo c1 c2) = go_co env c1 `mappend` go_co env c2

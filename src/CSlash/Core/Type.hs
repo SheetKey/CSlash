@@ -169,6 +169,7 @@ mapTypeX (TypeMapper { tcm_tyvar = tyvar
         return $ BigTyLamTy kv' inner'
     go_ty !env (Embed ki) = Embed <$> mono_ki env ki
     go_ty !env (CastTy ty co) = mkCastTy <$> go_ty env ty <*> pure co
+    go_ty _ co@(KindCoercion {}) = pprPanic "mapTypeX" (ppr co)
 
 {- *********************************************************************
 *                                                                      *
@@ -380,6 +381,7 @@ typeMonoKind ty@(TyLamTy tv res) =
 typeMonoKind ty@(BigTyLamTy _ _) = pprPanic "typeMonoKind" (ppr ty)
 typeMonoKind ty@(Embed _) = pprPanic "typeMonoKind" (ppr ty)
 typeMonoKind (CastTy _ co) = kicoercionRKind co
+typeMonoKind co@(KindCoercion {}) = pprPanic "typeMonoKind" (ppr co)
 
 handle_non_mono :: Kind -> (Kind -> SDoc) -> MonoKind
 handle_non_mono ki doc = case ki of

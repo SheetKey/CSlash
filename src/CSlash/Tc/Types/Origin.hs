@@ -132,20 +132,24 @@ instance Outputable TyVarBndrs where
   ppr (CsTyVarBndrsRn bndrs) = fsep (map ppr bndrs)
 
 data CtOrigin
-  = KindEqOrigin { keq_actual :: TcMonoKind
+  = OccurrenceOf Name
+  | KindEqOrigin { keq_actual :: TcMonoKind
                  , keq_expected :: TcMonoKind
                  , keq_thing :: Maybe KindedThing
                  , keq_visible :: Bool
                  }
 
 isVisibleOrigin :: CtOrigin -> Bool
-isVisibleOrigin (KindEqOrigin {}) = False
+isVisibleOrigin (KindEqOrigin { keq_visible = vis }) = vis
+isVisibleOrigin _ = True
 
 toInvisibleOrigin :: CtOrigin -> CtOrigin
-toInvisibleOrigin o@(KindEqOrigin {}) = o
+toInvisibleOrigin o@(KindEqOrigin {}) = o { keq_visible = True }
+toInvisibleOrigin o = o
 
 isGivenOrigin :: CtOrigin -> Bool
 isGivenOrigin (KindEqOrigin {}) = False
+isGivenOrigin (OccurrenceOf {}) = False
 
 instance Outputable CtOrigin where
   ppr = pprCtOrigin
@@ -153,10 +157,23 @@ instance Outputable CtOrigin where
 ctoHerald :: SDoc
 ctoHerald = text "arising from"
 
+lCsTyCtOrigin :: LCsType Rn -> CtOrigin
+lCsTyCtOrigin = csTyCtOrigin . unLoc
+
+csTyCtOrigin :: CsType Rn -> CtOrigin
+csTyCtOrigin (CsTyVar _ (L _ name)) = OccurrenceOf name
+csTyCtOrigin _ = panic "lCsTypeCtOrigin"
+
 pprCtOrigin :: CtOrigin -> SDoc
 pprCtOrigin (KindEqOrigin k1 k2 _ _)
   = hang (ctoHerald <+> text "a kind equality")
          2 (sep [ppr k1, char '~', ppr k2])
+
+pprCtOrigin simple_origin = ctoHerald <+> pprCtO simple_origin
+
+pprCtO :: HasCallStack => CtOrigin -> SDoc
+pprCtO (OccurrenceOf name) = hsep [text "a use of", quotes (ppr name)]
+pprCtO _ = panic "pprCtO"
 
 {- *******************************************************************
 *                                                                    *

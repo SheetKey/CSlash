@@ -81,6 +81,9 @@ newMetaKindVars n = replicateM n newMetaKindVar
 *                                                                       *
 ********************************************************************** -}
 
+newKiEvVars :: [TcPredKind] -> TcM [KiEvVar]
+newKiEvVars theta = mapM newKiEvVar theta
+
 newKiEvVar :: TcPredKind -> TcRnIf gbl lcl KiEvVar
 newKiEvVar ki = do
   name <- newSysName (predKindOccName ki)
@@ -91,6 +94,31 @@ predKindOccName ki = case classifyPredKind ki of
   EqPred {} -> mkVarOccFS (fsLit "co")
   IrredPred {} -> mkVarOccFS (fsLit "irred")
   RelPred {} -> mkVarOccFS (fsLit "relco")
+
+newWantedWithLoc :: CtLoc -> PredKind -> TcM CtEvidence
+newWantedWithLoc loc predki = do
+  dst <- case classifyPredKind predki of
+           EqPred {} -> HoleDest <$> newKiCoercionHole predki
+           _ -> EvVarDest <$> newKiEvVar predki
+  return $ CtWanted { ctev_dest = dst
+                    , ctev_pred = predki
+                    , ctev_loc = loc
+                    , ctev_rewriters = emptyRewriterSet }
+
+newWanted :: CtOrigin -> Maybe TypeOrKind -> PredKind -> TcM CtEvidence
+newWanted orig t_or_k predki = do
+  loc <- getCtLocM orig t_or_k
+  newWantedWithLoc loc predki
+
+----------------------------------------------
+-- Emitting constraints
+----------------------------------------------
+
+emitWanted :: CtOrigin -> TcPredKind -> TcM KiEvVar
+emitWanted origin pred = do
+  ev <- newWanted origin Nothing pred
+  emitSimple $ mkNonCanonical ev
+  return $ ctEvKiEvVar ev
 
 {- *********************************************************************
 *                                                                      *
@@ -395,6 +423,8 @@ collect_cand_qkvs_co orig_co cur_lvl bound = go_co
       case m_co of
         Just co -> go_co dv co
         Nothing -> go_cv dv (coHoleCoVar hole)
+
+    go_co dv (KiCoVarCo cv) = go_cv dv cv
 
     go_cv :: DKiVarSet -> KiCoVar -> TcM DKiVarSet
     go_cv dv cv

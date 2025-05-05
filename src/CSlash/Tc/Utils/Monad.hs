@@ -759,11 +759,29 @@ mAX_CONTEXTS = 3
 
 newTcKiEvBinds :: TcM KiEvBindsVar
 newTcKiEvBinds = do
+  binds_ref <- newTcRef emptyKiEvBindMap
   kcvs_ref <- newTcRef emptyVarSet
   uniq <- newUnique
   traceTc "newTcKiEvBinds" (text "unique =" <+> ppr uniq)
-  return $ KiCoEvBindsVar { ebv_kcvs = kcvs_ref
-                          , ebv_uniq = uniq }
+  return $ KiEvBindsVar { kebv_binds = binds_ref
+                        , kebv_kcvs = kcvs_ref
+                        , kebv_uniq = uniq }
+
+newNoTcKiEvBinds :: TcM KiEvBindsVar
+newNoTcKiEvBinds = do
+  kcvs_ref <- newTcRef emptyVarSet
+  uniq <- newUnique
+  traceTc "newNoTcKiEvBinds" (text "unique =" <+> ppr uniq)
+  return $ KiCoEvBindsVar { kebv_kcvs = kcvs_ref
+                          , kebv_uniq = uniq }
+
+addTcKiEvBind :: KiEvBindsVar -> KiEvBind -> TcM ()
+addTcKiEvBind (KiEvBindsVar { kebv_binds = ev_ref, kebv_uniq = u }) ev_bind = do
+  traceTc "addTcKiEvBind" $ ppr u $$ ppr ev_bind
+  binds <- readTcRef ev_ref
+  writeTcRef ev_ref (extendKiEvBinds binds ev_bind)
+addTcKiEvBind (KiCoEvBindsVar { kebv_uniq = u }) ev_bind
+  = pprPanic "addTcKiEvBind KiCoEvBindsVar" $ ppr ev_bind $$ ppr u
 
 getConstraintVar :: TcM (TcRef WantedConstraints)
 getConstraintVar = do
@@ -777,6 +795,11 @@ emitConstraints ct
   | otherwise
   = do lie_var <- getConstraintVar
        updTcRef lie_var (`andWC` ct)
+
+emitSimple :: Ct -> TcM ()
+emitSimple ct = do
+  lie_var <- getConstraintVar
+  updTcRef lie_var (`addSimples` unitBag ct)
 
 emitSimples :: Cts -> TcM ()
 emitSimples cts = do

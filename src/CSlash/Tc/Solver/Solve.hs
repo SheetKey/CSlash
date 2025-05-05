@@ -6,7 +6,7 @@ import CSlash.Tc.Solver.Irred( solveIrred )
 import CSlash.Tc.Solver.Rewrite( rewriteKi )
 import CSlash.Tc.Errors.Types
 import CSlash.Tc.Utils.TcType
--- import GHC.Tc.Types.Evidence
+import CSlash.Tc.Types.Evidence
 import CSlash.Tc.Types
 import CSlash.Tc.Types.Origin
 import CSlash.Tc.Types.Constraint
@@ -172,5 +172,11 @@ finish_rewrite old_ev (ReductionKi co new_pred) rewriters
 
 finish_rewrite ev@(CtWanted { ctev_dest = dest, ctev_loc = loc, ctev_rewriters = rewriters })
                (ReductionKi co new_pred) new_rewriters
-  = do mb_new_ev <- panic "newWanted loc rewriters' new_pred"
-       panic "finish_rewrite"
+  = do mb_new_ev <- newWanted loc rewriters' new_pred
+       setWantedKiEvType dest True $
+         mkKiEvCast (getKiEvType mb_new_ev) (mkSymKiCo co)
+       case mb_new_ev of
+         Fresh new_ev -> continueWith new_ev
+         Cached _ -> stopWith ev "Cached wanted"
+  where
+    rewriters' = rewriters S.<> new_rewriters

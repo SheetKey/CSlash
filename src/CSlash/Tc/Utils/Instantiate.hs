@@ -62,6 +62,32 @@ import Data.Function ( on )
 
 {- *********************************************************************
 *                                                                      *
+            Instantiating a call
+*                                                                      *
+********************************************************************* -}
+
+instCallKiConstraints :: CtOrigin -> [TcPredKind] -> TcM [KiEvVar]
+instCallKiConstraints orig preds
+  | null preds
+  = return []
+  | otherwise
+  = do evs <- mapM go preds
+       traceTc "instCallKiConstraints" (ppr evs)
+       return evs
+  where
+    go :: TcPredKind -> TcM KiEvVar
+    go pred
+      -- | Just (ki1, ki2) <- getEqPredKis_maybe pred
+      -- = do unifyKind Nothing ki1 ki2
+      --      newKiEvVar pred
+      -- | Just (EQKi, ki1, ki2) <- splitKiConApp_maybe pred
+      -- = do unifyKind Nothing ki1 ki2
+      --      newKiEvVar pred
+      -- | otherwise
+      = emitWanted orig pred
+
+{- *********************************************************************
+*                                                                      *
          Instantiating Kinds
 *                                                                      *
 ********************************************************************* -}

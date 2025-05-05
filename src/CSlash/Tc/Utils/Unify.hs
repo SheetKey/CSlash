@@ -76,11 +76,13 @@ buildVImplication skol_info skol_vs tclvl wanted
                     <||> isTyVarTyVar
                     <||> isSkolemKiVar
                     <||> isKiVarKiVar) skol_vs) (ppr skol_vs) $ do
+      ev_binds <- newNoTcKiEvBinds
       implic <- newImplication
       let implic' = implic { ic_tclvl = tclvl
                            , ic_skols = skol_vs
                            , ic_given_eqs = NoGivenEqs
                            , ic_wanted = wanted
+                           , ic_binds = ev_binds
                            , ic_info = skol_info }
       checkImplicationInvariants implic'
       return implic'
@@ -90,6 +92,14 @@ buildVImplication skol_info skol_vs tclvl wanted
                 Unification
 *                                                                      *
 ********************************************************************* -}
+
+unifyKind :: Maybe KindedThing -> TcMonoKind -> TcMonoKind -> TcM KindCoercion
+unifyKind thing ki1 ki2 = unifyKindAndEmit origin ki1 ki2
+  where
+    origin = KindEqOrigin { keq_actual = ki1
+                          , keq_expected = ki2
+                          , keq_thing = thing
+                          , keq_visible = True }
 
 unifyKindAndEmit :: CtOrigin -> TcMonoKind -> TcMonoKind -> TcM KindCoercion
 unifyKindAndEmit orig ki1 ki2 = do

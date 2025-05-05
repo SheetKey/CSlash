@@ -24,5 +24,13 @@ classifyPredKind ev_ki = case ev_ki of
     | otherwise -> RelPred kc ki1 ki2
   _ -> IrredPred ev_ki
 
+getKiEqPredKis_maybe :: PredKind -> Maybe (MonoKind, MonoKind)
+getKiEqPredKis_maybe (KiConApp EQKi [k1, k2]) = Just (k1, k2)
+getKiEqPredKis_maybe _ = Nothing
+
 mkRelPred :: KiCon -> MonoKind -> MonoKind -> PredKind
 mkRelPred kc ki1 ki2 = mkKiConApp kc [ki1, ki2]
+
+isKiEqPred :: PredKind -> Bool
+isKiEqPred (KiConApp EQKi _) = True
+isKiEqPred _ = False

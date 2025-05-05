@@ -44,7 +44,7 @@ import CSlash.Core.Kind
 import CSlash.Core.Kind.FVs
 -- import GHC.Core.Coercion
 -- import GHC.Core.Coercion.Axiom( TypeEqn )
--- import GHC.Core.Predicate
+import CSlash.Core.Predicate
 import CSlash.Core.Reduction
 -- import GHC.Core.Class
 import CSlash.Core.TyCon
@@ -285,6 +285,16 @@ getHasGivenEqs tclvl = do
   where
     insoluble_given_equality (IrredCt { ir_ev = ev, ir_reason = reason })
       = isInsolubleReason reason && isGiven ev
+
+lookupInInerts :: CtLoc -> TcPredKind -> TcS (Maybe CtEvidence)
+lookupInInerts loc pki
+  | RelPred rl k1 k2 <- classifyPredKind pki
+  = do inerts <- getInertSet
+       let mb_solved = lookupSolvedRel inerts loc rl k1 k2
+           mb_inert = fmap relCtEvidence (lookupInertRel (inert_cans inerts) loc rl k1 k2)
+       return $ mb_solved `mplus` mb_inert
+  | otherwise
+  = return Nothing
 
 lookupInertRel :: InertCans -> CtLoc -> KiCon -> MonoKind -> MonoKind -> Maybe RelCt
 lookupInertRel (IC { inert_rels = rels }) loc kc ki1 ki2 = findRel rels loc kc ki1 ki2
@@ -591,20 +601,46 @@ setUnificationFlag lvl = TcS $ \env -> do
 -- Creating and setting evidence variables and CtFlavors
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+data MaybeNew = Fresh CtEvidence | Cached KiEvType
+
+getKiEvType :: MaybeNew -> KiEvType
+getKiEvType (Fresh ctev) = ctEvType ctev
+getKiEvType (Cached ev) = ev
+
+setKiEvBind :: KiEvBind -> TcS ()
+setKiEvBind ev_bind = do
+  ebv <- getTcKiEvBindsVar
+  wrapTcS $ TcM.addTcKiEvBind ebv ev_bind
+
 useVars :: KiCoVarSet -> TcS ()
 useVars co_vars = do
   ev_binds_var <- getTcKiEvBindsVar
-  let ref = ebv_kcvs ev_binds_var
+  let ref = kebv_kcvs ev_binds_var
   wrapTcS $ do
     kcvs <- TcM.readTcRef ref
     let kcvs' = kcvs `unionVarSet` co_vars
     TcM.writeTcRef ref kcvs'
+
+newKiEvVar :: TcPredKind -> TcS KiEvVar
+newKiEvVar pred = wrapTcS (TcM.newKiEvVar pred)
 
 setWantedEq :: TcEvDest -> KindCoercion -> TcS ()
 setWantedEq (HoleDest hole) co = do
   useVars (coVarsOfKiCo co)
   fillKiCoercionHole hole co
 setWantedEq (EvVarDest ev) _ = pprPanic "setWantedEq: EvVarDest" (ppr ev)
+
+setWantedKiEvType :: TcEvDest -> Bool -> KiEvType -> TcS ()
+setWantedKiEvType (HoleDest hole) _ ty
+  | Just co <- kiEvTypeCoercion_maybe ty
+  = do useVars (coVarsOfKiCo co)
+       fillKiCoercionHole hole co
+  | otherwise
+  = do let co_var = coHoleCoVar hole
+       setKiEvBind (mkWantedKiEvBind co_var True ty)
+       fillKiCoercionHole hole (mkKiCoVarCo co_var)
+setWantedKiEvType (EvVarDest ev_var) canonical ty
+  = setKiEvBind (mkWantedKiEvBind ev_var canonical ty)
 
 fillKiCoercionHole :: KindCoercionHole -> KindCoercion -> TcS ()
 fillKiCoercionHole hole co = do
@@ -622,6 +658,32 @@ newWantedKiEq loc rewriters ki1 ki2 = do
          , mkKiHoleCo hole )
   where
     pki = mkKiEqPred ki1 ki2
+
+newWantedKiEvVarNC :: CtLoc -> RewriterSet -> TcPredKind -> TcS CtEvidence
+newWantedKiEvVarNC loc rewriters pki = do
+  new_ev <- newKiEvVar pki
+  traceTcS "Emitting new wanted" (ppr new_ev <+> colon <+> ppr pki $$ pprCtLoc loc)
+  return $ CtWanted { ctev_pred = pki
+                    , ctev_dest = EvVarDest new_ev
+                    , ctev_loc = loc
+                    , ctev_rewriters = rewriters }
+
+newWantedKiEvVar :: CtLoc -> RewriterSet -> TcPredKind -> TcS MaybeNew
+newWantedKiEvVar loc rewriters pki = assertPpr (not $ isKiEqPred pki)
+  (vcat [ text "newWantedKiEvVar: HoleDestPred", text "pki:" <+> ppr pki ])
+  $ do mb_ct <- lookupInInerts loc pki
+       case mb_ct of
+         Just ctev -> do traceTcS "newWantedKiEvVar/cache hit" $ ppr ctev
+                         return $ Cached (ctEvType ctev)
+         Nothing -> do ctev <- newWantedKiEvVarNC loc rewriters pki
+                       return $ Fresh ctev
+
+newWanted :: CtLoc -> RewriterSet -> PredKind -> TcS MaybeNew
+newWanted loc rewriters pki
+  | Just (k1, k2) <- getKiEqPredKis_maybe pki
+  = Fresh . fst <$> newWantedKiEq loc rewriters k1 k2
+  | otherwise
+  = newWantedKiEvVar loc rewriters pki  
 
 {- *********************************************************************
 *                                                                      *

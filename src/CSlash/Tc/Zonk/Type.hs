@@ -253,6 +253,7 @@ zonkRewriterSet (RewriterSet set) = nonDetStrictFoldUniqSet go (return emptyRewr
 
     folder :: MonoKiCoFolder () UnfilledCoercionHoleMonoid
     folder = MKiCoFolder { kcf_kivar = \_ _ -> mempty
+                         , kcf_covar = \_ cv -> check_ki (varKind cv)
                          , kcf_hole = \_ -> UCHM . check_hole }
 
 newtype UnfilledCoercionHoleMonoid = UCHM { unUCHM :: TcM RewriterSet }

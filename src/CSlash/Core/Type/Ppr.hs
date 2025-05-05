@@ -91,3 +91,5 @@ debug_ppr_ty prec t
 debug_ppr_ty _ BigTyLamTy{} = panic "debug_ppr_ty BigTyLamTy"
 
 debug_ppr_ty _ (Embed ki) = ppr ki
+
+debug_ppr_ty _ (KindCoercion co) = text "[KiCo]" <+> (ppr co)

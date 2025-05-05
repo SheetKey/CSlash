@@ -216,6 +216,9 @@ ctOrigin = ctLocOrigin . ctLoc
 ctPred :: Ct -> PredKind
 ctPred ct = ctEvPred (ctEvidence ct)
 
+ctKiEvVar :: Ct -> KiEvVar
+ctKiEvVar ct = ctEvKiEvVar (ctEvidence ct)
+
 instance Outputable Ct where
   ppr ct = ppr (ctEvidence ct) <+> parens pp_short
     where
@@ -514,12 +517,20 @@ ctEvRewriters :: CtEvidence -> RewriterSet
 ctEvRewriters (CtWanted { ctev_rewriters = rewriters }) = rewriters
 ctEvRewriters _ = emptyRewriterSet
 
+ctEvType :: HasDebugCallStack => CtEvidence -> KiEvType
+ctEvType ev@(CtWanted { ctev_dest = HoleDest _ }) = KindCoercion $ ctEvKiCoercion ev
+ctEvType ev = kiEvVar (ctEvKiEvVar ev)
+
 ctEvKiCoercion :: HasDebugCallStack => CtEvidence -> KindCoercion
 ctEvKiCoercion (CtWanted { ctev_dest = dest })
   | HoleDest hole <- dest
   = mkKiHoleCo hole
   | otherwise
   = panic "ctEvKiCoercion"
+
+ctEvKiEvVar :: CtEvidence -> KiEvVar
+ctEvKiEvVar (CtWanted { ctev_dest = EvVarDest ev }) = ev
+ctEvKiEvVar (CtWanted { ctev_dest = HoleDest h }) = coHoleCoVar h
 
 arisesFromGivens :: Ct -> Bool
 arisesFromGivens ct = isGivenCt ct || isGivenLoc (ctLoc ct)
@@ -683,3 +694,7 @@ bumpCtLocDepth loc@(CtLoc { ctl_depth = d }) = loc { ctl_depth = bumpSubGoalDept
 updateCtLocOrigin :: CtLoc -> (CtOrigin -> CtOrigin) -> CtLoc
 updateCtLocOrigin ctl@(CtLoc { ctl_origin = orig }) upd
   = ctl { ctl_origin = upd orig }
+
+pprCtLoc :: CtLoc -> SDoc
+pprCtLoc (CtLoc { ctl_origin = o, ctl_env = lcl })
+  = sep [ pprCtOrigin o, text "at" <+> ppr (getCtLocEnvLoc lcl) ]

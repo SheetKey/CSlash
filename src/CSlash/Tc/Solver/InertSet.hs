@@ -446,4 +446,5 @@ solveOneFromTheOther ct_i ct_w
     different_level_strategy = if lvl_w > lvl_i then KeepInert else KeepWork
 
     same_level_strategy = case (orig_i, orig_w) of
-      (KindEqOrigin {}, KindEqOrigin {}) -> KeepInert
+      _ -> KeepInert
+      

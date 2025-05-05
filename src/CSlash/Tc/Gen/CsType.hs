@@ -22,7 +22,7 @@ import CSlash.Tc.Utils.Unify
 import CSlash.Tc.Solver
 -- import GHC.Tc.Zonk.Type
 import CSlash.Tc.Utils.TcType
-import CSlash.Tc.Utils.Instantiate ( tcInstInvisibleKiBinder )
+import CSlash.Tc.Utils.Instantiate ( tcInstInvisibleKiBinder, instCallKiConstraints )
 import CSlash.Tc.Zonk.TcType
 
 import CSlash.Core.Type
@@ -247,22 +247,23 @@ tcInferTyApps_nosat orig_cs_ty fun orig_cs_args = do
         (subst', arg') <- tcInstInvisibleKiBinder subst ki_binder
         go n (mkAppTy fun arg') subst' inner_ki all_args
 
-      _ | Mono mono_fun_ki <- fun_ki -> go_mono n fun subst mono_fun_ki all_args
+      _ | Mono mono_fun_ki <- fun_ki -> go_mono_invis n fun subst mono_fun_ki all_args
 
       _ -> pprPanic "tcInferTyApps_nosat"
            $ vcat [ ppr fun
                   , ppr subst
                   , ppr fun_ki
                   , ppr all_args ]
-      -- where
-      --   try_again_after_substing_or fallthrough
-      --     | not (isEmptyKvSubst subst)
-      --     = go n fun zapped_subst substed_fun_ki all_args
-      --     | otherwise
-      --     = fallthrough
 
-      --   zapped_subst = zapSubst subst
-      --   substed_fun_ki = substKi subst fun_ki
+    go_mono_invis
+      :: Int -> TcType -> Subst -> TcMonoKind -> [LCsTypeArg Rn] -> TcM (TcType, TcMonoKind)
+    go_mono_invis n fun subst fun_ki all_args = case splitInvisFunKis fun_ki of
+      ([], _) -> go_mono n fun subst fun_ki all_args
+      (theta, inner_ki) -> do
+        let inst_theta = substMonoKis subst theta
+            orig = lCsTyCtOrigin orig_cs_ty
+        evVars <- instCallKiConstraints orig inst_theta
+        go_mono n (mkAppTys fun (TyVarTy <$> evVars)) subst inner_ki all_args
 
     go_mono
       :: Int -> TcType -> Subst -> TcMonoKind -> [LCsTypeArg Rn] -> TcM (TcType, TcMonoKind)
@@ -272,14 +273,18 @@ tcInferTyApps_nosat orig_cs_ty fun orig_cs_args = do
       (CsArgPar _ : args, _) -> go_mono n fun subst fun_ki args
 
       -- "normal" case 
-      (CsValArg _ arg : args, Just (_, arg_ki, res_ki)) -> do
-        traceTc "tcInferTyApps (vis normal app)"
-          $ vcat [ ppr arg_ki, ppr arg, ppr subst ]
-        arg' <- addErrCtxt (funAppCtxt orig_cs_ty arg n)
-                $ tc_lcs_type arg arg_ki
-        traceTc "tcInferTyApps (vis normal app) 2" (ppr arg_ki)
-        (subst', fun') <- mkAppTyM subst fun arg_ki arg'
-        go_mono (n + 1) fun' subst' res_ki args
+      (CsValArg _ arg : args, Just (af, arg_ki, res_ki)) ->
+        assertPpr (isVisibleKiFunArg af)
+        (vcat [ text "tcInferTyApps_nosat/go_mono/normal case has invisible arg kind"
+              , ppr fun, ppr fun_ki, ppr all_args
+              ])
+        $ do traceTc "tcInferTyApps (vis normal app)"
+               $ vcat [ ppr arg_ki, ppr arg, ppr subst ]
+             arg' <- addErrCtxt (funAppCtxt orig_cs_ty arg n)
+                     $ tc_lcs_type arg arg_ki
+             traceTc "tcInferTyApps (vis normal app) 2" (ppr arg_ki)
+             (subst', fun') <- mkAppTyM subst fun arg_ki arg'
+             go_mono (n + 1) fun' subst' res_ki args
 
       (CsValArg _ _ : _, Nothing) -> try_again_after_substing_or $ do
         let arrows_needed = n_initial_val_args all_args

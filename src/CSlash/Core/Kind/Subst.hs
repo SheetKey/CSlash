@@ -132,6 +132,11 @@ substMonoKi subst ki
   | otherwise = checkValidMonoKiSubst subst [ki] $
                 subst_mono_ki subst ki
 
+substMonoKis :: HasDebugCallStack => Subst -> [MonoKind] -> [MonoKind]
+substMonoKis subst kis
+  | isEmptyKvSubst subst = kis
+  | otherwise = checkValidMonoKiSubst subst kis $ map (subst_mono_ki subst) kis
+
 substKiUnchecked :: Subst -> Kind -> Kind
 substKiUnchecked subst ki
   | isEmptyKvSubst subst = ki
