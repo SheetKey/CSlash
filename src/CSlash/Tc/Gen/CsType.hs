@@ -567,6 +567,8 @@ tcTyLamTyBndrs pats thing_inside = do
            $ bindTyLamTyBndrsX skol_mode bndrs thing_inside
       let bndr_1 = head pats
           bndr_n = last pats
+      traceTc "tcTyLamTyBndrs/emitResidualTvConstraint"
+        $ vcat [ ppr skol_tvs, ppr wanted ]
       setSrcSpan (combineSrcSpans (getLocA bndr_1) (getLocA bndr_n))
         $ emitResidualTvConstraint skol_info skol_tvs tclvl wanted
       return (skol_tvs, res)
@@ -631,6 +633,8 @@ tcExplicitBndrsX skol_mode bndrs thing_inside = case nonEmpty bndrs of
     let bndr_1 = NE.head bndrs1
         bndr_n = NE.last bndrs1
     skol_info <- mkSkolemInfo $ ForAllSkol $ CsTyVarBndrsRn (unLoc <$> bndrs)
+    traceTc "tcExplicitBndrsX/emitResidualTvConstraint"
+      $ vcat [ ppr (binderVars skol_tvs), ppr wanted ]
     setSrcSpan (combineSrcSpans (getLocA bndr_1) (getLocA bndr_n))
       $ emitResidualTvConstraint skol_info (binderVars skol_tvs) tclvl wanted
     return (skol_tvs, res)
