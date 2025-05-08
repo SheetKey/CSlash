@@ -85,7 +85,15 @@ emptyRelMap = emptyKcAppMap
 
 findRel :: RelMap a -> CtLoc -> KiCon -> MonoKind -> MonoKind -> Maybe a
 findRel m loc kc ki1 ki2 = findKcApp m kc ki1 ki2
- 
+
+findRelsByRel :: RelMap a -> KiCon -> Bag a
+findRelsByRel m rl = findRelsByKiConKey m (getUnique rl)
+
+findRelsByKiConKey :: RelMap a -> Unique -> Bag a
+findRelsByKiConKey m rl
+  | Just ty <- lookupUDFM_Directly m rl = foldTM consBag ty emptyBag
+  | otherwise = emptyBag
+
 relsToBag :: RelMap a -> Bag a
 relsToBag = kcAppMapToBag
 

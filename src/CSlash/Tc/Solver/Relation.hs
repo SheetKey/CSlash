@@ -1,8 +1,7 @@
 module CSlash.Tc.Solver.Relation where
 
 import CSlash.Tc.Errors.Types
-import CSlash.Tc.Instance.Relation
--- import GHC.Tc.Instance.Class( safeOverlap, matchEqualityInst )
+import CSlash.Tc.Instance.Relation (RelInstResult(..))
 import CSlash.Tc.Types.Evidence
 import CSlash.Tc.Types.Constraint
 import CSlash.Tc.Types.Origin
@@ -56,10 +55,17 @@ solveRel rel_ct@(RelCt { rl_ev = ev, rl_kc = kc, rl_ki1 = ki1, rl_ki2 = ki2 })
   | isEqualityKiCon kc
   = panic "solveRel"
   | otherwise
-  = do simpleStage $ traceTcS "solveRel" (panic "ppr rel_ct")
+  = do simpleStage $ traceTcS "solveRel" (ppr rel_ct)
        tryInertRels rel_ct
        tryInstances rel_ct
-       panic "unfinished"
+
+       simpleStage (updInertRels rel_ct)
+       stopWithStage (relCtEvidence rel_ct) "Kept inert RelCt"
+
+updInertRels :: RelCt -> TcS ()
+updInertRels rel_ct@(RelCt { rl_kc = kc, rl_ev = ev, rl_ki1 = k1, rl_ki2 = k2 }) = do
+  traceTcS "Adding inert rel" (ppr rel_ct $$ ppr kc <+> ppr [k1, k2])
+  updInertCans (updRels (addRel rel_ct))
 
 canRelCt :: CtEvidence -> KiCon -> MonoKind -> MonoKind -> SolverStage RelCt
 canRelCt ev kc ki1 ki2
@@ -91,7 +97,7 @@ try_inert_rels inerts rel_w@(RelCt { rl_ev = ev_w, rl_kc = kc, rl_ki1 = ki1, rl_
          then stopWith ev_w "interactRel/solved from rel"
          else panic "try_inert_rels"
   | otherwise
-  = do panic "traceTcS "--tryInertRels:no" (ppr rel_w $$ ppr kc <+> ppr ki1 <+> ppr ki2)
+  = do traceTcS "tryInertRels:no" (ppr rel_w $$ ppr kc <+> ppr ki1 <+> ppr ki2)
        continueWith ()
 
 shortCutSolver :: CtEvidence -> CtEvidence -> TcS Bool
@@ -132,8 +138,7 @@ try_instances inerts work_item@(RelCt { rl_ev = ev, rl_kc = kc, rl_ki1 = ki1, rl
     rel_loc = ctEvLoc ev
 
 chooseInstance :: CtEvidence -> RelInstResult -> TcS (StopOrContinue a)
-chooseInstance work_item (OneInst { rir_new_theta = theta
-                                  , rir_what = what
+chooseInstance work_item (OneInst { rir_what = what
                                   , rir_canonical = canonical })
   = do traceTcS "doTopReact/found instance for " $ ppr work_item
        deeper_loc <- checkInstanceOK loc what pred
@@ -156,4 +161,26 @@ matchRelInst
   -> MonoKind
   -> CtLoc
   -> TcS RelInstResult
-matchRelInst dflags inerts kc k1 k2 loc = panic "matchRelInst"
+matchRelInst dflags inerts kc k1 k2 loc
+  | not (noMatchableGivenRels inerts loc kc k1 k2)
+  = do traceTcS "Delaying instance application"
+         $ vcat [ text "Work item:" <+> ppr (mkKiConApp kc [k1, k2]) ]
+       return NotSure
+  | otherwise
+  = do traceTcS "matchRelInst" $ text "pred =" <+> ppr kc <+> char '{'
+       local_res <- matchLocalInst kc k1 k2 loc
+       case local_res of
+         OneInst {} -> do traceTcS "} matchRelInst local match" $ ppr local_res
+                          return local_res
+         NotSure -> do traceTcS "} matchRelInst local not sure" empty
+                       return local_res
+         NoInstance -> do global_res <- matchGlobalInst dflags False kc k1 k2 loc
+                          traceTcS "} matchRelInst global result" $ ppr global_res
+                          return global_res
+
+matchLocalInst :: KiCon -> MonoKind -> MonoKind -> CtLoc -> TcS RelInstResult
+matchLocalInst kc k1 k2 loc = do
+  --inerts@(IS { inert_cans = ics }) <- getInertSet
+  traceTcS "SKIPPING match_local_inst SINCE THERE IS NOT 'QCInst' OR 'inert_insts'" empty
+  traceTcS "No local instance for" (ppr (mkKiConApp kc [k1, k2]))
+  return NoInstance

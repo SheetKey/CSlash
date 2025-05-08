@@ -60,10 +60,26 @@ import Data.Maybe
 
 data RelInstResult
   = NoInstance
-  | OneInst { rir_new_theta :: [TcPredKind]
-            , rir_canonical :: Bool
+  | OneInst { rir_canonical :: Bool
             , rir_what :: InstanceWhat
             }
   | NotSure
 
+instance Outputable RelInstResult where
+  ppr NoInstance = text "NoInstance"
+  ppr NotSure = text "NotSure"
+  ppr (OneInst _ what) = text "OneInst" <+> ppr what
 
+matchGlobalInst :: DynFlags -> Bool -> KiCon -> MonoKind -> MonoKind -> TcM RelInstResult
+matchGlobalInst dflags short_cut kc k1 k2 = case kc of
+  LTKi -> matchLTEQKi False k1 k2
+  LTEQKi -> matchLTEQKi True k1 k2
+  EQKi -> pprPanic "matchGlobalInst/EQKi" (ppr k1 $$ ppr k2)
+  other -> pprPanic "matchGlobalInst/other" (ppr other $$ ppr k1 $$ ppr k2)
+
+matchLTEQKi :: Bool -> MonoKind -> MonoKind -> TcM RelInstResult
+matchLTEQKi eq_ok (KiConApp kc1 []) (KiConApp kc2 [])
+  = if (kc1 == kc2 && eq_ok) || kc1 < kc2
+    then return $ OneInst True BuiltinInstance
+    else return $ NoInstance
+matchLTEQKi _ _ _ = return $ NotSure

@@ -76,7 +76,7 @@ buildVImplication skol_info skol_vs tclvl wanted
                     <||> isTyVarTyVar
                     <||> isSkolemKiVar
                     <||> isKiVarKiVar) skol_vs) (ppr skol_vs) $ do
-      ev_binds <- newNoTcKiEvBinds
+      ev_binds <- newTcKiEvBinds
       implic <- newImplication
       let implic' = implic { ic_tclvl = tclvl
                            , ic_skols = skol_vs

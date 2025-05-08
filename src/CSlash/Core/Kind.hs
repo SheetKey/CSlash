@@ -20,6 +20,7 @@ import CSlash.Types.Unique.DFM
 
 import Data.IORef
 import qualified Data.Data as Data
+import Data.List (intersect)
 
 {- **********************************************************************
 *                                                                       *
@@ -50,6 +51,16 @@ data KiCon
   | LTEQKi
   | EQKi
   deriving (Show, Eq, Data.Data)
+
+instance Ord KiCon where
+  compare k1 k2
+    | _:_ <- (intersect [LTKi, LTEQKi, EQKi] [k1, k2]) = panic "Ord KiCon"
+    | k1 == k2 = EQ
+  compare UKd _ = LT
+  compare _ UKd = GT
+  compare AKd _ = LT
+  compare _ AKd = GT
+  compare k1 k2 = pprPanic "Ord KiCon unreachable" (ppr k1 <+> ppr k2)
 
 isEqualityKiCon :: KiCon -> Bool
 isEqualityKiCon EQKi = True

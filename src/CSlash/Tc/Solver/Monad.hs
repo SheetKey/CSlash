@@ -25,6 +25,7 @@ import qualified CSlash.Tc.Zonk.Type as TcM
 import CSlash.Driver.DynFlags
 
 -- import GHC.Tc.Instance.Class( safeOverlap, instanceReturnsDictCon )
+import qualified CSlash.Tc.Instance.Relation as TcM (matchGlobalInst, RelInstResult(..))
 -- import GHC.Tc.Instance.FunDeps( FunDepEqn(..) )
 import CSlash.Tc.Utils.TcType
 import CSlash.Tc.Solver.Types
@@ -597,6 +598,11 @@ setUnificationFlag lvl = TcS $ \env -> do
 *                Instantiation etc.
 *                                                                      *
 ********************************************************************* -}
+
+matchGlobalInst
+  :: DynFlags -> Bool -> KiCon -> MonoKind -> MonoKind -> CtLoc -> TcS TcM.RelInstResult
+matchGlobalInst dflags short_cut kc k1 k2 loc
+  = wrapTcS $ TcM.setCtLocM loc $ TcM.matchGlobalInst dflags short_cut kc k1 k2
 
 -- Creating and setting evidence variables and CtFlavors
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

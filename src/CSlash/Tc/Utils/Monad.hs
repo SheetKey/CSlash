@@ -603,6 +603,13 @@ mkCtLocEnv lcl_env = CtLocEnv { ctl_bndrs = getLclEnvBinderStack lcl_env
                               , ctl_rdr = getLclEnvRdrEnv lcl_env
                               }
 
+setCtLocM :: CtLoc -> TcM a -> TcM a
+setCtLocM (CtLoc { ctl_env = lcl }) thing_inside
+  = updLclEnv (\env -> setLclEnvLoc (ctl_loc lcl)
+                       $ setLclEnvErrCtxt (ctl_ctxt lcl)
+                       $ setLclEnvBinderStack (ctl_bndrs lcl)
+                       $ env) thing_inside
+
 {- *********************************************************************
 *                                                                      *
              Error recovery and exceptions

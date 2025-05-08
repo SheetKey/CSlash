@@ -230,6 +230,9 @@ addInertEqs  eq_ct@(KiEqCt { eq_lhs = KiVarLHS kv }) eqs = addEq eqs kv eq_ct
 *                                                                      *
 ********************************************************************* -}
 
+updRels :: (RelMap RelCt -> RelMap RelCt) -> InertCans -> InertCans
+updRels upd ics = ics { inert_rels = upd (inert_rels ics) }
+
 addRel :: RelCt -> RelMap RelCt -> RelMap RelCt
 addRel item@(RelCt { rl_kc = kc, rl_ki1 = k1, rl_ki2 = k2 }) rm
   = insertKcApp rm kc k1 k2 item
@@ -385,6 +388,14 @@ isOuterKiVar tclvl kv
   | isKiVar kv = assertPpr (not (isTouchableMetaKiVar tclvl kv)) (ppr kv <+> ppr tclvl)
                  $ tclvl `strictlyDeeperThan` tcKiVarLevel kv
   | otherwise = False
+
+noMatchableGivenRels :: InertSet -> CtLoc -> KiCon -> MonoKind -> MonoKind -> Bool
+noMatchableGivenRels inerts@(IS { inert_cans = inert_cans }) loc_w kc k1 k2
+  = not $ anyBag matchable_given
+    $ findRelsByRel (inert_rels inert_cans) kc
+  where
+    matchable_given :: RelCt -> Bool
+    matchable_given (RelCt { rl_ev = CtWanted{} }) = False
 
 {- *********************************************************************
 *                                                                      *

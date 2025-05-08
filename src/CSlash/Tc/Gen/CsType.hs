@@ -847,7 +847,7 @@ tcCsContext :: CsContext Rn -> TcM ([KiEvVar], [MonoKind])
 tcCsContext [] = panic "tcCsContext empty"
 tcCsContext ctxt = do
   rels <- mapM tc_lcs_kdrel ctxt 
-  evVars <- mapM newKiEvVar rels
+  evVars <- newKiEvVars rels
   return $ (evVars, rels)
 
 tc_lcs_kdrel :: LCsKdRel Rn -> TcM MonoKind
