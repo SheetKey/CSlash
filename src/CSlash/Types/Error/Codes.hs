@@ -251,6 +251,8 @@ type family CsDiagnosticCode c = n | n -> c where
   CsDiagnosticCode "DriverUnrecognizedFlag"                        = 93741
   CsDiagnosticCode "DriverDeprecatedFlag"                          = 53692
 
+  CsDiagnosticCode "BadTelescope"                                  = 97739
+
   CsDiagnosticCode "TcRnBindingOfExistingName"                     = 58805
   CsDiagnosticCode "TcRnQualifiedBinder"                           = 28329
   CsDiagnosticCode "TcRnMultipleFixityDecls"                       = 50419
@@ -371,6 +373,11 @@ type family ConRecursInto con where
   -- Interface file errors
   ConRecursInto "TcRnInterfaceError"       = 'Just IfaceMessage
   ConRecursInto "Can'tFindInterface"       = 'Just MissingInterfaceError
+
+  ------------------
+  -- Solver reports
+  ConRecursInto "TcRnSolverReport"         = 'Just SolverReportWithCtxt
+  ConRecursInto "SolverReportWithCtxt"     = 'Just TcSolverReportMsg
 
   ----------------------------------
   -- Constructors of ImportLookupBad

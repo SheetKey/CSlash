@@ -11,7 +11,9 @@ import Prelude hiding ((<>))
 
 import CSlash.Core.Predicate
 import CSlash.Core.Type
+import CSlash.Core.Type.FVs
 import CSlash.Core.Kind
+import CSlash.Core.Kind.FVs
 -- import GHC.Core.Coercion
 -- import GHC.Core.Class
 import CSlash.Core.TyCon
@@ -26,7 +28,7 @@ import CSlash.Tc.Types.CtLocEnv
 import CSlash.Core
 
 import CSlash.Core.Type.Ppr
--- import CSlash.Utils.FV
+import CSlash.Utils.FV
 import CSlash.Types.Var.Set
 import CSlash.Builtin.Names
 import CSlash.Types.Basic
@@ -206,6 +208,13 @@ ctEvidence (CEqCan (KiEqCt { eq_ev = ev })) = ev
 ctEvidence (CIrredCan (IrredCt { ir_ev = ev })) = ev
 ctEvidence (CNonCanonical ev) = ev
 ctEvidence (CRelCan (RelCt { rl_ev = ev })) = ev
+
+updCtEvidence :: (CtEvidence -> CtEvidence) -> Ct -> Ct
+updCtEvidence upd ct = case ct of
+  CEqCan eq@(KiEqCt { eq_ev = ev }) -> CEqCan (eq { eq_ev = upd ev })
+  CIrredCan ir@(IrredCt { ir_ev = ev }) -> CIrredCan (ir { ir_ev = upd ev })
+  CNonCanonical ev -> CNonCanonical (upd ev)
+  CRelCan rl@(RelCt { rl_ev = ev }) -> CRelCan (rl { rl_ev = upd ev })
 
 ctLoc :: Ct -> CtLoc
 ctLoc = ctEvLoc . ctEvidence
@@ -488,7 +497,36 @@ checkSkolInfoAnon sk1 sk2 = go sk1 sk2
     go _ _ = False
 
     eq_pr (i1, _) (i2, _) = i1 == i2
-  
+
+{- *********************************************************************
+*                                                                      *
+        Simple functions over evidence variables
+*                                                                      *
+********************************************************************* -}
+
+kiFVsOfCt :: Ct -> FV
+kiFVsOfCt ct = kiFVsOfMonoKind $ ctPred ct
+
+kiFVsOfCts :: Cts -> FV
+kiFVsOfCts = foldr (unionFV . kiFVsOfCt) emptyFV
+
+kiVarsOfWCList :: WantedConstraints -> [KindVar]
+kiVarsOfWCList = fvVarList . kiFVsOfWC
+
+kiFVsOfWC :: WantedConstraints -> FV
+kiFVsOfWC (WC { wc_simple = simple, wc_impl = implic })
+  = kiFVsOfCts simple `unionFV` kiFVsOfBag kiFVsOfImplic implic
+
+kiFVsOfImplic :: Implication -> FV
+kiFVsOfImplic (Implic { ic_skols = skols, ic_wanted = wanted })
+  | isEmptyWC wanted
+  = emptyFV
+  | otherwise
+  = tyKiFVsVarBndrs skols $ kiFVsOfWC wanted
+
+kiFVsOfBag :: (a -> FV) -> Bag a -> FV
+kiFVsOfBag vs_of = foldr (unionFV . vs_of) emptyFV
+
 {- *********************************************************************
 *                                                                      *
             CtEvidence
@@ -542,6 +580,10 @@ setCtEvPredKind old_ctev@(CtWanted { ctev_dest = dest }) new_pred
     new_dest = case dest of
       EvVarDest ev -> EvVarDest (setTyVarKind ev new_pred)
       HoleDest h -> HoleDest (setCoHoleKind h new_pred)
+
+instance Outputable TcEvDest where
+  ppr (HoleDest h) = text "hole" <> ppr h
+  ppr (EvVarDest ev) = ppr ev
 
 instance Outputable CtEvidence where
   ppr ev = ppr (ctEvFlavor ev)

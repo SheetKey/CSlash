@@ -389,3 +389,15 @@ tcSplitTyLamTyVarBinders ty = assert (all isTyVar (fst sty)) sty
 tcSplitBigLamTyVarBinders :: Type -> ([KindVar], Type)
 tcSplitBigLamTyVarBinders ty = assert (all isKiVar (fst sty)) sty
   where sty = splitBigLamTyBinders ty
+
+{- *********************************************************************
+*                                                                      *
+      Classifying types
+*                                                                      *
+********************************************************************* -}
+
+isRigidKi :: MonoKind -> Bool
+isRigidKi ki = case ki of
+  KiConApp {} -> True
+  FunKi {} -> True
+  _ -> False

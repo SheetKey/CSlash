@@ -7,10 +7,9 @@ import CSlash.Cs
 -- import GHC.Tc.Errors.Types.PromotionErr
 -- import GHC.Tc.Errors.Hole.FitTypes (HoleFit)
 import CSlash.Tc.Types.Constraint
--- import GHC.Tc.Types.Evidence (EvBindsVar)
--- import GHC.Tc.Types.Origin ( CtOrigin (ProvCtxtOrigin), SkolemInfoAnon (SigSkol)
---                            , UserTypeCtxt (PatSynCtxt), TyVarBndrs, TypedThing
---                            , FixedRuntimeRepOrigin(..), InstanceWhat )
+import CSlash.Tc.Types.Evidence (KiEvBindsVar)
+import CSlash.Tc.Types.Origin ( CtOrigin (), SkolemInfoAnon (SigSkol)
+                              , InstanceWhat )
 -- import GHC.Tc.Types.Rank (Rank)
 -- import GHC.Tc.Utils.TcType (TcType, TcSigmaType, TcPredType,
 --                             PatersonCondFailure, PatersonCondFailureContext)
@@ -31,6 +30,7 @@ import CSlash.Types.Var.Env (TidyEnv)
 import CSlash.Types.Var.Set (TyVarSet, VarSet)
 import CSlash.Unit.Types (Module)
 import CSlash.Utils.Outputable
+import CSlash.Utils.Panic
 -- import GHC.Core.Class (Class, ClassMinimalDef, ClassOpItem, ClassATItem)
 -- import GHC.Core.Coercion (Coercion)
 -- import GHC.Core.Coercion.Axiom (CoAxBranch)
@@ -42,7 +42,7 @@ import CSlash.Core.DataCon (DataCon{-, FieldLabel-})
 -- import GHC.Core.Predicate (EqRel, predTypeEqRel)
 import CSlash.Core.TyCon (TyCon{-, Role, FamTyConFlav-}, AlgTyConRhs)
 import CSlash.Core.Type (Type{-, ThetaType, PredType, ErrorMsgType-}, ForAllTyFlag)
-import CSlash.Core.Kind (Kind)
+import CSlash.Core.Kind (Kind, PredKind)
 import CSlash.Driver.Backend (Backend)
 import CSlash.Unit.State (UnitState)
 import CSlash.Utils.Misc (filterOut)
@@ -78,6 +78,7 @@ data TcRnMessageDetailed = TcRnMessageDetailed !ErrInfo !TcRnMessage
 data TcRnMessage where
   TcRnUnknownMessage :: (UnknownDiagnostic (DiagnosticOpts TcRnMessage)) -> TcRnMessage
   TcRnMessageWithInfo :: !UnitState -> !TcRnMessageDetailed -> TcRnMessage
+  TcRnSolverReport :: SolverReportWithCtxt -> DiagnosticReason -> TcRnMessage
   TcRnBindingOfExistingName :: RdrName -> TcRnMessage
   TcRnQualifiedBinder :: !RdrName -> TcRnMessage
   TcRnMultipleFixityDecls :: SrcSpan -> RdrName -> TcRnMessage
@@ -104,6 +105,73 @@ data ShadowedNameProvenance
   = ShadowedNameProvenanceLocal !SrcLoc
   | ShadowedNameProvenanceGlobal [GlobalRdrElt]
 
+data SolverReport = SolverReport
+  { sr_important_msg :: SolverReportWithCtxt
+  , sr_supplementary :: [SolverReportSupplementary]
+  }
+
+data SolverReportSupplementary
+  = SupplementaryBindings RelevantBindings
+  | SupplementaryHoleFits ValidHoleFits
+  | SupplementaryCts [(PredKind, RealSrcSpan)]
+
+data SolverReportWithCtxt = SolverReportWithCtxt
+  { reportContext :: SolverReportErrCtxt
+  , reportContent :: TcSolverReportMsg
+  }
+  deriving Generic
+
+data SolverReportErrCtxt = CEC
+  { cec_encl :: [Implication]
+  , cec_tidy :: TidyEnv
+  , cec_binds :: KiEvBindsVar
+  , cec_defer_type_errors :: DiagnosticReason
+  , cec_expr_holes :: DiagnosticReason
+  , cec_out_of_scope_holes :: DiagnosticReason
+  , cec_warn_redundant :: Bool
+  , cec_suppress :: Bool
+  }
+
+----------------------------------------------------------------------------
+--
+--   ErrorItem
+--
+----------------------------------------------------------------------------
+
+data ErrorItem = EI
+  { ei_pred :: PredKind
+  , ei_evdest :: Maybe TcEvDest
+  , ei_flavor :: CtFlavor
+  , ei_loc :: CtLoc
+  , ei_m_reason :: Maybe CtIrredReason
+  , ei_suppress :: Bool
+  }
+
+instance Outputable ErrorItem where
+  ppr (EI { ei_pred = pred
+          , ei_evdest = m_evdest
+          , ei_flavor = flav
+          , ei_suppress = supp })
+    = pp_supp <+> ppr flav <+> pp_dest m_evdest <+> ppr pred
+    where
+      pp_dest Nothing = empty
+      pp_dest (Just ev) = ppr ev <+> colon
+
+      pp_supp = if supp then text "suppress:" else empty
+
+errorItemOrigin :: ErrorItem -> CtOrigin
+errorItemOrigin = ctLocOrigin . ei_loc
+
+errorItemCtLoc :: ErrorItem -> CtLoc
+errorItemCtLoc = ei_loc
+
+errorItemPred :: ErrorItem -> PredKind
+errorItemPred = ei_pred
+
+data TcSolverReportMsg
+  = BadTelescope
+  deriving Generic
+
 data BadImportKind
   = BadImportNotExported [CsHint]
   | BadImportAvailTyCon
@@ -124,9 +192,29 @@ data NotInScopeError
 mkTcRnNotInScope :: RdrName -> NotInScopeError -> TcRnMessage
 mkTcRnNotInScope rdr err = TcRnNotInScope err rdr [] noHints
 
+data HoleFitDispConfig = HFDC
+
 data ImportError
   = MissingModule ModuleName
   | ModulesDoNotExport (NE.NonEmpty Module) OccName
+
+data FitsMbSuppressed = Fits
+  -- { fits :: [HoleFit]
+  -- , fitSuppressed :: Bool
+  -- }
+
+data ValidHoleFits = ValidHoleFits
+  { holeFits :: FitsMbSuppressed
+  , refinementFits :: FitsMbSuppressed
+  }
+
+data RelevantBindings = RelevantBindings
+  { relevantBindingNamesAndKis :: [(Name, Kind)]
+  , ranOutOfFuel :: Bool
+  }
+
+pprRelevantBindings :: RelevantBindings -> SDoc
+pprRelevantBindings _ = panic "pprRelevantBindings"
 
 {- *********************************************************************
 *                                                                      *

@@ -11,7 +11,7 @@ import CSlash.Types.Unique.Set
 
 import CSlash.Tc.Errors.Types
 import CSlash.Tc.Errors.Ppr
--- import GHC.Tc.Types.Constraint
+import CSlash.Tc.Types.Constraint
 import CSlash.Tc.Types.Origin
 import CSlash.Tc.Types.TcRef
 import CSlash.Tc.Types.Evidence
@@ -27,7 +27,7 @@ import CSlash.Core.Type
 import CSlash.Core.Kind
 import CSlash.Core.Kind.Compare
 -- import GHC.Core.Coercion
--- import GHC.Core.Predicate
+import CSlash.Core.Predicate
 
 import CSlash.Utils.Constants
 import CSlash.Utils.Outputable
@@ -241,6 +241,67 @@ zonkTcKiVarToTcKiVar kv = do
 
 {- *********************************************************************
 *                                                                      *
+              Zonking constraints
+*                                                                      *
+********************************************************************* -}
+
+zonkImplication :: Implication -> ZonkM Implication
+zonkImplication implic@(Implic { ic_skols = skols, ic_wanted = wanted, ic_info = info }) = do
+  skols' <- mapM zonkTyVarKind skols
+  info' <- zonkSkolemInfoAnon info
+  wanted' <- zonkWCRec wanted
+  return $ implic { ic_skols = skols', ic_wanted = wanted', ic_info = info' }
+
+zonkWC :: WantedConstraints -> ZonkM WantedConstraints
+zonkWC wc = zonkWCRec wc
+
+zonkWCRec :: WantedConstraints -> ZonkM WantedConstraints
+zonkWCRec (WC { wc_simple = simple, wc_impl = implic }) = do
+  simple' <- zonkSimples simple
+  implic' <- mapBagM zonkImplication implic
+  return $ WC { wc_simple = simple', wc_impl = implic' }
+
+zonkSimples :: Cts -> ZonkM Cts
+zonkSimples cts = do
+  cts' <- mapBagM zonkCt cts
+  traceZonk "zonkSimples dont:" (ppr cts')
+  return cts'
+
+zonkCt :: Ct -> ZonkM Ct
+zonkCt (CRelCan rel@(RelCt { rl_ev = ev, rl_ki1 = k1, rl_ki2 = k2 })) = do
+  ev' <- zonkCtEvidence ev
+  k1' <- zonkTcMonoKind k1
+  k2' <- zonkTcMonoKind k2
+  return $ CRelCan $ rel { rl_ev = ev', rl_ki1 = k1', rl_ki2 = k2' }
+zonkCt (CEqCan (KiEqCt { eq_ev = ev })) = mkNonCanonical <$> zonkCtEvidence ev
+zonkCt (CIrredCan ir@(IrredCt { ir_ev = ev })) = do
+  ev' <- zonkCtEvidence ev
+  return $ CIrredCan $ ir { ir_ev = ev' }
+zonkCt ct = do
+  fl' <- zonkCtEvidence (ctEvidence ct)
+  return $ mkNonCanonical fl'
+
+zonkCtEvidence :: CtEvidence -> ZonkM CtEvidence
+zonkCtEvidence ctev = do
+  let pred = ctev_pred ctev
+  pred' <- zonkTcMonoKind pred
+  return $ setCtEvPredKind ctev pred'
+
+zonkSkolemInfoAnon :: SkolemInfoAnon -> ZonkM SkolemInfoAnon
+zonkSkolemInfoAnon (SigSkol cx ty tv_prs) = do
+  ty' <- zonkTcType ty
+  return $ SigSkol cx ty' tv_prs
+zonkSkolemInfoAnon (InferSkol ntys) = do
+  ntys' <- mapM do_one ntys
+  return $ InferSkol ntys'
+  where
+    do_one (n, ty) = do
+      ty' <- zonkTcType ty
+      return (n, ty')
+zonkSkolemInfoAnon skol_info = return skol_info
+
+{- *********************************************************************
+*                                                                      *
                  Tidying
 *                                                                      *
 ********************************************************************** -}
@@ -266,3 +327,11 @@ tcInitOpenTidyEnv vs = do
   env1 <- tcInitTidyEnv
   let env2 = tidyFreeTyKiVars env1 vs
   return env2
+
+tidyCt :: TidyEnv -> Ct -> Ct
+tidyCt env = updCtEvidence (tidyCtEvidence env)
+
+tidyCtEvidence :: TidyEnv -> CtEvidence -> CtEvidence
+tidyCtEvidence env ctev = ctev { ctev_pred = tidyMonoKind env ki }
+  where
+    ki = ctev_pred ctev

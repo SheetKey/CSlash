@@ -18,7 +18,7 @@ import CSlash.Builtin.Utils
 import CSlash.Builtin.Names
 import CSlash.Tc.Errors
 import CSlash.Tc.Errors.Types
--- import GHC.Tc.Types.Evidence
+import CSlash.Tc.Types.Evidence
 import CSlash.Tc.Solver.Solve ( solveSimpleGivens, solveSimpleWanteds )
 -- import GHC.Tc.Solver.Dict    ( makeSuperClasses, solveCallStack )
 -- import GHC.Tc.Solver.Rewrite ( rewriteType )
@@ -75,13 +75,15 @@ captureTopConstraints thing_inside = do
     Nothing -> do _ <- simplifyTop lie
                   failM
 
-simplifyTop :: WantedConstraints -> TcM ()
+simplifyTop :: WantedConstraints -> TcM (Bag KiEvBind)
 simplifyTop wanteds = do
   traceTc "simplifyTop {" $ text "wanted = " <+> ppr wanteds
-  final_wc <- runTcS $ simplifyTopWanteds wanteds
+  (final_wc, binds1) <- runTcS $ simplifyTopWanteds wanteds
   traceTc "End simplifyTop }" empty
 
-  reportUnsolved final_wc
+  binds2 <- reportUnsolved final_wc
+
+  return (kiEvBindMapBinds binds1 `unionBags` binds2)
 
 pushLevelAndSolveEqualities :: SkolemInfoAnon -> [TcKiVar] -> TcM a -> TcM a
 pushLevelAndSolveEqualities skol_info_anon tcbs thing_inside = do

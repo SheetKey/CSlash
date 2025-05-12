@@ -399,12 +399,16 @@ csTraceTcM mk_doc = do
 {-# INLINE csTraceTcM #-}
 
 runTcSEqualities :: TcS a -> TcM a
-runTcSEqualities thing_inside = runTcS thing_inside
+runTcSEqualities thing_inside = do
+  ev_binds_var <- TcM.newNoTcKiEvBinds
+  runTcSWithKiEvBinds ev_binds_var thing_inside
 
-runTcS :: TcS a -> TcM a
+runTcS :: TcS a -> TcM (a, KiEvBindMap)
 runTcS tcs = do
   ev_binds_var <- TcM.newTcKiEvBinds
-  runTcSWithKiEvBinds ev_binds_var tcs
+  res <- runTcSWithKiEvBinds ev_binds_var tcs
+  ev_binds <- TcM.getTcKiEvBindsMap ev_binds_var
+  return (res, ev_binds)
 
 runTcSWithKiEvBinds :: KiEvBindsVar -> TcS a -> TcM a
 runTcSWithKiEvBinds = runTcSWithKiEvBinds' True False

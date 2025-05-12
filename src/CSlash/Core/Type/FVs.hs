@@ -168,6 +168,9 @@ tyKiFVsOfType other _ _ _  = pprPanic "tyKiFVsOfType" (ppr other)
 tyKiFVsBndr :: ForAllTyBinder -> FV -> FV
 tyKiFVsBndr (Bndr tv _) fvs = tyKiFVsVarBndr tv fvs
 
+tyKiFVsVarBndrs :: [Var] -> FV -> FV
+tyKiFVsVarBndrs vars fvs = foldr tyKiFVsVarBndr fvs vars
+
 tyKiFVsVarBndr :: Var -> FV -> FV
 tyKiFVsVarBndr var fvs = kiFVsOfMonoKind (varKind var) `unionFV` delFV var fvs
 

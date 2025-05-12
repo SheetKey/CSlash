@@ -21,6 +21,7 @@ import CSlash.Types.Unique.DFM
 import Data.IORef
 import qualified Data.Data as Data
 import Data.List (intersect)
+import Data.Maybe (isJust)
 
 {- **********************************************************************
 *                                                                       *
@@ -558,6 +559,9 @@ getKiVar_maybe _ = Nothing
 getKiVarMono_maybe :: MonoKind -> Maybe KindVar
 getKiVarMono_maybe (KiVarKi kv) = Just kv
 getKiVarMono_maybe _ = Nothing
+
+isKiVarKi :: MonoKind -> Bool
+isKiVarKi ki = isJust (getKiVarMono_maybe ki)
 
 {- *********************************************************************
 *                                                                      *

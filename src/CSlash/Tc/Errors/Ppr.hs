@@ -110,6 +110,7 @@ instance Diagnostic TcRnMessage where
       -> messageWithInfoDiagnosticMessage unit_state err_info
            (tcOptsShowContext opts)
            (diagnosticMessage opts msg)
+    TcRnSolverReport msg _ -> mkSimpleDecorated $ pprSolverReportWithCtxt msg
     TcRnBindingOfExistingName name -> mkSimpleDecorated $
       text "Illegal binding of an existing name:" <+> ppr name
     TcRnQualifiedBinder rdr_name -> mkSimpleDecorated $
@@ -191,6 +192,7 @@ instance Diagnostic TcRnMessage where
   diagnosticReason = \case
     TcRnUnknownMessage m -> diagnosticReason m
     TcRnMessageWithInfo _ (TcRnMessageDetailed _ m) -> diagnosticReason m
+    TcRnSolverReport _ reason -> reason
     TcRnBindingOfExistingName{} -> ErrorWithoutFlag
     TcRnQualifiedBinder{} -> ErrorWithoutFlag
     TcRnMultipleFixityDecls{} -> ErrorWithoutFlag
@@ -220,6 +222,7 @@ instance Diagnostic TcRnMessage where
   diagnosticHints = \case
     TcRnUnknownMessage m -> diagnosticHints m
     TcRnMessageWithInfo _ (TcRnMessageDetailed _ m) -> diagnosticHints m
+    TcRnSolverReport (SolverReportWithCtxt ctxt msg) _ -> tcSolverReportMsgHints ctxt msg
     TcRnBindingOfExistingName{} -> noHints
     TcRnQualifiedBinder{} -> noHints
     TcRnMultipleFixityDecls{} -> noHints
@@ -269,6 +272,24 @@ dodgy_msg_insert tc_gre = panic "dodgy_msg_insert"
 
 {- *********************************************************************
 *                                                                      *
+              Outputable SolverReportErrCtxt (for debugging)
+*                                                                      *
+**********************************************************************-}
+
+instance Outputable SolverReportErrCtxt where
+  ppr _ = panic "Outputable SolverReportErrCtxt"
+
+{- *********************************************************************
+*                                                                      *
+                    Outputting TcSolverReportMsg errors
+*                                                                      *
+**********************************************************************-}
+
+pprSolverReportWithCtxt :: SolverReportWithCtxt -> SDoc
+pprSolverReportWithCtxt _ = panic "pprSolverReportWithCtxt"
+
+{- *********************************************************************
+*                                                                      *
       Outputting ScopeError messages
 *                                                                      *
 ********************************************************************* -}
@@ -302,6 +323,9 @@ scopeErrorHints :: NotInScopeError -> [CsHint]
 scopeErrorHints scope_err = case scope_err of
   MissingBinding _ hints -> hints
   _ -> noHints
+
+tcSolverReportMsgHints :: SolverReportErrCtxt -> TcSolverReportMsg -> [CsHint]
+tcSolverReportMsgHints ctxt _ = panic "tcSolverReportMsgHints"
 
 {- *********************************************************************
 *                                                                      *

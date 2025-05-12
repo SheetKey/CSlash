@@ -552,6 +552,9 @@ checkNoErrs main = do
   unless no_errs failM
   return res
 
+whenNoErrs :: TcM () -> TcM ()
+whenNoErrs thing = ifErrsM (return ()) thing
+
 ifErrsM :: TcRn r -> TcRn r -> TcRn r
 ifErrsM bale_out normal = do
   errs_var <- getErrsVar
@@ -781,6 +784,10 @@ newNoTcKiEvBinds = do
   traceTc "newNoTcKiEvBinds" (text "unique =" <+> ppr uniq)
   return $ KiCoEvBindsVar { kebv_kcvs = kcvs_ref
                           , kebv_uniq = uniq }
+
+getTcKiEvBindsMap :: KiEvBindsVar -> TcM KiEvBindMap
+getTcKiEvBindsMap (KiEvBindsVar { kebv_binds = ev_ref }) = readTcRef ev_ref
+getTcKiEvBindsMap (KiCoEvBindsVar {}) = return emptyKiEvBindMap
 
 addTcKiEvBind :: KiEvBindsVar -> KiEvBind -> TcM ()
 addTcKiEvBind (KiEvBindsVar { kebv_binds = ev_ref, kebv_uniq = u }) ev_bind = do
