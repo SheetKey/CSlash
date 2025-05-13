@@ -29,6 +29,7 @@ import CSlash.Core.Type.Rep (Type(..))
 -- import GHC.Core.PatSyn ( patSynName, pprPatSynType )
 -- import GHC.Core.Predicate
 import CSlash.Core.Type
+import CSlash.Core.Type.Tidy
 -- import GHC.Core.FVs( orphNamesOfTypes )
 -- import GHC.CoreToIface
 
@@ -335,6 +336,39 @@ tcSolverReportMsgHints ctxt _ = panic "tcSolverReportMsgHints"
 
 instance Outputable ImportError where
   ppr _ = panic "ppr ImportError"
+
+{- *********************************************************************
+*                                                                      *
+                           SkolemInfo
+*                                                                      *
+**********************************************************************-}
+
+tidySkolemInfoAnon :: TidyEnv -> SkolemInfoAnon -> SkolemInfoAnon
+tidySkolemInfoAnon env (SigSkol cx ty tv_prs) = tidySigSkol env cx ty tv_prs
+tidySkolemInfoAnon env (InferSkol ids) = InferSkol (mapSnd (tidyType env) ids)
+tidySkolemInfoAnon env (UnifyForAllSkol ty) = UnifyForAllSkol (tidyType env ty)
+tidySkolemInfoAnon _ info = info
+
+tidySigSkol :: TidyEnv -> UserTypeCtxt -> TcType -> [(Name, TcTyVar)] -> SkolemInfoAnon
+tidySigSkol env cx ty tv_prs = SigSkol cx (tidy_ty env ty) tv_prs'
+  where
+    tv_prs' = mapSnd (tidyTyKiVarOcc env) tv_prs
+    inst_env = mkNameEnv tv_prs'
+
+    tidy_ty env (ForAllTy (Bndr tv vis) ty) = ForAllTy (Bndr tv' vis) (tidy_ty env' ty)
+      where (env', tv') = tidy_tv_bndr env tv
+
+    tidy_ty env ty@(FunTy { ft_arg = arg, ft_res = res })
+      = ty { ft_arg = tidyType env arg, ft_res = tidy_ty env res }
+
+    tidy_ty env ty = tidyType env ty
+
+    tidy_tv_bndr :: TidyEnv -> TypeVar -> (TidyEnv, TypeVar)
+    tidy_tv_bndr  env@(occ_env, subst) tv
+      | Just tv' <- lookupNameEnv inst_env (tyVarName tv)
+      = ((occ_env, extendVarEnv subst tv tv'), tv')
+      | otherwise
+      = tidyVarBndr env tv
 
 {- *********************************************************************
 *                                                                      *

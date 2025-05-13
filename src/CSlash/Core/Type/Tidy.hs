@@ -13,6 +13,8 @@ import CSlash.Types.Name hiding (varName)
 import CSlash.Types.Var
 import CSlash.Types.Var.Env
 import CSlash.Utils.Misc (strictMap)
+import CSlash.Utils.Trace
+import CSlash.Utils.Outputable
 
 import Data.List (mapAccumL)
 
@@ -94,6 +96,9 @@ tidyTyKiVarOcc :: TidyEnv -> Var -> Var
 tidyTyKiVarOcc env@(_, subst) v = case lookupVarEnv subst v of
                                     Nothing -> updateVarKindSafe (tidyMonoKind env) v
                                     Just v' -> v'
+
+tidyType :: TidyEnv -> Type -> Type
+tidyType _ ty = warnPprTrace True "tidyType" (text "NOT TIDYING THE TYPE") ty
 
 tidyKind :: TidyEnv -> Kind -> Kind
 tidyKind env (Mono mki) = Mono $ tidyMonoKind env mki

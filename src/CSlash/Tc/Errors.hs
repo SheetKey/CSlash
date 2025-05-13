@@ -151,8 +151,48 @@ deferringAnyBindings (CEC { cec_defer_type_errors = ErrorWithoutFlag
                           , cec_out_of_scope_holes = ErrorWithoutFlag }) = False
 deferringAnyBindings _ = True
 
+maybeSwitchOffDefer :: KiEvBindsVar -> SolverReportErrCtxt -> SolverReportErrCtxt
+maybeSwitchOffDefer evb ctxt
+  | KiCoEvBindsVar {} <- evb
+  = ctxt { cec_defer_type_errors = ErrorWithoutFlag
+         , cec_expr_holes = ErrorWithoutFlag
+         , cec_out_of_scope_holes = ErrorWithoutFlag }
+  | otherwise
+  = ctxt
+
 reportImplic :: SolverReportErrCtxt -> Implication -> TcM ()
-reportImplic _ _ = panic "reportImplic"
+reportImplic ctxt implic@(Implic { ic_skols = tvs
+                                 , ic_wanted = wanted
+                                 , ic_binds = evb
+                                 , ic_status = status
+                                 , ic_info = info
+                                 , ic_env = ct_loc_env
+                                 , ic_tclvl = tc_lvl }) = do
+  traceTc "reportImplic"
+    $ vcat [ text "tidy env:" <+> ppr (cec_tidy ctxt)
+           , text "skols:" <+> ppr tvs
+           , text "tidy skols:" <+> ppr tvs' ]
+
+  when bad_telescope $ panic "reportBadTelescope ctxt ct_loc_ev info tvs"
+
+  reportWanteds ctxt' tc_lvl wanted
+
+  where
+    insoluble = isInsolubleStatus status
+    (env1, tvs') = tidyVarBndrs (cec_tidy ctxt) $ tvs
+
+    info' = tidySkolemInfoAnon env1 info
+    implic' = implic { ic_skols = tvs', ic_info = info' }
+
+    ctxt1 = maybeSwitchOffDefer evb ctxt
+    ctxt' = ctxt1 { cec_tidy = env1
+                  , cec_encl = implic' : cec_encl ctxt
+                  , cec_suppress = insoluble || cec_suppress ctxt
+                  , cec_binds = evb  }
+
+    bad_telescope = case status of
+      IC_BadTelescope -> True
+      _ -> False
 
 mkErrorItem :: Ct -> TcM (Maybe ErrorItem)
 mkErrorItem ct = do

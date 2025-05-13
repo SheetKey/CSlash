@@ -178,6 +178,7 @@ tyKiFVsOfTypes :: [Type] -> FV
 tyKiFVsOfTypes [] fv_cand in_scope acc = emptyFV fv_cand in_scope acc
 tyKiFVsOfTypes (ty:tys) fv_cand in_scope acc
   = (tyKiFVsOfType ty `unionFV` tyKiFVsOfTypes tys) fv_cand in_scope acc
+
 {- *********************************************************************
 *                                                                      *
             Free type constructors
