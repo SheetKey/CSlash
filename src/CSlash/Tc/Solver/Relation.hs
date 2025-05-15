@@ -151,7 +151,9 @@ chooseInstance work_item (OneInst { rir_what = what
 chooseInstance work_item lookup_res = pprPanic "chooseInstance" (ppr work_item $$ panic "ppr lookup_res")
 
 checkInstanceOK :: CtLoc -> InstanceWhat -> TcPredKind -> TcS CtLoc
-checkInstanceOK loc what pred = panic "checkInstanceOK"
+checkInstanceOK loc what pred = return deeper_loc
+  where
+    deeper_loc = bumpCtLocDepth loc
 
 matchRelInst
   :: DynFlags
