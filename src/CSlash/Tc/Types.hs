@@ -203,6 +203,14 @@ data TcGblEnv = TcGblEnv
 instance ContainsModule TcGblEnv where
   extractModule env = tcg_mod env
 
+removeBindingShadowing :: HasOccName a => [a] -> [a]
+removeBindingShadowing bindings = reverse $ fst $ foldl
+  (\(bindingAcc, seenNames) binding ->
+     if occName binding `elemOccSet` seenNames
+     then (bindingAcc, seenNames)
+     else (binding:bindingAcc, extendOccSet seenNames (occName binding)))
+  ([], emptyOccSet) bindings
+
 {- *********************************************************************
 *                                                                      *
             Operations over ImportAvails

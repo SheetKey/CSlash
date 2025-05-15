@@ -395,6 +395,11 @@ data HasGivenEqs
   | MaybeGivenEqs
   deriving Eq
 
+type UserGiven = Implication
+
+getUserGivensFromImplics :: [Implication] -> [UserGiven]
+getUserGivensFromImplics implics = [] --reverse (filterOut (null . ic_given) implics)
+
 instance Outputable Implication where
   ppr (Implic { ic_tclvl = tclvl
               , ic_skols = skols
@@ -729,9 +734,15 @@ ctLocOrigin = ctl_origin
 
 ctLocSpan :: CtLoc -> RealSrcSpan
 ctLocSpan (CtLoc { ctl_env = lcl }) = getCtLocEnvLoc lcl
+
+ctLocTypeOrKind_maybe :: CtLoc -> Maybe TypeOrKind
+ctLocTypeOrKind_maybe = ctl_t_or_k
  
 bumpCtLocDepth :: CtLoc -> CtLoc
 bumpCtLocDepth loc@(CtLoc { ctl_depth = d }) = loc { ctl_depth = bumpSubGoalDepth d }
+
+setCtLocOrigin :: CtLoc -> CtOrigin -> CtLoc
+setCtLocOrigin ctl orig = ctl { ctl_origin = orig }
 
 updateCtLocOrigin :: CtLoc -> (CtOrigin -> CtOrigin) -> CtLoc
 updateCtLocOrigin ctl@(CtLoc { ctl_origin = orig }) upd

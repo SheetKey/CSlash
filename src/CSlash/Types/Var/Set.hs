@@ -42,6 +42,9 @@ isEmptyVarSet = isEmptyUniqSet
 mkVarSet :: [Var] -> VarSet
 mkVarSet = mkUniqSet
 
+disjointVarSet :: VarSet -> VarSet -> Bool
+disjointVarSet s1 s2 = disjointUFM (getUniqSet s1) (getUniqSet s2)
+
 subVarSet :: VarSet -> VarSet -> Bool
 subVarSet s1 s2 = isEmptyVarSet (s1 `minusVarSet` s2)
 

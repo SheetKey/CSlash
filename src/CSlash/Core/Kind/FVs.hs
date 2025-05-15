@@ -102,16 +102,19 @@ shallowKvFolder = KindFolder { kf_view = noKindView
 
 {- *********************************************************************
 *                                                                      *
-          Free coercion variables
+          Deep Free ki/coercion variables
 *                                                                      *
 ********************************************************************* -}
 
-runCoVars :: Endo KiCoVarSet -> KiCoVarSet
-runCoVars f = appEndo f emptyVarSet
-{-# INLINE runCoVars #-}
+runKiCoVars :: Endo KiCoVarSet -> KiCoVarSet
+runKiCoVars f = appEndo f emptyVarSet
+{-# INLINE runKiCoVars #-}
 
-coVarsOfKiCo :: KindCoercion -> KiCoVarSet
-coVarsOfKiCo co = runCoVars (deep_cv_co co)
+kiCoVarsOfKiCo :: KindCoercion -> KiCoVarSet
+kiCoVarsOfKiCo co = runKiCoVars (deep_cv_co co)
+
+kiCoVarsOfMonoKind :: MonoKind -> KiCoVarSet
+kiCoVarsOfMonoKind mki = runKiCoVars (deep_cv_ki mki)
 
 deep_cv_ki :: MonoKind -> Endo KiCoVarSet
 deep_cv_kis :: [MonoKind] -> Endo KiCoVarSet
@@ -132,6 +135,33 @@ deepKiCoVarFolder = MKiCoFolder { kcf_kivar = do_kcv
                                 acc `extendVarSet` v
                   | otherwise = acc `extendVarSet` v
     do_hole is hole = do_kcv is (coHoleCoVar hole)
+
+{- *********************************************************************
+*                                                                      *
+          Free coercion variables
+*                                                                      *
+********************************************************************* -}
+
+coVarsOfKiCo :: KindCoercion -> KiCoVarSet
+coVarsOfKiCo co = runKiCoVars (deep_cv_only_co co)
+
+deep_cv_only_co :: KindCoercion -> Endo KiCoVarSet
+(_, _, deep_cv_only_co, _) = foldMonoKiCo deepKiCoVarOnlyFolder emptyVarSet
+
+deepKiCoVarOnlyFolder :: MonoKiCoFolder KiCoVarSet (Endo KiCoVarSet)
+deepKiCoVarOnlyFolder = MKiCoFolder { kcf_kivar = do_kivar
+                                    , kcf_covar = do_covar
+                                    , kcf_hole = do_hole }
+  where
+    do_kivar _ _ = mempty
+
+    do_covar is v = Endo do_it
+      where
+        do_it acc | v `elemVarSet` is = acc
+                  | v `elemVarSet` acc = acc
+                  | otherwise = acc `extendVarSet` v
+
+    do_hole is hole = do_covar is (coHoleCoVar hole)
 
 {- *********************************************************************
 *                                                                      *

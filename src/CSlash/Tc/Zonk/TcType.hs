@@ -287,6 +287,9 @@ zonkCtEvidence ctev = do
   pred' <- zonkTcMonoKind pred
   return $ setCtEvPredKind ctev pred'
 
+zonkSkolemInfo :: SkolemInfo -> ZonkM SkolemInfo
+zonkSkolemInfo (SkolemInfo u sk) = SkolemInfo u <$> zonkSkolemInfoAnon sk
+
 zonkSkolemInfoAnon :: SkolemInfoAnon -> ZonkM SkolemInfoAnon
 zonkSkolemInfoAnon (SigSkol cx ty tv_prs) = do
   ty' <- zonkTcType ty
@@ -327,6 +330,9 @@ tcInitOpenTidyEnv vs = do
   env1 <- tcInitTidyEnv
   let env2 = tidyFreeTyKiVars env1 vs
   return env2
+
+zonkTidyOrigin :: TidyEnv -> CtOrigin -> ZonkM (TidyEnv, CtOrigin)
+zonkTidyOrigin _ _ = panic "zonkTidyOrigin"
 
 tidyCt :: TidyEnv -> Ct -> Ct
 tidyCt env = updCtEvidence (tidyCtEvidence env)

@@ -253,6 +253,10 @@ type family CsDiagnosticCode c = n | n -> c where
 
   CsDiagnosticCode "BadTelescope"                                  = 97739
 
+  CsDiagnosticCode "BasicMismatch"                                 = 18872
+  CsDiagnosticCode "KindEqMismatch"                                = 89223
+  CsDiagnosticCode "CouldNotDeduce"                                = 05617
+
   CsDiagnosticCode "TcRnBindingOfExistingName"                     = 58805
   CsDiagnosticCode "TcRnQualifiedBinder"                           = 28329
   CsDiagnosticCode "TcRnMultipleFixityDecls"                       = 50419
@@ -378,6 +382,8 @@ type family ConRecursInto con where
   -- Solver reports
   ConRecursInto "TcRnSolverReport"         = 'Just SolverReportWithCtxt
   ConRecursInto "SolverReportWithCtxt"     = 'Just TcSolverReportMsg
+
+  ConRecursInto "Mismatch"                 = 'Just MismatchMsg
 
   ----------------------------------
   -- Constructors of ImportLookupBad

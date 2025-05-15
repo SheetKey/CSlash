@@ -9,7 +9,7 @@ import CSlash.Cs
 import CSlash.Tc.Types.Constraint
 import CSlash.Tc.Types.Evidence (KiEvBindsVar)
 import CSlash.Tc.Types.Origin ( CtOrigin (), SkolemInfoAnon (SigSkol)
-                              , InstanceWhat )
+                              , InstanceWhat, KindedThing )
 -- import GHC.Tc.Types.Rank (Rank)
 -- import GHC.Tc.Utils.TcType (TcType, TcSigmaType, TcPredType,
 --                             PatersonCondFailure, PatersonCondFailureContext)
@@ -25,7 +25,7 @@ import CSlash.Types.Name.Reader
 -- import GHC.Types.SourceFile (HsBootOrSig(..))
 import CSlash.Types.SrcLoc
 import CSlash.Types.TyThing (TyThing)
-import CSlash.Types.Var (Id, {-TyCoVar,-} TypeVar{-, TcTyVar, CoVar, Specificity-})
+import CSlash.Types.Var (Id, {-TyCoVar,-} TypeVar, KindVar {-, TcTyVar, CoVar, Specificity-})
 import CSlash.Types.Var.Env (TidyEnv)
 import CSlash.Types.Var.Set (TyVarSet, VarSet)
 import CSlash.Unit.Types (Module)
@@ -42,7 +42,7 @@ import CSlash.Core.DataCon (DataCon{-, FieldLabel-})
 -- import GHC.Core.Predicate (EqRel, predTypeEqRel)
 import CSlash.Core.TyCon (TyCon{-, Role, FamTyConFlav-}, AlgTyConRhs)
 import CSlash.Core.Type (Type{-, ThetaType, PredType, ErrorMsgType-}, ForAllTyFlag)
-import CSlash.Core.Kind (Kind, PredKind)
+import CSlash.Core.Kind (Kind, PredKind, MonoKind, KiCon)
 import CSlash.Driver.Backend (Backend)
 import CSlash.Unit.State (UnitState)
 import CSlash.Utils.Misc (filterOut)
@@ -132,6 +132,9 @@ data SolverReportErrCtxt = CEC
   , cec_suppress :: Bool
   }
 
+getUserGivens :: SolverReportErrCtxt -> [UserGiven]
+getUserGivens (CEC { cec_encl = implics }) = getUserGivensFromImplics implics
+
 ----------------------------------------------------------------------------
 --
 --   ErrorItem
@@ -169,7 +172,56 @@ errorItemPred :: ErrorItem -> PredKind
 errorItemPred = ei_pred
 
 data TcSolverReportMsg
-  = BadTelescope
+  = Mismatch
+    { mismatchMsg :: MismatchMsg
+    , mismatchKiVarInfo :: Maybe KiVarInfo
+    , mismatchAmbiguityInfo :: [AmbiguityInfo]
+    }
+  deriving Generic
+
+data MismatchMsg
+  = BasicMismatch
+    { mismatch_ea :: MismatchEA
+    , mismatch_item :: ErrorItem
+    , mismatch_ki1 :: MonoKind
+    , mismatch_ki2 :: MonoKind
+    , mismatch_whenMatching :: Maybe WhenMatching
+    , mismatch_mb_same_kicon :: Maybe SameKiConInfo
+    }
+  | KindEqMismatch
+    { keq_mismatch_item :: ErrorItem
+    , keq_mismatch_ki1 :: MonoKind
+    , keq_mismatch_ki2 :: MonoKind
+    , keq_mismatch_expected :: MonoKind
+    , keq_mismatch_actual :: MonoKind
+    , keq_mismatch_what :: Maybe KindedThing
+    , keq_mb_same_kicon :: Maybe SameKiConInfo
+    }
+  | CouldNotDeduce
+    { cnd_user_givens :: [Implication]
+    , cnd_wanted :: NE.NonEmpty ErrorItem
+    , cnd_extra :: Maybe CND_Extra
+    }
+  deriving Generic
+
+data MismatchEA
+  = NoEA
+
+data CND_Extra = CND_Extra TypeOrKind MonoKind MonoKind
+
+data KiVarInfo = KiVarInfo
+  { thisKiVar :: KindVar
+  , thisKiVarIsUntouchable :: Maybe Implication
+  , otherKi :: Maybe KindVar
+  }
+
+data SameKiConInfo
+  = SameKiCon KiCon
+  | SameFunKi
+
+data AmbiguityInfo = Ambiguity
+
+data WhenMatching = WhenMatching MonoKind MonoKind CtOrigin (Maybe TypeOrKind)
   deriving Generic
 
 data BadImportKind

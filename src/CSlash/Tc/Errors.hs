@@ -1,3 +1,5 @@
+{-# LANGUAGE MultiWayIf #-}
+
 module CSlash.Tc.Errors where
 
 import Prelude hiding ((<>))
@@ -41,8 +43,10 @@ import CSlash.Unit.Module
 
 import CSlash.Core.Predicate
 import CSlash.Core.Type
+import CSlash.Core.Type.FVs
 import CSlash.Core.Type.Tidy
 import CSlash.Core.Kind
+import CSlash.Core.Kind.FVs
 import CSlash.Core.Kind.Compare
 -- import GHC.Core.Coercion
 import CSlash.Core.Type.Ppr ( pprTyVars )
@@ -144,6 +148,14 @@ report_unsolved type_errors expr_holes out_of_scope_holes binds_var wanted
 --------------------------------------------
 --      Internal functions
 --------------------------------------------
+
+important :: SolverReportErrCtxt -> TcSolverReportMsg -> SolverReport
+important ctxt doc = SolverReport { sr_important_msg = SolverReportWithCtxt ctxt doc
+                                  , sr_supplementary = [] }
+
+add_relevant_bindings :: RelevantBindings -> SolverReport -> SolverReport
+add_relevant_bindings binds report@(SolverReport { sr_supplementary = supp })
+  = report { sr_supplementary = SupplementaryBindings binds : supp }
 
 deferringAnyBindings :: SolverReportErrCtxt -> Bool
 deferringAnyBindings (CEC { cec_defer_type_errors = ErrorWithoutFlag
@@ -327,6 +339,25 @@ mkSkolReporter ctxt items = mapM_ (reportGroup mkEqErr ctxt) (group (toList item
       | eq_lhs_kind item1 item2 = True
       | otherwise = False
 
+zonkTidyTcLclEnvs :: TidyEnv -> [CtLocEnv] -> ZonkM (TidyEnv, NameEnv Type)
+zonkTidyTcLclEnvs tidy_env lcls = foldM go (tidy_env, emptyNameEnv) (concatMap ctl_bndrs lcls)
+  where
+    go envs tc_bndr = case tc_bndr of
+      TcTvBndr {} -> return envs
+      TcKvBndr {} -> return envs
+      TcIdBndr id _ -> panic "go_one (idName id) (idType id) envs"
+      TcIdBndr_ExpType name et _ -> panic "zonkTidyTcLclEnvs TcIdBndr_ExpType" --do
+        -- mb_ty <- liftIO $ readExpType_maybe et
+        -- case mb_ty of
+        --   Just ty -> panic go_one name ty envs
+        --   Nothing -> return envs
+
+    -- go_one name ty (tidy_env, name_env) = do
+    --   if name `elemNameEv` name_env
+    --     then return (tidy_env, name_env)
+    --     else do (tidy_env', tidy_ty) <- zonkTidyTcType tidy_env ty
+    --             return 
+
 ignoreErrorReporter :: Reporter
 ignoreErrorReporter ctxt items = do
   traceTc "mkGivenErrorReporter no" (ppr items $$ ppr (cec_encl ctxt))
@@ -458,7 +489,121 @@ mkIrredErr ctxt items = panic "mkIrredErr"
 ********************************************************************* -}
 
 mkEqErr :: SolverReportErrCtxt -> NonEmpty ErrorItem -> TcM SolverReport
-mkEqErr ctxt items = panic "mkEqErr"
+mkEqErr ctxt items
+  | item1 :| _ <- tryFilter (not . ei_suppress) items
+  = mkEqErr1 ctxt item1
+
+mkEqErr1 :: SolverReportErrCtxt -> ErrorItem -> TcM SolverReport
+mkEqErr1 ctxt item = do
+  (ctxt, binds, item) <- relevantBindings True ctxt item
+  traceTc "mkEqErr1" (ppr item $$ pprCtOrigin (errorItemOrigin item))
+  let (ki1, ki2) = getKiEqPredKis (errorItemPred item)
+  err_msg <- mkEqErr_help ctxt item ki1 ki2
+  let report = add_relevant_bindings binds $ important ctxt err_msg
+  return report
+
+mkEqErr_help :: SolverReportErrCtxt -> ErrorItem -> MonoKind -> MonoKind -> TcM TcSolverReportMsg
+mkEqErr_help ctxt item ki1 ki2
+  | Just kv1 <- getKiVarMono_maybe ki1
+  = mkKiVarEqErr ctxt item kv1 ki2
+  | Just kv2 <- getKiVarMono_maybe ki2
+  = mkKiVarEqErr ctxt item kv2 ki1
+  | otherwise
+  = reportEqErr ctxt item ki1 ki2
+
+reportEqErr :: SolverReportErrCtxt -> ErrorItem -> MonoKind -> MonoKind -> TcM TcSolverReportMsg
+reportEqErr ctxt item ki1 ki2 = do
+  kv_info <- case getKiVarMono_maybe ki2 of
+               Nothing -> return Nothing
+               Just kv2 -> Just <$> extraKiVarEqInfo (kv2, Nothing) ki1
+  return $ Mismatch { mismatchMsg = mismatch
+                    , mismatchKiVarInfo = kv_info
+                    , mismatchAmbiguityInfo = [] }
+  where
+    mismatch = misMatchOrCND ctxt item ki1 ki2
+
+mkKiVarEqErr
+  :: SolverReportErrCtxt
+  -> ErrorItem
+  -> KindVar
+  -> MonoKind
+  -> TcM TcSolverReportMsg
+mkKiVarEqErr ctxt item kv1 ki2 = do
+  traceTc "mkKiVarEqErr" (ppr item $$ ppr kv1 $$ ppr ki2)
+  mkKiVarEqErr' ctxt item kv1 ki2
+
+mkKiVarEqErr'
+  :: SolverReportErrCtxt
+  -> ErrorItem
+  -> KindVar
+  -> MonoKind
+  -> TcM TcSolverReportMsg
+mkKiVarEqErr' ctxt item kv1 ki2 = panic "mkKiVarEqErr'"
+
+misMatchOrCND :: SolverReportErrCtxt -> ErrorItem -> MonoKind -> MonoKind -> MismatchMsg
+misMatchOrCND ctxt item ki1 ki2
+  | insoluble_item
+    || (isRigidKi ki1 && isRigidKi ki2)
+    || (ei_flavor item == Given)
+    || null givens
+  = mkMismatchMsg item ki1 ki2
+  | otherwise
+  = CouldNotDeduce givens (item :| []) (Just $ CND_Extra level ki1 ki2)
+  where
+    insoluble_item = case ei_m_reason item of
+                       Nothing -> False
+                       Just r -> isInsolubleReason r
+    level = ctLocTypeOrKind_maybe (errorItemCtLoc item) `orElse` KindLevel
+    givens = [ given | given <- getUserGivens ctxt, ic_given_eqs given /= NoGivenEqs ]
+
+extraKiVarEqInfo :: (TcKiVar, Maybe Implication) -> MonoKind -> TcM KiVarInfo
+extraKiVarEqInfo (kv1, mb_implic) ki2 = do
+  kv1_info <- extraKiVarInfo kv1
+  ki2_info <- ki_extra ki2
+  return $ KiVarInfo { thisKiVar = kv1_info
+                     , thisKiVarIsUntouchable = mb_implic
+                     , otherKi = ki2_info }
+  where
+    ki_extra ki = case getKiVarMono_maybe ki of
+                    Just kv -> Just <$> extraKiVarInfo kv
+                    Nothing -> return Nothing
+
+extraKiVarInfo :: TcKiVar -> TcM KindVar
+extraKiVarInfo kv = assertPpr (isKiVar kv) (ppr kv) $
+  case tcKiVarDetails kv of
+    SkolemKv skol_info lvl -> do
+      new_skol_info <- liftZonkM $ zonkSkolemInfo skol_info
+      return $ mkTcKiVar (kiVarName kv) (SkolemKv new_skol_info lvl)
+    _ -> return kv
+ 
+mkMismatchMsg :: ErrorItem -> MonoKind -> MonoKind -> MismatchMsg
+mkMismatchMsg item ki1 ki2 = case orig of
+  KindEqOrigin { keq_actual = keq_actual, keq_expected = keq_expected, keq_thing = mb_thing }
+    -> KindEqMismatch { keq_mismatch_item = item
+                      , keq_mismatch_ki1 = ki1
+                      , keq_mismatch_ki2 = ki2
+                      , keq_mismatch_actual = keq_actual
+                      , keq_mismatch_expected = keq_expected
+                      , keq_mismatch_what = mb_thing
+                      , keq_mb_same_kicon = mb_same_kicon }
+  _ -> BasicMismatch { mismatch_ea = NoEA
+                     , mismatch_item = item
+                     , mismatch_ki1 = ki1
+                     , mismatch_ki2 = ki2
+                     , mismatch_whenMatching = Nothing
+                     , mismatch_mb_same_kicon = mb_same_kicon }
+  where
+    orig = errorItemOrigin item
+    mb_same_kicon = sameKiConExtras ki2 ki1
+
+sameKiConExtras :: MonoKind -> MonoKind -> Maybe SameKiConInfo
+sameKiConExtras (KiConApp kc1 _) (KiConApp kc2 _)
+  | kc1 == kc2 = Just $ SameKiCon kc1
+sameKiConExtras (FunKi {}) (FunKi {}) = Just $ SameFunKi
+sameKiConExtras _ _ = Nothing
+
+      
+  
 
 {- *********************************************************************
 *                                                                      *
@@ -472,3 +617,102 @@ mkRelErr
   -> NonEmpty ErrorItem
   -> TcM SolverReport
 mkRelErr ctxt orig_items = panic "mkRelErr"
+
+{-**********************************************************************
+*                                                                      *
+                      Relevant bindings
+*                                                                      *
+**********************************************************************-}
+
+relevantBindings
+  :: Bool
+  -> SolverReportErrCtxt
+  -> ErrorItem
+  -> TcM (SolverReportErrCtxt, RelevantBindings, ErrorItem)
+relevantBindings want_filtering ctxt item = do
+  traceTc "relevantBindings" (ppr item)
+  let loc = errorItemCtLoc item
+      lcl_env = ctLocEnv loc
+  (env1, tidy_orig) <- liftZonkM $ zonkTidyOrigin (cec_tidy ctxt) (ctLocOrigin loc)
+
+  let ct_fvs = kiCoVarsOfMonoKind (errorItemPred item)
+
+      loc' = setCtLocOrigin loc tidy_orig
+      item' = item { ei_loc = loc' }
+
+  (env2, lcl_name_cache) <- liftZonkM $ zonkTidyTcLclEnvs env1 [lcl_env]
+
+  relev_bds <- relevant_bindings want_filtering lcl_env lcl_name_cache ct_fvs
+  let ctxt' = ctxt { cec_tidy = env2 }
+  return (ctxt', relev_bds, item')
+
+relevant_bindings
+  :: Bool
+  -> CtLocEnv
+  -> NameEnv Type
+  -> KiCoVarSet
+  -> TcM RelevantBindings
+relevant_bindings want_filtering lcl_env lcl_name_env ct_kvs = do
+  dflags <- getDynFlags
+  traceTc "relevant_bindings"
+    $ vcat [ ppr ct_kvs
+           , pprWithCommas id [ ppr id <+> colon <+> ppr (varType id)
+                              | TcIdBndr id _ <- ctl_bndrs lcl_env ]
+           , pprWithCommas id [ ppr id | TcIdBndr_ExpType id _ _ <- ctl_bndrs lcl_env ] ]
+  go dflags (maxRelevantBinds dflags) emptyVarSet (RelevantBindings [] False)
+    (removeBindingShadowing $ ctl_bndrs lcl_env)
+
+  where
+    run_out :: Maybe Int -> Bool
+    run_out Nothing = False
+    run_out (Just n) = n <= 0
+
+    dec_max :: Maybe Int -> Maybe Int
+    dec_max = fmap (\n -> n - 1)
+
+    go
+      :: DynFlags
+      -> Maybe Int
+      -> TyVarSet
+      -> RelevantBindings
+      -> [TcBinder]
+      -> TcM RelevantBindings
+    go _ _ _ (RelevantBindings bds discards) []
+      = return $ RelevantBindings (reverse bds) discards
+    go dflags n_left tvs_seen rels@(RelevantBindings bds discards) (tc_bndr : tc_bndrs)
+      = case tc_bndr of
+          TcTvBndr {} -> discard_it
+          TcKvBndr {} -> discard_it
+          TcIdBndr id top_lvl -> panic "go2 (idName id) top_lvl"
+          TcIdBndr_ExpType name et top_lvl -> panic "relevant_bindings TcIdBndr_ExpType"
+      where
+        discard_it = go dflags n_left tvs_seen rels tc_bndrs
+
+        -- go2 id_name top_lvl = do
+        --   let tidy_ty = case lookupNameEnv lcl_name_env id_name of
+        --                   Just tty -> tty
+        --                   Nothing -> pprPanic "relevant_bindings" (ppr id_name)
+        --   traceTc "relevantBindings 1" (ppr id_name <+> colon <+> ppr tidy_ty)
+        --   let id_tvs = tyVarsOfType tidy_ty
+        --       bd = (id_name, tidy_ty)
+        --       new_seen = tvs_seen `unionVarSet` id_tvs
+
+        --   if | (want_filtering && not (hasPprDebug dflags)
+        --         && id_tvs `disjointVarSet` ct_kvs)
+        --        ->  discard_it
+        --      | isTopLevel top_lvl && not (isNothing n_left)
+        --        -> discard_it
+        --      | run_out n_left && id_tvs `subVarSet` tvs_seen
+        --        -> go dflags n_left tvs_seen (RelevantBindings bds True) tc_bndrs
+        --      | otherwise
+        --        -> go dflags (dec_max n_left) new_seen
+        --              (RelevantBindings (bd:bds) discards) tc_bndrs
+
+{-**********************************************************************
+*                                                                      *
+                     helper functions
+*                                                                      *
+**********************************************************************-}
+
+tryFilter :: (a -> Bool) -> NonEmpty a -> NonEmpty a
+tryFilter f as = fromMaybe as $ nonEmpty (filter f (toList as))
