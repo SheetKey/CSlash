@@ -170,3 +170,7 @@ assertPpr cond msg a =
 massertPpr :: (HasCallStack, Applicative m) => Bool -> SDoc -> m ()
 {-# INLINE massertPpr #-}
 massertPpr cond msg = withFrozenCallStack (assertPpr cond msg (pure ()))
+
+assertPprM :: (HasCallStack, Monad m) => m Bool -> SDoc -> m ()
+{-# INLINE assertPprM #-}
+assertPprM mcond msg = withFrozenCallStack (mcond >>= \cond -> massertPpr cond msg)

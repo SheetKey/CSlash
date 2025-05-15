@@ -690,6 +690,9 @@ initialSubGoalDepth = SubGoalDepth 0
 bumpSubGoalDepth :: SubGoalDepth -> SubGoalDepth
 bumpSubGoalDepth (SubGoalDepth n) = SubGoalDepth (n + 1)
 
+subGoalDepthExceeded :: IntWithInf -> SubGoalDepth -> Bool
+subGoalDepthExceeded reductionDepth (SubGoalDepth d) = mkIntWithInf d > reductionDepth
+
 {- *********************************************************************
 *                                                                      *
             CtLoc

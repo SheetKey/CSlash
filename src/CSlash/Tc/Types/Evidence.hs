@@ -61,6 +61,10 @@ data KiEvBindsVar
     , kebv_kcvs :: IORef KiCoVarSet
     }
 
+isKiCoEvBindsVar :: KiEvBindsVar -> Bool 
+isKiCoEvBindsVar (KiCoEvBindsVar {}) = True
+isKiCoEvBindsVar (KiEvBindsVar {}) = False
+
 newtype KiEvBindMap = KiEvBindMap { kev_bind_varenv :: DVarEnv KiEvBind }
 
 emptyKiEvBindMap :: KiEvBindMap

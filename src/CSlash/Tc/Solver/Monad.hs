@@ -349,6 +349,9 @@ instance HasModule TcS where
 wrapTcS :: TcM a -> TcS a
 wrapTcS action = mkTcS $ \_ -> action
 
+wrapErrTcS :: TcM a -> TcS a
+wrapErrTcS = wrapTcS
+
 failTcS :: TcRnMessage -> TcS a
 failTcS = wrapTcS . TcM.failWith
 
@@ -694,6 +697,15 @@ newWanted loc rewriters pki
   = Fresh . fst <$> newWantedKiEq loc rewriters k1 k2
   | otherwise
   = newWantedKiEvVar loc rewriters pki  
+
+checkReductionDepth :: CtLoc -> MonoKind -> TcS ()
+checkReductionDepth loc ki = do
+  dflags <- getDynFlags
+  when (subGoalDepthExceeded (reductionDepth dflags) (ctLocDepth loc))
+    $ wrapErrTcS $ solverDepthError loc ki
+
+solverDepthError :: CtLoc -> MonoKind -> TcM a
+solverDepthError loc ki = panic "solverDepthError"
 
 {- *********************************************************************
 *                                                                      *

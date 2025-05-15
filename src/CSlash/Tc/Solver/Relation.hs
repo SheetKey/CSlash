@@ -142,8 +142,9 @@ chooseInstance work_item (OneInst { rir_what = what
                                   , rir_canonical = canonical })
   = do traceTcS "doTopReact/found instance for " $ ppr work_item
        deeper_loc <- checkInstanceOK loc what pred
-       panic "checkReductionDepth deeper_loc pred"
-       panic "assertPprM (getTcKiEvBindsVar >>= return . not . isCoE"
+       checkReductionDepth deeper_loc pred
+       assertPprM (getTcKiEvBindsVar >>= return . not . isKiCoEvBindsVar) (ppr work_item)
+       stopWith work_item "Rel/Top (solved wanted)"
   where
     pred = ctEvPred work_item
     loc = ctEvLoc work_item
