@@ -283,8 +283,9 @@ tcInferTyApps_nosat orig_cs_ty fun orig_cs_args = do
               ])
         $ do traceTc "tcInferTyApps (vis normal app)"
                $ vcat [ ppr arg_ki, ppr arg, ppr subst ]
+             let arg_exp_kind = substMonoKi subst arg_ki
              arg' <- addErrCtxt (funAppCtxt orig_cs_ty arg n)
-                     $ tc_lcs_type arg arg_ki
+                     $ tc_lcs_type arg arg_exp_kind
              traceTc "tcInferTyApps (vis normal app) 2" (ppr arg_ki)
              (subst', fun') <- mkAppTyM subst fun arg_ki arg'
              go_mono (n + 1) fun' subst' res_ki args
