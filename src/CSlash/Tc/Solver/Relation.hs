@@ -70,7 +70,7 @@ updInertRels rel_ct@(RelCt { rl_kc = kc, rl_ev = ev, rl_ki1 = k1, rl_ki2 = k2 })
 canRelCt :: CtEvidence -> KiCon -> MonoKind -> MonoKind -> SolverStage RelCt
 canRelCt ev kc ki1 ki2
   | isGiven ev
-  = panic "canRelCt"
+  = Stage $ continueWith $ RelCt { rl_ev = ev, rl_kc = kc, rl_ki1 = ki1, rl_ki2 = ki2 }
   | otherwise
   = Stage $ continueWith $ RelCt { rl_ev = ev, rl_kc = kc, rl_ki1 = ki1, rl_ki2 = ki2 }
       

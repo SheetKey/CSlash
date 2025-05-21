@@ -12,7 +12,7 @@ import CSlash.Tc.Utils.Env
 import CSlash.Tc.Utils.Monad
 import CSlash.Tc.Utils.TcMType
 import CSlash.Tc.Utils.TcType
--- import GHC.Tc.Types.Evidence
+import CSlash.Tc.Types.Evidence
 import CSlash.Tc.Types.Constraint
 import CSlash.Tc.Types.Origin
 import CSlash.Tc.Zonk.TcType
@@ -56,6 +56,18 @@ import qualified Data.Semigroup as S ( (<>) )
 *                                                                      *
 ********************************************************************* -}
 
+checkKiConstraints :: SkolemInfoAnon -> [KiEvVar] -> TcM result -> TcM result
+checkKiConstraints skol_info given thing_inside = do
+  implication_needed <- implicationNeeded skol_info given
+  
+  if implication_needed
+    then do (tclvl, wanted, result) <- pushLevelAndCaptureConstraints thing_inside
+            (implics, ev_binds) <- buildImplicationFor tclvl skol_info given wanted
+            traceTc "checkKiConstraints" (ppr tclvl $$ ppr ev_binds)
+            emitImplications implics
+            return result
+    else thing_inside
+
 emitResidualTvConstraint :: SkolemInfo -> [TcTyVar] -> TcLevel -> WantedConstraints -> TcM ()
 emitResidualTvConstraint skol_info skol_tvs tclvl wanted
   | not (isEmptyWC wanted)
@@ -86,6 +98,44 @@ buildVImplication skol_info skol_vs tclvl wanted
                            , ic_info = skol_info }
       checkImplicationInvariants implic'
       return implic'
+
+implicationNeeded :: SkolemInfoAnon -> [KiEvVar] -> TcM Bool
+implicationNeeded skol_info given
+  | null given
+  , not (alwaysBuildImplication skol_info)
+  = do tc_lvl <- getTcLevel
+       if not (isTopTcLevel tc_lvl)
+         then return False
+         else do dflags <- getDynFlags
+                 return $ gopt Opt_DeferTypeErrors dflags
+                       || gopt Opt_DeferTypedHoles dflags
+                       || gopt Opt_DeferOutOfScopeVariables dflags
+  | otherwise
+  = return True
+
+alwaysBuildImplication :: SkolemInfoAnon -> Bool
+alwaysBuildImplication _ = False
+
+buildImplicationFor
+  :: TcLevel
+  -> SkolemInfoAnon
+  -> [KiEvVar]
+  -> WantedConstraints
+  -> TcM (Bag Implication, TcKiEvBinds)
+buildImplicationFor tclvl skol_info given wanted
+  | isEmptyWC wanted && null given
+  = return (emptyBag, emptyTcKiEvBinds)
+  | otherwise
+  = do ev_binds_var <- newTcKiEvBinds
+       implic <- newImplication
+       let implic' = implic { ic_tclvl = tclvl
+                            , ic_skols = []
+                            , ic_given = given
+                            , ic_wanted = wanted
+                            , ic_binds = ev_binds_var
+                            , ic_info = skol_info }
+       checkImplicationInvariants implic'
+       return (unitBag implic', TcKiEvBinds ev_binds_var)
 
 {- *********************************************************************
 *                                                                      *

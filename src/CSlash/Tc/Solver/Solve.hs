@@ -170,6 +170,14 @@ finish_rewrite old_ev (ReductionKi co new_pred) rewriters
   = assert (isEmptyRewriterSet rewriters)
     $ continueWith (setCtEvPredKind old_ev new_pred)
 
+finish_rewrite ev@(CtGiven { ctev_evar = old_evar, ctev_loc = loc })
+               (ReductionKi co new_pred) rewriters
+  = assert (isEmptyRewriterSet rewriters) $ do
+      new_ev <- newGivenKiEvVar loc (new_pred, new_ty)
+      continueWith new_ev
+  where
+    new_ty = mkKiEvCast (kiEvVar old_evar) co
+
 finish_rewrite ev@(CtWanted { ctev_dest = dest, ctev_loc = loc, ctev_rewriters = rewriters })
                (ReductionKi co new_pred) new_rewriters
   = do mb_new_ev <- newWanted loc rewriters' new_pred

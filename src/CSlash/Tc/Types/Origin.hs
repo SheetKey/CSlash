@@ -49,6 +49,10 @@ data ReportRedundantConstraints
   | WantRRC SrcSpan
   deriving (Eq)
 
+reportRedundantConstraints :: ReportRedundantConstraints -> Bool
+reportRedundantConstraints NoRRC = False
+reportRedundantConstraints (WantRRC {}) = True
+
 pprUserTypeCtxt :: UserTypeCtxt -> SDoc
 pprUserTypeCtxt (FunSigCtxt n _) = text "the type signature for" <+> quotes (ppr n)
 pprUserTypeCtxt (InfSigCtxt n) = text "the inferred type for" <+> quotes (ppr n)
@@ -73,6 +77,7 @@ data SkolemInfoAnon
   | ForAllSkol TyVarBndrs
   | TyLamTySkol [Name]
   | InferSkol [(Name, TcType)]
+  | InferKindSkol
   | UnifyForAllSkol TcType
   | TyConSkol (TyConFlavor TyCon) Name
   | UnkSkol CallStack
@@ -105,6 +110,7 @@ pprSkolInfo (TyLamTySkol tvs) = text "an explicit type lambda" <+> ppr tvs
 pprSkolInfo (InferSkol ids) = hang (text "the inferred type" <> plural ids <+> text "of")
                               2 (vcat [ ppr name <+> colon <+> ppr ty
                                       | (name, ty) <- ids ])
+pprSkolInfo InferKindSkol = text "the inferred kind"
 pprSkolInfo (UnifyForAllSkol ty) = text "the type" <+> ppr ty
 pprSkolInfo (TyConSkol flav name) = text "the" <+> ppr flav
                                     <+> text "declaration for" <+> quotes (ppr name)
@@ -132,7 +138,8 @@ instance Outputable TyVarBndrs where
   ppr (CsTyVarBndrsRn bndrs) = fsep (map ppr bndrs)
 
 data CtOrigin
-  = OccurrenceOf Name
+  = GivenOrigin SkolemInfoAnon
+  | OccurrenceOf Name
   | KindEqOrigin { keq_actual :: TcMonoKind
                  , keq_expected :: TcMonoKind
                  , keq_thing :: Maybe KindedThing
@@ -148,6 +155,7 @@ toInvisibleOrigin o@(KindEqOrigin {}) = o { keq_visible = True }
 toInvisibleOrigin o = o
 
 isGivenOrigin :: CtOrigin -> Bool
+isGivenOrigin (GivenOrigin {}) = True
 isGivenOrigin (KindEqOrigin {}) = False
 isGivenOrigin (OccurrenceOf {}) = False
 

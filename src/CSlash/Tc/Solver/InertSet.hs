@@ -19,6 +19,7 @@ import CSlash.Core.Predicate
 import CSlash.Core.Type.FVs
 import CSlash.Core.Kind.FVs
 import CSlash.Core.Kind
+import CSlash.Core.Kind.Subst
 import CSlash.Core.Kind.Compare
 import qualified CSlash.Core.Type.Rep as Rep
 -- import GHC.Core.Class( Class )
@@ -394,8 +395,18 @@ noMatchableGivenRels inerts@(IS { inert_cans = inert_cans }) loc_w kc k1 k2
   = not $ anyBag matchable_given
     $ findRelsByRel (inert_rels inert_cans) kc
   where
+    pred_w = mkRelPred kc k1 k2
+
     matchable_given :: RelCt -> Bool
-    matchable_given (RelCt { rl_ev = CtWanted{} }) = False
+    matchable_given (RelCt { rl_ev = ev })
+      | CtGiven { ctev_loc = loc_g, ctev_pred = pred_g } <- ev
+      = isJust $ mightEqualLater inerts pred_g loc_g pred_w loc_w
+      | otherwise
+      = False
+
+mightEqualLater :: InertSet -> TcPredKind -> CtLoc -> TcPredKind -> CtLoc -> Maybe Subst
+mightEqualLater inert_set given_pred given_loc wanted_pred wanted_loc
+  = panic "mightEqualLater"
 
 {- *********************************************************************
 *                                                                      *
@@ -430,7 +441,7 @@ solveOneFromTheOther :: Ct -> Ct -> InteractResult
 solveOneFromTheOther ct_i ct_w
   | CtWanted {} <- ev_w
   = case ev_i of
-      --CtGiven {} -> KeepInert
+      CtGiven {} -> KeepInert
       CtWanted {}
         | ((<) `on` ctLocSpan) loc_i loc_w -> KeepInert
         | otherwise -> KeepWork

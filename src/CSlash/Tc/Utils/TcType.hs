@@ -1,3 +1,6 @@
+{-# LANGUAGE TupleSections #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+
 module CSlash.Tc.Utils.TcType
   ( module CSlash.Tc.Utils.TcType
   , TcTyVar, TcKiVar
@@ -9,10 +12,12 @@ import CSlash.Core.Type
 import CSlash.Core.Type.Rep
 import CSlash.Core.Type.FVs
 import CSlash.Core.Kind
+import CSlash.Core.Kind.Compare
 import CSlash.Core.Kind.FVs
 import CSlash.Types.Var
 import CSlash.Types.Var.Set
 import CSlash.Core.TyCon
+import CSlash.Core.Predicate
 
 import {-# SOURCE #-} CSlash.Tc.Types.Origin
   ( SkolemInfo, unkSkol )
@@ -149,6 +154,10 @@ minTcLevel (TcLevel a) (TcLevel b) = TcLevel (a `min` b)
 
 topTcLevel :: TcLevel
 topTcLevel = TcLevel 0
+
+isTopTcLevel :: TcLevel -> Bool
+isTopTcLevel (TcLevel 0) = True
+isTopTcLevel _ = False
 
 pushTcLevel :: TcLevel -> TcLevel
 pushTcLevel (TcLevel us) = TcLevel (us + 1)
@@ -288,7 +297,7 @@ isMetaKiVar kv
       _ -> False
   | otherwise = False
 
-isConcreteKiVar_maybe :: TcKiVar -> Maybe (TcKiVar, ConcreteKvOrigin)
+isConcreteKiVar_maybe :: TcKiVar -> Maybe ConcreteKvOrigin
 isConcreteKiVar_maybe kv
   | isTcKiVar kv
   , MetaKv { mkv_info = info } <- tcKiVarDetails kv
@@ -297,6 +306,10 @@ isConcreteKiVar_maybe kv
       TauKv -> Nothing
   | otherwise
   = Nothing
+
+isConcreteKiVarKi_maybe :: TcMonoKind -> Maybe (TcKiVar, ConcreteKvOrigin)
+isConcreteKiVarKi_maybe (KiVarKi kv) = (kv,) <$> isConcreteKiVar_maybe kv
+isConcreteKiVarKi_maybe _ = Nothing
 
 isConcreteInfoK :: MetaInfoK -> Bool
 isConcreteInfoK KiVarKv = False
@@ -371,6 +384,41 @@ tcSplitPiKi_maybe ki = assert (isMaybeKiBinder ski) ski
 
     isMaybeKiBinder (Just (Left (kv, _))) = isKiVar kv
     isMaybeKiBinder _ = True
+
+{- *********************************************************************
+*                                                                      *
+          Predicate kinds
+*                                                                      *
+********************************************************************* -}
+
+kiEvVarPred :: KiEvVar -> MonoKind
+kiEvVarPred var = varKind var
+
+mkMinimalBy :: forall a. (a -> PredKind) -> [a] -> [a]
+mkMinimalBy get_pred xs = go preds_with_eqx []
+  where
+    preds_with_eqx :: [(PredKind, [PredKind], a)]
+    preds_with_eqx = [ (pred, pred : eq_extras pred, x)
+                     | x <- xs
+                     , let pred = get_pred x ]
+
+    eq_extras pred = case classifyPredKind pred of
+                       EqPred k1 k2 -> [mkKiEqPred k2 k1]
+                       _ -> []
+ 
+    go :: [(PredKind, [PredKind], a)] -> [(PredKind, [PredKind], a)] -> [a]
+    go [] min_preds = reverse (map thdOf3 min_preds)
+    go (work_item@(p, _, _) : work_list) min_preds
+      | EqPred k1 k2 <- classifyPredKind p
+      , k1 `tcEqMonoKind` k2
+      = go work_list min_preds
+      | p `in_cloud` work_list || p `in_cloud` min_preds
+      = go work_list min_preds
+      | otherwise
+      = go work_list (work_item : min_preds)
+
+    in_cloud :: PredKind -> [(PredKind, [PredKind], a)] -> Bool
+    in_cloud p ps = or [ p `tcEqMonoKind` p' | (_, eqxs, _) <- ps, p' <- eqxs ]
 
 {- *********************************************************************
 *                                                                      *

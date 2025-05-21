@@ -7,7 +7,8 @@ import CSlash.Data.FastString
 import CSlash.Core.Type.Rep
 import CSlash.Core.Kind
 import CSlash.Core.Type.FVs (tyKiVarsOfTypeList)
-import CSlash.Core.Kind.FVs (kiVarsOfKindList, kiVarsOfMonoKindList)
+import CSlash.Core.Kind.FVs (kiVarsOfKindList, kiVarsOfMonoKindList
+                            , kiCoVarsOfMonoKindsWellScoped)
 
 import CSlash.Types.Name hiding (varName)
 import CSlash.Types.Var
@@ -15,6 +16,7 @@ import CSlash.Types.Var.Env
 import CSlash.Utils.Misc (strictMap)
 import CSlash.Utils.Trace
 import CSlash.Utils.Outputable
+import CSlash.Utils.Panic
 
 import Data.List (mapAccumL)
 
@@ -120,6 +122,18 @@ splitForAllKiVars' ki = go ki []
   where
     go (ForAllKi kv ki) kvs = go ki (kv : kvs)
     go (Mono ki) kvs = (reverse kvs, ki)
+
+tidyOpenMonoKinds :: TidyEnv -> [MonoKind] -> (TidyEnv, [MonoKind])
+tidyOpenMonoKinds env kis = (env', tidyMonoKinds (trimmed_occ_env, var_env) kis)
+  where
+    (env'@(_, var_env), kvs') = tidyOpenTyKiVars env
+                                $ kiCoVarsOfMonoKindsWellScoped kis
+    trimmed_occ_env = initTidyOccEnv (map getOccName kvs')
+
+tidyOpenMonoKind :: TidyEnv -> MonoKind -> (TidyEnv, MonoKind)
+tidyOpenMonoKind env ki = case tidyOpenMonoKinds env [ki] of
+                            (env', [ki']) -> (env', ki')
+                            _ -> panic "tidyOpenMonoKind"
 
 tidyMonoKinds :: TidyEnv -> [MonoKind] -> [MonoKind]
 tidyMonoKinds env kis = strictMap (tidyMonoKind env) kis

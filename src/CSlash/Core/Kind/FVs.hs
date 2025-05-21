@@ -175,6 +175,9 @@ kiVarsOfKindDSet ki = fvDVarSet $ kiFVsOfKind ki
 kiVarsOfKindList :: Kind -> [KindVar]
 kiVarsOfKindList ki = fvVarList $ kiFVsOfKind ki
 
+kiCoVarsOfMonoKindsList :: [MonoKind] -> [KiCoVar]
+kiCoVarsOfMonoKindsList kis = fvVarList $ kiFVsOfMonoKinds kis
+
 kiFVsOfKind :: Kind -> FV
 kiFVsOfKind (Mono ki) f bound_vars acc = kiFVsOfMonoKind ki f bound_vars acc
 kiFVsOfKind (ForAllKi kv ki) f bound_vars acc
@@ -232,3 +235,23 @@ noFreeVarsOfKind ki = not $ DM.getAny (f ki)
 noFreeVarsOfMonoKind :: MonoKind -> Bool
 noFreeVarsOfMonoKind ki = not $ DM.getAny (f (Mono ki))
   where (f, _) = foldKind (afvFolder (const True)) emptyVarSet
+
+{- *********************************************************************
+*                                                                      *
+                 scopedSort
+*                                                                      *
+********************************************************************* -}
+
+scopedSort :: [KiCoVar] -> [KiCoVar]
+scopedSort = go []
+  where
+    go acc [] = reverse acc
+    go acc (kv:kvs) = go acc' kvs
+      where
+        acc' = insert kv acc
+
+    insert kv [] = [kv]
+    insert kv (a:as) = (kv:a:as)
+
+kiCoVarsOfMonoKindsWellScoped :: [MonoKind] -> [KindVar]
+kiCoVarsOfMonoKindsWellScoped = scopedSort . kiCoVarsOfMonoKindsList

@@ -25,7 +25,8 @@ import CSlash.Tc.Types.Evidence
 -- import GHC.Tc.Types.EvTerm
 -- import GHC.Tc.Instance.Family
 import CSlash.Tc.Utils.Instantiate
--- import {-# SOURCE #-} GHC.Tc.Errors.Hole ( findValidHoleFits, getHoleFitDispConfig, pprHoleFit )
+import {-# SOURCE #-} CSlash.Tc.Errors.Hole ( {-findValidHoleFits,-}
+  getHoleFitDispConfig{-, pprHoleFit-} )
 
 import CSlash.Types.Name
 import CSlash.Types.Name.Reader
@@ -174,6 +175,7 @@ maybeSwitchOffDefer evb ctxt
 
 reportImplic :: SolverReportErrCtxt -> Implication -> TcM ()
 reportImplic ctxt implic@(Implic { ic_skols = tvs
+                                 , ic_given = given
                                  , ic_wanted = wanted
                                  , ic_binds = evb
                                  , ic_status = status
@@ -189,12 +191,15 @@ reportImplic ctxt implic@(Implic { ic_skols = tvs
 
   reportWanteds ctxt' tc_lvl wanted
 
+  warnRedundantConstraints ctxt' ct_loc_env info' dead_givens
   where
     insoluble = isInsolubleStatus status
     (env1, tvs') = tidyVarBndrs (cec_tidy ctxt) $ tvs
 
     info' = tidySkolemInfoAnon env1 info
-    implic' = implic { ic_skols = tvs', ic_info = info' }
+    implic' = implic { ic_skols = tvs'
+                     , ic_given = map (tidyKiEvVar env1) given
+                     , ic_info = info' }
 
     ctxt1 = maybeSwitchOffDefer evb ctxt
     ctxt' = ctxt1 { cec_tidy = env1
@@ -202,15 +207,36 @@ reportImplic ctxt implic@(Implic { ic_skols = tvs
                   , cec_suppress = insoluble || cec_suppress ctxt
                   , cec_binds = evb  }
 
+    dead_givens = case status of
+                    IC_Solved dead -> dead
+                    _ -> []
+
     bad_telescope = case status of
       IC_BadTelescope -> True
       _ -> False
+
+warnRedundantConstraints
+  :: SolverReportErrCtxt
+  -> CtLocEnv
+  -> SkolemInfoAnon
+  -> [KiEvVar]
+  -> TcM ()
+warnRedundantConstraints ctxt env info redundant_evs
+  | not (cec_warn_redundant ctxt)
+  = return ()
+  | null redundant_evs
+  = return ()
+  | SigSkol user_ctxt _ _ <- info
+  = panic "report_redundant_msg True (set"
+  | otherwise
+  = panic "report_redundant"
 
 mkErrorItem :: Ct -> TcM (Maybe ErrorItem)
 mkErrorItem ct = do
   let loc = ctLoc ct
       flav = ctFlavor ct
   (suppress, m_evdest) <- case ctEvidence ct of
+    CtGiven {} -> return (False, Nothing)
     CtWanted { ctev_rewriters = rewriters, ctev_dest = dest } -> do
       rewriters' <- zonkRewriterSet rewriters
       return (not (isEmptyRewriterSet rewriters'), Just dest)
@@ -392,6 +418,7 @@ reportGroup mk_err ctxt items = do
 nonDeferrableOrigin :: CtOrigin -> Bool
 nonDeferrableOrigin OccurrenceOf {} = False
 nonDeferrableOrigin KindEqOrigin {} = False
+nonDeferrableOrigin GivenOrigin {} = False
 
 maybeReportError :: SolverReportErrCtxt -> NonEmpty ErrorItem -> SolverReport -> TcM ()
 maybeReportError ctxt items@(item1 :| _) (SolverReport { sr_important_msg = important
@@ -454,7 +481,7 @@ mkErrorReport
 mkErrorReport tcl_env msg mb_ctxt supplementary = do
   mb_context <- traverse (\ctxt -> mkErrInfo (cec_tidy ctxt) (ctl_ctxt tcl_env)) mb_ctxt
   unit_state <- cs_units <$> getTopEnv
-  hfdc <- panic "getHoleFitDispConfig"
+  hfdc <- getHoleFitDispConfig
   let err_info = ErrInfo
                  (fromMaybe empty mb_context)
                  (vcat $ map (pprSolverReportSupplementary hfdc) supplementary)
@@ -538,7 +565,79 @@ mkKiVarEqErr'
   -> KindVar
   -> MonoKind
   -> TcM TcSolverReportMsg
-mkKiVarEqErr' ctxt item kv1 ki2 = panic "mkKiVarEqErr'"
+mkKiVarEqErr' ctxt item kv1 ki2
+  = let headline_msg = misMatchOrCND ctxt item ki1 ki2
+        mismatch_msg = mkMismatchMsg item ki1 ki2
+
+        mb_concrete_reason
+          | Just frr_orig <- isConcreteKiVar_maybe kv1
+          = panic "mkKiVarEqErr'/concrete ki var"
+          | Just (kv2, frr_orig) <- isConcreteKiVarKi_maybe ki2
+          = panic "mkKiVarEqErr'/concrete kivarki"
+          | otherwise
+          = Nothing
+
+        check_eq_result = case ei_m_reason item of
+                            Just (NonCanonicalReason result) -> result
+                            _ -> ctkeOK
+
+        ki1 = mkKiVarMKi kv1
+
+    in if | Just frr_info <- mb_concrete_reason
+            -> panic "mkKiVarEqErr'1"
+          | check_eq_result `ctkerHasProblem` ctkeImpredicative
+            -> do kivar_eq_info <- extraKiVarEqInfo (kv1, Nothing) ki2
+                  let poly_msg = CannotUnifyWithPolykind item kv1 ki2 mb_kv_info
+                      mb_kv_info | isSkolemKiVar kv1 = Just kivar_eq_info
+                                 | otherwise = Nothing
+                      main_msg = CannotUnifyKiVariable
+                                 { mismatchMsg = headline_msg
+                                 , cannotUnifyReason = poly_msg }
+                  return main_msg
+
+          | isSkolemKiVar kv1
+            || isKiVarKiVar kv1 && not (isKiVarKi ki2)
+            -> do kv_extra <- extraKiVarEqInfo (kv1, Nothing) ki2
+                  let reason = DifferentKiVars kv_extra
+                      main_msg = CannotUnifyKiVariable
+                                 { mismatchMsg = headline_msg
+                                 , cannotUnifyReason = reason }
+                  return main_msg
+          | kv1 `elemVarSet` kiCoVarsOfMonoKind ki2
+            -> let ambiguity_infos = kiEqInfoMsgs ki1 ki2
+
+                   occurs_err = OccursCheck { occursCheckAmbiguityInfos = ambiguity_infos }
+                   main_msg = CannotUnifyKiVariable
+                              { mismatchMsg = headline_msg
+                              , cannotUnifyReason = occurs_err }
+               in return main_msg
+
+          | (implic:_) <- cec_encl ctxt
+          , Implic { ic_skols = skols } <- implic
+          , kv1 `elem` skols
+            ->  do panic "mkKiVarEqErr'/skols in implic"
+          
+          | (implic:_) <- cec_encl ctxt
+          , Implic { ic_skols = skols } <- implic
+          , let esc_skols = filter (`elemVarSet` (kiCoVarsOfMonoKind ki2)) skols
+          , not (null esc_skols)
+            ->  panic "mkKiVarEqErr'/skols in implic 2"
+
+          | (implic:_) <- cec_encl ctxt
+          , Implic { ic_tclvl = lvl } <- implic
+          -> assertPpr (not (isTouchableMetaKiVar lvl kv1)) (ppr kv1 $$ ppr lvl) $ do
+              kv_extra <- extraKiVarEqInfo (kv1, Just implic) ki2
+              let kv_extra' = kv_extra { thisKiVarIsUntouchable = Just implic }
+                  msg = Mismatch { mismatchMsg = mismatch_msg
+                                 , mismatchKiVarInfo = Just kv_extra'
+                                 , mismatchAmbiguityInfo = [] }
+              return msg
+
+          | otherwise
+            -> reportEqErr ctxt item (mkKiVarMKi kv1) ki2
+
+kiEqInfoMsgs :: TcMonoKind -> TcMonoKind -> [AmbiguityInfo]
+kiEqInfoMsgs ki1 ki2 = panic "kiEqInfoMsgs"
 
 misMatchOrCND :: SolverReportErrCtxt -> ErrorItem -> MonoKind -> MonoKind -> MismatchMsg
 misMatchOrCND ctxt item ki1 ki2

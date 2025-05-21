@@ -142,6 +142,9 @@ shallowTvFolder = TypeFolder { tf_view = noView
 *                                                                      *
 ********************************************************************* -}
 
+typeSomeFreeVars :: (Var -> Bool) -> Type -> VarSet
+typeSomeFreeVars fv_cand t = fvVarSet $ filterFV fv_cand $ tyKiFVsOfType t
+
 tyKiVarsOfTypeDSet :: Type -> DVarSet
 tyKiVarsOfTypeDSet ty = fvDVarSet $ tyKiFVsOfType ty
 

@@ -785,9 +785,20 @@ newNoTcKiEvBinds = do
   return $ KiCoEvBindsVar { kebv_kcvs = kcvs_ref
                           , kebv_uniq = uniq }
 
+getTcKiEvKiCoVars :: KiEvBindsVar -> TcM KiCoVarSet
+getTcKiEvKiCoVars ev_binds_var = readTcRef (kebv_kcvs ev_binds_var)
+
 getTcKiEvBindsMap :: KiEvBindsVar -> TcM KiEvBindMap
 getTcKiEvBindsMap (KiEvBindsVar { kebv_binds = ev_ref }) = readTcRef ev_ref
 getTcKiEvBindsMap (KiCoEvBindsVar {}) = return emptyKiEvBindMap
+
+setTcKiEvBindsMap :: KiEvBindsVar -> KiEvBindMap -> TcM ()
+setTcKiEvBindsMap (KiEvBindsVar { kebv_binds = ev_ref }) binds = writeTcRef ev_ref binds
+setTcKiEvBindsMap v@(KiCoEvBindsVar {}) ev_binds
+  | isEmptyKiEvBindMap ev_binds
+  = return ()
+  | otherwise
+  = pprPanic "setTcKiEvBindsMap" (ppr v $$ ppr ev_binds)
 
 addTcKiEvBind :: KiEvBindsVar -> KiEvBind -> TcM ()
 addTcKiEvBind (KiEvBindsVar { kebv_binds = ev_ref, kebv_uniq = u }) ev_bind = do

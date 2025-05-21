@@ -266,6 +266,8 @@ canDecomposableKiConAppOK ev kc kis1 kis2 = assert (kis1 `equalLength` kis2) $ d
         cos <- zipWithM (u_arg uenv) kis1 kis2
         return $ mkKiConAppCo kc cos
       setWantedEq dest co
+    CtGiven { ctev_evar = evar } -> pprPanic "canDecomposableKiConAppOK/CtGiven"
+                                    $ vcat [ ppr ev, ppr kc, ppr kis1, ppr kis2 ]
   stopWith ev "Decomposed KiConApp"
   where
     loc = ctEvLoc ev
@@ -285,9 +287,14 @@ canDecomposableFunKi ev f f1@(a1, r1) f2@(a2, r2) = do
   traceTcS "canDecomposableFunKi"
     $ ppr ev $$ ppr f1 $$ ppr f2
   case ev of
-    CtWanted {} -> wrapUnifierTcS ev $ \uenv -> do
-      uKind uenv a1 a2
-      uKind uenv r1 r2
+    CtWanted { ctev_dest = dest } -> do
+      (co, _, _) <- wrapUnifierTcS ev $ \uenv -> do
+        arg <- uKind uenv a1 a2
+        res <- uKind uenv r1 r2
+        return $ mkFunKiCo f arg res
+      setWantedEq dest co
+    CtGiven { ctev_evar = evar } -> pprPanic "canDecomposableFunKi"
+                                    $ vcat [ ppr ev, ppr f1, ppr f2 ]
   stopWith ev "Decomposed FunKi"
 
 canKiEqHardFailure
@@ -457,6 +464,8 @@ rewriteKiEqEvidence new_rewriters old_ev swapped (ReductionKi lhs_co nlhs) (Redu
   , isReflKiCo lhs_co
   , isReflKiCo rhs_co
   = return $ setCtEvPredKind old_ev new_pred
+  | CtGiven { ctev_evar = old_evar } <- old_ev
+  = panic "rewriteKiEqEvidence"
   | CtWanted { ctev_dest = dest, ctev_rewriters = rewriters } <- old_ev
   , let rewriters' = rewriters S.<> new_rewriters
   = do (new_ev, hole_co) <- newWantedKiEq loc rewriters' nlhs nrhs

@@ -203,6 +203,12 @@ allBits = [ (ctkeImpredicative, "ctkeImpredicative")
 mkNonCanonical :: CtEvidence -> Ct
 mkNonCanonical = CNonCanonical
 
+mkGivens :: CtLoc -> [KiEvVar] -> [Ct]
+mkGivens loc ev_vars = map mk ev_vars
+  where mk ev_var = mkNonCanonical (CtGiven { ctev_evar = ev_var
+                                            , ctev_pred = kiEvVarPred ev_var
+                                            , ctev_loc = loc })
+
 ctEvidence :: Ct -> CtEvidence
 ctEvidence (CEqCan (KiEqCt { eq_ev = ev })) = ev
 ctEvidence (CIrredCan (IrredCt { ir_ev = ev })) = ev
@@ -242,6 +248,13 @@ instance Outputable EqCt where
 
 isGivenLoc :: CtLoc -> Bool
 isGivenLoc loc = isGivenOrigin (ctLocOrigin loc)
+
+{- *********************************************************************
+*                                                                      *
+                    CtEvidence
+         The "flavor" of a canonical constraint
+*                                                                      *
+********************************************************************* -}
 
 isWantedCt :: Ct -> Bool
 isWantedCt = isWanted . ctEvidence
@@ -313,7 +326,7 @@ dropMisleading (WC { wc_simple = simples, wc_impl = implics })
     keep_ct _ct = True
 
 isSolvedStatus :: ImplicStatus -> Bool
-isSolvedStatus IC_Solved = True
+isSolvedStatus IC_Solved {} = True
 isSolvedStatus _ = False
 
 isInsolubleStatus :: ImplicStatus -> Bool
@@ -362,12 +375,15 @@ data Implication = Implic
   { ic_tclvl :: TcLevel
   , ic_info :: SkolemInfoAnon
   , ic_skols :: [TcVar]
+  , ic_given :: [KiEvVar]
   , ic_given_eqs :: HasGivenEqs
   , ic_warn_inaccessible :: Bool
   , ic_env :: !CtLocEnv
   , ic_wanted :: WantedConstraints
   , ic_binds :: KiEvBindsVar
   , ic_status :: ImplicStatus
+  , ic_need_inner :: VarSet
+  , ic_need_outer :: VarSet
   }
 
 implicationPrototype :: CtLocEnv -> Implication
@@ -376,15 +392,18 @@ implicationPrototype ct_loc_env = Implic
   , ic_binds = panic "newImplic:binds"
   , ic_info = panic "newImplic:info"
   , ic_skols = []
+  , ic_given = []
   , ic_given_eqs = MaybeGivenEqs
   , ic_warn_inaccessible = panic "newImplic:warn_inaccessible"
   , ic_env = ct_loc_env
   , ic_wanted = emptyWC
   , ic_status = IC_Unsolved
+  , ic_need_inner = emptyVarSet
+  , ic_need_outer = emptyVarSet
   }
 
 data ImplicStatus
-  = IC_Solved
+  = IC_Solved { ics_dead :: [KiEvVar] }
   | IC_Insoluble
   | IC_BadTelescope
   | IC_Unsolved
@@ -398,11 +417,12 @@ data HasGivenEqs
 type UserGiven = Implication
 
 getUserGivensFromImplics :: [Implication] -> [UserGiven]
-getUserGivensFromImplics implics = [] --reverse (filterOut (null . ic_given) implics)
+getUserGivensFromImplics implics = reverse (filterOut (null . ic_given) implics)
 
 instance Outputable Implication where
   ppr (Implic { ic_tclvl = tclvl
               , ic_skols = skols
+              , ic_given = given
               , ic_given_eqs = given_eqs
               , ic_wanted = wanted
               , ic_status = status
@@ -412,6 +432,7 @@ instance Outputable Implication where
              , text "Skolems =" <+> pprTyVars skols
              , text "Given-eqs =" <+> ppr given_eqs
              , text "Status =" <+> ppr status
+             , hang (text "Given =") 2 (pprKiEvVars given)
              , hang (text "Wanted =") 2 (ppr wanted)
              , pprSkolInfo info ] <+> rbrace)
 
@@ -419,7 +440,7 @@ instance Outputable ImplicStatus where
   ppr IC_Insoluble = text "Insoluble"
   ppr IC_BadTelescope = text "Bad telescope"
   ppr IC_Unsolved = text "Unsolved"
-  ppr IC_Solved = text "Solved"
+  ppr (IC_Solved dead) = text "Solved" <+> (braces (text "Dead givens =" <+> ppr dead))
 
 checkTelescopeSkol :: SkolemInfoAnon -> Bool
 checkTelescopeSkol (ForAllSkol {}) = True
@@ -523,14 +544,28 @@ kiFVsOfWC (WC { wc_simple = simple, wc_impl = implic })
   = kiFVsOfCts simple `unionFV` kiFVsOfBag kiFVsOfImplic implic
 
 kiFVsOfImplic :: Implication -> FV
-kiFVsOfImplic (Implic { ic_skols = skols, ic_wanted = wanted })
+kiFVsOfImplic (Implic { ic_skols = skols, ic_given = givens, ic_wanted = wanted })
   | isEmptyWC wanted
   = emptyFV
   | otherwise
-  = tyKiFVsVarBndrs skols $ kiFVsOfWC wanted
+  = tyKiFVsVarBndrs skols
+    $ tyKiFVsVarBndrs givens
+    $ kiFVsOfWC wanted
 
 kiFVsOfBag :: (a -> FV) -> Bag a -> FV
 kiFVsOfBag vs_of = foldr (unionFV . vs_of) emptyFV
+
+{- *********************************************************************
+*                                                                      *
+            Pretty printing
+*                                                                      *
+********************************************************************* -}
+
+pprKiEvVars :: [KiEvVar] -> SDoc
+pprKiEvVars ev_vars = vcat (map pprKiEvVarWithKind ev_vars)
+
+pprKiEvVarWithKind :: KiEvVar -> SDoc
+pprKiEvVarWithKind v = ppr v <+> colon <+> ppr (kiEvVarPred v)
 
 {- *********************************************************************
 *                                                                      *
@@ -543,7 +578,11 @@ data TcEvDest
   | HoleDest KindCoercionHole
 
 data CtEvidence
-  = CtWanted
+  = CtGiven
+    { ctev_pred :: TcPredKind
+    , ctev_evar :: KiEvVar
+    , ctev_loc :: CtLoc }
+  | CtWanted
     { ctev_pred :: TcPredKind
     , ctev_dest :: TcEvDest 
     , ctev_loc :: CtLoc
@@ -565,6 +604,7 @@ ctEvType ev@(CtWanted { ctev_dest = HoleDest _ }) = KindCoercion $ ctEvKiCoercio
 ctEvType ev = kiEvVar (ctEvKiEvVar ev)
 
 ctEvKiCoercion :: HasDebugCallStack => CtEvidence -> KindCoercion
+ctEvKiCoercion (CtGiven { ctev_evar = ev_var }) = mkKiCoVarCo ev_var
 ctEvKiCoercion (CtWanted { ctev_dest = dest })
   | HoleDest hole <- dest
   = mkKiHoleCo hole
@@ -574,11 +614,15 @@ ctEvKiCoercion (CtWanted { ctev_dest = dest })
 ctEvKiEvVar :: CtEvidence -> KiEvVar
 ctEvKiEvVar (CtWanted { ctev_dest = EvVarDest ev }) = ev
 ctEvKiEvVar (CtWanted { ctev_dest = HoleDest h }) = coHoleCoVar h
+ctEvKiEvVar (CtGiven { ctev_evar = ev }) = ev
 
 arisesFromGivens :: Ct -> Bool
 arisesFromGivens ct = isGivenCt ct || isGivenLoc (ctLoc ct)
 
 setCtEvPredKind :: CtEvidence -> TcPredKind -> CtEvidence
+setCtEvPredKind old_ctev@(CtGiven { ctev_evar = ev }) new_pred
+  = old_ctev { ctev_pred = new_pred
+             , ctev_evar = setTyVarKind ev new_pred }
 setCtEvPredKind old_ctev@(CtWanted { ctev_dest = dest }) new_pred
   = old_ctev { ctev_pred = new_pred, ctev_dest = new_dest }
   where
@@ -597,9 +641,11 @@ instance Outputable CtEvidence where
 
 isWanted :: CtEvidence -> Bool
 isWanted (CtWanted {}) = True
+isWanted _ = False
 
 isGiven :: CtEvidence -> Bool
-isGiven (CtWanted {}) = False
+isGiven (CtGiven {}) = True
+isGiven _ = False
 
 {- *********************************************************************
 *                                                                      *
@@ -649,6 +695,7 @@ instance Outputable CtFlavor where
 
 ctEvFlavor :: CtEvidence -> CtFlavor
 ctEvFlavor (CtWanted {}) = Wanted
+ctEvFlavor (CtGiven {}) = Given
 
 eqCtFlavor :: EqCt -> CtFlavor
 eqCtFlavor (KiEqCt { eq_ev = ev }) = ctEvFlavor ev
@@ -722,6 +769,13 @@ toKindLoc loc = loc { ctl_t_or_k = Just KindLevel }
 
 toInvisibleLoc :: CtLoc -> CtLoc
 toInvisibleLoc loc = updateCtLocOrigin loc toInvisibleOrigin
+
+mkGivenLoc :: TcLevel -> SkolemInfoAnon -> CtLocEnv -> CtLoc
+mkGivenLoc tclvl skol_info env
+  = CtLoc { ctl_origin = GivenOrigin skol_info
+          , ctl_env = setCtLocEnvLvl env tclvl
+          , ctl_t_or_k = Nothing
+          , ctl_depth = initialSubGoalDepth }
 
 ctLocEnv :: CtLoc -> CtLocEnv
 ctLocEnv = ctl_env

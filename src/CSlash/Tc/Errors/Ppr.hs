@@ -1,3 +1,4 @@
+{-# LANGUAGE MonadComprehensions #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -30,6 +31,7 @@ import CSlash.Core.Type.Rep (Type(..))
 -- import GHC.Core.Predicate
 import CSlash.Core.Type
 import CSlash.Core.Type.Tidy
+import CSlash.Core.Kind
 -- import GHC.Core.FVs( orphNamesOfTypes )
 -- import GHC.CoreToIface
 
@@ -287,7 +289,138 @@ instance Outputable SolverReportErrCtxt where
 **********************************************************************-}
 
 pprSolverReportWithCtxt :: SolverReportWithCtxt -> SDoc
-pprSolverReportWithCtxt _ = panic "pprSolverReportWithCtxt"
+pprSolverReportWithCtxt (SolverReportWithCtxt { reportContext = ctxt, reportContent = msg })
+  = pprTcSolverReportMsg ctxt msg
+
+pprTcSolverReportMsg :: SolverReportErrCtxt -> TcSolverReportMsg -> SDoc
+pprTcSolverReportMsg ctxt (CannotUnifyKiVariable msg reason)
+  = pprMismatchMsg ctxt msg $$ pprCannotUnifyKiVariableReason ctxt reason
+pprTcSolverReportMsg ctxt (Mismatch mismatch_msg kv_info ambig_infos)
+  = vcat $ [ pprMismatchMsg ctxt mismatch_msg
+           , maybe empty (pprKiVarInfo ctxt) kv_info ]
+           ++ (map pprAmbiguityInfo ambig_infos)
+
+pprCannotUnifyKiVariableReason :: SolverReportErrCtxt -> CannotUnifyKiVariableReason -> SDoc
+pprCannotUnifyKiVariableReason ctxt (CannotUnifyWithPolykind item kv1 ki2 mb_kv_info)
+  = vcat [ (if isSkolemKiVar kv1 then text "Cannot equate type variable"
+            else text "Cannot instantiate unification variable")
+           <+> quotes (ppr kv1)
+         , hang (text "with a" <+> what <+> text "involving polykinds:") 2 (ppr ki2)
+         , maybe empty (pprKiVarInfo ctxt) mb_kv_info ]
+  where
+    what = text $ levelString $ ctLocTypeOrKind_maybe (errorItemCtLoc item) `orElse` KindLevel
+
+pprCannotUnifyKiVariableReason ctxt (OccursCheck ambig_infos)
+  = vcat (map pprAmbiguityInfo ambig_infos)
+
+pprCannotUnifyKiVariableReason ctxt (DifferentKiVars kv_info)
+  = pprKiVarInfo ctxt kv_info
+
+pprUntouchableVariable :: TcKiVar -> Implication -> SDoc
+pprUntouchableVariable _ _ = panic "pprUntouchableVariable"
+
+pprMismatchMsg :: SolverReportErrCtxt -> MismatchMsg -> SDoc
+pprMismatchMsg ctxt (BasicMismatch ea item ki1 ki2 mb_match_txt same_kc_info)
+  = vcat [ addArising (errorItemCtLoc item) msg
+         , ea_extra
+         , maybe empty (pprWhenMatching ctxt) mb_match_txt
+         , maybe empty pprSameKiConInfo same_kc_info ]
+  where
+    msg | isAtomicKi ki1 || isAtomicKi ki2
+        = sep [ text herald1 <+> quotes (ppr ki1)
+              , nest padding $ text herald2 <+> quotes (ppr ki2) ]
+        | otherwise
+        = vcat [ text herald1 <> colon <+> ppr ki1
+               , nest padding $ text herald2 <> colon <+> ppr ki2 ]
+
+    herald1 = conc [ "Couldn't match"
+                   , if want_ea then "expected" else "" ]
+    herald2 = conc [ "with"
+                   , if want_ea then ("actual " ++ what) else "" ]
+
+    padding = length herald1 - length herald2
+
+    (want_ea, ea_extra) = case ea of
+                            NoEA -> (False, empty)
+
+    what = levelString (ctLocTypeOrKind_maybe (errorItemCtLoc item) `orElse` KindLevel)
+
+    conc = foldr1 add_space
+    add_space s1 s2 | null s1 = s2
+                    | null s2 = s1
+                    | otherwise = s1 ++ (' ' : s2)
+
+pprMismatchMsg ctxt (KindEqMismatch item ki1 ki2 exp act mb_thing mb_same_kc)                    
+  = addArising ct_loc $ msg $$ maybe empty pprSameKiConInfo mb_same_kc
+  where
+    msg = vcat [ text "KindeEqMismatch (needs fixing later)"
+               , ppr item
+               , text "ki1" <+> ppr ki1
+               , text "ki2" <+> ppr ki2
+               , text "exp" <+> ppr exp
+               , text "act" <+> ppr act ]
+
+    ct_loc = errorItemCtLoc item
+
+pprMismatchMsg ctxt (CouldNotDeduce useful_givens (item:|others) mb_extra)
+  = main_msg $$ case supplementary of
+                  Left infos -> vcat (map (pprExpectedActualInfo ctxt) infos)
+                  Right other_msg -> pprMismatchMsg ctxt other_msg
+  where
+    main_msg | null useful_givens = addArising ct_loc (no_instance_msg <+> missing)
+             | otherwise = vcat (addArising ct_loc (no_deduce_msg <+> missing)
+                                 : pp_givens useful_givens)
+
+    supplementary = case mb_extra of
+                      Nothing -> Left []
+                      Just (CND_Extra level ki1 ki2)
+                        -> mk_supplementary_ea_msg ctxt level ki1 ki2 orig
+
+    ct_loc = errorItemCtLoc item
+    orig = ctLocOrigin ct_loc
+    wanteds = map errorItemPred (item:others)
+
+    no_instance_msg = case wanteds of
+                        [wanted] | KiConApp kc _ <- wanted
+                                 , kc `elem` [LTKi, LTEQKi]
+                                 -> text "No instance for"
+                        _ -> text "Could not solve:"
+
+    no_deduce_msg = case wanteds of
+                      [_] -> text "Could not deduce"
+                      _ -> text "Could not deduce:"
+
+    missing = case wanteds of
+                [w] -> quotes (ppr w)
+                _ -> ppr wanteds
+
+{- *********************************************************************
+*                                                                      *
+             Outputting additional solver report information
+*                                                                      *
+**********************************************************************-}
+
+pprExpectedActualInfo :: SolverReportErrCtxt -> ExpectedActualInfo -> SDoc
+pprExpectedActualInfo _ _ = panic "pprExpectedActualInfo"
+
+pprWhenMatching :: SolverReportErrCtxt -> WhenMatching -> SDoc
+pprWhenMatching _ _ = panic "pprWhenMatching"
+
+pprKiVarInfo :: SolverReportErrCtxt -> KiVarInfo -> SDoc
+pprKiVarInfo ctxt (KiVarInfo kv1 mb_implic mb_kv2)
+  = vcat [ mk_msg kv1
+         , maybe empty (pprUntouchableVariable kv1) mb_implic
+         , maybe empty mk_msg mb_kv2 ]
+  where
+    mk_msg kv = case tcKiVarDetails kv of
+                  SkolemKv sk_info _ -> pprSkols ctxt [(getSkolemInfo sk_info, [kv])]
+                  MetaKv {} -> empty
+
+pprAmbiguityInfo :: AmbiguityInfo -> SDoc
+pprAmbiguityInfo _ = panic "pprAmbiguityInfo"
+
+pprSameKiConInfo :: SameKiConInfo -> SDoc
+pprSameKiConInfo _ = panic "pprSameKiConInfo"
 
 {- *********************************************************************
 *                                                                      *
@@ -326,7 +459,33 @@ scopeErrorHints scope_err = case scope_err of
   _ -> noHints
 
 tcSolverReportMsgHints :: SolverReportErrCtxt -> TcSolverReportMsg -> [CsHint]
-tcSolverReportMsgHints ctxt _ = panic "tcSolverReportMsgHints"
+tcSolverReportMsgHints ctxt = \case
+  CannotUnifyKiVariable mismatch_msg rea
+    -> mismatchMsgHints ctxt mismatch_msg ++ cannotUnifyKiVariableHints rea
+  Mismatch { mismatchMsg = mismatch_msg }
+    -> mismatchMsgHints ctxt mismatch_msg
+
+mismatchMsgHints :: SolverReportErrCtxt -> MismatchMsg -> [CsHint]
+mismatchMsgHints ctxt msg
+  = maybeToList [ hint | (exp, act) <- mismatchMsg_ExpectedActuals msg
+                       , hint <- suggestAddSig ctxt exp act ]
+
+mismatchMsg_ExpectedActuals :: MismatchMsg -> Maybe (MonoKind, MonoKind)
+mismatchMsg_ExpectedActuals = \case
+  BasicMismatch { mismatch_ki1 = exp, mismatch_ki2 = act } -> Just (exp, act)
+  KindEqMismatch { keq_mismatch_expected = exp, keq_mismatch_actual = act } -> Just (exp, act)
+  CouldNotDeduce { cnd_extra = cnd_extra }
+    | Just (CND_Extra _ exp act) <- cnd_extra -> Just (exp, act)
+    | otherwise -> Nothing
+
+cannotUnifyKiVariableHints :: CannotUnifyKiVariableReason -> [CsHint]
+cannotUnifyKiVariableHints = \case
+  CannotUnifyWithPolykind {} -> noHints
+  OccursCheck {} -> noHints
+  DifferentKiVars {} -> noHints
+
+suggestAddSig :: SolverReportErrCtxt -> MonoKind -> MonoKind -> Maybe CsHint
+suggestAddSig ctxt ki1 _ = Nothing
 
 {- *********************************************************************
 *                                                                      *
@@ -336,6 +495,41 @@ tcSolverReportMsgHints ctxt _ = panic "tcSolverReportMsgHints"
 
 instance Outputable ImportError where
   ppr _ = panic "ppr ImportError"
+
+{- *********************************************************************
+*                                                                      *
+             Suggested fixes for implication constraints
+*                                                                      *
+**********************************************************************-}
+
+pp_givens :: [Implication] -> [SDoc]
+pp_givens _ = panic "pp_givens"
+
+{- *********************************************************************
+*                                                                      *
+                       CtOrigin information
+*                                                                      *
+**********************************************************************-}
+
+levelString :: TypeOrKind -> String
+levelString TypeLevel = "type"
+levelString KindLevel = "kind"
+
+addArising :: CtLoc -> SDoc -> SDoc
+addArising ct_loc msg = hang msg 2 (pprArising ct_loc)
+
+pprArising :: CtLoc -> SDoc
+pprArising ct_loc
+  | suppress_origin = empty
+  | otherwise = pprCtOrigin orig
+  where
+    orig = ctLocOrigin ct_loc
+    suppress_origin
+      | isGivenOrigin orig = True
+      | otherwise = case orig of
+          KindEqOrigin {} -> True
+          GivenOrigin {} -> False
+          OccurrenceOf {} -> False
 
 {- *********************************************************************
 *                                                                      *
@@ -369,6 +563,51 @@ tidySigSkol env cx ty tv_prs = SigSkol cx (tidy_ty env ty) tv_prs'
       = ((occ_env, extendVarEnv subst tv tv'), tv')
       | otherwise
       = tidyVarBndr env tv
+
+pprSkols :: SolverReportErrCtxt -> [(SkolemInfoAnon, [TcKiVar])] -> SDoc
+pprSkols ctxt zonked_ki_vars
+  = let tidy_ki_vars = map (bimap (tidySkolemInfoAnon (cec_tidy ctxt)) id) zonked_ki_vars
+    in vcat (map pp_one tidy_ki_vars)
+  where
+    no_msg = text "No skolem info - we could not find the origin of the following variable"
+             <+> ppr zonked_ki_vars
+             $$ text "This should not happen."
+
+    pp_one (UnkSkol cs, kvs)
+      = vcat [ hang (pprQuotedList kvs)
+               2 (is_or_are kvs "a" "(rigid, skolem)")
+             , nest 2 (text "of unknown origin")
+             , nest 2 (text "bound at" <+> ppr (skolsSpan kvs))
+             , no_msg
+             , prettyCallStackDoc cs ]
+
+    pp_one (skol_info, kvs)
+      = vcat [ hang (pprQuotedList kvs)
+               2 (is_or_are kvs "a" "rigid" <+> text "bound by")
+             , nest 2 (pprSkolInfo skol_info)
+             , nest 2 (text "at" <+> ppr (skolsSpan kvs)) ]
+
+    is_or_are [_] article adjective = text "is" <+> text article <+> text adjective
+                                      <+> text "kind variable"
+    is_or_are _ _ adjective = text "are" <+> text adjective <+> text "kind variables"
+
+skolsSpan :: [TcKiVar] -> SrcSpan
+skolsSpan skol_kvs = foldr1 combineSrcSpans (map getSrcSpan skol_kvs)
+
+{- *********************************************************************
+*                                                                      *
+                Utilities for expected/actual messages
+*                                                                      *
+**********************************************************************-}
+
+mk_supplementary_ea_msg
+  :: SolverReportErrCtxt
+  -> TypeOrKind
+  -> MonoKind
+  -> MonoKind
+  -> CtOrigin
+  -> Either [ExpectedActualInfo] MismatchMsg
+mk_supplementary_ea_msg _ _ _ _ _ = panic "mk_supplementary_ea_msg"
 
 {- *********************************************************************
 *                                                                      *

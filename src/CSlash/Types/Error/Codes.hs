@@ -257,6 +257,10 @@ type family CsDiagnosticCode c = n | n -> c where
   CsDiagnosticCode "KindEqMismatch"                                = 89223
   CsDiagnosticCode "CouldNotDeduce"                                = 05617
 
+  CsDiagnosticCode "CannotUnifyWithPolykind"                       = 91028
+  CsDiagnosticCode "OccursCheck"                                   = 27958
+  CsDiagnosticCode "DifferentKiVars"                               = 25897
+
   CsDiagnosticCode "TcRnBindingOfExistingName"                     = 58805
   CsDiagnosticCode "TcRnQualifiedBinder"                           = 28329
   CsDiagnosticCode "TcRnMultipleFixityDecls"                       = 50419
@@ -382,6 +386,8 @@ type family ConRecursInto con where
   -- Solver reports
   ConRecursInto "TcRnSolverReport"         = 'Just SolverReportWithCtxt
   ConRecursInto "SolverReportWithCtxt"     = 'Just TcSolverReportMsg
+
+  ConRecursInto "CannotUnifyKiVariable"    = 'Just CannotUnifyKiVariableReason
 
   ConRecursInto "Mismatch"                 = 'Just MismatchMsg
 

@@ -246,11 +246,21 @@ zonkTcKiVarToTcKiVar kv = do
 ********************************************************************* -}
 
 zonkImplication :: Implication -> ZonkM Implication
-zonkImplication implic@(Implic { ic_skols = skols, ic_wanted = wanted, ic_info = info }) = do
+zonkImplication implic@(Implic { ic_skols = skols
+                               , ic_given = given
+                               , ic_wanted = wanted
+                               , ic_info = info }) = do
   skols' <- mapM zonkTyVarKind skols
+  given' <- mapM zonkKiEvVar given
   info' <- zonkSkolemInfoAnon info
   wanted' <- zonkWCRec wanted
-  return $ implic { ic_skols = skols', ic_wanted = wanted', ic_info = info' }
+  return $ implic { ic_skols = skols'
+                  , ic_given = given'
+                  , ic_wanted = wanted'
+                  , ic_info = info' }
+
+zonkKiEvVar :: KiEvVar -> ZonkM KiEvVar
+zonkKiEvVar var = updateTyVarKindM zonkTcMonoKind var
 
 zonkWC :: WantedConstraints -> ZonkM WantedConstraints
 zonkWC wc = zonkWCRec wc
@@ -331,8 +341,24 @@ tcInitOpenTidyEnv vs = do
   let env2 = tidyFreeTyKiVars env1 vs
   return env2
 
+zonkTidyTcMonoKind :: TidyEnv -> TcMonoKind -> ZonkM (TidyEnv, TcMonoKind)
+zonkTidyTcMonoKind env ki = do
+  ki' <- zonkTcMonoKind ki
+  return $ tidyOpenMonoKind env ki'
+
 zonkTidyOrigin :: TidyEnv -> CtOrigin -> ZonkM (TidyEnv, CtOrigin)
-zonkTidyOrigin _ _ = panic "zonkTidyOrigin"
+
+zonkTidyOrigin env (GivenOrigin skol_info) = do
+  skol_info1 <- zonkSkolemInfoAnon skol_info
+  let skol_info2 = tidySkolemInfoAnon env skol_info1
+  return (env, GivenOrigin skol_info2)
+
+zonkTidyOrigin env orig@(KindEqOrigin { keq_actual = act, keq_expected = exp }) = do
+  (env1, act') <- zonkTidyTcMonoKind env act
+  (env2, exp') <- zonkTidyTcMonoKind env1 exp
+  return (env2, orig { keq_actual = act', keq_expected = exp' })
+
+zonkTidyOrigin env orig = return (env, orig)
 
 tidyCt :: TidyEnv -> Ct -> Ct
 tidyCt env = updCtEvidence (tidyCtEvidence env)
@@ -341,3 +367,6 @@ tidyCtEvidence :: TidyEnv -> CtEvidence -> CtEvidence
 tidyCtEvidence env ctev = ctev { ctev_pred = tidyMonoKind env ki }
   where
     ki = ctev_pred ctev
+
+tidyKiEvVar :: TidyEnv -> KiEvVar -> KiEvVar
+tidyKiEvVar env var = updateVarKind (tidyMonoKind env) var

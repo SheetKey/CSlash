@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE GADTs #-}
 
@@ -172,7 +173,11 @@ errorItemPred :: ErrorItem -> PredKind
 errorItemPred = ei_pred
 
 data TcSolverReportMsg
-  = Mismatch
+  = CannotUnifyKiVariable
+    { mismatchMsg :: MismatchMsg
+    , cannotUnifyReason :: CannotUnifyKiVariableReason
+    }
+  | Mismatch
     { mismatchMsg :: MismatchMsg
     , mismatchKiVarInfo :: Maybe KiVarInfo
     , mismatchAmbiguityInfo :: [AmbiguityInfo]
@@ -207,6 +212,13 @@ data MismatchMsg
 data MismatchEA
   = NoEA
 
+data CannotUnifyKiVariableReason
+  = CannotUnifyWithPolykind ErrorItem KindVar MonoKind (Maybe KiVarInfo)
+  | OccursCheck { occursCheckAmbiguityInfos :: [AmbiguityInfo] }
+  | DifferentKiVars KiVarInfo
+  deriving Generic
+
+
 data CND_Extra = CND_Extra TypeOrKind MonoKind MonoKind
 
 data KiVarInfo = KiVarInfo
@@ -220,6 +232,8 @@ data SameKiConInfo
   | SameFunKi
 
 data AmbiguityInfo = Ambiguity
+
+data ExpectedActualInfo
 
 data WhenMatching = WhenMatching MonoKind MonoKind CtOrigin (Maybe TypeOrKind)
   deriving Generic
@@ -266,7 +280,18 @@ data RelevantBindings = RelevantBindings
   }
 
 pprRelevantBindings :: RelevantBindings -> SDoc
-pprRelevantBindings _ = panic "pprRelevantBindings"
+pprRelevantBindings (RelevantBindings bds ran_out_of_fuel)
+  = ppUnless (null rel_bds)
+    $ hang (text "Relevant bindings include")
+      2 (vcat (map ppr_binding rel_bds) $$ ppWhen ran_out_of_fuel discardMsg)
+  where
+    ppr_binding (nm, tidy_ki) = sep [ pprPrefixOcc nm <+> colon <+> ppr tidy_ki
+                                    , nest 2 (parens (text "bound at" <+> ppr (getSrcLoc nm))) ]
+    rel_bds = filter (not . isGeneratedSrcSpan . getSrcSpan . fst) bds
+
+discardMsg :: SDoc
+discardMsg = text "(Some bindings suppressed;" <+>
+             text "use -fmax-relevant-binds=N or -fno-max-relevant-binds)"
 
 {- *********************************************************************
 *                                                                      *

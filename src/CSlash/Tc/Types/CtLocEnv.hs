@@ -20,3 +20,6 @@ getCtLocEnvLoc = ctl_loc
 
 getCtLocEnvLvl :: CtLocEnv -> TcLevel
 getCtLocEnvLvl = ctl_tclvl
+
+setCtLocEnvLvl :: CtLocEnv -> TcLevel -> CtLocEnv
+setCtLocEnvLvl env lvl = env { ctl_tclvl = lvl }

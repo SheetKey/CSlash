@@ -537,6 +537,15 @@ getTcKiEvBindsVar = TcS (return . tcs_ki_ev_binds)
 getTcLevel :: TcS TcLevel
 getTcLevel = wrapTcS TcM.getTcLevel
 
+getTcKiEvKiCoVars :: KiEvBindsVar -> TcS KiCoVarSet
+getTcKiEvKiCoVars ev_binds_var = wrapTcS $ TcM.getTcKiEvKiCoVars ev_binds_var
+
+getTcKiEvBindsMap :: KiEvBindsVar -> TcS KiEvBindMap
+getTcKiEvBindsMap ev_binds_var = wrapTcS $ TcM.getTcKiEvBindsMap ev_binds_var
+
+setTcKiEvBindsMap :: KiEvBindsVar -> KiEvBindMap -> TcS ()
+setTcKiEvBindsMap ev_binds_var binds = wrapTcS $ TcM.setTcKiEvBindsMap ev_binds_var binds
+
 unifyKiVar :: TcKiVar -> TcMonoKind -> TcS ()
 unifyKiVar kv ki
   = assertPpr (isMetaKiVar kv) (ppr kv)
@@ -659,6 +668,17 @@ fillKiCoercionHole :: KindCoercionHole -> KindCoercion -> TcS ()
 fillKiCoercionHole hole co = do
   wrapTcS $ TcM.fillKiCoercionHole hole co
   kickOutAfterFillingCoercionHole hole
+
+newGivenKiEvVar :: CtLoc -> (TcPredKind, KiEvType) -> TcS CtEvidence
+newGivenKiEvVar loc (pred, rhs) = do
+  new_ev <- newBoundKiEvVar pred rhs
+  return $ CtGiven { ctev_pred = pred, ctev_evar = new_ev, ctev_loc = loc }
+
+newBoundKiEvVar :: TcPredKind -> KiEvType -> TcS KiEvVar
+newBoundKiEvVar pred rhs = do
+  new_ev <- newKiEvVar pred
+  setKiEvBind (mkGivenKiEvBind new_ev rhs)
+  return new_ev
 
 newWantedKiEq
   :: CtLoc -> RewriterSet -> TcMonoKind -> TcMonoKind -> TcS (CtEvidence, KindCoercion)

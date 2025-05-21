@@ -1,3 +1,5 @@
+{-# LANGUAGE TupleSections #-}
+
 module CSlash.Tc.Solver where
 
 import Prelude hiding ((<>))
@@ -34,6 +36,7 @@ import CSlash.Tc.Types.Constraint
 import CSlash.Tc.Types.Origin
 import CSlash.Tc.Utils.TcType
 import CSlash.Core.Type
+import CSlash.Core.Kind
 import CSlash.Core.Ppr
 import CSlash.Core.TyCon    ( TyConBinder{-, isTypeFamilyTyCon-} )
 import CSlash.Builtin.Types
@@ -135,6 +138,34 @@ useUnsatisfiableGivens wc = do
       = do wcs' <- go_wc (ic_wanted impl)
            lift $ setImplicationStatus $ impl { ic_wanted = wcs' }    
 
+solveImplicationUsingUnsatGiven :: (KiEvVar, MonoKind) -> Implication -> TcS (Maybe Implication)
+solveImplicationUsingUnsatGiven unsat_given@(given_ev, _) impl@(Implic { ic_wanted = wtd
+                                                                       , ic_tclvl = tclvl
+                                                                       , ic_binds = ev_binds_var
+                                                                       , ic_need_inner = inner })
+  | isKiCoEvBindsVar ev_binds_var
+  = return $ Just impl
+  | otherwise
+  = do wcs <- nestImplicTcS ev_binds_var tclvl $ go_wc wtd
+       setImplicationStatus $ impl { ic_wanted = wcs
+                                   , ic_need_inner = inner `extendVarSet` given_ev }
+  where
+    go_wc :: WantedConstraints -> TcS WantedConstraints
+    go_wc wc@(WC { wc_simple = wtds, wc_impl = impls }) = do
+      mapBagM_ go_simple wtds
+      impls <- mapMaybeBagM (solveImplicationUsingUnsatGiven unsat_given) impls
+      return $ wc { wc_simple = emptyBag, wc_impl = impls }
+
+    go_simple :: Ct -> TcS ()
+    go_simple ct = case ctEvidence ct of
+      CtWanted { ctev_pred = pki, ctev_dest = dst }
+        -> do ev_type <- unsatisfiableKiEvType unsat_given pki
+              setWantedKiEvType dst True ev_type
+      _ -> return ()
+
+unsatisfiableKiEvType :: (KiEvVar, MonoKind) -> MonoKind -> TcS Type
+unsatisfiableKiEvType (unsat_ev, given_msg) wtd_ki = panic "unsatisfiableKiEvType"
+
 {- *********************************************************************
 *                                                                      *
                       Main Simplifier
@@ -215,6 +246,7 @@ solveNestedImplications implics
 solveImplication :: Implication -> TcS (Maybe Implication)
 solveImplication imp@(Implic { ic_tclvl = tclvl
                              , ic_binds = ev_binds_var
+                             , ic_given = given_ids
                              , ic_wanted = wanteds
                              , ic_info = info
                              , ic_status = status })
@@ -226,8 +258,14 @@ solveImplication imp@(Implic { ic_tclvl = tclvl
 
        (has_given_eqs, given_insols, residual_wanted)
          <- nestImplicTcS ev_binds_var tclvl $ 
-            do residual_wanted <- solveWanteds wanteds
+            do let loc = mkGivenLoc tclvl info (ic_env imp)
+                   givens = mkGivens loc given_ids
+               solveSimpleGivens givens
+               
+               residual_wanted <- solveWanteds wanteds
+
                (has_eqs, given_insols) <- getHasGivenEqs tclvl
+
                return (has_eqs, given_insols, residual_wanted)
 
        traceTcS "solveImplication 2"
@@ -238,16 +276,19 @@ solveImplication imp@(Implic { ic_tclvl = tclvl
        res_implic <- setImplicationStatus (imp { ic_given_eqs = has_given_eqs
                                                , ic_wanted = final_wanted })
 
+       evbinds <- TcS.getTcKiEvBindsMap ev_binds_var
        traceTcS "solveImplication end }"
          $ vcat [ text "has_given_eqs =" <+> ppr has_given_eqs
-                , text "res_implic =" <+> ppr res_implic ]
+                , text "res_implic =" <+> ppr res_implic
+                , text "implication evbinds =" <+> ppr (kiEvBindMapBinds evbinds) ]
 
        return res_implic                   
 
 setImplicationStatus :: Implication -> TcS (Maybe Implication)
 setImplicationStatus implic@(Implic { ic_status = status
                                     , ic_info = info
-                                    , ic_wanted = wc })
+                                    , ic_wanted = wc
+                                    , ic_given = givens })
   | assertPpr (not (isSolvedStatus status)) (ppr info)
     $ not (isSolvedWC pruned_wc)
   = do traceTcS "setImplicationStatus(not-all-solved) {" (ppr implic)
@@ -262,15 +303,23 @@ setImplicationStatus implic@(Implic { ic_status = status
 
   | otherwise
   = do traceTcS "setImplicationStatus(all-solved) {" (ppr implic)
+
+       implic@(Implic { ic_need_inner = need_inner
+                      , ic_need_outer = need_outer }) <- neededKiEvVars implic
+
        bad_telescope <- checkBadTelescope implic
 
-       let discard_entire_implication
-             = not bad_telescope
+       let warn_givens = findUnnecessaryGivens info need_inner givens
+
+           discard_entire_implication
+             = null warn_givens
+               && not bad_telescope
                && isEmptyWC pruned_wc
+               && isEmptyVarSet need_outer
 
            final_status
              | bad_telescope = IC_BadTelescope
-             | otherwise = IC_Solved
+             | otherwise = IC_Solved { ics_dead = warn_givens }
 
            final_implic = implic { ic_status = final_status
                                  , ic_wanted = pruned_wc }
@@ -291,11 +340,30 @@ setImplicationStatus implic@(Implic { ic_status = status
                    , wc_impl = pruned_implics }
 
     keep_me ic
-      | IC_Solved <- ic_status ic
+      | IC_Solved dead_givens <- ic_status ic
+      , null dead_givens
       , isEmptyBag (wc_impl (ic_wanted ic))
       = False
       | otherwise
       = True
+
+findUnnecessaryGivens :: SkolemInfoAnon -> VarSet -> [KiEvVar] -> [KiEvVar]
+findUnnecessaryGivens info need_inner givens
+  | not (warnRedundantGivens info)
+  = []
+  | not (null unused_givens)
+  = unused_givens
+  | otherwise
+  = redundant_givens
+  where
+    unused_givens = filterOut is_used givens
+
+    is_used given = given `elemVarSet` need_inner
+
+    minimal_givens = mkMinimalBy kiEvVarPred givens
+    is_minimal = (`elemVarSet` mkVarSet minimal_givens)
+
+    redundant_givens = filterOut is_minimal givens
 
 checkBadTelescope :: Implication -> TcS Bool
 checkBadTelescope (Implic { ic_info = info, ic_skols = skols })
@@ -303,3 +371,48 @@ checkBadTelescope (Implic { ic_info = info, ic_skols = skols })
   = panic "checkBadTelescope"
   | otherwise
   = return False
+
+warnRedundantGivens :: SkolemInfoAnon -> Bool
+warnRedundantGivens (SigSkol ctxt _ _) = case ctxt of
+  FunSigCtxt _ rrc -> reportRedundantConstraints rrc
+  ExprSigCtxt rrc -> reportRedundantConstraints rrc
+  _ -> False
+warnRedundantGivens _ = False
+
+neededKiEvVars :: Implication -> TcS Implication
+neededKiEvVars implic@(Implic { ic_given = givens
+                              , ic_binds = ev_binds_var
+                              , ic_wanted = WC { wc_impl = implics }
+                              , ic_need_inner = old_needs }) = do
+  ev_binds <- TcS.getTcKiEvBindsMap ev_binds_var
+  kcvs <- TcS.getTcKiEvKiCoVars ev_binds_var
+
+  let seeds1 = foldr add_implic_seeds old_needs implics
+      seeds2 = nonDetStrictFoldKiEvBindMap add_wanted seeds1 ev_binds
+      seeds3 = seeds2 `unionVarSet` kcvs
+      need_inner = findNeededKiEvVars ev_binds seeds3
+      live_ev_binds = filterKiEvBindMap (needed_ev_bind need_inner) ev_binds
+      need_outer = varSetMinusKiEvBindMap need_inner live_ev_binds `delVarSetList` givens
+
+  TcS.setTcKiEvBindsMap ev_binds_var live_ev_binds
+
+  traceTcS "neededKiEvVars"
+    $ vcat [ text "old_needs:" <+> ppr old_needs
+           , text "seeds3:" <+> ppr seeds3
+           , text "kcvs:" <+> ppr kcvs
+           , text "ev_binds:" <+> ppr ev_binds
+           , text "live_ev_binds:" <+> ppr live_ev_binds ]
+
+  return $ implic { ic_need_inner = need_inner
+                  , ic_need_outer = need_outer }
+  where
+    add_implic_seeds (Implic { ic_need_outer = needs }) acc = needs `unionVarSet` acc
+
+    needed_ev_bind needed (KiEvBind { keb_lhs = ev_var, keb_info = info })
+      | KiEvBindGiven <- info = ev_var `elemVarSet` needed
+      | otherwise = True
+
+    add_wanted :: KiEvBind -> VarSet -> VarSet
+    add_wanted (KiEvBind { keb_info = info, keb_rhs = rhs }) needs
+      | KiEvBindGiven <- info = needs
+      | otherwise = kiEvVarsOfType rhs `unionVarSet` needs

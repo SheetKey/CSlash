@@ -11,13 +11,14 @@ import CSlash.Types.Var
 import CSlash.Core.Ppr ()   -- Instance OutputableBndr TyVar
 import CSlash.Tc.Utils.TcType
 import CSlash.Core.Type
+import CSlash.Core.Type.FVs
 import CSlash.Core.Kind
 import CSlash.Core.TyCon
 import CSlash.Core.DataCon ( DataCon{-, dataConWrapId-} )
 import CSlash.Builtin.Names
 import CSlash.Types.Var.Env
 import CSlash.Types.Var.Set
--- import GHC.Core.Predicate
+import CSlash.Core.Predicate
 import CSlash.Types.Basic
 
 import CSlash.Core
@@ -50,6 +51,10 @@ maybeSymCo NotSwapped co = co
 *                                                                      *
 ********************************************************************* -}
   
+data TcKiEvBinds
+  = TcKiEvBinds KiEvBindsVar
+  | KiEvBinds (Bag KiEvBind)
+
 data KiEvBindsVar
   = KiEvBindsVar
     { kebv_uniq :: Unique
@@ -89,9 +94,15 @@ kiEvBindMapBinds = foldKiEvBindMap consBag emptyBag
 foldKiEvBindMap :: (KiEvBind -> a -> a) -> a -> KiEvBindMap -> a
 foldKiEvBindMap k z bs = foldDVarEnv k z (kev_bind_varenv bs)
 
+nonDetStrictFoldKiEvBindMap :: (KiEvBind -> a -> a) -> a -> KiEvBindMap -> a
+nonDetStrictFoldKiEvBindMap k z bs = nonDetStrictFoldDVarEnv k z (kev_bind_varenv bs)
+
 filterKiEvBindMap :: (KiEvBind -> Bool) -> KiEvBindMap -> KiEvBindMap
 filterKiEvBindMap k (KiEvBindMap { kev_bind_varenv = env })
   = KiEvBindMap { kev_bind_varenv = filterDVarEnv k env }
+
+varSetMinusKiEvBindMap :: VarSet -> KiEvBindMap -> VarSet
+varSetMinusKiEvBindMap vs (KiEvBindMap dve) = vs `uniqSetMinusUDFM` dve
 
 instance Outputable KiEvBindMap where
   ppr (KiEvBindMap m) = ppr m
@@ -140,6 +151,9 @@ mkKiEvCast ev lco
   | isReflKiCo lco = ev
   | otherwise = kiEvCast ev lco
 
+emptyTcKiEvBinds :: TcKiEvBinds
+emptyTcKiEvBinds = KiEvBinds emptyBag
+
 kiEvTypeCoercion_maybe :: KiEvType -> Maybe KindCoercion
 kiEvTypeCoercion_maybe ev_ty = go ev_ty
   where
@@ -150,9 +164,38 @@ kiEvTypeCoercion_maybe ev_ty = go ev_ty
 
 {- *********************************************************************
 *                                                                      *
+                  Free variables
+*                                                                      *
+********************************************************************* -}
+
+findNeededKiEvVars :: KiEvBindMap -> VarSet -> VarSet
+findNeededKiEvVars ev_binds seeds = transCloVarSet also_needs seeds
+  where
+    also_needs needs = nonDetStrictFoldUniqSet add emptyVarSet needs
+
+    add v needs
+      | Just ev_bind <- lookupKiEvBind ev_binds v
+      , KiEvBind { keb_info = KiEvBindGiven, keb_rhs = rhs } <- ev_bind
+      = kiEvVarsOfType rhs `unionVarSet` needs
+      | otherwise
+      = needs
+
+kiEvVarsOfType :: KiEvType -> VarSet
+kiEvVarsOfType = typeSomeFreeVars isKiEvVar
+
+{- *********************************************************************
+*                                                                      *
                   Pretty printing
 *                                                                      *
 ********************************************************************* -}
+
+instance Outputable TcKiEvBinds where
+  ppr (TcKiEvBinds v) = ppr v
+  ppr (KiEvBinds bs) = text "KiEvBinds" <> braces (vcat (map ppr (bagToList bs)))
+
+instance Outputable KiEvBindsVar where
+  ppr (KiEvBindsVar { kebv_uniq = u }) = text "KiEvBindsVar" <> angleBrackets (ppr u)
+  ppr (KiCoEvBindsVar { kebv_uniq = u }) = text "KiCoEvBindsVar" <> angleBrackets (ppr u)
 
 instance Outputable KiEvBind where
   ppr (KiEvBind { keb_lhs = v, keb_rhs = e, keb_info = info })

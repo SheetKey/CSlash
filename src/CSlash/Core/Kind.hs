@@ -649,3 +649,8 @@ mkForAllKis kis ki = assertPpr (all isKiVar kis) (ppr kis) $ foldr ForAllKi ki k
 
 mkForAllKisMono :: [KindVar] -> MonoKind -> Kind
 mkForAllKisMono kis mki = assertPpr (all isKiVar kis) (ppr kis) $ foldr ForAllKi (Mono mki) kis
+
+isAtomicKi :: MonoKind -> Bool
+isAtomicKi (KiVarKi {}) = True
+isAtomicKi (KiConApp _ []) = True
+isAtomicKi _ = False

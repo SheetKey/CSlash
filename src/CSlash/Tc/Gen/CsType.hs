@@ -143,7 +143,10 @@ tc_cs_type rn_ty@(CsQualTy { cst_ctxt = ctxt, cst_body = body_ty }) exp_kind
        massertPpr (ctxt_kis `equalLength` unLoc ctxt)
          $ vcat [ text "tc_cs_type CsQualTy", ppr ctxt, ppr exp_kind ]
        (evVars, evVarKis) <- tcLCsContext ctxt
-       (ty', body_ki) <- tc_infer_lcs_type body_ty
+       traceTc "tc_cs_type CsQualTy"
+         $ vcat [ ppr rn_ty, ppr evVars ]
+       (ty', body_ki) <- checkKiConstraints InferKindSkol evVars
+                         $ tc_infer_lcs_type body_ty
        let final_ty = mkTyLamTys evVars ty'
            final_ki = mkInvisFunKis evVarKis body_ki
        checkExpectedKind rn_ty final_ty final_ki exp_kind

@@ -36,6 +36,9 @@ elemVarSet = elementOfUniqSet
 minusVarSet :: VarSet -> VarSet -> VarSet
 minusVarSet = minusUniqSet
 
+delVarSetList :: VarSet -> [Var] -> VarSet
+delVarSetList = delListFromUniqSet
+
 isEmptyVarSet :: VarSet -> Bool
 isEmptyVarSet = isEmptyUniqSet
 
@@ -59,6 +62,15 @@ unionVarSet = unionUniqSets
 
 unionVarSets :: [VarSet] -> VarSet
 unionVarSets = unionManyUniqSets
+
+transCloVarSet :: (VarSet -> VarSet) -> VarSet -> VarSet
+transCloVarSet fn seeds = go seeds seeds
+  where
+    go acc candidates
+      | isEmptyVarSet new_vs = acc
+      | otherwise = go (acc `unionVarSet` new_vs) new_vs
+      where
+        new_vs = fn candidates `minusVarSet` acc
 
 pprVarSet :: VarSet -> ([Var] -> SDoc) -> SDoc
 pprVarSet = pprUFM . getUniqSet
