@@ -291,8 +291,7 @@ newFlexiKiVarKi = do
   return $ mkKiVarMKi tc_kivar
 
 newMetaKiVarX :: Subst -> KindVar -> TcM (Subst, TcKiVar)
---newMetaKiVarX = new_meta_kv_x TauKv
-newMetaKiVarX s k = return (s, k)
+newMetaKiVarX = new_meta_kv_x TauKv
 
 new_meta_kv_x :: MetaInfoK -> Subst -> KindVar -> TcM (Subst, TcKiVar)
 new_meta_kv_x info subst kv = do
