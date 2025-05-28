@@ -28,10 +28,11 @@ import CSlash.Core.Type.Rep (Type(..))
 -- import CSlash.Core.Type.Ppr (pprWithExplicitKindsWhen,
 --                              pprSourceTyCon, pprTyVars, pprWithTYPE, pprTyVar, pprTidiedType)
 -- import GHC.Core.PatSyn ( patSynName, pprPatSynType )
--- import GHC.Core.Predicate
+import CSlash.Core.Predicate
 import CSlash.Core.Type
 import CSlash.Core.Type.Tidy
 import CSlash.Core.Kind
+import CSlash.Core.Kind.FVs
 -- import GHC.Core.FVs( orphNamesOfTypes )
 -- import GHC.CoreToIface
 
@@ -293,12 +294,36 @@ pprSolverReportWithCtxt (SolverReportWithCtxt { reportContext = ctxt, reportCont
   = pprTcSolverReportMsg ctxt msg
 
 pprTcSolverReportMsg :: SolverReportErrCtxt -> TcSolverReportMsg -> SDoc
+
 pprTcSolverReportMsg ctxt (CannotUnifyKiVariable msg reason)
   = pprMismatchMsg ctxt msg $$ pprCannotUnifyKiVariableReason ctxt reason
+
 pprTcSolverReportMsg ctxt (Mismatch mismatch_msg kv_info ambig_infos)
   = vcat $ [ pprMismatchMsg ctxt mismatch_msg
            , maybe empty (pprKiVarInfo ctxt) kv_info ]
            ++ (map pprAmbiguityInfo ambig_infos)
+
+pprTcSolverReportMsg ctxt@(CEC { cec_encl = implics }) (CannotResolveRelation item binds)
+  = vcat [ no_inst_msg
+         , nest 2 extra_note
+         , show_fixes (ctxtFixes has_ambigs pred implics)
+         ]
+  where
+    orig = errorItemOrigin item
+    pred = errorItemPred item
+    (kc, kis) = getPredKcKis pred
+    ambig_kvs = ambigKvsOfKi pred
+    has_ambigs = not (null ambig_kvs)
+    useful_givens = getUserGivensFromImplics implics
+
+    no_inst_msg :: SDoc
+    no_inst_msg
+      = pprMismatchMsg ctxt $ CouldNotDeduce useful_givens (item :| []) Nothing
+
+    extra_note | any isMonoFunKi kis
+               = text "(maybe you haven't applied a type function to enough arguments?)"
+               | otherwise
+               = empty
 
 pprCannotUnifyKiVariableReason :: SolverReportErrCtxt -> CannotUnifyKiVariableReason -> SDoc
 pprCannotUnifyKiVariableReason ctxt (CannotUnifyWithPolykind item kv1 ki2 mb_kv_info)
@@ -464,6 +489,7 @@ tcSolverReportMsgHints ctxt = \case
     -> mismatchMsgHints ctxt mismatch_msg ++ cannotUnifyKiVariableHints rea
   Mismatch { mismatchMsg = mismatch_msg }
     -> mismatchMsgHints ctxt mismatch_msg
+  CannotResolveRelation {} -> noHints
 
 mismatchMsgHints :: SolverReportErrCtxt -> MismatchMsg -> [CsHint]
 mismatchMsgHints ctxt msg
@@ -501,6 +527,43 @@ instance Outputable ImportError where
              Suggested fixes for implication constraints
 *                                                                      *
 **********************************************************************-}
+
+show_fixes :: [SDoc] -> SDoc
+show_fixes [] = empty
+show_fixes (f:fs) = sep [ text "Possible fix:"
+                        , nest 2 (vcat (f : map (text "or" <+>) fs)) ]
+
+ctxtFixes :: Bool -> PredKind -> [Implication] -> [SDoc]
+ctxtFixes has_ambig_kvs pred implics
+  | not has_ambig_kvs
+  , isKiVarKcPred pred
+  , (skol:skols) <- usefulContext implics pred
+  = [sep [ text "add" <+> pprParendMonoKind pred <+> text "to the" <+> text "context of"
+         , nest 2 $ ppr_skol skol $$ vcat [ text "or" <+> ppr_skol skol
+                                          | skol <- skols ] ] ]
+  | otherwise = []
+  where
+    ppr_skol skol_info = ppr skol_info
+
+usefulContext :: [Implication] -> PredKind -> [SkolemInfoAnon]
+usefulContext implics pred = go implics
+  where
+    pred_kvs = kiCoVarsOfMonoKind pred
+
+    go [] = []
+    go (ic:ics)
+      | implausible ic = rest
+      | otherwise = ic_info ic : rest
+      where rest | any (`elemVarSet` pred_kvs) (ic_skols ic) = []
+                 | otherwise = go ics
+
+    implausible ic
+      | null (ic_skols ic) = True
+      | implausible_info (ic_info ic) = True
+      | otherwise = False
+
+    implausible_info (SigSkol (InfSigCtxt {}) _ _) = True
+    implausible_info _ = False
 
 pp_givens :: [Implication] -> [SDoc]
 pp_givens _ = panic "pp_givens"

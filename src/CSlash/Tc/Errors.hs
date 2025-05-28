@@ -715,7 +715,25 @@ mkRelErr
   => SolverReportErrCtxt
   -> NonEmpty ErrorItem
   -> TcM SolverReport
-mkRelErr ctxt orig_items = panic "mkRelErr"
+mkRelErr ctxt orig_items =
+  let items = tryFilter (not . ei_suppress) orig_items
+
+      no_givens = null (getUserGivens ctxt)
+
+      mk_minimal = mkMinimalBy errorItemPred . toList
+
+      min_items = mk_minimal items
+  in do err <- mk_rel_err ctxt (head min_items)
+        return $ important ctxt err
+
+mk_rel_err :: HasCallStack => SolverReportErrCtxt -> ErrorItem -> TcM TcSolverReportMsg
+mk_rel_err ctxt item = do
+  (_, rel_binds, _) <- relevantBindings True ctxt item
+  return $ cannot_resolve_msg item rel_binds
+
+  where
+    cannot_resolve_msg :: ErrorItem -> RelevantBindings -> TcSolverReportMsg
+    cannot_resolve_msg  item binds = CannotResolveRelation item binds
 
 {-**********************************************************************
 *                                                                      *

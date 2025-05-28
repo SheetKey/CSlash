@@ -297,6 +297,14 @@ isMetaKiVar kv
       _ -> False
   | otherwise = False
 
+isAmbiguousKiVar :: TcKiVar -> Bool
+isAmbiguousKiVar kv
+  | isKiVar kv
+  = case tcKiVarDetails kv of
+      MetaKv {} -> True
+      _ -> False
+  | otherwise = False
+
 isConcreteKiVar_maybe :: TcKiVar -> Maybe ConcreteKvOrigin
 isConcreteKiVar_maybe kv
   | isTcKiVar kv
@@ -362,6 +370,11 @@ isFlexi _ = False
 mkKiVarNamePairs :: [KindVar] -> [(Name, KindVar)]
 mkKiVarNamePairs kvs = [(kiVarName kv, kv) | kv <- kvs ]
 
+ambigKvsOfKi :: TcMonoKind -> [KindVar]
+ambigKvsOfKi ki = filter isAmbiguousKiVar kvs
+  where
+    kvs = kiCoVarsOfMonoKindList ki
+
 {- *********************************************************************
 *                                                                      *
           Expanding and splitting kinds
@@ -390,6 +403,11 @@ tcSplitPiKi_maybe ki = assert (isMaybeKiBinder ski) ski
           Predicate kinds
 *                                                                      *
 ********************************************************************* -}
+
+isKiVarKcPred :: PredKind -> Bool
+isKiVarKcPred ki = case getPredKcKis_maybe ki of
+  Just (_, kis) -> all isKiVarKi kis
+  _ -> False
 
 kiEvVarPred :: KiEvVar -> MonoKind
 kiEvVarPred var = varKind var

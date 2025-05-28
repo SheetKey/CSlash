@@ -175,6 +175,9 @@ kiVarsOfKindDSet ki = fvDVarSet $ kiFVsOfKind ki
 kiVarsOfKindList :: Kind -> [KindVar]
 kiVarsOfKindList ki = fvVarList $ kiFVsOfKind ki
 
+kiCoVarsOfMonoKindList :: MonoKind -> [KiCoVar]
+kiCoVarsOfMonoKindList ki = fvVarList $ kiFVsOfMonoKind ki
+
 kiCoVarsOfMonoKindsList :: [MonoKind] -> [KiCoVar]
 kiCoVarsOfMonoKindsList kis = fvVarList $ kiFVsOfMonoKinds kis
 

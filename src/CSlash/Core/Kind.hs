@@ -127,6 +127,9 @@ pprKind = pprPrecKind topPrec
 pprMonoKind :: MonoKind -> SDoc
 pprMonoKind = pprPrecMonoKind topPrec
 
+pprParendMonoKind :: MonoKind -> SDoc
+pprParendMonoKind = pprPrecMonoKind appPrec
+
 pprPrecKind :: PprPrec -> Kind -> SDoc
 pprPrecKind = pprPrecKindX emptyTidyEnv
 
@@ -616,6 +619,10 @@ splitPiKi_maybe ki = case ki of
   ForAllKi kv ki -> Just $ Left (kv, ki)
   Mono (FunKi { fk_f = af, fk_arg = arg, fk_res = res }) -> Just $ Right (af, arg, res)
   _ -> Nothing
+
+isMonoFunKi :: MonoKind -> Bool
+isMonoFunKi (FunKi {}) = True
+isMonoFunKi _ = False
 
 splitForAllKi_maybe :: Kind -> Maybe (KindVar, Kind)
 splitForAllKi_maybe ki = case ki of

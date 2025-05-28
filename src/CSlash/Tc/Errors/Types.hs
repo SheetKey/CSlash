@@ -182,6 +182,10 @@ data TcSolverReportMsg
     , mismatchKiVarInfo :: Maybe KiVarInfo
     , mismatchAmbiguityInfo :: [AmbiguityInfo]
     }
+  | CannotResolveRelation
+    { cannotResolve_item :: ErrorItem
+    , cannotResolve_relevant_bindings :: RelevantBindings
+    }
   deriving Generic
 
 data MismatchMsg

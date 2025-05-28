@@ -252,6 +252,7 @@ type family CsDiagnosticCode c = n | n -> c where
   CsDiagnosticCode "DriverDeprecatedFlag"                          = 53692
 
   CsDiagnosticCode "BadTelescope"                                  = 97739
+  CsDiagnosticCode "CannotResolveRelation"                         = 39999
 
   CsDiagnosticCode "BasicMismatch"                                 = 18872
   CsDiagnosticCode "KindEqMismatch"                                = 89223
