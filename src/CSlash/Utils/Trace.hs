@@ -10,6 +10,11 @@ import CSlash.Stack
 import Debug.Trace (trace)
 import Control.Monad.IO.Class
 
+pprTrace :: String -> SDoc -> a -> a
+pprTrace str doc x
+  | unsafeHasNoDebugOutput = x
+  | otherwise = pprDebugAndThen traceSDocContext trace (text str) doc x
+
 warnPprTrace :: HasCallStack => Bool -> String -> SDoc -> a -> a
 warnPprTrace _ _ _ x | not debugIsOn = x
 warnPprTrace _ _ _ x | unsafeHasNoDebugOutput = x
