@@ -24,7 +24,7 @@ import qualified CSlash.Tc.Zonk.Type as TcM
 
 import CSlash.Driver.DynFlags
 
--- import GHC.Tc.Instance.Class( safeOverlap, instanceReturnsDictCon )
+import CSlash.Tc.Instance.Relation( instanceShouldBeSaved )
 import qualified CSlash.Tc.Instance.Relation as TcM (matchGlobalInst, RelInstResult(..))
 -- import GHC.Tc.Instance.FunDeps( FunDepEqn(..) )
 import CSlash.Tc.Utils.TcType
@@ -196,8 +196,22 @@ kickOutAfterFillingCoercionHole hole = do
       = False
 
 updSolvedRels :: InstanceWhat -> RelCt -> TcS ()
-updSolvedRels what rel_ct@(RelCt { rl_ev = ev }) =
-  traceTcS "updSolvedRels: NOT ADDING DICT" empty 
+updSolvedRels what rel_ct@(RelCt { rl_ev = ev })
+  | isWanted ev
+  , instanceShouldBeSaved what
+  = do traceTcS "updSolvedRels:" $ ppr rel_ct
+       updInertSet $ \ics ->
+         ics { inert_solved_rels = addSolvedRel rel_ct (inert_solved_rels ics) }
+  | otherwise
+  = return ()
+
+getSolvedRels :: TcS (RelMap RelCt)
+getSolvedRels = do
+  ics <- getInertSet
+  return $ inert_solved_rels ics
+
+setSolvedRels :: RelMap RelCt -> TcS ()
+setSolvedRels solved_rels = updInertSet $ \ics -> ics { inert_solved_rels = solved_rels }
 
 {- *********************************************************************
 *                                                                      *

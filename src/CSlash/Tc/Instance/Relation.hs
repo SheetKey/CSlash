@@ -70,6 +70,11 @@ instance Outputable RelInstResult where
   ppr NotSure = text "NotSure"
   ppr (OneInst _ what) = text "OneInst" <+> ppr what
 
+instanceShouldBeSaved :: InstanceWhat -> Bool
+instanceShouldBeSaved BuiltinEqInstance = False
+instanceShouldBeSaved BuiltinInstance = True
+instanceShouldBeSaved LocalInstance = False
+
 matchGlobalInst :: DynFlags -> Bool -> KiCon -> MonoKind -> MonoKind -> TcM RelInstResult
 matchGlobalInst dflags short_cut kc k1 k2 = case kc of
   LTKi -> matchLTEQKi False k1 k2

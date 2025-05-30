@@ -238,6 +238,10 @@ addRel :: RelCt -> RelMap RelCt -> RelMap RelCt
 addRel item@(RelCt { rl_kc = kc, rl_ki1 = k1, rl_ki2 = k2 }) rm
   = insertKcApp rm kc k1 k2 item
 
+addSolvedRel :: RelCt -> RelMap RelCt -> RelMap RelCt
+addSolvedRel item@(RelCt { rl_kc = kc, rl_ki1 = k1, rl_ki2 = k2 }) rm
+  = insertKcApp rm kc k1 k2 item
+
 partitionRels :: (RelCt -> Bool) -> RelMap RelCt -> (Bag RelCt, RelMap RelCt)
 partitionRels f m = foldKcAppMap k m (emptyBag, emptyRelMap)
   where

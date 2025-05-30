@@ -92,7 +92,7 @@ try_inert_rels inerts rel_w@(RelCt { rl_ev = ev_w, rl_kc = kc, rl_ki1 = ki1, rl_
         loc_i = ctEvLoc ev_i
         loc_w = ctEvLoc ev_w
   = do dflags <- getDynFlags
-       short_cut_worked <- shortCutSolver ev_w ev_i
+       short_cut_worked <- shortCutSolver dflags ev_w ev_i
        if short_cut_worked
          then stopWith ev_w "interactRel/solved from rel"
          else panic "try_inert_rels"
@@ -100,13 +100,41 @@ try_inert_rels inerts rel_w@(RelCt { rl_ev = ev_w, rl_kc = kc, rl_ki1 = ki1, rl_
   = do traceTcS "tryInertRels:no" (ppr rel_w $$ ppr kc <+> ppr ki1 <+> ppr ki2)
        continueWith ()
 
-shortCutSolver :: CtEvidence -> CtEvidence -> TcS Bool
-shortCutSolver ev_w ev_i
+shortCutSolver :: DynFlags -> CtEvidence -> CtEvidence -> TcS Bool
+shortCutSolver dflags ev_w ev_i
   | isWanted ev_w
   , isGiven ev_i
-  = panic "shortCutSolver"
+  = do ev_binds_var <- getTcKiEvBindsVar
+       ev_binds <- assertPpr (not (isKiCoEvBindsVar ev_binds_var)) (ppr ev_w)
+                   $ getTcKiEvBindsMap ev_binds_var
+       solved_rels <- getSolvedRels
+       mb_stuff <- try_solve_from_instance solved_rels ev_w
+       case mb_stuff of
+         Nothing -> return False
+         Just solved_rels' -> do
+           setSolvedRels solved_rels'
+           return True
   | otherwise
   = return False
+  where
+    loc_w = ctEvLoc ev_w
+
+    try_solve_from_instance :: RelMap RelCt -> CtEvidence -> TcS (Maybe (RelMap RelCt))
+    try_solve_from_instance solved_rels ev
+      | let pred = ctEvPred ev
+      , RelPred rl k1 k2 <- classifyPredKind pred
+      = do inst_res <- matchGlobalInst dflags True rl k1 k2 loc_w
+           case inst_res of
+             OneInst { rir_canonical = canonical, rir_what = what } -> do
+               let rel_ct = RelCt { rl_ev = ev, rl_kc = rl, rl_ki1 = k1, rl_ki2 = k2 }
+                   solved_rels' = addSolvedRel rel_ct solved_rels
+               traceTcS "shortCutSolver: found instnace" empty
+               loc' <- checkInstanceOK (ctEvLoc ev) what pred
+               checkReductionDepth loc' pred
+               return $ Just solved_rels'
+             _ -> return Nothing
+      | otherwise
+      = return Nothing
 
 {- *******************************************************************
 *                                                                    *
