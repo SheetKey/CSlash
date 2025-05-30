@@ -593,6 +593,7 @@ pprArising ct_loc
           KindEqOrigin {} -> True
           GivenOrigin {} -> False
           OccurrenceOf {} -> False
+          TupleTyOrigin -> False
 
 {- *********************************************************************
 *                                                                      *

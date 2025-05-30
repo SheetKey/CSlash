@@ -145,6 +145,7 @@ data CtOrigin
                  , keq_thing :: Maybe KindedThing
                  , keq_visible :: Bool
                  }
+  | TupleTyOrigin
 
 isVisibleOrigin :: CtOrigin -> Bool
 isVisibleOrigin (KindEqOrigin { keq_visible = vis }) = vis
@@ -158,6 +159,7 @@ isGivenOrigin :: CtOrigin -> Bool
 isGivenOrigin (GivenOrigin {}) = True
 isGivenOrigin (KindEqOrigin {}) = False
 isGivenOrigin (OccurrenceOf {}) = False
+isGivenOrigin TupleTyOrigin = False
 
 instance Outputable CtOrigin where
   ppr = pprCtOrigin

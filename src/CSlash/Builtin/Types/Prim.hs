@@ -20,6 +20,7 @@ import CSlash.Builtin.Names
 import CSlash.Utils.Misc ( changeLast )
 import CSlash.Utils.Panic ( assertPpr )
 import CSlash.Utils.Outputable
+import CSlash.Utils.Trace
 
 import CSlash.Data.FastString
 import Data.Char
@@ -100,7 +101,7 @@ mkTemplateTyConKindFromRes arity res_kind
         full_kind_no_constraints = foldr (FunKi FKF_K_K) res_kind kinds
         full_kind = foldr (FunKi FKF_C_K) full_kind_no_constraints constraints 
         q_full_kind = foldr ForAllKi (Mono full_kind) kind_vars
-    in q_full_kind
+    in pprTrace "mkTemplateTyConKindFromRes" (ppr q_full_kind) q_full_kind
 
 mkTemplateTyConKind :: Int -> Kind
 mkTemplateTyConKind arity

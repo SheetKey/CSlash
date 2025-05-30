@@ -202,23 +202,94 @@ tc_arrow _ = panic "tc_arrow"
 *                                                                      *
 ********************************************************************* -}
 
+-- tc_tuple :: CsType Rn -> TcMonoKind -> TcM TcType
+-- tc_tuple rn_ty@(CsTupleTy _ tup_args) exp_kind = do
+--   let arity = length tys
+--       tys = (\case { TyPresent _ ty -> ty; _ -> panic "tc_tuple" }) <$> tup_args
+--   arg_kinds <- replicateM arity newOpenTypeKind
+--   tau_tys <- zipWithM tc_lcs_type tys arg_kinds
+--   finish_tuple rn_ty tau_tys arg_kinds exp_kind
+-- tc_tuple _ _ = panic "tc_tuple/unreachable"
+
+-- finish_tuple :: CsType Rn -> [TcType] -> [TcMonoKind] -> TcMonoKind -> TcM TcType
+-- finish_tuple rn_ty tau_tys tau_kinds exp_kind = do
+--   traceTc "finish_tuple" (ppr tau_kinds $$ ppr exp_kind)
+--   let arity = length tau_tys
+--       tycon = tupleTyCon arity
+--       res_kind = panic "tyConResKind tycon"
+--   checkTupSize arity
+--   checkExpectedKind rn_ty (mkTyConApp tycon tau_tys) res_kind exp_kind
+
 tc_tuple :: CsType Rn -> TcMonoKind -> TcM TcType
 tc_tuple rn_ty@(CsTupleTy _ tup_args) exp_kind = do
-  let arity = length tys
-      tys = (\case { TyPresent _ ty -> ty; _ -> panic "tc_tuple" }) <$> tup_args
-  arg_kinds <- replicateM arity newOpenTypeKind
-  tau_tys <- zipWithM tc_lcs_type tys arg_kinds
-  finish_tuple rn_ty tau_tys arg_kinds exp_kind
+  let arity = length tup_args
+      tup_tycon = tupleTyCon arity
+  (ty, res_kind) <- inst_tuple_tycon tup_tycon tup_args
+  checkExpectedKind rn_ty ty res_kind exp_kind
 tc_tuple _ _ = panic "tc_tuple/unreachable"
 
-finish_tuple :: CsType Rn -> [TcType] -> [TcMonoKind] -> TcMonoKind -> TcM TcType
-finish_tuple rn_ty tau_tys tau_kinds exp_kind = do
-  traceTc "finish_tuple" (ppr tau_kinds $$ ppr exp_kind)
-  let arity = length tau_tys
-      tycon = tupleTyCon arity
-      res_kind = panic "tyConResKind tycon"
-  checkTupSize arity
-  checkExpectedKind rn_ty (mkTyConApp tycon tau_tys) res_kind exp_kind
+inst_tuple_tycon :: TyCon -> [CsTyTupArg Rn] -> TcM (TcType, TcMonoKind)
+inst_tuple_tycon tup_tycon tup_args = do
+  traceTc "inst_tuple_tycon {" (ppr tup_tycon $$ ppr tup_args)
+  (res, res_ki) <- go_init 1 tup_tycon tup_args
+  traceTc "inst_tuple_tycon }" (ppr res $$ ppr res_ki)
+  return (res, res_ki)
+  where
+    go_init n tup_tycon all_args = case tup_ki of
+                                     Mono _ -> pprPanic "inst_tuple_tycon/MonoTupKi" (ppr tup_ki)
+                                     _ -> go n tup_type empty_subst tup_ki all_args
+      where
+        tup_ki = tyConKind tup_tycon
+        tup_type = tyConNullaryTy tup_tycon
+        empty_subst = mkEmptySubst $ mkInScopeSet $ kiVarsOfKind tup_ki
+
+    go :: Int -> TcType -> Subst -> TcKind -> [CsTyTupArg Rn] -> TcM (TcType, TcMonoKind)
+    go n fun subst fun_ki all_args = case tcSplitForAllKi_maybe fun_ki of
+      Just (ki_binder, inner_ki) -> do
+        traceTc "inst_tuple_tycon (need to instantiate)"
+          $ vcat [ ppr ki_binder, ppr subst ]
+        (subst', arg') <- tcInstInvisibleKiBinder subst ki_binder
+        go n (mkAppTy fun arg') subst' inner_ki all_args
+
+      Nothing | Mono mono_fun_ki <- fun_ki -> go_mono_invis n fun subst mono_fun_ki all_args
+              | otherwise -> pprPanic "inst_tuple_tycon"
+                             $ vcat [ ppr fun, ppr subst, ppr fun_ki, ppr all_args ]
+
+    go_mono_invis
+      :: Int -> TcType -> Subst -> TcMonoKind -> [CsTyTupArg Rn] -> TcM (TcType, TcMonoKind)
+    go_mono_invis n fun subst fun_ki all_args = case splitInvisFunKis fun_ki of
+      ([], _) -> pprPanic "inst_tuple_tycon/go_mono_invis"
+                 $ vcat [ ppr fun, ppr subst, ppr fun_ki, ppr all_args ]
+      (theta, inner_ki) -> do
+        let inst_theta = substMonoKis subst theta
+        evVars <- instCallKiConstraints TupleTyOrigin inst_theta
+        go_mono n (mkAppTys fun (TyVarTy <$> evVars)) subst inner_ki all_args
+
+    go_mono
+      :: Int -> TcType -> Subst -> TcMonoKind -> [CsTyTupArg Rn] -> TcM (TcType, TcMonoKind)
+    go_mono n fun subst fun_ki all_args = case (all_args, tcSplitMonoFunKi_maybe fun_ki) of
+      ([], Nothing) -> return (fun, substMonoKi subst fun_ki)
+      ([], _) -> pprPanic "inst_tuple_tycon/unreachable1"
+                 $ vcat [ ppr fun, ppr subst, ppr fun_ki ]
+
+      (TyPresent _ arg : args, Just (af, arg_ki, res_ki)) ->
+        assertPpr (isVisibleKiFunArg af)
+        (vcat [ text "inst_tuple_tycon/go_mono/present case has invisible arg kind"
+              , ppr fun, ppr fun_ki, ppr all_args
+              ])
+        $ do traceTc "inst_tuple_tycon (vis present app)"
+               $ vcat [ ppr arg_ki, ppr arg, ppr subst ]
+             let arg_exp_kind = substMonoKi subst arg_ki
+             arg' <- addErrCtxt (tupAppCtxt arg n)
+                     $ tc_lcs_type arg arg_exp_kind
+             traceTc "inst_tuple_tycon (vis present app) 2" (ppr arg_ki)
+             (subst', fun') <- mkAppTyM subst fun arg_ki arg'
+             go_mono (n + 1) fun' subst' res_ki args
+
+      (TyMissing _ : args, Just (af, arg_ki, res_ki)) -> panic "type tuple sections in the works"
+
+      (_:_, Nothing) -> pprPanic "inst_tuple_tycon/unreachable1"
+                        $ vcat [ ppr fun, ppr subst, ppr fun_ki, ppr all_args ]
 
 ---------------------------
 tcInferTyApps :: LCsType Rn -> TcType -> [LCsTypeArg Rn] -> TcM (TcType, TcMonoKind)
@@ -877,6 +948,10 @@ funAppCtxt :: (Outputable fun, Outputable arg) => fun -> arg -> Int -> SDoc
 funAppCtxt fun arg arg_no = hang (hsep [ text "In the", speakNth arg_no, text "argument of"
                                        , quotes (ppr fun) <> text ", namely" ])
                             2 (quotes (ppr arg))
+
+tupAppCtxt :: Outputable arg => arg -> Int -> SDoc
+tupAppCtxt arg arg_no = hang (hsep [ text "In the", speakNth arg_no, text "argument of a tuple type, namely" ])
+                             2 (quotes (ppr arg))
 
 addTyConFlavCtxt :: Name -> TyConFlavor tc -> TcM a -> TcM a
 addTyConFlavCtxt name flav

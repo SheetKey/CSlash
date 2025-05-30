@@ -330,6 +330,10 @@ instance (Outputable tm, Outputable ty) => Outputable (CsArg (CsPass p) tm ty) w
   ppr (CsTypeArg _ ty) = text "CsTypeArg" <+> ppr ty
   ppr (CsArgPar sp) = text "CsArgPar" <+> ppr sp
 
+instance OutputableBndrId p => Outputable (CsTyTupArg (CsPass p)) where
+  ppr (TyPresent _ lty) = ppr lty <> text "[present]"
+  ppr (TyMissing _) = text "[missing]"
+
 type instance Anno (CsType (CsPass p)) = SrcSpanAnnA
 type instance Anno (CsSigType (CsPass p)) = SrcSpanAnnA
 
