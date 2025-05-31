@@ -234,6 +234,9 @@ addInertEqs  eq_ct@(KiEqCt { eq_lhs = KiVarLHS kv }) eqs = addEq eqs kv eq_ct
 updRels :: (RelMap RelCt -> RelMap RelCt) -> InertCans -> InertCans
 updRels upd ics = ics { inert_rels = upd (inert_rels ics) }
 
+delRel :: RelCt -> RelMap a -> RelMap a
+delRel (RelCt { rl_kc = kc, rl_ki1 = k1, rl_ki2 = k2 }) m = delKcApp m kc k1 k2
+
 addRel :: RelCt -> RelMap RelCt -> RelMap RelCt
 addRel item@(RelCt { rl_kc = kc, rl_ki1 = k1, rl_ki2 = k2 }) rm
   = insertKcApp rm kc k1 k2 item

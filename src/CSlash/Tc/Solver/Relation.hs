@@ -95,7 +95,14 @@ try_inert_rels inerts rel_w@(RelCt { rl_ev = ev_w, rl_kc = kc, rl_ki1 = ki1, rl_
        short_cut_worked <- shortCutSolver dflags ev_w ev_i
        if short_cut_worked
          then stopWith ev_w "interactRel/solved from rel"
-         else panic "try_inert_rels"
+         else case solveOneFromTheOther (CRelCan rel_i) (CRelCan rel_w) of
+                KeepInert -> do traceTcS "lookupInertRel:KeepInert" (ppr rel_w)
+                                setKiEvBindIfWanted ev_w True (ctEvType ev_i)
+                                return $ Stop ev_w (text "Rel equal" <+> ppr rel_w)
+                KeepWork -> do traceTcS "lookupInertRel:KeepWork" (ppr rel_w)
+                               setKiEvBindIfWanted ev_i True (ctEvType ev_w)
+                               updInertCans (updRels $ delRel rel_w)
+                               continueWith ()
   | otherwise
   = do traceTcS "tryInertRels:no" (ppr rel_w $$ ppr kc <+> ppr ki1 <+> ppr ki2)
        continueWith ()

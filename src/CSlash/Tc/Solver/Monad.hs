@@ -683,6 +683,11 @@ fillKiCoercionHole hole co = do
   wrapTcS $ TcM.fillKiCoercionHole hole co
   kickOutAfterFillingCoercionHole hole
 
+setKiEvBindIfWanted :: CtEvidence -> Bool -> KiEvType -> TcS ()
+setKiEvBindIfWanted ev canonical ty = case ev of
+  CtWanted { ctev_dest = dest } -> setWantedKiEvType dest canonical ty
+  _ -> return ()
+
 newGivenKiEvVar :: CtLoc -> (TcPredKind, KiEvType) -> TcS CtEvidence
 newGivenKiEvVar loc (pred, rhs) = do
   new_ev <- newBoundKiEvVar pred rhs
