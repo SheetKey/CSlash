@@ -52,4 +52,6 @@ isKiEvVarKind (KiConApp _ [_, _]) = True
 isKiEvVarKind _ = False
 
 isKiEvVar :: Var -> Bool
-isKiEvVar var = isKiEvVarKind (varKind var)
+isKiEvVar var
+  | isTyVar var = isKiEvVarKind (varKind var)
+  | otherwise = False
