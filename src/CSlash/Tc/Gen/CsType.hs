@@ -262,8 +262,8 @@ inst_tuple_tycon tup_tycon tup_args = do
                  $ vcat [ ppr fun, ppr subst, ppr fun_ki, ppr all_args ]
       (theta, inner_ki) -> do
         let inst_theta = substMonoKis subst theta
-        evVars <- instCallKiConstraints TupleTyOrigin inst_theta
-        go_mono n (mkAppTys fun (TyVarTy <$> evVars)) subst inner_ki all_args
+        evTys <- instCallKiConstraints TupleTyOrigin inst_theta
+        go_mono n (mkAppTys fun evTys) subst inner_ki all_args
 
     go_mono
       :: Int -> TcType -> Subst -> TcMonoKind -> [CsTyTupArg Rn] -> TcM (TcType, TcMonoKind)
@@ -336,8 +336,8 @@ tcInferTyApps_nosat orig_cs_ty fun orig_cs_args = do
       (theta, inner_ki) -> do
         let inst_theta = substMonoKis subst theta
             orig = lCsTyCtOrigin orig_cs_ty
-        evVars <- instCallKiConstraints orig inst_theta
-        go_mono n (mkAppTys fun (TyVarTy <$> evVars)) subst inner_ki all_args
+        evTys <- instCallKiConstraints orig inst_theta
+        go_mono n (mkAppTys fun evTys) subst inner_ki all_args
 
     go_mono
       :: Int -> TcType -> Subst -> TcMonoKind -> [LCsTypeArg Rn] -> TcM (TcType, TcMonoKind)

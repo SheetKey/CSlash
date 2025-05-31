@@ -8,7 +8,7 @@ import CSlash.Driver.DynFlags
 -- import {-# SOURCE #-} GHC.Tc.Utils.Unify( unifyInvisibleType, tcSubMult )
 import CSlash.Tc.Types.Origin
 import CSlash.Tc.Types.Constraint
--- import GHC.Tc.Types.Evidence
+import CSlash.Tc.Types.Evidence
 import CSlash.Tc.Utils.Monad        -- TcType, amongst others
 import CSlash.Tc.Utils.TcType
 import CSlash.Tc.Errors.Types
@@ -114,11 +114,11 @@ newWanted orig t_or_k predki = do
 -- Emitting constraints
 ----------------------------------------------
 
-emitWanted :: CtOrigin -> TcPredKind -> TcM KiEvVar
+emitWanted :: CtOrigin -> TcPredKind -> TcM KiEvType
 emitWanted origin pred = do
   ev <- newWanted origin Nothing pred
   emitSimple $ mkNonCanonical ev
-  return $ ctEvKiEvVar ev
+  return $ ctEvType ev
 
 {- *********************************************************************
 *                                                                      *

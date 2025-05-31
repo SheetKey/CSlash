@@ -22,7 +22,7 @@ import CSlash.Core.DataCon
 -- import GHC.Core.Coercion.Axiom
 
 -- import {-# SOURCE #-}   GHC.Tc.Gen.Expr( tcCheckPolyExpr, tcSyntaxOp )
--- import {-# SOURCE #-}   GHC.Tc.Utils.Unify( unifyType )
+import {-{-# SOURCE #-}-} CSlash.Tc.Utils.Unify( unifyKind )
 import CSlash.Tc.Utils.Monad
 import CSlash.Tc.Types.Constraint
 import CSlash.Tc.Types.Origin
@@ -66,7 +66,7 @@ import Data.Function ( on )
 *                                                                      *
 ********************************************************************* -}
 
-instCallKiConstraints :: CtOrigin -> [TcPredKind] -> TcM [KiEvVar]
+instCallKiConstraints :: CtOrigin -> [TcPredKind] -> TcM [KiEvType]
 instCallKiConstraints orig preds
   | null preds
   = return []
@@ -75,15 +75,12 @@ instCallKiConstraints orig preds
        traceTc "instCallKiConstraints" (ppr evs)
        return evs
   where
-    go :: TcPredKind -> TcM KiEvVar
+    go :: TcPredKind -> TcM KiEvType
     go pred
-      -- | Just (ki1, ki2) <- getEqPredKis_maybe pred
-      -- = do unifyKind Nothing ki1 ki2
-      --      newKiEvVar pred
-      -- | Just (EQKi, ki1, ki2) <- splitKiConApp_maybe pred
-      -- = do unifyKind Nothing ki1 ki2
-      --      newKiEvVar pred
-      -- | otherwise
+      | KiConApp EQKi [k1, k2] <- pred
+      = do co <- unifyKind Nothing k1 k2
+           return $ kiEvCoercion co
+      | otherwise
       = emitWanted orig pred
 
 {- *********************************************************************
