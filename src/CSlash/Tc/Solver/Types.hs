@@ -91,7 +91,7 @@ findRelsByRel m rl = findRelsByKiConKey m (getUnique rl)
 
 findRelsByKiConKey :: RelMap a -> Unique -> Bag a
 findRelsByKiConKey m rl
-  | Just ty <- lookupUDFM_Directly m rl = foldTM consBag ty emptyBag
+  | Just km <- lookupUDFM_Directly m rl = foldTM consBag km emptyBag
   | otherwise = emptyBag
 
 relsToBag :: RelMap a -> Bag a

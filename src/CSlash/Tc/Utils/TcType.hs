@@ -334,6 +334,11 @@ metaTyVarRef tv = case tcTyVarDetails tv of
                     MetaTv { mtv_ref = ref } -> ref
                     _ -> pprPanic "metaTyVarRef" (ppr tv)
 
+metaKiVarInfo :: TcKiVar -> MetaInfoK
+metaKiVarInfo kv = case tcKiVarDetails kv of
+  MetaKv { mkv_info = info } -> info
+  _ -> pprPanic "metaKiVarInfo" (ppr kv)
+
 metaKiVarRef :: KindVar -> IORef MetaDetailsK
 metaKiVarRef kv = case tcKiVarDetails kv of
                     MetaKv { mkv_ref = ref } -> ref

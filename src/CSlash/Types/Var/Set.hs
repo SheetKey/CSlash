@@ -24,6 +24,9 @@ type TyKiVarSet = UniqSet Var
 emptyVarSet :: VarSet
 emptyVarSet = emptyUniqSet
 
+unitVarSet :: Var -> VarSet
+unitVarSet = unitUniqSet
+
 extendVarSet :: VarSet -> Var -> VarSet
 extendVarSet = addOneToUniqSet
 

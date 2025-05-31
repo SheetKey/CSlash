@@ -12,7 +12,7 @@ import Control.Monad.IO.Class
 
 pprTrace :: String -> SDoc -> a -> a
 pprTrace str doc x
-  | unsafeHasNoDebugOutput = x
+  --  | unsafeHasNoDebugOutput = x
   | otherwise = pprDebugAndThen traceSDocContext trace (text str) doc x
 
 warnPprTrace :: HasCallStack => Bool -> String -> SDoc -> a -> a

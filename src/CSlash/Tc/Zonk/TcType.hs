@@ -274,7 +274,7 @@ zonkWCRec (WC { wc_simple = simple, wc_impl = implic }) = do
 zonkSimples :: Cts -> ZonkM Cts
 zonkSimples cts = do
   cts' <- mapBagM zonkCt cts
-  traceZonk "zonkSimples dont:" (ppr cts')
+  traceZonk "zonkSimples done:" (ppr cts')
   return cts'
 
 zonkCt :: Ct -> ZonkM Ct

@@ -183,6 +183,8 @@ pprCtOrigin simple_origin = ctoHerald <+> pprCtO simple_origin
 
 pprCtO :: HasCallStack => CtOrigin -> SDoc
 pprCtO (OccurrenceOf name) = hsep [text "a use of", quotes (ppr name)]
+pprCtO (GivenOrigin {}) = text "a given constraint"
+pprCtO TupleTyOrigin = text "a tuple type"
 pprCtO _ = panic "pprCtO"
 
 {- *******************************************************************

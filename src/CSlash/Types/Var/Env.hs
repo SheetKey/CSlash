@@ -238,6 +238,9 @@ type KiVarEnv elt = UniqFM Var elt
 mkVarEnv :: [(Var, a)] -> VarEnv a
 mkVarEnv = listToUFM
 
+mapVarEnv :: (a -> b) -> VarEnv a -> VarEnv b
+mapVarEnv = mapUFM
+
 emptyVarEnv :: VarEnv a
 emptyVarEnv = emptyUFM
 

@@ -35,6 +35,9 @@ type TvSubstEnv = TyVarEnv Type
 
 type KvSubstEnv = KiVarEnv MonoKind
 
+emptyKvSubstEnv :: KvSubstEnv
+emptyKvSubstEnv = emptyVarEnv
+
 emptySubst :: Subst
 emptySubst = Subst emptyInScopeSet emptyVarEnv emptyVarEnv emptyVarEnv
 
@@ -59,6 +62,9 @@ extendKvSubstWithClone (Subst in_scope ids tvs kvs) kv kv'
           ids
           tvs
           (extendVarEnv kvs kv (mkKiVarMKi kv'))
+
+mkKvSubst :: InScopeSet -> KvSubstEnv -> Subst
+mkKvSubst in_scope kenv = Subst in_scope emptyVarEnv emptyVarEnv kenv
 
 zapSubst :: Subst -> Subst
 zapSubst (Subst in_scope _ _ _) = Subst in_scope emptyVarEnv emptyVarEnv emptyVarEnv

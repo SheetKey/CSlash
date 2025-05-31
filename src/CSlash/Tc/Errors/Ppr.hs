@@ -566,7 +566,15 @@ usefulContext implics pred = go implics
     implausible_info _ = False
 
 pp_givens :: [Implication] -> [SDoc]
-pp_givens _ = panic "pp_givens"
+pp_givens givens = case givens of
+                     [] -> []
+                     (g:gs) -> ppr_given (text "from the context:") g
+                               : map (ppr_given (text "or from:")) gs
+  where
+    ppr_given herald implic@(Implic { ic_given = gs, ic_info = skol_info })
+      = hang (herald <+> pprKiEvVarTheta (mkMinimalBy kiEvVarPred gs))
+        2 (sep [ text "bound by" <+> ppr skol_info
+               , text "at" <+> ppr (getCtLocEnvLoc (ic_env implic)) ])
 
 {- *********************************************************************
 *                                                                      *

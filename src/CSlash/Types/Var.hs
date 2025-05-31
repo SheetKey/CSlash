@@ -40,7 +40,9 @@ import Prelude hiding ((<>))
 import {-# SOURCE #-} CSlash.Core.Type.Rep (Type)
 import {-# SOURCE #-} CSlash.Core.Kind (Kind, MonoKind, pprKind, isCoVarKind)
 import {-# SOURCE #-} CSlash.Tc.Utils.TcType
-  (TcTyVarDetails, TcKiVarDetails, pprTcTyVarDetails, vanillaSkolemTvUnk, vanillaSkolemKvUnk)
+  ( TcTyVarDetails, TcKiVarDetails
+  , pprTcTyVarDetails, pprTcKiVarDetails
+  , vanillaSkolemTvUnk, vanillaSkolemKvUnk)
 import {-# SOURCE #-} CSlash.Types.Id.Info (IdDetails, IdInfo, pprIdDetails)
 
 import CSlash.Types.Name hiding (varName)
@@ -118,6 +120,9 @@ instance Outputable Var where
           (TcTyVar {tc_tv_details = d})
             | dumpStyle sty || debug
             -> brackets (pprTcTyVarDetails d)
+          (TcKiVar {tc_kv_details = d})
+            | dumpStyle sty || debug
+            -> brackets (pprTcKiVarDetails d)
           (Id {idScope = s, id_details = d})
             | debug
             -> brackets (ppr_id_scope s <> pprIdDetails d)

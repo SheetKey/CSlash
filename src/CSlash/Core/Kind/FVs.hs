@@ -116,6 +116,9 @@ kiCoVarsOfKiCo co = runKiCoVars (deep_cv_co co)
 kiCoVarsOfMonoKind :: MonoKind -> KiCoVarSet
 kiCoVarsOfMonoKind mki = runKiCoVars (deep_cv_ki mki)
 
+kiCoVarsOfMonoKinds :: [MonoKind] -> KiCoVarSet
+kiCoVarsOfMonoKinds mkis = runKiCoVars (deep_cv_kis mkis)
+
 deep_cv_ki :: MonoKind -> Endo KiCoVarSet
 deep_cv_kis :: [MonoKind] -> Endo KiCoVarSet
 deep_cv_co :: KindCoercion -> Endo KiCoVarSet

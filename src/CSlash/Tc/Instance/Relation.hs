@@ -87,4 +87,7 @@ matchLTEQKi eq_ok (KiConApp kc1 []) (KiConApp kc2 [])
   = if (kc1 == kc2 && eq_ok) || kc1 < kc2
     then return $ OneInst True BuiltinInstance
     else return $ NoInstance
+matchLTEQKi True (KiVarKi v1) (KiVarKi v2)
+  | v1 == v2
+  = return $ OneInst True BuiltinInstance
 matchLTEQKi _ _ _ = return $ NotSure

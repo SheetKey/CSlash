@@ -564,6 +564,11 @@ kiFVsOfBag vs_of = foldr (unionFV . vs_of) emptyFV
 pprKiEvVars :: [KiEvVar] -> SDoc
 pprKiEvVars ev_vars = vcat (map pprKiEvVarWithKind ev_vars)
 
+pprKiEvVarTheta :: [KiEvVar] -> SDoc
+pprKiEvVarTheta ev_vars = pprTheta (map kiEvVarPred ev_vars)
+  where
+    pprTheta t = text "pprTheta NEEDS IMPLEMENTING" <+> ppr t
+
 pprKiEvVarWithKind :: KiEvVar -> SDoc
 pprKiEvVarWithKind v = ppr v <+> colon <+> ppr (kiEvVarPred v)
 

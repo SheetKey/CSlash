@@ -25,11 +25,12 @@ import qualified CSlash.Core.Type.Rep as Rep
 -- import GHC.Core.Class( Class )
 import CSlash.Core.TyCon
 -- import GHC.Core.Class( classTyCon )
--- import GHC.Core.Unify
+import CSlash.Core.Unify
 
 import CSlash.Utils.Misc ( partitionWith )
 import CSlash.Utils.Outputable
 import CSlash.Utils.Panic
+import CSlash.Utils.Trace
 import CSlash.Data.Maybe
 import CSlash.Data.Bag
 
@@ -413,7 +414,36 @@ noMatchableGivenRels inerts@(IS { inert_cans = inert_cans }) loc_w kc k1 k2
 
 mightEqualLater :: InertSet -> TcPredKind -> CtLoc -> TcPredKind -> CtLoc -> Maybe Subst
 mightEqualLater inert_set given_pred given_loc wanted_pred wanted_loc
-  = panic "mightEqualLater"
+  = case tcUnifyKisFG bind_fun [given_pred] [wanted_pred] of
+      Unifiable subst -> pprTrace "mightEqualLater 1" (ppr subst) $ Just subst
+      MaybeApart reason subst
+        | MARInfinite <- reason
+        -> Nothing
+        | otherwise
+        -> pprTrace "mightEqualLater 2" (ppr subst) $ Just subst
+      SurelyApart -> Nothing
+
+  where
+    in_scope = mkInScopeSet $ kiCoVarsOfMonoKinds [given_pred, wanted_pred]
+
+    bind_fun :: BindFun
+    bind_fun kv rhs_ki
+      | isMetaKiVar kv
+      , can_unify kv (metaKiVarInfo kv) rhs_ki
+      = BindMe
+      | otherwise
+      = Apart
+
+    can_unify :: TcKiVar -> MetaInfoK -> MonoKind -> Bool
+    can_unify _ KiVarKv rhs_ki
+      | Just rhs_kv <- getKiVarMono_maybe rhs_ki
+      = case tcKiVarDetails rhs_kv of
+          MetaKv { mkv_info = KiVarKv } -> True
+          MetaKv {} -> False
+          SkolemKv {} -> True
+      | otherwise
+      = False
+    can_unify _ _ _ = False
 
 {- *********************************************************************
 *                                                                      *

@@ -85,6 +85,7 @@ library
                     , CSlash.Core.Type.Subst
                     , CSlash.Core.Type.Tidy
                     , CSlash.Core.Unfold
+                    , CSlash.Core.Unify
                     , CSlash.Core.UsageEnv
 
                     , CSlash.Cs

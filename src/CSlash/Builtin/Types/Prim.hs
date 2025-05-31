@@ -99,8 +99,11 @@ mkTemplateTyConKindFromRes arity res_kind
         kinds = KiVarKi <$> kind_vars
         constraints = ((KiConApp LTEQKi) . (: [res_kind])) <$> kinds
         full_kind_no_constraints = foldr (FunKi FKF_K_K) res_kind kinds
-        full_kind = foldr (FunKi FKF_C_K) full_kind_no_constraints constraints 
-        q_full_kind = foldr ForAllKi (Mono full_kind) kind_vars
+        full_kind = foldr (FunKi FKF_C_K) full_kind_no_constraints constraints
+        res_kind_var = case res_kind of
+                         KiVarKi var -> [var]
+                         _ -> []
+        q_full_kind = foldr ForAllKi (Mono full_kind) (kind_vars ++ res_kind_var)
     in pprTrace "mkTemplateTyConKindFromRes" (ppr q_full_kind) q_full_kind
 
 mkTemplateTyConKind :: Int -> Kind

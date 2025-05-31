@@ -53,16 +53,25 @@ emptyK = KM { km_var = emptyTM
             , km_kicon = emptyUDFM }
 
 lkK :: MonoKind -> KindMapX a -> Maybe a
-lkK ki m = panic "lkK"
+lkK (KiVarKi v) = km_var >.> lkVar v
+lkK (KiConApp kc []) = km_kicon >.> lkDKiCon kc
+lkK ki@(KiConApp {}) = pprPanic "lkK KiConApp" (ppr ki)
+lkK ki@(FunKi {}) = pprPanic "lkK FunKi" (ppr ki)
 
 xtK :: MonoKind -> XT a -> KindMapX a -> KindMapX a
-xtK ki f m = panic "xtK"
+xtK (KiVarKi v) f m = m { km_var = km_var m |> xtVar v f }
+xtK (KiConApp kc []) f m = m { km_kicon = km_kicon m |> xtDKiCon kc f }
+xtK ki@(KiConApp {}) _ _ = pprPanic "xtK KiConApp" (ppr ki)
+xtK ki@(FunKi {}) _ _ = pprPanic "xtK FunKi" (ppr ki)
 
 fdK :: (a -> b -> b) -> KindMapX a -> b -> b
-fdK k m b = panic "fdK"
+fdK k m = foldTM k (km_var m)
+        . foldTM k (km_kicon m)
 
 filterK :: (a -> Bool) -> KindMapX a -> KindMapX a
-filterK f km = panic "filterK"
+filterK f (KM { km_var = kvar, km_kicon = kkicon })
+  = KM { km_var = filterTM f kvar
+       , km_kicon = filterTM f kkicon }
 
 {- *********************************************************************
 *                                                                      *
@@ -100,3 +109,9 @@ xtDFreeVar v f m = alterDVarEnv f m v
 
 ftVar :: (a -> Bool) -> VarMap a -> VarMap a
 ftVar f (VM { vm_fvar = fv }) = VM { vm_fvar = filterTM f fv }
+
+lkDKiCon :: KiCon -> DKiConEnv a -> Maybe a
+lkDKiCon kc env = lookupDKiConEnv env kc
+
+xtDKiCon :: KiCon -> XT a -> DKiConEnv a -> DKiConEnv a
+xtDKiCon kc f m = alterDKiConEnv f m kc
