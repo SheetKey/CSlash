@@ -269,16 +269,22 @@ isImmutableKiVar :: KindVar -> Bool
 isImmutableKiVar tv = isSkolemKiVar tv
 
 isSkolemTyVar :: TcTyVar -> Bool
-isSkolemTyVar tv = assertPpr (tcIsTcTyVar tv) (ppr tv)
-  $ case tcTyVarDetails tv of
+isSkolemTyVar tv 
+  | tcIsTcTyVar tv
+  = case tcTyVarDetails tv of
       MetaTv {} -> False
       _ -> True
+  | otherwise
+  = False
 
 isSkolemKiVar :: TcKiVar -> Bool
-isSkolemKiVar kv = assertPpr (tcIsTcKiVar kv) (ppr kv)
-  $ case tcKiVarDetails kv of
+isSkolemKiVar kv
+  | tcIsTcKiVar kv
+  = case tcKiVarDetails kv of
       MetaKv {} -> False
       _ -> True
+  | otherwise
+  = False
 
 isMetaTyVar :: TypeVar -> Bool
 isMetaTyVar tv

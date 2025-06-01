@@ -468,9 +468,11 @@ zonkAndSkolemize skol_info var
   | isKiVarKiVar var
   = do zonked_kivar <- zonkTcKiVarToTcKiVar var
        skolemizeQuantifiedKiVar skol_info zonked_kivar
+  | isImmutableTyVar var
+  = zonkTyVarKind var
   | otherwise
-  = assertPpr (isImmutableTyVar var) (pprTyVar var)
-    $ zonkTyVarKind var
+  = assertPpr (isImmutableKiVar var) (ppr var)
+    $ return var
 
 skolemizeQuantifiedTyVar :: SkolemInfo -> TcTyVar -> ZonkM TcTyVar
 skolemizeQuantifiedTyVar skol_info tv

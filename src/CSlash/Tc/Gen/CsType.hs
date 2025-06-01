@@ -560,7 +560,8 @@ kcInferDeclHeader
   -> TcM ContextKind
   -> TcM MonoTcTyCon
 kcInferDeclHeader name flav kv_ns kc_res_ki = addTyConFlavCtxt name flav $ do
-  (scoped_kvs, res_kind) <- bindImplicitKBndrs_Q_Kv kv_ns
+  skol_info <- mkSkolemInfo $ TyConSkol flav name
+  (scoped_kvs, res_kind) <- bindImplicitKBndrs_Q_Skol skol_info kv_ns
                             $ newExpectedKind =<< kc_res_ki
 
   let kv_pairs = mkKiVarNamePairs scoped_kvs
@@ -781,6 +782,8 @@ newKiVarBndr (SMK { smk_clone = clone, smk_kvkv = kvkv }) name = do
             False -> return name
   details <- case kvkv of
                SMDKiVarKv -> newMetaDetailsK KiVarKv
+               SMDSkolemKv skol_info -> do lvl <- getTcLevel
+                                           return $ SkolemKv skol_info lvl
   return $ mkTcKiVar name details
 
 -- bindImplicitKinds :: [Name] -> TcM a -> TcM ([TcKiVar], a)
@@ -822,6 +825,11 @@ bindImplicitKBndrs_Q_Kv :: [Name] -> TcM a -> TcM ([TcKiVar], a)
 bindImplicitKBndrs_Q_Kv = bindImplicitKBndrsX (smkVanilla { smk_clone = False
                                                           , smk_kvkv = SMDKiVarKv })
 
+bindImplicitKBndrs_Q_Skol :: SkolemInfo -> [Name] -> TcM a -> TcM ([TcKiVar], a)
+bindImplicitKBndrs_Q_Skol skol_info = bindImplicitKBndrsX (smkVanilla
+                                                           { smk_clone = False
+                                                           , smk_kvkv = SMDSkolemKv skol_info })
+
 bindImplicitKBndrsX :: SkolemModeK -> [Name] -> TcM a -> TcM ([TcKiVar], a)
 bindImplicitKBndrsX skol_mode kv_names thing_inside = do
   lcl_env <- getLclTyKiEnv
@@ -843,6 +851,7 @@ data SkolemModeK = SMK
 
 data SkolemModeKDetails
   = SMDKiVarKv
+  | SMDSkolemKv SkolemInfo
 
 smkVanilla :: HasCallStack => SkolemModeK
 smkVanilla = SMK { smk_clone = panic "sm_clone"
