@@ -132,6 +132,12 @@ tcTyGroup (TypeGroup { group_typeds = typeds, group_kisigs = kisigs }) = do
   let gbl_env' = gbl_env { tcg_ksigs = tcg_ksigs gbl_env `unionNameSet` kindless }
   return gbl_env'
 
+newTcTyD :: CsBind Rn -> TcM TyCon
+newTcTyD (TyFunBind { tyfun_id = L _ name
+                    , tyfun_body = rhs
+                    , tyfun_ext = (kv_names, _) }) = do
+  
+
 tcTyDs :: [LCsBind Rn] -> TcM ([TyCon], NameSet)
 tcTyDs typeds = do
   (tc_tycons, kindless) <- checkNoErrs $ kcTyGroup typeds
