@@ -29,13 +29,13 @@ import Data.Maybe (isJust)
 *                                                                       *
 ********************************************************************** -}
 
-data Kind
-  = ForAllKi {-# UNPACK #-} !KindVar Kind
-  | Mono MonoKind
+data Kind v
+  = ForAllKi {-# UNPACK #-} !KiVar Kind
+  | Mono (MonoKind v)
   deriving Data.Data
 
-data MonoKind
-  = KiVarKi Var
+data MonoKind v
+  = KiVarKi v
   | KiConApp KiCon [MonoKind]
   | FunKi
     { fk_f :: FunKiFlag
@@ -101,13 +101,13 @@ instance Outputable KiCon where
   ppr LTEQKi = text "<="
   ppr EQKi = char '~'
 
-instance Outputable Kind where
+instance Outputable v => Outputable (Kind v) where
   ppr = pprKind
 
-instance Outputable MonoKind where
+instance Outputable v => Outputable (MonoKind v) where
   ppr = pprMonoKind
 
-instance Eq MonoKind where
+instance Eq v => Eq (MonoKind v) where
   k1 == k2 = go k1 k2
     where
       go (KiConApp kc1 kis1) (KiConApp kc2 kis2)
@@ -121,22 +121,22 @@ instance Eq MonoKind where
       gos (k1:ks1) (k2:ks2) = go k1 k2 && gos ks1 ks2
       gos _ _ = False
 
-pprKind :: Kind -> SDoc
+pprKind :: Outputable v => Kind v -> SDoc
 pprKind = pprPrecKind topPrec
 
-pprMonoKind :: MonoKind -> SDoc
+pprMonoKind :: Outputable v => MonoKind v -> SDoc
 pprMonoKind = pprPrecMonoKind topPrec
 
-pprParendMonoKind :: MonoKind -> SDoc
+pprParendMonoKind :: Outputable v => MonoKind v -> SDoc
 pprParendMonoKind = pprPrecMonoKind appPrec
 
-pprPrecKind :: PprPrec -> Kind -> SDoc
+pprPrecKind :: Outputable v => PprPrec -> Kind v -> SDoc
 pprPrecKind = pprPrecKindX emptyTidyEnv
 
-pprPrecMonoKind :: PprPrec -> MonoKind -> SDoc
+pprPrecMonoKind :: Outputable v => PprPrec -> MonoKind v -> SDoc
 pprPrecMonoKind = pprPrecMonoKindX emptyTidyEnv
 
-pprPrecKindX :: TidyEnv -> PprPrec -> Kind -> SDoc
+pprPrecKindX :: Outputable v => MkTidyEnv v -> PprPrec -> Kind v -> SDoc
 pprPrecKindX env prec ki
   = getPprStyle $ \sty ->
     getPprDebug $ \debug ->
@@ -144,7 +144,7 @@ pprPrecKindX env prec ki
     then debug_ppr_ki prec ki
     else text "{pprKind not implemented}"--pprPrecIfaceKind prec (tidyToIfaceKindStyX env ty sty)
 
-pprPrecMonoKindX :: TidyEnv -> PprPrec -> MonoKind -> SDoc
+pprPrecMonoKindX :: Outputable v => MkTidyEnv v -> PprPrec -> MonoKind v -> SDoc
 pprPrecMonoKindX env prec ki
   = getPprStyle $ \sty ->
     getPprDebug $ \debug ->
@@ -152,26 +152,26 @@ pprPrecMonoKindX env prec ki
     then debug_ppr_mono_ki prec ki
     else text "{pprKind not implemented}"--pprPrecIfaceKind prec (tidyToIfaceKindStyX env ty sty)
 
-pprKiCo :: KindCoercion -> SDoc
+pprKiCo :: Outpurable v => KindCoercion v -> SDoc
 pprKiCo = pprPrecKiCo topPrec
 
-pprPrecKiCo :: PprPrec -> KindCoercion -> SDoc
+pprPrecKiCo :: Outputable v => PprPrec -> KindCoercion v -> SDoc
 pprPrecKiCo = pprPrecKiCoX emptyTidyEnv
 
-pprPrecKiCoX :: TidyEnv -> PprPrec -> KindCoercion -> SDoc
+pprPrecKiCoX :: Outputable v => TidyEnv v -> PprPrec -> KindCoercion v -> SDoc
 pprPrecKiCoX _ prec co = getPprStyle $ \sty ->
                        getPprDebug $ \debug ->
                        if debug
                        then debug_ppr_ki_co prec co
                        else panic "pprPrecKiCoX"
 
-debugPprKind :: Kind -> SDoc
+debugPprKind :: Outputable v => Kind v -> SDoc
 debugPprKind ki = debug_ppr_ki topPrec ki
 
-debugPprMonoKind :: MonoKind -> SDoc
+debugPprMonoKind :: Outputable v => MonoKind v -> SDoc
 debugPprMonoKind ki = debug_ppr_mono_ki topPrec ki
 
-debug_ppr_ki :: PprPrec -> Kind -> SDoc
+debug_ppr_ki :: Outputable v => PprPrec -> Kind v -> SDoc
 debug_ppr_ki prec (Mono ki) = debug_ppr_mono_ki prec ki
 debug_ppr_ki prec ki
   | (bndrs, body) <- splitForAllKiVars ki
@@ -180,7 +180,7 @@ debug_ppr_ki prec ki
                                   , ppr body ]
 debug_ppr_ki _ _ = panic "debug_ppr_ki unreachable"
 
-debug_ppr_mono_ki :: PprPrec -> MonoKind -> SDoc
+debug_ppr_mono_ki :: Outputable v => PprPrec -> MonoKind v -> SDoc
 debug_ppr_mono_ki _ (KiVarKi kv) = ppr kv
 debug_ppr_mono_ki prec ki@(KiConApp kc args)
   | UKd <- kc
@@ -256,19 +256,30 @@ instance Outputable FunKiFlag where
 *                                                                       *
 ********************************************************************** -}
 
-mkKiVarKi :: KindVar -> Kind
-mkKiVarKi v = assertPpr (isKiVar v) (ppr v) $ Mono $ KiVarKi v
+-- Simple Kind Constructors
+class SKC kind where
+  mkKiVarKi :: v -> kind v
+  mkFunKi :: FunKiFlag -> kind v -> kind v -> kind v
 
-mkKiVarMKi :: KindVar -> MonoKind
+instance SKC MonoKind where
+  mkKiVarKi = KiVarKi
+  mkFunKi f arg res = assertPpr (f == chooseFunKiFlag arg res)
+                      (vcat [ text "f" <+> ppr f
+                            , text "chooseF" <+> ppr (chooseFunKiFlag arg res)
+                            , text "arg" <+> ppr arg
+                            , text "res" <+> ppr res ])
+                      $ FunKi { fk_f = f, fk_arg = arg, fk_res = res }
+
+instance SKC Kind where
+  mkKiVarKi = Mono . mkKiVarKi
+  mkFunKi = Mono . mkFunKi
+
+mkKiVarKi :: v -> Kind v
+mkKiVarKi v = Mono $ KiVarKi v
+
+mkKiVarMKi :: KiVar -> MonoKind
 mkKiVarMKi v = assertPpr (isKiVar v) (ppr v) $ KiVarKi v
 
-mkFunKi :: FunKiFlag -> MonoKind -> MonoKind -> MonoKind
-mkFunKi f arg res = assertPpr (f == chooseFunKiFlag arg res)
-                    (vcat [ text "f" <+> ppr f
-                          , text "chooseF" <+> ppr (chooseFunKiFlag arg res)
-                          , text "arg" <+> ppr arg
-                          , text "res" <+> ppr res ])
-                    $ FunKi { fk_f = f, fk_arg = arg, fk_res = res }
 
 mkFunKi_nc :: FunKiFlag -> MonoKind -> MonoKind -> MonoKind
 mkFunKi_nc f arg res = FunKi { fk_f = f, fk_arg = arg, fk_res = res }
@@ -291,23 +302,23 @@ mkForAllKi v k = assertPpr (isKiVar v) (ppr v) $ ForAllKi v k
 *                                                                      *
 ********************************************************************* -}
 
-data KindCoercion
-  = Refl MonoKind
-  | KiConAppCo KiCon [KindCoercion]
+data KindCoercion v
+  = Refl (MonoKind v)
+  | KiConAppCo KiCon [KindCoercion v]
   | FunCo
     { fco_afl :: FunKiFlag
     , fco_afr :: FunKiFlag
-    , fco_arg :: KindCoercion
-    , fco_res :: KindCoercion }
+    , fco_arg :: KindCoercion v
+    , fco_res :: KindCoercion v }
   | KiCoVarCo KiCoVar
-  | SymCo KindCoercion
-  | TransCo KindCoercion KindCoercion
-  | HoleCo KindCoercionHole
+  | SymCo (KindCoercion v)
+  | TransCo (KindCoercion v) (KindCoercion v)
+  | HoleCo (KindCoercionHole v)
   deriving Data.Data
 
-data KindCoercionHole = CoercionHole
+data KindCoercionHole v = CoercionHole
   { ch_co_var :: KiCoVar
-  , ch_ref :: IORef (Maybe (KindCoercion))
+  , ch_ref :: IORef (Maybe (KindCoercion v))
   }
 
 instance Data.Data KindCoercionHole

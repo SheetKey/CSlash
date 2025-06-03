@@ -1,6 +1,10 @@
 module CSlash.Types.Var.Set where
 
-import CSlash.Types.Var ( Var, TypeVar, KindVar, KiCoVar, Id )
+import CSlash.Types.Var
+  ( Var
+  , TyVar, TcTyVar, AnyTyVar
+  , KiVar, TcKiVar, AnyKiVar
+  , KiCoVar, Id )
 import CSlash.Types.Unique
 import CSlash.Types.Name ( Name )
 import CSlash.Types.Unique.Set
@@ -9,64 +13,70 @@ import CSlash.Types.Unique.FM ( disjointUFM, pluralUFM, pprUFM )
 import CSlash.Types.Unique.DFM ( disjointUDFM, udfmToUfm, anyUDFM, allUDFM )
 import CSlash.Utils.Outputable (SDoc)
 
+type MkVarSet = UniqSet
+
 type VarSet = UniqSet Var
 
 type IdSet = UniqSet Id
 
-type TyVarSet = UniqSet TypeVar
+type TyVarSet = UniqSet TyVar
+type TcTyVarSet = UniqSet TcTyVar
+type AnyTyVarSet = UniqSet AnyTyVar
 
-type KiVarSet = UniqSet KindVar
+type KiVarSet = UniqSet KiVar
+type TcKiVarSet = UniqSet TcKiVar
+type AnyKiVarSet = UniqSet AnyKiVar
 
 type KiCoVarSet = UniqSet KiCoVar
 
 type TyKiVarSet = UniqSet Var
 
-emptyVarSet :: VarSet
+emptyVarSet :: UniqSet a
 emptyVarSet = emptyUniqSet
 
-unitVarSet :: Var -> VarSet
+unitVarSet :: Uniquable a => a -> UniqSet a
 unitVarSet = unitUniqSet
 
-extendVarSet :: VarSet -> Var -> VarSet
+extendVarSet :: Uniquable a => UniqSet a -> a -> UniqSet a
 extendVarSet = addOneToUniqSet
 
-extendVarSetList :: VarSet -> [Var] -> VarSet
+extendVarSetList :: Uniquable a => UniqSet a -> [a] -> UniqSet a
 extendVarSetList = addListToUniqSet
 
-elemVarSet :: Var -> VarSet -> Bool
+elemVarSet :: Uniquable a => a -> UniqSet a -> Bool
 elemVarSet = elementOfUniqSet
 
-minusVarSet :: VarSet -> VarSet -> VarSet
+minusVarSet :: UniqSet a -> UniqSet a -> UniqSet a
 minusVarSet = minusUniqSet
 
-delVarSetList :: VarSet -> [Var] -> VarSet
+delVarSetList :: Uniquable a => UniqSet a -> [a] -> UniqSet a
 delVarSetList = delListFromUniqSet
 
-isEmptyVarSet :: VarSet -> Bool
+isEmptyVarSet :: UniqSet a -> Bool
 isEmptyVarSet = isEmptyUniqSet
 
-mkVarSet :: [Var] -> VarSet
+mkVarSet :: Uniquable a => [a] -> UniqSet a
 mkVarSet = mkUniqSet
 
-disjointVarSet :: VarSet -> VarSet -> Bool
+disjointVarSet :: UniqSet a -> UniqSet a -> Bool
 disjointVarSet s1 s2 = disjointUFM (getUniqSet s1) (getUniqSet s2)
 
-subVarSet :: VarSet -> VarSet -> Bool
+subVarSet :: UniqSet a -> UniqSet a -> Bool
 subVarSet s1 s2 = isEmptyVarSet (s1 `minusVarSet` s2)
 
-lookupVarSet :: VarSet -> Var -> Maybe Var
+lookupVarSet :: Uniquable a => UniqSet a -> a -> Maybe a
 lookupVarSet = lookupUniqSet
 
-anyVarSet :: (Var -> Bool) -> VarSet -> Bool
+anyVarSet :: (a -> Bool) -> UniqSet a -> Bool
 anyVarSet = uniqSetAny
 
-unionVarSet :: VarSet -> VarSet -> VarSet
+unionVarSet :: UniqSet a -> UniqSet a -> UniqSet a
 unionVarSet = unionUniqSets
 
-unionVarSets :: [VarSet] -> VarSet
+unionVarSets :: [UniqSet a] -> UniqSet a
 unionVarSets = unionManyUniqSets
 
-transCloVarSet :: (VarSet -> VarSet) -> VarSet -> VarSet
+transCloVarSet :: (UniqSet a -> UniqSet a) -> UniqSet a -> UniqSet a
 transCloVarSet fn seeds = go seeds seeds
   where
     go acc candidates
@@ -75,36 +85,38 @@ transCloVarSet fn seeds = go seeds seeds
       where
         new_vs = fn candidates `minusVarSet` acc
 
-pprVarSet :: VarSet -> ([Var] -> SDoc) -> SDoc
+pprVarSet :: UniqSet a -> ([a] -> SDoc) -> SDoc
 pprVarSet = pprUFM . getUniqSet
+
+type MkDVarSet = UniqDSet
 
 type DVarSet = UniqDSet Var
 
-type DKiVarSet = UniqDSet KindVar
+type DKiVarSet = UniqDSet KiVar
 
-emptyDVarSet :: DVarSet
+emptyDVarSet :: UniqDSet a
 emptyDVarSet = emptyUniqDSet
 
-mkDVarSet :: [Var] -> DVarSet
+mkDVarSet :: Uniquable a => [a] -> UniqDSet a
 mkDVarSet = mkUniqDSet
 
-extendDVarSet :: DVarSet -> Var -> DVarSet 
+extendDVarSet :: Uniquable a => UniqDSet a -> a -> UniqDSet a
 extendDVarSet = addOneToUniqDSet
 
-elemDVarSet :: Var -> DVarSet -> Bool
+elemDVarSet :: Uniquable a => a -> UniqDSet a -> Bool
 elemDVarSet = elementOfUniqDSet
 
-dVarSetElems :: DVarSet -> [Var]
+dVarSetElems :: UniqDSet a -> [a]
 dVarSetElems = uniqDSetToList
 
-isEmptyDVarSet :: DVarSet -> Bool
+isEmptyDVarSet :: UniqDSet a -> Bool
 isEmptyDVarSet = isEmptyUniqDSet
 
-nonDetStrictFoldDVarSet :: (Var -> a -> a) -> a -> DVarSet -> a
+nonDetStrictFoldDVarSet :: (a -> b -> b) -> b -> UniqDSet a -> b
 nonDetStrictFoldDVarSet = nonDetStrictFoldUniqDSet
 
-delDVarSetList :: DVarSet -> [Var] -> DVarSet
+delDVarSetList :: Uniquable a => UniqDSet a -> [a] -> UniqDSet a
 delDVarSetList = delListFromUniqDSet
 
-dVarSetToVarSet :: DVarSet -> VarSet
+dVarSetToVarSet :: UniqDSet a -> UniqSet a
 dVarSetToVarSet = unsafeUFMToUniqSet . udfmToUfm . getUniqDSet
