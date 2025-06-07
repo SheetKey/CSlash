@@ -11,8 +11,8 @@ import {-# SOURCE #-} CSlash.Types.Name (Name)
 tupleTyConName :: Arity -> Name
 tupleDataConName :: Arity -> Name
 
-tupleDataCon :: Arity -> DataCon
-tupleTyCon :: Arity -> TyCon
+tupleDataCon :: Arity -> DataCon tv kv
+tupleTyCon :: Arity -> TyCon tv kv
 
-sumDataCon :: ConTag -> Arity -> DataCon
-sumTyCon :: Arity -> TyCon
+sumDataCon :: ConTag -> Arity -> DataCon tv kv
+sumTyCon :: Arity -> TyCon tv kv

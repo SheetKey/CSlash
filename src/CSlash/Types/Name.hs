@@ -47,7 +47,7 @@ module CSlash.Types.Name
 
 import Prelude hiding ((<>))
 
-import {-# SOURCE #-} CSlash.Types.TyThing (TyThing)
+import {-# SOURCE #-} CSlash.Types.TyThing (TyThing, WITyThing)
 
 import CSlash.Types.Name.Occurrence
 import CSlash.Unit.Module
@@ -76,7 +76,7 @@ data Name = Name
 
 data NameSort
   = External Module
-  | WiredIn Module TyThing BuiltInSyntax
+  | WiredIn Module WITyThing BuiltInSyntax
   | Internal
   | System
 
@@ -134,7 +134,7 @@ isWiredInName _ = False
 isWiredIn :: NamedThing thing => thing -> Bool
 isWiredIn = isWiredInName . getName
 
-wiredInNameTyThing_maybe :: Name -> Maybe TyThing
+wiredInNameTyThing_maybe :: Name -> Maybe WITyThing
 wiredInNameTyThing_maybe (Name {n_sort = WiredIn _ thing _}) = Just thing
 wiredInNameTyThing_maybe _ = Nothing
 
@@ -253,7 +253,7 @@ mkExternalName uniq mod occ loc
   = Name { n_uniq = uniq, n_sort = External mod,
            n_occ = occ, n_loc = loc }
 
-mkWiredInName :: Module -> OccName -> Unique -> TyThing -> BuiltInSyntax -> Name
+mkWiredInName :: Module -> OccName -> Unique -> WITyThing -> BuiltInSyntax -> Name
 {-# INLINE mkWiredInName #-}
 mkWiredInName mod occ uniq thing built_in
   = Name { n_uniq = uniq,

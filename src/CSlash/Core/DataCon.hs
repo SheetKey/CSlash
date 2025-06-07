@@ -46,14 +46,14 @@ import Numeric (showInt)
 -- we should have (invariant) length dcUnivTyVars <= length dcArgTys == length tyConBinders
 -- '<=' since in GADTS, some tyvars in the datacon may be instantiated.
 
-data DataCon = MkData
+data DataCon tv kv = MkData
   { dcName :: Name
   , dcUnique :: Unique
   , dcTag :: ConTag
-  , dcId :: Id
+  , dcId :: Id tv kv
   , dcArity :: Arity
   , dcTyCon :: TyCon
-  , dcType :: Type
+  , dcType :: Type tv kv
   , dcInfix :: Bool
   }
 
@@ -63,24 +63,24 @@ data DataCon = MkData
 *                                                                      *
 ********************************************************************* -}
 
-instance Eq DataCon where
+instance Eq (DataCon tv kv) where
   a == b = getUnique a == getUnique b
   a /= b = getUnique a /= getUnique b
 
-instance Uniquable DataCon where
+instance Uniquable (DataCon tv kv) where
   getUnique = dcUnique
 
-instance NamedThing DataCon where
+instance NamedThing (DataCon tv kv) where
   getName = dcName
 
-instance Outputable DataCon where
+instance Outputable (DataCon tv kv) where
   ppr con = ppr (dataConName con)
 
-instance OutputableBndr DataCon where
+instance OutputableBndr (DataCon tv kv) where
   pprInfixOcc con = pprInfixName (dataConName con)
   pprPrefixOcc con = pprPrefixName (dataConName con)
 
-instance Data.Data DataCon where
+instance Data.Data (DataCon tv kv) where
   toConstr _   = abstractConstr "DataCon"
   gunfold _ _  = error "gunfold"
   dataTypeOf _ = mkNoRepType "DataCon"
@@ -96,10 +96,10 @@ mkDataCon
   -> Bool
   -> KnotTied TyCon
   -> ConTag
-  -> Id
-  -> Type
+  -> Id tv kv
+  -> Type tv kv
   -> Arity
-  -> DataCon
+  -> DataCon tv kv
 mkDataCon name declared_infix tycon tag id ty arity
   = con
   where
@@ -113,7 +113,7 @@ mkDataCon name declared_infix tycon tag id ty arity
                  , dcArity = arity
                  }
 
-mkDataConTy :: TyCon -> Arity -> Type
+mkDataConTy :: TyCon -> Arity -> Type tv kv
 mkDataConTy tycon arity = panic "dc_type"
   -- where
   --   fun_kind_vars = mkTemplateFunKindVars arity
@@ -179,23 +179,23 @@ mkDataConTy tycon arity = panic "dc_type"
 --     dc_partial_type = foldr2 FunTy res_type funKinds arg_tys
 --     dc_type = WithContext full_constrs $ foldr ForAllTy dc_partial_type b_tyvars
 
-dataConName :: DataCon -> Name
+dataConName :: DataCon tv kv -> Name
 dataConName = dcName
 
-dataConTyCon :: DataCon -> TyCon
+dataConTyCon :: DataCon tv kv -> TyCon
 dataConTyCon = dcTyCon
 
-dataConType :: DataCon -> Type
+dataConType :: DataCon tv kv -> Type tv kv
 dataConType = dcType
          
-dataConArity :: DataCon -> Arity
+dataConArity :: DataCon tv kv -> Arity
 dataConArity (MkData { dcArity = arity }) = arity
 
-dataConId :: DataCon -> Id
+dataConId :: DataCon tv kv -> Id tv kv
 dataConId dc = dcId dc
 
-dataConImplicitTyThing :: DataCon -> TyThing
+dataConImplicitTyThing :: DataCon tv kv -> TyThing tv kv
 dataConImplicitTyThing (MkData { dcId = id }) = mkAnId id
 
-dataConFullSig :: DataCon -> Type
+dataConFullSig :: DataCon tv kv -> Type tv kv
 dataConFullSig (MkData { dcType = full_ty }) = full_ty

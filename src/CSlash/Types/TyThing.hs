@@ -17,45 +17,49 @@ import CSlash.Utils.Outputable
 import CSlash.Utils.Misc
 import CSlash.Utils.Panic
 
-data TyThing
-  = AnId Id
+data TyThing tv kv
+  = AnId (Id tv kv)
   | AConLike ConLike
-  | ATyCon TyCon
+  | ATyCon TyCon tv kv
 
-instance Outputable TyThing where
+-- Wire-in TyThing
+type WITyThing = TyThing (TyVar KiVar) KiVar
+
+instance (Outputable tv, Outputable kv) => Outputable (TyThing tv kv) where
   ppr = pprShortTyThing
 
-instance NamedThing TyThing where
+instance NamedThing (TyThing tv, kv) where
   getName (AnId id) = getName id
   getName (ATyCon tc) = getName tc
   getName (AConLike cl) = conLikeName cl
 
-mkATyCon :: TyCon -> TyThing
+mkATyCon :: TyCon tv kv -> TyThing tv kv
 mkATyCon = ATyCon
 
-mkAnId :: Id -> TyThing
+mkAnId :: Id tv kv -> TyThing tv kv
 mkAnId = AnId
 
+pprShortTyThing :: (Outputable tv, Outputable kv) => TyThing tv kv -> SDoc
 pprShortTyThing = undefined
 
-tyThingCategory :: TyThing -> String
+tyThingCategory :: TyThing tv kv -> String
 tyThingCategory (ATyCon _) = "type constructor"
 tyThingCategory (AnId _) = "identifier"
 tyThingCategory (AConLike (RealDataCon _)) = "data constructor"
 tyThingCategory (AConLike PatSynCon) = "pattern synonym"
 
-implicitTyConThings :: TyCon -> [TyThing]
+implicitTyConThings :: TyCon tv kv -> [TyThing tv kv]
 implicitTyConThings tc
   = datacon_stuff
   where
-    datacon_stuff :: [TyThing]
+    --datacon_stuff :: [TyThing tv kv]
     datacon_stuff = [ty_thing | dc <- cons
                               , ty_thing <- [ AConLike (RealDataCon dc)
                                             , dataConImplicitTyThing dc] ]
-    cons :: [DataCon]
+    --cons :: [DataCon]
     cons = tyConDataCons tc
 
-tyThingGREInfo :: TyThing -> GREInfo
+tyThingGREInfo :: TyThing tv kv -> GREInfo
 tyThingGREInfo = \case
   AConLike con -> IAmConLike $ conLikeConInfo con
   AnId _ -> Vanilla

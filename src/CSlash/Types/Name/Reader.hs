@@ -343,7 +343,7 @@ mkLocalGRE = mkGRE (const Nothing)
 mkLocalVanillaGRE :: Parent -> Name -> GlobalRdrElt
 mkLocalVanillaGRE = mkLocalGRE Vanilla
 
-mkLocalTyConGRE :: TyConFlavor Name -> Name -> GlobalRdrElt
+mkLocalTyConGRE :: TyConFlavor -> Name -> GlobalRdrElt
 mkLocalTyConGRE flav nm = mkLocalGRE (IAmTyCon flav) par nm
   where
     par = case tyConFlavorAssoc_maybe flav of

@@ -2,6 +2,6 @@ module CSlash.Core.TyCon where
 
 import {-# SOURCE #-} CSlash.Types.Name
 
-data TyCon
+data TyCon tv kv
 
-tyConName :: TyCon -> Name
+tyConName :: TyCon tv kv -> Name
