@@ -6,14 +6,15 @@ module CSlash.Types.Var
   ) where
 
 import {-# SOURCE #-} CSlash.Types.Name
+import Data.Void (Void)
 
-data Var
-instance NamedThing Var
+data Var tv kv
+instance NamedThing (Var tv kv)
 data VarBndr var argf
-newtype Id = Id Var
-newtype TyVar = TyVar Var
-newtype TcTyVar = TcTyVar Var
-newtype AnyTyVar = AnyTyVar Var
-newtype KiVar = KiVar Var
-newtype TcKiVar = TcKiVar Var
-newtype AnyKiVar = AnyKiVar Var
+newtype Id tv kv = Id (Var tv kv)
+newtype TyVar kv = TyVar (Var Void kv)
+newtype TcTyVar kv = TcTyVar (Var Void kv)
+newtype AnyTyVar kv = AnyTyVar (Var Void kv)
+newtype KiVar = KiVar (Var Void Void)
+newtype TcKiVar = TcKiVar (Var Void Void)
+newtype AnyKiVar = AnyKiVar (Var Void Void)

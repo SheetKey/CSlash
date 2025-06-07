@@ -15,21 +15,17 @@ import CSlash.Utils.Outputable (SDoc)
 
 type MkVarSet = UniqSet
 
-type VarSet = UniqSet Var
+type VarSet tv kv = MkVarSet (Var tv kv)
 
-type IdSet = UniqSet Id
+type IdSet tv kv = MkVarSet (Id tv kv)
 
-type TyVarSet = UniqSet TyVar
-type TcTyVarSet = UniqSet TcTyVar
-type AnyTyVarSet = UniqSet AnyTyVar
+type TyVarSet kv = MkVarSet (TyVar kv)
+type TcTyVarSet kv = MkVarSet (TcTyVar kv)
+type AnyTyVarSet kv = MkVarSet (AnyTyVar kv)
 
-type KiVarSet = UniqSet KiVar
-type TcKiVarSet = UniqSet TcKiVar
-type AnyKiVarSet = UniqSet AnyKiVar
-
-type KiCoVarSet = UniqSet KiCoVar
-
-type TyKiVarSet = UniqSet Var
+type KiVarSet = MkVarSet KiVar
+type TcKiVarSet = MkVarSet TcKiVar
+type AnyKiVarSet = MkVarSet AnyKiVar
 
 emptyVarSet :: UniqSet a
 emptyVarSet = emptyUniqSet
@@ -90,9 +86,9 @@ pprVarSet = pprUFM . getUniqSet
 
 type MkDVarSet = UniqDSet
 
-type DVarSet = UniqDSet Var
+type DVarSet tv kv = MkDVarSet (Var tv kv)
 
-type DKiVarSet = UniqDSet KiVar
+type DKiVarSet = MkDVarSet KiVar
 
 emptyDVarSet :: UniqDSet a
 emptyDVarSet = emptyUniqDSet

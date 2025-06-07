@@ -1,3 +1,5 @@
+{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE GeneralisedNewtypeDeriving #-}
 {-# LANGUAGE DeriveDataTypeable #-}
@@ -11,10 +13,13 @@ module CSlash.Types.Var
   , VarHasName(..), VarHasUnique(..)
   , VarHasType(..), VarHasKind(..)
   , VarHasTcDetails(..), VarCanSetTcDetails(..)
-  , SwellVar(..)
-  , EbbTyVar(..), EbbTcTyVar(..), EbbAnyTyVar(..)
-  , EbbKiVar(..), EbbTcKiVar(..), EbbAnyKiVar(..)
-  , EbbId(..)
+  , ToVar(..), ToAnyTyVar(..), ToAnyKiVar(..)
+  , ToTyVarMaybe(..), ToTcTyVarMaybe(..), ToAnyTyVarMaybe(..)
+  , ToKiVarMaybe(..), ToTcKiVarMaybe(..), ToAnyKiVarMaybe(..)
+  , ToIdMaybe(..)
+  , FromTyVar(..), FromTcTyVar(..), FromAnyTyVar(..)
+  , FromKiVar(..), FromTcKiVar(..), FromAnyKiVar(..)
+  , FromId(..)
 
     {-* TyVar *-}
   , TyVar, KiCoVar
@@ -37,8 +42,12 @@ module CSlash.Types.Var
     {-* Id *-}
   , Id
 
+    {-* ForAllFlag *-}
+  , ForAllFlag(..)
+  , isVisibleForAllFlag, isInvisibleForAllFlag
+  
     {-* VarBndr *-}
-  , VarBndr(..)
+  , VarBndr(..), ForAllBinder
   ) where
 
 import Prelude hiding ((<>))
@@ -62,6 +71,8 @@ import CSlash.Utils.Panic
 
 import Data.Data
 import Control.DeepSeq
+import Data.Void (Void, absurd)
+import Data.Bifunctor(Bifunctor(..))
 
 {- *********************************************************************
 *                                                                      *
@@ -69,16 +80,16 @@ import Control.DeepSeq
 *                                                                      *
 ********************************************************************* -}
 
-data Var
+data Var tv kv
   = TyVar'
     { _varName :: !Name
     , _realUnique :: {-# UNPACK #-} !Unique
-    , _varKind :: MonoKind
+    , _varKind :: MonoKind kv
     }
   | TcTyVar' -- for type inference
     { _varName :: !Name
     , _realUnique :: {-# UNPACK #-} !Unique
-    , _varKind :: MonoKind
+    , _varKind :: MonoKind kv
     , _tc_tv_details :: TcTyVarDetails
     }
   | KiVar'
@@ -93,11 +104,41 @@ data Var
   | Id'
     { _varName :: !Name
     , _realUnique :: {-# UNPACK #-} !Unique
-    , _varType :: Type
+    , _varType :: Type tv kv
     , _idScope :: IdScope
     , _id_details :: IdDetails
     , _id_info :: IdInfo
     }
+
+instance Functor (Var tv) where
+  fmap = panic "instance Functor (Var tv)"
+
+instance Bifunctor Var where
+  bimap _ _ (KiVar' {..}) = KiVar' {..}
+  bimap _ _ (TcKiVar' {..}) = TcKiVar' {..}
+  bimap _ _ _ = panic "instance Bifunctor Var"
+
+  first _ (TyVar' {..}) = TyVar' {..}
+  first _ (TcTyVar' {..}) = TcTyVar' {..}
+  first _ (KiVar' {..}) = KiVar' {..}
+  first _ (TcKiVar' {..}) = TcKiVar' {..}
+  first _ _ = panic "instance Bifunctor Var"
+
+  second _ (KiVar' {..}) = KiVar' {..}
+  second _ (TcKiVar' {..}) = TcKiVar' {..}
+  second _ _ = panic "instance Bifunctor Var"
+
+vacuousBimap :: Var Void Void -> Var tv kv
+vacuousBimap = bimap absurd absurd
+
+vacuousBimap' ::Var tv kv -> Var Void Void
+vacuousBimap' = bimap undefined undefined
+
+vacuousFirst :: Var Void kv -> Var tv kv
+vacuousFirst = first absurd
+
+vacuousFirst' :: Var tv kv -> Var Void kv
+vacuousFirst' = first undefined
 
 data IdScope
   = GlobalId
@@ -107,7 +148,7 @@ data ExportFlag
   = NotExported
   | Exported
 
-instance Outputable Var where
+instance (Outputable tv, Outputable kv) => Outputable (Var tv kv) where
   ppr var = 
     getPprDebug $ \ debug ->
     getPprStyle $ \ sty ->
@@ -139,31 +180,31 @@ ppr_id_scope GlobalId = text "gid"
 ppr_id_scope (LocalId Exported) = text "lidx"
 ppr_id_scope (LocalId NotExported) = text "lid"
 
-instance NamedThing Var where
+instance NamedThing (Var tv kv) where
   getName = varName
 
-instance Uniquable Var where
+instance Uniquable (Var tv kv) where
   getUnique = _realUnique
 
-instance Eq Var where
+instance Eq (Var tv kv) where
   a == b = _realUnique a == _realUnique b
 
-instance Ord Var where
+instance Ord (Var tv kv) where
   a <= b = getKey (_realUnique a) <= getKey (_realUnique b)
   a < b = getKey (_realUnique a) < getKey (_realUnique b)
   a >= b = getKey (_realUnique a) >= getKey (_realUnique b)
   a > b = getKey (_realUnique a) > getKey (_realUnique b)
   a `compare` b = a `nonDetCmpVar` b
     where
-      nonDetCmpVar :: Var -> Var -> Ordering
+      -- nonDetCmpVar :: Var -> Var -> Ordering
       nonDetCmpVar a b = _realUnique a `nonDetCmpUnique` _realUnique b
 
-instance Data Var where
+instance (Typeable tv, Typeable kv) => Data (Var tv kv) where
   toConstr _ = abstractConstr "Var"
   gunfold _ _ = error "gunfold"
   dataTypeOf _ = mkNoRepType "Var"
 
-instance HasOccName Var where
+instance HasOccName (Var tv kv) where
   occName = nameOccName . varName
 
 {- *********************************************************************
@@ -176,7 +217,7 @@ class NamedThing v => VarHasName v where
   varName :: v -> Name
   setVarName :: v -> Name -> v
 
-instance VarHasName Var where
+instance VarHasName (Var tv kv) where
   varName = _varName
   setVarName var new_name = var { _realUnique = getUnique new_name
                                 , _varName = new_name }
@@ -185,21 +226,21 @@ class Uniquable v => VarHasUnique v where
   varUnique :: v -> Unique
   setVarUnique :: v -> Unique -> v
 
-instance VarHasUnique Var where
+instance VarHasUnique (Var tv kv) where
   varUnique = _realUnique
   setVarUnique var uniq = var { _realUnique = uniq
                               , _varName = setNameUnique (_varName var) uniq }
 
-class VarHasType v where
-  varType :: v -> Type
-  updateVarType :: (Type -> Type) -> v -> v
-  setVarType :: v -> Type -> v
+class VarHasType v tv kv | v -> tv, v -> kv where
+  varType :: v -> Type tv kv
+  updateVarType :: (Type tv kv -> Type tv kv) -> v -> v
+  setVarType :: v -> Type tv kv -> v
 
-class VarHasKind v where
-  varKind :: v -> MonoKind
-  updateVarKind :: (MonoKind -> MonoKind) -> v -> v
-  updateVarKindM :: Monad m => (MonoKind -> m MonoKind) -> v -> m v
-  setVarKind :: v -> MonoKind -> v
+class VarHasKind v kv | v -> kv where
+  varKind :: v -> MonoKind kv
+  updateVarKind :: (MonoKind kv -> MonoKind kv) -> v -> v
+  updateVarKindM :: Monad m => (MonoKind kv -> m (MonoKind kv)) -> v -> m v
+  setVarKind :: v -> (MonoKind kv) -> v
 
 class VarHasTcDetails v d | v -> d where
   tcVarDetails :: v -> d
@@ -207,77 +248,104 @@ class VarHasTcDetails v d | v -> d where
 class VarCanSetTcDetails v d | v -> d where
   setTcVarDetails :: v -> d -> v
 
-class SwellVar v1 v2 | v1 -> v2 where
-  swellVar :: v1 -> v2
+class ToTyVarMaybe v kv | v -> kv where
+  toTyVar_maybe :: v -> Maybe (TyVar kv)
 
-class EbbTyVar v where
-  ebbTyVar :: v -> Maybe TyVar
+instance ToTyVarMaybe (Var tv kv) kv where
+  toTyVar_maybe tv@(TyVar' {}) = Just $ TyVar $ vacuousFirst' tv
+  toTyVar_maybe _ = Nothing
 
-instance EbbTyVar Var where
-  ebbTyVar tv@(TyVar' {}) = Just $ TyVar tv
-  ebbTyVar _ = Nothing
+class ToTcTyVarMaybe v tv | v -> tv where
+  toTcTyVar_maybe :: v -> Maybe (TcTyVar tv)
 
-class EbbTcTyVar v where
-  ebbTcTyVar :: v -> Maybe TcTyVar
+instance ToTcTyVarMaybe (Var tv kv) kv where
+  toTcTyVar_maybe tv@(TcTyVar' {}) = Just $ TcTyVar $ vacuousFirst' tv
+  toTcTyVar_maybe _ = Nothing
 
-instance EbbTcTyVar Var where
-  ebbTcTyVar tv@(TcTyVar' {}) = Just $ TcTyVar tv
-  ebbTcTyVar _ = Nothing
+class ToAnyTyVarMaybe v kv | v -> kv where
+  toAnyTyVar_maybe :: v -> Maybe (AnyTyVar kv)
 
-class EbbAnyTyVar v where
-  ebbAnyTyVar :: v -> Maybe AnyTyVar
+instance ToAnyTyVarMaybe (Var tv kv) kv where
+  toAnyTyVar_maybe tv@(TyVar' {}) = Just $ AnyTyVar $ vacuousFirst' tv
+  toAnyTyVar_maybe tv@(TcTyVar' {}) = Just $ AnyTyVar $ vacuousFirst' tv
+  toAnyTyVar_maybe _ = Nothing
 
-instance EbbAnyTyVar Var where
-  ebbAnyTyVar tv@(TyVar' {}) = Just $ AnyTyVar tv
-  ebbAnyTyVar tv@(TcTyVar' {}) = Just $ AnyTyVar tv
-  ebbAnyTyVar _ = Nothing
+class ToKiVarMaybe v where
+  toKiVar_maybe :: v -> Maybe KiVar
 
-class EbbKiVar v where
-  ebbKiVar :: v -> Maybe KiVar
+instance ToKiVarMaybe (Var tv kv) where
+  toKiVar_maybe kv@(KiVar' {}) = Just $ KiVar $ vacuousBimap' kv
+  toKiVar_maybe _ = Nothing
 
-instance EbbKiVar Var where
-  ebbKiVar kv@(KiVar' {}) = Just $ KiVar kv
-  ebbKiVar _ = Nothing
+class ToTcKiVarMaybe v where
+  toTcKiVar_maybe :: v -> Maybe TcKiVar
 
-class EbbTcKiVar v where
-  ebbTcKiVar :: v -> Maybe TcKiVar
+instance ToTcKiVarMaybe (Var tv kv) where
+  toTcKiVar_maybe kv@(TcKiVar' {}) = Just $ TcKiVar $ vacuousBimap' kv
+  toTcKiVar_maybe _ = Nothing
 
-instance EbbTcKiVar Var where
-  ebbTcKiVar kv@(TcKiVar' {}) = Just $ TcKiVar kv
-  ebbTcKiVar _ = Nothing
+class ToAnyKiVarMaybe v where
+  toAnyKiVar_maybe :: v -> Maybe AnyKiVar
 
-class EbbAnyKiVar v where
-  ebbAnyKiVar :: v -> Maybe AnyKiVar
+instance ToAnyKiVarMaybe (Var tv kv) where
+  toAnyKiVar_maybe kv@(KiVar' {}) = Just $ AnyKiVar $ vacuousBimap' kv
+  toAnyKiVar_maybe kv@(TcKiVar' {}) = Just $ AnyKiVar $ vacuousBimap' kv
+  toAnyKiVar_maybe _ = Nothing
 
-instance EbbAnyKiVar Var where
-  ebbAnyKiVar kv@(KiVar' {}) = Just $ AnyKiVar kv
-  ebbAnyKiVar kv@(TcKiVar' {}) = Just $ AnyKiVar kv
-  ebbAnyKiVar _ = Nothing
+class ToIdMaybe v tv kv | v -> tv, v -> kv where
+  toId_maybe :: v -> Maybe (Id tv kv)
 
-class EbbId v where
-  ebbId :: v -> Maybe Id
+instance ToIdMaybe (Var tv kv) tv kv where
+  toId_maybe id@(Id' {}) = Just $ Id id
+  toId_maybe _ = Nothing
 
-instance EbbId Var where
-  ebbId id@(Id' {}) = Just $ Id id
-  ebbId _ = Nothing
+class ToVar v tv kv | v -> tv, v -> kv where
+  toVar :: v -> Var tv kv
 
-class FromTyVar v where
-  fromTv :: TyVar -> v
+class ToAnyTyVar v kv | v -> kv where
+  toAnyTyVar :: v -> AnyTyVar kv
 
-class FromTcTyVar v where
-  fromTcTv :: TcTyVar -> v
+class ToAnyKiVar v where
+  toAnyKiVar :: v -> AnyKiVar
 
-class FromAnyTyVar v where
-  fromAnyTyVar :: AnyTyVar -> v
+class FromTyVar v kv | v -> kv where
+  fromTv :: TyVar kv -> v
+
+instance FromTyVar (Var tv kv) kv where
+  fromTv (TyVar tv) = vacuousFirst tv
+
+class FromTcTyVar v kv | v -> kv where
+  fromTcTv :: TcTyVar kv -> v
+
+instance FromTcTyVar (Var tv kv) kv where
+  fromTcTv (TcTyVar tv) = vacuousFirst tv
+
+class FromAnyTyVar v kv | v -> kv where
+  fromAnyTyVar :: AnyTyVar kv -> v
+
+instance FromAnyTyVar (Var tv kv) kv where
+  fromAnyTyVar (AnyTyVar tv) = vacuousFirst tv
 
 class FromKiVar v where
   fromKv :: KiVar -> v
 
+instance FromKiVar (Var tv kv) where
+  fromKv (KiVar kv) = vacuousBimap kv
+
 class FromTcKiVar v where
   fromTcKv :: TcKiVar -> v
 
+instance FromTcKiVar (Var tv kv) where
+  fromTcKv (TcKiVar kv) = vacuousBimap kv
+
 class FromAnyKiVar v where
   fromAnyKiVar :: AnyKiVar -> v
+
+instance FromAnyKiVar (Var tv kv) where
+  fromAnyKiVar (AnyKiVar kv) = vacuousBimap kv
+
+class FromId v tv kv | v -> tv, v -> kv where
+  fromId :: Id tv kv -> v
 
 {- *********************************************************************
 *                                                                      *
@@ -285,23 +353,20 @@ class FromAnyKiVar v where
 *                                                                      *
 ********************************************************************* -}
 
-newtype TyVar = TyVar Var
+newtype TyVar kv = TyVar (Var Void kv)
   deriving ( Outputable, NamedThing, Uniquable, Eq, Ord, Data, HasOccName
            , VarHasName, VarHasUnique)
 
 type KiCoVar = TyVar
 
-instance VarHasKind TyVar where
+instance Outputable kv => VarHasKind (TyVar kv) kv where
   varKind (TyVar (TyVar' { _varKind = ki })) = ki
   varKind other = pprPanic "Bad TyVar" (ppr other)
 
   updateVarKind upd (TyVar var@(TyVar' {})) = TyVar (var { _varKind = upd (_varKind var) })
   updateVarKind _ other = pprPanic "Bad TyVar" (ppr other)
 
-instance SwellVar TyVar AnyTyVar where
-  swellVar (TyVar v) = AnyTyVar v
-
-mkTyVar :: Name -> MonoKind -> TyVar
+mkTyVar :: Name -> MonoKind kv -> TyVar kv
 mkTyVar name kind = TyVar (TyVar' { _varName = name
                                   , _realUnique = nameUnique name
                                   , _varKind = kind })
@@ -312,13 +377,13 @@ mkTyVar name kind = TyVar (TyVar' { _varName = name
 *                                                                      *
 ********************************************************************* -}
 
-newtype TcTyVar = TcTyVar Var
+newtype TcTyVar kv = TcTyVar (Var Void kv)
   deriving ( Outputable, NamedThing, Uniquable, Eq, Ord, Data, HasOccName
            , VarHasName, VarHasUnique)
   
 type TcKiCoVar = TcTyVar
 
-instance VarHasKind TcTyVar where
+instance Outputable kv => VarHasKind (TcTyVar kv) kv where
   varKind (TcTyVar (TcTyVar' { _varKind = ki })) = ki
   varKind other = pprPanic "Bad TcTyVar" (ppr other)
 
@@ -326,17 +391,14 @@ instance VarHasKind TcTyVar where
     = TcTyVar (var { _varKind = upd (_varKind var) })
   updateVarKind _ other = pprPanic "Bad TcTyVar" (ppr other)
 
-instance VarHasTcDetails TcTyVar TcTyVarDetails where
+instance Outputable kv => VarHasTcDetails (TcTyVar kv) TcTyVarDetails where
   tcVarDetails (TcTyVar (TcTyVar' { _tc_tv_details = details })) = details
   tcVarDetails other = pprPanic "Bad TcKiVar" (ppr other)
 
-instance VarCanSetTcDetails TcTyVar TcTyVarDetails where
+instance VarCanSetTcDetails (TcTyVar kv) TcTyVarDetails where
   setTcVarDetails (TcTyVar v) d = TcTyVar (v { _tc_tv_details = d })
 
-instance SwellVar TcTyVar AnyTyVar where
-  swellVar (TcTyVar var) = AnyTyVar var
-
-mkTcTyVar :: Name -> MonoKind -> TcTyVarDetails -> TcTyVar
+mkTcTyVar :: Name -> MonoKind kv -> TcTyVarDetails -> TcTyVar kv
 mkTcTyVar name kind details = TcTyVar (TcTyVar' { _varName = name
                                                 , _realUnique = nameUnique name
                                                 , _varKind = kind
@@ -348,13 +410,13 @@ mkTcTyVar name kind details = TcTyVar (TcTyVar' { _varName = name
 *                                                                      *
 ********************************************************************* -}
 
-newtype AnyTyVar = AnyTyVar Var
+newtype AnyTyVar kv = AnyTyVar (Var Void kv)
   deriving ( Outputable, NamedThing, Uniquable, Eq, Ord, Data, HasOccName
            , VarHasName, VarHasUnique)
 
 type AnyKiCoVar = AnyTyVar
 
-instance VarHasKind AnyTyVar where
+instance Outputable kv => VarHasKind (AnyTyVar kv) kv where
   varKind (AnyTyVar (TyVar' { _varKind = ki })) = ki
   varKind (AnyTyVar (TcTyVar' { _varKind = ki })) = ki
   varKind other = pprPanic "Bad AnyTyVar" (ppr other)
@@ -365,21 +427,24 @@ instance VarHasKind AnyTyVar where
     = AnyTyVar (var { _varKind = upd (_varKind var) })
   updateVarKind _ other = pprPanic "Bad AnyTyVar" (ppr other)
 
-instance VarHasTcDetails AnyTyVar TcTyVarDetails where
+instance Outputable kv => VarHasTcDetails (AnyTyVar kv) TcTyVarDetails where
   tcVarDetails (AnyTyVar (TcTyVar' { _tc_tv_details = details })) = details
   tcVarDetails (AnyTyVar (TyVar' {})) = vanillaSkolemTvUnk
   tcVarDetails other = pprPanic "Bad TcKiVar" (ppr other)
 
-instance SwellVar AnyTyVar Var where
-  swellVar (AnyTyVar var) = var
+instance ToTyVarMaybe (AnyTyVar kv) kv where
+  toTyVar_maybe (AnyTyVar v@(TyVar' {})) = Just $ TyVar v
+  toTyVar_maybe _ = Nothing
 
-instance EbbTyVar AnyTyVar where
-  ebbTyVar (AnyTyVar v@(TyVar' {})) = Just $ TyVar v
-  ebbTyVar _ = Nothing
+instance ToTcTyVarMaybe (AnyTyVar kv) kv where
+  toTcTyVar_maybe (AnyTyVar v@(TcTyVar' {})) = Just $ TcTyVar v
+  toTcTyVar_maybe _ = Nothing
 
-instance EbbTcTyVar AnyTyVar where
-  ebbTcTyVar (AnyTyVar v@(TcTyVar' {})) = Just $ TcTyVar v
-  ebbTcTyVar _ = Nothing
+instance FromTyVar (AnyTyVar kv) kv where
+  fromTv (TyVar tv) = AnyTyVar tv
+
+instance FromTcTyVar (AnyTyVar kv) kv where
+  fromTcTv (TcTyVar tv) = AnyTyVar tv
 
 {- *********************************************************************
 *                                                                      *
@@ -387,12 +452,9 @@ instance EbbTcTyVar AnyTyVar where
 *                                                                      *
 ********************************************************************* -}
 
-newtype KiVar = KiVar Var
+newtype KiVar = KiVar (Var Void Void)
   deriving ( Outputable, NamedThing, Uniquable, Eq, Ord, Data, HasOccName
            , VarHasName, VarHasUnique)
-
-instance SwellVar KiVar AnyKiVar where
-  swellVar (KiVar var) = AnyKiVar var
 
 mkKiVar :: Name -> KiVar
 mkKiVar name = KiVar (KiVar' { _varName = name, _realUnique = nameUnique name })
@@ -403,7 +465,7 @@ mkKiVar name = KiVar (KiVar' { _varName = name, _realUnique = nameUnique name })
 *                                                                      *
 ********************************************************************* -}
 
-newtype TcKiVar = TcKiVar Var
+newtype TcKiVar = TcKiVar (Var Void Void)
   deriving ( Outputable, NamedThing, Uniquable, Eq, Ord, Data, HasOccName
            , VarHasName, VarHasUnique)
 
@@ -413,9 +475,6 @@ instance VarHasTcDetails TcKiVar TcKiVarDetails where
 
 instance VarCanSetTcDetails TcKiVar TcKiVarDetails where
   setTcVarDetails (TcKiVar v) d = TcKiVar (v { _tc_kv_details = d })
-
-instance SwellVar TcKiVar AnyKiVar where
-  swellVar (TcKiVar var) = AnyKiVar var
 
 mkTcKiVar :: Name -> TcKiVarDetails -> TcKiVar
 mkTcKiVar name details = TcKiVar (TcKiVar' { _varName = name
@@ -428,7 +487,7 @@ mkTcKiVar name details = TcKiVar (TcKiVar' { _varName = name
 *                                                                      *
 ********************************************************************* -}
 
-newtype AnyKiVar = AnyKiVar Var
+newtype AnyKiVar = AnyKiVar (Var Void Void)
   deriving ( Outputable, NamedThing, Uniquable, Eq, Ord, Data, HasOccName
            , VarHasName, VarHasUnique)
 
@@ -437,16 +496,19 @@ instance VarHasTcDetails AnyKiVar TcKiVarDetails where
   tcVarDetails (AnyKiVar (KiVar' {})) = vanillaSkolemKvUnk
   tcVarDetails other = pprPanic "Bad TcKiVar" (ppr other)
 
-instance SwellVar AnyKiVar Var where
-  swellVar (AnyKiVar var) = var
+instance ToKiVarMaybe AnyKiVar where
+  toKiVar_maybe (AnyKiVar v@(KiVar' {})) = Just $ KiVar v
+  toKiVar_maybe _ = Nothing
 
-instance EbbKiVar AnyKiVar where
-  ebbKiVar (AnyKiVar v@(KiVar' {})) = Just $ KiVar v
-  ebbKiVar _ = Nothing
+instance ToTcKiVarMaybe AnyKiVar where
+  toTcKiVar_maybe (AnyKiVar v@(TcKiVar' {})) = Just $ TcKiVar v
+  toTcKiVar_maybe _ = Nothing
 
-instance EbbTcKiVar AnyKiVar where
-  ebbTcKiVar (AnyKiVar v@(TcKiVar' {})) = Just $ TcKiVar v
-  ebbTcKiVar _ = Nothing
+instance FromKiVar AnyKiVar where
+  fromKv (KiVar kv) = AnyKiVar kv
+
+instance FromTcKiVar AnyKiVar where
+  fromTcKv (TcKiVar kv) = AnyKiVar kv
 
 {- *********************************************************************
 *                                                                      *
@@ -454,24 +516,56 @@ instance EbbTcKiVar AnyKiVar where
 *                                                                      *
 ********************************************************************* -}
 
-newtype Id = Id Var
+newtype Id tv kv = Id (Var tv kv)
   deriving ( Outputable, NamedThing, Uniquable, Eq, Ord, Data, HasOccName
            , VarHasName, VarHasUnique)
     
-instance VarHasType Id where
+instance (Outputable tv, Outputable kv) => VarHasType (Id tv kv) tv kv where
   varType (Id (Id' { _varType = ty })) = ty
   varType other = pprPanic "Bad Id" (ppr other)
 
-instance SwellVar Id Var where
-  swellVar (Id var) = var
+instance FromId (Var tv kv) tv kv where
+  fromId (Id v) = v
 
 {- *********************************************************************
 *                                                                      *
-                   VarBndr, ForAllTyBinder
+*                   ForAllFlag
+*                                                                      *
+********************************************************************* -}
+
+data ForAllFlag
+  = Specified -- type application is optional at call sight
+  | Required  -- type application is required at call sight
+  deriving (Eq, Ord, Data)
+
+isVisibleForAllFlag :: ForAllFlag -> Bool
+isVisibleForAllFlag af = not (isInvisibleForAllFlag af)
+
+isInvisibleForAllFlag :: ForAllFlag -> Bool
+isInvisibleForAllFlag Specified = True
+isInvisibleForAllFlag Required = False
+
+instance Outputable ForAllFlag where
+  ppr Required  = text "[req]"
+  ppr Specified = text "[spec]"
+
+instance Binary ForAllFlag where
+  put_ bh Required  = putByte bh 0
+  put_ bh Specified = putByte bh 1
+
+  get bh = do
+    h <- getByte bh
+    case h of
+      0 -> return Required
+      _ -> return Specified
+
+{- *********************************************************************
+*                                                                      *
+                   VarBndr, ForAllBinder
 *                                                                      *
 ********************************************************************* -}
 
 data VarBndr var argf = Bndr var argf
   deriving Data
 
-
+type ForAllBinder var = VarBndr var ForAllFlag

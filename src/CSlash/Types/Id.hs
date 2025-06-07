@@ -26,8 +26,8 @@ import CSlash.Utils.Misc
 import CSlash.Utils.Outputable
 import CSlash.Utils.Panic
 
-idName :: Id -> Name
+idName :: Id tv kv -> Name
 idName = Var.varName
 
-mkGlobalId :: IdDetails -> Name -> Type -> IdInfo -> Id
+mkGlobalId :: IdDetails -> Name -> Type tv kv -> IdInfo -> Id tv kv
 mkGlobalId = Var.mkGlobalVar

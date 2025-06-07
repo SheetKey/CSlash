@@ -28,7 +28,8 @@ type instance XRec (CsPass p) a = GenLocated (Anno a) a
 
 type instance Anno RdrName = SrcSpanAnnN
 type instance Anno Name = SrcSpanAnnN
-type instance Anno Id = SrcSpanAnnN
+type instance Anno (Id tv kv) = SrcSpanAnnN
+type instance Anno (Var tv kv) = SrcSpanAnnN
 
 type IsSrcSpanAnn p a = (Anno (IdCsP p) ~ EpAnn a, NoAnn a, IsPass p)
 
@@ -74,7 +75,7 @@ type instance IdP (CsPass p) = IdCsP p
 type family IdCsP pass where
   IdCsP 'Parsed = RdrName
   IdCsP 'Renamed = Name
-  IdCsP 'Typechecked = Var
+  IdCsP 'Typechecked = (Var (TyVar KiVar) KiVar)
 
 type instance NoTc (CsPass pass) = CsPass (NoCsTcPass pass)
 
