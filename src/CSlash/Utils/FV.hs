@@ -1,3 +1,5 @@
+{-# LANGUAGE TypeFamilyDependencies #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE BangPatterns #-}
 
 module CSlash.Utils.FV where
@@ -6,67 +8,70 @@ import CSlash.Types.Var
 import CSlash.Types.Var.Set
 import CSlash.Types.Unique
 
-type InterestingVarFun v = v -> Bool
+-- type FV arg is acc = (arg -> Bool) -> is -> acc -> acc
+type FV thing
+  = (FVArg thing -> Bool) -> FVInScope thing -> FVAcc thing -> FVAcc thing
 
-type FV v = InterestingVarFun v -> MkVarSet v -> MkVarAcc v -> MkVarAcc v
+class HasFVs thing where
+  type FVInScope thing = r | r -> thing
+  type FVAcc thing = r | r -> thing
+  type FVArg thing
 
-type MkVarAcc v = ([v], MkVarSet v)
+  fvElemAcc :: FVArg thing -> FVAcc thing -> Bool
+  fvElemIS :: FVArg thing -> FVInScope thing -> Bool
 
-fvVarAcc :: FV v ->  ([v], MkVarSet v)
-fvVarAcc fv = fv (const True) emptyVarSet ([], emptyVarSet)
+  fvExtendAcc :: FVArg thing -> FVAcc thing -> FVAcc thing
+  fvExtendIS :: FVArg thing -> FVInScope thing -> FVInScope thing
 
-fvVarList :: FV v -> [v]
-fvVarList = fst . fvVarAcc
+  fvEmptyAcc :: FVAcc thing
+  fvEmptyIS :: FVInScope thing
 
-fvDVarSet :: Uniquable v => FV v -> MkDVarSet v
-fvDVarSet = mkDVarSet . fvVarList
+fvVarAcc :: HasFVs thing => FV thing -> FVAcc thing
+fvVarAcc fv = fv (const True) fvEmptyIS fvEmptyAcc
 
-fvVarSet :: FV v -> MkVarSet v
-fvVarSet = snd . fvVarAcc
-
-unitFV :: Uniquable v => v -> FV v
-unitFV var fv_cand in_scope acc@(have, haveSet)
-  | var `elemVarSet` in_scope = acc
-  | var `elemVarSet` haveSet = acc
-  | fv_cand var = (var:have, extendVarSet haveSet var)
+unitFV :: HasFVs thing => FVArg thing -> FV thing
+unitFV var fv_cand in_scope acc
+  | var `fvElemIS` in_scope = acc
+  | var `fvElemAcc` acc = acc
+  | fv_cand var = var `fvExtendAcc` acc
   | otherwise = acc
 {-# INLINE unitFV #-}
 
-emptyFV :: FV v
+emptyFV :: FV thing
 emptyFV _ _ acc = acc
 {-# INLINE emptyFV #-}
 
-unionFV :: FV v -> FV v -> FV v
+unionFV :: HasFVs thing => FV thing -> FV thing -> FV thing
 unionFV fv1 fv2 fv_cand in_scope acc =
   fv1 fv_cand in_scope $! fv2 fv_cand in_scope $! acc
 {-# INLINE unionFV #-}
 
-delFV :: Uniquable v => v -> FV v -> FV v
+delFV :: HasFVs thing => FVArg thing -> FV thing -> FV thing
 delFV var fv fv_cand !in_scope acc =
-  fv fv_cand (extendVarSet in_scope var) acc
+  fv fv_cand (fvExtendIS var in_scope) acc
 {-# INLINE delFV #-}
 
-delFVs :: MkVarSet v -> FV v -> FV v
-delFVs vars fv fv_cand !in_scope acc =
-  fv fv_cand (in_scope `unionVarSet` vars) acc
-{-# INLINE delFVs #-}
+-- delFVs :: MkVarSet v -> FV v -> FV v
+-- delFVs vars fv fv_cand !in_scope acc =
+--   fv fv_cand (in_scope `unionVarSet` vars) acc
+-- {-# INLINE delFVs #-}
 
-filterFV :: InterestingVarFun v -> FV v -> FV v
+filterFV :: HasFVs thing => (FVArg thing -> Bool) -> FV thing -> FV thing
 filterFV fv_cand2 fv fv_cand1 in_scope acc =
   fv (\v -> fv_cand1 v && fv_cand2 v) in_scope acc
 {-# INLINE filterFV #-}
 
-mapUnionFV :: (a -> FV v) -> [a] -> FV v
+mapUnionFV :: HasFVs thing => (a -> FV thing) -> [a] -> FV thing
 mapUnionFV _f [] _fv_cand _in_scope acc = acc
 mapUnionFV f (a:as) fv_cand in_scope acc =
   mapUnionFV f as fv_cand in_scope $! f a fv_cand in_scope $! acc
 {-# INLINABLE mapUnionFV #-}
 
-unionsFV :: [FV v] -> FV v
+unionsFV :: HasFVs thing => [FV thing] -> FV thing
 unionsFV fvs fv_cand in_scope acc = mapUnionFV id fvs fv_cand in_scope acc
 {-# INLINE unionsFV #-}
 
-mkFVs :: Uniquable v => [v] -> FV v
+mkFVs :: HasFVs thing => [FVArg thing] -> FV thing
 mkFVs vars fv_cand in_scope acc =
   mapUnionFV unitFV vars fv_cand in_scope acc
 {-# INLINE mkFVs #-}
