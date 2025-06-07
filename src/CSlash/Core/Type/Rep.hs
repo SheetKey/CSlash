@@ -27,24 +27,24 @@ import Control.DeepSeq
 *                                                                       *
 ********************************************************************** -}
 
-data Type
-  = TyVarTy Var
-  | AppTy Type Type -- The first arg must be an 'AppTy' or a 'TyVarTy' or a 'TyLam'
-  | TyLamTy TypeVar Type
-  | BigTyLamTy KindVar Type
-  | TyConApp TyCon [Type]
-  | ForAllTy {-# UNPACK #-} !ForAllTyBinder Type
+data Type tv kv
+  = TyVarTy tv
+  | AppTy (Type tv kv) (Type tv kv) -- The first arg must be an 'AppTy' or a 'TyVarTy' or a 'TyLam'
+  | TyLamTy tv (Type tv kv)
+  | BigTyLamTy kv (Type tv kv)
+  | TyConApp (TyCon tv kv) [Type tv kv]
+  | ForAllTy {-# UNPACK #-} !(ForAllBinder tv) (Type tv kv)
   | FunTy
-    { ft_kind :: MonoKind
-    , ft_arg :: Type
-    , ft_res :: Type
+    { ft_kind :: MonoKind kv
+    , ft_arg :: Type tv kv
+    , ft_res :: Type tv kv
     }
-  | CastTy Type KindCoercion
-  | Embed MonoKind -- for application to a 'BigTyLamTy
-  | KindCoercion KindCoercion -- embed a kind coercion (evidence stuff)
+  | CastTy (Type tv kv) (KindCoercion kv tv)
+  | Embed (MonoKind kv) -- for application to a 'BigTyLamTy
+  | KindCoercion (KindCoercion kv tv) -- embed a kind coercion (evidence stuff)
   deriving Data.Data
 
-instance Outputable Type where
+instance (Outputable tv, Outputable kv) => Outputable (Type tv kv) where
   ppr = pprType
 
 type KnotTied ty = ty
@@ -55,32 +55,31 @@ type KnotTied ty = ty
 *                                                                       *
 ********************************************************************** -}
 
-mkTyVarTy :: TypeVar -> Type
-mkTyVarTy v = assertPpr (isTyVar v) (ppr v <+> colon <+> ppr (varKindMaybe v)) $
-              TyVarTy v
+mkTyVarTy :: tv -> Type tv kv
+mkTyVarTy v = TyVarTy v
 
-mkTyVarTys :: [TypeVar] -> [Type]
+mkTyVarTys :: [tv] -> [Type tv kv]
 mkTyVarTys = map mkTyVarTy
 
-mkNakedTyConTy :: TyCon -> Type
+mkNakedTyConTy :: TyCon tv kv -> Type tv kv
 mkNakedTyConTy tycon = TyConApp tycon []
 
-mkForAllTys :: [ForAllTyBinder] -> Type -> Type
+mkForAllTys :: [ForAllBinder tv] -> Type tv kv -> Type tv kv
 mkForAllTys tyvars ty = foldr ForAllTy ty tyvars
 
-tcMkFunTy :: MonoKind -> Type -> Type -> Type
+tcMkFunTy :: MonoKind kv -> Type tv kv -> Type tv kv -> Type tv kv
 tcMkFunTy = FunTy 
 
-mkTyLamTy :: TypeVar -> Type -> Type
+mkTyLamTy :: tv -> Type tv kv -> Type tv kv
 mkTyLamTy = TyLamTy
 
-mkTyLamTys :: [TypeVar] -> Type -> Type
+mkTyLamTys :: [tv] -> Type tv kv -> Type tv kv
 mkTyLamTys = flip (foldr mkTyLamTy)
 
-mkBigLamTy :: KindVar -> Type -> Type
+mkBigLamTy :: kv -> Type tv kv -> Type tv kv
 mkBigLamTy = BigTyLamTy
 
-mkBigLamTys  :: [KindVar] -> Type -> Type
+mkBigLamTys  :: [kv] -> Type tv kv -> Type tv kv
 mkBigLamTys = flip (foldr mkBigLamTy)
 
 {- *********************************************************************
@@ -89,19 +88,23 @@ mkBigLamTys = flip (foldr mkBigLamTy)
 *                                                                      *
 ********************************************************************* -}
 
-data TypeFolder env a = TypeFolder
-  { tf_view :: Type -> Maybe Type
-  , tf_tyvar :: env -> TypeVar -> a
-  , tf_tybinder :: env -> TypeVar -> ForAllTyFlag -> env
-  , tf_tylambinder :: env -> TypeVar -> env
-  , tf_tylamkibinder :: env -> KindVar -> env
-  , tf_embed_mono_ki :: env -> MonoKind -> a
+data TypeFolder tv kv env a = TypeFolder
+  { tf_view :: Type tv kv -> Maybe (Type tv kv)
+  , tf_tyvar :: env -> tv -> a
+  , tf_tybinder :: env -> tv -> ForAllFlag -> env
+  , tf_tylambinder :: env -> tv -> env
+  , tf_tylamkibinder :: env -> kv -> env
+  , tf_embed_mono_ki :: env -> MonoKind kv -> a
   }
 
 -- Unlike GHC, we do not deal with kind variables here.
 -- I.e., they are not added to the env.
 {-# INLINE foldType #-}
-foldType :: Monoid a => TypeFolder env a -> env -> (Type -> a, [Type] -> a)
+foldType
+  :: (Monoid a, Outputable tv, Outputable kv)
+  => TypeFolder tv kv env a
+  -> env
+  -> (Type tv kv -> a, [Type tv kv] -> a)
 foldType (TypeFolder { tf_view = view
                      , tf_tyvar = tyvar
                      , tf_tybinder = tybinder
@@ -130,7 +133,7 @@ foldType (TypeFolder { tf_view = view
     go_tys _ [] = mempty
     go_tys env (t:ts) = go_ty env t `mappend` go_tys env ts
 
-noView :: Type -> Maybe Type
+noView :: Type tv kv -> Maybe (Type tv kv)
 noView _ = Nothing
 
 {- *********************************************************************
@@ -139,17 +142,17 @@ noView _ = Nothing
 *                                                                      *
 ********************************************************************* -}
 
-typeSize :: Type -> Int
+typeSize :: (VarHasKind tv kv, Outputable tv, Outputable kv) => Type tv kv -> Int
 typeSize (TyVarTy {}) = 1
 typeSize (AppTy t1 t2) = typeSize t1 + typeSize t2
 typeSize (TyLamTy _ t) = 1 + typeSize t
 typeSize (BigTyLamTy _ t) = 1 + typeSize t
 typeSize (TyConApp _ ts) = 1 + typesSize ts
-typeSize (ForAllTy (Bndr tv _) t) = typeSize (varType tv) + typeSize t
+typeSize (ForAllTy (Bndr tv _) t) = panic "kindSize (varKind tv) + typeSize t"
 typeSize (FunTy _ t1 t2) = typeSize t1 + typeSize t2
 typeSize (Embed _) = 1
 typeSize (CastTy ty _) = typeSize ty
 typeSize co@(KindCoercion _) = pprPanic "typeSize" (ppr co)
 
-typesSize :: [Type] -> Int
+typesSize :: (VarHasKind tv kv, Outputable tv, Outputable kv) => [Type tv kv] -> Int
 typesSize tys = foldr ((+) . typeSize) 0 tys

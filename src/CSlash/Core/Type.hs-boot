@@ -4,10 +4,10 @@ import {-# SOURCE #-} CSlash.Core.TyCon
 import {-# SOURCE #-} CSlash.Core.Type.Rep (Type)
 import {-# SOURCE #-} CSlash.Core.Kind (KindCoercion)
 
-coreView :: Type -> Maybe Type
+coreView :: Type tv kv -> Maybe (Type tv kv)
 
-mkAppTy :: Type -> Type -> Type
+mkAppTy :: Type tv kv -> Type tv kv -> Type tv kv
 
-mkTyConApp :: TyCon -> [Type] -> Type
+mkTyConApp :: TyCon tv kv -> [Type tv kv] -> Type tv kv
 
-mkCastTy :: Type -> KindCoercion -> Type
+mkCastTy :: Type tv kv -> KindCoercion kv kcv -> Type tv kv

@@ -14,13 +14,13 @@ import CSlash.Utils.Misc
 import CSlash.Utils.Panic
 import CSlash.Types.Basic
 
-pprType :: Type -> SDoc
+pprType :: Outputable tv, Outputable kv => Type tv kv -> SDoc
 pprType = pprPrecType topPrec
 
-pprPrecType :: PprPrec -> Type -> SDoc
+pprPrecType :: Outputable tv, Outputable kv => PprPrec -> Type tv kv -> SDoc
 pprPrecType = pprPrecTypeX emptyTidyEnv
 
-pprPrecTypeX :: TidyEnv -> PprPrec -> Type -> SDoc
+pprPrecTypeX :: Outputable tv, Outputable kv => TidyEnv -> PprPrec -> Type tv kv -> SDoc
 pprPrecTypeX env prec ty
   = getPprStyle $ \ sty ->
     getPprDebug $ \ debug ->
@@ -28,15 +28,15 @@ pprPrecTypeX env prec ty
                     then debug_ppr_ty prec ty
                     else panic "pprPrecIfaceType prec (tidyToIfaceTypeStyX env ty sty)"
 
-pprTyVars :: [TypeVar] -> SDoc
+pprTyVars :: Outputable tv => [tv] -> SDoc
 pprTyVars tvs = sep (map pprTyVar tvs)
 
-pprTyVar :: TypeVar -> SDoc
+pprTyVar :: Outputable tv => tv -> SDoc
 pprTyVar tv = parens (ppr tv <+> colon <+> ppr kind)
   where
     kind = varKindMaybe tv
 
-debug_ppr_ty :: PprPrec -> Type -> SDoc
+debug_ppr_ty :: Outputable tv kv => PprPrec -> Type tv kv -> SDoc
 
 debug_ppr_ty _ (TyVarTy tv) = ppr tv
 

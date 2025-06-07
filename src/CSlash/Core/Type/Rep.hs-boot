@@ -2,6 +2,6 @@ module CSlash.Core.Type.Rep where
 
 import {-# SOURCE #-} CSlash.Core.TyCon (TyCon)
 
-data Type
+data Type tv kv
 
-mkNakedTyConTy :: TyCon -> Type
+mkNakedTyConTy :: TyCon tv kv -> Type tv kv
