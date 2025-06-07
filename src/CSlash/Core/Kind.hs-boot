@@ -2,13 +2,13 @@ module CSlash.Core.Kind where
 
 import CSlash.Utils.Outputable 
 
-data Kind
-data MonoKind
-data KindCoercion
+data Kind kv
+data MonoKind kv
+data KindCoercion kv kcv
 
-instance Outputable Kind
-instance Outputable MonoKind
+instance Outputable kv => Outputable (Kind kv)
+instance Outputable kv => Outputable (MonoKind kv)
 
-pprKind :: Kind -> SDoc
+pprKind :: Outputable kv => Kind kv -> SDoc
 
-isCoVarKind :: MonoKind -> Bool
+isCoVarKind :: MonoKind kv -> Bool
