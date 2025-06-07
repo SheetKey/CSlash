@@ -21,7 +21,7 @@ pprCoreExpr = undefined
 instance OutputableBndr b => Outputable (Expr b) where
   ppr expr = pprCoreExpr expr
 
-instance OutputableBndr Var where
+instance OutputableBndr (Var tv kv) where
   pprBndr = undefined
   pprInfixOcc = undefined
   pprPrefixOcc = undefined
