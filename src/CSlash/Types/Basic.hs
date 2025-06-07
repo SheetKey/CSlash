@@ -1,4 +1,3 @@
-{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 
 module CSlash.Types.Basic
@@ -35,16 +34,16 @@ pprAlternative :: (a -> SDoc) -> a -> ConTag -> Arity -> SDoc
 pprAlternative pp x alt arity
   = fsep (replicate (alt - 1) vbar ++ [pp x] ++ replicate (arity - alt) vbar)
 
-data TyConFlavor tc
+data TyConFlavor
   = TupleFlavor
   | SumFlavor
   | DataTypeFlavor
   | AbstractTypeFlavor
   | TypeFunFlavor
   | BuiltInTypeFlavor
-  deriving (Eq, Data, Functor)
+  deriving (Eq, Data)
 
-instance Outputable (TyConFlavor tc) where
+instance Outputable TyConFlavor where
   ppr = text . go
     where
       go TupleFlavor = "tuple"
@@ -54,7 +53,7 @@ instance Outputable (TyConFlavor tc) where
       go AbstractTypeFlavor = "abstract type"
       go BuiltInTypeFlavor = "built-in type"
 
-instance NFData tc => NFData (TyConFlavor tc) where
+instance NFData TyConFlavor where
   rnf TupleFlavor = ()
   rnf SumFlavor = ()
   rnf TypeFunFlavor = ()
@@ -62,7 +61,7 @@ instance NFData tc => NFData (TyConFlavor tc) where
   rnf AbstractTypeFlavor = ()
   rnf BuiltInTypeFlavor = ()
 
-tyConFlavorAssoc_maybe :: TyConFlavor tc -> Maybe tc
+tyConFlavorAssoc_maybe :: TyConFlavor -> Maybe tc
 tyConFlavorAssoc_maybe _ = Nothing
 
 instance Outputable TopLevelFlag where

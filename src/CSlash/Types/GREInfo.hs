@@ -18,7 +18,7 @@ import qualified Data.List.NonEmpty as NonEmpty
 data GREInfo
     = Vanilla
     | UnboundGRE
-    | IAmTyCon !(TyConFlavor Name)
+    | IAmTyCon !TyConFlavor
     | IAmConLike !ConInfo
     deriving Data
 
