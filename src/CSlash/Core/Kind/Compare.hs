@@ -1,3 +1,4 @@
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE MagicHash #-}
 
@@ -19,7 +20,7 @@ import CSlash.Utils.Outputable
 import CSlash.Utils.Misc
 import CSlash.Utils.Panic
 
-import GHC.Base (reallyUnsafePtrEquality#)
+import GHC.Base (reallyUnsafePtrEquality#, Void)
 
 import qualified Data.Semigroup as S
 
@@ -29,34 +30,36 @@ import qualified Data.Semigroup as S
 *                                                                      *
 ********************************************************************* -}
 
-tcEqKind :: HasDebugCallStack => Kind kv -> Kind kv -> Bool
+tcEqKind :: (HasDebugCallStack, Eq kv, VarHasUnique kv) => Kind kv -> Kind kv -> Bool
 tcEqKind = eqKind
 
-tcEqMonoKind :: HasDebugCallStack => MonoKind kv -> MonoKind kv -> Bool
+tcEqMonoKind :: (HasDebugCallStack, Eq kv, VarHasUnique kv) => MonoKind kv -> MonoKind kv -> Bool
 tcEqMonoKind = eqMonoKind
 
-initRnEnv :: Kind kv -> Kind kv -> RnEnv2 kv
+initRnEnv :: VarHasUnique kv => Kind kv -> Kind kv -> RnEnv2 kv
 initRnEnv ka kb = mkRnEnv2 $ mkInScopeSet $
-                  kiVarsOfKind ka `unionVarSet` kiVarsOfKind kb
+                  varsOfKind @Void ka `unionVarSet` varsOfKind @Void kb
 
-eqKind :: HasCallStack => Kind kv -> Kind kv -> Bool
+eqKind :: (HasCallStack, Eq kv, VarHasUnique kv) => Kind kv -> Kind kv -> Bool
 eqKind ka kb = eq_kind ka kb
 
-eqMonoKind :: HasCallStack => MonoKind kv -> MonoKind kv -> Bool
+eqMonoKind :: (HasCallStack, Eq kv, VarHasUnique kv) => MonoKind kv -> MonoKind kv -> Bool
 eqMonoKind ka kb = eq_mono_kind ka kb
 
-eq_kind :: Kind kv -> Kind kv -> Bool
+eq_kind :: (Eq kv, VarHasUnique kv) => Kind kv -> Kind kv -> Bool
 eq_kind = inline_generic_eq_kind_x Nothing
 
-eq_mono_kind :: MonoKind kv -> MonoKind kv -> Bool
+eq_mono_kind :: (Eq kv, VarHasUnique kv) => MonoKind kv -> MonoKind kv -> Bool
 eq_mono_kind = inline_generic_eq_mono_kind_x Nothing
 
 {-# NOINLINE generic_eq_kind_x #-}
-generic_eq_kind_x :: Maybe (RnEnv2 kv) -> Kind kv -> Kind kv -> Bool
+generic_eq_kind_x :: (Eq kv, VarHasUnique kv) => Maybe (RnEnv2 kv) -> Kind kv -> Kind kv -> Bool
 generic_eq_kind_x = inline_generic_eq_kind_x
 
 {-# INLINE inline_generic_eq_kind_x #-}
-inline_generic_eq_kind_x :: Maybe (RnEnv2 kv) -> (Kind kv) -> (Kind kv) -> Bool
+inline_generic_eq_kind_x
+  :: (Eq kv, VarHasUnique kv)
+  => Maybe (RnEnv2 kv) -> (Kind kv) -> (Kind kv) -> Bool
 inline_generic_eq_kind_x mb_env = \k1 k2 -> k1 `seq` k2 `seq`
   let go = generic_eq_kind_x mb_env
       go_mono = generic_eq_mono_kind_x mb_env
@@ -69,11 +72,14 @@ inline_generic_eq_kind_x mb_env = \k1 k2 -> k1 `seq` k2 `seq`
        _ -> False
 
 {-# NOINLINE generic_eq_mono_kind_x #-}
-generic_eq_mono_kind_x :: Maybe (RnEnv2 kv) -> (MonoKind kv) -> (MonoKind kv) -> Bool
+generic_eq_mono_kind_x
+  :: (Eq kv, VarHasUnique kv) => Maybe (RnEnv2 kv) -> (MonoKind kv) -> (MonoKind kv) -> Bool
 generic_eq_mono_kind_x = inline_generic_eq_mono_kind_x
 
 {-# INLINE inline_generic_eq_mono_kind_x #-}
-inline_generic_eq_mono_kind_x :: Maybe (RnEnv2 kv) -> (MonoKind kv) -> (MonoKind kv) -> Bool
+inline_generic_eq_mono_kind_x
+  :: (VarHasUnique kv, Eq kv)
+  => Maybe (RnEnv2 kv) -> (MonoKind kv) -> (MonoKind kv) -> Bool
 inline_generic_eq_mono_kind_x mb_env = \k1 k2 -> k1 `seq` k2 `seq`
   let go = generic_eq_mono_kind_x mb_env
 

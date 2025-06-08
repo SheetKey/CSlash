@@ -28,11 +28,14 @@ module CSlash.Types.Unique (
     ) where
 
 import CSlash.Utils.Outputable
+import CSlash.Utils.Panic
 import CSlash.Utils.Word64 (word64ToInt)
 
 import GHC.Exts (indexCharOffAddr#, Char(..), Int(..))
 
 import Data.Word ( Word64 )
+
+import Data.Void (Void)
 
 import GHC.Types.Unique hiding (pprUniqueAlways)
 
@@ -63,3 +66,6 @@ w64ToBase62 n_ = go n_ ""
     {-# INLINE chooseChar62 #-}
     chooseChar62 (I# n) = C# (indexCharOffAddr# chars62 n)
     chars62 = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"#
+
+instance Uniquable Void where
+  getUnique _ = panic "Uniquable Void"
