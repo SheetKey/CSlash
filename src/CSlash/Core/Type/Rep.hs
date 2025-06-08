@@ -1,3 +1,4 @@
+{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 
@@ -6,6 +7,7 @@ module CSlash.Core.Type.Rep where
 import {-# SOURCE #-} CSlash.Core.Type.Ppr (pprType)
 
 import CSlash.Types.Var
+import CSlash.Types.Var.Set
 import CSlash.Core.TyCon
 import CSlash.Core.Kind
 
@@ -17,6 +19,7 @@ import CSlash.Data.FastString
 import CSlash.Utils.Misc
 import CSlash.Utils.Panic
 import CSlash.Utils.Binary
+import CSlash.Utils.FV
 
 import qualified Data.Data as Data hiding (TyCon)
 import Control.DeepSeq
@@ -39,15 +42,41 @@ data Type tv kv
     , ft_arg :: Type tv kv
     , ft_res :: Type tv kv
     }
-  | CastTy (Type tv kv) (KindCoercion kv tv)
+  | CastTy (Type tv kv) (KindCoercion tv kv)
   | Embed (MonoKind kv) -- for application to a 'BigTyLamTy
-  | KindCoercion (KindCoercion kv tv) -- embed a kind coercion (evidence stuff)
+  | KindCoercion (KindCoercion tv kv) -- embed a kind coercion (evidence stuff)
   deriving Data.Data
 
 instance (Outputable tv, Outputable kv) => Outputable (Type tv kv) where
   ppr = pprType
 
 type KnotTied ty = ty
+
+{- **********************************************************************
+*                                                                       *
+            Type FV instance
+*                                                                       *
+********************************************************************** -}
+
+instance (Uniquable tv, Uniquable kv) => HasFVs (Type tv kv) where
+  type FVInScope (Type tv kv) = (MkVarSet tv, MkVarSet kv)
+  type FVAcc (Type tv kv) = ([tv], MkVarSet tv, [kv], MkVarSet kv)
+  type FVArg (Type tv kv) = Either tv kv
+
+  fvElemAcc (Left tv) (_, haveSet, _, _) = tv `elemVarSet` haveSet
+  fvElemAcc (Right kv) (_, _, _, haveSet) = kv `elemVarSet` haveSet
+
+  fvElemIS (Left tv) (in_scope, _) = tv `elemVarSet` in_scope
+  fvElemIS (Right kv) (_, in_scope) = kv `elemVarSet` in_scope
+
+  fvExtendAcc (Left tv) (have, haveSet, ks, kset) = (tv:have, extendVarSet haveSet tv, ks, kset)
+  fvExtendAcc (Right kv) (ts, tset, have, haveSet) = (ts, tset, kv:have, extendVarSet haveSet kv)
+
+  fvExtendIS (Left tv) (in_scope, ks) = (extendVarSet in_scope tv, ks)
+  fvExtendIS (Right kv) (ts, in_scope) = (ts, extendVarSet in_scope kv)
+
+  fvEmptyAcc = ([], emptyVarSet, [], emptyVarSet)
+  fvEmptyIS = (emptyVarSet, emptyVarSet)
 
 {- **********************************************************************
 *                                                                       *
@@ -88,28 +117,29 @@ mkBigLamTys = flip (foldr mkBigLamTy)
 *                                                                      *
 ********************************************************************* -}
 
-data TypeFolder tv kv env a = TypeFolder
+data TypeFolder tv kv env env' a = TypeFolder
   { tf_view :: Type tv kv -> Maybe (Type tv kv)
   , tf_tyvar :: env -> tv -> a
   , tf_tybinder :: env -> tv -> ForAllFlag -> env
   , tf_tylambinder :: env -> tv -> env
   , tf_tylamkibinder :: env -> kv -> env
-  , tf_embed_mono_ki :: env -> MonoKind kv -> a
+  , tf_swapEnv :: env -> env'
+  , tf_mkcf :: MKiCoFolder tv kv env' a
   }
 
--- Unlike GHC, we do not deal with kind variables here.
--- I.e., they are not added to the env.
 {-# INLINE foldType #-}
 foldType
-  :: (Monoid a, Outputable tv, Outputable kv)
-  => TypeFolder tv kv env a
+  :: (Monoid a, Outputable tv, Outputable kv, VarHasKind tv kv)
+  => TypeFolder tv kv env env' a
   -> env
   -> (Type tv kv -> a, [Type tv kv] -> a)
 foldType (TypeFolder { tf_view = view
                      , tf_tyvar = tyvar
                      , tf_tybinder = tybinder
                      , tf_tylambinder = tylambinder
-                     , tf_tylamkibinder = tylamkibinder }) env
+                     , tf_tylamkibinder = tylamkibinder
+                     , tf_swapEnv = tokenv
+                     , tf_mkcf = mkcf }) env
   = (go_ty env, go_tys env)
   where
     go_ty env ty | Just ty' <- view ty = go_ty env ty'
@@ -121,14 +151,24 @@ foldType (TypeFolder { tf_view = view
     go_ty env (BigTyLamTy kv ty)
       = let !env' = tylamkibinder env kv
         in go_ty env' ty
-    go_ty env (FunTy _ arg res) = go_ty env arg `mappend` go_ty env res
+    go_ty env (FunTy mki arg res) = go_mki mki `mappend` go_ty env arg `mappend` go_ty env res
+      where go_mki = case foldMonoKiCo mkcf (tokenv env) of
+                       (f, _, _, _) -> f
     go_ty env (TyConApp _ tys) = go_tys env tys
     go_ty env (ForAllTy (Bndr tv vis) inner)
       = let !env' = tybinder env tv vis
-        in go_ty env' inner
-    go_ty _ (Embed _) = mempty
-    go_ty env (CastTy ty _) = go_ty env ty
-    go_ty _ co@(KindCoercion {}) = pprPanic "foldType" (ppr co)
+        in go_mki (varKind tv) `mappend` go_ty env' inner
+      where go_mki = case foldMonoKiCo mkcf (tokenv env) of
+                       (f, _, _, _) -> f
+    go_ty env (Embed mki) = go_mki mki
+      where go_mki = case foldMonoKiCo mkcf (tokenv env) of
+                       (f, _, _, _) -> f
+    go_ty env (CastTy ty kco) = go_ty env ty `mappend` go_kco kco
+      where go_kco = case foldMonoKiCo mkcf (tokenv env) of
+                       (_, _, f, _) -> f
+    go_ty env (KindCoercion kco) = go_kco kco
+      where go_kco = case foldMonoKiCo mkcf (tokenv env) of
+                       (_, _, f, _) -> f
 
     go_tys _ [] = mempty
     go_tys env (t:ts) = go_ty env t `mappend` go_tys env ts

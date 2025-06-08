@@ -155,17 +155,17 @@ pprPrecMonoKindX env prec ki
     then debug_ppr_mono_ki prec ki
     else text "{pprKind not implemented}"--pprPrecIfaceKind prec (tidyToIfaceKindStyX env ty sty)
 
-pprKiCo :: (Outputable kv, Outputable kcv) => KindCoercion kv kcv -> SDoc
+pprKiCo :: (Outputable kv, Outputable kcv) => KindCoercion kcv kv -> SDoc
 pprKiCo = pprPrecKiCo topPrec
 
-pprPrecKiCo :: (Outputable kv, Outputable kcv) => PprPrec -> KindCoercion kv kcv -> SDoc
+pprPrecKiCo :: (Outputable kv, Outputable kcv) => PprPrec -> KindCoercion kcv kv -> SDoc
 pprPrecKiCo = pprPrecKiCoX emptyTidyEnv
 
 pprPrecKiCoX
   :: (Outputable kv, Outputable kcv)
   => MkTidyEnv kv
   -> PprPrec
-  -> KindCoercion kv kcv
+  -> KindCoercion kcv kv
   -> SDoc
 pprPrecKiCoX _ prec co = getPprStyle $ \sty ->
                        getPprDebug $ \debug ->
@@ -221,7 +221,7 @@ debug_ppr_mono_ki prec (FunKi { fk_f = f, fk_arg = arg, fk_res = res })
                   FKF_C_K -> darrow
                   FKF_K_K -> arrow
 
-debug_ppr_ki_co :: (Outputable kv, Outputable kcv) => PprPrec -> KindCoercion kv kcv -> SDoc
+debug_ppr_ki_co :: (Outputable kv, Outputable kcv) => PprPrec -> KindCoercion kcv kv -> SDoc
 debug_ppr_ki_co _ (Refl ki) = angleBrackets (ppr ki)
 debug_ppr_ki_co prec (FunCo _ _ co1 co2)
   = maybeParen prec funPrec
@@ -324,52 +324,52 @@ mkForAllKi = ForAllKi
 *                                                                      *
 ********************************************************************* -}
 
-data KindCoercion kv kcv
+data KindCoercion kcv kv 
   = Refl (MonoKind kv)
-  | KiConAppCo KiCon [KindCoercion kv kcv]
+  | KiConAppCo KiCon [KindCoercion kcv kv]
   | FunCo
     { fco_afl :: FunKiFlag
     , fco_afr :: FunKiFlag
-    , fco_arg :: KindCoercion kv kcv
-    , fco_res :: KindCoercion kv kcv }
+    , fco_arg :: KindCoercion kcv kv
+    , fco_res :: KindCoercion kcv kv }
   | KiCoVarCo kcv
-  | SymCo (KindCoercion kv kcv)
-  | TransCo (KindCoercion kv kcv) (KindCoercion kv kcv)
-  | HoleCo (KindCoercionHole kv kcv)
+  | SymCo (KindCoercion kcv kv)
+  | TransCo (KindCoercion kcv kv) (KindCoercion kcv kv)
+  | HoleCo (KindCoercionHole kcv kv)
   deriving Data.Data
 
-data KindCoercionHole kv kcv = CoercionHole
+data KindCoercionHole kcv kv = CoercionHole
   { ch_co_var :: kcv
-  , ch_ref :: IORef (Maybe (KindCoercion kv kcv))
+  , ch_ref :: IORef (Maybe (KindCoercion kcv kv))
   }
 
-instance (Data.Typeable kv, Data.Typeable kcv) => Data.Data (KindCoercionHole kv kcv)
+instance (Data.Typeable kcv, Data.Typeable kv) => Data.Data (KindCoercionHole kcv kv)
 
-coHoleCoVar :: KindCoercionHole kv kcv -> kcv
+coHoleCoVar :: KindCoercionHole kcv kv -> kcv
 coHoleCoVar = ch_co_var
 
-isReflKiCo :: KindCoercion kv kcv -> Bool
+isReflKiCo :: KindCoercion kcv kv -> Bool
 isReflKiCo (Refl{}) = True
 isReflKiCo _ = False
 
-isReflKiCo_maybe :: KindCoercion kv kcv -> Maybe (MonoKind kv)
+isReflKiCo_maybe :: KindCoercion kcv kv -> Maybe (MonoKind kv)
 isReflKiCo_maybe (Refl ki) = Just ki
 isReflKiCo_maybe _ = Nothing
 
-mkReflKiCo :: MonoKind kv -> KindCoercion kv kcv
+mkReflKiCo :: MonoKind kv -> KindCoercion kcv kv
 mkReflKiCo ki = Refl ki
 
-mkSymKiCo :: KindCoercion kv kcv -> KindCoercion  kv kcv
+mkSymKiCo :: KindCoercion kcv kv -> KindCoercion  kcv kv
 mkSymKiCo co | isReflKiCo co = co
 mkSymKiCo (SymCo co) = co
 mkSymKiCo co = SymCo co
 
-mkTransKiCo :: KindCoercion kv kcv -> KindCoercion kv kcv -> KindCoercion kv kcv
+mkTransKiCo :: KindCoercion kcv kv -> KindCoercion kcv kv -> KindCoercion kcv kv
 mkTransKiCo co1 co2 | isReflKiCo co1 = co2
                     | isReflKiCo co2 = co1
 mkTransKiCo co1 co2 = TransCo co1 co2
 
-mkKiConAppCo :: HasDebugCallStack => KiCon -> [KindCoercion kv kcv] -> KindCoercion kv kcv
+mkKiConAppCo :: HasDebugCallStack => KiCon -> [KindCoercion kcv kv] -> KindCoercion kcv kv
 mkKiConAppCo kc cos
   | Just kis <- traverse isReflKiCo_maybe cos
   = mkReflKiCo (mkKiConApp kc kis)
@@ -378,18 +378,18 @@ mkKiConAppCo kc cos
 mkFunKiCo
   :: Outputable kv
   => FunKiFlag
-  -> KindCoercion kv kcv
-  -> KindCoercion kv kcv
-  -> KindCoercion kv kcv
+  -> KindCoercion kcv kv
+  -> KindCoercion kcv kv
+  -> KindCoercion kcv kv
 mkFunKiCo af arg_co res_co = mkFunKiCo2 af af arg_co res_co
 
 mkFunKiCo2
   :: Outputable kv
   => FunKiFlag
   -> FunKiFlag
-  -> KindCoercion kv kcv
-  -> KindCoercion kv kcv
-  -> KindCoercion kv kcv
+  -> KindCoercion kcv kv
+  -> KindCoercion kcv kv
+  -> KindCoercion kcv kv
 mkFunKiCo2 afl afr arg_co res_co
   | Just ki1 <- isReflKiCo_maybe arg_co
   , Just ki2 <- isReflKiCo_maybe res_co
@@ -398,14 +398,14 @@ mkFunKiCo2 afl afr arg_co res_co
   = FunCo { fco_afl = afl, fco_afr = afr
           , fco_arg = arg_co, fco_res = res_co }
 
-mkKiCoVarCo :: kcv -> KindCoercion kv kcv
+mkKiCoVarCo :: kcv -> KindCoercion kcv kv
 mkKiCoVarCo cv = KiCoVarCo cv
 
 mkKiEqPred :: MonoKind kv -> MonoKind kv -> PredKind kv
 mkKiEqPred ki1 ki2 = mkKiConApp EQKi [ki1, ki2]
 
 kicoercionLKind
-  :: (Outputable kv, Outputable kcv, VarHasKind kcv kv) => KindCoercion kv kcv -> MonoKind kv
+  :: (Outputable kv, Outputable kcv, VarHasKind kcv kv) => KindCoercion kcv kv -> MonoKind kv
 kicoercionLKind co = go co
   where
     go (Refl ki) = ki
@@ -418,7 +418,7 @@ kicoercionLKind co = go co
     go (HoleCo h) = coVarLKind (coHoleCoVar h)
 
 kicoercionRKind
-  :: (Outputable kv, Outputable kcv, VarHasKind kcv kv) => KindCoercion kv kcv -> MonoKind kv
+  :: (Outputable kv, Outputable kcv, VarHasKind kcv kv) => KindCoercion kcv kv -> MonoKind kv
 kicoercionRKind co = go co
   where
     go (Refl ki) = ki
@@ -430,13 +430,13 @@ kicoercionRKind co = go co
     go (TransCo _ co2) = go co2
     go (HoleCo h) = coVarRKind (coHoleCoVar h)
 
-instance (Outputable kv, Outputable kcv) => Outputable (KindCoercion kv kcv) where
+instance (Outputable kv, Outputable kcv) => Outputable (KindCoercion kcv kv) where
   ppr = pprKiCo
 
-instance (Outputable kv, Outputable kcv) => Outputable (KindCoercionHole kv kcv) where
+instance (Outputable kv, Outputable kcv) => Outputable (KindCoercionHole kcv kv) where
   ppr (CoercionHole { ch_co_var = cv }) = braces (ppr cv)
 
-instance Uniquable kcv => Uniquable (KindCoercionHole kv kcv) where
+instance Uniquable kcv => Uniquable (KindCoercionHole kcv kv) where
   getUnique (CoercionHole { ch_co_var = cv }) = getUnique cv
 
 coVarLKind
@@ -457,17 +457,17 @@ coVarKinds cv
   | otherwise
   = pprPanic "coVarKinds" (ppr cv $$ ppr (varKind cv))
 
-mkKiHoleCo :: KindCoercionHole kv kcv -> KindCoercion kv kcv
+mkKiHoleCo :: KindCoercionHole kcv kv -> KindCoercion kcv kv
 mkKiHoleCo h = HoleCo h
 
 setCoHoleKind
   :: VarHasKind kcv kv
-  => KindCoercionHole kv kcv
+  => KindCoercionHole kcv kv
   -> MonoKind kv
-  -> KindCoercionHole kv kcv
+  -> KindCoercionHole kcv kv
 setCoHoleKind h k = setCoHoleCoVar h (setVarKind (coHoleCoVar h) k)
 
-setCoHoleCoVar :: KindCoercionHole kv kcv -> kcv -> KindCoercionHole kv kcv
+setCoHoleCoVar :: KindCoercionHole kcv kv -> kcv -> KindCoercionHole kcv kv
 setCoHoleCoVar h cv = h { ch_co_var = cv }
 
 {- **********************************************************************
@@ -488,15 +488,19 @@ isCoVarKind _ = False
 *                                                                      *
 ********************************************************************* -}
 
-data KiCoFolder kv kcv env a = KiCoFolder
+-- Remark: 'kcv' is really a 'tv'
+-- (a Kind Coercion Variable is a Type Variable whose kind is a Predicate on kinds)
+-- For compatibility with TypeFolder, and consistency in general,
+-- we list the type variable before the kind variable in parameters.
+data KiCoFolder kcv kv env a = KiCoFolder
   { kcf_kibinder :: env -> kv -> env
-  , kcf_mkcf :: MKiCoFolder kv kcv env a
+  , kcf_mkcf :: MKiCoFolder kcv kv env a
   }
 
-data MKiCoFolder kv kcv env a = MKiCoFolder
+data MKiCoFolder kcv kv env a = MKiCoFolder
   { mkcf_kivar :: env -> kv -> a
   , mkcf_covar :: env -> kcv -> a
-  , mkcf_hole :: env -> KindCoercionHole kv kcv -> a
+  , mkcf_hole :: env -> KindCoercionHole kcv kv -> a
   }
 
 noKindView :: a -> Maybe a
@@ -505,7 +509,7 @@ noKindView _ = Nothing
 {-# INLINE foldKind #-}
 foldKind
   :: Monoid a
-  => KiCoFolder kv kcv env a
+  => KiCoFolder kcv kv env a
   -> env
   -> (Kind kv -> a, [Kind kv] -> a)
 foldKind (KiCoFolder { kcf_kibinder = kibinder
@@ -526,9 +530,9 @@ foldKind (KiCoFolder { kcf_kibinder = kibinder
 {-# INLINE foldMonoKiCo #-}
 foldMonoKiCo
   :: Monoid a
-  => MKiCoFolder kv kcv env a
+  => MKiCoFolder kcv kv env a
   -> env
-  -> (MonoKind kv -> a, [MonoKind kv] -> a, KindCoercion kv kcv -> a, [KindCoercion kv kcv] -> a)
+  -> (MonoKind kv -> a, [MonoKind kv] -> a, KindCoercion kcv kv -> a, [KindCoercion kcv kv] -> a)
 foldMonoKiCo (MKiCoFolder { mkcf_kivar = kivar
                           , mkcf_covar = covar
                           , mkcf_hole = cohole }) env
@@ -559,21 +563,21 @@ foldMonoKiCo (MKiCoFolder { mkcf_kivar = kivar
 *                                                                      *
 ********************************************************************* -}
 
-data KiCoMapper kv kcv kv' kcv' env m = KiCoMapper
+data KiCoMapper kcv kv kcv' kv' env m = KiCoMapper
   { kcm_kibinder :: forall r. env -> kv -> (env -> kv' -> m r) -> m r
-  , kcm_mkcm :: MKiCoMapper kv kcv kv' kcv' env m
+  , kcm_mkcm :: MKiCoMapper kcv kv kcv' kv' env m
   }
 
-data MKiCoMapper kv kcv kv' kcv' env m = MKiCoMapper
+data MKiCoMapper kcv kv kcv' kv' env m = MKiCoMapper
   { mkcm_kivar :: env -> kv -> m (MonoKind kv')
-  , mkcm_covar :: env -> kcv -> m (KindCoercion kv' kcv')
-  , mkcm_hole :: env -> KindCoercionHole kv kcv -> m (KindCoercion kv' kcv')
+  , mkcm_covar :: env -> kcv -> m (KindCoercion kcv' kv')
+  , mkcm_hole :: env -> KindCoercionHole kcv kv -> m (KindCoercion kcv' kv')
   }
 
 {-# INLINE mapKind #-}
 mapKind
   :: (Monad m, Outputable kv')
-  => KiCoMapper kv kcv kv' kcv' () m
+  => KiCoMapper kcv kv kcv' kv' () m
   -> ( Kind kv -> m (Kind kv')
      , [Kind kv] -> m [Kind kv'] )
 mapKind mapper = case mapKindX mapper of
@@ -582,18 +586,18 @@ mapKind mapper = case mapKindX mapper of
 {-# INLINE mapMKiCo #-}
 mapMKiCo
   :: (Monad m, Outputable kv')
-  => MKiCoMapper kv kcv kv' kcv' () m
+  => MKiCoMapper kcv kv kcv' kv' () m
   -> ( MonoKind kv -> m (MonoKind kv')
      , [MonoKind kv] -> m [MonoKind kv']
-     , KindCoercion kv kcv -> m (KindCoercion kv' kcv')
-     , [KindCoercion kv kcv] -> m [KindCoercion kv' kcv'] )
+     , KindCoercion kcv kv -> m (KindCoercion kcv' kv')
+     , [KindCoercion kcv kv] -> m [KindCoercion kcv' kv'] )
 mapMKiCo mapper = case mapMKiCoX mapper of
   (go_ki, go_kis, go_co, go_cos) -> (go_ki (), go_kis (), go_co (), go_cos ())
 
 {-# INLINE mapKindX #-}
 mapKindX
   :: (Monad m, Outputable kv')
-  => KiCoMapper kv kcv kv' kcv' env m
+  => KiCoMapper kcv kv kcv' kv' env m
   -> ( env -> Kind kv -> m (Kind kv')
      , env -> [Kind kv] -> m [Kind kv'] )
 mapKindX (KiCoMapper { kcm_kibinder = kibinder, kcm_mkcm = mkcmapper })
@@ -615,11 +619,11 @@ mapKindX (KiCoMapper { kcm_kibinder = kibinder, kcm_mkcm = mkcmapper })
 {-# INLINE mapMKiCoX #-}
 mapMKiCoX
   :: (Monad m, Outputable kv')
-  => MKiCoMapper kv kcv kv' kcv' env m
+  => MKiCoMapper kcv kv kcv' kv' env m
   -> ( env -> MonoKind kv -> m (MonoKind kv')
      , env -> [MonoKind kv] -> m [MonoKind kv']
-     , env -> KindCoercion kv kcv -> m (KindCoercion kv' kcv')
-     , env -> [KindCoercion kv kcv] -> m [KindCoercion kv' kcv'] )
+     , env -> KindCoercion kcv kv -> m (KindCoercion kcv' kv')
+     , env -> [KindCoercion kcv kv] -> m [KindCoercion kcv' kv'] )
 mapMKiCoX (MKiCoMapper { mkcm_kivar = kivar, mkcm_covar = covar, mkcm_hole = cohole })
   = (go_mki, go_mkis, go_co, go_cos)
   where    
