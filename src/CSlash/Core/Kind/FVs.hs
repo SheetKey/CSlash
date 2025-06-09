@@ -1,6 +1,5 @@
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE TypeAbstractions #-}
-{-# LANGUAGE ExplicitForAll #-}
 
 module CSlash.Core.Kind.FVs where
 
@@ -21,6 +20,8 @@ import CSlash.Utils.Misc
 import CSlash.Utils.FV
 import CSlash.Utils.Panic
 import CSlash.Utils.Outputable
+
+import Data.Void
 
 {- *********************************************************************
 *                                                                      *
@@ -46,33 +47,27 @@ runKiCoVars f = appEndo f (emptyVarSet, emptyVarSet)
    This is meaningless for kinds, which, at this time, cannot contain co_holes.
 -}
 
-varsOfKind
-  :: forall kcv kv. (Uniquable kv, Uniquable kcv, Outputable kcv)
-  => Kind kv -> MkVarSet kv
-varsOfKind @kcv @_ ki = case runKiCoVars (deep_ki ki) of
-  (kcvs, kvs) -> assertPpr (isEmptyVarSet (kcvs :: MkVarSet kcv))
-                 (text "varsOfKind/kcvs" <+> ppr kcvs) kvs
+varsOfMonoKiVarEnv :: Uniquable kv => MkVarEnv kv (MonoKind kv) -> MkVarSet kv
+varsOfMonoKiVarEnv kis = varsOfMonoKinds (nonDetEltsUFM kis)
+
+varsOfKind :: Uniquable kv => Kind kv -> MkVarSet kv
+varsOfKind ki = case runKiCoVars (deep_ki @Void ki) of
+  (_, kvs) -> kvs
 
 varsOfKinds
-  :: forall kcv kv. (Uniquable kv, Uniquable kcv, Outputable kcv)
-  => [Kind kv] -> MkVarSet kv
-varsOfKinds @kcv @_ kis = case runKiCoVars (deep_kis kis) of
-  (kcvs, kvs) -> assertPpr (isEmptyVarSet (kcvs :: MkVarSet kcv))
-                 (text "varsOfKinds/kcvs" <+> ppr kcvs) kvs
+  :: Uniquable kv => [Kind kv] -> MkVarSet kv
+varsOfKinds kis = case runKiCoVars (deep_kis @Void kis) of
+  (_, kvs) -> kvs
 
 varsOfMonoKind
-  :: forall kcv kv. (Uniquable kv, Uniquable kcv, Outputable kcv)
-  => MonoKind kv -> MkVarSet kv
-varsOfMonoKind @kcv @_ ki = case runKiCoVars (deep_mki ki) of
-  (kcvs, kvs) -> assertPpr (isEmptyVarSet (kcvs :: MkVarSet kcv))
-                 (text "varsOfMonoKind/kcvs" <+> ppr kcvs) kvs
+  :: Uniquable kv => MonoKind kv -> MkVarSet kv
+varsOfMonoKind ki = case runKiCoVars (deep_mki @Void ki) of
+  (_, kvs) -> kvs
 
 varsOfMonoKinds
-  :: forall kcv kv. (Uniquable kv, Uniquable kcv, Outputable kcv)
-  => [Kind kv] -> MkVarSet kv
-varsOfMonoKinds @kcv @_ kis = case runKiCoVars (deep_kis kis) of
-  (kcvs, kvs) -> assertPpr (isEmptyVarSet (kcvs :: MkVarSet kcv))
-                 (text "varsOfMonoKinds/kcvs" <+> ppr kcvs) kvs
+  :: Uniquable kv => [MonoKind kv] -> MkVarSet kv
+varsOfMonoKinds kis = case runKiCoVars (deep_mkis @Void kis) of
+  (_, kvs) -> kvs
 
 varsOfKindCoercion
   :: (Uniquable kv, Uniquable kcv)
@@ -85,41 +80,41 @@ varsOfKindCoercions
 varsOfKindCoercions cos = runKiCoVars (deep_cos cos)
 
 deep_ki
-  :: (Uniquable kv, Uniquable kcv)
+  :: (Uniquable kcv, Uniquable kv)
   => Kind kv -> Endo (MkVarSet kcv, MkVarSet kv)
 deep_ki = fst $ foldKind deepKcvFolder emptyVarSet
 
 deep_kis
-  :: (Uniquable kv, Uniquable kcv)
+  :: (Uniquable kcv, Uniquable kv)
   => [Kind kv] -> Endo (MkVarSet kcv, MkVarSet kv)
 deep_kis = snd $ foldKind deepKcvFolder emptyVarSet
 
 deep_mki
-  :: (Uniquable kv, Uniquable kcv)
+  :: (Uniquable kcv, Uniquable kv)
   => MonoKind kv -> Endo (MkVarSet kcv, MkVarSet kv)
 deep_mki = case foldMonoKiCo deepMKcvFolder emptyVarSet of
              (f, _, _, _) -> f
 
 deep_mkis
-  :: (Uniquable kv, Uniquable kcv)
+  :: (Uniquable kcv, Uniquable kv)
   => [MonoKind kv] -> Endo (MkVarSet kcv, MkVarSet kv)
 deep_mkis = case foldMonoKiCo deepMKcvFolder emptyVarSet of
               (_, f, _, _) -> f
 
 deep_co
-  :: (Uniquable kv, Uniquable kcv)
+  :: (Uniquable kcv, Uniquable kv)
   => KindCoercion kcv kv -> Endo (MkVarSet kcv, MkVarSet kv)
 deep_co = case foldMonoKiCo deepMKcvFolder emptyVarSet of
             (_, _, f, _) -> f
 
 deep_cos
-  :: (Uniquable kv, Uniquable kcv)
+  :: (Uniquable kcv, Uniquable kv)
   => [KindCoercion kcv kv] -> Endo (MkVarSet kcv, MkVarSet kv)
 deep_cos = case foldMonoKiCo deepMKcvFolder emptyVarSet of
              (_, _, _, f) -> f
 
 deepKcvFolder
-  :: (Uniquable kv, Uniquable kcv)
+  :: (Uniquable kcv, Uniquable kv)
   => KiCoFolder kcv kv (MkVarSet kv) (Endo (MkVarSet kcv, MkVarSet kv))
 deepKcvFolder = KiCoFolder { kcf_kibinder = do_bndr
                            , kcf_mkcf = deepMKcvFolder }
@@ -127,7 +122,7 @@ deepKcvFolder = KiCoFolder { kcf_kibinder = do_bndr
     do_bndr is kv = extendVarSet is kv
 
 deepMKcvFolder
-  :: (Uniquable kv, Uniquable kcv)
+  :: (Uniquable kcv, Uniquable kv)
   => MKiCoFolder kcv kv (MkVarSet kv) (Endo (MkVarSet kcv, MkVarSet kv))
 deepMKcvFolder = MKiCoFolder { mkcf_kivar = do_kivar
                              , mkcf_covar = do_covar
