@@ -33,9 +33,9 @@ import CSlash.Utils.Outputable
 *                                                                      *
 ********************************************************************* -}
 
-runTyVars :: Endo (VarSet tv kv) -> VarSet tv kv
-{-# INLINE runTyVars #-}
-runTyVars f = appEndo f emptyVarSet
+runTyKiVars :: Endo (MkVarSet tv, MkVarSet kv) -> (MkVarSet tv, MkVarSet kv)
+{-# INLINE runTyKiVars #-}
+runTyKiVars f = appEndo f (emptyVarSet, emptyVarSet)
 
 {- *********************************************************************
 *                                                                      *
@@ -83,6 +83,16 @@ deepTvFolder = TypeFolder { tf_view = noView
           Shallow free variables
 *                                                                      *
 ********************************************************************* -}
+
+shallowVarsOfTypes
+  :: (IsVar tv, IsVar kv, VarHasKind tv kv)
+  => [Type tv kv] -> (MkVarSet tv, MkVarSet kv)
+shallowVarsOfTypes tys = runTyKiVars (shallow_tys tys)
+
+shallowVarsOfTyVarEnv
+  :: (IsVar tv, IsVar kv, VarHasKind tv kv)
+  => MkVarEnv tv (Type tv kv) -> (MkVarSet tv, MkVarSet kv)
+shallowVarsOfTyVarEnv tys = shallowVarsOfTypes (nonDetEltsUFM tys)
 
 shallow_ty
   :: (Outputable tv, Outputable kv, Uniquable tv, Uniquable kv, VarHasKind tv kv)
