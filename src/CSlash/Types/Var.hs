@@ -1,3 +1,4 @@
+{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
@@ -10,6 +11,7 @@ module CSlash.Types.Var
     Var
 
     {-* Class methods *-}
+  , IsVar
   , VarHasName(..), VarHasUnique(..)
   , VarHasType(..), VarHasKind(..)
   , VarHasTcDetails(..), VarCanSetTcDetails(..)
@@ -23,6 +25,7 @@ module CSlash.Types.Var
 
     {-* TyVar *-}
   , TyVar, KiCoVar
+  , mkTyVar
 
     {-* TcTyVar *-}
   , TcTyVar, TcKiCoVar
@@ -32,6 +35,7 @@ module CSlash.Types.Var
 
     {-* KiVar *-}
   , KiVar
+  , mkKiVar
 
     {-* TcKiVar *-}
   , TcKiVar
@@ -47,7 +51,9 @@ module CSlash.Types.Var
   , isVisibleForAllFlag, isInvisibleForAllFlag
   
     {-* VarBndr *-}
-  , VarBndr(..), ForAllBinder
+  , VarBndr(..), ForAllBinder, TyVarBinder
+  , binderVar, binderVars
+  , mkVarBinder, mkVarBinders
   ) where
 
 import Prelude hiding ((<>))
@@ -213,6 +219,8 @@ instance HasOccName (Var tv kv) where
 *                                                                      *
 ********************************************************************* -}
 
+type IsVar v = (Eq v, Ord v, Outputable v, VarHasName v, VarHasUnique v)
+
 class NamedThing v => VarHasName v where
   varName :: v -> Name
   setVarName :: v -> Name -> v
@@ -236,7 +244,7 @@ class VarHasType v tv kv | v -> tv, v -> kv where
   updateVarType :: (Type tv kv -> Type tv kv) -> v -> v
   setVarType :: v -> Type tv kv -> v
 
-class VarHasKind v kv | v -> kv where
+class (IsVar v, IsVar kv) => VarHasKind v kv | v -> kv where
   varKind :: v -> MonoKind kv
   updateVarKind :: (MonoKind kv -> MonoKind kv) -> v -> v
   updateVarKindM :: Monad m => (MonoKind kv -> m (MonoKind kv)) -> v -> m v
@@ -359,7 +367,7 @@ newtype TyVar kv = TyVar (Var Void kv)
 
 type KiCoVar = TyVar
 
-instance Outputable kv => VarHasKind (TyVar kv) kv where
+instance IsVar kv => VarHasKind (TyVar kv) kv where
   varKind (TyVar (TyVar' { _varKind = ki })) = ki
   varKind other = pprPanic "Bad TyVar" (ppr other)
 
@@ -383,7 +391,7 @@ newtype TcTyVar kv = TcTyVar (Var Void kv)
   
 type TcKiCoVar = TcTyVar
 
-instance Outputable kv => VarHasKind (TcTyVar kv) kv where
+instance IsVar kv => VarHasKind (TcTyVar kv) kv where
   varKind (TcTyVar (TcTyVar' { _varKind = ki })) = ki
   varKind other = pprPanic "Bad TcTyVar" (ppr other)
 
@@ -416,7 +424,7 @@ newtype AnyTyVar kv = AnyTyVar (Var Void kv)
 
 type AnyKiCoVar = AnyTyVar
 
-instance Outputable kv => VarHasKind (AnyTyVar kv) kv where
+instance IsVar kv => VarHasKind (AnyTyVar kv) kv where
   varKind (AnyTyVar (TyVar' { _varKind = ki })) = ki
   varKind (AnyTyVar (TcTyVar' { _varKind = ki })) = ki
   varKind other = pprPanic "Bad AnyTyVar" (ppr other)
@@ -569,3 +577,17 @@ data VarBndr var argf = Bndr var argf
   deriving Data
 
 type ForAllBinder var = VarBndr var ForAllFlag
+
+type TyVarBinder = VarBndr (TyVar KiVar) ForAllFlag
+
+binderVar :: VarBndr v argf -> v
+binderVar (Bndr v _) = v
+
+binderVars :: [VarBndr v argf] -> [v]
+binderVars bvs = map binderVar bvs
+
+mkVarBinder :: argf -> var -> VarBndr var argf
+mkVarBinder argf var = Bndr var argf
+
+mkVarBinders :: argf -> [var] -> [VarBndr var argf]
+mkVarBinders argf = map (mkVarBinder argf)
