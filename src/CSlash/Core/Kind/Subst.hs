@@ -2,6 +2,8 @@
 
 module CSlash.Core.Kind.Subst where
 
+import Prelude hiding ((<>))
+
 import {-# SOURCE #-} CSlash.Core ( CoreExpr )
 import {-# SOURCE #-} CSlash.Core.Ppr ()
 
@@ -27,54 +29,43 @@ import CSlash.Utils.Panic
 *                                                                       *
 ********************************************************************** -}
 
-data Subst = Subst InScopeSet IdSubstEnv TvSubstEnv KvSubstEnv
+data KvSubst kv = KvSubst (InScopeSet kv) (KvSubstEnv kv)
 
-type IdSubstEnv = IdEnv CoreExpr
+type KvSubstEnv kv = MkVarEnv kv (MonoKind kv)
 
-type TvSubstEnv = TyVarEnv Type
-
-type KvSubstEnv = KiVarEnv MonoKind
-
-emptyKvSubstEnv :: KvSubstEnv
+emptyKvSubstEnv :: KvSubstEnv kv
 emptyKvSubstEnv = emptyVarEnv
 
-emptySubst :: Subst
-emptySubst = Subst emptyInScopeSet emptyVarEnv emptyVarEnv emptyVarEnv
+emptyKvSubst :: KvSubst kv
+emptyKvSubst = KvSubst emptyInScopeSet emptyVarEnv
 
-mkEmptySubst :: InScopeSet -> Subst
-mkEmptySubst in_scope = Subst in_scope emptyVarEnv emptyVarEnv emptyVarEnv
+mkEmptyKvSubst :: InScopeSet kv -> KvSubst kv
+mkEmptyKvSubst in_scope = KvSubst in_scope emptyVarEnv
 
-isEmptySubst :: Subst -> Bool
-isEmptySubst (Subst _ id_env tv_env kv_env)
-  = isEmptyVarEnv id_env && isEmptyVarEnv tv_env && isEmptyVarEnv kv_env
+isEmptyKvSubst :: KvSubst kv -> Bool
+isEmptyKvSubst (KvSubst _ kv_env)
+  = isEmptyVarEnv kv_env
 
-isEmptyKvSubst :: Subst -> Bool
-isEmptyKvSubst (Subst _ _ _ kv_env) = isEmptyVarEnv kv_env
+extendKvSubst :: IsVar kv => KvSubst kv -> kv -> MonoKind kv -> KvSubst kv
+extendKvSubst (KvSubst in_scope kvs) kv ki
+  = KvSubst in_scope (extendVarEnv kvs kv ki)
 
-extendKvSubst :: Subst -> KindVar -> MonoKind -> Subst
-extendKvSubst (Subst in_scope ids tvs kvs) kv ki
-  = assertPpr (isKiVar kv) (text "extendKvSubst") $
-    Subst in_scope ids tvs (extendVarEnv kvs kv ki)
+extendKvSubstWithClone :: IsVar kv => KvSubst kv -> kv -> kv -> KvSubst kv
+extendKvSubstWithClone (KvSubst in_scope kvs) kv kv'
+  = KvSubst (extendInScopeSet in_scope kv')
+          (extendVarEnv kvs kv (mkKiVarKi kv'))
 
-extendKvSubstWithClone :: Subst -> KindVar -> KindVar -> Subst
-extendKvSubstWithClone (Subst in_scope ids tvs kvs) kv kv'
-  = Subst (extendInScopeSet in_scope kv')
-          ids
-          tvs
-          (extendVarEnv kvs kv (mkKiVarMKi kv'))
+mkKvSubst :: InScopeSet kv -> KvSubstEnv kv -> KvSubst kv
+mkKvSubst in_scope kenv = KvSubst in_scope kenv
 
-mkKvSubst :: InScopeSet -> KvSubstEnv -> Subst
-mkKvSubst in_scope kenv = Subst in_scope emptyVarEnv emptyVarEnv kenv
+zapKvSubst :: KvSubst kv -> KvSubst kv
+zapKvSubst (KvSubst in_scope _) = KvSubst in_scope emptyVarEnv
 
-zapSubst :: Subst -> Subst
-zapSubst (Subst in_scope _ _ _) = Subst in_scope emptyVarEnv emptyVarEnv emptyVarEnv
-
-instance Outputable Subst where
-  ppr (Subst in_scope ids tvs kvs)
+instance Outputable kv => Outputable (KvSubst kv) where
+  ppr (KvSubst in_scope kvs)
       =  text "<InScope =" <+> in_scope_doc
-      $$ text "IdSubst    =" <+> ppr ids
-      $$ text "TvSubst    =" <+> ppr tvs
-      $$ text "KvSubst    =" <+> ppr kvs
+      $$ text " KvSubst   =" <+> ppr kvs
+      <> char '>'
     where
       in_scope_doc = pprVarSet (getInScopeVars in_scope) (braces . fsep . map ppr)
 
@@ -84,18 +75,20 @@ instance Outputable Subst where
 *                                                                       *
 ********************************************************************** -}
 
-isValidKiSubst :: Subst -> Bool
-isValidKiSubst (Subst in_scope _ _ kenv) =
+isValidKvSubst :: IsVar kv => KvSubst kv -> Bool
+isValidKvSubst (KvSubst in_scope kenv) =
   (kenvFVs `varSetInScope` in_scope)
   where
-    kenvFVs = shallowKiVarsOfMonoKiVarEnv kenv
+    kenvFVs = varsOfMonoKiVarEnv kenv
 
-checkValidKiSubst :: HasDebugCallStack => Subst -> [Kind] -> a -> a
-checkValidKiSubst subst@(Subst in_scope _ _ kenv) kis a
-  = assertPpr (isValidKiSubst subst)
+checkValidKvSubst
+  :: (HasDebugCallStack, IsVar kv)
+  => KvSubst kv -> [Kind kv] -> a -> a
+checkValidKvSubst subst@(KvSubst in_scope kenv) kis a
+  = assertPpr (isValidKvSubst subst)
               (text "in_scope" <+> ppr in_scope $$
                text "kenv" <+> ppr kenv $$
-               text "kenvFVs" <+> ppr (shallowKiVarsOfMonoKiVarEnv kenv) $$
+               text "kenvFVs" <+> ppr (varsOfMonoKiVarEnv kenv) $$
                text "kis" <+> ppr kis) $
     assertPpr kisFVsInScope
               (text "in_scope" <+> ppr in_scope $$
@@ -105,15 +98,17 @@ checkValidKiSubst subst@(Subst in_scope _ _ kenv) kis a
               a
   where
     substDomain = nonDetKeysUFM kenv
-    needInScope = shallowKiVarsOfKinds kis `delListFromUniqSet_Directly` substDomain
+    needInScope = varsOfKinds kis `delListFromUniqSet_Directly` substDomain
     kisFVsInScope = needInScope `varSetInScope` in_scope
 
-checkValidMonoKiSubst :: HasDebugCallStack => Subst -> [MonoKind] -> a -> a
-checkValidMonoKiSubst subst@(Subst in_scope _ _ kenv) kis a
-  = assertPpr (isValidKiSubst subst)
+checkValidMonoKvSubst
+  :: (HasDebugCallStack, IsVar kv)
+  => KvSubst kv -> [MonoKind kv] -> a -> a
+checkValidMonoKvSubst subst@(KvSubst in_scope kenv) kis a
+  = assertPpr (isValidKvSubst subst)
               (text "in_scope" <+> ppr in_scope $$
                text "kenv" <+> ppr kenv $$
-               text "kenvFVs" <+> ppr (shallowKiVarsOfMonoKiVarEnv kenv) $$
+               text "kenvFVs" <+> ppr (varsOfMonoKiVarEnv kenv) $$
                text "kis" <+> ppr kis) $
     assertPpr kisFVsInScope
               (text "in_scope" <+> ppr in_scope $$
@@ -123,44 +118,50 @@ checkValidMonoKiSubst subst@(Subst in_scope _ _ kenv) kis a
               a
   where
     substDomain = nonDetKeysUFM kenv
-    needInScope = shallowKiVarsOfMonoKinds kis `delListFromUniqSet_Directly` substDomain
+    needInScope = varsOfMonoKinds kis `delListFromUniqSet_Directly` substDomain
     kisFVsInScope = needInScope `varSetInScope` in_scope
 
-substKi :: HasDebugCallStack => Subst -> Kind -> Kind
+substKi
+  :: (HasDebugCallStack, IsVar kv)
+  => KvSubst kv -> Kind kv -> Kind kv
 substKi subst ki
   | isEmptyKvSubst subst = ki
-  | otherwise = checkValidKiSubst subst [ki] $
+  | otherwise = checkValidKvSubst subst [ki] $
                 subst_ki subst ki
 
-substMonoKi :: HasDebugCallStack => Subst -> MonoKind -> MonoKind
+substMonoKi
+  :: (HasDebugCallStack, IsVar kv)
+  => KvSubst kv -> MonoKind kv -> MonoKind kv
 substMonoKi subst ki
   | isEmptyKvSubst subst = ki
-  | otherwise = checkValidMonoKiSubst subst [ki] $
+  | otherwise = checkValidMonoKvSubst subst [ki] $
                 subst_mono_ki subst ki
 
-substMonoKis :: HasDebugCallStack => Subst -> [MonoKind] -> [MonoKind]
+substMonoKis
+  :: (HasDebugCallStack, IsVar kv)
+  => KvSubst kv -> [MonoKind kv] -> [MonoKind kv]
 substMonoKis subst kis
   | isEmptyKvSubst subst = kis
-  | otherwise = checkValidMonoKiSubst subst kis $ map (subst_mono_ki subst) kis
+  | otherwise = checkValidMonoKvSubst subst kis $ map (subst_mono_ki subst) kis
 
-substKiUnchecked :: Subst -> Kind -> Kind
+substKiUnchecked :: IsVar kv => KvSubst kv -> Kind kv -> Kind kv
 substKiUnchecked subst ki
   | isEmptyKvSubst subst = ki
   | otherwise = subst_ki subst ki
 
-substMonoKiUnchecked :: Subst -> MonoKind -> MonoKind
+substMonoKiUnchecked :: IsVar kv => KvSubst kv -> MonoKind kv -> MonoKind kv
 substMonoKiUnchecked subst ki
   | isEmptyKvSubst subst = ki
   | otherwise = subst_mono_ki subst ki
 
-subst_ki :: Subst -> Kind -> Kind
+subst_ki :: IsVar kv => KvSubst kv -> Kind kv -> Kind kv
 subst_ki subst ki = go ki
   where
     go (Mono ki) = Mono $! subst_mono_ki subst ki
     go (ForAllKi kv ki) = case substKiVarBndrUnchecked subst kv of
                             (subst', kv') -> (ForAllKi $! kv') $! (subst_ki subst' ki)
 
-subst_mono_ki :: Subst -> MonoKind -> MonoKind
+subst_mono_ki :: IsVar kv => KvSubst kv -> MonoKind kv -> MonoKind kv
 subst_mono_ki subst ki = go ki
   where
     go (KiVarKi kv) = substKiVar subst kv
@@ -170,26 +171,25 @@ subst_mono_ki subst ki = go ki
         in ki { fk_arg = arg', fk_res = res' }
     go ki@(KiConApp kc kis) = (mkKiConApp $! kc) $! strictMap go kis
 
-substKiVar :: Subst -> KindVar -> MonoKind
-substKiVar (Subst _ _ _ kenv) kv
-  = assert (isKiVar kv) $
-    case lookupVarEnv kenv kv of
+substKiVar :: IsVar kv => KvSubst kv -> kv -> MonoKind kv
+substKiVar (KvSubst _ kenv) kv
+  = case lookupVarEnv kenv kv of
       Just ki -> ki
       Nothing -> KiVarKi kv
 
-substKiVarBndrUnchecked :: Subst -> KindVar -> (Subst, KindVar)
+substKiVarBndrUnchecked :: IsVar kv => KvSubst kv -> kv -> (KvSubst kv, kv)
 substKiVarBndrUnchecked = substKiVarBndrUsing substKiUnchecked
 
-substKiVarBndrUsing :: (Subst -> Kind -> Kind) -> Subst -> KindVar -> (Subst, KindVar)
-substKiVarBndrUsing subst_fn subst@(Subst in_scope idenv tenv kenv) old_var
+substKiVarBndrUsing
+  :: IsVar kv => (KvSubst kv -> Kind kv -> Kind kv) -> KvSubst kv -> kv -> (KvSubst kv, kv)
+substKiVarBndrUsing subst_fn subst@(KvSubst in_scope kenv) old_var
   = assertPpr _no_capture (ppr old_var $$ ppr new_var $$ ppr subst)
-    $ assert (isKiVar old_var)
-    (Subst (in_scope `extendInScopeSet` new_var) idenv tenv new_env, new_var)
+    (KvSubst (in_scope `extendInScopeSet` new_var) new_env, new_var)
   where
     new_env | no_change = delVarEnv kenv old_var
             | otherwise = extendVarEnv kenv old_var (KiVarKi new_var)
 
-    _no_capture = not (new_var `elemVarSet` shallowKiVarsOfMonoKiVarEnv kenv)
+    _no_capture = not (new_var `elemVarSet` varsOfMonoKiVarEnv kenv)
 
     no_change = new_var == old_var
 
