@@ -42,8 +42,8 @@ emptyTvSubstEnv = emptyVarEnv
 emptyTvSubst :: TvSubst tv kv
 emptyTvSubst = TvSubst emptyInScopeSet emptyVarEnv emptyKvSubst
 
-mkEmptyTvSubst :: InScopeSet tv -> TvSubst tv kv
-mkEmptyTvSubst in_scope = TvSubst in_scope emptyVarEnv emptyKvSubst
+mkEmptyTvSubst :: (InScopeSet tv, InScopeSet kv) -> TvSubst tv kv
+mkEmptyTvSubst (in_scope, k_in_scope) = TvSubst in_scope emptyVarEnv (mkEmptyKvSubst k_in_scope)
 
 isEmptyTvSubst :: TvSubst tv kv -> Bool
 isEmptyTvSubst (TvSubst _ tv_env _) = isEmptyVarEnv tv_env
