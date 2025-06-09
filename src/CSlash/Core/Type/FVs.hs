@@ -43,18 +43,24 @@ runTyKiVars f = appEndo f (emptyVarSet, emptyVarSet)
 *                                                                      *
 ********************************************************************* -}
 
+varsOfType :: VarHasKind tv kv => Type tv kv -> (MkVarSet tv, MkVarSet kv)
+varsOfType ty = runTyKiVars (deep_ty ty)
+
+varsOfTypes :: VarHasKind tv kv => [Type tv kv] -> (MkVarSet tv, MkVarSet kv)
+varsOfTypes tys = runTyKiVars (deep_tys tys)
+
 deep_ty
-  :: (Outputable tv, Outputable kv, Uniquable tv, Uniquable kv, VarHasKind tv kv)
+  :: VarHasKind tv kv
   => Type tv kv -> Endo (MkVarSet tv, MkVarSet kv)
 deep_ty = fst $ foldType deepTvFolder (emptyVarSet, emptyVarSet)
 
 deep_tys
-  :: (Outputable tv, Outputable kv, Uniquable tv, Uniquable kv, VarHasKind tv kv)
+  :: VarHasKind tv kv
   => [Type tv kv] -> Endo (MkVarSet tv, MkVarSet kv)
 deep_tys = snd $ foldType deepTvFolder (emptyVarSet, emptyVarSet)
 
 deepTvFolder
-  :: (Outputable tv, Outputable kv, Uniquable tv, Uniquable kv, VarHasKind tv kv)
+  :: VarHasKind tv kv
   => TypeFolder tv kv (MkVarSet tv, MkVarSet kv) (MkVarSet kv) (Endo (MkVarSet tv, MkVarSet kv))
 deepTvFolder = TypeFolder { tf_view = noView
                           , tf_tyvar = do_tv
@@ -85,22 +91,22 @@ deepTvFolder = TypeFolder { tf_view = noView
 ********************************************************************* -}
 
 shallowVarsOfTypes
-  :: (IsVar tv, IsVar kv, VarHasKind tv kv)
+  :: VarHasKind tv kv
   => [Type tv kv] -> (MkVarSet tv, MkVarSet kv)
 shallowVarsOfTypes tys = runTyKiVars (shallow_tys tys)
 
 shallowVarsOfTyVarEnv
-  :: (IsVar tv, IsVar kv, VarHasKind tv kv)
+  :: VarHasKind tv kv
   => MkVarEnv tv (Type tv kv) -> (MkVarSet tv, MkVarSet kv)
 shallowVarsOfTyVarEnv tys = shallowVarsOfTypes (nonDetEltsUFM tys)
 
 shallow_ty
-  :: (Outputable tv, Outputable kv, Uniquable tv, Uniquable kv, VarHasKind tv kv)
+  :: VarHasKind tv kv
   => Type tv kv -> Endo (MkVarSet tv, MkVarSet kv)
 shallow_ty = fst $ foldType shallowTvFolder (emptyVarSet, emptyVarSet)
 
 shallow_tys
-  :: (Outputable tv, Outputable kv, Uniquable tv, Uniquable kv, VarHasKind tv kv)
+  :: VarHasKind tv kv
   => [Type tv kv] -> Endo (MkVarSet tv, MkVarSet kv)
 shallow_tys = snd $ foldType shallowTvFolder (emptyVarSet, emptyVarSet)
 
@@ -139,7 +145,7 @@ liftKiFV kfv f (tis, kis) (taccl, taccs, kaccl, kaccs)
       (kaccl, kaccs) -> (taccl, taccs, kaccl, kaccs)
 
 fvsOfType
-  :: (Outputable tv, Outputable kv, Uniquable tv, Uniquable kv, VarHasKind tv kv)
+  :: VarHasKind tv kv
   => Type tv kv -> TyFV tv kv
 
 fvsOfType (TyVarTy v) f (bound_vars, bks) acc@(acc_list, acc_set, kl, ks)
@@ -167,22 +173,22 @@ fvsOfType (TyLamTy v ty) f bound_vars acc
 fvsOfType other _ _ _  = pprPanic "fvsOfType" (ppr other)
 
 fvsBndr
-  :: (Uniquable tv, Uniquable kv, VarHasKind tv kv)
+  :: VarHasKind tv kv
   => ForAllBinder tv -> TyFV tv kv -> TyFV tv kv
 fvsBndr (Bndr tv _) fvs = fvsVarBndr tv fvs
 
 fvsVarBndrs
-  :: (Uniquable tv, Uniquable kv, VarHasKind tv kv)
+  :: VarHasKind tv kv
   => [tv] -> TyFV tv kv -> TyFV tv kv
 fvsVarBndrs vars fvs = foldr fvsVarBndr fvs vars
 
 fvsVarBndr
-  :: (Uniquable tv, Uniquable kv, VarHasKind tv kv)
+  :: VarHasKind tv kv
   => tv -> TyFV tv kv -> TyFV tv kv
 fvsVarBndr var fvs = liftKiFV (fvsOfMonoKind (varKind var)) `unionFV` delFV (Left var) fvs
 
 fvsOfTypes
-  :: (Outputable tv, Outputable kv, Uniquable tv, Uniquable kv, VarHasKind tv kv)
+  :: VarHasKind tv kv
   => [Type tv kv] -> TyFV tv kv
 fvsOfTypes [] fv_cand in_scope acc = emptyFV fv_cand in_scope acc
 fvsOfTypes (ty:tys) fv_cand in_scope acc
@@ -195,7 +201,7 @@ fvsOfTypes (ty:tys) fv_cand in_scope acc
 ********************************************************************* -}
 
 tyConsOfType
-  :: (Outputable tv, Outputable kv)
+  :: VarHasKind tv kv
   => Type tv kv -> UniqSet (TyCon tv kv)
 tyConsOfType ty = go ty
   where
@@ -212,6 +218,6 @@ tyConsOfType ty = go ty
     go_tc tc = unitUniqSet tc
 
 tyConsOfTypes
-  :: (Outputable tv, Outputable kv)
+  :: VarHasKind tv kv
   => [Type tv kv] -> UniqSet (TyCon tv kv)
 tyConsOfTypes tys = foldr (unionUniqSets . tyConsOfType) emptyUniqSet tys
