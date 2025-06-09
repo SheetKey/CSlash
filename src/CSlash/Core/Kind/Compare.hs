@@ -1,4 +1,3 @@
-{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE MagicHash #-}
 
@@ -20,7 +19,7 @@ import CSlash.Utils.Outputable
 import CSlash.Utils.Misc
 import CSlash.Utils.Panic
 
-import GHC.Base (reallyUnsafePtrEquality#, Void)
+import GHC.Base (reallyUnsafePtrEquality#)
 
 import qualified Data.Semigroup as S
 
@@ -38,7 +37,7 @@ tcEqMonoKind = eqMonoKind
 
 initRnEnv :: VarHasUnique kv => Kind kv -> Kind kv -> RnEnv2 kv
 initRnEnv ka kb = mkRnEnv2 $ mkInScopeSet $
-                  varsOfKind @Void ka `unionVarSet` varsOfKind @Void kb
+                  varsOfKind ka `unionVarSet` varsOfKind kb
 
 eqKind :: (HasCallStack, Eq kv, VarHasUnique kv) => Kind kv -> Kind kv -> Bool
 eqKind ka kb = eq_kind ka kb
