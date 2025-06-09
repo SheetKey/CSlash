@@ -1,8 +1,12 @@
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+
 module CSlash.Types.Var
   ( Var, VarBndr
   , Id
   , TyVar, TcTyVar, AnyTyVar
   , KiVar, TcKiVar, AnyKiVar
+  , VarHasKind
   ) where
 
 import {-# SOURCE #-} CSlash.Types.Name
@@ -18,3 +22,5 @@ newtype AnyTyVar kv = AnyTyVar (Var Void kv)
 newtype KiVar = KiVar (Var Void Void)
 newtype TcKiVar = TcKiVar (Var Void Void)
 newtype AnyKiVar = AnyKiVar (Var Void Void)
+
+class VarHasKind v kv | v -> kv

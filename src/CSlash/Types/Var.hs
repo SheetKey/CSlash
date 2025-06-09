@@ -1,3 +1,4 @@
+{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -154,7 +155,30 @@ data ExportFlag
   = NotExported
   | Exported
 
-instance (Outputable tv, Outputable kv) => Outputable (Var tv kv) where
+instance {-# OVERLAPPING #-} Outputable kv => Outputable (Var Void kv) where
+  ppr var = 
+    getPprDebug $ \ debug ->
+    getPprStyle $ \ sty ->
+    let ppr_var = case var of
+          (TyVar' {}) | debug -> brackets (text "tv")
+          (KiVar' {}) | debug -> brackets (text "kv")
+          (TcTyVar' { _tc_tv_details = d })
+            | dumpStyle sty || debug
+            -> brackets (pprTcTyVarDetails d)
+          (TcKiVar' { _tc_kv_details = d })
+            | dumpStyle sty || debug
+            -> brackets (pprTcKiVarDetails d)
+          _ -> empty
+        ppr_tyki = case var of
+          (TyVar' { _varKind = ki }) -> char ' ' <> colon <+> ppr ki
+          (TcTyVar' { _varKind = ki }) -> char ' ' <> colon <+> ppr ki
+          _ -> empty
+
+    in if debug
+       then parens (ppr (_varName var) <+> ppr_var <> ppr_tyki)
+       else ppr (_varName var) <> ppr_var
+    
+instance VarHasKind tv kv => Outputable (Var tv kv) where
   ppr var = 
     getPprDebug $ \ debug ->
     getPprStyle $ \ sty ->
@@ -525,10 +549,12 @@ instance FromTcKiVar AnyKiVar where
 ********************************************************************* -}
 
 newtype Id tv kv = Id (Var tv kv)
-  deriving ( Outputable, NamedThing, Uniquable, Eq, Ord, Data, HasOccName
+  deriving ( NamedThing, Uniquable, Eq, Ord, Data, HasOccName
            , VarHasName, VarHasUnique)
+
+deriving instance VarHasKind tv kv => Outputable (Id tv kv)
     
-instance (Outputable tv, Outputable kv) => VarHasType (Id tv kv) tv kv where
+instance VarHasKind tv kv => VarHasType (Id tv kv) tv kv where
   varType (Id (Id' { _varType = ty })) = ty
   varType other = pprPanic "Bad Id" (ppr other)
 

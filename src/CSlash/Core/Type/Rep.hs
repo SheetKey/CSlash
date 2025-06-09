@@ -47,7 +47,7 @@ data Type tv kv
   | KindCoercion (KindCoercion tv kv) -- embed a kind coercion (evidence stuff)
   deriving Data.Data
 
-instance (Outputable tv, Outputable kv) => Outputable (Type tv kv) where
+instance VarHasKind tv kv => Outputable (Type tv kv) where
   ppr = pprType
 
 type KnotTied ty = ty

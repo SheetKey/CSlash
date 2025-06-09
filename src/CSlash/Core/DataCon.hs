@@ -52,7 +52,7 @@ data DataCon tv kv = MkData
   , dcTag :: ConTag
   , dcId :: Id tv kv
   , dcArity :: Arity
-  , dcTyCon :: TyCon
+  , dcTyCon :: TyCon tv kv
   , dcType :: Type tv kv
   , dcInfix :: Bool
   }
@@ -80,7 +80,7 @@ instance OutputableBndr (DataCon tv kv) where
   pprInfixOcc con = pprInfixName (dataConName con)
   pprPrefixOcc con = pprPrefixName (dataConName con)
 
-instance Data.Data (DataCon tv kv) where
+instance (Data.Typeable tv, Data.Typeable kv) => Data.Data (DataCon tv kv) where
   toConstr _   = abstractConstr "DataCon"
   gunfold _ _  = error "gunfold"
   dataTypeOf _ = mkNoRepType "DataCon"
@@ -94,7 +94,7 @@ instance Data.Data (DataCon tv kv) where
 mkDataCon
   :: Name
   -> Bool
-  -> KnotTied TyCon
+  -> KnotTied (TyCon tv kv)
   -> ConTag
   -> Id tv kv
   -> Type tv kv
@@ -113,7 +113,7 @@ mkDataCon name declared_infix tycon tag id ty arity
                  , dcArity = arity
                  }
 
-mkDataConTy :: TyCon -> Arity -> Type tv kv
+mkDataConTy :: TyCon tv kv -> Arity -> Type tv kv
 mkDataConTy tycon arity = panic "dc_type"
   -- where
   --   fun_kind_vars = mkTemplateFunKindVars arity
@@ -182,7 +182,7 @@ mkDataConTy tycon arity = panic "dc_type"
 dataConName :: DataCon tv kv -> Name
 dataConName = dcName
 
-dataConTyCon :: DataCon tv kv -> TyCon
+dataConTyCon :: DataCon tv kv -> TyCon tv kv
 dataConTyCon = dcTyCon
 
 dataConType :: DataCon tv kv -> Type tv kv

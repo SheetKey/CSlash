@@ -3,7 +3,8 @@ module CSlash.Core.Type.Ppr where
 -- import {-# SOURCE #-} CSlash.Types.Var (TypeVar)
 import {-# SOURCE #-} CSlash.Core.Type.Rep (Type)
 import CSlash.Utils.Outputable (Outputable, SDoc)
+import {-# SOURCE #-} CSlash.Types.Var (VarHasKind)
 
-pprType :: (Outputable tv, Outputable kv) => Type tv kv -> SDoc
+pprType :: VarHasKind tv kv => Type tv kv -> SDoc
 
-pprTyVar :: Outputable tv => tv -> SDoc
+pprTyVar :: VarHasKind tv kv => tv -> SDoc
