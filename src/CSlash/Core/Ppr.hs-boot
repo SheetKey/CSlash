@@ -6,4 +6,4 @@ import CSlash.Utils.Outputable (OutputableBndr, Outputable)
 
 instance OutputableBndr b => Outputable (Expr b)
 
-instance OutputableBndr Var
+instance OutputableBndr (Var tv kv)
