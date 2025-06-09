@@ -10,4 +10,4 @@ mkAppTy :: Type tv kv -> Type tv kv -> Type tv kv
 
 mkTyConApp :: TyCon tv kv -> [Type tv kv] -> Type tv kv
 
-mkCastTy :: Type tv kv -> KindCoercion kv kcv -> Type tv kv
+mkCastTy :: Type tv kv -> KindCoercion tv kv -> Type tv kv
