@@ -19,8 +19,8 @@ import CSlash.Utils.Panic
 
 data TyThing tv kv
   = AnId (Id tv kv)
-  | AConLike ConLike
-  | ATyCon TyCon tv kv
+  | AConLike (ConLike tv kv)
+  | ATyCon (TyCon tv kv)
 
 -- Wire-in TyThing
 type WITyThing = TyThing (TyVar KiVar) KiVar
@@ -28,7 +28,7 @@ type WITyThing = TyThing (TyVar KiVar) KiVar
 instance (Outputable tv, Outputable kv) => Outputable (TyThing tv kv) where
   ppr = pprShortTyThing
 
-instance NamedThing (TyThing tv, kv) where
+instance NamedThing (TyThing tv kv) where
   getName (AnId id) = getName id
   getName (ATyCon tc) = getName tc
   getName (AConLike cl) = conLikeName cl
@@ -63,4 +63,4 @@ tyThingGREInfo :: TyThing tv kv -> GREInfo
 tyThingGREInfo = \case
   AConLike con -> IAmConLike $ conLikeConInfo con
   AnId _ -> Vanilla
-  ATyCon tc -> IAmTyCon (fmap tyConName $ tyConFlavor tc)               
+  ATyCon tc -> IAmTyCon $ tyConFlavor tc

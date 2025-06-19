@@ -121,6 +121,9 @@ Similarly: type g = \x y -> \z -> (x, y, z)
   - arity: 2
 -}
 
+type TcTyCon = TyCon (TcTyVar TcKiVar) TcKiVar
+type AnyTyCon = TyCon (AnyTyVar AnyKiVar) AnyKiVar
+
 data TyCon tv kv = TyCon
   { tyConUnique :: !Unique
   , tyConName :: !Name
@@ -129,6 +132,9 @@ data TyCon tv kv = TyCon
   , tyConNullaryTy :: Type tv kv
   , tyConDetails :: !(TyConDetails tv kv)
   }
+
+instance AsAnyTy TyCon where
+  asAnyTy = undefined
 
 data TyConDetails tv kv
   = AlgTyCon
@@ -256,12 +262,12 @@ mkSumTyCon name kind arity cons parent
 
 mkTcTyCon
   :: Name
-  -> Kind TcKiVar
+  -> Kind AnyKiVar
   -> Arity
-  -> [(Name, TcKiVar)]
+  -> [(Name, AnyKiVar)]
   -> Bool
   -> TyConFlavor 
-  -> TyCon tv TcKiVar
+  -> TyCon tv AnyKiVar
 mkTcTyCon name full_kind arity scoped_kvs poly flav
   = mkTyCon name full_kind arity
     $ TcTyCon { tctc_scoped_kvs = scoped_kvs

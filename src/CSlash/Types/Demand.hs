@@ -180,7 +180,7 @@ defaultFvDmd Diverges = botDmd
 ********************************************************************* -}
 
 data DmdEnv = DE
-  { de_fvs :: !(VarEnv Demand)
+  { de_fvs :: !(MkVarEnv (Id (TyVar KiVar) KiVar) Demand)
   , de_div :: !Divergence
   }
 

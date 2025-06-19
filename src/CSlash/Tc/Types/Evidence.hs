@@ -41,7 +41,7 @@ import CSlash.Types.Unique.Set
 
 import qualified Data.Semigroup as S
 
-maybeSymCo :: SwapFlag -> KindCoercion -> KindCoercion
+maybeSymCo :: SwapFlag -> KindCoercion tv kv -> KindCoercion tv kv
 maybeSymCo IsSwapped co = mkSymKiCo co
 maybeSymCo NotSwapped co = co
 
@@ -59,18 +59,18 @@ data KiEvBindsVar
   = KiEvBindsVar
     { kebv_uniq :: Unique
     , kebv_binds :: IORef KiEvBindMap
-    , kebv_kcvs :: IORef KiCoVarSet
+    , kebv_kcvs :: IORef (MkVarSet (TcKiCoVar TcKiVar))
     }
   | KiCoEvBindsVar
     { kebv_uniq :: Unique
-    , kebv_kcvs :: IORef KiCoVarSet
+    , kebv_kcvs :: IORef (MkVarSet (TcKiCoVar TcKiVar))
     }
 
 isKiCoEvBindsVar :: KiEvBindsVar -> Bool 
 isKiCoEvBindsVar (KiCoEvBindsVar {}) = True
 isKiCoEvBindsVar (KiEvBindsVar {}) = False
 
-newtype KiEvBindMap = KiEvBindMap { kev_bind_varenv :: DVarEnv KiEvBind }
+newtype KiEvBindMap = KiEvBindMap { kev_bind_varenv :: MkDVarEnv (TcKiCoVar TcKiVar) KiEvBind }
 
 emptyKiEvBindMap :: KiEvBindMap
 emptyKiEvBindMap = KiEvBindMap emptyDVarEnv
@@ -85,7 +85,7 @@ extendKiEvBinds bs kev_bind
 isEmptyKiEvBindMap :: KiEvBindMap -> Bool
 isEmptyKiEvBindMap (KiEvBindMap m) = isEmptyDVarEnv m
 
-lookupKiEvBind :: KiEvBindMap -> KiEvVar -> Maybe KiEvBind
+lookupKiEvBind :: KiEvBindMap -> TcKiEvVar TcKiVar -> Maybe KiEvBind
 lookupKiEvBind bs = lookupDVarEnv (kev_bind_varenv bs)
 
 kiEvBindMapBinds :: KiEvBindMap -> Bag KiEvBind
@@ -101,25 +101,25 @@ filterKiEvBindMap :: (KiEvBind -> Bool) -> KiEvBindMap -> KiEvBindMap
 filterKiEvBindMap k (KiEvBindMap { kev_bind_varenv = env })
   = KiEvBindMap { kev_bind_varenv = filterDVarEnv k env }
 
-varSetMinusKiEvBindMap :: VarSet -> KiEvBindMap -> VarSet
+varSetMinusKiEvBindMap :: MkVarSet (TcKiCoVar TcKiVar) -> KiEvBindMap -> MkVarSet (TcKiCoVar TcKiVar)
 varSetMinusKiEvBindMap vs (KiEvBindMap dve) = vs `uniqSetMinusUDFM` dve
 
 instance Outputable KiEvBindMap where
   ppr (KiEvBindMap m) = ppr m
 
 data KiEvBind = KiEvBind
-  { keb_lhs :: KiEvVar
-  , keb_rhs :: KiEvType
+  { keb_lhs :: TcKiEvVar TcKiVar
+  , keb_rhs :: KiEvType (TcTyVar TcKiVar) TcKiVar
   , keb_info :: KiEvBindInfo
   }
 
-kiEvBindVar :: KiEvBind -> KiEvVar
+kiEvBindVar :: KiEvBind -> TcKiEvVar TcKiVar
 kiEvBindVar = keb_lhs
 
-mkWantedKiEvBind :: KiEvVar -> Bool -> KiEvType -> KiEvBind
+mkWantedKiEvBind :: TcKiEvVar TcKiVar -> Bool -> KiEvType (TcTyVar TcKiVar) TcKiVar -> KiEvBind
 mkWantedKiEvBind ev c tm = KiEvBind { keb_info = KiEvBindWanted c, keb_lhs = ev, keb_rhs = tm }
 
-mkGivenKiEvBind :: KiEvVar -> KiEvType -> KiEvBind
+mkGivenKiEvBind :: TcKiEvVar TcKiVar -> KiEvType (TcTyVar TcKiVar) TcKiVar -> KiEvBind
 mkGivenKiEvBind ev tm = KiEvBind { keb_info = KiEvBindGiven, keb_lhs = ev, keb_rhs = tm }
 
 data KiEvBindInfo
@@ -128,14 +128,16 @@ data KiEvBindInfo
 
 -- 'EvTerm' in GHC
 type KiEvType = Type
+type AnyKiEvType = Type (AnyTyVar AnyKiVar) AnyKiVar
+type TcKiEvType = Type (TcTyVar TcKiVar) TcKiVar
 
-kiEvVar :: KiEvVar -> KiEvType
+kiEvVar :: AnyKiEvVar AnyKiVar -> AnyKiEvType
 kiEvVar = TyVarTy
 
-kiEvCoercion :: KindCoercion -> KiEvType 
+kiEvCoercion :: KindCoercion (TcTyVar TcKiVar) TcKiVar -> KiEvType (TcTyVar TcKiVar) TcKiVar 
 kiEvCoercion co = KindCoercion co
 
-kiEvCast :: KiEvType -> KindCoercion -> KiEvType
+kiEvCast :: KiEvType (TcTyVar TcKiVar) TcKiVar -> KindCoercion (TcTyVar TcKiVar) TcKiVar -> KiEvType (TcTyVar TcKiVar) TcKiVar
 kiEvCast et co
   | isReflKiCo co = et
   | otherwise = CastTy et co
@@ -146,7 +148,7 @@ kiEvCast et co
 *                                                                      *
 ********************************************************************* -}
 
-mkKiEvCast :: KiEvType -> KindCoercion -> KiEvType
+mkKiEvCast :: KiEvType (TcTyVar TcKiVar) TcKiVar -> KindCoercion (TcTyVar TcKiVar) TcKiVar -> KiEvType (TcTyVar TcKiVar) TcKiVar
 mkKiEvCast ev lco
   | isReflKiCo lco = ev
   | otherwise = kiEvCast ev lco
@@ -154,7 +156,7 @@ mkKiEvCast ev lco
 emptyTcKiEvBinds :: TcKiEvBinds
 emptyTcKiEvBinds = KiEvBinds emptyBag
 
-kiEvTypeCoercion_maybe :: KiEvType -> Maybe KindCoercion
+kiEvTypeCoercion_maybe :: KiEvType (TcTyVar TcKiVar) TcKiVar -> Maybe (KindCoercion (TcTyVar TcKiVar) TcKiVar)
 kiEvTypeCoercion_maybe ev_ty = go ev_ty
   where
     go (TyVarTy v) = return $ mkKiCoVarCo v
@@ -168,7 +170,7 @@ kiEvTypeCoercion_maybe ev_ty = go ev_ty
 *                                                                      *
 ********************************************************************* -}
 
-findNeededKiEvVars :: KiEvBindMap -> VarSet -> VarSet
+findNeededKiEvVars :: KiEvBindMap -> MkVarSet (TcKiEvVar TcKiVar) -> MkVarSet (TcKiEvVar TcKiVar)
 findNeededKiEvVars ev_binds seeds = transCloVarSet also_needs seeds
   where
     also_needs needs = nonDetStrictFoldUniqSet add emptyVarSet needs
@@ -180,8 +182,11 @@ findNeededKiEvVars ev_binds seeds = transCloVarSet also_needs seeds
       | otherwise
       = needs
 
-kiEvVarsOfType :: KiEvType -> VarSet
-kiEvVarsOfType = typeSomeFreeVars isKiEvVar
+kiEvVarsOfType :: KiEvType (TcTyVar TcKiVar) TcKiVar -> MkVarSet (TcKiEvVar TcKiVar)
+kiEvVarsOfType = fst . typeSomeFreeVars fv_cand
+  where
+    fv_cand (Left tv) = isKiEvVarKind $ varKind tv
+    fv_cand (Right _) = False
 
 {- *********************************************************************
 *                                                                      *

@@ -15,6 +15,7 @@ import CSlash.Types.Name
 import CSlash.Types.Name.Reader
 import CSlash.Types.Basic
 import CSlash.Types.SrcLoc
+import CSlash.Types.Var (AnyTyVar, AnyKiVar)
 
 import CSlash.Data.FastString
 
@@ -72,14 +73,14 @@ pprUserTypeCtxt (TySynKindCtxt n) = text "the kind annotation on the declaration
 data SkolemInfo = SkolemInfo Unique SkolemInfoAnon
 
 data SkolemInfoAnon
-  = SigSkol UserTypeCtxt TcType [(Name, TcTyVar)]
+  = SigSkol UserTypeCtxt AnyType [(Name, AnyTyVar AnyKiVar)]
   | SigTypeSkol UserTypeCtxt
   | ForAllSkol TyVarBndrs
   | TyLamTySkol [Name]
-  | InferSkol [(Name, TcType)]
+  | InferSkol [(Name, AnyType)]
   | InferKindSkol
-  | UnifyForAllSkol TcType
-  | TyConSkol (TyConFlavor TyCon) Name
+  | UnifyForAllSkol AnyType
+  | TyConSkol TyConFlavor Name
   | UnkSkol CallStack
 
 unkSkol :: HasDebugCallStack => SkolemInfo
@@ -116,7 +117,7 @@ pprSkolInfo (TyConSkol flav name) = text "the" <+> ppr flav
                                     <+> text "declaration for" <+> quotes (ppr name)
 pprSkolInfo (UnkSkol cs) = text "UnkSkol (please report this as a bug)" $$ prettyCallStackDoc cs
 
-pprSigSkolInfo :: UserTypeCtxt -> TcType -> SDoc
+pprSigSkolInfo :: UserTypeCtxt -> AnyType -> SDoc
 pprSigSkolInfo ctxt ty = case ctxt of
   FunSigCtxt f _ -> vcat [ text "the type signature for:"
                          , nest 2 (pprPrefixOcc f <+> colon <+> ppr ty) ]
@@ -140,8 +141,8 @@ instance Outputable TyVarBndrs where
 data CtOrigin
   = GivenOrigin SkolemInfoAnon
   | OccurrenceOf Name
-  | KindEqOrigin { keq_actual :: TcMonoKind
-                 , keq_expected :: TcMonoKind
+  | KindEqOrigin { keq_actual :: AnyMonoKind
+                 , keq_expected :: AnyMonoKind
                  , keq_thing :: Maybe KindedThing
                  , keq_visible :: Bool
                  }

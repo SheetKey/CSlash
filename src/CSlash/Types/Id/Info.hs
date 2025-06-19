@@ -5,6 +5,8 @@ module CSlash.Types.Id.Info where
 import Prelude hiding ((<>))
 
 import CSlash.Core
+import CSlash.Core.Type
+import CSlash.Core.Kind
 import CSlash.Types.Name
 import CSlash.Types.Basic
 import CSlash.Core.DataCon
@@ -17,16 +19,16 @@ import Data.Data ( Data )
 import Data.Word
 import Data.Bits
 
-data IdDetails
+data IdDetails tv kv
   = VanillaId
-  | DataConId DataCon
+  | DataConId (DataCon tv kv)
   | TickBoxOpId TickBoxOp
   | JoinId JoinArity
 
-instance Outputable IdDetails where
+instance Outputable (IdDetails tv kv) where
   ppr = pprIdDetails
 
-pprIdDetails :: IdDetails -> SDoc
+pprIdDetails :: IdDetails tv kv -> SDoc
 pprIdDetails VanillaId = empty
 pprIdDetails other = brackets (pp other)
   where
@@ -220,7 +222,7 @@ data LambdaFormInfo
     !Bool
     !ArgDescr
   | LFCon
-    !DataCon
+    !(DataCon (TyVar KiVar) KiVar)
   | LFUnknown
     !Bool
 

@@ -7,12 +7,13 @@ import {-# SOURCE #-} CSlash.Core.DataCon (DataCon)
 
 import CSlash.Types.Basic (Arity, ConTag)
 import {-# SOURCE #-} CSlash.Types.Name (Name)
+import {-# SOURCE #-} CSlash.Types.Var (TyVar, KiVar)
 
 tupleTyConName :: Arity -> Name
 tupleDataConName :: Arity -> Name
 
-tupleDataCon :: Arity -> DataCon tv kv
-tupleTyCon :: Arity -> TyCon tv kv
+tupleDataCon :: Arity -> DataCon (TyVar KiVar) KiVar
+tupleTyCon :: Arity -> TyCon (TyVar KiVar) KiVar
 
-sumDataCon :: ConTag -> Arity -> DataCon tv kv
-sumTyCon :: Arity -> TyCon tv kv
+sumDataCon :: ConTag -> Arity -> DataCon (TyVar KiVar) KiVar
+sumTyCon :: Arity -> TyCon (TyVar KiVar) KiVar

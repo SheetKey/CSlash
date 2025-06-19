@@ -43,6 +43,7 @@ import CSlash.Types.Error (CsHint(..))
 import CSlash.Types.Fixity
 import CSlash.Types.SourceText
 import CSlash.Types.PkgQual
+import CSlash.Types.Var (TyVar, KiVar)
 
 import CSlash.Core.DataCon (DataCon, dataConName)
 
@@ -1009,7 +1010,7 @@ a_qconsym :: { LocatedN RdrName }
 syscon :: { LocatedN RdrName }
   : sysdcon { L (getLoc $1) $ nameRdrName (dataConName (unLoc $1)) }
 
-sysdcon :: { LocatedN DataCon }
+sysdcon :: { LocatedN (DataCon (TyVar KiVar) KiVar) }
   : '(' commas ')' {% amsr (sLL $1 $> $ tupleDataCon (snd $2 + 1))
                            (NameAnnCommas NameParens (glAA $1)
                               (map srcSpan2e (fst $2)) (glAA $3) []) }

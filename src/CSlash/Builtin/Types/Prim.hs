@@ -33,6 +33,7 @@ import Data.Char
 
 type PTyCon = TyCon PTyVar KiVar
 type PMonoKind = MonoKind KiVar
+type PType = Type PTyVar KiVar
 type PKind = Kind KiVar
 type PTyVar = TyVar KiVar
 

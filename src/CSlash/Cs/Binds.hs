@@ -69,15 +69,15 @@ type family XTCVarBindCs pL pR where
 -- ---------------------------------------------------------------------
 
 data AbsBinds = AbsBinds
-  { abs_tvs :: [TypeVar]
+  { abs_tvs :: [TyVar KiVar]
   , abs_exports :: [ABExport]
   , abs_binds :: LCsBinds Tc
   , abs_sig :: Bool
   }
 
 data ABExport = ABE
-  { abe_poly :: Id
-  , abe_mono :: Id
+  { abe_poly :: Id (TyVar KiVar) KiVar
+  , abe_mono :: Id (TyVar KiVar) KiVar
   }
 
 -- ---------------------------------------------------------------------

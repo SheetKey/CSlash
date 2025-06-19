@@ -29,7 +29,7 @@ import CSlash.Tc.Utils.Env (tcLookup)
 import CSlash.Utils.Outputable
 import CSlash.Driver.DynFlags
 import CSlash.Data.Maybe
-import CSlash.Utils.FV ( fvVarList, fvVarSet, unionFV, mkFVs, FV )
+import CSlash.Utils.FV ( unionFV, mkFVs, FV )
 
 import Control.Arrow ( (&&&) )
 

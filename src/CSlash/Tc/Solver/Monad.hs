@@ -50,7 +50,7 @@ import CSlash.Core.Reduction
 -- import GHC.Core.Class
 import CSlash.Core.TyCon
 
-import CSlash.Types.Name
+import CSlash.Types.Name hiding (varName)
 import CSlash.Types.TyThing
 import CSlash.Types.Name.Reader
 import CSlash.Types.Var
@@ -150,21 +150,21 @@ kickOutRewritable ko_spec new_f = do
                                , text "kicked_out =" <+> ppr kicked_out
                                , text "Residual inerts =" <+> ppr ics' ]
 
-kickOutAfterUnification :: [TcVar] -> TcS ()
+kickOutAfterUnification :: [TcKiVar] -> TcS ()
 kickOutAfterUnification vs
   | null vs
   = return ()
   | otherwise
   = do let v_set = mkVarSet vs
-       kickOutRewritable (KOAfterUnify v_set) Given
+       kickOutRewritable (panic "KOAfterUnify v_set") Given
 
-       let min_v_lvl = foldr1 minTcLevel (map tcVarLevel vs)
+       let min_v_lvl = foldr1 minTcLevel (map varLevel vs)
        ambient_lvl <- getTcLevel
        when (ambient_lvl `strictlyDeeperThan` min_v_lvl)
          $ setUnificationFlag min_v_lvl
        return ()
 
-kickOutAfterFillingCoercionHole :: KindCoercionHole -> TcS ()
+kickOutAfterFillingCoercionHole :: TcKindCoercionHole -> TcS ()
 kickOutAfterFillingCoercionHole hole = do
   ics <- getInertCans
   let (kicked_out, ics') = kick_out ics
@@ -190,7 +190,7 @@ kickOutAfterFillingCoercionHole hole = do
       , CtWanted { ctev_rewriters = RewriterSet rewriters } <- ev
       , NonCanonicalReason ctyeq <- reason
       , ctyeq `ctkerHasProblem` ctkeCoercionHole
-      , hole `elementOfUniqSet` rewriters
+      , panic "hole `elementOfUniqSet` rewriters"
       = True
       | otherwise
       = False
@@ -305,16 +305,16 @@ lookupInInerts :: CtLoc -> TcPredKind -> TcS (Maybe CtEvidence)
 lookupInInerts loc pki
   | RelPred rl k1 k2 <- classifyPredKind pki
   = do inerts <- getInertSet
-       let mb_solved = lookupSolvedRel inerts loc rl k1 k2
-           mb_inert = fmap relCtEvidence (lookupInertRel (inert_cans inerts) loc rl k1 k2)
+       let mb_solved = panic "lookupSolvedRel inerts loc rl k1 k2"
+           mb_inert = fmap relCtEvidence (panic "lookupInertRel (inert_cans inerts) loc rl k1 k2")
        return $ mb_solved `mplus` mb_inert
   | otherwise
   = return Nothing
 
-lookupInertRel :: InertCans -> CtLoc -> KiCon -> MonoKind -> MonoKind -> Maybe RelCt
+lookupInertRel :: InertCans -> CtLoc -> KiCon -> AnyMonoKind -> AnyMonoKind -> Maybe RelCt
 lookupInertRel (IC { inert_rels = rels }) loc kc ki1 ki2 = findRel rels loc kc ki1 ki2
 
-lookupSolvedRel :: InertSet -> CtLoc -> KiCon -> MonoKind -> MonoKind -> Maybe CtEvidence
+lookupSolvedRel :: InertSet -> CtLoc -> KiCon -> AnyMonoKind -> AnyMonoKind -> Maybe CtEvidence
 lookupSolvedRel (IS { inert_solved_rels = solved }) loc kc k1 k2
   = fmap relCtEvidence (findRel solved loc kc k1 k2)
 
@@ -551,7 +551,7 @@ getTcKiEvBindsVar = TcS (return . tcs_ki_ev_binds)
 getTcLevel :: TcS TcLevel
 getTcLevel = wrapTcS TcM.getTcLevel
 
-getTcKiEvKiCoVars :: KiEvBindsVar -> TcS KiCoVarSet
+getTcKiEvKiCoVars :: KiEvBindsVar -> TcS (MkVarSet (TcKiCoVar TcKiVar))
 getTcKiEvKiCoVars ev_binds_var = wrapTcS $ TcM.getTcKiEvKiCoVars ev_binds_var
 
 getTcKiEvBindsMap :: KiEvBindsVar -> TcS KiEvBindMap
@@ -562,7 +562,7 @@ setTcKiEvBindsMap ev_binds_var binds = wrapTcS $ TcM.setTcKiEvBindsMap ev_binds_
 
 unifyKiVar :: TcKiVar -> TcMonoKind -> TcS ()
 unifyKiVar kv ki
-  = assertPpr (isMetaKiVar kv) (ppr kv)
+  = assertPpr (isMetaVar kv) (ppr kv)
     $ TcS $ \env -> do TcM.traceTc "unifyKiVar" (ppr kv <+> text ":=" <+> ppr ki)
                        TcM.liftZonkM $ TcM.writeMetaKiVar kv ki
                        TcM.updTcRef (tcs_unified env) (+1)
@@ -589,7 +589,7 @@ selectNextWorkItem = do
     Just (ct, new_wl) -> do writeTcRef wl_var new_wl
                             return (Just ct)
 
-isFilledMetaKiVar_maybe :: TcKiVar -> TcS (Maybe MonoKind)
+isFilledMetaKiVar_maybe :: TcKiVar -> TcS (Maybe AnyMonoKind)
 isFilledMetaKiVar_maybe kv = wrapTcS (TcM.isFilledMetaKiVar_maybe kv)
 
 {- *********************************************************************
@@ -630,16 +630,16 @@ setUnificationFlag lvl = TcS $ \env -> do
 ********************************************************************* -}
 
 matchGlobalInst
-  :: DynFlags -> Bool -> KiCon -> MonoKind -> MonoKind -> CtLoc -> TcS TcM.RelInstResult
+  :: DynFlags -> Bool -> KiCon -> AnyMonoKind -> AnyMonoKind -> CtLoc -> TcS TcM.RelInstResult
 matchGlobalInst dflags short_cut kc k1 k2 loc
   = wrapTcS $ TcM.setCtLocM loc $ TcM.matchGlobalInst dflags short_cut kc k1 k2
 
 -- Creating and setting evidence variables and CtFlavors
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-data MaybeNew = Fresh CtEvidence | Cached KiEvType
+data MaybeNew = Fresh CtEvidence | Cached AnyKiEvType
 
-getKiEvType :: MaybeNew -> KiEvType
+getKiEvType :: MaybeNew -> AnyKiEvType
 getKiEvType (Fresh ctev) = ctEvType ctev
 getKiEvType (Cached ev) = ev
 
@@ -648,7 +648,7 @@ setKiEvBind ev_bind = do
   ebv <- getTcKiEvBindsVar
   wrapTcS $ TcM.addTcKiEvBind ebv ev_bind
 
-useVars :: KiCoVarSet -> TcS ()
+useVars :: (MkVarSet (TcKiCoVar TcKiVar)) -> TcS ()
 useVars co_vars = do
   ev_binds_var <- getTcKiEvBindsVar
   let ref = kebv_kcvs ev_binds_var
@@ -657,54 +657,54 @@ useVars co_vars = do
     let kcvs' = kcvs `unionVarSet` co_vars
     TcM.writeTcRef ref kcvs'
 
-newKiEvVar :: TcPredKind -> TcS KiEvVar
+newKiEvVar :: TcPredKind -> TcS (TcKiEvVar TcKiVar)
 newKiEvVar pred = wrapTcS (TcM.newKiEvVar pred)
 
-setWantedEq :: TcEvDest -> KindCoercion -> TcS ()
+setWantedEq :: TcEvDest -> TcKindCoercion -> TcS ()
 setWantedEq (HoleDest hole) co = do
-  useVars (coVarsOfKiCo co)
-  fillKiCoercionHole hole co
+  useVars (panic "coVarsOfKiCo co")
+  panic "fillKiCoercionHole hole co"
 setWantedEq (EvVarDest ev) _ = pprPanic "setWantedEq: EvVarDest" (ppr ev)
 
-setWantedKiEvType :: TcEvDest -> Bool -> KiEvType -> TcS ()
+setWantedKiEvType :: TcEvDest -> Bool -> TcKiEvType -> TcS ()
 setWantedKiEvType (HoleDest hole) _ ty
   | Just co <- kiEvTypeCoercion_maybe ty
-  = do useVars (coVarsOfKiCo co)
-       fillKiCoercionHole hole co
+  = do useVars (panic "coVarsOfKiCo co")
+       panic "fillKiCoercionHole hole co"
   | otherwise
   = do let co_var = coHoleCoVar hole
-       setKiEvBind (mkWantedKiEvBind co_var True ty)
-       fillKiCoercionHole hole (mkKiCoVarCo co_var)
+       setKiEvBind (panic "mkWantedKiEvBind co_var True ty")
+       panic "fillKiCoercionHole hole (mkKiCoVarCo co_var)"
 setWantedKiEvType (EvVarDest ev_var) canonical ty
-  = setKiEvBind (mkWantedKiEvBind ev_var canonical ty)
+  = panic "setKiEvBind (mkWantedKiEvBind ev_var canonical ty)"
 
-fillKiCoercionHole :: KindCoercionHole -> KindCoercion -> TcS ()
+fillKiCoercionHole :: TcKindCoercionHole -> TcKindCoercion -> TcS ()
 fillKiCoercionHole hole co = do
   wrapTcS $ TcM.fillKiCoercionHole hole co
   kickOutAfterFillingCoercionHole hole
 
-setKiEvBindIfWanted :: CtEvidence -> Bool -> KiEvType -> TcS ()
+setKiEvBindIfWanted :: CtEvidence -> Bool -> TcKiEvType -> TcS ()
 setKiEvBindIfWanted ev canonical ty = case ev of
   CtWanted { ctev_dest = dest } -> setWantedKiEvType dest canonical ty
   _ -> return ()
 
-newGivenKiEvVar :: CtLoc -> (TcPredKind, KiEvType) -> TcS CtEvidence
+newGivenKiEvVar :: CtLoc -> (TcPredKind, TcKiEvType) -> TcS CtEvidence
 newGivenKiEvVar loc (pred, rhs) = do
   new_ev <- newBoundKiEvVar pred rhs
-  return $ CtGiven { ctev_pred = pred, ctev_evar = new_ev, ctev_loc = loc }
+  return $ panic "CtGiven { ctev_pred = pred, ctev_evar = new_ev, ctev_loc = loc }"
 
-newBoundKiEvVar :: TcPredKind -> KiEvType -> TcS KiEvVar
+newBoundKiEvVar :: TcPredKind -> TcKiEvType -> TcS (TcKiEvVar TcKiVar)
 newBoundKiEvVar pred rhs = do
   new_ev <- newKiEvVar pred
   setKiEvBind (mkGivenKiEvBind new_ev rhs)
   return new_ev
 
 newWantedKiEq
-  :: CtLoc -> RewriterSet -> TcMonoKind -> TcMonoKind -> TcS (CtEvidence, KindCoercion)
+  :: CtLoc -> RewriterSet -> TcMonoKind -> TcMonoKind -> TcS (CtEvidence, TcKindCoercion)
 newWantedKiEq loc rewriters ki1 ki2 = do
   hole <- wrapTcS $ TcM.newKiCoercionHole pki
-  return ( CtWanted { ctev_pred = pki
-                    , ctev_dest = HoleDest hole
+  return ( CtWanted { ctev_pred = panic "pki"
+                    , ctev_dest = panic "HoleDest hole"
                     , ctev_loc = loc
                     , ctev_rewriters = rewriters }
          , mkKiHoleCo hole )
@@ -715,8 +715,8 @@ newWantedKiEvVarNC :: CtLoc -> RewriterSet -> TcPredKind -> TcS CtEvidence
 newWantedKiEvVarNC loc rewriters pki = do
   new_ev <- newKiEvVar pki
   traceTcS "Emitting new wanted" (ppr new_ev <+> colon <+> ppr pki $$ pprCtLoc loc)
-  return $ CtWanted { ctev_pred = pki
-                    , ctev_dest = EvVarDest new_ev
+  return $ CtWanted { ctev_pred = panic "pki"
+                    , ctev_dest = panic "EvVarDest new_ev"
                     , ctev_loc = loc
                     , ctev_rewriters = rewriters }
 
@@ -730,20 +730,20 @@ newWantedKiEvVar loc rewriters pki = assertPpr (not $ isKiEqPred pki)
          Nothing -> do ctev <- newWantedKiEvVarNC loc rewriters pki
                        return $ Fresh ctev
 
-newWanted :: CtLoc -> RewriterSet -> PredKind -> TcS MaybeNew
+newWanted :: CtLoc -> RewriterSet -> TcPredKind -> TcS MaybeNew
 newWanted loc rewriters pki
   | Just (k1, k2) <- getKiEqPredKis_maybe pki
   = Fresh . fst <$> newWantedKiEq loc rewriters k1 k2
   | otherwise
   = newWantedKiEvVar loc rewriters pki  
 
-checkReductionDepth :: CtLoc -> MonoKind -> TcS ()
+checkReductionDepth :: CtLoc -> TcMonoKind -> TcS ()
 checkReductionDepth loc ki = do
   dflags <- getDynFlags
   when (subGoalDepthExceeded (reductionDepth dflags) (ctLocDepth loc))
     $ wrapErrTcS $ solverDepthError loc ki
 
-solverDepthError :: CtLoc -> MonoKind -> TcM a
+solverDepthError :: CtLoc -> TcMonoKind -> TcM a
 solverDepthError loc ki = panic "solverDepthError"
 
 {- *********************************************************************
@@ -752,7 +752,7 @@ solverDepthError loc ki = panic "solverDepthError"
 *                                                                      *
 ********************************************************************* -}
 
-wrapUnifierTcS :: CtEvidence -> (UnifyEnv -> TcM a) -> TcS (a, Bag Ct, [TcVar])
+wrapUnifierTcS :: CtEvidence -> (UnifyEnv -> TcM a) -> TcS (a, Bag Ct, [TcKiVar])
 wrapUnifierTcS ev do_unifications = do
   (res, cts, unified, rewriters) <- wrapUnifierX ev do_unifications
 
@@ -763,7 +763,7 @@ wrapUnifierTcS ev do_unifications = do
 
   return (res, cts, unified)
 
-wrapUnifierX :: CtEvidence -> (UnifyEnv -> TcM a) -> TcS (a, Bag Ct, [TcVar], RewriterSet)
+wrapUnifierX :: CtEvidence -> (UnifyEnv -> TcM a) -> TcS (a, Bag Ct, [TcKiVar], RewriterSet)
 wrapUnifierX ev do_unifications = do
   unif_count_ref <- getUnifiedRef
   wrapTcS $ do
@@ -787,7 +787,7 @@ wrapUnifierX ev do_unifications = do
 
 restoreTyVarCycles :: InertSet -> TcM ()
 restoreTyVarCycles is = TcM.liftZonkM $
-  forAllCycleBreakerBindings_ (inert_cycle_breakers is) TcM.writeMetaTyVar
+  panic "forAllCycleBreakerBindings_ (inert_cycle_breakers is) TcM.writeMetaTyVar"
 
 {- *********************************************************************
 *                                                                      *
@@ -803,7 +803,7 @@ checkTouchableKiVarEq
 checkTouchableKiVarEq ev lhs_kv rhs
   | simpleUnifyCheckKind lhs_kv rhs
   = do traceTcS "checkTouchableKiVarEq: simple-check wins" (ppr lhs_kv $$ ppr rhs)
-       return $ pure $ mkReflRednKi rhs
+       return $ pure $ panic "mkReflRednKi rhs"
   | otherwise
   = do traceTcS "checkTouchableKiVarEq {" (ppr lhs_kv $$ ppr rhs)
        check_result <- wrapTcS $ check_rhs rhs
@@ -812,15 +812,15 @@ checkTouchableKiVarEq ev lhs_kv rhs
          PuFail reason -> return $ PuFail reason
          PuOK _ redn -> return $ pure redn
   where
-    (lhs_kv_info, lhs_kv_lvl) = case tcKiVarDetails lhs_kv of
-      MetaKv { mkv_info = info, mkv_tclvl = lvl } -> (info, lvl)
+    (lhs_kv_info, lhs_kv_lvl) = case tcVarDetails lhs_kv of
+      MetaVar { mv_info = info, mv_tclvl = lvl } -> (info, lvl)
       _ -> pprPanic "checkTouchableKiVarEq" (ppr lhs_kv)
 
     check_rhs rhs = checkKiEqRhs flags rhs
 
     flags = KEF { kef_foralls = False
                 , kef_unifying = UnifyingKi lhs_kv_info lhs_kv_lvl LC_Promote
-                , kef_lhs = KiVarLHS lhs_kv
+                , kef_lhs = panic "KiVarLHS lhs_kv"
                 , kef_occurs = ctkeInsolubleOccurs }
 
 checkKindEq :: CtEvidence -> CanEqLHS -> TcMonoKind -> TcS (PuResult () Reduction)

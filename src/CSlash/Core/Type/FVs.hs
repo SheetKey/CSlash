@@ -137,6 +137,11 @@ shallowTvFolder = TypeFolder { tf_view = noView
 *                                                                      *
 ********************************************************************* -}
 
+-- unionTyKiFV :: TyFV tv kv -> KiFV kv -> TyFV tv kv
+-- unionTyKiFV tyfv kifv f is@(_, bks) (tl, ts, kl, ks)
+--   = case kifv (f . Right) bks $! (kl, ks) of
+--       (kl, ks) -> tyfv f is $! (tl, ts, kl, ks)
+
 type TyFV tv kv = FV (Type tv kv)
 
 liftKiFV :: KiFV kv -> TyFV tv kv
@@ -187,12 +192,36 @@ fvsVarBndr
   => tv -> TyFV tv kv -> TyFV tv kv
 fvsVarBndr var fvs = liftKiFV (fvsOfMonoKind (varKind var)) `unionFV` delFV (Left var) fvs
 
+fvsKiVarBndrs :: VarHasKind tv kv => [kv] -> TyFV tv kv -> TyFV tv kv
+fvsKiVarBndrs vars fvs = foldr fvsKiVarBndr fvs vars
+
+fvsKiVarBndr :: VarHasKind tv kv => kv -> TyFV tv kv -> TyFV tv kv
+fvsKiVarBndr var fvs = delFV (Right var) fvs
+
 fvsOfTypes
   :: VarHasKind tv kv
   => [Type tv kv] -> TyFV tv kv
 fvsOfTypes [] fv_cand in_scope acc = emptyFV fv_cand in_scope acc
 fvsOfTypes (ty:tys) fv_cand in_scope acc
   = (fvsOfType ty `unionFV` fvsOfTypes tys) fv_cand in_scope acc
+
+varsOfTypeDSet :: VarHasKind tv kv => Type tv kv -> (MkDVarSet tv, MkDVarSet kv)
+varsOfTypeDSet ty = case fvVarAcc (fvsOfType ty) of
+  (tvs, _, kvs, _) -> (mkDVarSet tvs, mkDVarSet kvs)
+
+varsOfTypeList :: VarHasKind tv kv => Type tv kv -> ([tv], [kv])
+varsOfTypeList ty = case fvVarAcc (fvsOfType ty) of
+  (tvs, _, kvs, _) -> (tvs, kvs)
+
+varsOfTypesList :: VarHasKind tv kv => [Type tv kv] -> ([tv], [kv])
+varsOfTypesList tys = case fvVarAcc (fvsOfTypes tys) of
+  (tvs, _, kvs, _) -> (tvs, kvs)
+
+typeSomeFreeVars
+  :: VarHasKind tv kv
+  => (Either tv kv -> Bool) -> Type tv kv -> (MkVarSet tv, MkVarSet kv)
+typeSomeFreeVars fv_cand ty = case fvVarAcc (filterFV fv_cand $ fvsOfType ty) of
+  (_, tvs, _, kvs) -> (tvs, kvs)
 
 {- *********************************************************************
 *                                                                      *

@@ -4,6 +4,6 @@ import {-# SOURCE #-} CSlash.Types.Var
 
 data Expr a
 
-type CoreBndr = Var
+type CoreBndr = ()
 
 type CoreExpr = Expr CoreBndr

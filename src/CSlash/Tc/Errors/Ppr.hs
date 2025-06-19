@@ -55,7 +55,7 @@ import CSlash.Types.Basic
 import CSlash.Types.Error.Codes
 import CSlash.Types.Id
 -- import CSlash.Types.Id.Info ( RecSelParent(..) )
-import CSlash.Types.Name
+import CSlash.Types.Name hiding (varName)
 import CSlash.Types.Name.Env
 import CSlash.Types.Name.Set
 import CSlash.Types.SourceFile
@@ -327,7 +327,8 @@ pprTcSolverReportMsg ctxt@(CEC { cec_encl = implics }) (CannotResolveRelation it
 
 pprCannotUnifyKiVariableReason :: SolverReportErrCtxt -> CannotUnifyKiVariableReason -> SDoc
 pprCannotUnifyKiVariableReason ctxt (CannotUnifyWithPolykind item kv1 ki2 mb_kv_info)
-  = vcat [ (if isSkolemKiVar kv1 then text "Cannot equate type variable"
+  = vcat [ (if handleAnyKv (const True) isSkolemVar kv1
+            then text "Cannot equate type variable"
             else text "Cannot instantiate unification variable")
            <+> quotes (ppr kv1)
          , hang (text "with a" <+> what <+> text "involving polykinds:") 2 (ppr ki2)
@@ -341,7 +342,7 @@ pprCannotUnifyKiVariableReason ctxt (OccursCheck ambig_infos)
 pprCannotUnifyKiVariableReason ctxt (DifferentKiVars kv_info)
   = pprKiVarInfo ctxt kv_info
 
-pprUntouchableVariable :: TcKiVar -> Implication -> SDoc
+pprUntouchableVariable :: AnyKiVar -> Implication -> SDoc
 pprUntouchableVariable _ _ = panic "pprUntouchableVariable"
 
 pprMismatchMsg :: SolverReportErrCtxt -> MismatchMsg -> SDoc
@@ -437,9 +438,11 @@ pprKiVarInfo ctxt (KiVarInfo kv1 mb_implic mb_kv2)
          , maybe empty (pprUntouchableVariable kv1) mb_implic
          , maybe empty mk_msg mb_kv2 ]
   where
-    mk_msg kv = case tcKiVarDetails kv of
-                  SkolemKv sk_info _ -> pprSkols ctxt [(getSkolemInfo sk_info, [kv])]
-                  MetaKv {} -> empty
+    mk_msg = handleAnyKv
+             (panic "pprKiVarInfo")
+             (\kv -> case tcVarDetails kv of
+                 SkolemVar sk_info _ -> pprSkols ctxt [(getSkolemInfo sk_info, [kv])]
+                 MetaVar {} -> empty)
 
 pprAmbiguityInfo :: AmbiguityInfo -> SDoc
 pprAmbiguityInfo _ = panic "pprAmbiguityInfo"
@@ -496,7 +499,7 @@ mismatchMsgHints ctxt msg
   = maybeToList [ hint | (exp, act) <- mismatchMsg_ExpectedActuals msg
                        , hint <- suggestAddSig ctxt exp act ]
 
-mismatchMsg_ExpectedActuals :: MismatchMsg -> Maybe (MonoKind, MonoKind)
+mismatchMsg_ExpectedActuals :: MismatchMsg -> Maybe (AnyMonoKind, AnyMonoKind)
 mismatchMsg_ExpectedActuals = \case
   BasicMismatch { mismatch_ki1 = exp, mismatch_ki2 = act } -> Just (exp, act)
   KindEqMismatch { keq_mismatch_expected = exp, keq_mismatch_actual = act } -> Just (exp, act)
@@ -510,7 +513,7 @@ cannotUnifyKiVariableHints = \case
   OccursCheck {} -> noHints
   DifferentKiVars {} -> noHints
 
-suggestAddSig :: SolverReportErrCtxt -> MonoKind -> MonoKind -> Maybe CsHint
+suggestAddSig :: SolverReportErrCtxt -> AnyMonoKind -> AnyMonoKind -> Maybe CsHint
 suggestAddSig ctxt ki1 _ = Nothing
 
 {- *********************************************************************
@@ -533,7 +536,7 @@ show_fixes [] = empty
 show_fixes (f:fs) = sep [ text "Possible fix:"
                         , nest 2 (vcat (f : map (text "or" <+>) fs)) ]
 
-ctxtFixes :: Bool -> PredKind -> [Implication] -> [SDoc]
+ctxtFixes :: Bool -> AnyPredKind -> [Implication] -> [SDoc]
 ctxtFixes has_ambig_kvs pred implics
   | not has_ambig_kvs
   , isKiVarKcPred pred
@@ -545,16 +548,16 @@ ctxtFixes has_ambig_kvs pred implics
   where
     ppr_skol skol_info = ppr skol_info
 
-usefulContext :: [Implication] -> PredKind -> [SkolemInfoAnon]
+usefulContext :: [Implication] -> AnyPredKind -> [SkolemInfoAnon]
 usefulContext implics pred = go implics
   where
-    pred_kvs = kiCoVarsOfMonoKind pred
+    pred_kvs = varsOfMonoKind pred
 
     go [] = []
     go (ic:ics)
       | implausible ic = rest
       | otherwise = ic_info ic : rest
-      where rest | any (`elemVarSet` pred_kvs) (ic_skols ic) = []
+      where rest | any ((`elemVarSet` pred_kvs) . toAnyKiVar) (ic_skols ic) = []
                  | otherwise = go ics
 
     implausible ic
@@ -609,16 +612,16 @@ pprArising ct_loc
 *                                                                      *
 **********************************************************************-}
 
-tidySkolemInfoAnon :: TidyEnv -> SkolemInfoAnon -> SkolemInfoAnon
+tidySkolemInfoAnon :: AnyTidyEnv -> SkolemInfoAnon -> SkolemInfoAnon
 tidySkolemInfoAnon env (SigSkol cx ty tv_prs) = tidySigSkol env cx ty tv_prs
 tidySkolemInfoAnon env (InferSkol ids) = InferSkol (mapSnd (tidyType env) ids)
 tidySkolemInfoAnon env (UnifyForAllSkol ty) = UnifyForAllSkol (tidyType env ty)
 tidySkolemInfoAnon _ info = info
 
-tidySigSkol :: TidyEnv -> UserTypeCtxt -> TcType -> [(Name, TcTyVar)] -> SkolemInfoAnon
+tidySigSkol :: AnyTidyEnv -> UserTypeCtxt -> AnyType -> [(Name, AnyTyVar AnyKiVar)] -> SkolemInfoAnon
 tidySigSkol env cx ty tv_prs = SigSkol cx (tidy_ty env ty) tv_prs'
   where
-    tv_prs' = mapSnd (tidyTyKiVarOcc env) tv_prs
+    tv_prs' = mapSnd (panic "tidyTyKiVarOcc env") tv_prs
     inst_env = mkNameEnv tv_prs'
 
     tidy_ty env (ForAllTy (Bndr tv vis) ty) = ForAllTy (Bndr tv' vis) (tidy_ty env' ty)
@@ -629,12 +632,12 @@ tidySigSkol env cx ty tv_prs = SigSkol cx (tidy_ty env ty) tv_prs'
 
     tidy_ty env ty = tidyType env ty
 
-    tidy_tv_bndr :: TidyEnv -> TypeVar -> (TidyEnv, TypeVar)
-    tidy_tv_bndr  env@(occ_env, subst) tv
-      | Just tv' <- lookupNameEnv inst_env (tyVarName tv)
-      = ((occ_env, extendVarEnv subst tv tv'), tv')
+    tidy_tv_bndr :: AnyTidyEnv -> AnyTyVar AnyKiVar -> (AnyTidyEnv, AnyTyVar AnyKiVar)
+    tidy_tv_bndr env@(occ_env, subst, ksubst) tv
+      | Just tv' <- lookupNameEnv inst_env (varName tv)
+      = ((occ_env, extendVarEnv subst tv tv', ksubst), tv')
       | otherwise
-      = tidyVarBndr env tv
+      = panic "tidyVarBndr env tv"
 
 pprSkols :: SolverReportErrCtxt -> [(SkolemInfoAnon, [TcKiVar])] -> SDoc
 pprSkols ctxt zonked_ki_vars
@@ -675,8 +678,8 @@ skolsSpan skol_kvs = foldr1 combineSrcSpans (map getSrcSpan skol_kvs)
 mk_supplementary_ea_msg
   :: SolverReportErrCtxt
   -> TypeOrKind
-  -> MonoKind
-  -> MonoKind
+  -> AnyMonoKind
+  -> AnyMonoKind
   -> CtOrigin
   -> Either [ExpectedActualInfo] MismatchMsg
 mk_supplementary_ea_msg _ _ _ _ _ = panic "mk_supplementary_ea_msg"

@@ -61,13 +61,13 @@ import Data.Void( Void )
 *                                                                      *
 ********************************************************************* -}
 
-solveKiEquality :: CtEvidence -> MonoKind -> MonoKind -> SolverStage Void
+solveKiEquality :: CtEvidence -> AnyMonoKind -> AnyMonoKind -> SolverStage Void
 solveKiEquality ev ki1 ki2 = do
-  Pair ki1' ki2' <- zonkEqKinds ev ki1 ki2
-  let ev' | debugIsOn = setCtEvPredKind ev $ mkKiEqPred ki1' ki2'
+  Pair ki1' ki2' <- panic "zonkEqKinds ev ki1 ki2"
+  let ev' | debugIsOn = setCtEvPredKind ev $ panic "mkKiEqPred ki1' ki2'"
           | otherwise = ev
 
-  mb_canon <- canonicalizeKiEquality ev' ki1' ki2'
+  mb_canon <- panic "canonicalizeKiEquality ev' ki1' ki2'"
 
   case mb_canon of
     Left irred_ct -> do tryQCsIrredEqCt irred_ct
@@ -115,9 +115,9 @@ zonkEqKinds ev ki1 ki2 = Stage $ do
     bale_out ki1 ki2 = return $ Left (Pair ki1 ki2)
 
     kivar :: SwapFlag -> TcKiVar -> TcMonoKind -> TcS (Either (Pair TcMonoKind) TcMonoKind)
-    kivar swapped kv ki = case tcKiVarDetails kv of
-      MetaKv { mkv_ref = ref } -> do
-        cts <- readTcRef ref
+    kivar swapped kv ki = case tcVarDetails kv of
+      MetaVar { mv_ref = ref } -> do
+        cts <- panic "readTcRef ref"
         case cts of
           Flexi -> give_up
           Indirect ki' -> do
@@ -125,12 +125,12 @@ zonkEqKinds ev ki1 ki2 = Stage $ do
             unSwap swapped go_mono ki' ki
       _ -> give_up
       where
-        give_up = return $ Left $ unSwap swapped Pair (mkKiVarMKi kv) ki
+        give_up = return $ Left $ unSwap swapped Pair (mkKiVarKi kv) ki
 
     kivar_kivar kv1 kv2
-      | kv1 == kv2 = return $ Right (mkKiVarMKi kv1)
-      | otherwise = do (ki1', progress1) <- quick_zonk kv1
-                       (ki2', progress2) <- quick_zonk kv2
+      | kv1 == kv2 = return $ Right (mkKiVarKi kv1)
+      | otherwise = do (ki1', progress1) <- panic "quick_zonk kv1"
+                       (ki2', progress2) <- panic "quick_zonk kv2"
                        if progress1 || progress2
                          then go_mono ki1' ki2'
                          else return $ Left (Pair (KiVarKi kv1) (KiVarKi kv2))
@@ -139,8 +139,8 @@ zonkEqKinds ev ki1 ki2 = Stage $ do
       = traceTcS "Following filled kivar (zonkEqKinds)"
                  (ppr kv <+> equals <+> ppr ki)
 
-    quick_zonk kv = case tcKiVarDetails kv of
-      MetaKv { mkv_ref = ref } -> do
+    quick_zonk kv = case tcVarDetails kv of
+      MetaVar { mv_ref = ref } -> do
         cts <- readTcRef ref
         case cts of
           Flexi -> return (KiVarKi kv, False)
@@ -172,7 +172,7 @@ zonkEqKinds ev ki1 ki2 = Stage $ do
 *                                                                      *
 ********************************************************************* -}
 
-canonicalizeKiEquality :: CtEvidence -> MonoKind -> MonoKind -> SolverStage (Either IrredCt EqCt)
+canonicalizeKiEquality :: CtEvidence -> AnyMonoKind -> AnyMonoKind -> SolverStage (Either IrredCt EqCt)
 canonicalizeKiEquality ev ki1 ki2 = Stage $ do
   traceTcS "canonicalizeKiEquality"
     $ vcat [ ppr ev, ppr ki1, ppr ki2 ]
@@ -183,17 +183,17 @@ can_ki_eq_nc
   :: Bool
   -> GlobalRdrEnv
   -> CtEvidence
-  -> MonoKind
-  -> MonoKind
+  -> AnyMonoKind
+  -> AnyMonoKind
   -> TcS (StopOrContinue (Either IrredCt EqCt))
 
 can_ki_eq_nc _ _ ev ki1@(KiConApp kc1 []) (KiConApp kc2 []) 
   | kc1 == kc2
-  = canKiEqReflexive ev ki1
+  = panic "canKiEqReflexive ev ki1"
 
 can_ki_eq_nc True _ ev ki1 ki2
   | ki1 `tcEqMonoKind` ki2
-  = canKiEqReflexive ev ki1
+  = panic "canKiEqReflexive ev ki1"
 
 ----------------------
 -- Otherwise try to decompose
@@ -204,27 +204,27 @@ can_ki_eq_nc _ _ ev (FunKi f1 ki1a ki1b) (FunKi f2 ki2a ki2b)
   = canDecomposableFunKi ev f1 (ki1a, ki1b) (ki2a, ki2b)
 
 can_ki_eq_nc _ _ ev (KiConApp kc1 kis1) (KiConApp kc2 kis2)
-  = canKiConApp ev  kc1 kis1 kc2 kis2
+  = panic "canKiConApp ev kc1 kis1 kc2 kis2"
 
 ------------------
 -- Can't decompose
 ------------------
 
 can_ki_eq_nc False rdr_env ev ps_ki1 ps_ki2 = do
-  (redn1@(ReductionKi _ xi1), rewriters1) <- rewriteKi ev ps_ki1
-  (redn2@(ReductionKi _ xi2), rewriters2) <- rewriteKi ev ps_ki2
+  (redn1@(ReductionKi _ xi1), rewriters1) <- panic "rewriteKi ev ps_ki1"
+  (redn2@(ReductionKi _ xi2), rewriters2) <- panic "rewriteKi ev ps_ki2"
   new_ev <- rewriteKiEqEvidence (rewriters1 S.<> rewriters2) ev NotSwapped redn1 redn2
-  traceTcS "can_ki_eq_nc: go round again" (ppr new_ev $$ ppr xi1 $$ ppr xi2)
-  can_ki_eq_nc True rdr_env new_ev xi1 xi2 
+  traceTcS "can_ki_eq_nc: go round again" (panic "ppr new_ev $$ ppr xi1 $$ ppr xi2")
+  panic "can_ki_eq_nc True rdr_env new_ev xi1 xi2 "
 
 can_ki_eq_nc True _ ev ki1 ki2
   | Just can_eq_lhs1 <- canKiEqLHS_maybe ki1
   = do traceTcS "can_ki_eq1" (ppr ki1 $$ ppr ki2)
-       canKiEqCanLHSHomo ev NotSwapped can_eq_lhs1 ki1 ki2 ki2
+       panic "canKiEqCanLHSHomo ev NotSwapped can_eq_lhs1 ki1 ki2 ki2"
 
   | Just can_eq_lhs2 <- canKiEqLHS_maybe ki2
   = do traceTcS "can_ki_eq2" (ppr ki1 $$ ppr ki2)
-       canKiEqCanLHSHomo ev IsSwapped can_eq_lhs2 ki2 ki1 ki1
+       panic "canKiEqCanLHSHomo ev IsSwapped can_eq_lhs2 ki2 ki1 ki1"
 
 ------------------
 -- Failed
@@ -280,8 +280,8 @@ canDecomposableKiConAppOK ev kc kis1 kis2 = assert (kis1 `equalLength` kis2) $ d
 canDecomposableFunKi
   :: CtEvidence
   -> FunKiFlag
-  -> (MonoKind, MonoKind)
-  -> (MonoKind, MonoKind)
+  -> (AnyMonoKind, AnyMonoKind)
+  -> (AnyMonoKind, AnyMonoKind)
   -> TcS (StopOrContinue a)
 canDecomposableFunKi ev f f1@(a1, r1) f2@(a2, r2) = do
   traceTcS "canDecomposableFunKi"
@@ -289,8 +289,8 @@ canDecomposableFunKi ev f f1@(a1, r1) f2@(a2, r2) = do
   case ev of
     CtWanted { ctev_dest = dest } -> do
       (co, _, _) <- wrapUnifierTcS ev $ \uenv -> do
-        arg <- uKind uenv a1 a2
-        res <- uKind uenv r1 r2
+        arg <- panic "uKind uenv a1 a2"
+        res <- panic "uKind uenv r1 r2"
         return $ mkFunKiCo f arg res
       setWantedEq dest co
     CtGiven { ctev_evar = evar } -> pprPanic "canDecomposableFunKi"
@@ -318,7 +318,7 @@ canKiEqCanLHSHomo
   -> TcMonoKind
   -> TcS (StopOrContinue (Either IrredCt EqCt))
 canKiEqCanLHSHomo ev swapped lhs1 ps_xi1 xi2 ps_xi2
-  | Just lhs2 <- canKiEqLHS_maybe xi2
+  | Just lhs2 <- panic "canKiEqLHS_maybe xi2"
   = canKiEqCanLHS2 ev swapped lhs1 ps_xi1 lhs2 ps_xi2
   | otherwise
   = canKiEqCanLHSFinish ev swapped lhs1 ps_xi2
@@ -333,11 +333,11 @@ canKiEqCanLHS2
   -> TcS (StopOrContinue (Either IrredCt EqCt))
 canKiEqCanLHS2 ev swapped lhs1 ps_xi1 lhs2 ps_xi2
   | lhs1 `eqCanEqLHS` lhs2
-  = canKiEqReflexive ev lhs1_ki
+  = panic "canKiEqReflexive ev lhs1_ki"
   | KiVarLHS kv1 <- lhs1
   , KiVarLHS kv2 <- lhs2
   = do traceTcS "canEqLHS2 swapOver" (ppr kv1 $$ ppr kv2 $$ ppr swapped)
-       if swapOverKiVars (isGiven ev) kv1 kv2
+       if panic "swapOverKiVars (isGiven ev) kv1 kv2"
          then finish_with_swapping
          else finish_without_swapping
 
@@ -349,7 +349,7 @@ canKiEqCanLHS2 ev swapped lhs1 ps_xi1 lhs2 ps_xi2
 
     finish_with_swapping = do
       new_ev <- rewriteKiEqEvidence
-                emptyRewriterSet ev swapped (mkReflRednKi lhs1_ki) (mkReflRednKi lhs2_ki)
+                emptyRewriterSet ev swapped (panic "mkReflRednKi lhs1_ki") (panic "mkReflRednKi lhs2_ki")
       canKiEqCanLHSFinish new_ev IsSwapped lhs2 ps_xi1
 
 canKiEqCanLHSFinish
@@ -377,10 +377,10 @@ canKiEqCanLHSFinish_try_unification ev swapped lhs rhs
   | isWanted ev
   , KiVarLHS kv <- lhs
   = do given_eq_lvl <- getInnermostGivenEqLevel
-       if not (touchabilityAndShapeTestKind given_eq_lvl kv rhs)
+       if not (panic "touchabilityAndShapeTestKind given_eq_lvl kv rhs")
          then canKiEqCanLHSFinish_no_unification ev swapped lhs rhs
          else
-         do check_result <- checkTouchableKiVarEq ev kv rhs
+         do check_result <- panic "checkTouchableKiVarEq ev kv rhs"
             case check_result of
               PuFail reason
                 | reason `ctkerHasOnlyProblems` do_not_prevent_rewriting
@@ -388,19 +388,19 @@ canKiEqCanLHSFinish_try_unification ev swapped lhs rhs
                 | otherwise
                 -> tryIrredInstead reason ev swapped lhs rhs
               PuOK _ rhs_redn ->
-                do let kv_ki = mkKiVarMKi kv
+                do let kv_ki = panic "mkKiVarKi kv"
                    new_ev <- if isReflKiCo (reductionKindCoercion rhs_redn)
                              then return ev
                              else rewriteKiEqEvidence emptyRewriterSet
-                                    ev swapped (mkReflRednKi kv_ki) rhs_redn
+                                    ev swapped (panic "mkReflRednKi kv_ki") rhs_redn
                    let final_rhs = reductionReducedKind rhs_redn
 
                    traceTcS "Sneaky unification:"
                      $ text "Unifies:" <+> ppr kv <+> text ":=" <+> ppr final_rhs
 
-                   unifyKiVar kv final_rhs
+                   panic "unifyKiVar kv final_rhs"
 
-                   kickOutAfterUnification [kv]
+                   panic "kickOutAfterUnification [kv]"
 
                    return $ Stop new_ev (text "Solved by unification")
   | otherwise
@@ -420,10 +420,10 @@ canKiEqCanLHSFinish_no_unification ev swapped lhs rhs = do
     PuFail reason -> tryIrredInstead reason ev swapped lhs rhs
     PuOK _ rhs_redn -> do
       let lhs_ki = canKiEqLHSKind lhs
-      new_ev <- rewriteKiEqEvidence emptyRewriterSet ev swapped (mkReflRednKi lhs_ki) rhs_redn
+      new_ev <- rewriteKiEqEvidence emptyRewriterSet ev swapped (panic "mkReflRednKi lhs_ki") rhs_redn
       continueWith $ Right $ KiEqCt { eq_ev = new_ev
                                   , eq_lhs = lhs
-                                  , eq_rhs = reductionReducedKind rhs_redn }
+                                  , eq_rhs = panic "reductionReducedKind rhs_redn" }
 
 tryIrredInstead
   :: CheckTyKiEqResult
@@ -435,7 +435,7 @@ tryIrredInstead
 tryIrredInstead reason ev swapped lhs rhs = do
   traceTcS "cantMakeCaconical" (ppr reason $$ ppr lhs $$ ppr rhs)
   new_ev <- rewriteKiEqEvidence
-            emptyRewriterSet ev swapped (mkReflRednKi $ canKiEqLHSKind lhs) (mkReflRednKi rhs)
+            emptyRewriterSet ev swapped (panic "mkReflRednKi $ canKiEqLHSKind lhs") (panic "mkReflRednKi rhs")
   finishCanWithIrred (NonCanonicalReason reason) new_ev
 
 finishCanWithIrred :: CtIrredReason -> CtEvidence -> TcS (StopOrContinue (Either IrredCt a))
@@ -463,16 +463,16 @@ rewriteKiEqEvidence new_rewriters old_ev swapped (ReductionKi lhs_co nlhs) (Redu
   | NotSwapped <- swapped
   , isReflKiCo lhs_co
   , isReflKiCo rhs_co
-  = return $ setCtEvPredKind old_ev new_pred
+  = return $ panic "setCtEvPredKind old_ev new_pred"
   | CtGiven { ctev_evar = old_evar } <- old_ev
   = panic "rewriteKiEqEvidence"
   | CtWanted { ctev_dest = dest, ctev_rewriters = rewriters } <- old_ev
   , let rewriters' = rewriters S.<> new_rewriters
-  = do (new_ev, hole_co) <- newWantedKiEq loc rewriters' nlhs nrhs
-       let co = maybeSymCo swapped $ lhs_co `mkTransKiCo` hole_co `mkTransKiCo` mkSymKiCo rhs_co
+  = do (new_ev, hole_co) <- panic "newWantedKiEq loc rewriters' nlhs nrhs"
+       let co = panic "maybeSymCo swapped $ lhs_co `mkTransKiCo` hole_co `mkTransKiCo` mkSymKiCo rhs_co"
        setWantedEq dest co
        traceTcS "rewriterEqEvidence"
-         $ vcat [ ppr old_ev, ppr nlhs, ppr nrhs, ppr co, ppr new_rewriters ]
+         $ vcat [ panic "ppr old_ev, ppr nlhs, ppr nrhs, ppr co, ppr new_rewriters" ]
        return new_ev
   where
     new_pred = mkKiEqPred nlhs nrhs
@@ -531,13 +531,13 @@ inertsCanDischarge _ _ = Nothing
 tryQCsIrredEqCt :: IrredCt -> SolverStage ()
 tryQCsIrredEqCt irred@(IrredCt { ir_ev = ev })
   | EqPred k1 k2 <- classifyPredKind (ctEvPred ev)
-  = lookup_ki_eq_in_qcis (CIrredCan irred) k1 k2
+  = panic "lookup_ki_eq_in_qcis (CIrredCan irred) k1 k2"
   | otherwise
   = pprPanic "solveIrredEquality" (ppr ev)
 
 tryQCsEqCt :: EqCt -> SolverStage ()
 tryQCsEqCt work_item@(KiEqCt { eq_lhs = lhs, eq_rhs = rhs })
-  = lookup_ki_eq_in_qcis (CEqCan work_item) (canKiEqLHSKind lhs) rhs
+  = lookup_ki_eq_in_qcis (CEqCan work_item) (panic "canKiEqLHSKind lhs") (panic "rhs")
 
 lookup_ki_eq_in_qcis :: Ct -> TcMonoKind -> TcMonoKind -> SolverStage ()
 lookup_ki_eq_in_qcis work_ct lhs rhs = Stage $ do

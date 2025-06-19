@@ -221,9 +221,9 @@ anyFreeVarsOfKind :: Uniquable kv => (kv -> Bool) -> Kind kv -> Bool
 anyFreeVarsOfKind check_fv ki = DM.getAny (f ki)
   where (f, _) = foldKind (afvFolder check_fv) emptyVarSet
 
-anyFreeVarsOfMonoKind :: Uniquable kv => (kcv -> Bool) -> (kv -> Bool) -> MonoKind kv -> Bool
-anyFreeVarsOfMonoKind check_kcv check_kv ki = DM.getAny (f ki)
-  where (f, _, _, _) = foldMonoKiCo (mafvFolder check_kcv check_kv) emptyVarSet
+anyFreeVarsOfMonoKind :: Uniquable kv => (kv -> Bool) -> MonoKind kv -> Bool
+anyFreeVarsOfMonoKind check_kv ki = DM.getAny (f ki)
+  where (f, _, _, _) = foldMonoKiCo (mafvFolder (const False) check_kv) emptyVarSet
 
 noFreeVarsOfKind :: Uniquable kv => Kind kv -> Bool
 noFreeVarsOfKind ki = not $ DM.getAny (f ki)

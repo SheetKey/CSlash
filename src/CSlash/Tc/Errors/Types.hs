@@ -12,8 +12,7 @@ import CSlash.Tc.Types.Evidence (KiEvBindsVar)
 import CSlash.Tc.Types.Origin ( CtOrigin (), SkolemInfoAnon (SigSkol)
                               , InstanceWhat, KindedThing )
 -- import GHC.Tc.Types.Rank (Rank)
--- import GHC.Tc.Utils.TcType (TcType, TcSigmaType, TcPredType,
---                             PatersonCondFailure, PatersonCondFailureContext)
+import CSlash.Tc.Utils.TcType (AnyKind, AnyMonoKind, AnyPredKind)
 import CSlash.Types.Basic
 import CSlash.Types.Error
 import CSlash.Types.Avail
@@ -26,8 +25,8 @@ import CSlash.Types.Name.Reader
 -- import GHC.Types.SourceFile (HsBootOrSig(..))
 import CSlash.Types.SrcLoc
 import CSlash.Types.TyThing (TyThing)
-import CSlash.Types.Var (Id, {-TyCoVar,-} TypeVar, KindVar {-, TcTyVar, CoVar, Specificity-})
-import CSlash.Types.Var.Env (TidyEnv)
+import CSlash.Types.Var (Id, {-TyCoVar,-} TyVar, KiVar, AnyTyVar, AnyKiVar {-, TcTyVar, CoVar, Specificity-})
+import CSlash.Types.Var.Env (AnyTidyEnv)
 import CSlash.Types.Var.Set (TyVarSet, VarSet)
 import CSlash.Unit.Types (Module)
 import CSlash.Utils.Outputable
@@ -42,7 +41,7 @@ import CSlash.Core.DataCon (DataCon{-, FieldLabel-})
 -- import GHC.Core.PatSyn (PatSyn)
 -- import GHC.Core.Predicate (EqRel, predTypeEqRel)
 import CSlash.Core.TyCon (TyCon{-, Role, FamTyConFlav-}, AlgTyConRhs)
-import CSlash.Core.Type (Type{-, ThetaType, PredType, ErrorMsgType-}, ForAllTyFlag)
+import CSlash.Core.Type (Type{-, ThetaType, PredType, ErrorMsgType-}, ForAllFlag)
 import CSlash.Core.Kind (Kind, PredKind, MonoKind, KiCon)
 import CSlash.Driver.Backend (Backend)
 import CSlash.Unit.State (UnitState)
@@ -99,7 +98,7 @@ data TcRnMessage where
   TcRnSimplifierTooManyIterations :: Cts -> !IntWithInf -> WantedConstraints -> TcRnMessage
   TcRnBindingNameConflict :: !RdrName -> !(NE.NonEmpty SrcSpan) -> TcRnMessage
   TcRnTyThingUsedWrong :: !WrongThingSort -> !TcTyKiThing -> !Name -> TcRnMessage
-  TcRnArityMismatch :: !TyThing -> !Arity -> !Arity -> TcRnMessage
+  TcRnArityMismatch :: !(TyThing (AnyTyVar AnyKiVar) AnyKiVar) -> !Arity -> !Arity -> TcRnMessage
   deriving Generic
 
 data ShadowedNameProvenance
@@ -114,7 +113,7 @@ data SolverReport = SolverReport
 data SolverReportSupplementary
   = SupplementaryBindings RelevantBindings
   | SupplementaryHoleFits ValidHoleFits
-  | SupplementaryCts [(PredKind, RealSrcSpan)]
+  | SupplementaryCts [(AnyPredKind, RealSrcSpan)]
 
 data SolverReportWithCtxt = SolverReportWithCtxt
   { reportContext :: SolverReportErrCtxt
@@ -124,7 +123,7 @@ data SolverReportWithCtxt = SolverReportWithCtxt
 
 data SolverReportErrCtxt = CEC
   { cec_encl :: [Implication]
-  , cec_tidy :: TidyEnv
+  , cec_tidy :: AnyTidyEnv
   , cec_binds :: KiEvBindsVar
   , cec_defer_type_errors :: DiagnosticReason
   , cec_expr_holes :: DiagnosticReason
@@ -143,7 +142,7 @@ getUserGivens (CEC { cec_encl = implics }) = getUserGivensFromImplics implics
 ----------------------------------------------------------------------------
 
 data ErrorItem = EI
-  { ei_pred :: PredKind
+  { ei_pred :: AnyPredKind
   , ei_evdest :: Maybe TcEvDest
   , ei_flavor :: CtFlavor
   , ei_loc :: CtLoc
@@ -169,7 +168,7 @@ errorItemOrigin = ctLocOrigin . ei_loc
 errorItemCtLoc :: ErrorItem -> CtLoc
 errorItemCtLoc = ei_loc
 
-errorItemPred :: ErrorItem -> PredKind
+errorItemPred :: ErrorItem -> AnyPredKind
 errorItemPred = ei_pred
 
 data TcSolverReportMsg
@@ -192,17 +191,17 @@ data MismatchMsg
   = BasicMismatch
     { mismatch_ea :: MismatchEA
     , mismatch_item :: ErrorItem
-    , mismatch_ki1 :: MonoKind
-    , mismatch_ki2 :: MonoKind
+    , mismatch_ki1 :: AnyMonoKind
+    , mismatch_ki2 :: AnyMonoKind
     , mismatch_whenMatching :: Maybe WhenMatching
     , mismatch_mb_same_kicon :: Maybe SameKiConInfo
     }
   | KindEqMismatch
     { keq_mismatch_item :: ErrorItem
-    , keq_mismatch_ki1 :: MonoKind
-    , keq_mismatch_ki2 :: MonoKind
-    , keq_mismatch_expected :: MonoKind
-    , keq_mismatch_actual :: MonoKind
+    , keq_mismatch_ki1 :: AnyMonoKind
+    , keq_mismatch_ki2 :: AnyMonoKind
+    , keq_mismatch_expected :: AnyMonoKind
+    , keq_mismatch_actual :: AnyMonoKind
     , keq_mismatch_what :: Maybe KindedThing
     , keq_mb_same_kicon :: Maybe SameKiConInfo
     }
@@ -217,18 +216,18 @@ data MismatchEA
   = NoEA
 
 data CannotUnifyKiVariableReason
-  = CannotUnifyWithPolykind ErrorItem KindVar MonoKind (Maybe KiVarInfo)
+  = CannotUnifyWithPolykind ErrorItem AnyKiVar AnyMonoKind (Maybe KiVarInfo)
   | OccursCheck { occursCheckAmbiguityInfos :: [AmbiguityInfo] }
   | DifferentKiVars KiVarInfo
   deriving Generic
 
 
-data CND_Extra = CND_Extra TypeOrKind MonoKind MonoKind
+data CND_Extra = CND_Extra TypeOrKind AnyMonoKind AnyMonoKind
 
 data KiVarInfo = KiVarInfo
-  { thisKiVar :: KindVar
+  { thisKiVar :: AnyKiVar
   , thisKiVarIsUntouchable :: Maybe Implication
-  , otherKi :: Maybe KindVar
+  , otherKi :: Maybe AnyKiVar
   }
 
 data SameKiConInfo
@@ -239,7 +238,7 @@ data AmbiguityInfo = Ambiguity
 
 data ExpectedActualInfo
 
-data WhenMatching = WhenMatching MonoKind MonoKind CtOrigin (Maybe TypeOrKind)
+data WhenMatching = WhenMatching AnyMonoKind AnyMonoKind CtOrigin (Maybe TypeOrKind)
   deriving Generic
 
 data BadImportKind
@@ -279,7 +278,7 @@ data ValidHoleFits = ValidHoleFits
   }
 
 data RelevantBindings = RelevantBindings
-  { relevantBindingNamesAndKis :: [(Name, Kind)]
+  { relevantBindingNamesAndKis :: [(Name, AnyKind)]
   , ranOutOfFuel :: Bool
   }
 
@@ -314,7 +313,7 @@ data WrongThingSort
   = WrongThingType
   | WrongThingKind
 
-type TySynCycleTyCons = [Either TyCon (LCsBind Rn)]
+type TySynCycleTyCons = [Either (TyCon (TyVar KiVar) KiVar) (LCsBind Rn)]
 
 data DodgyImportsReason
   = DodgyImportsEmptyParent !GlobalRdrElt

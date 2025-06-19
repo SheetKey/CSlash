@@ -333,7 +333,7 @@ csTyForeignBinders type_decls = panic "csTyForeignBinders"
 -------------------
 
 data TyDeclBinders p = TyDeclBinders
-  { tyDeclMainBinder :: !(LocatedA (IdP (CsPass p)), TyConFlavor ())
+  { tyDeclMainBinder :: !(LocatedA (IdP (CsPass p)), TyConFlavor)
   -- , tyDeclATs :: ![(LocatedA (IdP (CsPass p)), TyConFlavor ())]       -- ATs=associated types
   -- , tyDeclOpSigs :: ![LocatedA (IdP (CsPass p))]                      -- class op sigs
   }

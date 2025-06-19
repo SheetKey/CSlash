@@ -38,7 +38,7 @@ import CSlash.Tc.Utils.TcType
 import CSlash.Core.Type
 import CSlash.Core.Kind
 import CSlash.Core.Ppr
-import CSlash.Core.TyCon    ( TyConBinder{-, isTypeFamilyTyCon-} )
+-- import CSlash.Core.TyCon    ( TyConBinder{-, isTypeFamilyTyCon-} )
 import CSlash.Builtin.Types
 -- import GHC.Core.Unify    ( tcMatchTyKis )
 import CSlash.Unit.Module ( getModule )
@@ -138,7 +138,7 @@ useUnsatisfiableGivens wc = do
       = do wcs' <- go_wc (ic_wanted impl)
            lift $ setImplicationStatus $ impl { ic_wanted = wcs' }    
 
-solveImplicationUsingUnsatGiven :: (KiEvVar, MonoKind) -> Implication -> TcS (Maybe Implication)
+solveImplicationUsingUnsatGiven :: (AnyKiEvVar AnyKiVar, AnyMonoKind) -> Implication -> TcS (Maybe Implication)
 solveImplicationUsingUnsatGiven unsat_given@(given_ev, _) impl@(Implic { ic_wanted = wtd
                                                                        , ic_tclvl = tclvl
                                                                        , ic_binds = ev_binds_var
@@ -160,10 +160,10 @@ solveImplicationUsingUnsatGiven unsat_given@(given_ev, _) impl@(Implic { ic_want
     go_simple ct = case ctEvidence ct of
       CtWanted { ctev_pred = pki, ctev_dest = dst }
         -> do ev_type <- unsatisfiableKiEvType unsat_given pki
-              setWantedKiEvType dst True ev_type
+              panic "setWantedKiEvType dst True ev_type"
       _ -> return ()
 
-unsatisfiableKiEvType :: (KiEvVar, MonoKind) -> MonoKind -> TcS Type
+unsatisfiableKiEvType :: (AnyKiEvVar AnyKiVar, AnyMonoKind) -> AnyMonoKind -> TcS AnyType
 unsatisfiableKiEvType (unsat_ev, given_msg) wtd_ki = panic "unsatisfiableKiEvType"
 
 {- *********************************************************************
@@ -347,7 +347,7 @@ setImplicationStatus implic@(Implic { ic_status = status
       | otherwise
       = True
 
-findUnnecessaryGivens :: SkolemInfoAnon -> VarSet -> [KiEvVar] -> [KiEvVar]
+findUnnecessaryGivens :: SkolemInfoAnon -> MkVarSet (AnyKiEvVar AnyKiVar) -> [AnyKiEvVar AnyKiVar] -> [AnyKiEvVar AnyKiVar]
 findUnnecessaryGivens info need_inner givens
   | not (warnRedundantGivens info)
   = []
@@ -388,11 +388,11 @@ neededKiEvVars implic@(Implic { ic_given = givens
   kcvs <- TcS.getTcKiEvKiCoVars ev_binds_var
 
   let seeds1 = foldr add_implic_seeds old_needs implics
-      seeds2 = nonDetStrictFoldKiEvBindMap add_wanted seeds1 ev_binds
+      seeds2 = panic "nonDetStrictFoldKiEvBindMap add_wanted seeds1 ev_binds"
       seeds3 = seeds2 `unionVarSet` kcvs
       need_inner = findNeededKiEvVars ev_binds seeds3
       live_ev_binds = filterKiEvBindMap (needed_ev_bind need_inner) ev_binds
-      need_outer = varSetMinusKiEvBindMap need_inner live_ev_binds `delVarSetList` givens
+      need_outer = panic "varSetMinusKiEvBindMap need_inner live_ev_binds `delVarSetList` givens"
 
   TcS.setTcKiEvBindsMap ev_binds_var live_ev_binds
 
@@ -403,8 +403,8 @@ neededKiEvVars implic@(Implic { ic_given = givens
            , text "ev_binds:" <+> ppr ev_binds
            , text "live_ev_binds:" <+> ppr live_ev_binds ]
 
-  return $ implic { ic_need_inner = need_inner
-                  , ic_need_outer = need_outer }
+  return $ implic { ic_need_inner = panic "need_inner"
+                  , ic_need_outer = panic "need_outer" }
   where
     add_implic_seeds (Implic { ic_need_outer = needs }) acc = needs `unionVarSet` acc
 
@@ -412,7 +412,7 @@ neededKiEvVars implic@(Implic { ic_given = givens
       | KiEvBindGiven <- info = ev_var `elemVarSet` needed
       | otherwise = True
 
-    add_wanted :: KiEvBind -> VarSet -> VarSet
+    --add_wanted :: KiEvBind -> VarSet -> VarSet
     add_wanted (KiEvBind { keb_info = info, keb_rhs = rhs }) needs
       | KiEvBindGiven <- info = needs
       | otherwise = kiEvVarsOfType rhs `unionVarSet` needs

@@ -111,7 +111,7 @@ instance Outputable WorkList where
 *                                                                      *
 ********************************************************************* -}
 
-type CycleBreakerVarStack = NonEmpty (Bag (TcTyVar, TcType))
+type CycleBreakerVarStack = NonEmpty (Bag (AnyTyVar AnyKiVar, AnyType))
 
 data InertSet = IS
   { inert_cans :: InertCans
@@ -155,7 +155,7 @@ data InertCans = IC
   , inert_given_eqs :: Bool
   }
 
-type InertEqs = DVarEnv EqualCtList
+type InertEqs = MkDVarEnv AnyKiVar EqualCtList
 type InertIrreds = Bag IrredCt
 
 instance Outputable InertCans where
@@ -188,7 +188,7 @@ addEqToCans tc_lvl eq_ct@(KiEqCt { eq_lhs = lhs }) ics@(IC { inert_eqs = eqs })
     $ case lhs of
         KiVarLHS kv -> ics { inert_eqs = addEq eqs kv eq_ct }
 
-addEq :: InertEqs -> TcVar -> EqCt -> InertEqs
+addEq :: InertEqs -> AnyKiVar -> EqCt -> InertEqs
 addEq old_eqs v ct
   = extendDVarEnv_C add_eq old_eqs v [ct]
   where
@@ -197,7 +197,7 @@ addEq old_eqs v ct
 foldKiEqs :: (EqCt -> b -> b) -> InertEqs -> b -> b
 foldKiEqs k eqs z = foldDVarEnv (\cts z -> foldr k z cts) z eqs
 
-findKiEqs :: InertCans -> KindVar -> [EqCt]
+findKiEqs :: InertCans -> AnyKiVar -> [EqCt]
 findKiEqs icans kv = concat @Maybe (lookupDVarEnv (inert_eqs icans) kv)
 
 findEq :: InertCans -> CanEqLHS -> [EqCt]
@@ -325,7 +325,7 @@ updGivenEqs tclvl ct inerts@(IC { inert_given_eq_lvl = ge_lvl })
     not_equality _ = False
 
 data KickOutSpec
-  = KOAfterUnify VarSet
+  = KOAfterUnify (MkVarSet AnyKiVar)
   | KOAfterAdding CanEqLHS
 
 kickOutRewritableLHS :: KickOutSpec -> CtFlavor -> InertCans -> (Cts, InertCans)
@@ -346,14 +346,14 @@ kickOutRewritableLHS ko_spec new_f ics@(IC { inert_eqs = kv_eqs
     (rels_out, rels_in) = partitionRels (kick_out_ct . CRelCan) relmap
     (irs_out, irs_in) = partitionBag (kick_out_ct . CIrredCan) irreds
 
-    f_kv_can_rewrite_ki :: (KindVar -> Bool) -> MonoKind -> Bool
+    f_kv_can_rewrite_ki :: (TcKiVar -> Bool) -> AnyMonoKind -> Bool
     f_kv_can_rewrite_ki = anyRewritableKiVar 
 
     {-# INLINE f_can_rewrite_ki #-}
-    f_can_rewrite_ki :: MonoKind -> Bool
+    f_can_rewrite_ki :: AnyMonoKind -> Bool
     f_can_rewrite_ki = case ko_spec of
-      KOAfterUnify kvs -> f_kv_can_rewrite_ki (`elemVarSet` kvs)
-      KOAfterAdding (KiVarLHS kv) -> f_kv_can_rewrite_ki (== kv)
+      KOAfterUnify kvs -> f_kv_can_rewrite_ki ((`elemVarSet` kvs) . toAnyKiVar)
+      KOAfterAdding (KiVarLHS kv) -> f_kv_can_rewrite_ki ((== kv) . toAnyKiVar)
 
     f_may_rewrite f = new_f `eqCanRewriteF` f
 
@@ -379,7 +379,7 @@ kickOutRewritableLHS ko_spec new_f ics@(IC { inert_eqs = kv_eqs
       KOAfterUnify vs -> is_kivar_ki_for vs
       KOAfterAdding lhs -> (`eqMonoKind` canKiEqLHSKind lhs)
 
-    is_kivar_ki_for vs ki = case getKiVarMono_maybe ki of
+    is_kivar_ki_for vs ki = case getKiVar_maybe ki of
                               Nothing -> False
                               Just kv -> kv `elemVarSet` vs
 
@@ -392,13 +392,13 @@ kickOutRewritableLHS ko_spec new_f ics@(IC { inert_eqs = kv_eqs
 mentionsOuterVar :: TcLevel -> CtEvidence -> Bool
 mentionsOuterVar tclvl ev = anyFreeVarsOfMonoKind (isOuterKiVar tclvl) $ ctEvPred ev
 
-isOuterKiVar :: TcLevel -> KindVar -> Bool
+isOuterKiVar :: TcLevel -> AnyKiVar -> Bool
 isOuterKiVar tclvl kv
-  | isKiVar kv = assertPpr (not (isTouchableMetaKiVar tclvl kv)) (ppr kv <+> ppr tclvl)
-                 $ tclvl `strictlyDeeperThan` tcKiVarLevel kv
-  | otherwise = False
+ = assertPpr (not (handleAnyKv (const False) (isTouchableMetaVar tclvl) kv))
+   (ppr kv <+> ppr tclvl)
+   $ tclvl `strictlyDeeperThan` (handleAnyKv (const topTcLevel) varLevel kv)
 
-noMatchableGivenRels :: InertSet -> CtLoc -> KiCon -> MonoKind -> MonoKind -> Bool
+noMatchableGivenRels :: InertSet -> CtLoc -> KiCon -> AnyMonoKind -> AnyMonoKind -> Bool
 noMatchableGivenRels inerts@(IS { inert_cans = inert_cans }) loc_w kc k1 k2
   = not $ anyBag matchable_given
     $ findRelsByRel (inert_rels inert_cans) kc
@@ -412,7 +412,7 @@ noMatchableGivenRels inerts@(IS { inert_cans = inert_cans }) loc_w kc k1 k2
       | otherwise
       = False
 
-mightEqualLater :: InertSet -> TcPredKind -> CtLoc -> TcPredKind -> CtLoc -> Maybe Subst
+mightEqualLater :: InertSet -> AnyPredKind -> CtLoc -> AnyPredKind -> CtLoc -> Maybe (KvSubst AnyKiVar)
 mightEqualLater inert_set given_pred given_loc wanted_pred wanted_loc
   = case tcUnifyKisFG bind_fun [given_pred] [wanted_pred] of
       Unifiable subst -> pprTrace "mightEqualLater 1" (ppr subst) $ Just subst
@@ -424,23 +424,24 @@ mightEqualLater inert_set given_pred given_loc wanted_pred wanted_loc
       SurelyApart -> Nothing
 
   where
-    in_scope = mkInScopeSet $ kiCoVarsOfMonoKinds [given_pred, wanted_pred]
+    in_scope = mkInScopeSet $ varsOfMonoKinds [given_pred, wanted_pred]
 
     bind_fun :: BindFun
     bind_fun kv rhs_ki
-      | isMetaKiVar kv
-      , can_unify kv (metaKiVarInfo kv) rhs_ki
+      | Just kv' <- toTcKiVar_maybe kv
+      , isMetaVar kv'
+      , can_unify kv' (metaVarInfo kv') rhs_ki
       = BindMe
       | otherwise
       = Apart
 
-    can_unify :: TcKiVar -> MetaInfoK -> MonoKind -> Bool
-    can_unify _ KiVarKv rhs_ki
-      | Just rhs_kv <- getKiVarMono_maybe rhs_ki
-      = case tcKiVarDetails rhs_kv of
-          MetaKv { mkv_info = KiVarKv } -> True
-          MetaKv {} -> False
-          SkolemKv {} -> True
+    can_unify :: TcKiVar -> MetaInfo -> AnyMonoKind -> Bool
+    can_unify _ VarVar rhs_ki
+      | Just rhs_kv <- getKiVar_maybe rhs_ki
+      = handleAnyKv (const True) (\rhs_kv -> case tcVarDetails rhs_kv of
+                                     MetaVar { mv_info = VarVar } -> True
+                                     MetaVar {} -> False
+                                     SkolemVar {} -> True ) rhs_kv
       | otherwise
       = False
     can_unify _ _ _ = False
@@ -455,7 +456,7 @@ pushCycleBreakerVarStack :: CycleBreakerVarStack -> CycleBreakerVarStack
 pushCycleBreakerVarStack = (emptyBag <|)
 
 forAllCycleBreakerBindings_
-  :: Monad m => CycleBreakerVarStack -> (TcTyVar -> TcType -> m ()) -> m ()
+  :: Monad m => CycleBreakerVarStack -> (AnyTyVar AnyKiVar -> AnyType -> m ()) -> m ()
 forAllCycleBreakerBindings_ (top_env :| _) action
   = forM_ top_env (uncurry action)
 {-# INLINABLE forAllCycleBreakerBindings_ #-}

@@ -22,7 +22,7 @@ import CSlash.Core.Predicate
 import {-# SOURCE #-} CSlash.Tc.Types.Origin
   ( SkolemInfo, unkSkol )
 
-import CSlash.Types.Name as Name
+import CSlash.Types.Name as Name hiding (varName)
 import CSlash.Types.Name.Env
 import CSlash.Types.Name.Set
 import CSlash.Builtin.Names
@@ -41,18 +41,30 @@ import Data.IORef (IORef)
 *                                                                      *
 ********************************************************************* -}
 
-type TcType = Type
+type AnyType = Type (AnyTyVar AnyKiVar) AnyKiVar
+type TcType = Type (TcTyVar TcKiVar) TcKiVar
 
-type TcTyVarBinder = TyVarBinder
+type AnyTyVarBinder = VarBndr (AnyTyVar AnyKiVar) ForAllFlag
+type TcTyVarBinder = VarBndr (TcTyVar TcKiVar) ForAllFlag
 
-type TcTyCon = TyCon
+type MonoAnyTyCon = AnyTyCon
+type PolyAnyTyCon = AnyTyCon
 type MonoTcTyCon = TcTyCon
 type PolyTcTyCon = TcTyCon
-type TcTyConBinder = TyConBinder
 
-type TcKind = Kind
-type TcMonoKind = MonoKind
-type TcPredKind = PredKind
+type AnyKind = Kind AnyKiVar
+type AnyMonoKind = MonoKind AnyKiVar
+type AnyPredKind = PredKind AnyKiVar
+
+type TcKind = Kind TcKiVar
+type TcMonoKind = MonoKind TcKiVar
+type TcPredKind = PredKind TcKiVar
+
+type TcKindCoercion = KindCoercion (TcTyVar TcKiVar) TcKiVar
+type AnyKindCoercion = KindCoercion (AnyTyVar AnyKiVar) AnyKiVar
+
+type TcKindCoercionHole = KindCoercionHole (TcTyVar TcKiVar) TcKiVar
+type AnyKindCoercionHole = KindCoercionHole (AnyTyVar AnyKiVar) AnyKiVar
 
 {- *********************************************************************
 *                                                                      *
@@ -72,66 +84,38 @@ data InferResult
 *                                                                      *
 ********************************************************************* -}
 
-data TcTyVarDetails
-  = SkolemTv SkolemInfo TcLevel
-  | MetaTv { mtv_info :: MetaInfo
-           , mtv_ref :: IORef MetaDetails
-           , mtv_tclvl :: TcLevel
-           }
+data TcVarDetails tyki
+  = SkolemVar SkolemInfo TcLevel
+  | MetaVar { mv_info :: MetaInfo
+            , mv_ref :: IORef (MetaDetails tyki)
+            , mv_tclvl :: TcLevel
+            }
 
-vanillaSkolemTvUnk :: HasDebugCallStack => TcTyVarDetails
-vanillaSkolemTvUnk = SkolemTv unkSkol topTcLevel
-
-instance Outputable TcTyVarDetails where
-  ppr = pprTcTyVarDetails
-
-pprTcTyVarDetails :: TcTyVarDetails -> SDoc
-pprTcTyVarDetails (SkolemTv _sk lvl) = text "sk" <> colon <> ppr lvl
-pprTcTyVarDetails (MetaTv { mtv_info = info, mtv_tclvl = tclvl })
-  = ppr info <> colon <> ppr tclvl
-
-data MetaDetails' tk
+data MetaDetails tk
   = Flexi
   | Indirect tk
 
-type MetaDetails = MetaDetails' TcType
-
 data MetaInfo
-  = TyVarTv
+  = TauVar
+  | VarVar
 
-instance Outputable tk => Outputable (MetaDetails' tk) where
+instance Outputable (TcVarDetails tk) where
+  ppr = pprTcVarDetails
+
+pprTcVarDetails :: TcVarDetails tk -> SDoc
+pprTcVarDetails (SkolemVar _sk lvl) = text "sk" <> colon <> ppr lvl
+pprTcVarDetails (MetaVar { mv_info = info, mv_tclvl = tclvl })
+  = ppr info <> colon <> ppr tclvl
+
+instance Outputable tk => Outputable (MetaDetails tk) where
   ppr = panic "ppr metadetails'"
 
 instance Outputable MetaInfo where
-  ppr TyVarTv = text "tyv"
+  ppr TauVar = text "tau"
+  ppr VarVar = text "var"
 
-data TcKiVarDetails
-  = SkolemKv SkolemInfo TcLevel
-  | MetaKv { mkv_info :: MetaInfoK
-           , mkv_ref :: IORef MetaDetailsK
-           , mkv_tclvl :: TcLevel
-           }
-
-instance Outputable TcKiVarDetails where
-  ppr = pprTcKiVarDetails
-
-pprTcKiVarDetails :: TcKiVarDetails -> SDoc
-pprTcKiVarDetails (SkolemKv _sk lvl) = text "sk" <> colon <> ppr lvl
-pprTcKiVarDetails (MetaKv { mkv_info = info, mkv_tclvl = tclvl })
-  = ppr info <> colon <> ppr tclvl
-
-vanillaSkolemKvUnk :: HasDebugCallStack => TcKiVarDetails
-vanillaSkolemKvUnk = SkolemKv unkSkol topTcLevel
-
-type MetaDetailsK = MetaDetails' TcMonoKind
-
-data MetaInfoK
-  = KiVarKv
-  | TauKv
-
-instance Outputable MetaInfoK where
-  ppr TauKv = text "tuakv"
-  ppr KiVarKv = text "kiv"
+vanillaSkolemVarUnk :: HasDebugCallStack => TcVarDetails tk
+vanillaSkolemVarUnk = SkolemVar unkSkol topTcLevel
 
 data ConcreteKvOrigin
 
@@ -176,60 +160,78 @@ checkTcLevelInvariant :: TcLevel -> TcLevel -> Bool
 checkTcLevelInvariant (TcLevel ctxt_tclvl) (TcLevel v_tclvl)
   = ctxt_tclvl >= v_tclvl
 
-tcVarLevel :: TcVar -> TcLevel
-tcVarLevel v 
-  | isTcTyVar v = tcTyVarLevel v
-  | isTcKiVar v = tcKiVarLevel v
-  | otherwise = pprPanic "tcVarLevel" (ppr v)
+varLevel :: TcVar v => v -> TcLevel
+varLevel v = case tcVarDetails v of
+  MetaVar { mv_tclvl = tc_lvl } -> tc_lvl
+  SkolemVar _ tc_lvl -> tc_lvl
 
-tcTyVarLevel :: TcTyVar -> TcLevel
-tcTyVarLevel tv = case tcTyVarDetails tv of
-  MetaTv { mtv_tclvl = tv_lvl } -> tv_lvl
-  SkolemTv _ tv_lvl -> tv_lvl
+-- tcTyVarLevel :: TcTyVar -> TcLevel
+-- tcTyVarLevel tv = case tcTyVarDetails tv of
+--   MetaTv { mtv_tclvl = tv_lvl } -> tv_lvl
+--   SkolemTv _ tv_lvl -> tv_lvl
 
-tcKiVarLevel :: TcKiVar -> TcLevel
-tcKiVarLevel kv = case tcKiVarDetails kv of
-                    MetaKv { mkv_tclvl = kv_lvl } -> kv_lvl
-                    SkolemKv _ kv_lvl -> kv_lvl
+-- tcKiVarLevel :: TcKiVar -> TcLevel
+-- tcKiVarLevel kv = case tcKiVarDetails kv of
+--   MetaKv { mkv_tclvl = kv_lvl } -> kv_lvl
+--   SkolemKv _ kv_lvl -> kv_lvl
+
+anyTypeLevel :: AnyType -> TcLevel
+anyTypeLevel ty = tenv_lvl `maxTcLevel` kenv_lvl
+  where
+    (tenv, kenv) = varsOfTypeDSet ty
+    tenv_lvl = nonDetStrictFoldDVarSet (handleAnyTv
+                                        (const $ \lvl -> lvl `maxTcLevel` topTcLevel)
+                                        add) topTcLevel tenv
+    kenv_lvl = nonDetStrictFoldDVarSet (handleAnyKv
+                                        (const $ \lvl -> lvl `maxTcLevel` topTcLevel)
+                                        add) topTcLevel kenv
+
+    add :: TcVar v => v -> TcLevel -> TcLevel
+    add v lvl = lvl `maxTcLevel` varLevel v
 
 tcTypeLevel :: TcType -> TcLevel
-tcTypeLevel ty = nonDetStrictFoldDVarSet add topTcLevel (tyKiVarsOfTypeDSet ty)
+tcTypeLevel ty = tenv_lvl `maxTcLevel` kenv_lvl
   where
-    add v lvl
-      | isTcTyVar v = lvl `maxTcLevel` tcTyVarLevel v
-      | isTcKiVar v = lvl `maxTcLevel` tcKiVarLevel v
-      | otherwise = lvl
+    (tenv, kenv) = varsOfTypeDSet ty
+    tenv_lvl = nonDetStrictFoldDVarSet add topTcLevel tenv
+    kenv_lvl = nonDetStrictFoldDVarSet add topTcLevel kenv
+
+    add :: TcVar v => v -> TcLevel -> TcLevel
+    add v lvl = lvl `maxTcLevel` varLevel v
+
+anyMonoKindLevel :: AnyMonoKind -> TcLevel
+anyMonoKindLevel ki = nonDetStrictFoldDVarSet add topTcLevel (varsOfMonoKindDSet ki)
+  where
+    add = handleAnyKv (const $ \lvl -> lvl `maxTcLevel` topTcLevel) addTc
+    addTc v lvl = lvl `maxTcLevel` varLevel v
 
 tcMonoKindLevel :: TcMonoKind -> TcLevel
-tcMonoKindLevel ki = nonDetStrictFoldDVarSet add topTcLevel (kiVarsOfMonoKindDSet ki)
+tcMonoKindLevel ki = nonDetStrictFoldDVarSet add topTcLevel (varsOfMonoKindDSet ki)
   where
-    add v lvl
-      | isTcKiVar v = lvl `maxTcLevel` tcKiVarLevel v
-      | otherwise = lvl
+    add v lvl = lvl `maxTcLevel` varLevel v
 
-tcKindLevel :: TcKind -> TcLevel
-tcKindLevel ki = nonDetStrictFoldDVarSet add topTcLevel (kiVarsOfKindDSet ki)
+tcKindLevel :: AnyKind -> TcLevel
+tcKindLevel ki = nonDetStrictFoldDVarSet add topTcLevel (varsOfKindDSet ki)
   where
-    add v lvl
-      | isTcKiVar v = lvl `maxTcLevel` tcKiVarLevel v
-      | otherwise = lvl
+    add = handleAnyKv (const $ \lvl -> lvl `maxTcLevel` topTcLevel) addTc
+    addTc v lvl = lvl `maxTcLevel` varLevel v
 
 {-# INLINE any_rewritable_ki #-}
-any_rewritable_ki :: (TcKiVar -> Bool) -> TcMonoKind -> Bool
+any_rewritable_ki :: (TcKiVar -> Bool) -> AnyMonoKind -> Bool
 any_rewritable_ki kv_pred = go_mono emptyVarSet
   where
-    go_mono :: VarSet -> TcMonoKind -> Bool
+    go_mono :: MkVarSet AnyKiVar -> AnyMonoKind -> Bool
     go_mono bvs (KiConApp kc kis) = go_kc bvs kc kis
     go_mono bvs (KiVarKi kv) = go_kv bvs kv
     go_mono bvs (FunKi _ arg res) = go_mono bvs arg || go_mono bvs res
 
     go_kv bvs kv | kv `elemVarSet` bvs = False
-                 | otherwise = kv_pred kv
+                 | otherwise = handleAnyKv (const False) kv_pred kv
 
-    go_kc :: VarSet -> KiCon -> [TcMonoKind] -> Bool
+    go_kc :: MkVarSet AnyKiVar -> KiCon -> [AnyMonoKind] -> Bool
     go_kc bvs _ kis = any (go_mono bvs) kis
 
-anyRewritableKiVar :: (TcKiVar -> Bool) -> TcMonoKind -> Bool
+anyRewritableKiVar :: (TcKiVar -> Bool) -> AnyMonoKind -> Bool
 anyRewritableKiVar = any_rewritable_ki
 
 {- *********************************************************************
@@ -238,147 +240,94 @@ anyRewritableKiVar = any_rewritable_ki
 *                                                                      *
 ********************************************************************* -}
 
-tcIsTcTyVar :: TcTyVar -> Bool
-tcIsTcTyVar tv = isTyVar tv
+isPromotableMetaVar :: TcVar v => v -> Bool
+isPromotableMetaVar v = case tcVarDetails v of
+   MetaVar { mv_info = info } -> isTouchableInfo info
+   _ -> False
 
-tcIsTcKiVar :: TcKiVar -> Bool
-tcIsTcKiVar kv = isKiVar kv
+isTouchableMetaVar :: TcVar v => TcLevel -> v -> Bool
+isTouchableMetaVar ctxt_tclvl v = case tcVarDetails v of
+  MetaVar { mv_tclvl = tclvl, mv_info = info }
+    | isTouchableInfo info
+      ->  assertPpr (checkTcLevelInvariant ctxt_tclvl tclvl)
+          (text "isTouchableMetaVar" $$ ppr tclvl $$ ppr ctxt_tclvl)
+          $ tclvl `sameDepthAs` ctxt_tclvl
+  _ -> False
 
-isPromotableMetaKiVar :: TcKiVar -> Bool
-isPromotableMetaKiVar kv
-  | isKiVar kv
-  , MetaKv { mkv_info = info } <- tcKiVarDetails kv
-  = isTouchableInfoK info
-  | otherwise
-  = False
+isImmutableVar :: TcVar v => v -> Bool
+isImmutableVar v = isSkolemVar v
 
-isTouchableMetaKiVar :: TcLevel -> TcKiVar -> Bool
-isTouchableMetaKiVar ctxt_tclvl kv
-  | isKiVar kv
-  , MetaKv { mkv_tclvl = kv_tclvl, mkv_info = info } <- tcKiVarDetails kv
-  , isTouchableInfoK info
-  = assertPpr (checkTcLevelInvariant ctxt_tclvl kv_tclvl)
-              (ppr kv $$ ppr kv_tclvl $$ ppr ctxt_tclvl)
-    $ kv_tclvl `sameDepthAs` ctxt_tclvl
-  | otherwise = False
+isSkolemVar :: TcVar v => v -> Bool
+isSkolemVar v = case tcVarDetails v of
+  MetaVar {} -> False
+  _ -> True
 
-isImmutableTyVar :: TypeVar -> Bool
-isImmutableTyVar tv = isSkolemTyVar tv
+isMetaVar :: TcVar v => v -> Bool
+isMetaVar v = case tcVarDetails v of
+                MetaVar {} -> True
+                _ -> False
 
-isImmutableKiVar :: KindVar -> Bool
-isImmutableKiVar tv = isSkolemKiVar tv
+isAmbiguousVar :: TcVar v => v -> Bool
+isAmbiguousVar v = case tcVarDetails v of
+  MetaVar {} -> True
+  _ -> False
 
-isSkolemTyVar :: TcTyVar -> Bool
-isSkolemTyVar tv = assertPpr (tcIsTcTyVar tv) (ppr tv)
-  $ case tcTyVarDetails tv of
-      MetaTv {} -> False
-      _ -> True
-
-isSkolemKiVar :: TcKiVar -> Bool
-isSkolemKiVar kv = assertPpr (tcIsTcKiVar kv) (ppr kv)
-  $ case tcKiVarDetails kv of
-      MetaKv {} -> False
-      _ -> True
-
-isMetaTyVar :: TypeVar -> Bool
-isMetaTyVar tv
-  | isTyVar tv
-  = case tcTyVarDetails tv of
-      MetaTv {} -> True
-      _ -> False
-  | otherwise
-  = False
-
-isMetaKiVar :: TcKiVar -> Bool
-isMetaKiVar kv
-  | isKiVar kv
-  = case tcKiVarDetails kv of
-      MetaKv {} -> True
-      _ -> False
-  | otherwise = False
-
-isAmbiguousKiVar :: TcKiVar -> Bool
-isAmbiguousKiVar kv
-  | isKiVar kv
-  = case tcKiVarDetails kv of
-      MetaKv {} -> True
-      _ -> False
-  | otherwise = False
-
-isConcreteKiVar_maybe :: TcKiVar -> Maybe ConcreteKvOrigin
-isConcreteKiVar_maybe kv
-  | isTcKiVar kv
-  , MetaKv { mkv_info = info } <- tcKiVarDetails kv
+isConcreteVar_maybe :: TcVar v => v -> Maybe ConcreteKvOrigin
+isConcreteVar_maybe kv 
+  | MetaVar { mv_info = info } <- tcVarDetails kv
   = case info of
-      KiVarKv -> Nothing
-      TauKv -> Nothing
+      VarVar -> Nothing
+      TauVar -> Nothing
   | otherwise
   = Nothing
 
-isConcreteKiVarKi_maybe :: TcMonoKind -> Maybe (TcKiVar, ConcreteKvOrigin)
-isConcreteKiVarKi_maybe (KiVarKi kv) = (kv,) <$> isConcreteKiVar_maybe kv
+isConcreteKiVarKi_maybe :: AnyMonoKind -> Maybe (TcKiVar, ConcreteKvOrigin)
+isConcreteKiVarKi_maybe (KiVarKi kv)
+  = handleAnyKv (const Nothing) (\kv -> (kv, ) <$> isConcreteVar_maybe kv) kv
 isConcreteKiVarKi_maybe _ = Nothing
 
-isConcreteInfoK :: MetaInfoK -> Bool
-isConcreteInfoK KiVarKv = False
-isConcreteInfoK TauKv = False
+isConcreteInfo :: MetaInfo -> Bool
+isConcreteInfo VarVar = False
+isConcreteInfo TauVar = False
 
-isConcreteKiVar :: TcKiVar -> Bool
-isConcreteKiVar = isJust . isConcreteKiVar_maybe
+isConcreteVar :: TcVar v => v -> Bool
+isConcreteVar = isJust . isConcreteVar_maybe
 
-isTouchableInfoK :: MetaInfoK -> Bool
-isTouchableInfoK _info = True
+isTouchableInfo :: MetaInfo -> Bool
+isTouchableInfo _info = True
 
-metaTyVarRef :: TypeVar -> IORef MetaDetails
-metaTyVarRef tv = case tcTyVarDetails tv of
-                    MetaTv { mtv_ref = ref } -> ref
-                    _ -> pprPanic "metaTyVarRef" (ppr tv)
+metaVarRef :: TcVar v => v -> IORef (MetaDetails (TcDetailsThing v))
+metaVarRef v = case tcVarDetails v of
+  MetaVar { mv_ref = ref } -> ref
+  _ -> pprPanic "metaVarRef" (ppr v)
 
-metaKiVarInfo :: TcKiVar -> MetaInfoK
-metaKiVarInfo kv = case tcKiVarDetails kv of
-  MetaKv { mkv_info = info } -> info
-  _ -> pprPanic "metaKiVarInfo" (ppr kv)
+metaVarInfo :: TcVar v => v -> MetaInfo
+metaVarInfo v = case tcVarDetails v of
+  MetaVar { mv_info = info } -> info
+  _ -> pprPanic "metaKiVarInfo" (ppr v)
 
-metaKiVarRef :: KindVar -> IORef MetaDetailsK
-metaKiVarRef kv = case tcKiVarDetails kv of
-                    MetaKv { mkv_ref = ref } -> ref
-                    _ -> pprPanic "metaKiVarRef" (ppr kv)
+setMetaVarTcLevel :: TcVar v => v -> TcLevel -> v
+setMetaVarTcLevel v tclvl = case tcVarDetails v of
+  details@(MetaVar {})
+    -> setTcVarDetails v (details { mv_tclvl = tclvl })
+  _ -> pprPanic "metaKiVarTcLevel" (ppr v)
 
-setMetaKiVarTcLevel :: TcKiVar -> TcLevel -> TcKiVar
-setMetaKiVarTcLevel kv tclvl = case tcKiVarDetails kv of
-                                 details@(MetaKv {})
-                                   -> setTcKiVarDetails kv (details { mkv_tclvl = tclvl })
-                                 _ -> pprPanic "metaKiVarTcLevel" (ppr kv)
+isTcVarVar :: TcVar v => v -> Bool
+isTcVarVar v = case tcVarDetails v of
+  MetaVar { mv_info = VarVar } -> True
+  _ -> False
 
-isTyVarTyVar :: Var -> Bool
-isTyVarTyVar tv
-  | isTcTyVar tv
-  = case tcTyVarDetails tv of
-      MetaTv { mtv_info = TyVarTv } -> True
-      _ -> False
-  | otherwise
-  = False
-
-isKiVarKiVar :: Var -> Bool
-isKiVarKiVar kv
-  | isTcKiVar kv
-  = case tcKiVarDetails kv of
-      MetaKv { mkv_info = KiVarKv } -> True
-      _ -> False
-  | otherwise
-  = False
-
-isFlexi :: MetaDetails' tk -> Bool
+isFlexi :: MetaDetails tk -> Bool
 isFlexi Flexi = True
 isFlexi _ = False
 
-mkKiVarNamePairs :: [KindVar] -> [(Name, KindVar)]
-mkKiVarNamePairs kvs = [(kiVarName kv, kv) | kv <- kvs ]
+mkKiVarNamePairs :: [TcKiVar] -> [(Name, TcKiVar)]
+mkKiVarNamePairs kvs = [(varName kv, kv) | kv <- kvs ]
 
-ambigKvsOfKi :: TcMonoKind -> [KindVar]
-ambigKvsOfKi ki = filter isAmbiguousKiVar kvs
+ambigKvsOfKi :: AnyMonoKind -> [TcKiVar]
+ambigKvsOfKi ki = filterAnyTcKiVar isAmbiguousVar kvs
   where
-    kvs = kiCoVarsOfMonoKindList ki
+    kvs = varsOfMonoKindList ki
 
 {- *********************************************************************
 *                                                                      *
@@ -386,22 +335,22 @@ ambigKvsOfKi ki = filter isAmbiguousKiVar kvs
 *                                                                      *
 ********************************************************************* -}
 
-tcSplitFunKi_maybe :: Kind -> Maybe (FunKiFlag, MonoKind, MonoKind)
-tcSplitFunKi_maybe = splitFunKi_maybe
+-- tcSplitFunKi_maybe :: Kind -> Maybe (FunKiFlag, MonoKind, MonoKind)
+-- tcSplitFunKi_maybe = splitFunKi_maybe
 
-tcSplitMonoFunKi_maybe :: MonoKind -> Maybe (FunKiFlag, MonoKind, MonoKind)
+tcSplitMonoFunKi_maybe :: AnyMonoKind -> Maybe (FunKiFlag, AnyMonoKind, AnyMonoKind)
 tcSplitMonoFunKi_maybe = splitMonoFunKi_maybe
 
-tcSplitForAllKi_maybe :: Kind -> Maybe (KindVar, Kind)
+tcSplitForAllKi_maybe :: AnyKind -> Maybe (AnyKiVar, AnyKind)
 tcSplitForAllKi_maybe = splitForAllKi_maybe
 
-tcSplitPiKi_maybe :: Kind -> Maybe (Either (KindVar, Kind) (FunKiFlag, MonoKind, MonoKind))
-tcSplitPiKi_maybe ki = assert (isMaybeKiBinder ski) ski
-  where
-    ski = splitPiKi_maybe ki
+-- tcSplitPiKi_maybe :: Kind -> Maybe (Either (KindVar, Kind) (FunKiFlag, MonoKind, MonoKind))
+-- tcSplitPiKi_maybe ki = assert (isMaybeKiBinder ski) ski
+--   where
+--     ski = splitPiKi_maybe ki
 
-    isMaybeKiBinder (Just (Left (kv, _))) = isKiVar kv
-    isMaybeKiBinder _ = True
+--     isMaybeKiBinder (Just (Left (kv, _))) = isKiVar kv
+--     isMaybeKiBinder _ = True
 
 {- *********************************************************************
 *                                                                      *
@@ -409,18 +358,18 @@ tcSplitPiKi_maybe ki = assert (isMaybeKiBinder ski) ski
 *                                                                      *
 ********************************************************************* -}
 
-isKiVarKcPred :: PredKind -> Bool
+isKiVarKcPred :: AnyPredKind -> Bool
 isKiVarKcPred ki = case getPredKcKis_maybe ki of
   Just (_, kis) -> all isKiVarKi kis
   _ -> False
 
-kiEvVarPred :: KiEvVar -> MonoKind
+kiEvVarPred :: AnyKiCoVar AnyKiVar -> AnyMonoKind
 kiEvVarPred var = varKind var
 
-mkMinimalBy :: forall a. (a -> PredKind) -> [a] -> [a]
+mkMinimalBy :: forall a. (a -> AnyPredKind) -> [a] -> [a]
 mkMinimalBy get_pred xs = go preds_with_eqx []
   where
-    preds_with_eqx :: [(PredKind, [PredKind], a)]
+    preds_with_eqx :: [(AnyPredKind, [AnyPredKind], a)]
     preds_with_eqx = [ (pred, pred : eq_extras pred, x)
                      | x <- xs
                      , let pred = get_pred x ]
@@ -429,7 +378,7 @@ mkMinimalBy get_pred xs = go preds_with_eqx []
                        EqPred k1 k2 -> [mkKiEqPred k2 k1]
                        _ -> []
  
-    go :: [(PredKind, [PredKind], a)] -> [(PredKind, [PredKind], a)] -> [a]
+    go :: [(AnyPredKind, [AnyPredKind], a)] -> [(AnyPredKind, [AnyPredKind], a)] -> [a]
     go [] min_preds = reverse (map thdOf3 min_preds)
     go (work_item@(p, _, _) : work_list) min_preds
       | EqPred k1 k2 <- classifyPredKind p
@@ -440,7 +389,7 @@ mkMinimalBy get_pred xs = go preds_with_eqx []
       | otherwise
       = go work_list (work_item : min_preds)
 
-    in_cloud :: PredKind -> [(PredKind, [PredKind], a)] -> Bool
+    in_cloud :: AnyPredKind -> [(AnyPredKind, [AnyPredKind], a)] -> Bool
     in_cloud p ps = or [ p `tcEqMonoKind` p' | (_, eqxs, _) <- ps, p' <- eqxs ]
 
 {- *********************************************************************
@@ -449,16 +398,16 @@ mkMinimalBy get_pred xs = go preds_with_eqx []
 *                                                                      *
 ********************************************************************* -}
 
-tcSplitForAllTyVarBinders :: Type -> ([TyVarBinder], Type)
-tcSplitForAllTyVarBinders ty = assert (all isTyVarBinder (fst sty)) sty
+tcSplitForAllTyVarBinders :: AnyType -> ([AnyTyVarBinder], AnyType)
+tcSplitForAllTyVarBinders ty = sty
   where sty = splitForAllForAllTyBinders ty
 
-tcSplitTyLamTyVarBinders :: Type -> ([TypeVar], Type)
-tcSplitTyLamTyVarBinders ty = assert (all isTyVar (fst sty)) sty
+tcSplitTyLamTyVarBinders :: AnyType -> ([AnyTyVar AnyKiVar], AnyType)
+tcSplitTyLamTyVarBinders ty = sty
   where sty = splitTyLamTyBinders ty
 
-tcSplitBigLamTyVarBinders :: Type -> ([KindVar], Type)
-tcSplitBigLamTyVarBinders ty = assert (all isKiVar (fst sty)) sty
+tcSplitBigLamTyVarBinders :: AnyType -> ([AnyKiVar], AnyType)
+tcSplitBigLamTyVarBinders ty = sty
   where sty = splitBigLamTyBinders ty
 
 {- *********************************************************************
@@ -467,7 +416,7 @@ tcSplitBigLamTyVarBinders ty = assert (all isKiVar (fst sty)) sty
 *                                                                      *
 ********************************************************************* -}
 
-isRigidKi :: MonoKind -> Bool
+isRigidKi :: MonoKind kv -> Bool
 isRigidKi ki = case ki of
   KiConApp {} -> True
   FunKi {} -> True

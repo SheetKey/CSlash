@@ -58,6 +58,7 @@ import CSlash.Types.Name
 -- import GHC.Types.SafeHaskell
 import CSlash.Types.Id
 import CSlash.Types.TypeEnv
+import CSlash.Types.Var (TcKiCoVar)
 import CSlash.Types.Var.Set
 import CSlash.Types.Var.Env
 import CSlash.Types.SrcLoc
@@ -579,7 +580,7 @@ addErrCtxt :: SDoc -> TcM a -> TcM a
 addErrCtxt msg = addErrCtxtM (\env -> return (env, msg))
 {-# INLINE addErrCtxt #-}
 
-addErrCtxtM :: (TidyEnv -> ZonkM (TidyEnv, SDoc)) -> TcM a -> TcM a
+addErrCtxtM :: (AnyTidyEnv -> ZonkM (AnyTidyEnv, SDoc)) -> TcM a -> TcM a
 addErrCtxtM ctxt = pushCtxt (False, ctxt)
 {-# INLINE addErrCtxtM #-}
 
@@ -707,7 +708,7 @@ addErrTc err_msg = do
   env0 <- liftZonkM tcInitTidyEnv
   addErrTcM (env0, err_msg)
 
-addErrTcM :: (TidyEnv, TcRnMessage) -> TcM ()
+addErrTcM :: (AnyTidyEnv, TcRnMessage) -> TcM ()
 addErrTcM (tidy_env, err_msg) = do
   ctxt <- getErrCtxt
   loc <- getSrcSpanM
@@ -739,15 +740,15 @@ add_diagnostic msg = do
   unit_state <- cs_units <$> getTopEnv
   mkTcRnMessage loc (TcRnMessageWithInfo unit_state msg) >>= reportDiagnostic
 
-add_err_tcm :: TidyEnv -> TcRnMessage -> SrcSpan -> [ErrCtxt] -> TcM ()
+add_err_tcm :: AnyTidyEnv -> TcRnMessage -> SrcSpan -> [ErrCtxt] -> TcM ()
 add_err_tcm tidy_env msg loc ctxt = do
   err_info <- mkErrInfo tidy_env ctxt
   add_long_err_at loc (mkDetailedMessage (ErrInfo err_info Outputable.empty) msg)
 
-mkErrInfo :: TidyEnv -> [ErrCtxt] -> TcM SDoc
+mkErrInfo :: AnyTidyEnv -> [ErrCtxt] -> TcM SDoc
 mkErrInfo env ctxts = go False 0 env ctxts
   where
-    go :: Bool -> Int -> TidyEnv -> [ErrCtxt] -> TcM SDoc
+    go :: Bool -> Int -> AnyTidyEnv -> [ErrCtxt] -> TcM SDoc
     go _ _ _ [] = return empty
     go dbg n env ((is_landmark, ctxt) : ctxts)
       | is_landmark || n < mAX_CONTEXTS
@@ -785,7 +786,7 @@ newNoTcKiEvBinds = do
   return $ KiCoEvBindsVar { kebv_kcvs = kcvs_ref
                           , kebv_uniq = uniq }
 
-getTcKiEvKiCoVars :: KiEvBindsVar -> TcM KiCoVarSet
+getTcKiEvKiCoVars :: KiEvBindsVar -> TcM (MkVarSet (TcKiCoVar TcKiVar))
 getTcKiEvKiCoVars ev_binds_var = readTcRef (kebv_kcvs ev_binds_var)
 
 getTcKiEvBindsMap :: KiEvBindsVar -> TcM KiEvBindMap

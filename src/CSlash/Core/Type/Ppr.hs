@@ -20,7 +20,7 @@ pprType = pprPrecType topPrec
 pprPrecType :: VarHasKind tv kv => PprPrec -> Type tv kv -> SDoc
 pprPrecType = pprPrecTypeX emptyTidyEnv
 
-pprPrecTypeX :: VarHasKind tv kv => MkTidyEnv tv -> PprPrec -> Type tv kv -> SDoc
+pprPrecTypeX :: VarHasKind tv kv => MkTidyEnv tv kv -> PprPrec -> Type tv kv -> SDoc
 pprPrecTypeX env prec ty
   = getPprStyle $ \ sty ->
     getPprDebug $ \ debug ->

@@ -49,7 +49,7 @@ import Data.Data
 
 type instance XWildPat Ps = NoExtField
 type instance XWildPat Rn = NoExtField
-type instance XWildPat Tc = Type
+type instance XWildPat Tc = Type (TyVar KiVar) KiVar
 
 type instance XVarPat (CsPass _) = NoExtField
 type instance XTyVarPat (CsPass _) = NoExtField
@@ -64,11 +64,11 @@ type instance XParPat Tc = NoExtField
 
 type instance XTuplePat Ps = [AddEpAnn]
 type instance XTuplePat Rn = NoExtField
-type instance XTuplePat Tc = [Type]
+type instance XTuplePat Tc = [Type (TyVar KiVar) KiVar]
 
 type instance XSumPat Ps = EpAnnSumPat
 type instance XSumPat Rn = NoExtField
-type instance XSumPat Tc = [Type]
+type instance XSumPat Tc = [Type (TyVar KiVar) KiVar]
 
 type instance XConPat Ps = [AddEpAnn]
 type instance XConPat Rn = NoExtField
@@ -78,15 +78,15 @@ type instance XLitPat (CsPass _) = NoExtField
 
 type instance XNPat Ps = [AddEpAnn]
 type instance XNPat Rn = [AddEpAnn]
-type instance XNPat Tc = Type
+type instance XNPat Tc = Type (TyVar KiVar) KiVar
 
 type instance XSigPat Ps = [AddEpAnn]
 type instance XSigPat Rn = NoExtField
-type instance XSigPat Tc = Type
+type instance XSigPat Tc = Type (TyVar KiVar) KiVar
 
 type instance XKdSigPat Ps = [AddEpAnn]
 type instance XKdSigPat Rn = NoExtField
-type instance XKdSigPat Tc = Kind
+type instance XKdSigPat Tc = Kind KiVar
 
 type instance XImpPat Ps = EpAnnImpPat
 type instance XImpPat Rn = NoExtField
@@ -98,7 +98,7 @@ type instance XXPat Tc = XXPatCsTc
 
 type instance ConLikeP Ps = RdrName
 type instance ConLikeP Rn = Name
-type instance ConLikeP Tc = ConLike
+type instance ConLikeP Tc = ConLike (TyVar KiVar) KiVar
 
 type instance XConPatTyArg Ps = [AddEpAnn]
 type instance XConPatTyArg Rn = NoExtField
@@ -225,4 +225,4 @@ pprConArgs (InfixCon p1 p2) = sep [ pprParendLPat appPrec p1, pprParendLPat appP
 
 type instance Anno (Pat (CsPass p)) = SrcSpanAnnA
 type instance Anno (CsOverLit (CsPass p)) = EpAnnCO
-type instance Anno ConLike = SrcSpanAnnN
+type instance Anno (ConLike tv kv) = SrcSpanAnnN

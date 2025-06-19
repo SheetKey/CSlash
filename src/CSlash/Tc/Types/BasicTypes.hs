@@ -25,13 +25,13 @@ import CSlash.Utils.Misc
 
 type TcBinderStack = [TcBinder]
 
-type TcId = Id
+type TcId = Id (TcTyVar TcKiVar) TcKiVar
 
 data TcBinder
   = TcIdBndr TcId TopLevelFlag
   | TcIdBndr_ExpType Name ExpType TopLevelFlag
-  | TcTvBndr Name TypeVar
-  | TcKvBndr Name KindVar
+  | TcTvBndr Name (TcTyVar TcKiVar)
+  | TcKvBndr Name TcKiVar
 
 instance Outputable TcBinder where
   ppr (TcIdBndr id top_lvl) = ppr id <> brackets (ppr top_lvl)
@@ -52,16 +52,16 @@ instance HasOccName TcBinder where
 ********************************************************************* -}
 
 data TcTyKiThing
-  = AGlobal TyThing
+  = AGlobal (TyThing (TcTyVar TcKiVar) TcKiVar)
   | ATcId
-    { tct_id :: Id
+    { tct_id :: Id (TcTyVar TcKiVar) TcKiVar
     , tct_info :: IdBindingInfo
     }
-  | ATyVar Name TcTyVar
+  | ATyVar Name (TcTyVar TcKiVar)
   | AKiVar Name TcKiVar -- should make a new type 'TcKiThing'
-  | ATcTyCon TyCon
+  | ATcTyCon (TyCon (TcTyVar TcKiVar) TcKiVar)
 
-tcTyThingTyCon_maybe :: TcTyKiThing -> Maybe TyCon
+tcTyThingTyCon_maybe :: TcTyKiThing -> Maybe (TyCon (TcTyVar TcKiVar) TcKiVar)
 tcTyThingTyCon_maybe (AGlobal (ATyCon tc)) = Just tc
 tcTyThingTyCon_maybe (ATcTyCon tc_tc) = Just tc_tc
 tcTyThingTyCon_maybe _ = Nothing

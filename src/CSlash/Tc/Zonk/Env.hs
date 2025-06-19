@@ -7,9 +7,9 @@ module CSlash.Tc.Zonk.Env where
 
 import CSlash.Core.Type.Rep ( Type )
 import CSlash.Core.Kind ( Kind, MonoKind )
-import CSlash.Types.Var ( TypeVar, KindVar, Var )
+import CSlash.Types.Var ( TcTyVar, TyVar, AnyTyVar, TcKiVar, KiVar, AnyKiVar )
 
-import CSlash.Types.Var ( Id, isTyVar )
+import CSlash.Types.Var ( Id )
 import CSlash.Types.Var.Env
 
 import CSlash.Utils.Monad.Codensity
@@ -26,11 +26,11 @@ import GHC.Exts                  ( oneShot )
 
 data ZonkEnv = ZonkEnv
   { ze_flexi :: !ZonkFlexi
-  , ze_tv_env :: TyVarEnv TypeVar
-  , ze_kv_env :: KiVarEnv KindVar
-  , ze_id_env :: IdEnv Id
-  , ze_meta_tv_env :: IORef (TyVarEnv Type)
-  , ze_meta_kv_env :: IORef (KiVarEnv MonoKind)
+  , ze_tv_env :: MkVarEnv (AnyTyVar AnyKiVar) (AnyTyVar AnyKiVar)
+  , ze_kv_env :: MkVarEnv AnyKiVar AnyKiVar
+  , ze_id_env :: MkVarEnv (Id (AnyTyVar AnyKiVar) AnyKiVar) (Id (AnyTyVar AnyKiVar) AnyKiVar)
+  , ze_meta_tv_env :: IORef (MkVarEnv (AnyTyVar AnyKiVar) (Type (AnyTyVar AnyKiVar) AnyKiVar))
+  , ze_meta_kv_env :: IORef (MkVarEnv AnyKiVar (MonoKind AnyKiVar))
   }
 
 data ZonkFlexi
@@ -118,10 +118,10 @@ nestZonkEnv f = ZonkBndrT $ \k -> case k () of
 getZonkEnv :: Monad m => ZonkT m ZonkEnv
 getZonkEnv = ZonkT return
 
-extendTyZonkEnv :: TypeVar -> ZonkBndrT m ()
+extendTyZonkEnv :: AnyTyVar AnyKiVar -> ZonkBndrT m ()
 extendTyZonkEnv tv = nestZonkEnv $ \ze@(ZonkEnv { ze_tv_env = ty_env }) ->
                                      ze { ze_tv_env = extendVarEnv ty_env tv tv }
 
-extendKiZonkEnv :: KindVar -> ZonkBndrT m ()
+extendKiZonkEnv :: AnyKiVar -> ZonkBndrT m ()
 extendKiZonkEnv kv = nestZonkEnv $ \ze@(ZonkEnv { ze_kv_env = ki_env }) ->
                                      ze { ze_kv_env = extendVarEnv ki_env kv kv }

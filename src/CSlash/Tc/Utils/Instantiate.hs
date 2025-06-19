@@ -14,6 +14,7 @@ import CSlash.Cs
 import CSlash.Core.Predicate
 import CSlash.Core ( Expr(..) ) 
 import CSlash.Core.Type
+import CSlash.Core.Type.Subst
 import CSlash.Core.Kind
 import CSlash.Core.Kind.Subst
 -- import CSlash.Core.TyCo.Ppr ( debugPprType )
@@ -66,7 +67,7 @@ import Data.Function ( on )
 *                                                                      *
 ********************************************************************* -}
 
-instCallKiConstraints :: CtOrigin -> [TcPredKind] -> TcM [KiEvType]
+instCallKiConstraints :: CtOrigin -> [TcPredKind] -> TcM [TcKiEvType]
 instCallKiConstraints orig preds
   | null preds
   = return []
@@ -75,13 +76,13 @@ instCallKiConstraints orig preds
        traceTc "instCallKiConstraints" (ppr evs)
        return evs
   where
-    go :: TcPredKind -> TcM KiEvType
+    go :: TcPredKind -> TcM TcKiEvType
     go pred
       | KiConApp EQKi [k1, k2] <- pred
-      = do co <- unifyKind Nothing k1 k2
+      = do co <- panic "unifyKind Nothing k1 k2"
            return $ kiEvCoercion co
       | otherwise
-      = emitWanted orig pred
+      = panic "emitWanted orig pred"
 
 {- *********************************************************************
 *                                                                      *
@@ -89,7 +90,8 @@ instCallKiConstraints orig preds
 *                                                                      *
 ********************************************************************* -}
 
-tcInstInvisibleKiBinder :: Subst -> KindVar -> TcM (Subst, TcType)
+tcInstInvisibleKiBinder :: TvSubst tv kv -> KiVar -> TcM (TvSubst tv kv, TcType)
 tcInstInvisibleKiBinder subst kv = do
-  (subst', kv') <- newMetaKiVarX subst kv
-  return (subst', Embed (mkKiVarMKi kv'))
+  -- (subst', kv') <- newMetaKiVarX subst kv
+  -- return (subst', Embed (mkKiVarMKi kv'))
+  panic "tcInstInvisibleKiBinder"

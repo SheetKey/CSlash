@@ -11,6 +11,7 @@ import CSlash.Types.Hint.Ppr ()
 import CSlash.Types.Error.Codes
 import CSlash.Types.Name
 import CSlash.Types.TyThing
+import CSlash.Types.Var (TyVar, KiVar)
 
 import CSlash.Unit.State
 import CSlash.Unit.Module
@@ -243,7 +244,7 @@ homeModError mod location = text "attempting to use module " <> quotes (ppr mod)
         Nothing -> empty)
   <+> text "which is not loaded"
 
-missingDeclInInterface :: Name -> [TyThing] -> SDoc
+missingDeclInInterface :: Name -> [TyThing (TyVar KiVar) KiVar] -> SDoc
 missingDeclInInterface name things =
   whenPprDebug (found_things $$ empty) $$
   hang (text "Can't find interface-file declaration for"

@@ -47,7 +47,7 @@ import CSlash.Types.SourceText
 import CSlash.Types.Id
 import CSlash.Types.Var as Var
 import CSlash.Types.Var.Set
-import CSlash.Types.Var.Env( TidyEnv, TyVarEnv, {-mkVarEnv,-} lookupVarEnv )
+import CSlash.Types.Var.Env( MkTidyEnv, TyVarEnv, {-mkVarEnv,-} lookupVarEnv )
 import CSlash.Types.Name
 import CSlash.Types.Name.Set
 import CSlash.Types.Name.Env

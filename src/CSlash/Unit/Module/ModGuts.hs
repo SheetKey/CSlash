@@ -29,12 +29,13 @@ import CSlash.Types.Name.Set (NameSet)
 import CSlash.Types.SourceFile ( CsSource(..){-, hscSourceToIsBoot-} )
 import CSlash.Types.SrcLoc
 -- import GHC.Types.CostCentre
+import CSlash.Types.Var (TyVar, KiVar)
 
 import Data.Set (Set)
 
 data CgGuts = CgGuts
   { cg_module :: !Module
-  , cg_tycons :: [TyCon]
+  , cg_tycons :: [TyCon (TyVar KiVar) KiVar]
   , cg_binds :: CoreProgram
   --, cg_ccs :: [CostCentre]
   --, cg_foreign :: !ForeignStubs

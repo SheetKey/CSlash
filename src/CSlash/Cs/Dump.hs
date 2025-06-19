@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
@@ -151,10 +152,10 @@ showAstData bs ba a0 = blankLine $$ showAstData' a0
           BlankEpAnnotations -> parens $ text "blanked:" <+> text "AddEpAnn"
           NoBlankEpAnnotations -> parens $ text "AddEpAnn" <+> ppr a <+> epaAnchor s
 
-        var :: Var -> SDoc
+        var :: Var (TyVar KiVar) KiVar -> SDoc
         var v = braces $ text "Var:" <+> ppr v
 
-        dataCon :: DataCon -> SDoc
+        dataCon :: DataCon (TyVar KiVar) KiVar -> SDoc
         dataCon c = braces $ text "DataCon:" <+> ppr c
 
         bagRdrName :: Bag (LocatedA (CsBind Ps)) -> SDoc

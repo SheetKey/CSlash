@@ -17,6 +17,7 @@ import CSlash.Core.DataCon
 import CSlash.Core.TyCon
 
 import CSlash.Types.Avail
+import CSlash.Types.Var (TyVar, KiVar)
 import CSlash.Types.Id
 import CSlash.Types.Name
 import CSlash.Types.Name.Env
@@ -56,14 +57,14 @@ knownKeyNames
              , map idName wiredInIds
              , basicKnownKeyNames
              ]
-    wired_tycon_kk_names :: TyCon -> [Name]
+    wired_tycon_kk_names :: TyCon (TyVar KiVar) KiVar -> [Name]
     wired_tycon_kk_names tc = tyConName tc : implicits
       where implicits = concatMap thing_kk_names (implicitTyConThings tc)
 
-    wired_datacon_kk_names :: DataCon -> [Name]
+    wired_datacon_kk_names :: DataCon (TyVar KiVar) KiVar -> [Name]
     wired_datacon_kk_names dc = [dataConName dc]
 
-    thing_kk_names :: TyThing -> [Name]
+    thing_kk_names :: TyThing (TyVar KiVar) KiVar -> [Name]
     thing_kk_names (ATyCon tc) = wired_tycon_kk_names tc
     thing_kk_names (AConLike (RealDataCon dc)) = wired_datacon_kk_names dc
     thing_kk_names thing = [getName thing]
@@ -118,7 +119,7 @@ cslBuiltInExports
     | tc <- builtInTyCons
     , let n = tyConName tc ]
 
-builtInTyCons :: [TyCon]
+builtInTyCons :: [TyCon (TyVar KiVar) KiVar]
 builtInTyCons
   = boolTyCon
   : (fst <$> elems sumArr)

@@ -122,7 +122,7 @@ import CSlash.Language.Syntax.Extension (NoExtField (NoExtField))
 --                               , ifBinders = binders, ifResKind = res_kind }) = do
 --   panic "tc_iface_decl IfaceSynonym"
 
-tcIfaceDecls :: Bool -> [(Fingerprint, IfaceDecl)] -> IfL [(Name, TyThing)]
+tcIfaceDecls :: Bool -> [(Fingerprint, IfaceDecl)] -> IfL [(Name, TyThing (Var.TyVar Var.KiVar) Var.KiVar)]
 
 -- remove empty case later later:
 tcIfaceDecls _ [] = return []

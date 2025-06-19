@@ -85,5 +85,5 @@ tcKiVar name = do
   traceTc "lk1k" (ppr name)
   thing <- tcLookup name
   case thing of
-    AKiVar _ kv -> return $ mkKiVarMKi kv
+    AKiVar _ kv -> return $ mkKiVarKi kv
     _ -> wrongThingErr WrongThingKind thing name

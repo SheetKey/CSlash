@@ -13,8 +13,9 @@ import CSlash.Types.CompleteMatch
 import CSlash.Types.Name
 import CSlash.Unit.Types      ( Module )
 import CSlash.Utils.Fingerprint
+import CSlash.Types.Var (TyVar, KiVar)
 
 import Data.List.NonEmpty ( NonEmpty )
 
 tcIfaceCompleteMatches :: [IfaceCompleteMatch] -> IfL CompleteMatches
-tcIfaceDecls :: Bool -> [(Fingerprint, IfaceDecl)] -> IfL [(Name,TyThing)]
+tcIfaceDecls :: Bool -> [(Fingerprint, IfaceDecl)] -> IfL [(Name, TyThing (TyVar KiVar) KiVar)]

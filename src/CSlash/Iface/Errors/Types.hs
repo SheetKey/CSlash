@@ -8,6 +8,7 @@ import CSlash.Unit.Types (Module, InstalledModule, UnitId, Unit)
 import CSlash.Unit.State (UnitState, ModuleSuggestion, ModuleOrigin, UnusableUnit, UnitInfo)
 import CSlash.Language.Syntax.Module.Name ( ModuleName )
 import CSlash.Unit.Module.Location
+import CSlash.Types.Var (TyVar, KiVar)
 
 import GHC.Generics ( Generic )
 import GHC.Exception.Type (SomeException)
@@ -22,7 +23,7 @@ data InterfaceLookingFor
 
 data IfaceMessage
   = Can'tFindInterface MissingInterfaceError InterfaceLookingFor
-  | Can'tFindNameInInterface Name [TyThing]
+  | Can'tFindNameInInterface Name [TyThing (TyVar KiVar) KiVar]
   | CircularImport !Module
   deriving Generic
 

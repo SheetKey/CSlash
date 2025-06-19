@@ -213,13 +213,17 @@ rnSwap (RV2 { envL = envL, envR = envR, in_scope = in_scope })
 *                                                                      *
 ********************************************************************* -}
 
-type MkTidyEnv v = (TidyOccEnv, MkVarEnv v v)
+type AnyTidyEnv = MkTidyEnv (AnyTyVar AnyKiVar) AnyKiVar
 
-emptyTidyEnv :: MkTidyEnv v
-emptyTidyEnv = (emptyTidyOccEnv, emptyVarEnv)
+type MkTidyEnv tv kv = ( TidyOccEnv
+                       , MkVarEnv tv tv
+                       , MkVarEnv kv kv )
 
-mkEmptyTidyEnv :: TidyOccEnv -> MkTidyEnv v
-mkEmptyTidyEnv occ_env = (occ_env, emptyVarEnv)
+emptyTidyEnv :: MkTidyEnv tv kv
+emptyTidyEnv = (emptyTidyOccEnv, emptyVarEnv, emptyVarEnv)
+
+mkEmptyTidyEnv :: TidyOccEnv -> MkTidyEnv tv kv
+mkEmptyTidyEnv occ_env = (occ_env, emptyVarEnv, emptyVarEnv)
 
 {- *********************************************************************
 *                                                                      *

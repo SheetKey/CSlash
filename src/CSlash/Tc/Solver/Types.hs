@@ -37,20 +37,20 @@ isEmptyKcAppMap m = isEmptyDKiConEnv m
 emptyKcAppMap :: KcAppMap a
 emptyKcAppMap = emptyDKiConEnv
 
-findKcApp :: KcAppMap a -> KiCon -> MonoKind -> MonoKind -> Maybe a
+findKcApp :: KcAppMap a -> KiCon -> AnyMonoKind -> AnyMonoKind -> Maybe a
 findKcApp m kc ki1 ki2 = do
   kis_map <- lookupDKiConEnv m kc
   lookupTM [ki1, ki2] kis_map
 
-delKcApp :: KcAppMap a -> KiCon -> MonoKind -> MonoKind -> KcAppMap a
+delKcApp :: KcAppMap a -> KiCon -> AnyMonoKind -> AnyMonoKind -> KcAppMap a
 delKcApp m kc ki1 ki2 = adjustDKiConEnv (deleteTM [ki1, ki2]) m kc
 
-insertKcApp :: KcAppMap a -> KiCon -> MonoKind -> MonoKind -> a -> KcAppMap a
+insertKcApp :: KcAppMap a -> KiCon -> AnyMonoKind -> AnyMonoKind -> a -> KcAppMap a
 insertKcApp m kc ki1 ki2 ct = alterDKiConEnv alter_km m kc
   where
     alter_km mb_km = Just (insertTM [ki1, ki2] ct (mb_km `orElse` emptyTM))
 
-alterKcApp :: forall a. KcAppMap a -> KiCon -> MonoKind -> MonoKind -> XT a -> KcAppMap a
+alterKcApp :: forall a. KcAppMap a -> KiCon -> AnyMonoKind -> AnyMonoKind -> XT a -> KcAppMap a
 alterKcApp m kc ki1 ki2 upd = alterDKiConEnv alter_km m kc
   where
     alter_km :: Maybe (ListMap KindMap a) -> Maybe (ListMap KindMap a)
@@ -83,7 +83,7 @@ type RelMap a = KcAppMap a
 emptyRelMap :: RelMap a
 emptyRelMap = emptyKcAppMap
 
-findRel :: RelMap a -> CtLoc -> KiCon -> MonoKind -> MonoKind -> Maybe a
+findRel :: RelMap a -> CtLoc -> KiCon -> AnyMonoKind -> AnyMonoKind -> Maybe a
 findRel m loc kc ki1 ki2 = findKcApp m kc ki1 ki2
 
 findRelsByRel :: RelMap a -> KiCon -> Bag a

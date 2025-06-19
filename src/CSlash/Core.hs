@@ -29,12 +29,12 @@ import Data.Word
 ********************************************************************* -}
 
 data Expr b
-  = Var Id
+  = Var (Id () ())
   | Lit Literal
   | App (Expr b) (Arg b)
   | Lam b (Expr b) -- can bind term, type, or kind vars
   | Let (Bind b) (Expr b)
-  | Case (Expr b) b Type [Alt b]
+  | Case (Expr b) b (Type () ()) [Alt b]
   deriving Data
 
 type Arg b = Expr b
@@ -43,7 +43,7 @@ data Alt b = Alt AltCon [b] (Expr b)
   deriving (Data)
 
 data AltCon
-  = DataAlt DataCon
+  = DataAlt (DataCon () ())
   | LitAlt Literal
   | DEFAULT
   deriving (Eq, Data)
@@ -112,7 +112,7 @@ isEvaldUnfolding (CoreUnfolding { uf_cache = cache }) = uf_is_value cache
 
 type CoreProgram = [CoreBind]
 
-type CoreBndr = Var
+type CoreBndr = ()
 
 type CoreExpr = Expr CoreBndr
 

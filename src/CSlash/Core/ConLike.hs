@@ -25,8 +25,9 @@ import qualified Data.List as List
 *                                                                      *
 ********************************************************************* -}
 
-data ConLike = RealDataCon DataCon
-             | PatSynCon
+data ConLike tv kv
+  = RealDataCon (DataCon tv kv)
+  | PatSynCon
 
 {- *********************************************************************
 *                                                                      *
@@ -34,42 +35,42 @@ data ConLike = RealDataCon DataCon
 *                                                                      *
 ********************************************************************* -}
 
-instance Eq ConLike where
+instance Eq (ConLike tv kv) where
   (==) = eqConLike
 
-eqConLike :: ConLike -> ConLike -> Bool
+eqConLike :: ConLike tv kv -> ConLike tv kv -> Bool
 eqConLike x y = getUnique x == getUnique y
 
-instance Uniquable ConLike where
+instance Uniquable (ConLike tv kv) where
   getUnique (RealDataCon dc) = getUnique dc
   getUnique (PatSynCon) = error "getUnique PatSynCon"
 
-instance NamedThing ConLike where
+instance NamedThing (ConLike tv kv) where
   getName (RealDataCon dc) = getName dc
   getName (PatSynCon) = error "getName PatSynCon"
 
-instance Outputable ConLike where
+instance Outputable (ConLike tv kv) where
   ppr (RealDataCon dc) = ppr dc
   ppr (PatSynCon) = error "ppr PatSynCon"
 
-instance OutputableBndr ConLike where
+instance OutputableBndr (ConLike tv kv) where
   pprInfixOcc (RealDataCon dc) = pprInfixOcc dc
   pprInfixOcc (PatSynCon) = error "pprInfixOcc PatSynCon"
   pprPrefixOcc (RealDataCon dc) = pprPrefixOcc dc
   pprPrefixOcc (PatSynCon) = error "pprPrefixOcc PatSynCon"
 
-instance Data.Data ConLike where
+instance (Data.Typeable tv, Data.Typeable kv) => Data.Data (ConLike tv kv) where
   toConstr _ = abstractConstr "ConLike"
   gunfold _ _ = error "gunfold"
   dataTypeOf _ = mkNoRepType "ConLike"
 
-conLikeArity :: ConLike -> Arity
+conLikeArity :: ConLike tv kv -> Arity
 conLikeArity (RealDataCon data_con) = dataConArity data_con
 conLikeArity PatSynCon = panic "conLikeArity PatSynCon"
 
-conLikeConInfo :: ConLike -> ConInfo
+conLikeConInfo :: ConLike tv kv -> ConInfo
 conLikeConInfo con = mkConInfo (conLikeArity con)
 
-conLikeName :: ConLike -> Name
+conLikeName :: ConLike tv kv -> Name
 conLikeName (RealDataCon data_con) = dataConName data_con
 conLikeName PatSynCon = panic "'conLikeName PatSynCon' not implemented"

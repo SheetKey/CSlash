@@ -1,10 +1,14 @@
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 
-module CSlash.Core.Kind where
+module CSlash.Core.Kind
+  ( module CSlash.Core.Kind
+  , KiVar
+  ) where
 
 import Prelude hiding ((<>))
 
@@ -25,6 +29,7 @@ import Data.IORef
 import qualified Data.Data as Data
 import Data.List (intersect)
 import Data.Maybe (isJust)
+import Data.Void (Void)
 
 {- **********************************************************************
 *                                                                       *
@@ -133,13 +138,14 @@ pprMonoKind = pprPrecMonoKind topPrec
 pprParendMonoKind :: Outputable v => MonoKind v -> SDoc
 pprParendMonoKind = pprPrecMonoKind appPrec
 
-pprPrecKind :: Outputable v => PprPrec -> Kind v -> SDoc
-pprPrecKind = pprPrecKindX emptyTidyEnv
+pprPrecKind :: Outputable kv => PprPrec -> Kind kv -> SDoc
+pprPrecKind = pprPrecKindX @Void emptyTidyEnv
 
 pprPrecMonoKind :: Outputable v => PprPrec -> MonoKind v -> SDoc
-pprPrecMonoKind = pprPrecMonoKindX emptyTidyEnv
+pprPrecMonoKind = pprPrecMonoKindX @Void emptyTidyEnv
 
-pprPrecKindX :: Outputable v => MkTidyEnv v -> PprPrec -> Kind v -> SDoc
+pprPrecKindX
+  :: forall tv kv. Outputable kv => MkTidyEnv tv kv -> PprPrec -> Kind kv -> SDoc
 pprPrecKindX env prec ki
   = getPprStyle $ \sty ->
     getPprDebug $ \debug ->
@@ -147,7 +153,8 @@ pprPrecKindX env prec ki
     then debug_ppr_ki prec ki
     else text "{pprKind not implemented}"--pprPrecIfaceKind prec (tidyToIfaceKindStyX env ty sty)
 
-pprPrecMonoKindX :: Outputable v => MkTidyEnv v -> PprPrec -> MonoKind v -> SDoc
+pprPrecMonoKindX
+  :: forall tv kv. Outputable kv => MkTidyEnv tv kv -> PprPrec -> MonoKind kv -> SDoc
 pprPrecMonoKindX env prec ki
   = getPprStyle $ \sty ->
     getPprDebug $ \debug ->
@@ -162,8 +169,8 @@ pprPrecKiCo :: (Outputable kv, Outputable kcv) => PprPrec -> KindCoercion kcv kv
 pprPrecKiCo = pprPrecKiCoX emptyTidyEnv
 
 pprPrecKiCoX
-  :: (Outputable kv, Outputable kcv)
-  => MkTidyEnv kv
+  :: (Outputable kcv, Outputable kv)
+  => MkTidyEnv kcv kv
   -> PprPrec
   -> KindCoercion kcv kv
   -> SDoc
@@ -257,6 +264,12 @@ data FunKiFlag
 instance Outputable FunKiFlag where
   ppr FKF_K_K = text "[->]"
   ppr FKF_C_K = text "[=>]"
+
+instance AsAnyKi Kind where
+  asAnyKi = undefined
+
+instance AsAnyKi MonoKind where
+  asAnyKi = undefined
 
 {- **********************************************************************
 *                                                                       *

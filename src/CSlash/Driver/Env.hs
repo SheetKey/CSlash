@@ -34,6 +34,7 @@ import CSlash.Types.Error ( emptyMessages, Messages )
 import CSlash.Types.Name
 import CSlash.Types.Name.Env
 import CSlash.Types.TyThing
+import CSlash.Types.Var (TyVar, KiVar)
 
 import CSlash.Builtin.Names ( cSLASH_PRIM )
 
@@ -103,13 +104,13 @@ csUpdateLoggerFlags :: CsEnv -> CsEnv
 csUpdateLoggerFlags h = h
   { cs_logger = setLogFlags (cs_logger h) (initLogFlags (cs_dflags h)) }
 
-lookupType :: CsEnv -> Name -> IO (Maybe TyThing)
+lookupType :: CsEnv -> Name -> IO (Maybe (TyThing (TyVar KiVar) KiVar))
 lookupType cs_env name = do
   eps <- liftIO $ csEPS cs_env
   let pte = eps_PTE eps
   return $ lookupTypeInPTE cs_env pte name
 
-lookupTypeInPTE :: CsEnv -> PackageTypeEnv -> Name -> Maybe TyThing
+lookupTypeInPTE :: CsEnv -> PackageTypeEnv -> Name -> Maybe (TyThing (TyVar KiVar) KiVar)
 lookupTypeInPTE cs_env pte name = ty
   where
     hpt = cs_HUG cs_env

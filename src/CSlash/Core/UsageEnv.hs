@@ -11,7 +11,7 @@ import CSlash.Utils.Panic
 
 data Usage = Zero | Bottom | MUsage
 
-data UsageEnv = UsageEnv !(NameEnv Kind) Bool
+data UsageEnv = UsageEnv !(NameEnv (Kind KiVar)) Bool
 
 zeroUE :: UsageEnv
 zeroUE = UsageEnv emptyNameEnv False

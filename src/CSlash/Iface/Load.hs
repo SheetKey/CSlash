@@ -92,7 +92,7 @@ import Debug.Trace (trace)
 *                                                                      *
 ********************************************************************* -}
 
-tcLookupImported_maybe :: Name -> TcM (MaybeErr IfaceMessage TyThing)
+tcLookupImported_maybe :: Name -> TcM (MaybeErr IfaceMessage WITyThing)
 tcLookupImported_maybe name = do
   cs_env <- getTopEnv
   mb_thing <- liftIO (lookupType cs_env name)
@@ -100,7 +100,7 @@ tcLookupImported_maybe name = do
     Just thing -> return (Succeeded thing)
     Nothing -> tcImportDecl_maybe name
 
-tcImportDecl_maybe :: Name -> TcM (MaybeErr IfaceMessage TyThing)
+tcImportDecl_maybe :: Name -> TcM (MaybeErr IfaceMessage WITyThing)
 tcImportDecl_maybe name
   | Just thing <- wiredInNameTyThing_maybe name
   = do when (needWiredInHomeIface thing)
@@ -109,7 +109,7 @@ tcImportDecl_maybe name
   | otherwise
   = initIfaceTcRn (importDecl name)
 
-importDecl :: Name -> IfM lcl (MaybeErr IfaceMessage TyThing)
+importDecl :: Name -> IfM lcl (MaybeErr IfaceMessage WITyThing)
 importDecl name = assert (not (isWiredInName name)) $ do
   logger <- getLogger
   let nd_doc = text "Need decl for" <+> ppr name
@@ -135,7 +135,7 @@ importDecl name = assert (not (isWiredInName name)) $ do
 *                                                                      *
 ********************************************************************* -}
 
-needWiredInHomeIface :: TyThing -> Bool
+needWiredInHomeIface :: WITyThing -> Bool
 needWiredInHomeIface (ATyCon {}) = True
 needWiredInHomeIface _ = False
 
@@ -307,7 +307,7 @@ computeInterface cs_env doc_str mod0 = do
 
 rnModIface _ _ _ iface = trace "rnModIface" $ return $ Right iface
 
-addDeclsToPTE :: PackageTypeEnv -> [(Name, TyThing)] -> PackageTypeEnv
+addDeclsToPTE :: PackageTypeEnv -> [(Name, WITyThing)] -> PackageTypeEnv
 addDeclsToPTE pte things = extendNameEnvList pte things
 
 {- *********************************************************************

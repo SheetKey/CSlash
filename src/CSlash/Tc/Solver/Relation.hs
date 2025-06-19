@@ -44,7 +44,7 @@ import Control.Monad.Trans.Maybe( MaybeT, runMaybeT )
 import Control.Monad.Trans.Class( lift )
 import Control.Monad
 
-solveRelNC :: CtEvidence -> KiCon -> MonoKind -> MonoKind -> SolverStage Void
+solveRelNC :: CtEvidence -> KiCon -> AnyMonoKind -> AnyMonoKind -> SolverStage Void
 solveRelNC ev kc ki1 ki2 = do
   simpleStage $ traceTcS "solveRelNC" (ppr (mkRelPred kc ki1 ki2) $$ ppr ev)
   rel_ct <- canRelCt ev kc ki1 ki2
@@ -67,7 +67,7 @@ updInertRels rel_ct@(RelCt { rl_kc = kc, rl_ev = ev, rl_ki1 = k1, rl_ki2 = k2 })
   traceTcS "Adding inert rel" (ppr rel_ct $$ ppr kc <+> ppr [k1, k2])
   updInertCans (updRels (addRel rel_ct))
 
-canRelCt :: CtEvidence -> KiCon -> MonoKind -> MonoKind -> SolverStage RelCt
+canRelCt :: CtEvidence -> KiCon -> AnyMonoKind -> AnyMonoKind -> SolverStage RelCt
 canRelCt ev kc ki1 ki2
   | isGiven ev
   = Stage $ continueWith $ RelCt { rl_ev = ev, rl_kc = kc, rl_ki1 = ki1, rl_ki2 = ki2 }
@@ -97,10 +97,10 @@ try_inert_rels inerts rel_w@(RelCt { rl_ev = ev_w, rl_kc = kc, rl_ki1 = ki1, rl_
          then stopWith ev_w "interactRel/solved from rel"
          else case solveOneFromTheOther (CRelCan rel_i) (CRelCan rel_w) of
                 KeepInert -> do traceTcS "lookupInertRel:KeepInert" (ppr rel_w)
-                                setKiEvBindIfWanted ev_w True (ctEvType ev_i)
+                                setKiEvBindIfWanted ev_w True (panic "ctEvType ev_i")
                                 return $ Stop ev_w (text "Rel equal" <+> ppr rel_w)
                 KeepWork -> do traceTcS "lookupInertRel:KeepWork" (ppr rel_w)
-                               setKiEvBindIfWanted ev_i True (ctEvType ev_w)
+                               setKiEvBindIfWanted ev_i True (panic "ctEvType ev_w")
                                updInertCans (updRels $ delRel rel_w)
                                continueWith ()
   | otherwise
@@ -136,8 +136,8 @@ shortCutSolver dflags ev_w ev_i
                let rel_ct = RelCt { rl_ev = ev, rl_kc = rl, rl_ki1 = k1, rl_ki2 = k2 }
                    solved_rels' = addSolvedRel rel_ct solved_rels
                traceTcS "shortCutSolver: found instnace" empty
-               loc' <- checkInstanceOK (ctEvLoc ev) what pred
-               checkReductionDepth loc' pred
+               loc' <- panic "checkInstanceOK (ctEvLoc ev) what pred"
+               panic "checkReductionDepth loc' pred"
                return $ Just solved_rels'
              _ -> return Nothing
       | otherwise
@@ -176,8 +176,8 @@ chooseInstance :: CtEvidence -> RelInstResult -> TcS (StopOrContinue a)
 chooseInstance work_item (OneInst { rir_what = what
                                   , rir_canonical = canonical })
   = do traceTcS "doTopReact/found instance for " $ ppr work_item
-       deeper_loc <- checkInstanceOK loc what pred
-       checkReductionDepth deeper_loc pred
+       deeper_loc <- panic "checkInstanceOK loc what pred"
+       panic "checkReductionDepth deeper_loc pred"
        assertPprM (getTcKiEvBindsVar >>= return . not . isKiCoEvBindsVar) (ppr work_item)
        stopWith work_item "Rel/Top (solved wanted)"
   where
@@ -195,8 +195,8 @@ matchRelInst
   :: DynFlags
   -> InertSet
   -> KiCon
-  -> MonoKind
-  -> MonoKind
+  -> AnyMonoKind
+  -> AnyMonoKind
   -> CtLoc
   -> TcS RelInstResult
 matchRelInst dflags inerts kc k1 k2 loc
@@ -216,7 +216,7 @@ matchRelInst dflags inerts kc k1 k2 loc
                           traceTcS "} matchRelInst global result" $ ppr global_res
                           return global_res
 
-matchLocalInst :: KiCon -> MonoKind -> MonoKind -> CtLoc -> TcS RelInstResult
+matchLocalInst :: KiCon -> AnyMonoKind -> AnyMonoKind -> CtLoc -> TcS RelInstResult
 matchLocalInst kc k1 k2 loc = do
   --inerts@(IS { inert_cans = ics }) <- getInertSet
   traceTcS "SKIPPING match_local_inst SINCE THERE IS NOT 'QCInst' OR 'inert_insts'" empty

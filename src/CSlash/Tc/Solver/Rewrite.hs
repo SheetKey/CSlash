@@ -132,23 +132,23 @@ rewriteKiForErrors ev ki = do
 ********************************************************************* -}
 
 {-# INLINE rewrite_args_kc #-}
-rewrite_args_kc :: KiCon -> [MonoKind] -> RewriteM Reductions
+rewrite_args_kc :: KiCon -> [AnyMonoKind] -> RewriteM Reductions
 rewrite_args_kc _ = rewrite_args_fast
 
 {-# INLINE rewrite_args_fast #-}
-rewrite_args_fast :: [MonoKind] -> RewriteM Reductions
+rewrite_args_fast :: [AnyMonoKind] -> RewriteM Reductions
 rewrite_args_fast orig_kis = iterate orig_kis
   where
-    iterate :: [MonoKind] -> RewriteM Reductions
+    iterate :: [AnyMonoKind] -> RewriteM Reductions
     iterate (ki:kis) = do
-      ReductionKi co xi <- rewrite_one_ki ki
+      ReductionKi co xi <- panic "rewrite_one_ki ki"
       Reductions cos xis <- iterate kis
       pure $ Reductions (co : cos) (xi : xis)
     iterate [] = pure $ Reductions [] []
 
 rewrite_one_ki :: TcMonoKind -> RewriteM Reduction
 
-rewrite_one_ki (KiVarKi kv) = rewriteKiVar kv
+rewrite_one_ki (KiVarKi kv) = panic "rewriteKiVar kv"
 
 rewrite_one_ki (KiConApp kc kis) = rewrite_ki_con_app kc kis
 
@@ -159,12 +159,12 @@ rewrite_one_ki (FunKi { fk_f = vis, fk_arg = ki1, fk_res = ki2 }) = do
 
 rewrite_reduction :: Reduction -> RewriteM Reduction
 rewrite_reduction (ReductionKi co ki) = do
-  redn <- bumpDepth $ rewrite_one_ki ki
+  redn <- bumpDepth $ panic "rewrite_one_ki ki"
   return $ co `mkTransRedn` redn
 
 rewrite_ki_con_app :: KiCon -> [TcMonoKind] -> RewriteM Reduction
 rewrite_ki_con_app kc kis = do
-  redns <- rewrite_args_kc kc kis
+  redns <- panic "rewrite_args_kc kc kis"
   return $ mkKiConAppRedn kc redns
 
 {- *********************************************************************
@@ -177,27 +177,27 @@ data RewriteKvResult
   = RKRNotFollowed
   | RKRFollowed !Reduction
  
-rewriteKiVar :: KindVar -> RewriteM Reduction
+rewriteKiVar :: AnyKiVar -> RewriteM Reduction
 rewriteKiVar kv = do
   mb_yes <- rewrite_kivar1 kv
   case mb_yes of
     RKRFollowed redn -> rewrite_reduction redn
-    RKRNotFollowed -> return $ mkReflRednKi $ mkKiVarMKi kv
+    RKRNotFollowed -> return $ mkReflRednKi $ panic "mkKiVarKi kv"
 
-rewrite_kivar1 :: TcKiVar -> RewriteM RewriteKvResult
+rewrite_kivar1 :: AnyKiVar -> RewriteM RewriteKvResult
 rewrite_kivar1 kv = do
-  mb_ki <- liftTcS $ isFilledMetaKiVar_maybe kv
+  mb_ki <- liftTcS $ panic "isFilledMetaKiVar_maybe kv"
   case mb_ki of
     Just ki -> do
       traceRewriteM "Following filled kivar"
-        (ppr kv <+> equals <+> ppr ki)
-      return $ RKRFollowed $ mkReflRednKi ki
+        (panic "ppr kv <+> equals <+> ppr ki")
+      return $ RKRFollowed $ panic "mkReflRednKi ki"
     Nothing -> do
       traceRewriteM "Unfilled kivar" (ppr kv)
       f <- getFlavor
       rewrite_kivar2 kv f
 
-rewrite_kivar2 :: TcKiVar -> CtFlavor -> RewriteM RewriteKvResult
+rewrite_kivar2 :: AnyKiVar -> CtFlavor -> RewriteM RewriteKvResult
 rewrite_kivar2 kv f = do
   ieqs <- liftTcS $ getInertEqs
   case lookupDVarEnv ieqs kv of
@@ -212,7 +212,7 @@ rewrite_kivar2 kv f = do
             when wrw $ recordRewriter ctev
 
             let rewriting_co = ctEvKiCoercion ctev
-            return $ RKRFollowed $ mkReductionKi rewriting_co rhs_ki
+            return $ RKRFollowed $ panic "mkReductionKi rewriting_co rhs_ki"
     _ -> return RKRNotFollowed
   where
     can_rewrite :: EqCt -> Bool

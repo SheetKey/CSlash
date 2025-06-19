@@ -18,7 +18,7 @@ import qualified CSlash.Core.Type.Rep as TypeRep (Type(TyConApp))
 
 import CSlash.Types.TyThing
 import CSlash.Types.SourceText
-import CSlash.Types.Var (VarBndr(Bndr), tyVarName)
+import CSlash.Types.Var (VarBndr(Bndr), varName)
 import CSlash.Types.Name.Reader
 import CSlash.Types.Name as Name
 import CSlash.Types.Name.Env (lookupNameEnv_NF, mkNameEnv)
@@ -49,19 +49,22 @@ import Control.Applicative ((<|>))
 *                                                                      *
 ********************************************************************* -}
 
-wiredInTyCons :: [TyCon]
+type PDataCon = DataCon PTyVar KiVar
+type PId = Id PTyVar KiVar
+
+wiredInTyCons :: [PTyCon]
 wiredInTyCons
   = [ boolTyCon ]
 
-mkWiredInTyConName :: BuiltInSyntax -> Module -> FastString -> Unique -> TyCon -> Name
+mkWiredInTyConName :: BuiltInSyntax -> Module -> FastString -> Unique -> PTyCon -> Name
 mkWiredInTyConName built_in modu fs unique tycon
   = mkWiredInName modu (mkTcOccFS fs) unique (ATyCon tycon) built_in
 
-mkWiredInDataConName :: BuiltInSyntax -> Module -> FastString -> Unique -> DataCon -> Name
+mkWiredInDataConName :: BuiltInSyntax -> Module -> FastString -> Unique -> PDataCon -> Name
 mkWiredInDataConName built_in modu fs unique datacon
   = mkWiredInName modu (mkDataOccFS fs) unique (AConLike (RealDataCon datacon)) built_in
 
-mkWiredInIdName :: Module -> FastString -> Unique -> Id -> Name
+mkWiredInIdName :: Module -> FastString -> Unique -> PId -> Name
 mkWiredInIdName modu fs unique id
   = mkWiredInName modu (mkOccNameFS Name.varName fs) unique (AnId id) UserSyntax
 
@@ -76,13 +79,14 @@ trueDataConName :: Name
 trueDataConName
   = mkWiredInDataConName UserSyntax cSLASH_BUILTIN (fsLit "True") trueDataConKey trueDataCon
 
-makeRecoveryTyCon :: TyCon -> TyCon
-makeRecoveryTyCon tc = mkTcTyCon (tyConName tc)
-                                 (tyConKind tc)
-                                 (tyConArity tc)
-                                 []
-                                 True
-                                 (tyConFlavor tc)
+makeRecoveryTyCon :: PTyCon -> PTyCon
+makeRecoveryTyCon tc = panic "makeRecoveryTyCon"
+  -- mkTcTyCon (tyConName tc)
+  --                                (tyConKind tc)
+  --                                (tyConArity tc)
+  --                                []
+  --                                True
+  --                                (tyConFlavor tc)
 
 {- *********************************************************************
 *                                                                      *
@@ -91,7 +95,7 @@ makeRecoveryTyCon tc = mkTcTyCon (tyConName tc)
 ********************************************************************* -}
 
 -- assumes types have ANY kind (I.e., a kind var)
-pcTyCon :: Name -> [DataCon] -> Arity -> TyCon
+pcTyCon :: Name -> [PDataCon] -> Arity -> PTyCon
 pcTyCon name cons arity
   = mkAlgTyCon name
                kind
@@ -101,25 +105,25 @@ pcTyCon name cons arity
   where
     kind = mkTemplateTyConKind arity
 
-pcDataCon :: Name -> TyCon -> Arity -> DataCon
+pcDataCon :: Name -> PTyCon -> Arity -> PDataCon
 pcDataCon n tycon arity
   = pcDataConWithFixity False n tycon arity
 
 pcDataConWithFixity
   :: Bool -- declared infix?
   -> Name
-  -> TyCon
+  -> PTyCon
   -> Arity
-  -> DataCon
+  -> PDataCon
 pcDataConWithFixity infx n = pcDataConWithFixity' infx n (dataConUnique (nameUnique n))
 
 pcDataConWithFixity'
   :: Bool
   -> Name
   -> Unique
-  -> TyCon
+  -> PTyCon
   -> Arity
-  -> DataCon
+  -> PDataCon
 pcDataConWithFixity' declared_infix dc_name key tycon arity
   = data_con
   where
@@ -134,7 +138,7 @@ pcDataConWithFixity' declared_infix dc_name key tycon arity
     name = mkDataConName data_con key
     dc_ty = mkDataConTy tycon arity
 
-mkDataConName :: DataCon -> Unique -> Name
+mkDataConName :: PDataCon -> Unique -> Name
 mkDataConName data_con key =
     mkWiredInName modu occ key (AnId (dataConId data_con)) UserSyntax
   where
@@ -267,7 +271,7 @@ mkTupleStr ns ar
 commas :: Arity -> String
 commas ar = replicate (ar-1) ','
 
-tupleTyCon :: Arity -> TyCon
+tupleTyCon :: Arity -> PTyCon
 tupleTyCon i
   | i > mAX_TUPLE_SIZE = fst (mk_tuple i)
   | otherwise = fst (tupleArr ! i)
@@ -275,7 +279,7 @@ tupleTyCon i
 tupleTyConName :: Arity -> Name
 tupleTyConName a = tyConName (tupleTyCon a)
 
-tupleDataCon :: Arity -> DataCon
+tupleDataCon :: Arity -> PDataCon
 tupleDataCon i
   | i > mAX_TUPLE_SIZE = snd (mk_tuple i)
   | otherwise = snd (tupleArr ! i)
@@ -283,10 +287,10 @@ tupleDataCon i
 tupleDataConName :: Arity -> Name
 tupleDataConName i = dataConName (tupleDataCon i)
 
-tupleArr :: Array Int (TyCon, DataCon)
+tupleArr :: Array Int (PTyCon, PDataCon)
 tupleArr = listArray (0, mAX_TUPLE_SIZE) [mk_tuple i | i <- [0..mAX_TUPLE_SIZE]]
 
-mk_tuple :: Int -> (TyCon, DataCon)
+mk_tuple :: Int -> (PTyCon, PDataCon)
 mk_tuple arity = (tycon, tuple_con)
   where
     tycon = mkTupleTyCon tc_name tc_kind arity tuple_con flavor
@@ -304,7 +308,7 @@ mk_tuple arity = (tycon, tuple_con)
                             (AConLike (RealDataCon tuple_con)) BuiltInSyntax
     dc_uniq = mkTupleDataConUnique arity
 
-unitTyCon :: TyCon
+unitTyCon :: PTyCon
 unitTyCon = tupleTyCon 0
 
 unitTyConName :: Name
@@ -313,16 +317,16 @@ unitTyConName = tyConName unitTyCon
 unitTyConKey :: Unique
 unitTyConKey = getUnique unitTyCon
 
-unitDataCon :: DataCon
+unitDataCon :: PDataCon
 unitDataCon = head (tyConDataCons unitTyCon)
 
-unitDataConId :: Id
+unitDataConId :: PId
 unitDataConId = dataConId unitDataCon
 
 unitDataConName :: Name
 unitDataConName = dataConName unitDataCon
 
-soloTyCon :: TyCon
+soloTyCon :: PTyCon
 soloTyCon = tupleTyCon 1
 
 soloTyConName :: Name
@@ -348,7 +352,7 @@ mkSumDataConOcc alt n = mkOccName dataName str
     str = '(' : ' ' : bars alt ++ '_' : bars (n - alt - 1) ++ " )"
     bars i = intersperse ' ' $ replicate i '|'
 
-sumTyCon :: Arity -> TyCon
+sumTyCon :: Arity -> PTyCon
 sumTyCon arity
   | arity > mAX_SUM_SIZE
   = fst (mk_sum arity)
@@ -357,7 +361,7 @@ sumTyCon arity
   |otherwise
   = fst (sumArr ! arity)
 
-sumDataCon :: ConTag -> Arity -> DataCon
+sumDataCon :: ConTag -> Arity -> PDataCon
 sumDataCon alt arity
   | alt > arity
   = panic ("sumDataCon: index out of bounds: alt: "
@@ -373,10 +377,10 @@ sumDataCon alt arity
   | otherwise
   = snd (sumArr ! arity) ! (alt - 1)
 
-sumArr :: Array Int (TyCon, Array Int DataCon)
+sumArr :: Array Int (PTyCon, Array Int PDataCon)
 sumArr = listArray (2, mAX_SUM_SIZE) [mk_sum i | i <- [2..mAX_SUM_SIZE]]
 
-mk_sum :: Arity -> (TyCon, Array ConTagZ DataCon)
+mk_sum :: Arity -> (PTyCon, Array ConTagZ PDataCon)
 mk_sum arity = (tycon, sum_cons)
   where
     tycon = mkSumTyCon tc_name tc_kind arity (elems sum_cons) AlgSumTyCon
@@ -403,14 +407,14 @@ mk_sum arity = (tycon, sum_cons)
 *                                                                      *
 ********************************************************************* -}
 
-boolTy :: Type
+boolTy :: PType
 boolTy = mkTyConTy boolTyCon
 
-boolTyCon :: TyCon
+boolTyCon :: PTyCon
 boolTyCon = pcTyCon boolTyConName [falseDataCon, trueDataCon] 0
 
-falseDataCon :: DataCon
+falseDataCon :: PDataCon
 falseDataCon = pcDataCon falseDataConName boolTyCon 0
 
-trueDataCon :: DataCon
+trueDataCon :: PDataCon
 trueDataCon = pcDataCon trueDataConName boolTyCon 0

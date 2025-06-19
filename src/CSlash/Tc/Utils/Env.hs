@@ -56,6 +56,7 @@ import CSlash.Types.Name
 import CSlash.Types.Name.Set
 import CSlash.Types.Name.Env
 import CSlash.Types.Id
+import CSlash.Types.Var (KiVar, AnyKiVar)
 -- import CSlash.Types.Id.Info ( RecSelParent(..) )
 import CSlash.Types.Name.Reader
 import CSlash.Types.TyThing
@@ -73,7 +74,7 @@ import CSlash.Types.Error
 *                                                                      *
 ********************************************************************* -}
 
-tcLookupGlobal :: Name -> TcM TyThing
+tcLookupGlobal :: Name -> TcM WITyThing
 tcLookupGlobal name = do
   env <- getGblEnv
   case lookupNameEnv (tcg_type_env env) name of
@@ -85,7 +86,7 @@ tcLookupGlobal name = do
                          Succeeded thing -> return thing
                          Failed msg -> failWithTc (TcRnInterfaceError msg)
 
-tcLookupGlobalOnly :: Name -> TcM TyThing
+tcLookupGlobalOnly :: Name -> TcM WITyThing
 tcLookupGlobalOnly name = do
   env <- getGblEnv
   return $ case lookupNameEnv (tcg_type_env env) name of
@@ -105,20 +106,20 @@ setGlobalTypeEnv tcg_env new_type_env = do
     Nothing -> return ()
   return $ tcg_env { tcg_type_env = new_type_env }
 
-tcExtendGlobalEnvImplicit :: [TyThing] -> TcM r -> TcM r
+tcExtendGlobalEnvImplicit :: [WITyThing] -> TcM r -> TcM r
 tcExtendGlobalEnvImplicit things thing_inside = do
   tcg_env <- getGblEnv
   let ge' = extendTypeEnvList (tcg_type_env tcg_env) things
   tcg_env' <- setGlobalTypeEnv tcg_env ge'
   setGblEnv tcg_env' thing_inside
 
-tcExtendTyConEnv :: [TyCon] -> TcM r -> TcM r
+tcExtendTyConEnv :: [AnyTyCon] -> TcM r -> TcM r
 tcExtendTyConEnv tycons thing_inside = do
   env <- getGblEnv
   let env' = env { tcg_tcs = tycons ++ tcg_tcs env }
-  setGblEnv env' $ tcExtendGlobalEnvImplicit (map ATyCon tycons) thing_inside
+  panic "setGblEnv env' $ tcExtendGlobalEnvImplicit (map ATyCon tycons) thing_inside"
 
-tcExtendRecEnv :: [(Name, TyThing)] -> TcM r -> TcM r
+tcExtendRecEnv :: [(Name, WITyThing)] -> TcM r -> TcM r
 tcExtendRecEnv gbl_stuff thing_inside = do
   tcg_env <- getGblEnv
   let ge' = extendNameEnvList (tcg_type_env tcg_env) gbl_stuff
@@ -136,7 +137,7 @@ tcLookup name = do
   local_env <- getLclTyKiEnv
   case lookupNameEnv local_env name of
     Just thing -> return thing
-    Nothing -> AGlobal <$> tcLookupGlobal name
+    Nothing -> panic "AGlobal <$> tcLookupGlobal name"
 
 tcLookupTcTyCon :: HasDebugCallStack => Name -> TcM TcTyCon
 tcLookupTcTyCon name = do
@@ -155,14 +156,14 @@ tcExtendKindEnvList things thing_inside = do
 tcExtendKiVarEnv :: [TcKiVar] -> TcM r -> TcM r
 tcExtendKiVarEnv kvs thing_inside = tcExtendNameKiVarEnv (mkKiVarNamePairs kvs) thing_inside
 
-tcExtendNameTyVarEnv :: [(Name, TcTyVar)] -> TcM r -> TcM r
+tcExtendNameTyVarEnv :: [(Name, TcTyVar AnyKiVar)] -> TcM r -> TcM r
 tcExtendNameTyVarEnv binds thing_inside
   = tc_extend_local_env NotTopLevel names
     $ tcExtendBinderStack tv_binds
     $ thing_inside
   where
-    tv_binds = [TcTvBndr name tv | (name, tv) <- binds]
-    names = [(name, ATyVar name tv) | (name, tv) <- binds]
+    tv_binds = panic "[TcTvBndr name tv | (name, tv) <- binds]"
+    names = panic "[(name, ATyVar name tv) | (name, tv) <- binds]"
 
 tcExtendNameKiVarEnv :: [(Name, TcKiVar)] -> TcM r -> TcM r
 tcExtendNameKiVarEnv binds thing_inside
@@ -213,7 +214,7 @@ getTypeSigNames sigs = foldr get_type_sig emptyNameSet sigs
 *                                                                      *
 ********************************************************************* -}
 
-notFound :: Name -> TcM TyThing
+notFound :: Name -> TcM WITyThing
 notFound name = do
   lcl_env <- getLclEnv
   if isTermVarNameSpace (nameNameSpace name)

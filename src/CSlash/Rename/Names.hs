@@ -268,7 +268,7 @@ getLocalNonValBinders fixity_env CsGroup{ cs_valds = binds, cs_typeds = type_dec
     new_tc tc_decl = do
       let TyDeclBinders (main_bndr, tc_flav) = csLTyDeclBinders tc_decl
       tycon_name <- newTopSrcBinder $ la2la main_bndr
-      let tc_gre = mkLocalTyConGRE (fmap (const tycon_name) tc_flav) tycon_name
+      let tc_gre = mkLocalTyConGRE tc_flav tycon_name
       traceRn "getLocalNonValBinders new_tc" $
         vcat [ text "tycon:" <+> ppr tycon_name
              , text "tc_gre:" <+> ppr tc_gre ]

@@ -31,7 +31,7 @@ import Control.Monad ( (>=>) )
 type KindMap = GenMap KindMapX
 
 data KindMapX a = KM
-  { km_var :: VarMap a
+  { km_var :: VarMap AnyKiVar a
   , km_kicon :: DKiConEnv a
   }
 
@@ -41,7 +41,7 @@ instance Functor KindMapX where
                       }
 
 instance TrieMap KindMapX where
-  type Key KindMapX = MonoKind
+  type Key KindMapX = MonoKind AnyKiVar
   emptyTM = emptyK
   lookupTM = lkK
   alterTM = xtK
@@ -52,13 +52,13 @@ emptyK :: KindMapX a
 emptyK = KM { km_var = emptyTM
             , km_kicon = emptyUDFM }
 
-lkK :: MonoKind -> KindMapX a -> Maybe a
+lkK :: MonoKind AnyKiVar -> KindMapX a -> Maybe a
 lkK (KiVarKi v) = km_var >.> lkVar v
 lkK (KiConApp kc []) = km_kicon >.> lkDKiCon kc
 lkK ki@(KiConApp {}) = pprPanic "lkK KiConApp" (ppr ki)
 lkK ki@(FunKi {}) = pprPanic "lkK FunKi" (ppr ki)
 
-xtK :: MonoKind -> XT a -> KindMapX a -> KindMapX a
+xtK :: MonoKind AnyKiVar -> XT a -> KindMapX a -> KindMapX a
 xtK (KiVarKi v) f m = m { km_var = km_var m |> xtVar v f }
 xtK (KiConApp kc []) f m = m { km_kicon = km_kicon m |> xtDKiCon kc f }
 xtK ki@(KiConApp {}) _ _ = pprPanic "xtK KiConApp" (ppr ki)
@@ -79,35 +79,35 @@ filterK f (KM { km_var = kvar, km_kicon = kkicon })
 *                                                                      *
 ********************************************************************* -}
 
-data VarMap a = VM { vm_fvar :: DVarEnv a }
+data VarMap v a = VM { vm_fvar :: MkDVarEnv v a }
 
-instance Functor VarMap where
+instance Functor (VarMap v) where
   fmap f VM { vm_fvar = fv } = VM { vm_fvar = fmap f fv }
 
-instance TrieMap VarMap where
-   type Key VarMap = Var
+instance IsVar v => TrieMap (VarMap v) where
+   type Key (VarMap v) = v
    emptyTM  = VM { vm_fvar = emptyDVarEnv }
    lookupTM = lkVar 
    alterTM  = xtVar 
    foldTM   = fdVar
    filterTM = ftVar
 
-lkVar :: Var -> VarMap a -> Maybe a
+lkVar :: IsVar v => v -> VarMap v a -> Maybe a
 lkVar v = vm_fvar >.> lkDFreeVar v
 
-xtVar :: Var -> XT a -> VarMap a -> VarMap a
+xtVar :: IsVar v => v -> XT a -> VarMap v a -> VarMap v a
 xtVar v f m = m { vm_fvar = vm_fvar m |> xtDFreeVar v f }
 
-fdVar :: (a -> b -> b) -> VarMap a -> b -> b
+fdVar :: IsVar v => (a -> b -> b) -> VarMap v a -> b -> b
 fdVar k m = foldTM k (vm_fvar m)
 
-lkDFreeVar :: Var -> DVarEnv a -> Maybe a
+lkDFreeVar :: IsVar v => v -> MkDVarEnv v a -> Maybe a
 lkDFreeVar var env = lookupDVarEnv env var
 
-xtDFreeVar :: Var -> XT a -> DVarEnv a -> DVarEnv a
+xtDFreeVar :: IsVar v => v -> XT a -> MkDVarEnv v a -> MkDVarEnv v a
 xtDFreeVar v f m = alterDVarEnv f m v
 
-ftVar :: (a -> Bool) -> VarMap a -> VarMap a
+ftVar :: IsVar v => (a -> Bool) -> VarMap v a -> VarMap v a
 ftVar f (VM { vm_fvar = fv }) = VM { vm_fvar = filterTM f fv }
 
 lkDKiCon :: KiCon -> DKiConEnv a -> Maybe a

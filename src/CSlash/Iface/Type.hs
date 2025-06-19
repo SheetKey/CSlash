@@ -73,7 +73,7 @@ data IfaceKdRel
 ********************************************************************** -}
 
 data IfaceType
-  = IfaceFreeTyVar TypeVar
+  = IfaceFreeTyVar (TyVar KiVar)
   | IfaceTyVar IfLclName
   | IfaceAppTy IfaceType IfaceAppArgs
   | IfaceFunTy IfaceKind IfaceType IfaceType
@@ -82,12 +82,12 @@ data IfaceType
   | IfaceTupleTy IfaceAppArgs
   | IfaceWithContext IfaceKind IfaceType
 
-type IfaceTyConBinder = VarBndr IfaceBndr ForAllTyFlag
-type IfaceForAllBndr = VarBndr IfaceBndr ForAllTyFlag
+type IfaceTyConBinder = VarBndr IfaceBndr ForAllFlag
+type IfaceForAllBndr = VarBndr IfaceBndr ForAllFlag
 
 data IfaceAppArgs
   = IA_Nil
-  | IA_Arg IfaceType ForAllTyFlag IfaceAppArgs
+  | IA_Arg IfaceType ForAllFlag IfaceAppArgs
 
 instance Semi.Semigroup IfaceAppArgs where
   IA_Nil <> xs = xs
@@ -155,7 +155,7 @@ appArgsIfaceTypes :: IfaceAppArgs -> [IfaceType]
 appArgsIfaceTypes IA_Nil = []
 appArgsIfaceTypes (IA_Arg t _ ts) = t : appArgsIfaceTypes ts
 
-appArgsIfaceTypesForAllTyFlags :: IfaceAppArgs -> [(IfaceType, ForAllTyFlag)]
+appArgsIfaceTypesForAllTyFlags :: IfaceAppArgs -> [(IfaceType, ForAllFlag)]
 appArgsIfaceTypesForAllTyFlags IA_Nil = []
 appArgsIfaceTypesForAllTyFlags (IA_Arg t a ts)
   = (t, a) : appArgsIfaceTypesForAllTyFlags ts
@@ -165,7 +165,7 @@ ifaceVisAppArgsLength = go 0
   where
     go !n IA_Nil = n
     go n (IA_Arg _ argf rest)
-      | isVisibleForAllTyFlag argf = go (n+1) rest
+      | isVisibleForAllFlag argf = go (n+1) rest
       | otherwise = go n rest
 
 {- *********************************************************************
@@ -288,7 +288,7 @@ ppr_app_args ctx_prec = go
     go IA_Nil = empty
     go (IA_Arg t argf ts) = ppr_app_arg ctx_prec (t, argf) <+> go ts
 
-ppr_app_arg :: PprPrec -> (IfaceType, ForAllTyFlag) -> SDoc
+ppr_app_arg :: PprPrec -> (IfaceType, ForAllFlag) -> SDoc
 ppr_app_arg ctx_prec (t, argf) =
   case argf of
     Required -> ppr_ty ctx_prec t
@@ -356,8 +356,8 @@ pprTyTcApp ctxt_prec tc tys =
     info = ifaceTyConInfo tc
 
 ppr_iface_tc_app
-  :: (PprPrec -> (a, ForAllTyFlag) -> SDoc)
-  -> PprPrec -> IfaceTyCon -> [(a, ForAllTyFlag)] -> SDoc
+  :: (PprPrec -> (a, ForAllFlag) -> SDoc)
+  -> PprPrec -> IfaceTyCon -> [(a, ForAllFlag)] -> SDoc
 ppr_iface_tc_app pp ctxt_prec tc tys 
   | not (isSymOcc (nameOccName (ifaceTyConName tc)))
   =  pprIfacePrefixApp ctxt_prec (ppr tc) (map (pp appPrec) tys)

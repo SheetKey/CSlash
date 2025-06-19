@@ -58,7 +58,7 @@ import CSlash.Types.Id.Make
 import CSlash.Types.Var
 import CSlash.Types.Var.Env
 import CSlash.Types.Var.Set
-import CSlash.Types.Name
+import CSlash.Types.Name hiding (varName)
 import CSlash.Types.Name.Set
 import CSlash.Types.Name.Env
 import CSlash.Types.SrcLoc
@@ -120,7 +120,7 @@ tcTyGroup (TypeGroup { group_typeds = typeds, group_kisigs = kisigs }) = do
   traceTc "Done synonym cycle check" (ppr tys)
 
   traceTc "Starting validity check" (ppr tys)
-  tys <- tcExtendTyConEnv tys
+  tys <- panic "tcExtendTyConEnv tys"
          $ for tys
          $ \tycon -> checkValidTyCon tycon
   traceTc "Done validity check" (ppr tys)
@@ -132,7 +132,7 @@ tcTyGroup (TypeGroup { group_typeds = typeds, group_kisigs = kisigs }) = do
   let gbl_env' = gbl_env { tcg_ksigs = tcg_ksigs gbl_env `unionNameSet` kindless }
   return gbl_env'
 
-tcTyDs :: [LCsBind Rn] -> TcM ([TyCon], NameSet)
+tcTyDs :: [LCsBind Rn] -> TcM ([TyCon (TyVar KiVar) KiVar], NameSet)
 tcTyDs typeds = do
   (tc_tycons, kindless) <- checkNoErrs $ kcTyGroup typeds
 
@@ -152,17 +152,23 @@ tcTyDs typeds = do
                                   , ppr (tyConKind tc)
                                   , ppr (isTcTyCon tc) ])
 
-zipRecTys :: [TcTyCon] -> [TyCon] -> [(Name, TyThing)]
+zipRecTys :: [TcTyCon] -> [TyCon (TyVar KiVar) KiVar] -> [(Name, TyThing (TyVar KiVar) KiVar)]
 zipRecTys tc_tycons rec_tycons
   = [ (name, ATyCon (get name)) | tc_tycon <- tc_tycons, let name = getName tc_tycon ]
   where
-    add_one_tc :: TyCon -> NameEnv TyCon -> NameEnv TyCon
+    add_one_tc
+      :: TyCon (TyVar KiVar) KiVar
+      -> NameEnv (TyCon (TyVar KiVar) KiVar)
+      -> NameEnv (TyCon (TyVar KiVar) KiVar)
     add_one_tc tc env = extendNameEnv env (tyConName tc) tc
 
-    add_tc :: TyCon -> NameEnv TyCon -> NameEnv TyCon
+    add_tc
+      :: TyCon (TyVar KiVar) KiVar
+      -> NameEnv (TyCon (TyVar KiVar) KiVar)
+      -> NameEnv (TyCon (TyVar KiVar) KiVar)
     add_tc tc env = add_one_tc tc env --foldr add_one_tc env (tc : tyConATs tc)
 
-    rec_tc_env :: NameEnv TyCon
+    rec_tc_env :: NameEnv (TyCon (TyVar KiVar) KiVar)
     rec_tc_env = foldr add_tc emptyNameEnv rec_tycons
 
     get name = case lookupNameEnv rec_tc_env name of
@@ -219,8 +225,8 @@ generalizeTyDecl inferred_tc_env (L _ decl) = do
     skolemize_tc_tycon tc_name = do
       let tc = lookupNameEnv_NF inferred_tc_env tc_name
       skol_info <- mkSkolemInfo (TyConSkol (tyConFlavor tc) tc_name)
-      scoped_pairs <- mapSndM (zonkAndSkolemize skol_info) (tcTyConScopedKiVars tc)
-      return (tc, skol_info, scoped_pairs)
+      scoped_pairs <- panic "mapSndM (zonkAndSkolemize skol_info) (tcTyConScopedKiVars tc)"
+      panic "return (tc, skol_info, scoped_pairs)"
 
     zonk_tc_tycon
       :: (TcTyCon, SkolemInfo, ScopedPairs)
@@ -235,57 +241,60 @@ swizzleTcTyConBndrs
   -> TcM [(TcTyCon, SkolemInfo, ScopedPairs, TcKind)]
 swizzleTcTyConBndrs tc_infos 
   | all no_swizzle swizzle_pairs
-  = do traceTc "Skipping swizzleTcTyConBndrs for" (ppr_infos tc_infos)
+  = do traceTc "Skipping swizzleTcTyConBndrs for" (panic "ppr_infos tc_infos")
        return tc_infos
 
   | otherwise
-  = do checkForDuplicateScopedTyVars swizzle_pairs
+  = do panic "checkForDuplicateScopedTyVars swizzle_pairs"
        traceTc "swizzleTcTyConBndrs" $
-         vcat [ text "before" <+> ppr_infos tc_infos
+         vcat [ text "before" <+> panic "ppr_infos tc_infos"
               , text "swizzle_pairs" <+> ppr swizzle_pairs
-              , text "after" <+> ppr_infos swizzled_infos ]
+              , text "after" <+> panic "ppr_infos swizzled_infos" ]
        return swizzled_infos
   where
-    swizzled_infos = [ ( tc, skol_info, mapSnd swizzle_var scoped_pairs
+    swizzled_infos = [ ( tc
+                       , skol_info
+                       , panic "mapSnd swizzle_var scoped_pairs"
                        , swizzle_ki full_kind)
                      | (tc, skol_info, scoped_pairs, full_kind) <- tc_infos ]
 
-    swizzle_pairs :: [(Name, TypeVar)]
-    swizzle_pairs = [ pair | (_, _, pairs, _) <- tc_infos, pair <- pairs ]
+    swizzle_pairs :: [(Name, TcTyVar TcKiVar)]
+    swizzle_pairs = [ panic "pair" | (_, _, pairs, _) <- tc_infos, pair <- pairs ]
 
-    no_swizzle :: (Name, TypeVar) -> Bool
-    no_swizzle (nm, tv) = nm == tyVarName tv
+    no_swizzle :: (Name, TcTyVar TcKiVar) -> Bool
+    no_swizzle (nm, tv) = nm == varName tv
 
     ppr_infos infos = vcat [ ppr tc <+> pprTyVars (map snd pairs)
                            | (tc, _, pairs, _) <- infos ]
 
     swizzle_env = mkVarEnv (map swap swizzle_pairs)
 
-    swizzleMapper :: TypeMapper () Identity
-    swizzleMapper = TypeMapper { tcm_tyvar = swizzle_tv
-                               , tcm_tybinder = swizzle_bndr
-                               , tcm_tylambinder = swizzle_lam_bndr
-                               , tcm_tylamkibinder = swizzle_lam_bndr
-                               , tcm_embed_mono_ki = \_ ki -> return ki
-                               , tcm_tycon = swizzle_tycon }
+    --swizzleMapper :: TypeMapper () Identity
+    swizzleMapper = panic "swizzleMapper"
+      -- TypeMapper { tcm_tyvar = swizzle_tv
+      --                          , tcm_tybinder = swizzle_bndr
+      --                          , tcm_tylambinder = swizzle_lam_bndr
+      --                          , tcm_tylamkibinder = swizzle_lam_bndr
+      --                          , tcm_embed_mono_ki = \_ ki -> return ki
+      --                          , tcm_tycon = swizzle_tycon }
 
     swizzle_tycon tc = pprPanic "swizzle_tc" (ppr tc)
 
-    swizzle_tv _ tv = return $ mkTyVarTy $ swizzle_var tv
+    swizzle_tv _ tv = return $ mkTyVarTy $ panic "swizzle_var tv"
 
-    swizzle_bndr :: () -> TypeVar -> ForAllTyFlag -> (() -> TypeVar -> Identity r) -> Identity r
-    swizzle_bndr _ tv _ k = k () (swizzle_var tv)
+    -- swizzle_bndr :: () -> TypeVar -> ForAllTyFlag -> (() -> TypeVar -> Identity r) -> Identity r
+    -- swizzle_bndr _ tv _ k = k () (swizzle_var tv)
 
-    swizzle_lam_bndr :: () -> TypeVar -> (() -> TypeVar -> Identity r) -> Identity r
-    swizzle_lam_bndr _ tv k = k () (swizzle_var tv)
+    -- swizzle_lam_bndr :: () -> TypeVar -> (() -> TypeVar -> Identity r) -> Identity r
+    -- swizzle_lam_bndr _ tv k = k () (swizzle_var tv)
 
-    swizzle_var :: Var -> Var
-    swizzle_var v = assertPpr (isKiVar v) (ppr v)
-      $ case lookupVarEnv swizzle_env v of
-          Just nm -> v `setVarName` nm
-          Nothing -> v
+    -- swizzle_var :: Var -> Var
+    -- swizzle_var v = assertPpr (isKiVar v) (ppr v)
+    --   $ case lookupVarEnv swizzle_env v of
+    --       Just nm -> v `setVarName` nm
+    --       Nothing -> v
 
-    (map_type, _) = mapType swizzleMapper
+    (map_type, _) = panic "mapType swizzleMapper"
     swizzle_ty ty = runIdentity (map_type ty)
 
     swizzle_ki ki = trace "swizzle_ki NOT implemented" ki
@@ -295,7 +304,7 @@ generalizeTcTyCon (tc, skol_info, scoped_prs, tc_full_kind)
   = setSrcSpan (getSrcSpan tc) $ addTyConCtxt tc $ do
       let spec_kvs = map snd scoped_prs -- kvs that appear in user code (specified by user)
       all_kvs <- candidateQKiVarsOfKind tc_full_kind
-      let inf_kvs = all_kvs `delDVarSetList` spec_kvs
+      let inf_kvs = panic "all_kvs `delDVarSetList` spec_kvs"
       inferred <- quantifyKiVars skol_info inf_kvs
       
       traceTc "generalizeTcTyCon: pre zonk"
@@ -321,9 +330,9 @@ generalizeTcTyCon (tc, skol_info, scoped_prs, tc_full_kind)
           full_kind = mkForAllKis all_tckvs tc_full_kind
 
       let tycon = mkTcTyCon (tyConName tc)
-                            full_kind
+                            (panic "full_kind")
                             (tyConArity tc)
-                            (mkKiVarNamePairs spec_kvs)
+                            (panic "mkKiVarNamePairs spec_kvs")
                             True
                             (tyConFlavor tc)
 
@@ -332,7 +341,7 @@ generalizeTcTyCon (tc, skol_info, scoped_prs, tc_full_kind)
                , text "tc_full_kind =" <+> ppr full_kind
                , text "all_tckvs =" <+> ppr all_tckvs ]
 
-      return tycon
+      panic "return tycon"
 
 tcExtendKindEnvWithTyCons :: [TcTyCon] -> TcM a -> TcM a
 tcExtendKindEnvWithTyCons tcs = tcExtendKindEnvList [ (tyConName tc, ATcTyCon tc) | tc <- tcs ]
@@ -360,10 +369,10 @@ getInitialKind strategy (TyFunBind { tyfun_id = L _ name
                          | not (null (unLoc ctxt)) -> do
                              arg_kinds <- newMetaKindVars (length (unLoc ctxt))
                              res_kind <- newMetaKindVar
-                             return $ TheMonoKind $ mkInvisFunKis_nc arg_kinds res_kind
+                             return $ TheMonoKind $ panic "mkInvisFunKis_nc arg_kinds res_kind"
                        _ -> return AnyMonoKind
         -- csTyFunResAndFullKinds ctxt rhs
-  return [tc]
+  panic "return [tc]"
 
 getInitialKind _ other = pprPanic "getInitialKind" (ppr other)
 
@@ -441,7 +450,7 @@ kcTyDecl (TyFunBind { tyfun_body = rhs }) tycon
   = tcExtendNameKiVarEnv (tcTyConScopedKiVars tycon) $ 
     let kind = tyConKind tycon
     in case kind of
-         Mono kind -> discardResult $ tcCheckLCsType rhs (TheMonoKind kind)
+         Mono kind -> discardResult $ tcCheckLCsType rhs (panic "TheMonoKind kind")
          other -> pprPanic "kcTyDecl" (ppr kind)
 kcTyDecl _ _ = panic "kcTyDecl/unreachable"
 
@@ -451,7 +460,7 @@ kcTyDecl _ _ = panic "kcTyDecl/unreachable"
 *                                                                      *
 ********************************************************************* -}
 
-tcTyDecl :: LCsBind Rn -> TcM TyCon
+tcTyDecl :: LCsBind Rn -> TcM (TyCon (TyVar KiVar) KiVar)
 tcTyDecl (L loc bind)
   | Just thing <- wiredInNameTyThing_maybe (tydName bind)
   = case thing of
@@ -464,7 +473,7 @@ tcTyDecl (L loc bind)
       traceTc "---- tcTyDecl ---- }" (ppr tc)
       return tc
 
-tcTyDecl1 :: CsBind Rn -> TcM TyCon
+tcTyDecl1 :: CsBind Rn -> TcM (TyCon (TyVar KiVar) KiVar)
 tcTyDecl1 (TyFunBind { tyfun_id = L _ tc_name, tyfun_body = rhs })
   = tcTyFunRhs tc_name rhs
 
@@ -476,7 +485,7 @@ tcTyDecl1 other = pprPanic "tcTyDecl1" (ppr other)
 *                                                                      *
 ********************************************************************* -}
 
-tcTyFunRhs :: Name -> LCsType Rn -> TcM TyCon
+tcTyFunRhs :: Name -> LCsType Rn -> TcM (TyCon (TyVar KiVar) KiVar)
 tcTyFunRhs tc_name cs_ty = bindTyConKiVars tc_name
                            $ \ tc_ki_bndrs rhs_kind arity -> do
   env <- getLclEnv
@@ -488,18 +497,18 @@ tcTyFunRhs tc_name cs_ty = bindTyConKiVars tc_name
 
   let skol_info = TyConSkol TypeFunFlavor tc_name
   rhs_ty <- pushLevelAndSolveEqualities skol_info tc_ki_bndrs
-            $ tcCheckLCsType cs_ty (TheMonoKind rhs_kind)
+            $ tcCheckLCsType cs_ty (panic "TheMonoKind rhs_kind")
 
-  kvs <- candidateQKiVarsOfType rhs_ty
+  kvs <- panic "candidateQKiVarsOfType rhs_ty"
   -- let err_ctxt tidy_env = do (tidy_env2, rhs_ty) <- zonkTidyTcType tidy_env rhs_ty
   --                            return (tidy_env2, UnifyTyCtx_TySynRhs rhs_ty)
   doNotQuantifyKiVars kvs 
 
   (ki_bndrs, rhs_ty) <- initZonkEnv NoFlexi
                         $ runZonkBndrT (zonkKiVarBindersX tc_ki_bndrs)
-                        $ \bndrs -> do rhs_ty <- zonkTcTypeToTypeX rhs_ty
+                        $ \bndrs -> do rhs_ty <- panic "zonkTcTypeToTypeX rhs_ty"
                                        return (bndrs, rhs_ty)
-  let rhs_kind' = mkForAllKisMono ki_bndrs rhs_kind
+  let rhs_kind' = panic "mkForAllKisMono ki_bndrs rhs_kind"
       rhs_ty' = mkBigLamTys ki_bndrs rhs_ty
   return $ buildSynTyCon tc_name rhs_kind' arity rhs_ty'
 
@@ -509,7 +518,7 @@ tcTyFunRhs tc_name cs_ty = bindTyConKiVars tc_name
 *                                                                      *
 ********************************************************************* -}
 
-checkValidTyCon :: TyCon -> TcM TyCon
+checkValidTyCon :: TyCon (TyVar KiVar) KiVar -> TcM (TyCon (TyVar KiVar) KiVar)
 checkValidTyCon tc = setSrcSpan (getSrcSpan tc)
                      $ addTyConCtxt tc
                      $ recoverM recovery $ do
@@ -524,7 +533,7 @@ checkValidTyCon tc = setSrcSpan (getSrcSpan tc)
 
     mk_fake_tc = makeRecoveryTyCon
 
-checkValidTyCon' :: TyCon -> TcM ()
+checkValidTyCon' :: TyCon (TyVar KiVar) KiVar -> TcM ()
 checkValidTyCon' tc
   | isPrimTyCon tc
   = return ()
@@ -533,8 +542,8 @@ checkValidTyCon' tc
   | otherwise
   = do traceTc "checkValidTyCon" (ppr tc)
        case synTyConRhs_maybe tc of
-         Just syn_rhs -> do checkValidType syn_ctxt syn_rhs
-                            checkTySynRhs syn_ctxt syn_rhs
+         Just syn_rhs -> do panic "checkValidType syn_ctxt syn_rhs"
+                            panic "checkTySynRhs syn_ctxt syn_rhs"
          Nothing -> pprPanic "checkValidTyCon'" (ppr tc)
   where
     syn_ctxt = TySynCtxt name
@@ -553,7 +562,7 @@ tcMkDeclCtxt decl = hsep [ text "In the", pprTyDeclFlavor decl
 tcAddDeclCtxt :: CsBind Rn -> TcM a -> TcM a
 tcAddDeclCtxt decl thing_inside = addErrCtxt (tcMkDeclCtxt decl) thing_inside
 
-addTyConCtxt :: TyCon -> TcM a -> TcM a
+addTyConCtxt :: TyCon tv kv -> TcM a -> TcM a
 addTyConCtxt tc = addTyConFlavCtxt name flav
   where
     name = getName tc
