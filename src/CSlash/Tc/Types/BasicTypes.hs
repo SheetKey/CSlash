@@ -19,7 +19,7 @@ import CSlash.Language.Syntax.Type ( LCsSigType )
 
 -- import GHC.Tc.Errors.Types.PromotionErr (PromotionErr, peCategory)
 
-import CSlash.Core.TyCon  ( TyCon, tyConKind )
+import CSlash.Core.TyCon  ( TyCon, AnyTyCon, tyConKind )
 import CSlash.Utils.Outputable
 import CSlash.Utils.Misc
 
@@ -30,8 +30,8 @@ type TcId = Id (TcTyVar TcKiVar) TcKiVar
 data TcBinder
   = TcIdBndr TcId TopLevelFlag
   | TcIdBndr_ExpType Name ExpType TopLevelFlag
-  | TcTvBndr Name (TcTyVar TcKiVar)
-  | TcKvBndr Name TcKiVar
+  | TcTvBndr Name (TcTyVar AnyKiVar)
+  | TcKvBndr Name AnyKiVar
 
 instance Outputable TcBinder where
   ppr (TcIdBndr id top_lvl) = ppr id <> brackets (ppr top_lvl)
@@ -52,16 +52,16 @@ instance HasOccName TcBinder where
 ********************************************************************* -}
 
 data TcTyKiThing
-  = AGlobal (TyThing (TcTyVar TcKiVar) TcKiVar)
+  = AGlobal (TyThing (AnyTyVar AnyKiVar) AnyKiVar)
   | ATcId
     { tct_id :: Id (TcTyVar TcKiVar) TcKiVar
     , tct_info :: IdBindingInfo
     }
-  | ATyVar Name (TcTyVar TcKiVar)
-  | AKiVar Name TcKiVar -- should make a new type 'TcKiThing'
-  | ATcTyCon (TyCon (TcTyVar TcKiVar) TcKiVar)
+  | ATyVar Name (TcTyVar AnyKiVar)
+  | AKiVar Name AnyKiVar -- should make a new type 'TcKiThing'
+  | ATcTyCon AnyTyCon
 
-tcTyThingTyCon_maybe :: TcTyKiThing -> Maybe (TyCon (TcTyVar TcKiVar) TcKiVar)
+tcTyThingTyCon_maybe :: TcTyKiThing -> Maybe AnyTyCon
 tcTyThingTyCon_maybe (AGlobal (ATyCon tc)) = Just tc
 tcTyThingTyCon_maybe (ATcTyCon tc_tc) = Just tc_tc
 tcTyThingTyCon_maybe _ = Nothing

@@ -101,7 +101,7 @@ tc_infer_cs_type (CsParTy _ ty) = tc_infer_lcs_type ty
 
 tc_infer_cs_type ty
   | Just (cs_fun_ty, cs_args) <- splitCsAppTys ty
-  = do (fun_ty, _) <- tcInferTyAppHead cs_fun_ty
+  = do fun_ty <- tcInferTyAppHead cs_fun_ty
        tcInferTyApps cs_fun_ty fun_ty cs_args
 
 tc_infer_cs_type (CsKindSig _ ty sig) = do
@@ -149,9 +149,9 @@ tc_cs_type rn_ty@(CsQualTy { cst_ctxt = ctxt, cst_body = body_ty }) exp_kind
          $ vcat [ ppr rn_ty, ppr evVars ]
        (ty', body_ki) <- checkKiConstraints InferKindSkol evVars
                          $ tc_infer_lcs_type body_ty
-       let final_ty = panic "mkTyLamTys evVars ty'"
-           final_ki = panic "mkInvisFunKis evVarKis body_ki"
-       panic "checkExpectedKind rn_ty final_ty final_ki exp_kind"
+       let final_ty = mkTyLamTys (toAnyTyVar <$> evVars) ty'
+           final_ki = mkInvisFunKis evVarKis body_ki
+       checkExpectedKind rn_ty final_ty final_ki exp_kind
 
 tc_cs_type rn_ty@(CsTupleTy _ tup_args) exp_kind
   | all tyTupArgPresent tup_args
@@ -256,7 +256,7 @@ inst_tuple_tycon tup_tycon tup_args = do
       Just (ki_binder, inner_ki) -> do
         traceTc "inst_tuple_tycon (need to instantiate)"
           $ vcat [ ppr ki_binder, ppr subst ]
-        (subst', arg') <- panic "tcInstInvisibleKiBinder subst ki_binder"
+        (subst', arg') <- tcInstInvisibleKiBinder subst ki_binder
         go n (mkAppTy fun arg') subst' inner_ki all_args
 
       Nothing | Mono mono_fun_ki <- fun_ki -> go_mono_invis n fun subst mono_fun_ki all_args
@@ -275,7 +275,7 @@ inst_tuple_tycon tup_tycon tup_args = do
                  $ vcat [ ppr fun, ppr subst, ppr fun_ki, ppr all_args ]
       (theta, inner_ki) -> do
         let inst_theta = substMonoKis subst theta
-        evTys <- panic "instCallKiConstraints TupleTyOrigin inst_theta"
+        evTys <- instCallKiConstraints TupleTyOrigin inst_theta
         go_mono n (mkAppTys fun evTys) subst inner_ki all_args
 
     go_mono
@@ -342,7 +342,7 @@ tcInferTyApps_nosat orig_cs_ty fun orig_cs_args = do
       (CsValArg _ arg : args, Just (ki_binder, inner_ki)) -> do
         traceTc "tcInferTyApps (need to instantiate)"
           $ vcat [ ppr ki_binder, ppr subst ]
-        (subst', arg') <- panic "tcInstInvisibleKiBinder subst ki_binder"
+        (subst', arg') <- tcInstInvisibleKiBinder subst ki_binder
         go n (mkAppTy fun arg') subst' inner_ki all_args
 
       _ | Mono mono_fun_ki <- fun_ki -> go_mono_invis n fun subst mono_fun_ki all_args
@@ -365,7 +365,7 @@ tcInferTyApps_nosat orig_cs_ty fun orig_cs_args = do
       (theta, inner_ki) -> do
         let inst_theta = substMonoKis subst theta
             orig = lCsTyCtOrigin orig_cs_ty
-        evTys <- panic "instCallKiConstraints orig inst_theta"
+        evTys <- instCallKiConstraints orig inst_theta
         go_mono n (mkAppTys fun evTys) subst inner_ki all_args
 
     go_mono
@@ -489,10 +489,10 @@ splitCsAppTys cs_ty
     go f as = (f, as)
 
 ---------------------------
-tcInferTyAppHead :: LCsType Rn -> TcM (AnyType, AnyMonoKind)
+tcInferTyAppHead :: LCsType Rn -> TcM AnyType
 tcInferTyAppHead (L _ (CsTyVar _ (L _ tv))) = tcTyVar tv
 tcInferTyAppHead (L _ (CsUnboundTyVar _ _)) = panic "tcInferTyAppHead/unbound ty var"
-tcInferTyAppHead ty = tc_infer_lcs_type ty
+tcInferTyAppHead ty = fst <$> tc_infer_lcs_type ty
 
 {- *********************************************************************
 *                                                                      *
@@ -513,9 +513,9 @@ tcTyLamMatches cs_type (MG _
 
   let bndr_kinds = varKind <$> bndrs
       act_kind = mkVisFunKis bndr_kinds inf_ki
-      full_ty = panic "mkTyLamTys bndrs body_ty'"
+      full_ty = mkTyLamTys (toAnyTyVar <$> bndrs) body_ty'
 
-  panic "checkExpectedKind cs_type full_ty act_kind exp_kind"
+  checkExpectedKind cs_type full_ty act_kind exp_kind
 
 tcTyLamMatches _ _ _ = panic "unreachable"
 
@@ -552,13 +552,13 @@ checkExpectedKind cs_ty ty act_kind exp_kind = do
               $ vcat [ ppr act_kind, ppr exp_kind, ppr co_k ]
             return (ty `mkCastTy` co_k)
 
-tcTyVar :: Name -> TcM (AnyType, AnyMonoKind)
+tcTyVar :: Name -> TcM AnyType
 tcTyVar name = do
   traceTc "lk1" (ppr name)
   thing <- tcLookup name
   case thing of
-    ATyVar _ tv -> panic "return (mkTyVarTy tv, varKind tv)"
-    (tcTyThingTyCon_maybe -> Just tc) -> return (panic "mkTyConTy tc", panic "tyConKind tc")
+    ATyVar _ tv -> return $ mkTyVarTy (toAnyTyVar tv)
+    (tcTyThingTyCon_maybe -> Just tc) -> return $ mkTyConTy tc
     
     _ -> wrongThingErr WrongThingType thing name
 
@@ -597,9 +597,9 @@ kcInferDeclHeader name flav kv_ns kc_res_ki = addTyConFlavCtxt name flav $ do
   (scoped_kvs, res_kind) <- bindImplicitKBndrs_Q_Kv kv_ns
                             $ newExpectedKind =<< kc_res_ki
 
-  let kv_pairs = mkKiVarNamePairs scoped_kvs
+  let kv_pairs = mkVarNamePairs (toAnyKiVar <$> scoped_kvs)
       arity = length $ fst $ splitFunKis res_kind
-      tycon = panic "mkTcTyCon name (Mono res_kind) arity kv_pairs False flav"
+      tycon = mkTcTyCon name (Mono res_kind) arity kv_pairs False flav
   
   traceTc "kcInferDeclHeader"
     $ vcat [ ppr name, ppr kv_ns, ppr scoped_kvs, ppr res_kind, ppr arity ]
@@ -670,17 +670,17 @@ tcTyLamTyBndrs pats thing_inside = do
     Nothing -> do
       res <- thing_inside
       return ([], res)
-    Just bndrs1 -> do
-      (tclvl, wanted, (skol_tvs, res))
-        <- pushLevelAndCaptureConstraints
-           $ bindTyLamTyBndrsX skol_mode bndrs thing_inside
-      let bndr_1 = head pats
-          bndr_n = last pats
-      traceTc "tcTyLamTyBndrs/emitResidualTvConstraint"
-        $ vcat [ ppr skol_tvs, ppr wanted ]
-      setSrcSpan (combineSrcSpans (getLocA bndr_1) (getLocA bndr_n))
-        $ panic "emitResidualTvConstraint skol_info skol_tvs tclvl wanted"
-      return (skol_tvs, res)
+    Just bndrs1 -> do bindTyLamTyBndrsX skol_mode bndrs thing_inside
+      -- (tclvl, wanted, (skol_tvs, res))
+      --   <- pushLevelAndCaptureConstraints
+      --      $ bindTyLamTyBndrsX skol_mode bndrs thing_inside
+      -- let bndr_1 = head pats
+      --     bndr_n = last pats
+      -- traceTc "tcTyLamTyBndrs/emitResidualTvConstraint"
+      --   $ vcat [ ppr skol_tvs, ppr wanted ]
+      -- setSrcSpan (combineSrcSpans (getLocA bndr_1) (getLocA bndr_n))
+      --   $ emitResidualTvConstraint skol_info skol_tvs tclvl wanted
+      -- return (skol_tvs, res)
 
 bindTyLamTyBndrs :: [LPat Rn] -> TcM a -> TcM ([TcTyVar TcKiVar], a)
 bindTyLamTyBndrs pats thing_inside = do
@@ -845,7 +845,7 @@ newKiVarBndr (SM { sm_clone = clone, sm_var = var }) name = do
 --   tcExtendKiVarEnv binders
 --     $ thing_inside binders res_kind rhs_kind arity
 
-bindTyConKiVars :: Name -> ([TcKiVar] -> TcMonoKind -> Arity -> TcM a) -> TcM a
+bindTyConKiVars :: Name -> ([AnyKiVar] -> AnyMonoKind -> Arity -> TcM a) -> TcM a
 bindTyConKiVars tycon_name thing_inside = do
   tycon <- tcLookupTcTyCon tycon_name
   let full_kind = tyConKind tycon
@@ -864,7 +864,7 @@ bindImplicitKBndrsX skol_mode kv_names thing_inside = do
   lcl_env <- getLclTyKiEnv
   kvs <- mapM (new_kv lcl_env) kv_names
   traceTc "bindImplicitKBndrsX" (ppr kv_names $$ ppr kvs)
-  res <- tcExtendNameKiVarEnv (kv_names `zip` kvs) thing_inside
+  res <- tcExtendNameKiVarEnv (kv_names `zip` fmap toAnyKiVar kvs) thing_inside
   return (kvs, res)
   where
     new_kv lcl_env name = newKiVarBndr skol_mode name      
@@ -875,7 +875,7 @@ bindImplicitKBndrsX skol_mode kv_names thing_inside = do
 *                                                                      *
 ********************************************************************* -}
 
-kindGeneralizeNone :: TcMonoKind -> TcM ()
+kindGeneralizeNone :: AnyMonoKind -> TcM ()
 kindGeneralizeNone kind = do
   traceTc "kindGeneralizeNone" (ppr kind)
   dvs <- candidateQKiVarsOfKind (Mono kind)
@@ -930,26 +930,26 @@ tcLCsKindSig ctxt cs_kind = do
   traceTc "tcLCsKindSig" (ppr cs_kind $$ ppr kind)
 
   kindGeneralizeNone kind
-  kind <- liftZonkM $ panic "zonkTcMonoKind kind"
+  kind <- liftZonkM $ zonkTcMonoKind kind
 
-  panic "checkValidMonoKind ctxt kind"
-  traceTc "tcLCsKindSig2" (panic "ppr kind")
-  panic "return kind"
+  checkValidMonoKind ctxt kind
+  traceTc "tcLCsKindSig2" (ppr kind)
+  return kind
 
-tcLCsContext :: LCsContext Rn -> TcM ([TcKiEvVar TcKiVar], [TcMonoKind])
+tcLCsContext :: LCsContext Rn -> TcM ([KiEvVar AnyKiVar], [AnyMonoKind])
 tcLCsContext = tcCsContext . unLoc
 
-tcCsContext :: CsContext Rn -> TcM ([TcKiEvVar TcKiVar], [TcMonoKind])
+tcCsContext :: CsContext Rn -> TcM ([KiEvVar AnyKiVar], [AnyMonoKind])
 tcCsContext [] = panic "tcCsContext empty"
 tcCsContext ctxt = do
   rels <- mapM tc_lcs_kdrel ctxt 
   evVars <- newKiEvVars rels
   return $ (evVars, rels)
 
-tc_lcs_kdrel :: LCsKdRel Rn -> TcM TcMonoKind
+tc_lcs_kdrel :: LCsKdRel Rn -> TcM AnyMonoKind
 tc_lcs_kdrel rel = tc_cs_kdrel (unLoc rel)
 
-tc_cs_kdrel :: CsKdRel Rn -> TcM TcMonoKind
+tc_cs_kdrel :: CsKdRel Rn -> TcM AnyMonoKind
 tc_cs_kdrel (CsKdLT _ k1 k2) = do
   k1' <- tcLCsKind k1
   k2' <- tcLCsKind k2

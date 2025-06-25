@@ -72,18 +72,23 @@ zonkTyBndrX tv = assertPpr (isImmutableVar tv) (ppr tv) $ do
   return tv'
 
 {-# INLINE zonkKiBndrX #-}
-zonkKiBndrX :: TcKiVar -> ZonkBndrTcM KiVar
-zonkKiBndrX kv = assertPpr (isImmutableVar kv) (ppr kv) $ do
-  let kv' = mkKiVar (varName kv)
-  panic "extendKiZonkEnv kv'"
-  return kv'
+zonkKiBndrX :: AnyKiVar -> ZonkBndrTcM KiVar
+zonkKiBndrX kv = handleAnyKv
+                 (\_ -> res)
+                 (\tckv -> assertPpr (isImmutableVar tckv) (ppr tckv) res)
+                 kv
+  where
+    res = do
+      let kv' = mkKiVar (varName kv)
+      panic "extendKiZonkEnv kv'"
+      return kv'
 
 {-# INLINE zonkKiVarBindersX #-}
-zonkKiVarBindersX :: [TcKiVar] -> ZonkBndrTcM [KiVar]
+zonkKiVarBindersX :: [AnyKiVar] -> ZonkBndrTcM [KiVar]
 zonkKiVarBindersX = traverse zonkKiVarBinderX
 
 {-# INLINE zonkKiVarBinderX #-}
-zonkKiVarBinderX :: TcKiVar -> ZonkBndrTcM KiVar
+zonkKiVarBinderX :: AnyKiVar -> ZonkBndrTcM KiVar
 zonkKiVarBinderX kv = zonkKiBndrX kv
 
 zonkTyVarOcc :: HasDebugCallStack => TcTyVar TcKiVar -> ZonkTcM (Type (TyVar KiVar) KiVar)
@@ -160,7 +165,7 @@ zonkTcTyConToTyCon tc
 zonkTcTypeToTypeX :: TcType -> ZonkTcM (Type (TyVar KiVar) KiVar)
 zonkTcTypesToTypesX :: [TcType] -> ZonkTcM [Type (TyVar KiVar) KiVar]
 (zonkTcTypeToTypeX, zonkTcTypesToTypesX) = case mapTypeX zonk_typemapper of
-  (zty, ztys) -> (ZonkT . flip zty, ZonkT . flip ztys)
+  (zty, ztys) -> panic "(ZonkT . flip zty, ZonkT . flip ztys)"
 
 zonkKiVarOcc :: HasDebugCallStack => TcKiVar -> ZonkTcM (MonoKind KiVar)
 zonkKiVarOcc kv = do
@@ -209,7 +214,7 @@ commitFlexiKv kv = do
   lift $ case flexi of
     NoFlexi -> pprPanic "NoFlexi" (ppr kv)
 
-zonk_kindmapper :: KiCoMapper (TcTyVar TcKiVar) TcKiVar (TyVar KiVar) KiVar ZonkEnv TcM
+zonk_kindmapper :: KiCoMapper TcKiVar KiVar ZonkEnv TcM
 zonk_kindmapper = panic "zonk_kindmapper"
   -- KindMapper
   -- { km_kivar = \env kv -> runZonkT (zonkKiVarOcc kv) env
@@ -235,7 +240,7 @@ zonkTcMonoKindToMonoKindX ki = do
 *                                                                      *
 ********************************************************************* -}
 
-unpackKiCoercionHole_maybe :: KindCoercionHole tv kv -> TcM (Maybe (KindCoercion tv kv))
+unpackKiCoercionHole_maybe :: KindCoercionHole kv -> TcM (Maybe (KindCoercion kv))
 unpackKiCoercionHole_maybe (CoercionHole { ch_ref = ref }) = readTcRef ref
 
 zonkRewriterSet :: RewriterSet -> TcM RewriterSet

@@ -58,7 +58,7 @@ import CSlash.Types.Name
 -- import GHC.Types.SafeHaskell
 import CSlash.Types.Id
 import CSlash.Types.TypeEnv
-import CSlash.Types.Var (TcKiCoVar)
+import CSlash.Types.Var (KiCoVar, AnyKiVar)
 import CSlash.Types.Var.Set
 import CSlash.Types.Var.Env
 import CSlash.Types.SrcLoc
@@ -786,7 +786,7 @@ newNoTcKiEvBinds = do
   return $ KiCoEvBindsVar { kebv_kcvs = kcvs_ref
                           , kebv_uniq = uniq }
 
-getTcKiEvKiCoVars :: KiEvBindsVar -> TcM (MkVarSet (TcKiCoVar TcKiVar))
+getTcKiEvKiCoVars :: KiEvBindsVar -> TcM (MkVarSet (KiCoVar AnyKiVar))
 getTcKiEvKiCoVars ev_binds_var = readTcRef (kebv_kcvs ev_binds_var)
 
 getTcKiEvBindsMap :: KiEvBindsVar -> TcM KiEvBindMap

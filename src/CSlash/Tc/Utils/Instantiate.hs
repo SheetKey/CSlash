@@ -67,7 +67,7 @@ import Data.Function ( on )
 *                                                                      *
 ********************************************************************* -}
 
-instCallKiConstraints :: CtOrigin -> [TcPredKind] -> TcM [TcKiEvType]
+instCallKiConstraints :: CtOrigin -> [AnyPredKind] -> TcM [KiEvType]
 instCallKiConstraints orig preds
   | null preds
   = return []
@@ -76,13 +76,13 @@ instCallKiConstraints orig preds
        traceTc "instCallKiConstraints" (ppr evs)
        return evs
   where
-    go :: TcPredKind -> TcM TcKiEvType
+    go :: AnyPredKind -> TcM KiEvType
     go pred
       | KiConApp EQKi [k1, k2] <- pred
-      = do co <- panic "unifyKind Nothing k1 k2"
+      = do co <- unifyKind Nothing k1 k2
            return $ kiEvCoercion co
       | otherwise
-      = panic "emitWanted orig pred"
+      = emitWanted orig pred
 
 {- *********************************************************************
 *                                                                      *
@@ -90,8 +90,7 @@ instCallKiConstraints orig preds
 *                                                                      *
 ********************************************************************* -}
 
-tcInstInvisibleKiBinder :: TvSubst tv kv -> KiVar -> TcM (TvSubst tv kv, TcType)
+tcInstInvisibleKiBinder :: KvSubst AnyKiVar -> AnyKiVar -> TcM (KvSubst AnyKiVar, AnyType)
 tcInstInvisibleKiBinder subst kv = do
-  -- (subst', kv') <- newMetaKiVarX subst kv
-  -- return (subst', Embed (mkKiVarMKi kv'))
-  panic "tcInstInvisibleKiBinder"
+  (subst', kv') <- newMetaKiVarX subst kv
+  return (subst', Embed $ mkKiVarKi kv')

@@ -11,4 +11,4 @@ mkAppTy :: Type tv kv -> Type tv kv -> Type tv kv
 
 mkTyConApp :: TyCon tv kv -> [Type tv kv] -> Type tv kv
 
-mkCastTy :: VarHasKind tv kv => Type tv kv -> KindCoercion tv kv -> Type tv kv
+mkCastTy :: VarHasKind tv kv => Type tv kv -> KindCoercion kv -> Type tv kv

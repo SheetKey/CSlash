@@ -89,6 +89,8 @@ type MkDVarSet = UniqDSet
 type DVarSet tv kv = MkDVarSet (Var tv kv)
 
 type DKiVarSet = MkDVarSet KiVar
+type DTcKiVarSet = MkDVarSet TcKiVar
+type DAnyKiVarSet = MkDVarSet AnyKiVar
 
 emptyDVarSet :: UniqDSet a
 emptyDVarSet = emptyUniqDSet

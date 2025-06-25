@@ -1,3 +1,4 @@
+{-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 
@@ -6,7 +7,7 @@ module CSlash.Types.Var
   , Id
   , TyVar, TcTyVar, AnyTyVar
   , KiVar, TcKiVar, AnyKiVar
-  , VarHasKind
+  , VarHasKind, AsAnyTy
   ) where
 
 import {-# SOURCE #-} CSlash.Types.Name
@@ -24,3 +25,4 @@ newtype TcKiVar = TcKiVar (Var Void Void)
 newtype AnyKiVar = AnyKiVar (Var Void Void)
 
 class VarHasKind v kv | v -> kv
+class AsAnyTy (thing :: * -> * -> *)

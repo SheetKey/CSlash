@@ -2,6 +2,6 @@ module CSlash.Core.Kind.Compare where
 
 import CSlash.Core.Kind (Kind)
 import CSlash.Utils.Misc (HasDebugCallStack)
-import CSlash.Types.Var (VarHasUnique)
+import CSlash.Types.Var (IsVar)
 
-tcEqKind :: (HasDebugCallStack, Eq kv, VarHasUnique kv) => Kind kv -> Kind kv -> Bool
+tcEqKind :: (HasDebugCallStack, IsVar kv) => Kind kv -> Kind kv -> Bool

@@ -201,7 +201,7 @@ allBits = [ (ctkeImpredicative, "ctkeImpredicative")
 mkNonCanonical :: CtEvidence -> Ct
 mkNonCanonical = CNonCanonical
 
-mkGivens :: CtLoc -> [AnyKiEvVar AnyKiVar] -> [Ct]
+mkGivens :: CtLoc -> [KiEvVar AnyKiVar] -> [Ct]
 mkGivens loc ev_vars = map mk ev_vars
   where mk ev_var = mkNonCanonical (CtGiven { ctev_evar = ev_var
                                             , ctev_pred = kiEvVarPred ev_var
@@ -229,7 +229,7 @@ ctOrigin = ctLocOrigin . ctLoc
 ctPred :: Ct -> AnyPredKind
 ctPred ct = ctEvPred (ctEvidence ct)
 
-ctKiEvVar :: Ct -> AnyKiEvVar AnyKiVar
+ctKiEvVar :: Ct -> KiEvVar AnyKiVar
 ctKiEvVar ct = ctEvKiEvVar (ctEvidence ct)
 
 instance Outputable Ct where
@@ -372,8 +372,8 @@ ppr_bag doc bag
 data Implication = Implic
   { ic_tclvl :: TcLevel
   , ic_info :: SkolemInfoAnon
-  , ic_skols :: [TcKiVar]
-  , ic_given :: [AnyKiEvVar AnyKiVar]
+  , ic_skols :: [TcKiVar] -- as in GHC (NO KiVars or MetaKiVars, just Skolem TcKiVars)
+  , ic_given :: [KiEvVar AnyKiVar]
   , ic_given_eqs :: HasGivenEqs
   , ic_warn_inaccessible :: Bool
   , ic_env :: !CtLocEnv
@@ -401,7 +401,7 @@ implicationPrototype ct_loc_env = Implic
   }
 
 data ImplicStatus
-  = IC_Solved { ics_dead :: [AnyKiEvVar AnyKiVar] }
+  = IC_Solved { ics_dead :: [KiEvVar AnyKiVar] }
   | IC_Insoluble
   | IC_BadTelescope
   | IC_Unsolved
@@ -532,7 +532,7 @@ fvsOfImplic (Implic { ic_skols = skols, ic_given = givens, ic_wanted = wanted })
   = emptyFV
   | otherwise
   = fvsKiVarBndrs (toAnyKiVar <$> skols)
-    $ fvsVarBndrs givens
+    $ fvsVarBndrs (toAnyTyVar <$> givens)
     $ fvsOfWC wanted
 
 fvsOfBag :: (a -> AnyTyFV) -> Bag a -> AnyTyFV
@@ -544,15 +544,15 @@ fvsOfBag vs_of = foldr (unionFV . vs_of) emptyFV
 *                                                                      *
 ********************************************************************* -}
 
-pprKiEvVars :: [AnyKiEvVar AnyKiVar] -> SDoc
+pprKiEvVars :: [KiEvVar AnyKiVar] -> SDoc
 pprKiEvVars ev_vars = vcat (map pprKiEvVarWithKind ev_vars)
 
-pprKiEvVarTheta :: [AnyKiEvVar AnyKiVar] -> SDoc
+pprKiEvVarTheta :: [KiEvVar AnyKiVar] -> SDoc
 pprKiEvVarTheta ev_vars = pprTheta (map kiEvVarPred ev_vars)
   where
     pprTheta t = text "pprTheta NEEDS IMPLEMENTING" <+> ppr t
 
-pprKiEvVarWithKind :: AnyKiEvVar AnyKiVar -> SDoc
+pprKiEvVarWithKind :: KiEvVar AnyKiVar -> SDoc
 pprKiEvVarWithKind v = ppr v <+> colon <+> ppr (kiEvVarPred v)
 
 {- *********************************************************************
@@ -562,13 +562,13 @@ pprKiEvVarWithKind v = ppr v <+> colon <+> ppr (kiEvVarPred v)
 ********************************************************************* -}
 
 data TcEvDest
-  = EvVarDest (AnyKiEvVar AnyKiVar)
-  | HoleDest (KindCoercionHole (AnyKiEvVar AnyKiVar) AnyKiVar)
+  = EvVarDest (KiEvVar AnyKiVar)
+  | HoleDest (KindCoercionHole AnyKiVar)
 
 data CtEvidence
   = CtGiven
     { ctev_pred :: AnyPredKind
-    , ctev_evar :: AnyKiEvVar AnyKiVar
+    , ctev_evar :: KiEvVar AnyKiVar
     , ctev_loc :: CtLoc }
   | CtWanted
     { ctev_pred :: AnyPredKind
@@ -587,19 +587,23 @@ ctEvRewriters :: CtEvidence -> RewriterSet
 ctEvRewriters (CtWanted { ctev_rewriters = rewriters }) = rewriters
 ctEvRewriters _ = emptyRewriterSet
 
-ctEvType :: HasDebugCallStack => CtEvidence -> AnyKiEvType
+ctEvType :: HasDebugCallStack => CtEvidence -> KiEvType
 ctEvType ev@(CtWanted { ctev_dest = HoleDest _ }) = KindCoercion $ ctEvKiCoercion ev
 ctEvType ev = kiEvVar (ctEvKiEvVar ev)
 
-ctEvKiCoercion :: HasDebugCallStack => CtEvidence -> KindCoercion (AnyKiCoVar AnyKiVar) AnyKiVar
-ctEvKiCoercion (CtGiven { ctev_evar = ev_var }) = mkKiCoVarCo ev_var
+ctEvKiCoercion :: HasDebugCallStack => CtEvidence -> KindCoercion AnyKiVar
+ctEvKiCoercion (CtGiven { ctev_pred = pred, ctev_evar = ev_var })
+  = assertPpr (isKiEqPred pred)
+    (vcat [ text "ctEvKiCoercion called on non-eq pred"
+          , ppr pred, ppr ev_var ])
+    $ mkKiCoVarCo ev_var
 ctEvKiCoercion (CtWanted { ctev_dest = dest })
   | HoleDest hole <- dest
   = mkKiHoleCo hole
   | otherwise
   = panic "ctEvKiCoercion"
 
-ctEvKiEvVar :: CtEvidence -> AnyKiEvVar AnyKiVar
+ctEvKiEvVar :: CtEvidence -> KiEvVar AnyKiVar
 ctEvKiEvVar (CtWanted { ctev_dest = EvVarDest ev }) = ev
 ctEvKiEvVar (CtWanted { ctev_dest = HoleDest h }) = coHoleCoVar h
 ctEvKiEvVar (CtGiven { ctev_evar = ev }) = ev
@@ -641,7 +645,7 @@ isGiven _ = False
 *                                                                      *
 ********************************************************************* -}
 
-type RWKiCoHole = KindCoercionHole (AnyKiCoVar AnyKiVar) AnyKiVar
+type RWKiCoHole = KindCoercionHole AnyKiVar
 
 newtype RewriterSet = RewriterSet (UniqSet RWKiCoHole)
   deriving newtype (Outputable, Semigroup, Monoid)

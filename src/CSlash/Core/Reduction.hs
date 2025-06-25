@@ -26,10 +26,10 @@ import CSlash.Utils.Panic
 ********************************************************************* -}
 
 data Reduction = ReductionKi
-  { reductionKindCoercion :: KindCoercion (TyVar KiVar) KiVar
+  { reductionKindCoercion :: KindCoercion KiVar
   , reductionReducedKind :: !(MonoKind KiVar) }
 
-mkReductionKi :: KindCoercion (TyVar KiVar) KiVar -> MonoKind KiVar -> Reduction
+mkReductionKi :: KindCoercion KiVar -> MonoKind KiVar -> Reduction
 mkReductionKi co ki = ReductionKi co ki
 {-# INLINE mkReductionKi #-}
 
@@ -43,7 +43,7 @@ reductionOriginalKind :: Reduction -> MonoKind KiVar
 reductionOriginalKind = kicoercionLKind . reductionKindCoercion
 {-# INLINE reductionOriginalKind #-}
 
-mkTransRedn :: KindCoercion (TyVar KiVar) KiVar -> Reduction -> Reduction
+mkTransRedn :: KindCoercion KiVar -> Reduction -> Reduction
 mkTransRedn co1 redn@(ReductionKi co2 _) = redn { reductionKindCoercion = co1 `mkTransKiCo` co2 }
 {-# INLINE mkTransRedn #-}
 
@@ -55,7 +55,7 @@ mkFunKiRedn af (ReductionKi arg_co arg_ki) (ReductionKi res_co res_ki)
   = mkReductionKi (mkFunKiCo af arg_co res_co) (mkFunKi af arg_ki res_ki)
 {-# INLINE mkFunKiRedn #-}
 
-data Reductions = Reductions [KindCoercion (TyVar KiVar) KiVar] [MonoKind KiVar]
+data Reductions = Reductions [KindCoercion KiVar] [MonoKind KiVar]
 
 mkKiConAppRedn :: KiCon -> Reductions -> Reduction
 mkKiConAppRedn kc (Reductions cos kis) = mkReductionKi (mkKiConAppCo kc cos) (mkKiConApp kc kis)

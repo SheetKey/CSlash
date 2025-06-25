@@ -3,6 +3,8 @@ module CSlash.Tc.Zonk.TcType
   ,  module CSlash.Tc.Zonk.TcType
   ) where
 
+import Prelude hiding ((<>))
+
 import CSlash.Types.Name
 import CSlash.Types.Var
 import CSlash.Types.Var.Env
@@ -36,7 +38,7 @@ import CSlash.Utils.Monad ( mapAccumLM )
 import CSlash.Utils.Panic
 
 import CSlash.Data.Bag
--- import GHC.Data.Pair
+import CSlash.Data.Pair
 
 {- *********************************************************************
 *                                                                      *
@@ -83,28 +85,26 @@ writeMetaTyVarRef tyvar ref ty
                                   2 (ppr tyvar $$ ppr details)
 {-# INLINE writeMetaTyVarRef #-}
 
-writeMetaKiVar :: HasDebugCallStack => TcKiVar -> TcMonoKind -> ZonkM ()
+writeMetaKiVar :: HasDebugCallStack => TcKiVar -> AnyMonoKind -> ZonkM ()
 writeMetaKiVar kivar ki
   | not debugIsOn
-  = panic "writeMetaKiVarRef kivar (metaVarRef kivar) ki"
-  -- | not (isTcKiVar kivar)
-  -- = massertPpr False (text "Writing to non-tc kivar" <+> ppr kivar)
+  = writeMetaKiVarRef kivar (metaVarRef kivar) ki
   | MetaVar { mv_ref = ref } <- tcVarDetails kivar
-  = panic "writeMetaKiVarRef kivar ref ki"
+  = writeMetaKiVarRef kivar ref ki
   | otherwise
   = massertPpr False (text "Writing to non-meta kivar" <+> ppr kivar)
 {-# INLINE writeMetaKiVar #-}
 
 writeMetaKiVarRef
-  :: HasDebugCallStack => TcKiVar -> TcRef (MetaDetails TcMonoKind) -> TcMonoKind -> ZonkM ()
+  :: HasDebugCallStack => TcKiVar -> TcRef (MetaDetails AnyMonoKind) -> AnyMonoKind -> ZonkM ()
 writeMetaKiVarRef kivar ref ki
   | not debugIsOn
   = do traceZonk "writeMetaKiVar" (ppr kivar <+> text ":=" <+> ppr ki)
        writeTcRef ref (Indirect ki)
   | otherwise
   = do meta_details <- readTcRef ref
-       zonked_ki <- panic "zonkTcMonoKind ki"
-       let zonked_ki_lvl = tcMonoKindLevel zonked_ki
+       zonked_ki <- zonkTcMonoKind ki
+       let zonked_ki_lvl = anyMonoKindLevel zonked_ki
            kv_lvl = varLevel kivar
            level_check_ok = not (zonked_ki_lvl `strictlyDeeperThan` kv_lvl)
            level_check_msg = ppr zonked_ki_lvl $$ ppr kv_lvl
@@ -132,7 +132,11 @@ zonkTcType :: TcType -> ZonkM TcType
 zonkTcTypes :: [TcType] -> ZonkM [TcType]
 (zonkTcType, zonkTcTypes) = mapType zonkTcTypeMapper
   where
-    zonkTcTypeMapper :: TypeMapper (TcTyVar TcKiVar) TcKiVar (TcTyVar TcKiVar) TcKiVar () ZonkM
+    zonkTcTypeMapper
+      :: TypeMapper
+         (TcTyVar AnyKiVar) AnyKiVar
+         (TcTyVar AnyKiVar) AnyKiVar
+         () ZonkM
     zonkTcTypeMapper = panic "zonkTcTypeMapper"
       -- TypeMapper
       -- { tm_tyvar = const zonkTcTyVar
@@ -142,13 +146,13 @@ zonkTcTypes :: [TcType] -> ZonkM [TcType]
       -- , tm_tycon = zonkTcTyCon
       -- }
 
-zonkTcTyCon :: TcTyCon -> ZonkM TcTyCon
+zonkTcTyCon :: AnyTyCon -> ZonkM AnyTyCon
 zonkTcTyCon tc
   | isMonoTcTyCon tc = do tck' <- zonkTcKind (tyConKind tc)
                           return $ setTcTyConKind tc tck'
   | otherwise = return tc
 
-zonkTcTyVar :: TcTyVar TcKiVar -> ZonkM TcType
+zonkTcTyVar :: TcTyVar AnyKiVar -> ZonkM TcType
 zonkTcTyVar tv
   -- | isTcTyVar tv
   = case tcVarDetails tv of
@@ -168,10 +172,10 @@ zonkTcTyVar tv
   --     z_tv <- zonkTyVarKind tv
   --     return $ mkTyVarTy z_tv
 
-zonkTcTyVarsToTcTyVars :: HasDebugCallStack => [TcTyVar TcKiVar] -> ZonkM [TcTyVar TcKiVar]
+zonkTcTyVarsToTcTyVars :: HasDebugCallStack => [TcTyVar AnyKiVar] -> ZonkM [TcTyVar AnyKiVar]
 zonkTcTyVarsToTcTyVars = mapM zonkTcTyVarToTcTyVar
 
-zonkTcTyVarToTcTyVar :: HasDebugCallStack => TcTyVar TcKiVar -> ZonkM (TcTyVar TcKiVar)
+zonkTcTyVarToTcTyVar :: HasDebugCallStack => TcTyVar AnyKiVar -> ZonkM (TcTyVar AnyKiVar)
 zonkTcTyVarToTcTyVar tv = do
   ty <- zonkTcTyVar tv
   let tv' = case getTyVar_maybe ty of
@@ -196,49 +200,109 @@ zonkTyVarKind tv = do
 *                                                                      *
 ********************************************************************* -}
 
-zonkTcMonoKind :: AnyMonoKind -> ZonkM TcMonoKind
-zonkTcMonoKind ki = do
-  ki' <- panic "zonkTcKind $ Mono ki"
-  case ki' of
-    Mono mki -> return mki
-    _ -> pprPanic "zonkTcMonoKind" (ppr ki $$ ppr ki')
+zonkTcMonoKind :: AnyMonoKind -> ZonkM AnyMonoKind
+zonkTcMonoKinds :: [AnyMonoKind] -> ZonkM [AnyMonoKind]
+zonkKiCo :: AnyKindCoercion -> ZonkM AnyKindCoercion
+(zonkTcMonoKind, zonkTcMonoKinds, zonkKiCo, _) = mapMKiCo zonkTcMonoKindMapper
 
-zonkTcKind :: TcKind -> ZonkM TcKind
-zonkTcKinds :: [TcKind] -> ZonkM [TcKind]
+zonkTcKind :: AnyKind -> ZonkM AnyKind
+zonkTcKinds :: [AnyKind] -> ZonkM [AnyKind]
 (zonkTcKind, zonkTcKinds) = mapKind zonkTcKindMapper
 
-zonkTcKindMapper :: KiCoMapper (TcTyVar TcKiVar) TcKiVar (TcTyVar TcKiVar) TcKiVar () ZonkM
-zonkTcKindMapper = panic "zonkTcKindMapper"
-  -- KiCoMapper
-  -- { kcm_kibinder = \_ kv k -> k () kv
-  -- }
+zonkTcKindMapper
+  :: KiCoMapper AnyKiVar AnyKiVar () ZonkM
+zonkTcKindMapper = KiCoMapper
+  { kcm_kibinder = \_ kv k -> k () kv
+  , kcm_mkcm = zonkTcMonoKindMapper
+  }
 
-zonkTcKiVar :: TcKiVar -> ZonkM TcMonoKind
-zonkTcKiVar kv 
-  -- | isTcKiVar kv
-  = case tcVarDetails kv of
-      SkolemVar {} -> return $ mkKiVarKi kv
-      MetaVar { mv_ref = ref } -> do
-        cts <- panic "readTcRef ref"
-        case cts of
-          Flexi -> return $ mkKiVarKi kv
-          Indirect ki -> do
-            zki <- panic "zonkTcMonoKind ki"
-            panic "writeTcRef ref (Indirect zki)"
-            return zki
-  -- | otherwise
-  -- = return $ mkKiVarMKi kv
+zonkTcMonoKindMapper
+  :: MKiCoMapper AnyKiVar AnyKiVar () ZonkM
+zonkTcMonoKindMapper = MKiCoMapper
+  { mkcm_kivar = const zonkAnyKiVar
+  , mkcm_covar = const (\cv -> mkKiCoVarCo <$> zonkKiCoVarKind cv)
+  , mkcm_hole = hole }
+  where
+    hole :: () -> AnyKindCoercionHole -> ZonkM AnyKindCoercion
+    hole _ hole@(CoercionHole { ch_ref = ref, ch_co_var = cv }) = do
+      contents <- readTcRef ref
+      case contents of
+        Just co -> do co' <- zonkKiCo co
+                      checkKiCoercionHole cv co'
+        Nothing -> do cv' <- zonkKiCoVarKind cv
+                      return $ HoleCo $ hole { ch_co_var = cv' }
+
+zonkAnyKiVar :: AnyKiVar -> ZonkM AnyMonoKind
+zonkAnyKiVar kv = handleAnyKv (const simple)
+  (\ kv -> case tcVarDetails kv of
+             SkolemVar {} -> simple
+             MetaVar { mv_ref = ref } -> do
+               cts <- readTcRef ref
+               case cts of
+                 Flexi -> simple
+                 Indirect ki -> do zki <- zonkTcMonoKind ki
+                                   writeTcRef ref (Indirect zki)
+                                   return zki
+  ) kv
+  where
+    simple = return $ mkKiVarKi kv
+
+-- zonkTcKiVar :: TcKiVar -> ZonkM TcMonoKind
+-- zonkTcKiVar kv 
+--   -- | isTcKiVar kv
+--   = case tcVarDetails kv of
+--       SkolemVar {} -> return $ mkKiVarKi kv
+--       MetaVar { mv_ref = ref } -> do
+--         cts <- panic "readTcRef ref"
+--         case cts of
+--           Flexi -> return $ mkKiVarKi kv
+--           Indirect ki -> do
+--             zki <- panic "zonkTcMonoKind ki"
+--             panic "writeTcRef ref (Indirect zki)"
+--             return zki
+--   -- | otherwise
+--   -- = return $ mkKiVarMKi kv
 
 zonkTcKiVarsToTcKiVars :: HasDebugCallStack => [TcKiVar] -> ZonkM [TcKiVar]
 zonkTcKiVarsToTcKiVars = mapM zonkTcKiVarToTcKiVar
 
 zonkTcKiVarToTcKiVar :: HasDebugCallStack => TcKiVar -> ZonkM TcKiVar
-zonkTcKiVarToTcKiVar kv = do
-  ki <- zonkTcKiVar kv
-  let kv' = case getKiVar_maybe ki of
-              Just kv' -> kv'
-              Nothing -> pprPanic "zonkTcKiVarToTcKiVar" (ppr kv $$ ppr ki)
-  return kv'
+zonkTcKiVarToTcKiVar kv = do panic "zonkTcKiVarToTcKiVar"
+  -- ki <- zonkTcKiVar kv
+  -- let kv' = case getKiVar_maybe ki of
+  --             Just kv' -> kv'
+  --             Nothing -> pprPanic "zonkTcKiVarToTcKiVar" (ppr kv $$ ppr ki)
+  -- return kv'
+
+zonkKiCoVarKind :: KiCoVar AnyKiVar -> ZonkM (KiCoVar AnyKiVar)
+zonkKiCoVarKind kcv = do
+  kind' <- zonkTcMonoKind (varKind kcv)
+  return $ setVarKind kcv kind'
+
+{- *********************************************************************
+*                                                                      *
+              Kind Coercion Holes
+*                                                                      *
+********************************************************************* -}
+
+checkKiCoercionHole :: KiCoVar AnyKiVar -> AnyKindCoercion -> ZonkM AnyKindCoercion
+checkKiCoercionHole kcv kco
+  | debugIsOn
+  = do kcv_ki <- zonkTcMonoKind (varKind kcv)
+       return
+         $ assertPpr (ok kcv_ki)
+         (text "Bad kind coercion hole"
+          <+> ppr kcv <> colon <+> vcat [ ppr k1, ppr k2, ppr kcv_ki ])
+         kco
+  | otherwise
+  = return kco
+  where
+    (Pair k1 k2) = kiCoercionKind kco
+    ok kcv_ki | EqPred kcv_k1 kcv_k2 <- classifyPredKind kcv_ki
+              = k1 `eqMonoKind` kcv_k1
+                && k2 `eqMonoKind` kcv_k2
+              | otherwise
+              = False
 
 {- *********************************************************************
 *                                                                      *
@@ -260,7 +324,7 @@ zonkImplication implic@(Implic { ic_skols = skols
                   , ic_wanted = wanted'
                   , ic_info = info' }
 
-zonkKiEvVar :: AnyKiEvVar AnyKiVar -> ZonkM (AnyKiEvVar AnyKiVar)
+zonkKiEvVar :: KiEvVar AnyKiVar -> ZonkM (KiEvVar AnyKiVar)
 zonkKiEvVar var = panic "updateVarKindM zonkTcMonoKind var"
 
 zonkWC :: WantedConstraints -> ZonkM WantedConstraints

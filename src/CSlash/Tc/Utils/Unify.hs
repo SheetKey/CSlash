@@ -56,7 +56,7 @@ import qualified Data.Semigroup as S ( (<>) )
 *                                                                      *
 ********************************************************************* -}
 
-checkKiConstraints :: SkolemInfoAnon -> [TcKiEvVar kv] -> TcM result -> TcM result
+checkKiConstraints :: SkolemInfoAnon -> [KiEvVar AnyKiVar] -> TcM result -> TcM result
 checkKiConstraints skol_info given thing_inside = do
   implication_needed <- implicationNeeded skol_info given
   
@@ -97,7 +97,7 @@ buildVImplication skol_info skol_vs tclvl wanted
       checkImplicationInvariants implic'
       return implic'
 
-implicationNeeded :: SkolemInfoAnon -> [TcKiEvVar kv] -> TcM Bool
+implicationNeeded :: SkolemInfoAnon -> [KiEvVar kv] -> TcM Bool
 implicationNeeded skol_info given
   | null given
   , not (alwaysBuildImplication skol_info)
@@ -117,7 +117,7 @@ alwaysBuildImplication _ = False
 buildImplicationFor
   :: TcLevel
   -> SkolemInfoAnon
-  -> [TcKiEvVar kv]
+  -> [KiEvVar AnyKiVar]
   -> WantedConstraints
   -> TcM (Bag Implication, TcKiEvBinds)
 buildImplicationFor tclvl skol_info given wanted
@@ -128,7 +128,7 @@ buildImplicationFor tclvl skol_info given wanted
        implic <- newImplication
        let implic' = implic { ic_tclvl = tclvl
                             , ic_skols = []
-                            , ic_given = panic "given"
+                            , ic_given = given
                             , ic_wanted = wanted
                             , ic_binds = ev_binds_var
                             , ic_info = skol_info }
@@ -157,7 +157,7 @@ unifyKindAndEmit orig ki1 ki2 = do
                , u_rewriters = emptyRewriterSet
                , u_defer = ref
                , u_unified = Nothing }
-  co <- panic "uKind env ki1 ki2"
+  co <- uKind env ki1 ki2
   cts <- readTcRef ref
   unless (null cts) (emitSimples cts)
   return co
@@ -178,13 +178,13 @@ data UnifyEnv = UE
 updUEnvLoc :: UnifyEnv -> (CtLoc -> CtLoc) -> UnifyEnv
 updUEnvLoc uenv@(UE { u_loc = loc }) upd = uenv { u_loc = upd loc }
 
-uKind_defer :: UnifyEnv -> TcMonoKind -> TcMonoKind -> TcM TcKindCoercion
+uKind_defer :: UnifyEnv -> AnyMonoKind -> AnyMonoKind -> TcM AnyKindCoercion
 uKind_defer (UE { u_loc = loc, u_defer = ref, u_rewriters = rewriters }) ki1 ki2 = do
   let pred_ki = mkKiEqPred ki1 ki2
   hole <- newKiCoercionHole pred_ki
   let ct = mkNonCanonical
-           $ CtWanted { ctev_pred = panic "pred_ki"
-                      , ctev_dest = panic "HoleDest hole"
+           $ CtWanted { ctev_pred = pred_ki
+                      , ctev_dest = HoleDest hole
                       , ctev_loc = loc
                       , ctev_rewriters = rewriters }
       co = HoleCo hole
@@ -198,7 +198,7 @@ uKind_defer (UE { u_loc = loc, u_defer = ref, u_rewriters = rewriters }) ki1 ki2
 
   return co
 
-uKind :: UnifyEnv -> TcMonoKind -> TcMonoKind -> TcM TcKindCoercion
+uKind :: UnifyEnv -> AnyMonoKind -> AnyMonoKind -> TcM AnyKindCoercion
 uKind env orig_ki1 orig_ki2 = do
   tclvl <- getTcLevel
   traceTc "u_kis"
@@ -210,19 +210,20 @@ uKind env orig_ki1 orig_ki2 = do
     else traceTc "u_kis yields coercion:" (ppr co)
   return co
   where   
-    go :: TcMonoKind -> TcMonoKind -> TcM TcKindCoercion
+    go :: AnyMonoKind -> AnyMonoKind -> TcM AnyKindCoercion
+
     go (KiVarKi kv1) ki2 = do
-      lookup_res <- isFilledMetaKiVar_maybe kv1
+      lookup_res <- handleAnyKv (const $ return Nothing) isFilledMetaKiVar_maybe kv1
       case lookup_res of
         Just ki1 -> do traceTc "found filled kivar" (ppr kv1 <+> text ":->" <+> ppr ki1)
-                       panic "uKind env ki1 orig_ki2"
+                       uKind env ki1 orig_ki2
         Nothing -> uUnfilledKiVar env NotSwapped kv1 ki2
 
     go ki1 (KiVarKi kv2) = do
-      lookup_res <- isFilledMetaKiVar_maybe kv2
+      lookup_res <- handleAnyKv (const $ return Nothing) isFilledMetaKiVar_maybe kv2
       case lookup_res of
         Just ki2 -> do traceTc "found filled kivar" (ppr kv2 <+> text ":->" <+> ppr ki2)
-                       panic "uKind env orig_ki1 ki2"
+                       uKind env orig_ki1 ki2
         Nothing -> uUnfilledKiVar env IsSwapped kv2 ki1
 
     go ki1@(KiConApp kc1 []) (KiConApp kc2 [])
@@ -260,12 +261,12 @@ uKind env orig_ki1 orig_ki2 = do
 *                                                                      *
 ********************************************************************* -}
 
-uUnfilledKiVar :: UnifyEnv -> SwapFlag -> TcKiVar -> TcMonoKind -> TcM TcKindCoercion
+uUnfilledKiVar :: UnifyEnv -> SwapFlag -> AnyKiVar -> AnyMonoKind -> TcM AnyKindCoercion
 uUnfilledKiVar env swapped kv1 ki2 = do
-  ki2 <- liftZonkM $ panic "zonkTcMonoKind ki2"
+  ki2 <- liftZonkM $ zonkTcMonoKind ki2
   uUnfilledKiVar1 env swapped kv1 ki2
 
-uUnfilledKiVar1 :: UnifyEnv -> SwapFlag -> TcKiVar -> TcMonoKind -> TcM TcKindCoercion
+uUnfilledKiVar1 :: UnifyEnv -> SwapFlag -> AnyKiVar -> AnyMonoKind -> TcM AnyKindCoercion
 uUnfilledKiVar1 env swapped kv1 ki2
   | Just kv2 <- getKiVar_maybe ki2
   = go kv2
@@ -280,18 +281,21 @@ uUnfilledKiVar1 env swapped kv1 ki2
       | otherwise
       = uUnfilledKiVar2 env swapped kv1 ki2
 
-uUnfilledKiVar2 :: UnifyEnv -> SwapFlag -> TcKiVar -> TcMonoKind -> TcM TcKindCoercion
-uUnfilledKiVar2 env@(UE { u_defer = def_eq_ref }) swapped kv1 ki2 = do
+uUnfilledKiVar2 :: UnifyEnv -> SwapFlag -> AnyKiVar -> AnyMonoKind -> TcM AnyKindCoercion
+uUnfilledKiVar2 env swapped kv1 ki2 = do
   cur_lvl <- getTcLevel
-  if not (touchabilityAndShapeTestKind cur_lvl kv1 ki2
-          && simpleUnifyCheckKind kv1 ki2)
-    then not_ok_so_defer
-    else do traceTc "uUnfilledKiVar2 ok" $ vcat [ ppr kv1, ppr ki2 ]
-            liftZonkM $ writeMetaKiVar kv1 ki2
-            case u_unified env of
-              Nothing -> return ()
-              Just uref -> updTcRef uref (kv1 :)
-            return $ mkReflKiCo ki2
+  case toTcKiVar_maybe kv1 of
+    Just tckv1
+      | touchabilityAndShapeTestKind cur_lvl tckv1 ki2
+      , simpleUnifyCheckKind tckv1 ki2
+        -> do traceTc "uUnfilledKiVar2 ok" $ vcat [ ppr tckv1, ppr ki2 ]
+              liftZonkM $ writeMetaKiVar tckv1 ki2
+              case u_unified env of
+                Nothing -> return ()
+                Just uref -> updTcRef uref (tckv1 :)
+              return $ mkReflKiCo ki2
+
+    _ -> not_ok_so_defer
   where
     ki1 = mkKiVarKi kv1
     defer = unSwap swapped (uKind_defer env) ki1 ki2
@@ -299,7 +303,7 @@ uUnfilledKiVar2 env@(UE { u_defer = def_eq_ref }) swapped kv1 ki2 = do
       traceTc "uUnfilledVar2 not ok" (ppr kv1 $$ ppr ki2)
       defer            
 
-swapOverKiVars :: Bool -> TcKiVar -> TcKiVar -> Bool
+swapOverKiVars :: Bool -> AnyKiVar -> AnyKiVar -> Bool
 swapOverKiVars is_given kv1 kv2
   | not is_given, pri1 == 0, pri2 > 0 = True
   | not is_given, pri2 == 0, pri1 > 0 = False
@@ -314,15 +318,16 @@ swapOverKiVars is_given kv1 kv2
 
   | otherwise = False
   where
-    lvl1 = varLevel kv1
-    lvl2 = varLevel kv2
+    lvl1 = handleAnyKv (const topTcLevel) varLevel kv1
+    lvl2 = handleAnyKv (const topTcLevel) varLevel kv2
     pri1 = lhsKiPriority kv1
     pri2 = lhsKiPriority kv2
     kv1_name = Var.varName kv1
     kv2_name = Var.varName kv2
 
-lhsKiPriority :: TcKiVar -> Int
-lhsKiPriority kv = 
+lhsKiPriority :: AnyKiVar -> Int
+lhsKiPriority =
+  handleAnyKv (const 0) $ \ kv ->
   case tcVarDetails kv of
     SkolemVar {} -> 0
     MetaVar { mv_info = info } -> case info of
@@ -363,16 +368,15 @@ matchExpectedFunKind cs_ty n k = panic "go n k"
 *                                                                      *
 ********************************************************************* -}
 
-simpleUnifyCheckKind  :: TcKiVar -> TcMonoKind -> Bool
+simpleUnifyCheckKind  :: TcKiVar -> AnyMonoKind -> Bool
 simpleUnifyCheckKind lhs_kv rhs = go_mono rhs
   where
     lhs_kv_lvl = varLevel lhs_kv
-    lhs_kv_is_concrete = isConcreteVar lhs_kv
 
     go_mono (KiVarKi kv)
-      | lhs_kv == kv = False
-      | varLevel kv > lhs_kv_lvl = False
-      | lhs_kv_is_concrete, not (isConcreteVar kv) = False
+      | Just tckv <- toTcKiVar_maybe kv
+      , lhs_kv == tckv = False
+      | handleAnyKv (const topTcLevel) varLevel kv > lhs_kv_lvl = False
       | otherwise = True
 
     go_mono (FunKi { fk_f = af, fk_arg = a, fk_res = r })
@@ -408,7 +412,7 @@ instance (Outputable a, Outputable b) => Outputable (PuResult a b) where
                      $ vcat [ text "redn:" <+> ppr x
                             , text "cts:" <+> ppr cts ])
 
-okCheckReflKi :: TcMonoKind -> TcM (PuResult a Reduction)
+okCheckReflKi :: AnyMonoKind -> TcM (PuResult a Reduction)
 okCheckReflKi ki = return $ PuOK emptyBag $ panic "mkReflRednKi ki"
 
 failCheckWith :: CheckTyKiEqResult -> TcM (PuResult a b)
@@ -482,7 +486,7 @@ checkKiVar (KEF { kef_lhs = lhs, kef_unifying = unifying, kef_occurs = occ_prob 
       KiVarLHS lhs_kv -> panic "check_kv unifying lhs_kv"
   where
     lvl_occ = varLevel occ_kv
-    success = okCheckReflKi (mkKiVarKi occ_kv)
+    success = panic "okCheckReflKi (mkKiVarKi occ_kv)"
 
     check_kv NotUnifying lhs_kv = simple_occurs_check lhs_kv
     check_kv (UnifyingKi info lvl prom) lhs_kv = do
@@ -532,32 +536,34 @@ checkKiVar (KEF { kef_lhs = lhs, kef_unifying = unifying, kef_occurs = occ_prob 
            okCheckReflKi new_kv_ki
       | otherwise = pprPanic "promote" (ppr occ_kv)
 
-promote_meta_kivar :: MetaInfo -> TcLevel -> TcKiVar -> TcM TcMonoKind
+promote_meta_kivar :: MetaInfo -> TcLevel -> TcKiVar -> TcM AnyMonoKind
 promote_meta_kivar info dest_lvl occ_kv = do
   mb_filled <- isFilledMetaKiVar_maybe occ_kv
   case mb_filled of
-    Just ki -> panic "return ki"
-    Nothing -> do new_kv <- cloneMetaKiVarWithInfo info dest_lvl occ_kv
+    Just ki -> return ki
+    Nothing -> do new_kv <- toAnyKiVar <$> cloneMetaKiVarWithInfo info dest_lvl occ_kv
                   liftZonkM $ writeMetaKiVar occ_kv (mkKiVarKi new_kv)
                   traceTc "promoteKiVar" (ppr occ_kv <+> text "-->" <+> ppr new_kv)
                   return $ mkKiVarKi new_kv
 
-touchabilityAndShapeTestKind :: TcLevel -> TcKiVar -> TcMonoKind -> Bool
+touchabilityAndShapeTestKind :: TcLevel -> TcKiVar -> AnyMonoKind -> Bool
 touchabilityAndShapeTestKind given_eq_lvl kv rhs
   | MetaVar { mv_info = info, mv_tclvl = kv_lvl } <- tcVarDetails kv
   , checkTopShapeKind info rhs
   = kv_lvl `deeperThanOrSame` given_eq_lvl
   | otherwise
-  = warnPprTrace True "touchabilityTestKind" (ppr kv $$ ppr rhs) False
+  = False
 
-checkTopShapeKind :: MetaInfo -> TcMonoKind -> Bool
+checkTopShapeKind :: MetaInfo -> AnyMonoKind -> Bool
 checkTopShapeKind info xi
   = case info of
       VarVar -> case getKiVar_maybe xi of
-                  Nothing -> warnPprTrace True "checkTopShapeKind1" (ppr info $$ ppr xi) False
-                  Just kv -> case tcVarDetails kv of
-                               SkolemVar {} -> True
-                               MetaVar { mv_info = VarVar } -> True
-                               _ -> warnPprTrace True "checkTopShapeKind2"
-                                    (ppr info $$ ppr xi) False
+                  Nothing -> False
+                  Just kv -> handleAnyKv (const True) helper kv
       _ -> True
+  where
+    helper kv = 
+      case tcVarDetails kv of
+        SkolemVar {} -> True
+        MetaVar { mv_info = VarVar } -> True
+        _ -> False

@@ -1,3 +1,4 @@
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE FlexibleInstances #-}
 
 module CSlash.Core.TyCon where
@@ -134,7 +135,12 @@ data TyCon tv kv = TyCon
   }
 
 instance AsAnyTy TyCon where
-  asAnyTy = undefined
+  asAnyTy (TyCon { tyConKind = kind, tyConDetails = details, .. })
+    = let tc' = TyCon { tyConKind = asAnyKi kind
+                      , tyConDetails = asAnyTy details
+                      , tyConNullaryTy = mkNakedTyConTy tc'
+                      , .. }
+      in tc'
 
 data TyConDetails tv kv
   = AlgTyCon
@@ -158,6 +164,13 @@ data TyConDetails tv kv
     , tctc_flavor :: TyConFlavor
     }
 
+instance AsAnyTy TyConDetails where
+  asAnyTy AlgTyCon { algTcRhs = rhs, .. } = AlgTyCon { algTcRhs = asAnyTy rhs, .. }
+  asAnyTy SynonymTyCon { synTcRhs = rhs, .. } = SynonymTyCon { synTcRhs = asAnyTy rhs, .. }
+  asAnyTy PrimTyCon = PrimTyCon
+  asAnyTy TcTyCon { tctc_scoped_kvs = kvs, .. }
+    = TcTyCon { tctc_scoped_kvs = mapSnd toAnyKiVar kvs, .. }
+
 data AlgTyConRhs tv kv
   = AbstractTyCon
   | TupleTyCon { data_con :: DataCon tv kv }
@@ -170,6 +183,14 @@ data AlgTyConRhs tv kv
     , data_cons_size :: Int
     , is_enum :: Bool
     }
+
+instance AsAnyTy AlgTyConRhs where
+  asAnyTy AbstractTyCon = AbstractTyCon
+  asAnyTy TupleTyCon { data_con = dc } = TupleTyCon $ asAnyTy dc
+  asAnyTy SumTyCon { data_cons = dcs, data_cons_size = size}
+    = SumTyCon (asAnyTy <$> dcs) size
+  asAnyTy DataTyCon { data_cons = dcs, .. }
+    = DataTyCon { data_cons = asAnyTy <$> dcs, .. }
 
 mkSumTyConRhs :: [DataCon tv kv] -> AlgTyConRhs tv kv
 mkSumTyConRhs data_cons = SumTyCon data_cons (length data_cons)
@@ -328,7 +349,7 @@ isConcreteTyCon tc@(TyCon { tyConDetails = details })
 --      TcTyCon
 -------------------------------------------- -}
 
-tcTyConScopedKiVars :: TyCon tv TcKiVar -> [(Name, TcKiVar)]
+tcTyConScopedKiVars :: TyCon tv AnyKiVar -> [(Name, AnyKiVar)]
 tcTyConScopedKiVars tc@(TyCon { tyConDetails = details })
   | TcTyCon { tctc_scoped_kvs = scoped_kvs } <- details = scoped_kvs
   | otherwise = pprPanic "tcTyConScopedKiVars" (ppr tc)

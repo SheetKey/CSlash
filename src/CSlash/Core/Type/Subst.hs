@@ -73,7 +73,7 @@ isValidTvSubst (TvSubst in_scope tenv ksubst@(KvSubst k_in_scope _)) =
   (kenvFVs `varSetInScope` k_in_scope) &&
   (isValidKvSubst ksubst)
   where
-    (tenvFVs, kenvFVs) = shallowVarsOfTyVarEnv tenv
+    (tenvFVs, kcvenvFVs, kenvFVs) = shallowVarsOfTyVarEnv tenv
 
 checkValidTvSubst
   :: (HasDebugCallStack, VarHasKind tv kv)
@@ -99,7 +99,7 @@ checkValidTvSubst subst@(TvSubst in_scope tenv ksubst@(KvSubst k_in_scope kenv))
   where
     substDomain = nonDetKeysUFM tenv
     kvsubstDomain = nonDetKeysUFM kenv
-    (tenvFVs, kenvFVs) = shallowVarsOfTypes tys
+    (tenvFVs, kcvenvFVs, kenvFVs) = shallowVarsOfTypes tys
     needInScope = tenvFVs `delListFromUniqSet_Directly` substDomain
     needInScopeKi = kenvFVs `delListFromUniqSet_Directly` kvsubstDomain
     tysFVsInScope = needInScope `varSetInScope` in_scope
@@ -166,7 +166,7 @@ substTyVarBndrUsing subst_fn subst@(TvSubst in_scope tenv ksubst) old_var
     new_env | no_change = delVarEnv tenv old_var
             | otherwise = extendVarEnv tenv old_var (TyVarTy new_var)
 
-    _no_capture = not (new_var `elemVarSet` fst (shallowVarsOfTyVarEnv tenv))
+    _no_capture = not (new_var `elemVarSet` fstOf3 (shallowVarsOfTyVarEnv tenv))
 
     old_ki = varKind old_var
     no_kind_change = noFreeVarsOfMonoKind old_ki

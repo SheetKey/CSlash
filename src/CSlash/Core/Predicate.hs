@@ -46,7 +46,3 @@ mkRelPred kc ki1 ki2 = mkKiConApp kc [ki1, ki2]
 isKiEqPred :: PredKind kv -> Bool
 isKiEqPred (KiConApp EQKi _) = True
 isKiEqPred _ = False
-
-isKiEvVarKind :: MonoKind kv -> Bool
-isKiEvVarKind (KiConApp _ [_, _]) = True
-isKiEvVarKind _ = False

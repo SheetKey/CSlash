@@ -96,7 +96,8 @@ expand_syn rhs arg_tys
   | otherwise = go rhs empty_subst arg_tys
   where
     empty_subst = mkEmptyTvSubst in_scope
-    in_scope = bimap mkInScopeSet mkInScopeSet $ shallowVarsOfTypes arg_tys
+    in_scope = bimap mkInScopeSet mkInScopeSet $ case shallowVarsOfTypes arg_tys of
+                                                   (tv, _, kv) -> (tv, kv)
 
     go (TyLamTy _ _) _ [] = pprPanic "expand_syn" (ppr rhs $$ ppr arg_tys)
     go ty subst [] = substTy subst ty
@@ -115,7 +116,7 @@ data TypeMapper tv kv tv' kv' env m = TypeMapper
   , tm_tylambinder :: forall r. env -> tv -> (env -> tv' -> m r) -> m r
   , tm_tylamkibinder :: forall r. env -> kv -> (env -> kv' -> m r) -> m r
   , tm_tycon :: TyCon tv kv -> m (TyCon tv' kv')
-  , tm_mkcm :: MKiCoMapper tv kv tv' kv' env m
+  , tm_mkcm :: MKiCoMapper kv kv' env m
   }
 
 {-# INLINE mapType #-}
@@ -226,7 +227,7 @@ piResultTys ki orig_args@(arg:args)
     init_subst = mkEmptyKvSubst $ mkInScopeSet $ kvs1 `unionVarSet` kvs2
       where
         kvs1 = varsOfKind ki
-        (_, kvs2) = varsOfTypes orig_args
+        (_, _, kvs2) = varsOfTypes orig_args
 
     -- go :: Subst -> Kind -> [Type] -> Kind
     go subst ki []
@@ -257,11 +258,11 @@ monoPiResultTys ki orig_args@(arg:args)
 *                                                                      *
 ********************************************************************* -}
 
-mkCastTy :: VarHasKind tv kv => Type tv kv -> KindCoercion tv kv -> Type tv kv
+mkCastTy :: VarHasKind tv kv => Type tv kv -> KindCoercion kv -> Type tv kv
 mkCastTy orig_ty co | isReflKiCo co = orig_ty
 mkCastTy orig_ty co = mk_cast_ty orig_ty co
 
-mk_cast_ty :: VarHasKind tv kv => Type tv kv -> KindCoercion tv kv -> Type tv kv
+mk_cast_ty :: VarHasKind tv kv => Type tv kv -> KindCoercion kv -> Type tv kv
 mk_cast_ty orig_ty co = go orig_ty
   where
     -- go :: Type -> Type
@@ -321,8 +322,8 @@ isForgetfulTy (TyConApp tc tys) = isForgetfulSynTyCon tc || any isForgetfulTy ty
 isForgetfulTy (AppTy a b) = isForgetfulTy a || isForgetfulTy b
 isForgetfulTy (FunTy _ a b) = isForgetfulTy a || isForgetfulTy b
 isForgetfulTy (ForAllTy (Bndr tv _) ty)
-  = (not $ tv `elemVarSet` (fst $ varsOfType ty)) || isForgetfulTy ty
-isForgetfulTy (TyLamTy tv ty) = (not $ tv `elemVarSet` (fst $ varsOfType ty)) || isForgetfulTy ty
+  = (not $ tv `elemVarSet` (fstOf3 $ varsOfType ty)) || isForgetfulTy ty
+isForgetfulTy (TyLamTy tv ty) = (not $ tv `elemVarSet` (fstOf3 $ varsOfType ty)) || isForgetfulTy ty
 isForgetfulTy other = pprPanic "isForgetfulTy" (ppr other)
 
 {- *********************************************************************

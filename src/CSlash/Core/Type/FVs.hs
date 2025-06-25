@@ -33,9 +33,11 @@ import CSlash.Utils.Outputable
 *                                                                      *
 ********************************************************************* -}
 
-runTyKiVars :: Endo (MkVarSet tv, MkVarSet kv) -> (MkVarSet tv, MkVarSet kv)
+runTyKiVars
+  :: Endo (MkVarSet tv, MkVarSet (KiCoVar kv), MkVarSet kv)
+  -> (MkVarSet tv, MkVarSet (KiCoVar kv), MkVarSet kv)
 {-# INLINE runTyKiVars #-}
-runTyKiVars f = appEndo f (emptyVarSet, emptyVarSet)
+runTyKiVars f = appEndo f (emptyVarSet, emptyVarSet, emptyVarSet)
 
 {- *********************************************************************
 *                                                                      *
@@ -43,46 +45,68 @@ runTyKiVars f = appEndo f (emptyVarSet, emptyVarSet)
 *                                                                      *
 ********************************************************************* -}
 
-varsOfType :: VarHasKind tv kv => Type tv kv -> (MkVarSet tv, MkVarSet kv)
+varsOfType
+  :: VarHasKind tv kv
+  => Type tv kv
+  -> (MkVarSet tv, MkVarSet (KiCoVar kv), MkVarSet kv)
 varsOfType ty = runTyKiVars (deep_ty ty)
 
-varsOfTypes :: VarHasKind tv kv => [Type tv kv] -> (MkVarSet tv, MkVarSet kv)
+varsOfTypes
+  :: VarHasKind tv kv
+  => [Type tv kv]
+  -> (MkVarSet tv, MkVarSet (KiCoVar kv), MkVarSet kv)
 varsOfTypes tys = runTyKiVars (deep_tys tys)
 
 deep_ty
   :: VarHasKind tv kv
-  => Type tv kv -> Endo (MkVarSet tv, MkVarSet kv)
-deep_ty = fst $ foldType deepTvFolder (emptyVarSet, emptyVarSet)
+  => Type tv kv
+  -> Endo (MkVarSet tv, MkVarSet (KiCoVar kv), MkVarSet kv)
+deep_ty = fst $ foldType deepTvFolder (emptyVarSet, emptyVarSet, emptyVarSet)
 
 deep_tys
   :: VarHasKind tv kv
-  => [Type tv kv] -> Endo (MkVarSet tv, MkVarSet kv)
-deep_tys = snd $ foldType deepTvFolder (emptyVarSet, emptyVarSet)
+  => [Type tv kv]
+  -> Endo (MkVarSet tv, MkVarSet (KiCoVar kv), MkVarSet kv)
+deep_tys = snd $ foldType deepTvFolder (emptyVarSet, emptyVarSet, emptyVarSet)
 
 deepTvFolder
   :: VarHasKind tv kv
-  => TypeFolder tv kv (MkVarSet tv, MkVarSet kv) (MkVarSet kv) (Endo (MkVarSet tv, MkVarSet kv))
+  => TypeFolder tv kv
+     (MkVarSet tv, MkVarSet (KiCoVar kv), MkVarSet kv)
+     (MkVarSet (KiCoVar kv), MkVarSet kv)
+     (Endo (MkVarSet (KiCoVar kv), MkVarSet kv))
+     (Endo (MkVarSet tv, MkVarSet (KiCoVar kv), MkVarSet kv))
 deepTvFolder = TypeFolder { tf_view = noView
                           , tf_tyvar = do_tv
                           , tf_tybinder = do_bndr
                           , tf_tylambinder = do_tylambndr
                           , tf_tylamkibinder = do_kilambndr
-                          , tf_swapEnv = snd
+                          , tf_swapEnv = \(_, kcv, kv) -> (kcv, kv)
+                          , tf_embedKiRes = \(Endo f) -> Endo $ \(tv, kcv, kv) ->
+                              let (kcv', kv') = f (kcv, kv)
+                              in (tv, kcv', kv')
                           , tf_mkcf = deepMKcvFolder }
   where
-    --do_tv :: (MkVarSet tv, MkVarSet kv) -> tv -> Endo (MkVarSet tv, MkVarSet kv)
-    do_tv (tis, _) v = Endo do_it
+    do_tv (tis, _, _) v = Endo do_it
       where
-        do_it acc@(tacc, kacc)
+        do_it acc@(tacc, kcvacc, kacc)
           | v `elemVarSet` tis = acc
           | v `elemVarSet` tacc = acc
-          | otherwise = appEndo (deep_mki (varKind v))
-                        $ (tacc `extendVarSet` v, kacc)
+          | otherwise = let (kcvacc', kacc') = appEndo (deep_mki (varKind v)) (kcvacc, kacc)
+                        in (tacc `extendVarSet` v, kcvacc', kacc')
           -- see GHC note [Closing over free variable kinds] for justification of deep_mki
           -- (deep_mki starts with emptyVarSet as in_scope set)
-    do_bndr (tis, kis) tv _ = (extendVarSet tis tv, kis)
-    do_tylambndr (tis, kis) tv = (extendVarSet tis tv, kis)
-    do_kilambndr (tis, kis) kv = (tis, extendVarSet kis kv)
+    do_bndr (tis, kcvis, kis) tv _
+      | Just kcv <- toKiCoVar_maybe tv
+      = (tis, extendVarSet kcvis kcv, kis)
+      | otherwise
+      = (extendVarSet tis tv, kcvis, kis)
+    do_tylambndr (tis, kcvis, kis) tv
+      | Just kcv <- toKiCoVar_maybe tv
+      = (tis, extendVarSet kcvis kcv, kis)
+      | otherwise
+      = (extendVarSet tis tv, kcvis, kis)
+    do_kilambndr (tis, kcvis, kis) kv = (tis, kcvis, extendVarSet kis kv)
 
 {- *********************************************************************
 *                                                                      *
@@ -92,44 +116,63 @@ deepTvFolder = TypeFolder { tf_view = noView
 
 shallowVarsOfTypes
   :: VarHasKind tv kv
-  => [Type tv kv] -> (MkVarSet tv, MkVarSet kv)
+  => [Type tv kv]
+  -> (MkVarSet tv, MkVarSet (KiCoVar kv), MkVarSet kv)
 shallowVarsOfTypes tys = runTyKiVars (shallow_tys tys)
 
 shallowVarsOfTyVarEnv
   :: VarHasKind tv kv
-  => MkVarEnv tv (Type tv kv) -> (MkVarSet tv, MkVarSet kv)
+  => MkVarEnv tv (Type tv kv)
+  -> (MkVarSet tv, MkVarSet (KiCoVar kv), MkVarSet kv)
 shallowVarsOfTyVarEnv tys = shallowVarsOfTypes (nonDetEltsUFM tys)
 
 shallow_ty
   :: VarHasKind tv kv
-  => Type tv kv -> Endo (MkVarSet tv, MkVarSet kv)
-shallow_ty = fst $ foldType shallowTvFolder (emptyVarSet, emptyVarSet)
+  => Type tv kv
+  -> Endo (MkVarSet tv, MkVarSet (KiCoVar kv), MkVarSet kv)
+shallow_ty = fst $ foldType shallowTvFolder (emptyVarSet, emptyVarSet, emptyVarSet)
 
 shallow_tys
   :: VarHasKind tv kv
-  => [Type tv kv] -> Endo (MkVarSet tv, MkVarSet kv)
-shallow_tys = snd $ foldType shallowTvFolder (emptyVarSet, emptyVarSet)
+  => [Type tv kv]
+  -> Endo (MkVarSet tv, MkVarSet (KiCoVar kv), MkVarSet kv)
+shallow_tys = snd $ foldType shallowTvFolder (emptyVarSet, emptyVarSet, emptyVarSet)
 
 shallowTvFolder
-  :: (Outputable tv, Outputable kv, Uniquable tv, Uniquable kv, VarHasKind tv kv)
-  => TypeFolder tv kv (MkVarSet tv, MkVarSet kv) (MkVarSet kv) (Endo (MkVarSet tv, MkVarSet kv))
+  :: VarHasKind tv kv
+  => TypeFolder tv kv
+     (MkVarSet tv, MkVarSet (KiCoVar kv), MkVarSet kv)
+     (MkVarSet (KiCoVar kv), MkVarSet kv)
+     (Endo (MkVarSet (KiCoVar kv), MkVarSet kv))
+     (Endo (MkVarSet tv, MkVarSet (KiCoVar kv), MkVarSet kv))
 shallowTvFolder = TypeFolder { tf_view = noView
                              , tf_tyvar = do_tv
                              , tf_tybinder = do_bndr
                              , tf_tylambinder = do_tylambndr
                              , tf_tylamkibinder = do_kilambndr
-                             , tf_swapEnv = snd
+                             , tf_swapEnv = \(_, kcv, kv) -> (kcv, kv)
+                             , tf_embedKiRes = \(Endo f) -> Endo $ \(tv, kcv, kv) ->
+                                 let (kcv', kv') = f (kcv, kv)
+                                 in (tv, kcv', kv')
                              , tf_mkcf = shallowMKcvFolder }
   where
-    do_tv (tis, _) v = Endo do_it
+    do_tv (tis, _, _) v = Endo do_it
       where
-        do_it acc@(tacc, kacc)
+        do_it acc@(tacc, kcvacc, kacc)
           | v `elemVarSet` tis = acc
           | v `elemVarSet` tacc = acc
-          | otherwise = (tacc `extendVarSet` v, kacc)
-    do_bndr (tis, kis) tv _ = (extendVarSet tis tv, kis)
-    do_tylambndr (tis, kis) tv = (extendVarSet tis tv, kis)
-    do_kilambndr (tis, kis) kv = (tis, extendVarSet kis kv)
+          | otherwise = (tacc `extendVarSet` v, kcvacc, kacc)
+    do_bndr (tis, kcvis, kis) tv _
+      | Just kcv <- toKiCoVar_maybe tv
+      = (tis, extendVarSet kcvis kcv, kis)
+      | otherwise
+      = (extendVarSet tis tv, kcvis, kis)
+    do_tylambndr (tis, kcvis, kis) tv
+      | Just kcv <- toKiCoVar_maybe tv
+      = (tis, extendVarSet kcvis kcv, kis)
+      | otherwise
+      = (extendVarSet tis tv, kcvis, kis)
+    do_kilambndr (tis, kcvis, kis) kv = (tis, kcvis, extendVarSet kis kv)
 
 {- *********************************************************************
 *                                                                      *

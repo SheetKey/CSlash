@@ -42,7 +42,7 @@ import Data.IORef (IORef)
 ********************************************************************* -}
 
 type AnyType = Type (AnyTyVar AnyKiVar) AnyKiVar
-type TcType = Type (TcTyVar TcKiVar) TcKiVar
+type TcType = Type (TcTyVar AnyKiVar) AnyKiVar
 
 type AnyTyVarBinder = VarBndr (AnyTyVar AnyKiVar) ForAllFlag
 type TcTyVarBinder = VarBndr (TcTyVar TcKiVar) ForAllFlag
@@ -60,11 +60,11 @@ type TcKind = Kind TcKiVar
 type TcMonoKind = MonoKind TcKiVar
 type TcPredKind = PredKind TcKiVar
 
-type TcKindCoercion = KindCoercion (TcTyVar TcKiVar) TcKiVar
-type AnyKindCoercion = KindCoercion (AnyTyVar AnyKiVar) AnyKiVar
+type TcKindCoercion = KindCoercion TcKiVar
+type AnyKindCoercion = KindCoercion AnyKiVar
 
-type TcKindCoercionHole = KindCoercionHole (TcTyVar TcKiVar) TcKiVar
-type AnyKindCoercionHole = KindCoercionHole (AnyTyVar AnyKiVar) AnyKiVar
+type TcKindCoercionHole = KindCoercionHole TcKiVar
+type AnyKindCoercionHole = KindCoercionHole AnyKiVar
 
 {- *********************************************************************
 *                                                                      *
@@ -194,10 +194,13 @@ tcTypeLevel ty = tenv_lvl `maxTcLevel` kenv_lvl
   where
     (tenv, kenv) = varsOfTypeDSet ty
     tenv_lvl = nonDetStrictFoldDVarSet add topTcLevel tenv
-    kenv_lvl = nonDetStrictFoldDVarSet add topTcLevel kenv
+    kenv_lvl = nonDetStrictFoldDVarSet addk topTcLevel kenv
 
     add :: TcVar v => v -> TcLevel -> TcLevel
     add v lvl = lvl `maxTcLevel` varLevel v
+
+    addk :: AnyKiVar -> TcLevel -> TcLevel
+    addk = handleAnyKv (\_ lvl -> lvl) add
 
 anyMonoKindLevel :: AnyMonoKind -> TcLevel
 anyMonoKindLevel ki = nonDetStrictFoldDVarSet add topTcLevel (varsOfMonoKindDSet ki)
@@ -321,8 +324,8 @@ isFlexi :: MetaDetails tk -> Bool
 isFlexi Flexi = True
 isFlexi _ = False
 
-mkKiVarNamePairs :: [TcKiVar] -> [(Name, TcKiVar)]
-mkKiVarNamePairs kvs = [(varName kv, kv) | kv <- kvs ]
+mkVarNamePairs :: IsVar kv => [kv] -> [(Name, kv)]
+mkVarNamePairs kvs = [(varName kv, kv) | kv <- kvs ]
 
 ambigKvsOfKi :: AnyMonoKind -> [TcKiVar]
 ambigKvsOfKi ki = filterAnyTcKiVar isAmbiguousVar kvs
@@ -363,7 +366,7 @@ isKiVarKcPred ki = case getPredKcKis_maybe ki of
   Just (_, kis) -> all isKiVarKi kis
   _ -> False
 
-kiEvVarPred :: AnyKiCoVar AnyKiVar -> AnyMonoKind
+kiEvVarPred :: KiCoVar AnyKiVar -> AnyMonoKind
 kiEvVarPred var = varKind var
 
 mkMinimalBy :: forall a. (a -> AnyPredKind) -> [a] -> [a]

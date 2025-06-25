@@ -63,11 +63,11 @@ import Data.Void( Void )
 
 solveKiEquality :: CtEvidence -> AnyMonoKind -> AnyMonoKind -> SolverStage Void
 solveKiEquality ev ki1 ki2 = do
-  Pair ki1' ki2' <- panic "zonkEqKinds ev ki1 ki2"
-  let ev' | debugIsOn = setCtEvPredKind ev $ panic "mkKiEqPred ki1' ki2'"
+  Pair ki1' ki2' <- zonkEqKinds ev ki1 ki2
+  let ev' | debugIsOn = setCtEvPredKind ev $ mkKiEqPred ki1' ki2'
           | otherwise = ev
 
-  mb_canon <- panic "canonicalizeKiEquality ev' ki1' ki2'"
+  mb_canon <- canonicalizeKiEquality ev' ki1' ki2'
 
   case mb_canon of
     Left irred_ct -> do tryQCsIrredEqCt irred_ct
@@ -89,14 +89,14 @@ updInertEqs eq_ct = do
 *                                                                      *
 ********************************************************************* -}
 
-zonkEqKinds :: CtEvidence -> TcMonoKind -> TcMonoKind -> SolverStage (Pair TcMonoKind)
+zonkEqKinds :: CtEvidence -> AnyMonoKind -> AnyMonoKind -> SolverStage (Pair AnyMonoKind)
 zonkEqKinds ev ki1 ki2 = Stage $ do
   res <- go_mono ki1 ki2
   case res of
     Left pair -> continueWith pair
     Right ki -> canKiEqReflexive ev ki
   where
-    go_mono :: TcMonoKind -> TcMonoKind -> TcS (Either (Pair TcMonoKind) TcMonoKind)
+    go_mono :: AnyMonoKind -> AnyMonoKind -> TcS (Either (Pair AnyMonoKind) AnyMonoKind)
     go_mono ki1@(KiConApp kc1 kis1) (KiConApp kc2 kis2)
       = if kc1 == kc2 && kis1 `equalLength` kis2
         then kicon kc1 kis1 kis2
@@ -114,10 +114,10 @@ zonkEqKinds ev ki1 ki2 = Stage $ do
 
     bale_out ki1 ki2 = return $ Left (Pair ki1 ki2)
 
-    kivar :: SwapFlag -> TcKiVar -> TcMonoKind -> TcS (Either (Pair TcMonoKind) TcMonoKind)
-    kivar swapped kv ki = case tcVarDetails kv of
-      MetaVar { mv_ref = ref } -> do
-        cts <- panic "readTcRef ref"
+    kivar :: SwapFlag -> AnyKiVar -> AnyMonoKind -> TcS (Either (Pair AnyMonoKind) AnyMonoKind)
+    kivar swapped kv ki = case handleAnyKv (const Nothing) (Just . tcVarDetails) kv of
+      Just (MetaVar { mv_ref = ref }) -> do
+        cts <- readTcRef ref
         case cts of
           Flexi -> give_up
           Indirect ki' -> do
@@ -129,8 +129,8 @@ zonkEqKinds ev ki1 ki2 = Stage $ do
 
     kivar_kivar kv1 kv2
       | kv1 == kv2 = return $ Right (mkKiVarKi kv1)
-      | otherwise = do (ki1', progress1) <- panic "quick_zonk kv1"
-                       (ki2', progress2) <- panic "quick_zonk kv2"
+      | otherwise = do (ki1', progress1) <- quick_zonk kv1
+                       (ki2', progress2) <- quick_zonk kv2
                        if progress1 || progress2
                          then go_mono ki1' ki2'
                          else return $ Left (Pair (KiVarKi kv1) (KiVarKi kv2))
@@ -139,8 +139,8 @@ zonkEqKinds ev ki1 ki2 = Stage $ do
       = traceTcS "Following filled kivar (zonkEqKinds)"
                  (ppr kv <+> equals <+> ppr ki)
 
-    quick_zonk kv = case tcVarDetails kv of
-      MetaVar { mv_ref = ref } -> do
+    quick_zonk kv = case handleAnyKv (const Nothing) (Just . tcVarDetails) kv of
+      Just (MetaVar { mv_ref = ref }) -> do
         cts <- readTcRef ref
         case cts of
           Flexi -> return (KiVarKi kv, False)
@@ -148,15 +148,19 @@ zonkEqKinds ev ki1 ki2 = Stage $ do
                              return (ki', True)
       _ -> return (KiVarKi kv, False)
 
-    kicon :: KiCon -> [TcMonoKind] -> [TcMonoKind] -> TcS (Either (Pair TcMonoKind) TcMonoKind)
+    kicon
+      :: KiCon
+      -> [AnyMonoKind]
+      -> [AnyMonoKind]
+      -> TcS (Either (Pair AnyMonoKind) AnyMonoKind)
     kicon kc kis1 kis2 = do
       results <- zipWithM go_mono kis1 kis2
       return $ case combine_results results of
                  Left kis -> Left $ mkKiConApp kc <$> kis
                  Right kis -> Right $ mkKiConApp kc kis
 
-    combine_results :: [Either (Pair TcMonoKind) TcMonoKind]
-                    -> Either (Pair [TcMonoKind]) [TcMonoKind]
+    combine_results :: [Either (Pair AnyMonoKind) AnyMonoKind]
+                    -> Either (Pair [AnyMonoKind]) [AnyMonoKind]
     combine_results = bimap (fmap reverse) reverse .
                       foldl' (combine_rev (:)) (Right [])
                       
@@ -263,7 +267,7 @@ canDecomposableKiConAppOK ev kc kis1 kis2 = assert (kis1 `equalLength` kis2) $ d
   case ev of
     CtWanted { ctev_dest = dest } -> do
       (co, _, _) <- wrapUnifierTcS ev $ \uenv -> do
-        cos <- zipWithM (u_arg uenv) kis1 kis2
+        cos <- panic "zipWithM (u_arg uenv) kis1 kis2"
         return $ mkKiConAppCo kc cos
       setWantedEq dest co
     CtGiven { ctev_evar = evar } -> pprPanic "canDecomposableKiConAppOK/CtGiven"
@@ -289,8 +293,8 @@ canDecomposableFunKi ev f f1@(a1, r1) f2@(a2, r2) = do
   case ev of
     CtWanted { ctev_dest = dest } -> do
       (co, _, _) <- wrapUnifierTcS ev $ \uenv -> do
-        arg <- panic "uKind uenv a1 a2"
-        res <- panic "uKind uenv r1 r2"
+        arg <- uKind uenv a1 a2
+        res <- uKind uenv r1 r2
         return $ mkFunKiCo f arg res
       setWantedEq dest co
     CtGiven { ctev_evar = evar } -> pprPanic "canDecomposableFunKi"
@@ -443,8 +447,11 @@ finishCanWithIrred reason ev = do
   when (isInsolubleReason reason) tryEarlyAbortTcS
   continueWith $ Left $ IrredCt { ir_ev = ev, ir_reason = reason }
 
-canKiEqReflexive :: CtEvidence -> TcMonoKind -> TcS (StopOrContinue a)
-canKiEqReflexive ev ki = stopWith ev "Solved by reflexivity"
+canKiEqReflexive :: CtEvidence -> AnyMonoKind -> TcS (StopOrContinue a)
+canKiEqReflexive ev ki = do
+  setKiEvBindIfWanted ev True
+    $ kiEvCoercion (mkReflKiCo ki)
+  stopWith ev "Solved by reflexivity"
 
 {- *******************************************************************
 *                                                                    *

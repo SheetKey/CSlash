@@ -85,6 +85,9 @@ instance (Data.Typeable tv, Data.Typeable kv) => Data.Data (DataCon tv kv) where
   gunfold _ _  = error "gunfold"
   dataTypeOf _ = mkNoRepType "DataCon"
 
+instance AsAnyTy DataCon where
+  asAnyTy = panic "asAnyTy DataCon"
+
 {- *********************************************************************
 *                                                                      *
             Construction

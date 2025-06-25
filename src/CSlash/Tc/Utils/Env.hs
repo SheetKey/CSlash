@@ -139,7 +139,7 @@ tcLookup name = do
     Just thing -> return thing
     Nothing -> panic "AGlobal <$> tcLookupGlobal name"
 
-tcLookupTcTyCon :: HasDebugCallStack => Name -> TcM TcTyCon
+tcLookupTcTyCon :: HasDebugCallStack => Name -> TcM AnyTyCon
 tcLookupTcTyCon name = do
   thing <- tcLookup name
   case thing of
@@ -153,8 +153,8 @@ tcExtendKindEnvList things thing_inside = do
   where
     upd_env env = env { tcl_env = extendNameEnvList (tcl_env env) things }
 
-tcExtendKiVarEnv :: [TcKiVar] -> TcM r -> TcM r
-tcExtendKiVarEnv kvs thing_inside = tcExtendNameKiVarEnv (mkKiVarNamePairs kvs) thing_inside
+tcExtendKiVarEnv :: [AnyKiVar] -> TcM r -> TcM r
+tcExtendKiVarEnv kvs thing_inside = tcExtendNameKiVarEnv (mkVarNamePairs kvs) thing_inside
 
 tcExtendNameTyVarEnv :: [(Name, TcTyVar AnyKiVar)] -> TcM r -> TcM r
 tcExtendNameTyVarEnv binds thing_inside
@@ -162,10 +162,10 @@ tcExtendNameTyVarEnv binds thing_inside
     $ tcExtendBinderStack tv_binds
     $ thing_inside
   where
-    tv_binds = panic "[TcTvBndr name tv | (name, tv) <- binds]"
-    names = panic "[(name, ATyVar name tv) | (name, tv) <- binds]"
+    tv_binds = [TcTvBndr name tv | (name, tv) <- binds]
+    names = [(name, ATyVar name tv) | (name, tv) <- binds]
 
-tcExtendNameKiVarEnv :: [(Name, TcKiVar)] -> TcM r -> TcM r
+tcExtendNameKiVarEnv :: [(Name, AnyKiVar)] -> TcM r -> TcM r
 tcExtendNameKiVarEnv binds thing_inside
   = tc_extend_local_env NotTopLevel names
     $ tcExtendBinderStack kv_binds

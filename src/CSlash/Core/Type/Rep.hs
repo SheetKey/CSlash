@@ -42,13 +42,16 @@ data Type tv kv
     , ft_arg :: Type tv kv
     , ft_res :: Type tv kv
     }
-  | CastTy (Type tv kv) (KindCoercion tv kv)
+  | CastTy (Type tv kv) (KindCoercion kv)
   | Embed (MonoKind kv) -- for application to a 'BigTyLamTy
-  | KindCoercion (KindCoercion tv kv) -- embed a kind coercion (evidence stuff)
+  | KindCoercion (KindCoercion kv) -- embed a kind coercion (evidence stuff)
   deriving Data.Data
 
 instance VarHasKind tv kv => Outputable (Type tv kv) where
   ppr = pprType
+
+instance AsAnyTy Type where
+  asAnyTy = panic "asAnyTy Type"
 
 type KnotTied ty = ty
 
@@ -117,20 +120,21 @@ mkBigLamTys = flip (foldr mkBigLamTy)
 *                                                                      *
 ********************************************************************* -}
 
-data TypeFolder tv kv env env' a = TypeFolder
+data TypeFolder tv kv env env' b a  = TypeFolder
   { tf_view :: Type tv kv -> Maybe (Type tv kv)
   , tf_tyvar :: env -> tv -> a
   , tf_tybinder :: env -> tv -> ForAllFlag -> env
   , tf_tylambinder :: env -> tv -> env
   , tf_tylamkibinder :: env -> kv -> env
   , tf_swapEnv :: env -> env'
-  , tf_mkcf :: MKiCoFolder tv kv env' a
+  , tf_embedKiRes :: b -> a
+  , tf_mkcf :: MKiCoFolder kv env' b
   }
 
 {-# INLINE foldType #-}
 foldType
-  :: (Monoid a, Outputable tv, Outputable kv, VarHasKind tv kv)
-  => TypeFolder tv kv env env' a
+  :: (Monoid a, Monoid b, Outputable tv, Outputable kv, VarHasKind tv kv)
+  => TypeFolder tv kv env env' b a
   -> env
   -> (Type tv kv -> a, [Type tv kv] -> a)
 foldType (TypeFolder { tf_view = view
@@ -139,6 +143,7 @@ foldType (TypeFolder { tf_view = view
                      , tf_tylambinder = tylambinder
                      , tf_tylamkibinder = tylamkibinder
                      , tf_swapEnv = tokenv
+                     , tf_embedKiRes = embedRes
                      , tf_mkcf = mkcf }) env
   = (go_ty env, go_tys env)
   where
@@ -151,22 +156,24 @@ foldType (TypeFolder { tf_view = view
     go_ty env (BigTyLamTy kv ty)
       = let !env' = tylamkibinder env kv
         in go_ty env' ty
-    go_ty env (FunTy mki arg res) = go_mki mki `mappend` go_ty env arg `mappend` go_ty env res
+    go_ty env (FunTy mki arg res) = embedRes (go_mki mki)
+                                    `mappend` go_ty env arg
+                                    `mappend` go_ty env res
       where go_mki = case foldMonoKiCo mkcf (tokenv env) of
                        (f, _, _, _) -> f
     go_ty env (TyConApp _ tys) = go_tys env tys
     go_ty env (ForAllTy (Bndr tv vis) inner)
       = let !env' = tybinder env tv vis
-        in go_mki (varKind tv) `mappend` go_ty env' inner
+        in embedRes (go_mki (varKind tv)) `mappend` go_ty env' inner
       where go_mki = case foldMonoKiCo mkcf (tokenv env) of
                        (f, _, _, _) -> f
-    go_ty env (Embed mki) = go_mki mki
+    go_ty env (Embed mki) = embedRes $ go_mki mki
       where go_mki = case foldMonoKiCo mkcf (tokenv env) of
                        (f, _, _, _) -> f
-    go_ty env (CastTy ty kco) = go_ty env ty `mappend` go_kco kco
+    go_ty env (CastTy ty kco) = go_ty env ty `mappend` embedRes (go_kco kco)
       where go_kco = case foldMonoKiCo mkcf (tokenv env) of
                        (_, _, f, _) -> f
-    go_ty env (KindCoercion kco) = go_kco kco
+    go_ty env (KindCoercion kco) = embedRes $ go_kco kco
       where go_kco = case foldMonoKiCo mkcf (tokenv env) of
                        (_, _, f, _) -> f
 

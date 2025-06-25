@@ -81,31 +81,31 @@ newMetaKindVars n = replicateM n newMetaKindVar
 *                                                                       *
 ********************************************************************** -}
 
-newKiEvVars :: [TcPredKind] -> TcM [TcKiEvVar TcKiVar]
+newKiEvVars :: IsTyVar kiEvVar kv => [PredKind kv] -> TcM [kiEvVar]
 newKiEvVars theta = mapM newKiEvVar theta
 
-newKiEvVar :: TcPredKind -> TcRnIf gbl lcl (TcKiEvVar TcKiVar)
+newKiEvVar :: IsTyVar kiEvVar kv => PredKind kv -> TcRnIf gbl lcl kiEvVar
 newKiEvVar ki = do
   name <- newSysName (predKindOccName ki)
-  return $ panic "mkLocalVarOrKiCoVar name ki"
+  return $ mkLocalKiEvVar name ki
 
-predKindOccName :: TcPredKind -> OccName
+predKindOccName :: PredKind kv -> OccName
 predKindOccName ki = case classifyPredKind ki of
   EqPred {} -> mkVarOccFS (fsLit "co")
   IrredPred {} -> mkVarOccFS (fsLit "irred")
   RelPred {} -> mkVarOccFS (fsLit "relco")
 
-newWantedWithLoc :: CtLoc -> TcPredKind -> TcM CtEvidence
+newWantedWithLoc :: CtLoc -> AnyPredKind -> TcM CtEvidence
 newWantedWithLoc loc predki = do
   dst <- case classifyPredKind predki of
-           EqPred {} -> HoleDest <$> panic "newKiCoercionHole predki"
-           _ -> EvVarDest <$> panic "newKiEvVar predki"
+           EqPred {} -> HoleDest <$> newKiCoercionHole predki
+           _ -> EvVarDest <$> newKiEvVar predki
   return $ CtWanted { ctev_dest = dst
-                    , ctev_pred = panic "predki"
+                    , ctev_pred = predki
                     , ctev_loc = loc
                     , ctev_rewriters = emptyRewriterSet }
 
-newWanted :: CtOrigin -> Maybe TypeOrKind -> TcPredKind -> TcM CtEvidence
+newWanted :: CtOrigin -> Maybe TypeOrKind -> AnyPredKind -> TcM CtEvidence
 newWanted orig t_or_k predki = do
   loc <- getCtLocM orig t_or_k
   newWantedWithLoc loc predki
@@ -114,7 +114,7 @@ newWanted orig t_or_k predki = do
 -- Emitting constraints
 ----------------------------------------------
 
-emitWanted :: CtOrigin -> TcPredKind -> TcM AnyKiEvType 
+emitWanted :: CtOrigin -> AnyPredKind -> TcM KiEvType 
 emitWanted origin pred = do
   ev <- newWanted origin Nothing pred
   emitSimple $ mkNonCanonical ev
@@ -126,14 +126,18 @@ emitWanted origin pred = do
 *                                                                      *
 ********************************************************************* -}
 
-newKiCoercionHole :: TcPredKind -> TcM (KindCoercionHole (TcTyVar TcKiVar) TcKiVar)
+newKiCoercionHole
+  :: IsKiVar kv => PredKind kv -> TcM (KindCoercionHole kv)
 newKiCoercionHole pred_ki = do
   co_var <- newKiEvVar pred_ki
   traceTc "New coercion hole:" (ppr co_var <+> colon <+> ppr pred_ki)
   ref <- newMutVar Nothing
   return $ CoercionHole { ch_co_var = co_var, ch_ref = ref }
 
-fillKiCoercionHole :: (KindCoercionHole (TcTyVar TcKiVar) TcKiVar) -> (KindCoercion (TcTyVar TcKiVar) TcKiVar) -> TcM ()
+fillKiCoercionHole
+  :: (KindCoercionHole TcKiVar)
+  -> (KindCoercion TcKiVar)
+  -> TcM ()
 fillKiCoercionHole (CoercionHole { ch_ref = ref, ch_co_var = cv }) co = do
   when debugIsOn $ do
     cts <- panic "readTcRef ref"
@@ -226,7 +230,7 @@ cloneMetaKiVar kv = {-assert (isTcKiVar kv) $ -}do
   return kivar
 
 cloneMetaKiVarWithInfo :: MetaInfo -> TcLevel -> TcKiVar -> TcM TcKiVar
-cloneMetaKiVarWithInfo info tc_lvl kv = {-assert (isTcKiVar kv) $ -}do
+cloneMetaKiVarWithInfo info tc_lvl kv = do
   ref <- newMutVar Flexi
   name' <- cloneMetaKiVarName (varName kv)
   let details = MetaVar { mv_info = info
@@ -250,8 +254,7 @@ readMetaKiVar kivar = assertPpr (isMetaVar kivar) (ppr kivar)
 
 isFilledMetaKiVar_maybe :: TcKiVar -> TcM (Maybe AnyMonoKind)
 isFilledMetaKiVar_maybe kv
-  | panic "isTcKiVar kv"
-  , MetaVar { mv_ref = ref } <- tcVarDetails kv
+  | MetaVar { mv_ref = ref } <- tcVarDetails kv
   = do cts <- readTcRef ref
        case cts of
          Indirect ki -> return $ Just ki
@@ -265,7 +268,7 @@ isFilledMetaKiVar_maybe kv
 *                                                                      *
 ********************************************************************* -}
 
-cloneAnonMetaKiVar :: MetaInfo -> TcKiVar -> TcM TcKiVar
+cloneAnonMetaKiVar :: MetaInfo -> AnyKiVar -> TcM TcKiVar
 cloneAnonMetaKiVar info kv = do
   details <- newMetaDetails info
   name <- cloneMetaKiVarName (varName kv)
@@ -290,12 +293,12 @@ newFlexiKiVarKi = do
   tc_kivar <- newFlexiKiVar
   return $ mkKiVarKi tc_kivar
 
-newMetaKiVarX :: KvSubst TcKiVar -> TcKiVar -> TcM (KvSubst TcKiVar, TcKiVar)
+newMetaKiVarX :: KvSubst AnyKiVar -> AnyKiVar -> TcM (KvSubst AnyKiVar, AnyKiVar)
 newMetaKiVarX = new_meta_kv_x TauVar
 
-new_meta_kv_x :: MetaInfo -> KvSubst TcKiVar -> TcKiVar -> TcM (KvSubst TcKiVar, TcKiVar)
+new_meta_kv_x :: MetaInfo -> KvSubst AnyKiVar -> AnyKiVar -> TcM (KvSubst AnyKiVar, AnyKiVar)
 new_meta_kv_x info subst kv = do
-  new_kv <- cloneAnonMetaKiVar info kv
+  new_kv <- toAnyKiVar <$> cloneAnonMetaKiVar info kv
   let subst1 = extendKvSubstWithClone subst kv new_kv
   return (subst1, new_kv)
 
@@ -357,49 +360,53 @@ candidateQKiVarsOfType ty = do
 --       = do tv_kind <- liftZonkM $ zonkTcMonoKind (varKind tv)
 --            collect_cand_qkvs (Mono tv_kind) cur_lvl bound dv (Mono tv_kind)
 
-candidateQKiVarsOfKind :: TcKind -> TcM DKiVarSet
+candidateQKiVarsOfKind :: AnyKind -> TcM DTcKiVarSet
 candidateQKiVarsOfKind ki = do
   cur_lvl <- getTcLevel
-  panic "collect_cand_qkvs ki cur_lvl emptyVarSet emptyDVarSet ki"
+  collect_cand_qkvs ki cur_lvl emptyVarSet emptyDVarSet ki
 
--- collect_cand_qkvs
---   :: TcKind
---   -> TcLevel
---   -> AnyKiVarSet
---   -> DKiVarSet
---   -> AnyKind
---   -> TcM DKiVarSet
--- collect_cand_qkvs orig_ki cur_lvl bound dvs ki = go dvs ki
---   where
---     is_bound kv = kv `elemVarSet` bound
+collect_cand_qkvs
+  :: AnyKind
+  -> TcLevel
+  -> AnyKiVarSet
+  -> DTcKiVarSet
+  -> AnyKind
+  -> TcM DTcKiVarSet
+collect_cand_qkvs orig_ki cur_lvl bound dvs ki = go dvs ki
+  where
+    is_bound kv = kv `elemVarSet` bound
 
---     -----------------
---     go :: DKiVarSet -> TcKind -> TcM DKiVarSet
---     go dv (Mono ki) = go_mono dv ki
---     go dv (ForAllKi kv ki) = collect_cand_qkvs orig_ki cur_lvl (bound `extendVarSet` kv) dv ki
+    -----------------
+    go :: DTcKiVarSet -> AnyKind -> TcM DTcKiVarSet
+    go dv (Mono ki) = go_mono dv ki
+    go dv (ForAllKi kv ki) = collect_cand_qkvs orig_ki cur_lvl (bound `extendVarSet` kv) dv ki
 
---     go_mono :: DKiVarSet -> TcMonoKind -> TcM DKiVarSet
---     go_mono dv (KiConApp kc kis) = foldlM go_mono dv kis
---     go_mono dv (FunKi _ k1 k2) = foldlM go_mono dv [k1, k2]
---     go_mono dv (KiVarKi kv)
---       | is_bound kv = return dv
---       | otherwise = do
---           m_contents <- isFilledMetaKiVar_maybe kv
---           case m_contents of
---             Just ind_ki -> go_mono dv ind_ki
---             Nothing -> go_kv dv kv
+    go_mono :: DTcKiVarSet -> AnyMonoKind -> TcM DTcKiVarSet
+    go_mono dv (KiConApp kc kis) = foldlM go_mono dv kis
+    go_mono dv (FunKi _ k1 k2) = foldlM go_mono dv [k1, k2]
+    go_mono dv (KiVarKi kv)
+      | is_bound kv = return dv
+      | Just kv <- toTcKiVar_maybe kv
+      = do m_contents <- isFilledMetaKiVar_maybe kv
+           case m_contents of
+             Just ind_ki -> go_mono dv ind_ki
+             Nothing -> go_kv dv kv
+      | otherwise
+      = pprPanic "collect_cand_qkvs found unbound non-meta kivar"
+        (ppr orig_ki $$ ppr kv $$ ppr bound)
 
---     go_kv dv kv
---       | varLevel kv <= cur_lvl
---       = return dv
---       | case tcVarDetails kv of
---           SkolemVar _ lvl -> lvl > pushTcLevel cur_lvl
---           _ -> False
---       = return dv
---       | kv `elemDVarSet` dv
---       = return dv
---       | otherwise
---       = return $ dv `extendDVarSet` kv
+    go_kv :: DTcKiVarSet -> TcKiVar -> TcM DTcKiVarSet
+    go_kv dv kv
+      | varLevel kv <= cur_lvl
+      = return dv
+      | case tcVarDetails kv of
+          SkolemVar _ lvl -> lvl > pushTcLevel cur_lvl
+          _ -> False
+      = return dv
+      | kv `elemDVarSet` dv
+      = return dv
+      | otherwise
+      = return $ dv `extendDVarSet` kv
 
 -- collect_cand_qkvs_co
 --   :: KindCoercion (TcTyVar TcKiVar) TcKiVar
@@ -463,7 +470,7 @@ quantifyKiVars skol_info kvs
 zonkAndSkolemize :: SkolemInfo -> TcTyVar TcKiVar -> ZonkM (TcTyVar TcKiVar)
 zonkAndSkolemize skol_info var
   | isTcVarVar var
-  = do zonked_tyvar <- zonkTcTyVarToTcTyVar var
+  = do zonked_tyvar <- panic "zonkTcTyVarToTcTyVar var"
        skolemizeQuantifiedTyVar skol_info zonked_tyvar
   -- | isTcVarVar var
   -- = do zonked_kivar <- zonkTcKiVarToTcKiVar var
@@ -476,7 +483,7 @@ skolemizeQuantifiedTyVar :: SkolemInfo -> (TcTyVar TcKiVar) -> ZonkM (TcTyVar Tc
 skolemizeQuantifiedTyVar skol_info tv
   = case tcVarDetails tv of
       MetaVar {} -> panic "skolemizeUnboundMetaTyVar skol_info tv"
-      SkolemVar _ lvl -> do kind <- zonkTcMonoKind (panic "varKind tv")
+      SkolemVar _ lvl -> do kind <- panic "zonkTcMonoKind (varKind tv)"
                             let details = SkolemVar skol_info lvl
                                 name = varName tv
                             return $ mkTcTyVar name kind details
@@ -511,7 +518,7 @@ skolemizeUnboundMetaTyVar :: SkolemInfo -> TcTyVar TcKiVar -> ZonkM (TyVar KiVar
 skolemizeUnboundMetaTyVar skol_info tv = assertPpr (isMetaVar tv) (ppr tv) $ do
   check_empty tv
   ZonkGblEnv { zge_src_span = here, zge_tc_level = tc_lvl } <- getZonkGblEnv
-  kind <- zonkTcMonoKind (panic "varKind tv")
+  kind <- panic "zonkTcMonoKind (varKind tv)"
   let tv_name = varName tv
       final_name | isSystemName tv_name
                  = mkInternalName (nameUnique tv_name) (nameOccName tv_name) here
@@ -544,7 +551,7 @@ skolemizeUnboundMetaKiVar skol_info kv = assertPpr (isMetaVar kv) (ppr kv) $ do
       final_kv = mkTcKiVar final_name details
 
   traceZonk "Skolemizing" (ppr kv <+> text ":=" <+> ppr final_kv)
-  writeMetaKiVar kv (mkKiVarKi final_kv)
+  panic "writeMetaKiVar kv (mkKiVarKi final_kv)"
   panic "return final_kv"
   where
     check_empty kv = when debugIsOn $ do
@@ -579,16 +586,16 @@ promoteMetaKiVarTo tclvl kv
     $ varLevel kv `strictlyDeeperThan` tclvl
   = do cloned_kv <- cloneMetaKiVar kv
        let rhs_kv = setMetaVarTcLevel cloned_kv tclvl
-       liftZonkM $ writeMetaKiVar kv (mkKiVarKi rhs_kv)
+       liftZonkM $ panic "writeMetaKiVar kv (mkKiVarKi rhs_kv)"
        traceTc "promoteKiVar" (ppr kv <+> text "-->" <+> ppr rhs_kv)
        return True
   | otherwise
   = return False
 
-promoteKiVarSet :: HasDebugCallStack => KiVarSet -> TcM Bool
+promoteKiVarSet :: HasDebugCallStack => TcKiVarSet -> TcM Bool
 promoteKiVarSet kvs = do
   tclvl <- getTcLevel
   bools <- mapM (promoteMetaKiVarTo tclvl)
            $ filter isPromotableMetaVar
-           $ panic "nonDetEltsUniqSet kvs"
+           $ nonDetEltsUniqSet kvs
   return $ or bools

@@ -347,7 +347,11 @@ setImplicationStatus implic@(Implic { ic_status = status
       | otherwise
       = True
 
-findUnnecessaryGivens :: SkolemInfoAnon -> MkVarSet (AnyKiEvVar AnyKiVar) -> [AnyKiEvVar AnyKiVar] -> [AnyKiEvVar AnyKiVar]
+findUnnecessaryGivens
+  :: SkolemInfoAnon
+  -> MkVarSet (AnyKiEvVar AnyKiVar)
+  -> [KiEvVar AnyKiVar]
+  -> [KiEvVar AnyKiVar]
 findUnnecessaryGivens info need_inner givens
   | not (warnRedundantGivens info)
   = []
@@ -358,7 +362,8 @@ findUnnecessaryGivens info need_inner givens
   where
     unused_givens = filterOut is_used givens
 
-    is_used given = given `elemVarSet` need_inner
+    is_used :: KiEvVar AnyKiVar -> Bool
+    is_used given = toAnyTyVar given `elemVarSet` need_inner
 
     minimal_givens = mkMinimalBy kiEvVarPred givens
     is_minimal = (`elemVarSet` mkVarSet minimal_givens)

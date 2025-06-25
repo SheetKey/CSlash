@@ -219,7 +219,7 @@ warnRedundantConstraints
   :: SolverReportErrCtxt
   -> CtLocEnv
   -> SkolemInfoAnon
-  -> [TcKiEvVar TcKiVar]
+  -> [KiEvVar TcKiVar]
   -> TcM ()
 warnRedundantConstraints ctxt env info redundant_evs
   | not (cec_warn_redundant ctxt)
@@ -768,7 +768,7 @@ relevant_bindings
   :: Bool
   -> CtLocEnv
   -> NameEnv TcType
-  -> MkVarSet (TcKiCoVar TcKiVar)
+  -> MkVarSet (KiCoVar TcKiVar)
   -> TcM RelevantBindings
 relevant_bindings want_filtering lcl_env lcl_name_env ct_kvs = do
   dflags <- getDynFlags
