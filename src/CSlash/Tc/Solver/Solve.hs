@@ -161,28 +161,28 @@ solveNC ev = case classifyPredKind (ctEvPred ev) of
 rewriteEvidence :: CtEvidence -> SolverStage CtEvidence
 rewriteEvidence ev = Stage $ do
   traceTcS "rewriteEvidence" (ppr ev)
-  (redn, rewriters) <- panic "rewriteKi ev (ctEvPred ev)"
+  (redn, rewriters) <- rewriteKi ev (ctEvPred ev)
   finish_rewrite ev redn rewriters
 
 finish_rewrite :: CtEvidence -> Reduction -> RewriterSet -> TcS (StopOrContinue CtEvidence)
 finish_rewrite old_ev (ReductionKi co new_pred) rewriters
   | isReflKiCo co
   = assert (isEmptyRewriterSet rewriters)
-    $ continueWith (panic "setCtEvPredKind old_ev new_pred")
+    $ continueWith (setCtEvPredKind old_ev new_pred)
 
 finish_rewrite ev@(CtGiven { ctev_evar = old_evar, ctev_loc = loc })
                (ReductionKi co new_pred) rewriters
   = assert (isEmptyRewriterSet rewriters) $ do
-      new_ev <- panic "newGivenKiEvVar loc (new_pred, new_ty)"
+      new_ev <- newGivenKiEvVar loc (new_pred, new_ty)
       continueWith new_ev
   where
-    new_ty = panic "mkKiEvCast (kiEvVar old_evar) co"
+    new_ty = mkKiEvCast (kiEvVar old_evar) co
 
 finish_rewrite ev@(CtWanted { ctev_dest = dest, ctev_loc = loc, ctev_rewriters = rewriters })
                (ReductionKi co new_pred) new_rewriters
-  = do mb_new_ev <- panic "newWanted loc rewriters' new_pred"
+  = do mb_new_ev <- newWanted loc rewriters' new_pred
        setWantedKiEvType dest True $
-         panic "mkKiEvCast (getKiEvType mb_new_ev) (mkSymKiCo co)"
+         mkKiEvCast (getKiEvType mb_new_ev) (mkSymKiCo co)
        case mb_new_ev of
          Fresh new_ev -> continueWith new_ev
          Cached _ -> stopWith ev "Cached wanted"

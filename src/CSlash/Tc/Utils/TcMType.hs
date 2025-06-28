@@ -135,14 +135,14 @@ newKiCoercionHole pred_ki = do
   return $ CoercionHole { ch_co_var = co_var, ch_ref = ref }
 
 fillKiCoercionHole
-  :: (KindCoercionHole TcKiVar)
-  -> (KindCoercion TcKiVar)
+  :: AnyKindCoercionHole
+  -> AnyKindCoercion
   -> TcM ()
 fillKiCoercionHole (CoercionHole { ch_ref = ref, ch_co_var = cv }) co = do
   when debugIsOn $ do
-    cts <- panic "readTcRef ref"
+    cts <- readTcRef ref
     whenIsJust cts $ \old_co ->
-      panic "pprPanic Filling a filled coercion hole (ppr cv $$ ppr co $$ ppr old_co)"
+      pprPanic "Filling a filled coercion hole" (ppr cv $$ ppr co $$ ppr old_co)
   traceTc "Filling coercion hole" (ppr cv <+> text ":=" <+> ppr co)
   writeTcRef ref (Just co)
 
@@ -498,13 +498,13 @@ skolemizeQuantifiedKiVar skol_info kv
 
 defaultKiVar :: TcKiVar -> TcM Bool
 defaultKiVar kv
-  | not (panic "isMetaKiVar kv")
+  | not (isMetaVar kv)
     || isTcVarVar kv
   = return False
-  | isConcreteVar kv
-  = do lvl <- getTcLevel
-       _ <- promoteMetaKiVarTo lvl kv
-       return True
+  -- | isConcreteVar kv
+  -- = do lvl <- getTcLevel
+  --      _ <- promoteMetaKiVarTo lvl kv
+  --      return True
   | otherwise
   = return False
 

@@ -509,7 +509,7 @@ checkSkolInfoAnon sk1 sk2 = go sk1 sk2
 *                                                                      *
 ********************************************************************* -}
 
-type AnyTyFV = TyFV (AnyTyVar AnyKiVar) AnyKiVar
+type AnyTyFV = TyFV (KiEvVar AnyKiVar) AnyKiVar
 type AnyKiFV = KiFV AnyKiVar
 
 fvsOfCt :: Ct -> AnyKiFV
@@ -518,7 +518,7 @@ fvsOfCt ct = fvsOfMonoKind $ ctPred ct
 fvsOfCts :: Cts -> AnyKiFV
 fvsOfCts = foldr (unionFV . fvsOfCt) emptyFV
 
-varsOfWCList :: WantedConstraints -> ([AnyKiEvVar AnyKiVar], [AnyKiVar])
+varsOfWCList :: WantedConstraints -> ([KiEvVar AnyKiVar], [AnyKiVar])
 varsOfWCList wc = case fvVarAcc (fvsOfWC wc) of
   (tvs, _, kvs, _) -> (tvs, kvs)
 
@@ -532,7 +532,7 @@ fvsOfImplic (Implic { ic_skols = skols, ic_given = givens, ic_wanted = wanted })
   = emptyFV
   | otherwise
   = fvsKiVarBndrs (toAnyKiVar <$> skols)
-    $ fvsVarBndrs (toAnyTyVar <$> givens)
+    $ fvsVarBndrs givens
     $ fvsOfWC wanted
 
 fvsOfBag :: (a -> AnyTyFV) -> Bag a -> AnyTyFV

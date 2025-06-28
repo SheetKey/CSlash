@@ -115,7 +115,7 @@ type CycleBreakerVarStack = NonEmpty (Bag (AnyTyVar AnyKiVar, AnyType))
 
 data InertSet = IS
   { inert_cans :: InertCans
-  , inert_cycle_breakers :: CycleBreakerVarStack
+  -- , inert_cycle_breakers :: CycleBreakerVarStack
   , inert_solved_rels :: RelMap RelCt
   }
 
@@ -137,7 +137,7 @@ emptyInertCans = IC { inert_eqs = emptyEqs
 
 emptyInert :: InertSet
 emptyInert = IS { inert_cans = emptyInertCans
-                , inert_cycle_breakers = emptyBag :| []
+                -- , inert_cycle_breakers = emptyBag :| []
                 , inert_solved_rels = emptyRelMap
                 }
 
@@ -325,7 +325,7 @@ updGivenEqs tclvl ct inerts@(IC { inert_given_eq_lvl = ge_lvl })
     not_equality _ = False
 
 data KickOutSpec
-  = KOAfterUnify (MkVarSet AnyKiVar)
+  = KOAfterUnify (MkVarSet TcKiVar)
   | KOAfterAdding CanEqLHS
 
 kickOutRewritableLHS :: KickOutSpec -> CtFlavor -> InertCans -> (Cts, InertCans)
@@ -352,7 +352,7 @@ kickOutRewritableLHS ko_spec new_f ics@(IC { inert_eqs = kv_eqs
     {-# INLINE f_can_rewrite_ki #-}
     f_can_rewrite_ki :: AnyMonoKind -> Bool
     f_can_rewrite_ki = case ko_spec of
-      KOAfterUnify kvs -> f_kv_can_rewrite_ki ((`elemVarSet` kvs) . toAnyKiVar)
+      KOAfterUnify kvs -> f_kv_can_rewrite_ki (`elemVarSet` kvs)
       KOAfterAdding (KiVarLHS kv) -> f_kv_can_rewrite_ki ((== kv) . toAnyKiVar)
 
     f_may_rewrite f = new_f `eqCanRewriteF` f
@@ -380,8 +380,10 @@ kickOutRewritableLHS ko_spec new_f ics@(IC { inert_eqs = kv_eqs
       KOAfterAdding lhs -> (`eqMonoKind` canKiEqLHSKind lhs)
 
     is_kivar_ki_for vs ki = case getKiVar_maybe ki of
-                              Nothing -> False
-                              Just kv -> kv `elemVarSet` vs
+                              Just kv
+                                | Just tckv <- toTcKiVar_maybe kv
+                                  -> tckv `elemVarSet` vs
+                              _ -> False
 
 {- *********************************************************************
 *                                                                      *

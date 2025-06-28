@@ -135,9 +135,15 @@ data TyCon tv kv = TyCon
   }
 
 instance AsAnyTy TyCon where
-  asAnyTy (TyCon { tyConKind = kind, tyConDetails = details, .. })
+  asAnyTy (TyCon { tyConDetails = details, .. })
+    = let tc' = TyCon { tyConDetails = asAnyTy details
+                      , tyConNullaryTy = mkNakedTyConTy tc'
+                      , .. }
+      in tc'
+
+  asAnyTyKi (TyCon { tyConKind = kind, tyConDetails = details, .. })
     = let tc' = TyCon { tyConKind = asAnyKi kind
-                      , tyConDetails = asAnyTy details
+                      , tyConDetails = asAnyTyKi details
                       , tyConNullaryTy = mkNakedTyConTy tc'
                       , .. }
       in tc'
@@ -168,7 +174,12 @@ instance AsAnyTy TyConDetails where
   asAnyTy AlgTyCon { algTcRhs = rhs, .. } = AlgTyCon { algTcRhs = asAnyTy rhs, .. }
   asAnyTy SynonymTyCon { synTcRhs = rhs, .. } = SynonymTyCon { synTcRhs = asAnyTy rhs, .. }
   asAnyTy PrimTyCon = PrimTyCon
-  asAnyTy TcTyCon { tctc_scoped_kvs = kvs, .. }
+  asAnyTy TcTyCon { .. } = TcTyCon { .. }
+
+  asAnyTyKi AlgTyCon { algTcRhs = rhs, .. } = AlgTyCon { algTcRhs = asAnyTyKi rhs, .. }
+  asAnyTyKi SynonymTyCon { synTcRhs = rhs, .. } = SynonymTyCon { synTcRhs = asAnyTyKi rhs, .. }
+  asAnyTyKi PrimTyCon = PrimTyCon
+  asAnyTyKi TcTyCon { tctc_scoped_kvs = kvs, .. }
     = TcTyCon { tctc_scoped_kvs = mapSnd toAnyKiVar kvs, .. }
 
 data AlgTyConRhs tv kv

@@ -1,3 +1,5 @@
+{-# LANGUAGE FlexibleContexts #-}
+
 module CSlash.Tc.Zonk.TcType
   ( module CSlash.Tc.Zonk.Monad
   ,  module CSlash.Tc.Zonk.TcType
@@ -49,7 +51,12 @@ import CSlash.Data.Pair
 writeMetaTyVar :: HasDebugCallStack => TcTyVar TcKiVar -> TcType -> ZonkM ()
 writeMetaTyVar = undefined
 
-writeMetaTyVarRef :: HasDebugCallStack => TcTyVar TcKiVar -> TcRef (MetaDetails TcType) -> TcType -> ZonkM ()
+writeMetaTyVarRef
+  :: HasDebugCallStack
+  => TcTyVar AnyKiVar
+  -> TcRef (MetaDetails TcType)
+  -> TcType
+  -> ZonkM ()
 writeMetaTyVarRef tyvar ref ty
   | not debugIsOn
   = do traceZonk "writeMetaTyVar" (ppr tyvar <+> colon <+> ppr (varKind tyvar)
@@ -59,7 +66,7 @@ writeMetaTyVarRef tyvar ref ty
   = do meta_details <- readTcRef ref
        let tv_kind = varKind tyvar
            tv_lvl = varLevel tyvar
-       zonked_tv_kind <- panic "zonkTcMonoKind tv_kind"
+       zonked_tv_kind <- zonkTcMonoKind tv_kind
        zonked_ty <- zonkTcType ty
        let zonked_ty_kind = typeKind zonked_ty
            zonked_ty_lvl = tcTypeLevel zonked_ty
@@ -189,9 +196,9 @@ zonkTcTyVarToTcTyVar tv = do
 *                                                                      *
 ********************************************************************* -}
 
-zonkTyVarKind :: AnyTyVar AnyKiVar -> ZonkM (AnyTyVar AnyKiVar)
+zonkTyVarKind :: VarHasKind tv AnyKiVar => tv -> ZonkM tv
 zonkTyVarKind tv = do
-  kind' <- panic "zonkTcMonoKind $ varKind tv"
+  kind' <- zonkTcMonoKind $ varKind tv
   return $ setVarKind tv kind'
 
 {- *********************************************************************
@@ -267,12 +274,12 @@ zonkTcKiVarsToTcKiVars :: HasDebugCallStack => [TcKiVar] -> ZonkM [TcKiVar]
 zonkTcKiVarsToTcKiVars = mapM zonkTcKiVarToTcKiVar
 
 zonkTcKiVarToTcKiVar :: HasDebugCallStack => TcKiVar -> ZonkM TcKiVar
-zonkTcKiVarToTcKiVar kv = do panic "zonkTcKiVarToTcKiVar"
-  -- ki <- zonkTcKiVar kv
-  -- let kv' = case getKiVar_maybe ki of
-  --             Just kv' -> kv'
-  --             Nothing -> pprPanic "zonkTcKiVarToTcKiVar" (ppr kv $$ ppr ki)
-  -- return kv'
+zonkTcKiVarToTcKiVar kv = do 
+  ki <- panic "zonkTcKiVar kv"
+  let kv' = case panic "getKiVar_maybe ki" of
+              Just kv' -> kv'
+              Nothing -> pprPanic "zonkTcKiVarToTcKiVar" (panic "ppr kv $$ ppr ki")
+  return kv'
 
 zonkKiCoVarKind :: KiCoVar AnyKiVar -> ZonkM (KiCoVar AnyKiVar)
 zonkKiCoVarKind kcv = do
@@ -315,17 +322,16 @@ zonkImplication implic@(Implic { ic_skols = skols
                                , ic_given = given
                                , ic_wanted = wanted
                                , ic_info = info }) = do
-  skols' <- panic "mapM zonkTyVarKind skols"
   given' <- mapM zonkKiEvVar given
   info' <- zonkSkolemInfoAnon info
   wanted' <- zonkWCRec wanted
-  return $ implic { ic_skols = panic "skols'"
+  return $ implic { ic_skols = skols
                   , ic_given = given'
                   , ic_wanted = wanted'
                   , ic_info = info' }
 
 zonkKiEvVar :: KiEvVar AnyKiVar -> ZonkM (KiEvVar AnyKiVar)
-zonkKiEvVar var = panic "updateVarKindM zonkTcMonoKind var"
+zonkKiEvVar var = updateVarKindM zonkTcMonoKind var
 
 zonkWC :: WantedConstraints -> ZonkM WantedConstraints
 zonkWC wc = zonkWCRec wc
@@ -345,9 +351,9 @@ zonkSimples cts = do
 zonkCt :: Ct -> ZonkM Ct
 zonkCt (CRelCan rel@(RelCt { rl_ev = ev, rl_ki1 = k1, rl_ki2 = k2 })) = do
   ev' <- zonkCtEvidence ev
-  k1' <- panic "zonkTcMonoKind k1"
-  k2' <- panic "zonkTcMonoKind k2"
-  return $ panic "CRelCan $ rel { rl_ev = ev', rl_ki1 = k1', rl_ki2 = k2' }"
+  k1' <- zonkTcMonoKind k1
+  k2' <- zonkTcMonoKind k2
+  return $ CRelCan $ rel { rl_ev = ev', rl_ki1 = k1', rl_ki2 = k2' }
 zonkCt (CEqCan (KiEqCt { eq_ev = ev })) = mkNonCanonical <$> zonkCtEvidence ev
 zonkCt (CIrredCan ir@(IrredCt { ir_ev = ev })) = do
   ev' <- zonkCtEvidence ev
@@ -359,7 +365,7 @@ zonkCt ct = do
 zonkCtEvidence :: CtEvidence -> ZonkM CtEvidence
 zonkCtEvidence ctev = do
   let pred = ctev_pred ctev
-  pred' <- panic "zonkTcMonoKind pred"
+  pred' <- zonkTcMonoKind pred
   return $ setCtEvPredKind ctev pred'
 
 zonkSkolemInfo :: SkolemInfo -> ZonkM SkolemInfo
@@ -368,7 +374,7 @@ zonkSkolemInfo (SkolemInfo u sk) = SkolemInfo u <$> zonkSkolemInfoAnon sk
 zonkSkolemInfoAnon :: SkolemInfoAnon -> ZonkM SkolemInfoAnon
 zonkSkolemInfoAnon (SigSkol cx ty tv_prs) = do
   ty' <- panic "zonkTcType ty"
-  return $ panic "SigSkol cx ty' tv_prs"
+  return $ SigSkol cx ty' tv_prs
 zonkSkolemInfoAnon (InferSkol ntys) = do
   ntys' <- panic "mapM do_one ntys"
   return $ InferSkol ntys'
@@ -409,7 +415,7 @@ tcInitOpenTidyEnv vs = do
 zonkTidyTcMonoKind :: AnyTidyEnv -> AnyMonoKind -> ZonkM (AnyTidyEnv, AnyMonoKind)
 zonkTidyTcMonoKind env ki = do
   ki' <- zonkTcMonoKind ki
-  return $ panic "tidyOpenMonoKind env ki'"
+  return $ tidyOpenMonoKind env ki'
 
 zonkTidyOrigin :: AnyTidyEnv -> CtOrigin -> ZonkM (AnyTidyEnv, CtOrigin)
 

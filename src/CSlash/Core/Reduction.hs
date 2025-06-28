@@ -14,6 +14,7 @@ import qualified CSlash.Data.List.Infinite as Inf
 import CSlash.Types.Var ( VarBndr(..), setVarKind )
 import CSlash.Types.Var.Env ( mkInScopeSet )
 import CSlash.Types.Var.Set ( TyVarSet )
+import CSlash.Tc.Utils.TcType (AnyMonoKind, AnyKindCoercion)
 
 import CSlash.Utils.Misc ( HasDebugCallStack, equalLength )
 import CSlash.Utils.Outputable
@@ -26,10 +27,10 @@ import CSlash.Utils.Panic
 ********************************************************************* -}
 
 data Reduction = ReductionKi
-  { reductionKindCoercion :: KindCoercion KiVar
-  , reductionReducedKind :: !(MonoKind KiVar) }
+  { reductionKindCoercion :: AnyKindCoercion 
+  , reductionReducedKind :: !AnyMonoKind }
 
-mkReductionKi :: KindCoercion KiVar -> MonoKind KiVar -> Reduction
+mkReductionKi :: AnyKindCoercion -> AnyMonoKind -> Reduction
 mkReductionKi co ki = ReductionKi co ki
 {-# INLINE mkReductionKi #-}
 
@@ -39,15 +40,15 @@ instance Outputable Reduction where
     , text "reductionReducedKind:" <+> ppr (reductionReducedKind redn)
     , text "reductionKindCoercion:" <+> ppr (reductionKindCoercion redn) ]
 
-reductionOriginalKind :: Reduction -> MonoKind KiVar
+reductionOriginalKind :: Reduction -> AnyMonoKind
 reductionOriginalKind = kicoercionLKind . reductionKindCoercion
 {-# INLINE reductionOriginalKind #-}
 
-mkTransRedn :: KindCoercion KiVar -> Reduction -> Reduction
+mkTransRedn :: AnyKindCoercion -> Reduction -> Reduction
 mkTransRedn co1 redn@(ReductionKi co2 _) = redn { reductionKindCoercion = co1 `mkTransKiCo` co2 }
 {-# INLINE mkTransRedn #-}
 
-mkReflRednKi :: MonoKind KiVar -> Reduction
+mkReflRednKi :: AnyMonoKind -> Reduction
 mkReflRednKi ki = mkReductionKi (mkReflKiCo ki) ki
 
 mkFunKiRedn :: FunKiFlag -> Reduction -> Reduction -> Reduction
@@ -55,7 +56,7 @@ mkFunKiRedn af (ReductionKi arg_co arg_ki) (ReductionKi res_co res_ki)
   = mkReductionKi (mkFunKiCo af arg_co res_co) (mkFunKi af arg_ki res_ki)
 {-# INLINE mkFunKiRedn #-}
 
-data Reductions = Reductions [KindCoercion KiVar] [MonoKind KiVar]
+data Reductions = Reductions [AnyKindCoercion] [AnyMonoKind]
 
 mkKiConAppRedn :: KiCon -> Reductions -> Reduction
 mkKiConAppRedn kc (Reductions cos kis) = mkReductionKi (mkKiConAppCo kc cos) (mkKiConApp kc kis)

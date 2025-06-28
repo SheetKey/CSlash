@@ -117,7 +117,7 @@ instance Outputable MetaInfo where
 vanillaSkolemVarUnk :: HasDebugCallStack => TcVarDetails tk
 vanillaSkolemVarUnk = SkolemVar unkSkol topTcLevel
 
-data ConcreteKvOrigin
+-- data ConcreteKvOrigin
 
 {- *********************************************************************
 *                                                                      *
@@ -275,26 +275,26 @@ isAmbiguousVar v = case tcVarDetails v of
   MetaVar {} -> True
   _ -> False
 
-isConcreteVar_maybe :: TcVar v => v -> Maybe ConcreteKvOrigin
-isConcreteVar_maybe kv 
-  | MetaVar { mv_info = info } <- tcVarDetails kv
-  = case info of
-      VarVar -> Nothing
-      TauVar -> Nothing
-  | otherwise
-  = Nothing
+-- isConcreteVar_maybe :: TcVar v => v -> Maybe ConcreteKvOrigin
+-- isConcreteVar_maybe kv 
+--   | MetaVar { mv_info = info } <- tcVarDetails kv
+--   = case info of
+--       VarVar -> Nothing
+--       TauVar -> Nothing
+--   | otherwise
+--   = Nothing
 
-isConcreteKiVarKi_maybe :: AnyMonoKind -> Maybe (TcKiVar, ConcreteKvOrigin)
-isConcreteKiVarKi_maybe (KiVarKi kv)
-  = handleAnyKv (const Nothing) (\kv -> (kv, ) <$> isConcreteVar_maybe kv) kv
-isConcreteKiVarKi_maybe _ = Nothing
+-- isConcreteKiVarKi_maybe :: AnyMonoKind -> Maybe (TcKiVar, ConcreteKvOrigin)
+-- isConcreteKiVarKi_maybe (KiVarKi kv)
+--   = handleAnyKv (const Nothing) (\kv -> (kv, ) <$> isConcreteVar_maybe kv) kv
+-- isConcreteKiVarKi_maybe _ = Nothing
 
-isConcreteInfo :: MetaInfo -> Bool
-isConcreteInfo VarVar = False
-isConcreteInfo TauVar = False
+-- isConcreteInfo :: MetaInfo -> Bool
+-- isConcreteInfo VarVar = False
+-- isConcreteInfo TauVar = False
 
-isConcreteVar :: TcVar v => v -> Bool
-isConcreteVar = isJust . isConcreteVar_maybe
+-- isConcreteVar :: TcVar v => v -> Bool
+-- isConcreteVar = isJust . isConcreteVar_maybe
 
 isTouchableInfo :: MetaInfo -> Bool
 isTouchableInfo _info = True

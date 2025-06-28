@@ -166,7 +166,7 @@ tc_cs_type rn_ty@(CsSumTy _ cs_tys) exp_kind = do
   let arity = length cs_tys
   arg_kinds <- mapM (\_ -> newOpenTypeKind) cs_tys
   tau_tys <- zipWithM tc_lcs_type cs_tys (asAnyKi <$> arg_kinds)
-  let sum_ty = mkTyConApp (asAnyTy $ sumTyCon arity) tau_tys
+  let sum_ty = mkTyConApp (asAnyTyKi $ sumTyCon arity) tau_tys
       sum_kind = panic "sum_kind"
   checkExpectedKind rn_ty sum_ty sum_kind exp_kind
 
@@ -225,7 +225,7 @@ tc_arrow _ = panic "tc_arrow"
 tc_tuple :: CsType Rn -> AnyMonoKind -> TcM AnyType
 tc_tuple rn_ty@(CsTupleTy _ tup_args) exp_kind = do
   let arity = length tup_args
-      tup_tycon = asAnyTy $ tupleTyCon arity
+      tup_tycon = asAnyTyKi $ tupleTyCon arity
   (ty, res_kind) <- inst_tuple_tycon tup_tycon tup_args
   checkExpectedKind rn_ty ty res_kind exp_kind
 tc_tuple _ _ = panic "tc_tuple/unreachable"
@@ -275,7 +275,7 @@ inst_tuple_tycon tup_tycon tup_args = do
                  $ vcat [ ppr fun, ppr subst, ppr fun_ki, ppr all_args ]
       (theta, inner_ki) -> do
         let inst_theta = substMonoKis subst theta
-        evTys <- instCallKiConstraints TupleTyOrigin inst_theta
+        evTys <- (asAnyTy <$>) <$> instCallKiConstraints TupleTyOrigin inst_theta
         go_mono n (mkAppTys fun evTys) subst inner_ki all_args
 
     go_mono
@@ -365,7 +365,7 @@ tcInferTyApps_nosat orig_cs_ty fun orig_cs_args = do
       (theta, inner_ki) -> do
         let inst_theta = substMonoKis subst theta
             orig = lCsTyCtOrigin orig_cs_ty
-        evTys <- instCallKiConstraints orig inst_theta
+        evTys <- (asAnyTy <$>) <$> instCallKiConstraints orig inst_theta
         go_mono n (mkAppTys fun evTys) subst inner_ki all_args
 
     go_mono

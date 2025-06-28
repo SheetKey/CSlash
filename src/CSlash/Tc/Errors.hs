@@ -126,11 +126,11 @@ report_unsolved type_errors expr_holes out_of_scope_holes binds_var wanted
        wanted <- liftZonkM $ zonkWC wanted
        
        let free_kvs = varsOfWCList wanted
-           tidy_env = panic "tidyFreeKiVars emptyTidyEnv free_kvs"
+           tidy_env = tidyFreeKiVars emptyTidyEnv free_kvs
 
        traceTc "reportUnsolved (after zonking):"
          $ vcat [ text "Free kivars:" <+> ppr free_kvs
-                , text "Tidy env:" <+> panic "ppr tidy_env"
+                , text "Tidy env:" <+> ppr tidy_env
                 , text "Wanted:" <+> ppr wanted ]
 
        warn_redundant <- woptM Opt_WarnRedundantConstraints
@@ -571,10 +571,10 @@ mkKiVarEqErr' ctxt item kv1 ki2
         mismatch_msg = mkMismatchMsg item ki1 ki2
 
         mb_concrete_reason
-          | Just frr_orig <- panic "isConcreteVar_maybe kv1"
-          = panic "mkKiVarEqErr'/concrete ki var"
-          | Just (kv2, frr_orig) <- isConcreteKiVarKi_maybe ki2
-          = panic "mkKiVarEqErr'/concrete kivarki"
+          -- | Just frr_orig <- panic "isConcreteVar_maybe kv1"
+          -- = panic "mkKiVarEqErr'/concrete ki var"
+          -- | Just (kv2, frr_orig) <- isConcreteKiVarKi_maybe ki2
+          -- = panic "mkKiVarEqErr'/concrete kivarki"
           | otherwise
           = Nothing
 

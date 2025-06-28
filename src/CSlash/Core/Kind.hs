@@ -360,6 +360,9 @@ data KindCoercionHole kv = CoercionHole
   , ch_ref :: IORef (Maybe (KindCoercion kv))
   }
 
+instance AsAnyKi KindCoercion
+instance AsAnyKi KindCoercionHole
+
 instance Data.Typeable kv => Data.Data (KindCoercionHole kv)
 
 coHoleCoVar :: KindCoercionHole kv -> KiCoVar kv

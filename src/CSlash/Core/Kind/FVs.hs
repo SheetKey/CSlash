@@ -181,11 +181,20 @@ coVarsOfKiCo :: IsVar kv => KindCoercion kv -> MkVarSet (KiCoVar kv)
 coVarsOfKiCo co = runCoVars (deep_kcv_co co)
 
 deep_kcv_mki :: IsVar kv => MonoKind kv -> Endo (MkVarSet (KiCoVar kv))
+deep_kcv_mki = case foldMonoKiCo deepKiCoVarFolder emptyVarSet of
+  (f, _, _, _) -> f
+
 deep_kcv_mkis :: IsVar kv => [MonoKind kv] -> Endo (MkVarSet (KiCoVar kv))
+deep_kcv_mkis = case foldMonoKiCo deepKiCoVarFolder emptyVarSet of
+  (_, f, _, _) -> f
+
 deep_kcv_co :: IsVar kv => KindCoercion kv -> Endo (MkVarSet (KiCoVar kv))
-deep_kcv_cos :: IsVar kv => [KindCoerion kv] -> Endo (MkVarSet (KiCoVar kv))
-(deep_kcv_mki, deep_kcv_mkis, deep_kcv_co, deep_kcv_cos)
-  = foldMonoKiCo deepKiCoVarFolder emptyVarSet
+deep_kcv_co = case foldMonoKiCo deepKiCoVarFolder emptyVarSet of
+  (_, _, f, _) -> f
+
+deep_kcv_cos :: IsVar kv => [KindCoercion kv] -> Endo (MkVarSet (KiCoVar kv))
+deep_kcv_cos = case foldMonoKiCo deepKiCoVarFolder emptyVarSet of
+  (_, _, _, f) -> f
 
 deepKiCoVarFolder
   :: IsVar kv

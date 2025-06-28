@@ -97,10 +97,10 @@ try_inert_rels inerts rel_w@(RelCt { rl_ev = ev_w, rl_kc = kc, rl_ki1 = ki1, rl_
          then stopWith ev_w "interactRel/solved from rel"
          else case solveOneFromTheOther (CRelCan rel_i) (CRelCan rel_w) of
                 KeepInert -> do traceTcS "lookupInertRel:KeepInert" (ppr rel_w)
-                                setKiEvBindIfWanted ev_w True (panic "ctEvType ev_i")
+                                setKiEvBindIfWanted ev_w True (ctEvType ev_i)
                                 return $ Stop ev_w (text "Rel equal" <+> ppr rel_w)
                 KeepWork -> do traceTcS "lookupInertRel:KeepWork" (ppr rel_w)
-                               setKiEvBindIfWanted ev_i True (panic "ctEvType ev_w")
+                               setKiEvBindIfWanted ev_i True (ctEvType ev_w)
                                updInertCans (updRels $ delRel rel_w)
                                continueWith ()
   | otherwise
@@ -136,8 +136,8 @@ shortCutSolver dflags ev_w ev_i
                let rel_ct = RelCt { rl_ev = ev, rl_kc = rl, rl_ki1 = k1, rl_ki2 = k2 }
                    solved_rels' = addSolvedRel rel_ct solved_rels
                traceTcS "shortCutSolver: found instnace" empty
-               loc' <- panic "checkInstanceOK (ctEvLoc ev) what pred"
-               panic "checkReductionDepth loc' pred"
+               loc' <- checkInstanceOK (ctEvLoc ev) what pred
+               checkReductionDepth loc' pred
                return $ Just solved_rels'
              _ -> return Nothing
       | otherwise
@@ -159,7 +159,7 @@ try_instances inerts work_item@(RelCt { rl_ev = ev, rl_kc = kc, rl_ki1 = ki1, rl
   | isGiven ev
   = continueWith ()
   | Just solved_ev <- lookupSolvedRel inerts rel_loc kc ki1 ki2
-  = do panic "setEvBindIfWanted ev True (ctEvTerm solved_ev)"
+  = do setKiEvBindIfWanted ev True (ctEvType solved_ev)
        stopWith ev "Rel/Top (cached)"
   | otherwise
   = do dflags <- getDynFlags
@@ -176,17 +176,17 @@ chooseInstance :: CtEvidence -> RelInstResult -> TcS (StopOrContinue a)
 chooseInstance work_item (OneInst { rir_what = what
                                   , rir_canonical = canonical })
   = do traceTcS "doTopReact/found instance for " $ ppr work_item
-       deeper_loc <- panic "checkInstanceOK loc what pred"
-       panic "checkReductionDepth deeper_loc pred"
+       deeper_loc <- checkInstanceOK loc what pred
+       checkReductionDepth deeper_loc pred
        assertPprM (getTcKiEvBindsVar >>= return . not . isKiCoEvBindsVar) (ppr work_item)
        stopWith work_item "Rel/Top (solved wanted)"
   where
     pred = ctEvPred work_item
     loc = ctEvLoc work_item
 
-chooseInstance work_item lookup_res = pprPanic "chooseInstance" (ppr work_item $$ panic "ppr lookup_res")
+chooseInstance work_item lookup_res = pprPanic "chooseInstance" (ppr work_item $$ ppr lookup_res)
 
-checkInstanceOK :: CtLoc -> InstanceWhat -> TcPredKind -> TcS CtLoc
+checkInstanceOK :: CtLoc -> InstanceWhat -> AnyPredKind -> TcS CtLoc
 checkInstanceOK loc what pred = return deeper_loc
   where
     deeper_loc = bumpCtLocDepth loc

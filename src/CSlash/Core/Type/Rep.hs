@@ -51,7 +51,28 @@ instance VarHasKind tv kv => Outputable (Type tv kv) where
   ppr = pprType
 
 instance AsAnyTy Type where
-  asAnyTy = panic "asAnyTy Type"
+  asAnyTy (TyVarTy tv) = TyVarTy (toAnyTyVar tv)
+  asAnyTy (AppTy t1 t2) = AppTy (asAnyTy t1) (asAnyTy t2)
+  asAnyTy (TyLamTy tv ty) = TyLamTy (toAnyTyVar tv) (asAnyTy ty)
+  asAnyTy (BigTyLamTy kv ty) = BigTyLamTy kv (asAnyTy ty)
+  asAnyTy (TyConApp tc tys) = TyConApp (asAnyTy tc) (asAnyTy <$> tys)
+  asAnyTy (ForAllTy (Bndr tv af) ty) = ForAllTy (Bndr (toAnyTyVar tv) af) (asAnyTy ty)
+  asAnyTy (FunTy k a r) = FunTy k (asAnyTy a) (asAnyTy r)
+  asAnyTy (CastTy ty co) = CastTy (asAnyTy ty) co
+  asAnyTy (Embed ki) = Embed ki
+  asAnyTy (KindCoercion co) = KindCoercion co
+
+  asAnyTyKi (TyVarTy tv) = TyVarTy (asAnyKi $ toAnyTyVar tv)
+  asAnyTyKi (AppTy t1 t2) = AppTy (asAnyTyKi t1) (asAnyTyKi t2)
+  asAnyTyKi (TyLamTy tv ty) = TyLamTy (asAnyKi $ toAnyTyVar tv) (asAnyTyKi ty)
+  asAnyTyKi (BigTyLamTy kv ty) = BigTyLamTy (toAnyKiVar kv) (asAnyTyKi ty)
+  asAnyTyKi (TyConApp tc tys) = TyConApp (asAnyTyKi tc) (asAnyTyKi <$> tys)
+  asAnyTyKi (ForAllTy (Bndr tv af) ty)
+    = ForAllTy (Bndr (asAnyKi $ toAnyTyVar tv) af) (asAnyTyKi ty)
+  asAnyTyKi (FunTy k a r) = FunTy (asAnyKi k) (asAnyTyKi a) (asAnyTyKi r)
+  asAnyTyKi (CastTy ty co) = CastTy (asAnyTyKi ty) (asAnyKi co)
+  asAnyTyKi (Embed ki) = Embed (asAnyKi ki)
+  asAnyTyKi (KindCoercion co) = KindCoercion (asAnyKi co)
 
 type KnotTied ty = ty
 
