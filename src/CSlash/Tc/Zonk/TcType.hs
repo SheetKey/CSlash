@@ -439,5 +439,5 @@ tidyCtEvidence env ctev = ctev { ctev_pred = tidyMonoKind env ki }
   where
     ki = ctev_pred ctev
 
-tidyKiEvVar :: AnyTidyEnv -> AnyKiEvVar AnyKiVar -> AnyKiEvVar AnyKiVar
+tidyKiEvVar :: AnyTidyEnv -> KiEvVar AnyKiVar -> KiEvVar AnyKiVar
 tidyKiEvVar env var = updateVarKind (tidyMonoKind env) var

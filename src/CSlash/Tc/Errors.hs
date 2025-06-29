@@ -1,3 +1,4 @@
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE MultiWayIf #-}
 
 module CSlash.Tc.Errors where
@@ -125,8 +126,8 @@ report_unsolved type_errors expr_holes out_of_scope_holes binds_var wanted
 
        wanted <- liftZonkM $ zonkWC wanted
        
-       let free_kvs = varsOfWCList wanted
-           tidy_env = tidyFreeKiVars emptyTidyEnv free_kvs
+       let free_kvs = snd $ varsOfWCList wanted
+           tidy_env = tidyFreeKiVars (emptyTidyEnv @(AnyTyVar AnyKiVar)) free_kvs
 
        traceTc "reportUnsolved (after zonking):"
          $ vcat [ text "Free kivars:" <+> ppr free_kvs
@@ -174,7 +175,7 @@ maybeSwitchOffDefer evb ctxt
   = ctxt
 
 reportImplic :: SolverReportErrCtxt -> Implication -> TcM ()
-reportImplic ctxt implic@(Implic { ic_skols = tvs
+reportImplic ctxt implic@(Implic { ic_skols = kvs
                                  , ic_given = given
                                  , ic_wanted = wanted
                                  , ic_binds = evb
@@ -184,25 +185,27 @@ reportImplic ctxt implic@(Implic { ic_skols = tvs
                                  , ic_tclvl = tc_lvl }) = do
   traceTc "reportImplic"
     $ vcat [ text "tidy env:" <+> ppr (cec_tidy ctxt)
-           , text "skols:" <+> ppr tvs
-           , text "tidy skols:" <+> panic "ppr tvs'" ]
+           , text "skols:" <+> ppr kvs
+           , text "tidy skols:" <+> ppr kvs' ]
 
-  when bad_telescope $ panic "reportBadTelescope ctxt ct_loc_ev info tvs"
+  when bad_telescope $ panic "reportBadTelescope ctxt ct_loc_env info kvs"
 
   reportWanteds ctxt' tc_lvl wanted
 
-  panic "warnRedundantConstraints ctxt' ct_loc_env info' dead_givens"
+  warnRedundantConstraints ctxt' ct_loc_env info' dead_givens
   where
     insoluble = isInsolubleStatus status
-    (env1, tvs') = panic "tidyKiVarBndrs (cec_tidy ctxt) $ tvs"
+    (env1, _kvs') = tidyKiVarBndrs (cec_tidy ctxt) $ toAnyKiVar <$> kvs
+    kvs' = let mkvs = toTcKiVar_maybe <$> _kvs'
+           in assert (all isJust mkvs) $ catMaybes mkvs
 
-    info' = panic "tidySkolemInfoAnon env1 info"
-    implic' = implic { ic_skols = tvs'
-                     , ic_given = panic "map (tidyKiEvVar env1) given"
+    info' = tidySkolemInfoAnon env1 info
+    implic' = implic { ic_skols = kvs'
+                     , ic_given = map (tidyKiEvVar env1) given
                      , ic_info = info' }
 
     ctxt1 = maybeSwitchOffDefer evb ctxt
-    ctxt' = ctxt1 { cec_tidy = panic "env1"
+    ctxt' = ctxt1 { cec_tidy = env1
                   , cec_encl = implic' : cec_encl ctxt
                   , cec_suppress = insoluble || cec_suppress ctxt
                   , cec_binds = evb  }
@@ -219,7 +222,7 @@ warnRedundantConstraints
   :: SolverReportErrCtxt
   -> CtLocEnv
   -> SkolemInfoAnon
-  -> [KiEvVar TcKiVar]
+  -> [KiEvVar AnyKiVar]
   -> TcM ()
 warnRedundantConstraints ctxt env info redundant_evs
   | not (cec_warn_redundant ctxt)
@@ -760,15 +763,15 @@ relevantBindings want_filtering ctxt item = do
 
   (env2, lcl_name_cache) <- liftZonkM $ zonkTidyTcLclEnvs env1 [lcl_env]
 
-  relev_bds <- panic "relevant_bindings want_filtering lcl_env lcl_name_cache ct_fvs"
+  relev_bds <- relevant_bindings want_filtering lcl_env lcl_name_cache ct_fvs
   let ctxt' = ctxt { cec_tidy = env2 }
   return (ctxt', relev_bds, item')
 
 relevant_bindings
   :: Bool
   -> CtLocEnv
-  -> NameEnv TcType
-  -> MkVarSet (KiCoVar TcKiVar)
+  -> NameEnv AnyType
+  -> MkVarSet AnyKiVar
   -> TcM RelevantBindings
 relevant_bindings want_filtering lcl_env lcl_name_env ct_kvs = do
   dflags <- getDynFlags

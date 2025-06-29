@@ -618,7 +618,7 @@ data ContextKind
 
 newExpectedKind :: ContextKind -> TcM AnyMonoKind
 newExpectedKind (TheMonoKind k) = return k
-newExpectedKind AnyMonoKind = panic "newMetaKindVar"
+newExpectedKind AnyMonoKind = asAnyKi <$> newMetaKindVar
 
 {- *********************************************************************
 *                                                                      *
