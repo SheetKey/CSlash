@@ -401,15 +401,15 @@ mkMinimalBy get_pred xs = go preds_with_eqx []
 *                                                                      *
 ********************************************************************* -}
 
-tcSplitForAllTyVarBinders :: AnyType -> ([AnyTyVarBinder], AnyType)
+tcSplitForAllTyVarBinders :: VarHasKind tv kv => Type tv kv -> ([ForAllBinder tv], Type tv kv)
 tcSplitForAllTyVarBinders ty = sty
   where sty = splitForAllForAllTyBinders ty
 
-tcSplitTyLamTyVarBinders :: AnyType -> ([AnyTyVar AnyKiVar], AnyType)
+tcSplitTyLamTyVarBinders :: VarHasKind tv kv => Type tv kv -> ([tv], Type tv kv)
 tcSplitTyLamTyVarBinders ty = sty
   where sty = splitTyLamTyBinders ty
 
-tcSplitBigLamTyVarBinders :: AnyType -> ([AnyKiVar], AnyType)
+tcSplitBigLamTyVarBinders :: VarHasKind tv kv => Type tv kv -> ([kv], Type tv kv)
 tcSplitBigLamTyVarBinders ty = sty
   where sty = splitBigLamTyBinders ty
 

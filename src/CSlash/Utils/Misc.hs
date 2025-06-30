@@ -14,3 +14,7 @@ foldr2 f c = go
     go [] [] = c
     go (a:as) (b:bs) = f a b (go as bs)
     go _ _ = panic "Util: foldr2"
+
+infixr 9 <.$>
+(<.$>) :: Functor m => (b -> c) -> (a -> m b) -> a -> m c
+(f <.$> g) a = f <$> g a

@@ -81,6 +81,9 @@ getHelpfulOccNameKi v
 -- tidyBigLamTyBinders tidy_env kvbs
 --   = mapAccumL tidyBigLamTyBinder (avoidNameClashes kvbs tidy_env) kvbs
 
+tidyFreeTyVars :: MkTidyEnv tv kv -> [tv] -> MkTidyEnv tv kv
+tidyFreeTyVars = panic "tidyFreeTyVars"
+
 tidyFreeKiVars :: ToTcKiVarMaybe kv => MkTidyEnv tv kv -> [kv] -> MkTidyEnv tv kv
 tidyFreeKiVars tidy_env vars = fst (tidyOpenKiVars tidy_env vars)
 

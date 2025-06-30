@@ -390,24 +390,33 @@ zonkSkolemInfoAnon skol_info = return skol_info
 tcInitTidyEnv :: ZonkM AnyTidyEnv
 tcInitTidyEnv = do
   ZonkGblEnv { zge_binder_stack = bndrs } <- getZonkGblEnv
-  panic "go emptyTidyEnv bndrs"
+  go emptyTidyEnv bndrs
   where
-    go (env, subst) [] = return (env, subst)
-    go (env, subst) (b : bs)
+    go :: AnyTidyEnv -> TcBinderStack -> ZonkM AnyTidyEnv
+    go (env, tsubst, ksubst) [] = return (env, tsubst, ksubst)
+    go (env, tsubst, ksubst) (b : bs)
       | TcTvBndr name tyvar <- b
       = do let (env', occ') = tidyOccName env (nameOccName name)
                name' = tidyNameOcc name occ'
                tyvar1 = setVarName tyvar name'
            tyvar2 <- zonkTcTyVarToTcTyVar tyvar1
-           go (env', extendVarEnv subst tyvar tyvar2) bs
+           go (env', extendVarEnv tsubst (toAnyTyVar tyvar) (toAnyTyVar tyvar2), ksubst) bs
+      | TcKvBndr name kivar <- b
+      = do let (env', occ') = tidyOccName env (nameOccName name)
+               name' = tidyNameOcc name occ'
+               kivar1 = setVarName kivar name'
+           kivar2 <- handleAnyKv (return . toAnyKiVar)
+                                 (toAnyKiVar <.$> zonkTcKiVarToTcKiVar) kivar1
+           go (env', tsubst, extendVarEnv ksubst kivar kivar2) bs
       | otherwise
-      = go (env, subst) bs
+      = go (env, tsubst, ksubst) bs
 
-tcInitOpenTidyEnv :: [AnyKiVar] -> ZonkM AnyTidyEnv
-tcInitOpenTidyEnv vs = do
+tcInitOpenTidyEnv :: ([AnyTyVar AnyKiVar], [AnyKiVar]) -> ZonkM AnyTidyEnv
+tcInitOpenTidyEnv (tvs, kvs) = do
   env1 <- tcInitTidyEnv
-  let env2 = tidyFreeKiVars env1 vs
-  return env2
+  let env2 = tidyFreeKiVars env1 kvs
+      env3 = tidyFreeTyVars env2 tvs
+  return env3
 
 zonkTidyTcMonoKind :: AnyTidyEnv -> AnyMonoKind -> ZonkM (AnyTidyEnv, AnyMonoKind)
 zonkTidyTcMonoKind env ki = do

@@ -548,8 +548,8 @@ checkValidTyCon' tc
   | otherwise
   = do traceTc "checkValidTyCon" (ppr tc)
        case synTyConRhs_maybe tc of
-         Just syn_rhs -> do panic "checkValidType syn_ctxt syn_rhs"
-                            panic "checkTySynRhs syn_ctxt syn_rhs"
+         Just syn_rhs -> do checkValidType syn_ctxt syn_rhs
+                            checkTySynRhs syn_ctxt syn_rhs
          Nothing -> pprPanic "checkValidTyCon'" (ppr tc)
   where
     syn_ctxt = TySynCtxt name
