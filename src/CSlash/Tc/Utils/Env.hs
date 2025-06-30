@@ -113,11 +113,11 @@ tcExtendGlobalEnvImplicit things thing_inside = do
   tcg_env' <- setGlobalTypeEnv tcg_env ge'
   setGblEnv tcg_env' thing_inside
 
-tcExtendTyConEnv :: [AnyTyCon] -> TcM r -> TcM r
+tcExtendTyConEnv :: [TyCon (TyVar KiVar) KiVar] -> TcM r -> TcM r
 tcExtendTyConEnv tycons thing_inside = do
   env <- getGblEnv
   let env' = env { tcg_tcs = tycons ++ tcg_tcs env }
-  panic "setGblEnv env' $ tcExtendGlobalEnvImplicit (map ATyCon tycons) thing_inside"
+  setGblEnv env' $ tcExtendGlobalEnvImplicit (map ATyCon tycons) thing_inside
 
 tcExtendRecEnv :: [(Name, WITyThing)] -> TcM r -> TcM r
 tcExtendRecEnv gbl_stuff thing_inside = do

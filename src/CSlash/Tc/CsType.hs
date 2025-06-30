@@ -120,7 +120,7 @@ tcTyGroup (TypeGroup { group_typeds = typeds, group_kisigs = kisigs }) = do
   traceTc "Done synonym cycle check" (ppr tys)
 
   traceTc "Starting validity check" (ppr tys)
-  tys <- panic "tcExtendTyConEnv tys"
+  tys <- tcExtendTyConEnv tys
          $ for tys
          $ \tycon -> checkValidTyCon tycon
   traceTc "Done validity check" (ppr tys)

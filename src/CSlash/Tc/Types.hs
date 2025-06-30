@@ -190,7 +190,7 @@ data TcGblEnv = TcGblEnv
   , tcg_tr_module :: Maybe (Id (AnyTyVar AnyKiVar) AnyKiVar)
   , tcg_binds :: LCsBinds Tc
   , tcg_sigs :: NameSet
-  , tcg_tcs :: [AnyTyCon]
+  , tcg_tcs :: [TyCon (TyVar KiVar) KiVar]
   , tcg_ksigs :: NameSet
   , tcg_hdr_info :: Maybe (XRec Rn ModuleName)
   , tcg_pc :: !AnyPcUsage
