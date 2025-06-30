@@ -15,12 +15,12 @@ import CSlash.Tc.Errors.Types
 -- import GHC.Tc.Validity( checkValidType )
 -- import GHC.Tc.Gen.Match
 -- import GHC.Tc.Utils.Unify( checkConstraints, tcSubTypeSigma )
--- import GHC.Tc.Zonk.Type
+import CSlash.Tc.Zonk.Type
 -- import GHC.Tc.Gen.Expr
 -- import GHC.Tc.Gen.App( tcInferSigma )
 import CSlash.Tc.Utils.Monad
 -- import GHC.Tc.Gen.Export
--- import GHC.Tc.Types.Evidence
+import CSlash.Tc.Types.Evidence
 import CSlash.Tc.Types.Constraint
 import CSlash.Tc.Types.Origin
 -- import GHC.Tc.Instance.Family
@@ -241,7 +241,7 @@ tcRnSrcDecls export_ies decls = do
   (tcg_env, tcl_env, lie) <- tc_rn_src_decls decls
 
   ------ Simplify constraints ---------
-  _ <- {-# SCC "simplifyTop" #-}
+  new_ki_ev_binds <- {-# SCC "simplifyTop" #-}
     restoreEnvs (tcg_env, tcl_env) $ do
       lie_main <- checkMainType tcg_env
       simplifyTop (lie `andWC` lie_main)
@@ -251,10 +251,11 @@ tcRnSrcDecls export_ies decls = do
   traceTc "Tc9" empty
   failIfErrsM
 
-  (id_env, binds') <- zonkTcGblEnv tcg_env
+  (id_env, ki_ev_binds', binds') <- zonkTcGblEnv new_ki_ev_binds tcg_env
 
   --------- Run finalizers --------------
   let init_tcg_env = tcg_env { tcg_binds = emptyBag
+                             , tcg_ki_ev_binds = emptyBag
                              , tcg_type_env = tcg_type_env tcg_env `plusTypeEnv` id_env }
 
   traceTc "Tc11" empty
@@ -263,24 +264,29 @@ tcRnSrcDecls export_ies decls = do
   tcg_env <- restoreEnvs (tcg_env, tcl_env) $ panic "rnExports export_ies"
 
   --------- Emit the ':Main.main = runMainIO main' declaration ----------
-  tcg_env <- restoreEnvs (tcg_env, tcl_env) $ do
+  (tcg_env, main_ki_ev_binds) <- restoreEnvs (tcg_env, tcl_env) $ do
     (tcg_env, lie) <- captureTopConstraints $ checkMain export_ies
-    simplifyTop lie
-    return tcg_env
+    ki_ev_binds <- simplifyTop lie
+    return (tcg_env, ki_ev_binds)
 
   failIfErrsM
 
   ---------- Final zonking ---------------
-  (id_env_mf, binds_mf) <- zonkTcGblEnv tcg_env
+  (id_env_mf, ki_ev_binds_mf, binds_mf) <- zonkTcGblEnv main_ki_ev_binds tcg_env
 
   let !final_type_env = tcg_type_env tcg_env `plusTypeEnv` id_env_mf
-      tcg_env' = tcg_env { tcg_binds =  binds' `unionBags` binds_mf }
+      tcg_env' = tcg_env { tcg_binds =  binds' `unionBags` binds_mf
+                         , tcg_ki_ev_binds = ki_ev_binds' `unionBags` ki_ev_binds_mf }
 
   panic "setGlobalTypeEnv tcg_env' final_type_env"
 
-zonkTcGblEnv :: TcGblEnv -> TcM (TypeEnv, LCsBinds Tc)
-zonkTcGblEnv tcg_env@(TcGblEnv { tcg_binds = binds }) = {-# SCC zonkTopDecls #-}
-  setGblEnv tcg_env $ panic "zonkTopDecls binds"
+zonkTcGblEnv :: Bag KiEvBind -> TcGblEnv -> TcM (TypeEnv, Bag KiEvBind, LCsBinds Tc)
+zonkTcGblEnv ki_ev_binds tcg_env@(TcGblEnv { tcg_binds = binds
+                                           , tcg_ki_ev_binds = cur_ki_ev_binds })
+  = {-# SCC zonkTopDecls #-}
+  setGblEnv tcg_env $
+  let all_ki_ev_binds = cur_ki_ev_binds `unionBags` ki_ev_binds
+  in zonkTopDecls all_ki_ev_binds binds
 
 tc_rn_src_decls :: [LCsDecl Ps] -> TcM (TcGblEnv, TcLclEnv, WantedConstraints)
 tc_rn_src_decls ds = {-# SCC "tc_rn_src_decls" #-} do

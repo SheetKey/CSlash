@@ -25,7 +25,7 @@ import CSlash.Cs
 
 import CSlash.Tc.Utils.TcType
 import CSlash.Tc.Types.Constraint
--- import GHC.Tc.Types.Evidence
+import CSlash.Tc.Types.Evidence
 -- import GHC.Tc.Types.TH
 import CSlash.Tc.Types.TcRef
 import CSlash.Tc.Types.LclEnv
@@ -186,7 +186,7 @@ data TcGblEnv = TcGblEnv
   , tcg_rn_exports :: Maybe [(LIE Rn, Avails)]
   , tcg_rn_imports :: [LImportDecl Rn]
   , tcg_rn_decls :: Maybe (CsGroup Rn)
-  -- , tcg_ev_binds :: Bag EvBind
+  , tcg_ki_ev_binds :: Bag KiEvBind
   , tcg_tr_module :: Maybe (Id (AnyTyVar AnyKiVar) AnyKiVar)
   , tcg_binds :: LCsBinds Tc
   , tcg_sigs :: NameSet
