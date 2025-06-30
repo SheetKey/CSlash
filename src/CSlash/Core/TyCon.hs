@@ -113,7 +113,8 @@ type AnyTyCon = TyCon (AnyTyVar AnyKiVar) AnyKiVar
 data TyCon tv kv = TyCon
   { tyConUnique :: !Unique
   , tyConName :: !Name
-  , tyConKind :: Kind kv
+  , tyConKind :: Kind kv -- should probably push this down to TyConDetails
+                         -- 'kv' only really matters in a TcTyCon, otherwise its a 'KiVar'
   , tyConArity :: Arity
   , tyConNullaryTy :: Type tv kv
   , tyConDetails :: !(TyConDetails)

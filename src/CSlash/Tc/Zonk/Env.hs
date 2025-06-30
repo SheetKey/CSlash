@@ -30,7 +30,7 @@ data ZonkEnv = ZonkEnv
   , ze_kv_env :: MkVarEnv KiVar KiVar
   , ze_id_env :: MkVarEnv (Id (AnyTyVar AnyKiVar) AnyKiVar) (Id (AnyTyVar AnyKiVar) AnyKiVar)
   , ze_meta_tv_env :: IORef (MkVarEnv (TcTyVar AnyKiVar) (Type (TyVar KiVar) KiVar))
-  , ze_meta_kv_env :: IORef (MkVarEnv KiVar (MonoKind KiVar))
+  , ze_meta_kv_env :: IORef (MkVarEnv TcKiVar (MonoKind KiVar))
   }
 
 data ZonkFlexi
