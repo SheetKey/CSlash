@@ -585,8 +585,6 @@ kcDeclHeader
   -> TcM MonoAnyTyCon
 kcDeclHeader InitialKindInfer = kcInferDeclHeader
 
--- Note: arity is not the number of args the TyCon can accept,
--- it is the number of args the TyCon accepts before its kind is the result kind
 kcInferDeclHeader
   :: Name
   -> TyConFlavor
@@ -594,10 +592,11 @@ kcInferDeclHeader
   -> TcM ContextKind
   -> TcM MonoAnyTyCon
 kcInferDeclHeader name flav kv_ns kc_res_ki = addTyConFlavCtxt name flav $ do
-  (scoped_kvs, res_kind) <- bindImplicitKBndrs_Q_Kv kv_ns
+  skol_info <- mkSkolemInfo (TyConSkol flav name)
+  (scoped_kvs, res_kind) <- bindImplicitKBndrs_Q_Skol skol_info kv_ns
                             $ newExpectedKind =<< kc_res_ki
 
-  let kv_pairs = mkVarNamePairs (toAnyKiVar <$> scoped_kvs)
+  let kv_pairs = mkVarNamePairs scoped_kvs
       arity = length $ fst $ splitFunKis res_kind
       tycon = mkTcTyCon name (Mono res_kind) arity kv_pairs False flav
   
@@ -858,6 +857,11 @@ bindTyConKiVars tycon_name thing_inside = do
 bindImplicitKBndrs_Q_Kv :: [Name] -> TcM a -> TcM ([TcKiVar], a)
 bindImplicitKBndrs_Q_Kv = bindImplicitKBndrsX (smVanilla { sm_clone = False
                                                          , sm_var = SMDVarVar })
+
+bindImplicitKBndrs_Q_Skol :: SkolemInfo -> [Name] -> TcM a -> TcM ([TcKiVar], a)
+bindImplicitKBndrs_Q_Skol skol_info
+  = bindImplicitKBndrsX (smVanilla { sm_clone = False
+                                   , sm_var = SMDSkolemVar skol_info })
 
 bindImplicitKBndrsX :: SkolemMode -> [Name] -> TcM a -> TcM ([TcKiVar], a)
 bindImplicitKBndrsX skol_mode kv_names thing_inside = do

@@ -25,7 +25,8 @@ import CSlash.Tc.Zonk.Env
 import CSlash.Tc.Zonk.TcType
        ( tcInitTidyEnv{-, tcInitOpenTidyEnv -}
        , writeMetaTyVarRef
-       , writeMetaKiVarRef )
+       , writeMetaKiVarRef
+       , checkKiCoercionHole )
 
 import CSlash.Core.Type
 import CSlash.Core.Kind
@@ -64,12 +65,17 @@ type ZonkTcM = ZonkT TcM
 type ZonkBndrTcM = ZonkBndrT TcM
 
 {-# INLINE zonkTyBndrX #-}
-zonkTyBndrX :: TcTyVar TcKiVar -> ZonkBndrTcM (TyVar KiVar)
-zonkTyBndrX tv = assertPpr (isImmutableVar tv) (ppr tv) $ do
-  ki <- noBinders $ zonkTcMonoKindToMonoKindX (varKind tv)
-  let tv' = mkTyVar (varName tv) ki
-  panic "extendTyZonkEnv tv'"
-  return tv'
+zonkTyBndrX :: AnyTyVar AnyKiVar -> ZonkBndrTcM (TyVar KiVar)
+zonkTyBndrX tv = handleAnyTv
+                 (\_ -> res)
+                 (\tctv -> assertPpr (isImmutableVar tctv) (ppr tctv) res)
+                 tv
+  where
+    res = do
+      ki <- noBinders $ zonkTcMonoKindToMonoKindX (varKind tv)
+      let tv' = mkTyVar (varName tv) ki
+      extendTyZonkEnv tv'
+      return tv'
 
 {-# INLINE zonkKiBndrX #-}
 zonkKiBndrX :: AnyKiVar -> ZonkBndrTcM KiVar
@@ -80,7 +86,7 @@ zonkKiBndrX kv = handleAnyKv
   where
     res = do
       let kv' = mkKiVar (varName kv)
-      panic "extendKiZonkEnv kv'"
+      extendKiZonkEnv kv'
       return kv'
 
 {-# INLINE zonkKiVarBindersX #-}
@@ -91,69 +97,79 @@ zonkKiVarBindersX = traverse zonkKiVarBinderX
 zonkKiVarBinderX :: AnyKiVar -> ZonkBndrTcM KiVar
 zonkKiVarBinderX kv = zonkKiBndrX kv
 
-zonkTyVarOcc :: HasDebugCallStack => TcTyVar TcKiVar -> ZonkTcM (Type (TyVar KiVar) KiVar)
-zonkTyVarOcc tv = do
-  ZonkEnv { ze_tv_env = tv_env } <- getZonkEnv
-  let lookup_in_tv_env = panic "lookup_in_tv_env"
-        -- case lookupVarEnv tv_env tv of
-        --                    Nothing -> mkTyVarTy <$> updateVarKindM zonkTcMonoKindToMonoKindX tv
-        --                    Just tv' -> return $ mkTyVarTy tv'
+zonkTyVarOcc :: HasDebugCallStack => AnyTyVar AnyKiVar -> ZonkTcM (Type (TyVar KiVar) KiVar)
+zonkTyVarOcc = handleAnyTv f_any f_tc
+  where
+    f_tc tv = do
+      ZonkEnv { ze_tv_env = tv_env } <- getZonkEnv
+      let lookup_in_tv_env :: ZonkTcM (Type (TyVar KiVar) KiVar)
+          lookup_in_tv_env = case lookupVarEnv_Directly tv_env (varUnique tv) of
+            Nothing -> panic "zonkTyVarOcc bad skolem"
+              -- mkTyVarTy <$> updateVarKindM zonkTcMonoKindToMonoKindX tv
+            Just tv' -> return $ mkTyVarTy tv'
+      
+          finish_meta :: Type (TyVar KiVar) KiVar -> ZonkTcM (Type (TyVar KiVar) KiVar)
+          finish_meta ty = do
+            extendMetaTvEnv tv ty
+            return ty
+      
+          zonk_meta
+            :: TcRef (MetaDetails (AnyType))
+            -> MetaDetails (AnyType)
+            -> ZonkTcM (Type (TyVar KiVar) KiVar)
+            
+          zonk_meta ref Flexi = do
+            kind <- zonkTcMonoKindToMonoKindX (varKind tv)
+            ty <- commitFlexiTv tv kind
+            -- Not necessary to write, since we are adding to the ZonkEnv
+            -- (also we can't write a Type to a ref of AnyType)
+            -- lift $ liftZonkM $ writeMetaTyVarRef tv ref ty
+            finish_meta ty
+      
+          zonk_meta _ (Indirect ty) = do
+            zty <- zonkTcTypeToTypeX ty
+            finish_meta zty
 
-      finish_meta ty = do
-        extendMetaTvEnv tv ty
-        return ty
+      case tcVarDetails tv of
+        SkolemVar {} -> lookup_in_tv_env
+        MetaVar { mv_ref = ref } -> do
+          mb_ty <- lookupMetaTv tv
+          case mb_ty of
+            Just ty -> return ty
+            Nothing -> do mtv_details <- readTcRef ref
+                          zonk_meta ref mtv_details
 
-      zonk_meta ref Flexi = do
-        kind <- zonkTcMonoKindToMonoKindX (varKind tv)
-        ty <- commitFlexiTv tv kind
-        lift $ liftZonkM $ panic "writeMetaTyVarRef tv ref ty"
-        finish_meta ty
+    f_any tv = mkTyVarTy <$> updateVarKindM zonkTcMonoKindToMonoKindX tv
 
-      zonk_meta _ (Indirect ty) = do
-        zty <- zonkTcTypeToTypeX ty
-        finish_meta zty
-
-  if True {-isTcTyVar tv-}
-    then case tcVarDetails tv of
-           SkolemVar {} -> lookup_in_tv_env
-           MetaVar { mv_ref = ref } -> do
-             mb_ty <- lookupMetaTv tv
-             case mb_ty of
-               Just ty -> return ty
-               Nothing -> do mtv_details <- panic "readTcRef ref"
-                             zonk_meta ref mtv_details
-    else lookup_in_tv_env
-
-extendMetaTvEnv :: TcTyVar TcKiVar -> Type (TyVar KiVar) KiVar -> ZonkTcM ()
+extendMetaTvEnv :: TcTyVar AnyKiVar -> Type (TyVar KiVar) KiVar -> ZonkTcM ()
 extendMetaTvEnv tv ty = ZonkT $ \ (ZonkEnv { ze_meta_tv_env = mtv_env_ref }) ->
   updTcRef mtv_env_ref (\env -> panic "extendVarEnv env tv ty")
 
-lookupMetaTv :: TcTyVar TcKiVar -> ZonkTcM (Maybe (Type (TyVar KiVar) KiVar))
+lookupMetaTv :: TcTyVar AnyKiVar -> ZonkTcM (Maybe (Type (TyVar KiVar) KiVar))
 lookupMetaTv tv = ZonkT $ \ (ZonkEnv { ze_meta_tv_env = mtv_env_ref }) -> do
   mtv_env <- readTcRef mtv_env_ref
   return $ panic "lookupVarEnv mtv_env tv"
 
-commitFlexiTv :: TcTyVar TcKiVar -> MonoKind KiVar -> ZonkTcM (Type (TyVar KiVar) KiVar)
+commitFlexiTv :: TcTyVar AnyKiVar -> MonoKind KiVar -> ZonkTcM (Type (TyVar KiVar) KiVar)
 commitFlexiTv tv zonked_kind = do
   flexi <- ze_flexi <$> getZonkEnv
   lift $ case flexi of
     NoFlexi -> pprPanic "NoFlexi" (ppr tv <+> colon <+> ppr zonked_kind) 
 
-zonk_typemapper :: TypeMapper (TcTyVar TcKiVar) TcKiVar (TyVar KiVar) KiVar ZonkEnv TcM
-zonk_typemapper = panic "zonk_typemapper"
-  -- TypeMapper
-  -- { tcm_tyvar = \env tv -> runZonkT (zonkTyVarOcc tv) env
-  -- , tcm_tybinder = \env tv _ k -> flip runZonkT env $ runZonkBndrT (zonkTyBndrX tv)
-  --                                 $ \tv' -> ZonkT $ \env' -> (k env' tv')
-  -- , tcm_tylambinder = \env tv k -> flip runZonkT env $ runZonkBndrT (zonkTyBndrX tv)
-  --                                  $ \tv' -> ZonkT $ \env' -> (k env' tv')
-  -- , tcm_tylamkibinder = \env kv k -> flip runZonkT env $ runZonkBndrT (zonkKiBndrX kv)
-  --                                    $ \kv' -> ZonkT $ \env' -> (k env' kv')
-  -- , tcm_tycon = \tc -> zonkTcTyConToTyCon tc
-  -- , tcm_embed_mono_ki = \env ki -> runZonkT (zonkTcMonoKindToMonoKindX ki) env
-  -- }
+zonk_typemapper :: TypeMapper (AnyTyVar AnyKiVar) AnyKiVar (TyVar KiVar) KiVar ZonkEnv TcM
+zonk_typemapper = TypeMapper
+  { tm_tyvar = \env tv -> runZonkT (zonkTyVarOcc tv) env
+  , tm_tybinder = \env tv _ k -> flip runZonkT env $ runZonkBndrT (zonkTyBndrX tv)
+                                 $ \tv' -> ZonkT $ \env' -> (k env' tv')
+  , tm_tylambinder = \env tv k -> flip runZonkT env $ runZonkBndrT (zonkTyBndrX tv)
+                                  $ \tv' -> ZonkT $ \env' -> (k env' tv')
+  , tm_tylamkibinder = \env kv k -> flip runZonkT env $ runZonkBndrT (zonkKiBndrX kv)
+                                    $ \kv' -> ZonkT $ \env' -> (k env' kv')
+  , tm_tycon = \tc -> zonkTcTyConToTyCon tc
+  , tm_mkcm = zonk_mkindmapper
+  }
 
-zonkTcTyConToTyCon :: TcTyCon -> TcM (TyCon (TyVar KiVar) KiVar)
+zonkTcTyConToTyCon :: AnyTyCon -> TcM (TyCon (TyVar KiVar) KiVar)
 zonkTcTyConToTyCon tc
   | isTcTyCon tc = do
       thing <- tcLookupGlobalOnly (getName tc)
@@ -162,42 +178,52 @@ zonkTcTyConToTyCon tc
         _ -> pprPanic "zonkTcTyCon" (ppr tc $$ ppr thing)
   | otherwise = panic "return tc"
 
-zonkTcTypeToTypeX :: TcType -> ZonkTcM (Type (TyVar KiVar) KiVar)
-zonkTcTypesToTypesX :: [TcType] -> ZonkTcM [Type (TyVar KiVar) KiVar]
+zonkTcTypeToTypeX :: AnyType -> ZonkTcM (Type (TyVar KiVar) KiVar)
+zonkTcTypesToTypesX :: [AnyType] -> ZonkTcM [Type (TyVar KiVar) KiVar]
 (zonkTcTypeToTypeX, zonkTcTypesToTypesX) = case mapTypeX zonk_typemapper of
-  (zty, ztys) -> panic "(ZonkT . flip zty, ZonkT . flip ztys)"
+  (zty, ztys) -> (ZonkT . flip zty, ZonkT . flip ztys)
 
-zonkKiVarOcc :: HasDebugCallStack => TcKiVar -> ZonkTcM (MonoKind KiVar)
-zonkKiVarOcc kv = do
-  ZonkEnv { ze_kv_env = kv_env } <- getZonkEnv
-  let lookup_in_kv_env = panic "lookup_in_kv_env"
-        -- case lookupVarEnv kv_env kv of
-        --                    Nothing -> return $ mkKiVarKi kv
-        --                    Just kv' -> return $ mkKiVarKi kv'
+zonkKiVarOcc :: HasDebugCallStack => AnyKiVar -> ZonkTcM (MonoKind KiVar)
+zonkKiVarOcc = handleAnyKv f_any f_tc
+  where
+    f_tc kv = do
+      ZonkEnv { ze_kv_env = kv_env } <- getZonkEnv
+      let lookup_in_kv_env :: ZonkTcM (MonoKind KiVar)
+          lookup_in_kv_env = case lookupVarEnv_Directly kv_env (varUnique kv) of
+            Nothing -> panic "zonkKiVarOcc bad skolem"
+              -- return $ mkKiVarKi kv
+            Just kv' -> return $ mkKiVarKi kv'
+      
+          finish_meta :: MonoKind KiVar -> ZonkTcM (MonoKind KiVar)
+          finish_meta ki = do
+            extendMetaKvEnv kv ki
+            return ki
+      
+          zonk_meta
+            :: TcRef (MetaDetails (AnyMonoKind))
+            -> MetaDetails (AnyMonoKind)
+            -> ZonkTcM (MonoKind KiVar)
+          zonk_meta ref Flexi = do
+            ki <- commitFlexiKv kv
+            -- Not necessary to write, since we are adding to the ZonkEnv
+            -- (also we can't write a MonoKind to a ref of AnyMonoKind)
+            -- lift $ liftZonkM $ writeMetaKiVarRef kv ref ki
+            finish_meta ki
+      
+          zonk_meta _ (Indirect ki) = do
+            zki <- zonkTcMonoKindToMonoKindX ki
+            finish_meta zki
+      
+      case tcVarDetails kv of
+        SkolemVar {} -> lookup_in_kv_env
+        MetaVar { mv_ref = ref } -> do
+          mb_ki <- lookupMetaKv kv
+          case mb_ki of
+            Just ki -> return ki
+            Nothing -> do mkv_details <- readTcRef ref
+                          zonk_meta ref mkv_details
 
-      finish_meta ki = do
-        extendMetaKvEnv kv ki
-        return ki
-
-      zonk_meta ref Flexi = do
-        ki <- commitFlexiKv kv
-        lift $ liftZonkM $ panic "writeMetaKiVarRef kv ref ki"
-        finish_meta ki
-
-      zonk_meta _ (Indirect ki) = do
-        zki <- zonkTcMonoKindToMonoKindX ki
-        finish_meta zki
-
-  if True {-isTcKiVar kv-}
-    then case tcVarDetails kv of
-           SkolemVar {} -> lookup_in_kv_env
-           MetaVar { mv_ref = ref } -> do
-             mb_ki <- lookupMetaKv kv
-             case mb_ki of
-               Just ki -> return ki
-               Nothing -> do mkv_details <- panic "readTcRef ref"
-                             zonk_meta ref mkv_details
-    else lookup_in_kv_env
+    f_any kv = return $ mkKiVarKi kv
 
 extendMetaKvEnv :: TcKiVar -> MonoKind KiVar -> ZonkTcM ()
 extendMetaKvEnv kv ki = ZonkT $ \ (ZonkEnv { ze_meta_kv_env = mkv_env_ref }) ->
@@ -214,6 +240,23 @@ commitFlexiKv kv = do
   lift $ case flexi of
     NoFlexi -> pprPanic "NoFlexi" (ppr kv)
 
+zonkKiCoVarOcc :: KiCoVar AnyKiVar -> ZonkTcM (KindCoercion KiVar)
+zonkKiCoVarOcc cv = do
+  ZonkEnv { ze_tv_env = tyco_env } <- getZonkEnv
+  case lookupVarEnv_Directly tyco_env (varUnique cv) of
+    Just cv' -> return $ mkKiCoVarCo cv'
+    _ -> mkKiCoVarCo <$> (lift $ liftZonkM $ panic "zonkTyVarKind cv")
+
+zonkKiCoHole :: KindCoercionHole AnyKiVar -> ZonkTcM (KindCoercion KiVar)
+zonkKiCoHole hole@(CoercionHole { ch_ref = ref, ch_co_var = cv }) = do
+  contents <- readTcRef ref
+  case contents of
+    Just co -> do
+      co' <- zonkKiCoToCo co
+      _ <- lift $ liftZonkM $ checkKiCoercionHole cv (asAnyKi co')
+      return co'
+    Nothing -> panic "zonkKiCoHole"
+
 zonk_kindmapper :: KiCoMapper TcKiVar KiVar ZonkEnv TcM
 zonk_kindmapper = panic "zonk_kindmapper"
   -- KindMapper
@@ -222,17 +265,25 @@ zonk_kindmapper = panic "zonk_kindmapper"
   --                              $ \kv' -> ZonkT $ \env' -> (k env' kv')
   -- }
 
+zonk_mkindmapper :: MKiCoMapper AnyKiVar KiVar ZonkEnv TcM
+zonk_mkindmapper = MKiCoMapper
+  { mkcm_kivar = \env kv -> runZonkT (zonkKiVarOcc kv) env
+  , mkcm_covar = \env cv -> runZonkT (zonkKiCoVarOcc cv) env
+  , mkcm_hole = \env co -> runZonkT (zonkKiCoHole co) env
+  }
+
 zonkTcKindToKindX :: TcKind -> ZonkTcM (Kind KiVar)
 zonkTcKindsToKindsX :: [TcKind] -> ZonkTcM [Kind KiVar]
 (zonkTcKindToKindX, zonkTcKindsToKindsX) = case mapKindX zonk_kindmapper of
   (zki, zkis) -> (ZonkT . flip zki, ZonkT . flip zkis)
 
-zonkTcMonoKindToMonoKindX :: TcMonoKind -> ZonkTcM (MonoKind KiVar)
-zonkTcMonoKindToMonoKindX ki = do
-  ki' <- zonkTcKindToKindX $ Mono ki
-  case ki' of
-    Mono mki -> return mki
-    _ -> pprPanic "zonkTcMonoKindToMonoKindX" (ppr ki $$ ppr ki')
+zonkTcMonoKindToMonoKindX :: AnyMonoKind -> ZonkTcM (MonoKind KiVar)
+zonkTcMonoKindsToMonoKindsX :: [AnyMonoKind] -> ZonkTcM [MonoKind KiVar]
+zonkKiCoToCo :: AnyKindCoercion -> ZonkTcM (KindCoercion KiVar)
+(zonkTcMonoKindToMonoKindX, zonkTcMonoKindsToMonoKindsX, zonkKiCoToCo)
+  = case mapMKiCoX zonk_mkindmapper of
+      (zki, zkis, zco, _) ->
+        (ZonkT . flip zki, ZonkT . flip zkis, ZonkT . flip zco)
 
 {- *********************************************************************
 *                                                                      *

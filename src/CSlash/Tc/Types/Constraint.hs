@@ -380,8 +380,8 @@ data Implication = Implic
   , ic_wanted :: WantedConstraints
   , ic_binds :: KiEvBindsVar
   , ic_status :: ImplicStatus
-  , ic_need_inner :: MkVarSet (AnyKiEvVar AnyKiVar)
-  , ic_need_outer :: MkVarSet (AnyKiEvVar AnyKiVar)
+  , ic_need_inner :: MkVarSet (KiEvVar AnyKiVar)
+  , ic_need_outer :: MkVarSet (KiEvVar AnyKiVar)
   }
 
 implicationPrototype :: CtLocEnv -> Implication

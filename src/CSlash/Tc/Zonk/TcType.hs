@@ -52,10 +52,10 @@ writeMetaTyVar :: HasDebugCallStack => TcTyVar TcKiVar -> TcType -> ZonkM ()
 writeMetaTyVar = undefined
 
 writeMetaTyVarRef
-  :: HasDebugCallStack
+  :: (HasDebugCallStack, VarHasKind tv kv)
   => TcTyVar AnyKiVar
-  -> TcRef (MetaDetails TcType)
-  -> TcType
+  -> TcRef (MetaDetails (Type tv kv))
+  -> Type tv kv
   -> ZonkM ()
 writeMetaTyVarRef tyvar ref ty
   | not debugIsOn
@@ -67,7 +67,7 @@ writeMetaTyVarRef tyvar ref ty
        let tv_kind = varKind tyvar
            tv_lvl = varLevel tyvar
        zonked_tv_kind <- zonkTcMonoKind tv_kind
-       zonked_ty <- zonkTcType ty
+       zonked_ty <- panic "zonkTcType ty"
        let zonked_ty_kind = typeKind zonked_ty
            zonked_ty_lvl = tcTypeLevel zonked_ty
            level_check_ok = not (zonked_ty_lvl `strictlyDeeperThan` tv_lvl)
@@ -254,31 +254,28 @@ zonkAnyKiVar kv = handleAnyKv (const simple)
   where
     simple = return $ mkKiVarKi kv
 
--- zonkTcKiVar :: TcKiVar -> ZonkM TcMonoKind
--- zonkTcKiVar kv 
---   -- | isTcKiVar kv
---   = case tcVarDetails kv of
---       SkolemVar {} -> return $ mkKiVarKi kv
---       MetaVar { mv_ref = ref } -> do
---         cts <- panic "readTcRef ref"
---         case cts of
---           Flexi -> return $ mkKiVarKi kv
---           Indirect ki -> do
---             zki <- panic "zonkTcMonoKind ki"
---             panic "writeTcRef ref (Indirect zki)"
---             return zki
---   -- | otherwise
---   -- = return $ mkKiVarMKi kv
+zonkTcKiVar :: TcKiVar -> ZonkM AnyMonoKind
+zonkTcKiVar kv 
+  = case tcVarDetails kv of
+      SkolemVar {} -> return $ mkKiVarKi (toAnyKiVar kv)
+      MetaVar { mv_ref = ref } -> do
+        cts <- readTcRef ref
+        case cts of
+          Flexi -> return $ mkKiVarKi (toAnyKiVar kv)
+          Indirect ki -> do
+            zki <- zonkTcMonoKind ki
+            writeTcRef ref (Indirect zki)
+            return zki
 
 zonkTcKiVarsToTcKiVars :: HasDebugCallStack => [TcKiVar] -> ZonkM [TcKiVar]
 zonkTcKiVarsToTcKiVars = mapM zonkTcKiVarToTcKiVar
 
 zonkTcKiVarToTcKiVar :: HasDebugCallStack => TcKiVar -> ZonkM TcKiVar
 zonkTcKiVarToTcKiVar kv = do 
-  ki <- panic "zonkTcKiVar kv"
-  let kv' = case panic "getKiVar_maybe ki" of
-              Just kv' -> kv'
-              Nothing -> pprPanic "zonkTcKiVarToTcKiVar" (panic "ppr kv $$ ppr ki")
+  ki <- zonkTcKiVar kv
+  let kv' = case getKiVar_maybe ki of
+              Just kv' | Just kv'' <- toTcKiVar_maybe kv' -> kv
+              _ -> pprPanic "zonkTcKiVarToTcKiVar" (panic "ppr kv $$ ppr ki")
   return kv'
 
 zonkKiCoVarKind :: KiCoVar AnyKiVar -> ZonkM (KiCoVar AnyKiVar)

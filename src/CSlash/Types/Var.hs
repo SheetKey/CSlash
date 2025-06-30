@@ -16,7 +16,7 @@ module CSlash.Types.Var
     {-* Class methods *-}
   , IsVar
   , VarHasName(..), VarHasUnique(..)
-  , VarHasType(..), VarHasKind(..)
+  , VarHasType(..), VarHasKind(..), UpdateVarKind(..)
   , TcVar(..)
   , IsTyVar(..), IsKiVar(..)
   -- , VarHasTcDetails(..), VarCanSetTcDetails(..)
@@ -38,7 +38,7 @@ module CSlash.Types.Var
   , mkTcTyVar
 
     {-* AnyTyVar *-}
-  , AnyTyVar, AnyKiCoVar, AnyKiEvVar
+  , AnyTyVar
   , handleAnyTv
 
     {-* KiVar *-}
@@ -109,7 +109,7 @@ data Var tv kv
     { _varName :: !Name
     , _realUnique :: {-# UNPACK #-} !Unique
     , _varKind :: MonoKind kv
-    , _tc_tv_details :: TcVarDetails (Type (AnyTyVar kv) kv)
+    , _tc_tv_details :: TcVarDetails (Type (AnyTyVar AnyKiVar) AnyKiVar)
     }
   | KiVar'
     { _varName :: !Name
@@ -282,13 +282,18 @@ class VarHasType v tv kv | v -> tv, v -> kv where
 
 class (IsVar v, IsVar kv) => VarHasKind v kv | v -> kv where
   varKind :: v -> MonoKind kv
-  updateVarKind :: (MonoKind kv -> MonoKind kv) -> v -> v
-  updateVarKindM :: Monad m => (MonoKind kv -> m (MonoKind kv)) -> v -> m v
+  -- updateVarKind :: (MonoKind kv -> MonoKind kv) -> v -> v
+  -- updateVarKindM :: Monad m => (MonoKind kv -> m (MonoKind kv)) -> v -> m v
   setVarKind :: v -> (MonoKind kv) -> v
   toTyVar_maybe :: v -> Maybe (TyVar kv)
 
+class UpdateVarKind v where
+  updateVarKind :: Outputable kv => (MonoKind kv -> MonoKind kv') -> v kv -> v kv'
+  updateVarKindM :: (Monad m, Outputable kv)
+                 => (MonoKind kv -> m (MonoKind kv')) -> v kv -> m (v kv')
+
 class IsVar v => TcVar v where
-  type TcDetailsThing v = r | r -> v
+  type TcDetailsThing v
   tcVarDetails :: v -> TcVarDetails (TcDetailsThing v)
   setTcVarDetails :: v -> TcVarDetails (TcDetailsThing v) -> v
 
@@ -438,14 +443,23 @@ instance IsVar kv => VarHasKind (TyVar kv) kv where
   varKind (TyVar (TyVar' { _varKind = ki })) = ki
   varKind other = pprPanic "Bad TyVar" (ppr other)
 
-  updateVarKind upd (TyVar var@(TyVar' {})) = TyVar (var { _varKind = upd (_varKind var) })
-  updateVarKind _ other = pprPanic "Bad TyVar" (ppr other)
+  -- updateVarKind upd (TyVar var@(TyVar' {})) = TyVar (var { _varKind = upd (_varKind var) })
+  -- updateVarKind _ other = pprPanic "Bad TyVar" (ppr other)
 
-  updateVarKindM upd (TyVar var) = do
-    kind <- upd (_varKind var)
-    return $ TyVar (var { _varKind = kind })
+  -- updateVarKindM upd (TyVar var) = do
+  --   kind <- upd (_varKind var)
+  --   return $ TyVar (var { _varKind = kind })
 
   setVarKind (TyVar tv) k = TyVar (tv { _varKind = k })
+
+instance UpdateVarKind TyVar where
+  updateVarKind upd (TyVar (TyVar' {..})) = TyVar $ TyVar' { _varKind = upd _varKind, .. }
+  updateVarKind _ other = pprPanic "Bad TyVar" (ppr other)
+  
+  updateVarKindM upd (TyVar (TyVar' {..})) = do
+    kind <- upd _varKind
+    return $ TyVar $ TyVar' { _varKind = kind, .. }
+  updateVarKindM _ other = pprPanic "Bad TyVar" (ppr other)
 
 instance IsKiVar kv => IsTyVar (TyVar kv) kv where
   mkTyVar name kind = TyVar (TyVar' { _varName = name
@@ -469,18 +483,28 @@ instance IsVar kv => VarHasKind (TcTyVar kv) kv where
   varKind (TcTyVar (TcTyVar' { _varKind = ki })) = ki
   varKind other = pprPanic "Bad TcTyVar" (ppr other)
 
-  updateVarKind upd (TcTyVar var@(TcTyVar' {}))
-    = TcTyVar (var { _varKind = upd (_varKind var) })
-  updateVarKind _ other = pprPanic "Bad TcTyVar" (ppr other)
+  -- updateVarKind upd (TcTyVar var@(TcTyVar' {}))
+  --   = TcTyVar (var { _varKind = upd (_varKind var) })
+  -- updateVarKind _ other = pprPanic "Bad TcTyVar" (ppr other)
 
-  updateVarKindM upd (TcTyVar var) = do
-    kind <- upd (_varKind var)
-    return $ TcTyVar (var { _varKind = kind })
+  -- updateVarKindM upd (TcTyVar var) = do
+  --   kind <- upd (_varKind var)
+  --   return $ TcTyVar (var { _varKind = kind })
 
   setVarKind (TcTyVar tv) k = TcTyVar (tv { _varKind = k })
 
+instance UpdateVarKind TcTyVar where
+  updateVarKind upd (TcTyVar (TcTyVar' {..}))
+    = TcTyVar $ TcTyVar' { _varKind = upd _varKind, .. }
+  updateVarKind _ other = pprPanic "Bad TcTyVar" (ppr other)
+
+  updateVarKindM upd (TcTyVar (TcTyVar' {..})) = do
+    kind <- upd _varKind
+    return $ TcTyVar $ TcTyVar' { _varKind = kind, .. }
+  updateVarKindM _ other = pprPanic "Bad TcTyVar" (ppr other)
+
 instance Outputable kv => TcVar (TcTyVar kv) where
-  type TcDetailsThing (TcTyVar kv) = Type (AnyTyVar kv) kv
+  type TcDetailsThing (TcTyVar kv) = Type (AnyTyVar AnyKiVar) AnyKiVar
 
   tcVarDetails (TcTyVar (TcTyVar' { _tc_tv_details = details })) = details
   tcVarDetails other = pprPanic "Bad TcKiVar" (ppr other)
@@ -510,9 +534,6 @@ newtype AnyTyVar kv = AnyTyVar (Var Void kv)
   deriving ( Outputable, NamedThing, Uniquable, Eq, Ord, Data, HasOccName
            , VarHasName, VarHasUnique)
 
-type AnyKiCoVar = AnyTyVar
-type AnyKiEvVar = AnyTyVar
-
 instance ToAnyTyVar (AnyTyVar kv) kv where
   toAnyTyVar tv = tv
 
@@ -521,20 +542,35 @@ instance IsVar kv => VarHasKind (AnyTyVar kv) kv where
   varKind (AnyTyVar (TcTyVar' { _varKind = ki })) = ki
   varKind other = pprPanic "Bad AnyTyVar" (ppr other)
 
-  updateVarKind upd (AnyTyVar var@(TyVar' {}))
-    = AnyTyVar (var { _varKind = upd (_varKind var) })
-  updateVarKind upd (AnyTyVar var@(TcTyVar' {}))
-    = AnyTyVar (var { _varKind = upd (_varKind var) })
-  updateVarKind _ other = pprPanic "Bad AnyTyVar" (ppr other)
+  -- updateVarKind upd (AnyTyVar var@(TyVar' {}))
+  --   = AnyTyVar (var { _varKind = upd (_varKind var) })
+  -- updateVarKind upd (AnyTyVar var@(TcTyVar' {}))
+  --   = AnyTyVar (var { _varKind = upd (_varKind var) })
+  -- updateVarKind _ other = pprPanic "Bad AnyTyVar" (ppr other)
 
-  updateVarKindM upd (AnyTyVar var) = do
-    kind <- upd (_varKind var)
-    return $ AnyTyVar (var { _varKind = kind })
+  -- updateVarKindM upd (AnyTyVar var) = do
+  --   kind <- upd (_varKind var)
+  --   return $ AnyTyVar (var { _varKind = kind })
 
   setVarKind (AnyTyVar tv) k = AnyTyVar (tv { _varKind = k })
 
   toTyVar_maybe (AnyTyVar v@(TyVar' {})) = Just $ TyVar v
   toTyVar_maybe _ = Nothing
+
+instance UpdateVarKind AnyTyVar where
+  updateVarKind upd (AnyTyVar (TyVar' {..}))
+    = AnyTyVar $ TyVar' { _varKind = upd _varKind, .. }
+  updateVarKind upd (AnyTyVar (TcTyVar' {..}))
+    = AnyTyVar $ TcTyVar' { _varKind = upd _varKind, .. }
+  updateVarKind _ other = pprPanic "Bad AnyTyVar" (ppr other)
+
+  updateVarKindM upd (AnyTyVar (TyVar' {..})) = do
+    kind <- upd _varKind
+    return $ AnyTyVar $ TyVar' { _varKind = kind, .. }
+  updateVarKindM upd (AnyTyVar (TcTyVar' {..})) = do
+    kind <- upd _varKind
+    return $ AnyTyVar $ TcTyVar' { _varKind = kind, .. }
+  updateVarKindM _ other = pprPanic "Bad AnyTyVar" (ppr other)
 
 -- instance Outputable kv => VarHasTcDetails (AnyTyVar kv) (Type (AnyTyVar kv) kv) where
 --   tcVarDetails (AnyTyVar (TcTyVar' { _tc_tv_details = details })) = details

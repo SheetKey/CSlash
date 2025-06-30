@@ -272,6 +272,9 @@ lookupVarEnv :: Uniquable v => MkVarEnv v a -> v -> Maybe a
 {-# INLINE lookupVarEnv #-}
 lookupVarEnv = lookupUFM
 
+lookupVarEnv_Directly :: MkVarEnv v a -> Unique -> Maybe a
+lookupVarEnv_Directly = lookupUFM_Directly
+
 {- *********************************************************************
 *                                                                      *
    Deterministic VarEnv (DVarEnv)

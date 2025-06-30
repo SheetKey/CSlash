@@ -26,11 +26,11 @@ import GHC.Exts                  ( oneShot )
 
 data ZonkEnv = ZonkEnv
   { ze_flexi :: !ZonkFlexi
-  , ze_tv_env :: MkVarEnv (AnyTyVar AnyKiVar) (AnyTyVar AnyKiVar)
-  , ze_kv_env :: MkVarEnv AnyKiVar AnyKiVar
+  , ze_tv_env :: MkVarEnv (TyVar KiVar) (TyVar KiVar)
+  , ze_kv_env :: MkVarEnv KiVar KiVar
   , ze_id_env :: MkVarEnv (Id (AnyTyVar AnyKiVar) AnyKiVar) (Id (AnyTyVar AnyKiVar) AnyKiVar)
-  , ze_meta_tv_env :: IORef (MkVarEnv (AnyTyVar AnyKiVar) (Type (AnyTyVar AnyKiVar) AnyKiVar))
-  , ze_meta_kv_env :: IORef (MkVarEnv AnyKiVar (MonoKind AnyKiVar))
+  , ze_meta_tv_env :: IORef (MkVarEnv (TcTyVar AnyKiVar) (Type (TyVar KiVar) KiVar))
+  , ze_meta_kv_env :: IORef (MkVarEnv KiVar (MonoKind KiVar))
   }
 
 data ZonkFlexi
@@ -118,10 +118,10 @@ nestZonkEnv f = ZonkBndrT $ \k -> case k () of
 getZonkEnv :: Monad m => ZonkT m ZonkEnv
 getZonkEnv = ZonkT return
 
-extendTyZonkEnv :: AnyTyVar AnyKiVar -> ZonkBndrT m ()
+extendTyZonkEnv :: TyVar KiVar -> ZonkBndrT m ()
 extendTyZonkEnv tv = nestZonkEnv $ \ze@(ZonkEnv { ze_tv_env = ty_env }) ->
                                      ze { ze_tv_env = extendVarEnv ty_env tv tv }
 
-extendKiZonkEnv :: AnyKiVar -> ZonkBndrT m ()
+extendKiZonkEnv :: KiVar -> ZonkBndrT m ()
 extendKiZonkEnv kv = nestZonkEnv $ \ze@(ZonkEnv { ze_kv_env = ki_env }) ->
                                      ze { ze_kv_env = extendVarEnv ki_env kv kv }

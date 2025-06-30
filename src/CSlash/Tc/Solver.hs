@@ -105,6 +105,15 @@ pushLevelAndSolveEqualitiesX callsite thing_inside = do
                                                 , text "Level:" <+> ppr tclvl ])
   return (tclvl, wanted, res)
 
+reportUnsolvedEqualities
+  :: SkolemInfo
+  -> [TcKiVar]
+  -> TcLevel
+  -> WantedConstraints
+  -> TcM ()
+reportUnsolvedEqualities skol_info skol_kvs tclvl wanted
+  = report_unsolved_equalities (getSkolemInfo skol_info) skol_kvs tclvl wanted
+
 report_unsolved_equalities
   :: SkolemInfoAnon -> [TcKiVar] -> TcLevel -> WantedConstraints -> TcM ()
 report_unsolved_equalities skol_info_anon skol_vs tclvl wanted
@@ -138,7 +147,10 @@ useUnsatisfiableGivens wc = do
       = do wcs' <- go_wc (ic_wanted impl)
            lift $ setImplicationStatus $ impl { ic_wanted = wcs' }    
 
-solveImplicationUsingUnsatGiven :: (AnyKiEvVar AnyKiVar, AnyMonoKind) -> Implication -> TcS (Maybe Implication)
+solveImplicationUsingUnsatGiven
+  :: (KiEvVar AnyKiVar, AnyMonoKind)
+  -> Implication
+  -> TcS (Maybe Implication)
 solveImplicationUsingUnsatGiven unsat_given@(given_ev, _) impl@(Implic { ic_wanted = wtd
                                                                        , ic_tclvl = tclvl
                                                                        , ic_binds = ev_binds_var
@@ -163,7 +175,7 @@ solveImplicationUsingUnsatGiven unsat_given@(given_ev, _) impl@(Implic { ic_want
               panic "setWantedKiEvType dst True ev_type"
       _ -> return ()
 
-unsatisfiableKiEvType :: (AnyKiEvVar AnyKiVar, AnyMonoKind) -> AnyMonoKind -> TcS AnyType
+unsatisfiableKiEvType :: (KiEvVar AnyKiVar, AnyMonoKind) -> AnyMonoKind -> TcS AnyType
 unsatisfiableKiEvType (unsat_ev, given_msg) wtd_ki = panic "unsatisfiableKiEvType"
 
 {- *********************************************************************
@@ -349,7 +361,7 @@ setImplicationStatus implic@(Implic { ic_status = status
 
 findUnnecessaryGivens
   :: SkolemInfoAnon
-  -> MkVarSet (AnyKiEvVar AnyKiVar)
+  -> MkVarSet (KiEvVar AnyKiVar)
   -> [KiEvVar AnyKiVar]
   -> [KiEvVar AnyKiVar]
 findUnnecessaryGivens info need_inner givens
@@ -363,7 +375,7 @@ findUnnecessaryGivens info need_inner givens
     unused_givens = filterOut is_used givens
 
     is_used :: KiEvVar AnyKiVar -> Bool
-    is_used given = toAnyTyVar given `elemVarSet` need_inner
+    is_used given = given `elemVarSet` need_inner
 
     minimal_givens = mkMinimalBy kiEvVarPred givens
     is_minimal = (`elemVarSet` mkVarSet minimal_givens)
@@ -393,11 +405,11 @@ neededKiEvVars implic@(Implic { ic_given = givens
   kcvs <- TcS.getTcKiEvKiCoVars ev_binds_var
 
   let seeds1 = foldr add_implic_seeds old_needs implics
-      seeds2 = panic "nonDetStrictFoldKiEvBindMap add_wanted seeds1 ev_binds"
+      seeds2 = nonDetStrictFoldKiEvBindMap add_wanted seeds1 ev_binds
       seeds3 = seeds2 `unionVarSet` kcvs
       need_inner = findNeededKiEvVars ev_binds seeds3
       live_ev_binds = filterKiEvBindMap (needed_ev_bind need_inner) ev_binds
-      need_outer = panic "varSetMinusKiEvBindMap need_inner live_ev_binds `delVarSetList` givens"
+      need_outer = varSetMinusKiEvBindMap need_inner live_ev_binds `delVarSetList` givens
 
   TcS.setTcKiEvBindsMap ev_binds_var live_ev_binds
 
@@ -408,8 +420,8 @@ neededKiEvVars implic@(Implic { ic_given = givens
            , text "ev_binds:" <+> ppr ev_binds
            , text "live_ev_binds:" <+> ppr live_ev_binds ]
 
-  return $ implic { ic_need_inner = panic "need_inner"
-                  , ic_need_outer = panic "need_outer" }
+  return $ implic { ic_need_inner = need_inner
+                  , ic_need_outer = need_outer }
   where
     add_implic_seeds (Implic { ic_need_outer = needs }) acc = needs `unionVarSet` acc
 

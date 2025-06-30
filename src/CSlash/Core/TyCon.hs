@@ -107,21 +107,6 @@ mkTyConTy tycon = tyConNullaryTy tycon
 *                                                                      *
 ********************************************************************* -}
 
-{-
-Invariants:
-The arity is the number of type arguments that must be supplied to the TC to have the res kind.
-The res kind CAN be a function kind.
-Consider: type f = \x -> \y -> (x, y)
-  - full kind: k1 -> k2 -> k3
-  - res kind: k2 -> k3
-  - arity: 1
-
-Similarly: type g = \x y -> \z -> (x, y, z)
-  - full kind: k1 -> k2 -> k3 -> k4
-  - res kind: k3 -> k4
-  - arity: 2
--}
-
 type TcTyCon = TyCon (TcTyVar TcKiVar) TcKiVar
 type AnyTyCon = TyCon (AnyTyVar AnyKiVar) AnyKiVar
 
@@ -165,7 +150,7 @@ data TyConDetails tv kv
   | PrimTyCon
     -- { primRepName :: TyConRepName } -- this is used to Typeable
   | TcTyCon -- used during type checking only
-    { tctc_scoped_kvs :: [(Name, kv)]
+    { tctc_scoped_kvs :: [(Name, TcKiVar)]
     , tctc_is_poly :: Bool
     , tctc_flavor :: TyConFlavor
     }
@@ -179,8 +164,7 @@ instance AsAnyTy TyConDetails where
   asAnyTyKi AlgTyCon { algTcRhs = rhs, .. } = AlgTyCon { algTcRhs = asAnyTyKi rhs, .. }
   asAnyTyKi SynonymTyCon { synTcRhs = rhs, .. } = SynonymTyCon { synTcRhs = asAnyTyKi rhs, .. }
   asAnyTyKi PrimTyCon = PrimTyCon
-  asAnyTyKi TcTyCon { tctc_scoped_kvs = kvs, .. }
-    = TcTyCon { tctc_scoped_kvs = mapSnd toAnyKiVar kvs, .. }
+  asAnyTyKi TcTyCon { .. } = TcTyCon { .. }
 
 data AlgTyConRhs tv kv
   = AbstractTyCon
@@ -296,7 +280,7 @@ mkTcTyCon
   :: Name
   -> Kind AnyKiVar
   -> Arity
-  -> [(Name, AnyKiVar)]
+  -> [(Name, TcKiVar)]
   -> Bool
   -> TyConFlavor 
   -> TyCon tv AnyKiVar
@@ -360,7 +344,7 @@ isConcreteTyCon tc@(TyCon { tyConDetails = details })
 --      TcTyCon
 -------------------------------------------- -}
 
-tcTyConScopedKiVars :: TyCon tv AnyKiVar -> [(Name, AnyKiVar)]
+tcTyConScopedKiVars :: TyCon tv AnyKiVar -> [(Name, TcKiVar)]
 tcTyConScopedKiVars tc@(TyCon { tyConDetails = details })
   | TcTyCon { tctc_scoped_kvs = scoped_kvs } <- details = scoped_kvs
   | otherwise = pprPanic "tcTyConScopedKiVars" (ppr tc)

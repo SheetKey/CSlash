@@ -336,7 +336,12 @@ isForgetfulTy other = pprPanic "isForgetfulTy" (ppr other)
 We do note need the type to be KnotTied.
 This is because we do not have recursive things the same way haskell does.
 -}
-buildSynTyCon :: VarHasKind tv kv => Name -> Kind kv -> Arity -> Type tv kv -> TyCon tv kv
+buildSynTyCon
+  :: Name
+  -> Kind KiVar
+  -> Arity
+  -> Type (TyVar KiVar) KiVar
+  -> TyCon (TyVar KiVar) KiVar
 buildSynTyCon name kind arity rhs
   = mkSynonymTyCon name kind arity rhs is_tau is_forgetful is_concrete
   where
