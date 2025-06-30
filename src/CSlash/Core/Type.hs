@@ -81,7 +81,7 @@ expandSynTyConApp_maybe :: VarHasKind tv kv => TyCon tv kv -> [Type tv kv] -> Ma
 expandSynTyConApp_maybe tc arg_tys
   | Just rhs <- synTyConDefn_maybe tc
   , arg_tys `saturates` tyConArity tc
-  = Just $! (expand_syn rhs arg_tys)
+  = Just $! (panic "expand_syn rhs arg_tys")
   | otherwise
   = Nothing
 

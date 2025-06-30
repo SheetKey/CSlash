@@ -48,7 +48,7 @@ tyThingCategory (AnId _) = "identifier"
 tyThingCategory (AConLike (RealDataCon _)) = "data constructor"
 tyThingCategory (AConLike PatSynCon) = "pattern synonym"
 
-implicitTyConThings :: TyCon tv kv -> [TyThing tv kv]
+implicitTyConThings :: TyCon tv kv -> [TyThing (TyVar KiVar) KiVar]
 implicitTyConThings tc
   = datacon_stuff
   where

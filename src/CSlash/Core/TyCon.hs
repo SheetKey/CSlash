@@ -116,33 +116,33 @@ data TyCon tv kv = TyCon
   , tyConKind :: Kind kv
   , tyConArity :: Arity
   , tyConNullaryTy :: Type tv kv
-  , tyConDetails :: !(TyConDetails tv kv)
+  , tyConDetails :: !(TyConDetails)
   }
 
 instance AsAnyTy TyCon where
-  asAnyTy (TyCon { tyConDetails = details, .. })
-    = let tc' = TyCon { tyConDetails = asAnyTy details
-                      , tyConNullaryTy = mkNakedTyConTy tc'
+  asAnyTy (TyCon { {-tyConDetails = details,-} .. })
+    = let tc' = TyCon { {-tyConDetails = asAnyTy details
+                      , -}tyConNullaryTy = mkNakedTyConTy tc'
                       , .. }
       in tc'
 
-  asAnyTyKi (TyCon { tyConKind = kind, tyConDetails = details, .. })
+  asAnyTyKi (TyCon { tyConKind = kind, {-tyConDetails = details,-} .. })
     = let tc' = TyCon { tyConKind = asAnyKi kind
-                      , tyConDetails = asAnyTyKi details
+                      {-, tyConDetails = asAnyTyKi details -}
                       , tyConNullaryTy = mkNakedTyConTy tc'
                       , .. }
       in tc'
 
-data TyConDetails tv kv
+data TyConDetails 
   = AlgTyCon
     -- { tyConCType :: Maybe CType
     -- , algTcGadtSyntax :: Bool
-    { algTcRhs :: AlgTyConRhs tv kv
+    { algTcRhs :: AlgTyConRhs
     -- , algTcFields :: FieldLabelEnv
     , algTcFlavor :: AlgTyConFlav
     }
   | SynonymTyCon
-    { synTcRhs :: Type tv kv
+    { synTcRhs :: Type (TyVar KiVar) KiVar
     , synIsTau :: Bool
     , synIsForgetful :: Bool
     , synIsConcrete :: Bool
@@ -155,42 +155,42 @@ data TyConDetails tv kv
     , tctc_flavor :: TyConFlavor
     }
 
-instance AsAnyTy TyConDetails where
-  asAnyTy AlgTyCon { algTcRhs = rhs, .. } = AlgTyCon { algTcRhs = asAnyTy rhs, .. }
-  asAnyTy SynonymTyCon { synTcRhs = rhs, .. } = SynonymTyCon { synTcRhs = asAnyTy rhs, .. }
-  asAnyTy PrimTyCon = PrimTyCon
-  asAnyTy TcTyCon { .. } = TcTyCon { .. }
+-- instance AsAnyTy TyConDetails where
+--   asAnyTy AlgTyCon { algTcRhs = rhs, .. } = AlgTyCon { algTcRhs = asAnyTy rhs, .. }
+--   asAnyTy SynonymTyCon { synTcRhs = rhs, .. } = SynonymTyCon { synTcRhs = asAnyTy rhs, .. }
+--   asAnyTy PrimTyCon = PrimTyCon
+--   asAnyTy TcTyCon { .. } = TcTyCon { .. }
 
-  asAnyTyKi AlgTyCon { algTcRhs = rhs, .. } = AlgTyCon { algTcRhs = asAnyTyKi rhs, .. }
-  asAnyTyKi SynonymTyCon { synTcRhs = rhs, .. } = SynonymTyCon { synTcRhs = asAnyTyKi rhs, .. }
-  asAnyTyKi PrimTyCon = PrimTyCon
-  asAnyTyKi TcTyCon { .. } = TcTyCon { .. }
+--   asAnyTyKi AlgTyCon { algTcRhs = rhs, .. } = AlgTyCon { algTcRhs = asAnyTyKi rhs, .. }
+--   asAnyTyKi SynonymTyCon { synTcRhs = rhs, .. } = SynonymTyCon { synTcRhs = asAnyTyKi rhs, .. }
+--   asAnyTyKi PrimTyCon = PrimTyCon
+--   asAnyTyKi TcTyCon { .. } = TcTyCon { .. }
 
-data AlgTyConRhs tv kv
+data AlgTyConRhs 
   = AbstractTyCon
-  | TupleTyCon { data_con :: DataCon tv kv }
+  | TupleTyCon { data_con :: DataCon (TyVar KiVar) KiVar }
   | SumTyCon
-    { data_cons :: [DataCon tv kv]
+    { data_cons :: [DataCon (TyVar KiVar) KiVar]
     , data_cons_size :: Int
     }
   | DataTyCon
-    { data_cons :: [DataCon tv kv]
+    { data_cons :: [DataCon (TyVar KiVar) KiVar]
     , data_cons_size :: Int
     , is_enum :: Bool
     }
 
-instance AsAnyTy AlgTyConRhs where
-  asAnyTy AbstractTyCon = AbstractTyCon
-  asAnyTy TupleTyCon { data_con = dc } = TupleTyCon $ asAnyTy dc
-  asAnyTy SumTyCon { data_cons = dcs, data_cons_size = size}
-    = SumTyCon (asAnyTy <$> dcs) size
-  asAnyTy DataTyCon { data_cons = dcs, .. }
-    = DataTyCon { data_cons = asAnyTy <$> dcs, .. }
+-- instance AsAnyTy AlgTyConRhs where
+--   asAnyTy AbstractTyCon = AbstractTyCon
+--   asAnyTy TupleTyCon { data_con = dc } = TupleTyCon $ asAnyTy dc
+--   asAnyTy SumTyCon { data_cons = dcs, data_cons_size = size}
+--     = SumTyCon (asAnyTy <$> dcs) size
+--   asAnyTy DataTyCon { data_cons = dcs, .. }
+--     = DataTyCon { data_cons = asAnyTy <$> dcs, .. }
 
-mkSumTyConRhs :: [DataCon tv kv] -> AlgTyConRhs tv kv
+mkSumTyConRhs :: [DataCon (TyVar KiVar) KiVar] -> AlgTyConRhs
 mkSumTyConRhs data_cons = SumTyCon data_cons (length data_cons)
 
-mkDataTyConRhs :: [DataCon tv kv] -> AlgTyConRhs tv kv
+mkDataTyConRhs :: [DataCon (TyVar KiVar) KiVar] -> AlgTyConRhs 
 mkDataTyConRhs cons
   = DataTyCon
     { data_cons = cons
@@ -229,7 +229,7 @@ isMonoTcTyCon (TyCon { tyConDetails = details })
 *                                                                      *
 ********************************************************************* -}
 
-mkTyCon :: Name -> Kind kv -> Arity -> TyConDetails tv kv -> TyCon tv kv
+mkTyCon :: Name -> Kind kv -> Arity -> TyConDetails -> TyCon tv kv
 mkTyCon name full_kind arity details = tc
   where
     tc = TyCon { tyConUnique = nameUnique name
@@ -244,7 +244,7 @@ mkAlgTyCon
   :: Name
   -> Kind kv
   -> Arity
-  -> AlgTyConRhs tv kv
+  -> AlgTyConRhs 
   -> AlgTyConFlav
   -> TyCon tv kv
 mkAlgTyCon name full_kind arity rhs parent
@@ -256,7 +256,7 @@ mkTupleTyCon
   :: Name
   -> Kind kv
   -> Arity
-  -> DataCon tv kv
+  -> DataCon (TyVar KiVar) KiVar
   -> AlgTyConFlav
   -> TyCon tv kv
 mkTupleTyCon name kind arity con parent
@@ -268,7 +268,7 @@ mkSumTyCon
   :: Name
   -> Kind kv 
   -> Arity
-  -> [DataCon tv kv]
+  -> [DataCon (TyVar KiVar) KiVar]
   -> AlgTyConFlav
   -> TyCon tv kv
 mkSumTyCon name kind arity cons parent
@@ -295,7 +295,12 @@ mkPrimTyCon name kind arity
   = mkTyCon name kind arity PrimTyCon
 
 mkSynonymTyCon
-  :: Name -> Kind kv -> Arity -> Type tv kv -> Bool -> Bool -> Bool -> TyCon tv kv
+  :: Name
+  -> Kind KiVar
+  -> Arity
+  -> Type (TyVar KiVar) KiVar
+  -> Bool -> Bool -> Bool
+  -> TyCon (TyVar KiVar) KiVar
 mkSynonymTyCon name rhs_kind arity rhs is_tau is_forgetful is_concrete
   = mkTyCon name rhs_kind arity
     $ SynonymTyCon { synTcRhs = rhs
@@ -349,10 +354,10 @@ tcTyConScopedKiVars tc@(TyCon { tyConDetails = details })
   | TcTyCon { tctc_scoped_kvs = scoped_kvs } <- details = scoped_kvs
   | otherwise = pprPanic "tcTyConScopedKiVars" (ppr tc)
 
-tyConDataCons :: TyCon tv kv -> [DataCon tv kv]
+tyConDataCons :: TyCon tv kv -> [DataCon (TyVar KiVar) KiVar]
 tyConDataCons tycon = tyConDataCons_maybe tycon `orElse` []
 
-tyConDataCons_maybe :: TyCon tv kv -> Maybe [DataCon tv kv]
+tyConDataCons_maybe :: TyCon tv kv -> Maybe [DataCon (TyVar KiVar) KiVar]
 tyConDataCons_maybe (TyCon { tyConDetails = details })
   | AlgTyCon { algTcRhs = rhs } <- details
   = case rhs of
@@ -361,14 +366,14 @@ tyConDataCons_maybe (TyCon { tyConDetails = details })
       _ -> Nothing
 tyConDataCons_maybe _ = Nothing   
 
-synTyConDefn_maybe :: TyCon tv kv -> Maybe (Type tv kv)
+synTyConDefn_maybe :: TyCon tv kv -> Maybe (Type (TyVar KiVar) KiVar)
 synTyConDefn_maybe (TyCon { tyConDetails = details })
   | SynonymTyCon {synTcRhs = ty} <- details
   = Just ty
   | otherwise
   = Nothing
 
-synTyConRhs_maybe :: (TyCon tv kv) -> Maybe (Type tv kv)
+synTyConRhs_maybe :: (TyCon tv kv) -> Maybe (Type (TyVar KiVar) KiVar)
 synTyConRhs_maybe (TyCon { tyConDetails = details })
   | SynonymTyCon {synTcRhs = ty} <- details
   = Just ty
