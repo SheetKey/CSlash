@@ -44,6 +44,7 @@ import CSlash.Types.Name.Env
 import CSlash.Types.Name.Reader ( mkRdrUnqual )
 import CSlash.Types.Id
 import CSlash.Types.Id.Info
+import CSlash.Types.Var
 import CSlash.Types.Var.Env
 import CSlash.Types.Var.Set
 import CSlash.Types.Unique.Set
@@ -113,8 +114,8 @@ checkSynCycles this_uid tcs tyds
       go_ty :: TyConSet -> [TyCon (TyVar KiVar) KiVar] -> Type (TyVar KiVar) KiVar -> SynCycleM ()
       go_ty so_far seen_tcs ty = mapM_ (go so_far seen_tcs) (synonymTyConsOfType ty)
 
-synonymTyConsOfType :: Type tv kv -> [TyCon tv kv]
-synonymTyConsOfType ty = nonDetNameEnvElts (panic "go ty")
+synonymTyConsOfType :: VarHasKind tv kv => Type tv kv -> [TyCon tv kv]
+synonymTyConsOfType ty = nonDetNameEnvElts (go ty)
   where
     --go :: Type -> NameEnv TyCon
     go (TyConApp tc tys) = go_tc tc `plusNameEnv` go_s tys
@@ -141,7 +142,7 @@ synonymTyConsOfType ty = nonDetNameEnvElts (panic "go ty")
 
 addTyConsToGblEnv :: [TyCon (TyVar KiVar) KiVar] -> TcM TcGblEnv
 addTyConsToGblEnv tys = assertPpr (all isTypeSynonymTyCon tys) (ppr tys) -- temporary
-                        $ panic "tcExtendTyConEnv tys"
+                        $ tcExtendTyConEnv tys
                         --  $ tcExtendGlobalEnvImplicit implicit_things
                         $ do traceTc "tcAddTyCons"
                                $ vcat [ text "tycons" <+> ppr tys ]
