@@ -179,6 +179,7 @@ chooseInstance work_item (OneInst { rir_what = what
        deeper_loc <- checkInstanceOK loc what pred
        checkReductionDepth deeper_loc pred
        assertPprM (getTcKiEvBindsVar >>= return . not . isKiCoEvBindsVar) (ppr work_item)
+       panic "setKiEvBindIfWanted"
        stopWith work_item "Rel/Top (solved wanted)"
   where
     pred = ctEvPred work_item
