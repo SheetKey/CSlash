@@ -73,5 +73,19 @@ import Control.Monad
 import Data.Foldable (find)
 
 tcTopBinds :: [(RecFlag, LCsBinds Rn)] -> [LSig Rn] -> TcM (TcGblEnv, TcLclEnv)
-tcTopBinds binds sigs = assertPpr (null binds && null sigs) (ppr (snd <$> binds) $$ ppr sigs)
-                        $ getEnvs
+tcTopBinds binds sigs = do
+  (binds', wrap, (tcg_env, tcl_env)) <- tcValBinds TopLevel binds sigs getEnvs
+
+  panic "unfinished1"
+
+
+tcValBinds
+  :: TopLevelFlag
+  -> [(RecFlag, LCsBinds Rn)]
+  -> [LSig Rn]
+  -> TcM thing
+  -> TcM ([(RecFlag, LCsBinds Tc)], CsWrapper, thing)
+tcValBinds binds sigs thing_inside = do
+  (poly_ids, sig_fn) <- tcTySigs sigs
+
+  panic "unfinished2"

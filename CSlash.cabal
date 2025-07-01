@@ -245,6 +245,7 @@ library
                     , CSlash.Tc.Gen.Bind
                     , CSlash.Tc.Gen.CsType
                     , CSlash.Tc.Gen.CsKind
+                    , CSlash.Tc.Gen.Sig
                     , CSlash.Tc.Instance.Relation
                     , CSlash.Tc.Module
                     , CSlash.Tc.Solver
