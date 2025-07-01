@@ -337,9 +337,9 @@ tcInferTyApps_nosat orig_cs_ty fun orig_cs_args = do
       -> AnyKind
       -> [LCsTypeArg Rn]
       -> TcM (AnyType, AnyMonoKind)
-    go n fun subst fun_ki all_args = case (all_args, tcSplitForAllKi_maybe fun_ki) of
+    go n fun subst fun_ki all_args = case tcSplitForAllKi_maybe fun_ki of
       -- need to instantiate invisible kind var
-      (CsValArg _ arg : args, Just (ki_binder, inner_ki)) -> do
+      Just (ki_binder, inner_ki) -> do
         traceTc "tcInferTyApps (need to instantiate)"
           $ vcat [ ppr ki_binder, ppr subst ]
         (subst', arg') <- tcInstInvisibleKiBinder subst ki_binder
