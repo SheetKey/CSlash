@@ -60,7 +60,8 @@ import Data.Maybe
 
 data RelInstResult
   = NoInstance
-  | OneInst { rir_canonical :: Bool
+  | OneInst { rir_ev :: KiEvType
+            , rir_canonical :: Bool
             , rir_what :: InstanceWhat
             }
   | NotSure
@@ -68,7 +69,7 @@ data RelInstResult
 instance Outputable RelInstResult where
   ppr NoInstance = text "NoInstance"
   ppr NotSure = text "NotSure"
-  ppr (OneInst _ what) = text "OneInst" <+> ppr what
+  ppr (OneInst _ _ what) = text "OneInst" <+> ppr what
 
 instanceShouldBeSaved :: InstanceWhat -> Bool
 instanceShouldBeSaved BuiltinEqInstance = False
@@ -84,10 +85,13 @@ matchGlobalInst dflags short_cut kc k1 k2 = case kc of
 
 matchLTEQKi :: Bool -> AnyMonoKind -> AnyMonoKind -> TcM RelInstResult
 matchLTEQKi eq_ok (KiConApp kc1 []) (KiConApp kc2 [])
-  = if (kc1 == kc2 && eq_ok) || kc1 < kc2
-    then return $ OneInst True BuiltinInstance
-    else return $ NoInstance
+  | (kc1 == kc2 && eq_ok) 
+  = return $ OneInst (KindCoercion (mkReflKiCo (KiConApp kc1 []))) True BuiltinInstance
+  | kc1 < kc2
+  = return $ OneInst (panic "IDK") True BuiltinInstance
+  | otherwise
+  = return $ NoInstance
 matchLTEQKi True (KiVarKi v1) (KiVarKi v2)
   | v1 == v2
-  = return $ OneInst True BuiltinInstance
+  = return $ OneInst (KindCoercion (mkReflKiCo (KiVarKi v1))) True BuiltinInstance
 matchLTEQKi _ _ _ = return $ NotSure

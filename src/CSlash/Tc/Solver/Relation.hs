@@ -173,11 +173,12 @@ try_instances inerts work_item@(RelCt { rl_ev = ev, rl_kc = kc, rl_ki1 = ki1, rl
 
 chooseInstance :: CtEvidence -> RelInstResult -> TcS (StopOrContinue a)
 chooseInstance work_item (OneInst { rir_what = what
+                                  , rir_ev = ev
                                   , rir_canonical = canonical })
   = do traceTcS "doTopReact/found instance for " $ ppr work_item
        deeper_loc <- checkInstanceOK loc what pred
        checkReductionDepth deeper_loc pred
-       panic "setKiEvBindIfWanted"
+       setKiEvBindIfWanted work_item canonical ev
        stopWith work_item "Rel/Top (solved wanted)"
   where
     pred = ctEvPred work_item
