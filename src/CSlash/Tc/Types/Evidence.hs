@@ -63,14 +63,6 @@ data KiEvBindsVar
     , kebv_binds :: IORef KiEvBindMap
     , kebv_kcvs :: IORef (MkVarSet (KiCoVar AnyKiVar))
     }
-  | KiCoEvBindsVar
-    { kebv_uniq :: Unique
-    , kebv_kcvs :: IORef (MkVarSet (KiCoVar AnyKiVar))
-    }
-
-isKiCoEvBindsVar :: KiEvBindsVar -> Bool 
-isKiCoEvBindsVar (KiCoEvBindsVar {}) = True
-isKiCoEvBindsVar (KiEvBindsVar {}) = False
 
 newtype KiEvBindMap = KiEvBindMap { kev_bind_varenv :: MkDVarEnv (KiCoVar AnyKiVar) KiEvBind }
 
@@ -201,7 +193,6 @@ instance Outputable TcKiEvBinds where
 
 instance Outputable KiEvBindsVar where
   ppr (KiEvBindsVar { kebv_uniq = u }) = text "KiEvBindsVar" <> angleBrackets (ppr u)
-  ppr (KiCoEvBindsVar { kebv_uniq = u }) = text "KiCoEvBindsVar" <> angleBrackets (ppr u)
 
 instance Outputable KiEvBind where
   ppr (KiEvBind { keb_lhs = v, keb_rhs = e, keb_info = info })

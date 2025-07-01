@@ -415,11 +415,6 @@ csTraceTcM mk_doc = do
          TcM.dumpTcRn False Opt_D_dump_cs_trace "" FormatText msg
 {-# INLINE csTraceTcM #-}
 
-runTcSEqualities :: TcS a -> TcM a
-runTcSEqualities thing_inside = do
-  ev_binds_var <- TcM.newNoTcKiEvBinds
-  runTcSWithKiEvBinds ev_binds_var thing_inside
-
 runTcS :: TcS a -> TcM (a, KiEvBindMap)
 runTcS tcs = do
   ev_binds_var <- TcM.newTcKiEvBinds

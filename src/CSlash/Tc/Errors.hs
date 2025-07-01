@@ -104,7 +104,7 @@ reportUnsolved wanted = do
 
 reportAllUnsolved :: WantedConstraints -> TcM ()
 reportAllUnsolved wanted = do
-  ev_binds <- newNoTcKiEvBinds
+  ev_binds <- newTcKiEvBinds
   report_unsolved ErrorWithoutFlag ErrorWithoutFlag ErrorWithoutFlag ev_binds wanted
 
 report_unsolved
@@ -165,15 +165,6 @@ deferringAnyBindings (CEC { cec_defer_type_errors = ErrorWithoutFlag
                           , cec_out_of_scope_holes = ErrorWithoutFlag }) = False
 deferringAnyBindings _ = True
 
-maybeSwitchOffDefer :: KiEvBindsVar -> SolverReportErrCtxt -> SolverReportErrCtxt
-maybeSwitchOffDefer evb ctxt
-  | KiCoEvBindsVar {} <- evb
-  = ctxt { cec_defer_type_errors = ErrorWithoutFlag
-         , cec_expr_holes = ErrorWithoutFlag
-         , cec_out_of_scope_holes = ErrorWithoutFlag }
-  | otherwise
-  = ctxt
-
 reportImplic :: SolverReportErrCtxt -> Implication -> TcM ()
 reportImplic ctxt implic@(Implic { ic_skols = kvs
                                  , ic_given = given
@@ -204,11 +195,10 @@ reportImplic ctxt implic@(Implic { ic_skols = kvs
                      , ic_given = map (tidyKiEvVar env1) given
                      , ic_info = info' }
 
-    ctxt1 = maybeSwitchOffDefer evb ctxt
-    ctxt' = ctxt1 { cec_tidy = env1
-                  , cec_encl = implic' : cec_encl ctxt
-                  , cec_suppress = insoluble || cec_suppress ctxt
-                  , cec_binds = evb  }
+    ctxt' = ctxt { cec_tidy = env1
+                 , cec_encl = implic' : cec_encl ctxt
+                 , cec_suppress = insoluble || cec_suppress ctxt
+                 , cec_binds = evb  }
 
     dead_givens = case status of
                     IC_Solved dead -> dead

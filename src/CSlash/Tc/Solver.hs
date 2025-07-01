@@ -88,35 +88,36 @@ simplifyTop wanteds = do
 
   return (kiEvBindMapBinds binds1 `unionBags` binds2)
 
-pushLevelAndSolveEqualities :: SkolemInfoAnon -> [TcKiVar] -> TcM a -> TcM a
-pushLevelAndSolveEqualities skol_info_anon tcbs thing_inside = do
-  (tclvl, wanted, res) <- pushLevelAndSolveEqualitiesX "pushLevelAndSolveEqualities" thing_inside
-  report_unsolved_equalities skol_info_anon tcbs tclvl wanted
+pushLevelAndSolve :: SkolemInfoAnon -> [TcKiVar] -> TcM a -> TcM a
+pushLevelAndSolve skol_info_anon tcbs thing_inside = do
+  (tclvl, wanted, eb_binds, res) <- pushLevelAndSolveX "pushLevelAndSolve" thing_inside
+  report_unsolved' skol_info_anon tcbs tclvl wanted
   return res
 
-pushLevelAndSolveEqualitiesX :: String -> TcM a -> TcM (TcLevel, WantedConstraints, a)
-pushLevelAndSolveEqualitiesX callsite thing_inside = do
-  traceTc "pushLevelAndSolveEqualitiesX {" (text "Called from" <+> text callsite)
-  (tclvl, (wanted, res)) <- pushTcLevelM $ do
+pushLevelAndSolveX :: String -> TcM a -> TcM (TcLevel, WantedConstraints, KiEvBindMap, a)
+pushLevelAndSolveX callsite thing_inside = do
+  traceTc "pushLevelAndSolveX {" (text "Called from" <+> text callsite)
+  (tclvl, (wanted, ev_binds, res)) <- pushTcLevelM $ do
     (res, wanted) <- captureConstraints thing_inside
-    wanted <- runTcSEqualities (simplifyTopWanteds wanted)
-    return (wanted, res)
-  traceTc "pushLevelAndSolveEqualities }" (vcat [ text "Residual:" <+> ppr wanted
-                                                , text "Level:" <+> ppr tclvl ])
-  return (tclvl, wanted, res)
+    (wanted, ev_binds) <- runTcS (simplifyTopWanteds wanted)
+    return (wanted, ev_binds, res)
+  traceTc "pushLevelAndSolveX }" (vcat [ text "Residual:" <+> ppr wanted
+                                       , text "KiEvBinds:" <+> ppr ev_binds
+                                       , text "Level:" <+> ppr tclvl ])
+  return (tclvl, wanted, ev_binds, res)
 
-reportUnsolvedEqualities
+reportUnsolved'
   :: SkolemInfo
   -> [TcKiVar]
   -> TcLevel
   -> WantedConstraints
   -> TcM ()
-reportUnsolvedEqualities skol_info skol_kvs tclvl wanted
-  = report_unsolved_equalities (getSkolemInfo skol_info) skol_kvs tclvl wanted
+reportUnsolved' skol_info skol_kvs tclvl wanted
+  = report_unsolved' (getSkolemInfo skol_info) skol_kvs tclvl wanted
 
-report_unsolved_equalities
+report_unsolved'
   :: SkolemInfoAnon -> [TcKiVar] -> TcLevel -> WantedConstraints -> TcM ()
-report_unsolved_equalities skol_info_anon skol_vs tclvl wanted
+report_unsolved' skol_info_anon skol_vs tclvl wanted
   | isEmptyWC wanted
   = return ()
   | otherwise
@@ -155,9 +156,6 @@ solveImplicationUsingUnsatGiven unsat_given@(given_ev, _) impl@(Implic { ic_want
                                                                        , ic_tclvl = tclvl
                                                                        , ic_binds = ev_binds_var
                                                                        , ic_need_inner = inner })
-  | isKiCoEvBindsVar ev_binds_var
-  = return $ Just impl
-  | otherwise
   = do wcs <- nestImplicTcS ev_binds_var tclvl $ go_wc wtd
        setImplicationStatus $ impl { ic_wanted = wcs
                                    , ic_need_inner = inner `extendVarSet` given_ev }

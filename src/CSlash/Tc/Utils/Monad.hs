@@ -779,36 +779,20 @@ newTcKiEvBinds = do
                         , kebv_kcvs = kcvs_ref
                         , kebv_uniq = uniq }
 
-newNoTcKiEvBinds :: TcM KiEvBindsVar
-newNoTcKiEvBinds = do
-  kcvs_ref <- newTcRef emptyVarSet
-  uniq <- newUnique
-  traceTc "newNoTcKiEvBinds" (text "unique =" <+> ppr uniq)
-  return $ KiCoEvBindsVar { kebv_kcvs = kcvs_ref
-                          , kebv_uniq = uniq }
-
 getTcKiEvKiCoVars :: KiEvBindsVar -> TcM (MkVarSet (KiCoVar AnyKiVar))
 getTcKiEvKiCoVars ev_binds_var = readTcRef (kebv_kcvs ev_binds_var)
 
 getTcKiEvBindsMap :: KiEvBindsVar -> TcM KiEvBindMap
 getTcKiEvBindsMap (KiEvBindsVar { kebv_binds = ev_ref }) = readTcRef ev_ref
-getTcKiEvBindsMap (KiCoEvBindsVar {}) = return emptyKiEvBindMap
 
 setTcKiEvBindsMap :: KiEvBindsVar -> KiEvBindMap -> TcM ()
 setTcKiEvBindsMap (KiEvBindsVar { kebv_binds = ev_ref }) binds = writeTcRef ev_ref binds
-setTcKiEvBindsMap v@(KiCoEvBindsVar {}) ev_binds
-  | isEmptyKiEvBindMap ev_binds
-  = return ()
-  | otherwise
-  = pprPanic "setTcKiEvBindsMap" (ppr v $$ ppr ev_binds)
 
 addTcKiEvBind :: KiEvBindsVar -> KiEvBind -> TcM ()
 addTcKiEvBind (KiEvBindsVar { kebv_binds = ev_ref, kebv_uniq = u }) ev_bind = do
   traceTc "addTcKiEvBind" $ ppr u $$ ppr ev_bind
   binds <- readTcRef ev_ref
   writeTcRef ev_ref (extendKiEvBinds binds ev_bind)
-addTcKiEvBind (KiCoEvBindsVar { kebv_uniq = u }) ev_bind
-  = pprPanic "addTcKiEvBind KiCoEvBindsVar" $ ppr ev_bind $$ ppr u
 
 getConstraintVar :: TcM (TcRef WantedConstraints)
 getConstraintVar = do

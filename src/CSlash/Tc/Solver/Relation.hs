@@ -112,8 +112,7 @@ shortCutSolver dflags ev_w ev_i
   | isWanted ev_w
   , isGiven ev_i
   = do ev_binds_var <- getTcKiEvBindsVar
-       ev_binds <- assertPpr (not (isKiCoEvBindsVar ev_binds_var)) (ppr ev_w)
-                   $ getTcKiEvBindsMap ev_binds_var
+       ev_binds <- getTcKiEvBindsMap ev_binds_var
        solved_rels <- getSolvedRels
        mb_stuff <- try_solve_from_instance solved_rels ev_w
        case mb_stuff of
@@ -178,7 +177,6 @@ chooseInstance work_item (OneInst { rir_what = what
   = do traceTcS "doTopReact/found instance for " $ ppr work_item
        deeper_loc <- checkInstanceOK loc what pred
        checkReductionDepth deeper_loc pred
-       assertPprM (getTcKiEvBindsVar >>= return . not . isKiCoEvBindsVar) (ppr work_item)
        panic "setKiEvBindIfWanted"
        stopWith work_item "Rel/Top (solved wanted)"
   where

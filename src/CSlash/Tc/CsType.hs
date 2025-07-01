@@ -12,7 +12,7 @@ import CSlash.Cs
 
 import CSlash.Tc.Errors.Types
 -- import GHC.Tc.TyCl.Build
-import CSlash.Tc.Solver ( pushLevelAndSolveEqualities, pushLevelAndSolveEqualitiesX
+import CSlash.Tc.Solver ( pushLevelAndSolve, pushLevelAndSolveX
                         {-, reportUnsolvedEqualities-} )
 import CSlash.Tc.Utils.Monad
 import CSlash.Tc.Utils.Env
@@ -188,7 +188,7 @@ kcTyGroup kindless_decls = do
 
   let kindless_names = mkNameSet $ map (tydName . unLoc) kindless_decls
 
-  inferred_tcs <- pushLevelAndSolveEqualities unkSkolAnon [] $ do
+  inferred_tcs <- pushLevelAndSolve unkSkolAnon [] $ do
     mono_tcs <- inferInitialKinds kindless_decls
 
     traceTc "kcTyGroup: initial kinds" $ ppr_tc_kinds mono_tcs
@@ -502,7 +502,7 @@ tcTyFunRhs tc_name cs_ty = bindTyConKiVars tc_name
                        (catMaybes mbinders)
         where mbinders = toTcKiVar_maybe <$> tc_ki_bndrs
 
-  rhs_ty <- pushLevelAndSolveEqualities skol_info tc_tc_ki_bndrs
+  rhs_ty <- pushLevelAndSolve skol_info tc_tc_ki_bndrs
             $ tcCheckLCsType cs_ty (TheMonoKind rhs_kind)
 
   kvs <- candidateQKiVarsOfType rhs_ty
