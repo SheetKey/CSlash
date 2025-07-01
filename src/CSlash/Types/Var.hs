@@ -417,8 +417,17 @@ class AsGenericTy thing where
 class AsGenericKi thing where
   asGenericKi :: IsKiVar kv => thing KiVar -> thing kv
 
-instance AsGenericKi TyVar
-instance AsGenericKi AnyTyVar
+instance AsGenericKi TyVar where
+  asGenericKi (TyVar (TyVar' { _varKind = kind, .. }))
+    = TyVar $ TyVar' { _varKind = asGenericKi kind, .. }
+  asGenericKi other = panic "AsGenericKi TyVar other"
+                      
+instance AsGenericKi AnyTyVar where
+  asGenericKi (AnyTyVar (TyVar' { _varKind = kind, .. }))
+    = AnyTyVar $ TyVar' { _varKind = asGenericKi kind, .. }
+  asGenericKi (AnyTyVar (TcTyVar' { _varKind = kind, .. }))
+    = AnyTyVar $ TcTyVar' { _varKind = asGenericKi kind, .. }
+  asGenericKi other = panic "AsGenericKi TyVar other"
 
 instance AsAnyTy Id
 
@@ -479,6 +488,7 @@ instance IsKiVar kv => IsTyVar (TyVar kv) kv where
   mkTyVar name kind = TyVar (TyVar' { _varName = name
                                     , _realUnique = nameUnique name
                                     , _varKind = kind })
+  toGenericTyVar var = var
 
 {- *********************************************************************
 *                                                                      *
@@ -595,6 +605,7 @@ instance IsKiVar kv => IsTyVar (AnyTyVar kv) kv where
   mkTyVar name kind = AnyTyVar (TyVar' { _varName = name
                                        , _realUnique = nameUnique name
                                        , _varKind = kind })
+  toGenericTyVar (TyVar var) = AnyTyVar var
 
 instance ToTcTyVarMaybe (AnyTyVar kv) kv where
   toTcTyVar_maybe (AnyTyVar v@(TcTyVar' {})) = Just $ TcTyVar v
@@ -626,6 +637,7 @@ instance ToAnyKiVar KiVar where
 
 instance IsKiVar KiVar where
   mkKiVar name = KiVar (KiVar' { _varName = name, _realUnique = nameUnique name })
+  toGenericKiVar var = var
 
 {- *********************************************************************
 *                                                                      *
@@ -680,6 +692,7 @@ instance ToAnyKiVar AnyKiVar where
 
 instance IsKiVar AnyKiVar where
   mkKiVar name = AnyKiVar (KiVar' { _varName = name, _realUnique = nameUnique name })
+  toGenericKiVar (KiVar var) = AnyKiVar var
 
 instance ToKiVarMaybe AnyKiVar where
   toKiVar_maybe (AnyKiVar v@(KiVar' {})) = Just $ KiVar v
