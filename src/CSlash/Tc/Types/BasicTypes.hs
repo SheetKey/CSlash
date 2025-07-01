@@ -23,6 +23,10 @@ import CSlash.Core.TyCon  ( TyCon, AnyTyCon, tyConKind )
 import CSlash.Utils.Outputable
 import CSlash.Utils.Misc
 
+---------------------------
+-- The TcBinderStack
+---------------------------
+
 type TcBinderStack = [TcBinder]
 
 type TcId = Id (AnyTyVar AnyKiVar) AnyKiVar
@@ -44,6 +48,22 @@ instance HasOccName TcBinder where
   occName (TcIdBndr_ExpType name _ _) = occName name
   occName (TcTvBndr name _) = occName name
   occName (TcKvBndr name _) = occName name
+
+{- *********************************************************************
+*                                                                      *
+             Type signatures
+*                                                                      *
+********************************************************************* -}
+
+type TcSigFun = Name -> Maybe TcSigInfo
+
+data TcSigInfo = TcIdSig TcCompleteSig
+
+data TcCompleteSig = CSig
+  { sig_ndr :: TcId
+  , sig_ctxt :: UserTypeCtxt
+  , sig_loc :: SrcSpan
+  }
 
 {- *********************************************************************
 *                                                                      *
