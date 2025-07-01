@@ -135,23 +135,23 @@ writeMetaKiVarRef kivar ref ki
 *                                                                      *
 ********************************************************************* -}
 
-zonkTcType :: TcType -> ZonkM TcType
-zonkTcTypes :: [TcType] -> ZonkM [TcType]
-(zonkTcType, zonkTcTypes) = panic "mapType zonkTcTypeMapper"
+zonkTcType :: AnyType -> ZonkM AnyType
+zonkTcTypes :: [AnyType] -> ZonkM [AnyType]
+(zonkTcType, zonkTcTypes) = mapType zonkTcTypeMapper
   where
     zonkTcTypeMapper
       :: TypeMapper
-         (TcTyVar AnyKiVar) AnyKiVar
-         (TcTyVar AnyKiVar) AnyKiVar
+         (AnyTyVar AnyKiVar) AnyKiVar
+         (AnyTyVar AnyKiVar) AnyKiVar
          () ZonkM
-    zonkTcTypeMapper = panic "zonkTcTypeMapper"
-      -- TypeMapper
-      -- { tm_tyvar = const zonkTcTyVar
-      -- , tm_tybinder = \_ tv _ k -> zonkTyVarKind tv >>= k ()
-      -- , tm_tylambinder = \_ tv k -> zonkTyVarKind tv >>= k ()
-      -- , tm_tylamkibinder = \_ kv k -> k () kv
-      -- , tm_tycon = zonkTcTyCon
-      -- }
+    zonkTcTypeMapper = TypeMapper
+      { tm_tyvar = const zonkAnyTyVar
+      , tm_tybinder = \_ tv _ k -> zonkTyVarKind tv >>= k ()
+      , tm_tylambinder = \_ tv k -> zonkTyVarKind tv >>= k ()
+      , tm_tylamkibinder = \_ kv k -> k () kv
+      , tm_tycon = zonkTcTyCon
+      , tm_mkcm = zonkTcMonoKindMapper
+      }
 
 zonkTcTyCon :: AnyTyCon -> ZonkM AnyTyCon
 zonkTcTyCon tc
@@ -159,7 +159,22 @@ zonkTcTyCon tc
                           return $ setTcTyConKind tc tck'
   | otherwise = return tc
 
-zonkTcTyVar :: TcTyVar AnyKiVar -> ZonkM TcType
+zonkAnyTyVar :: AnyTyVar AnyKiVar -> ZonkM AnyType
+zonkAnyTyVar tv = handleAnyTv (const simple)
+  (\ tv -> case tcVarDetails tv of
+             SkolemVar {} -> simple
+             MetaVar { mv_ref = ref } -> do
+               cts <- readTcRef ref
+               case cts of
+                 Flexi -> simple
+                 Indirect ty -> do zty <- zonkTcType ty
+                                   writeTcRef ref (Indirect zty)
+                                   return zty
+  ) tv
+  where
+    simple = return $ mkTyVarTy tv
+
+zonkTcTyVar :: TcTyVar AnyKiVar -> ZonkM AnyType
 zonkTcTyVar tv
   -- | isTcTyVar tv
   = case tcVarDetails tv of

@@ -399,15 +399,15 @@ tcInferTyApps_nosat orig_cs_ty fun orig_cs_args = do
         let arrows_needed = n_initial_val_args all_args
         co <- matchExpectedFunKind (CsTypeRnThing $ unLoc cs_ty) arrows_needed substed_fun_ki
 
-        fun' <- liftZonkM $ panic "zonkTcType (fun `mkCastTy` co)"
+        fun' <- liftZonkM $ zonkTcType (fun `mkCastTy` co)
 
         traceTc "tcInferTyApps (no binder)"
           $ vcat [ ppr fun <+> colon <+> ppr fun_ki
                  , ppr arrows_needed
-                 , panic "ppr co"
-                 , panic "ppr fun' <+> colon <+> ppr (typeKind fun')" ]
+                 , ppr co
+                 , ppr fun' <+> colon <+> ppr (typeKind fun') ]
 
-        panic "go_init n fun' all_args"
+        go_init n fun' all_args
 
       -- visible kind application in user code (not possible)
       (CsTypeArg {} : _, _) -> panic "tcInferTyApps/go_mono/CsTypeArg"
