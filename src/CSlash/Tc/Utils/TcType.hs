@@ -189,18 +189,18 @@ anyTypeLevel ty = tenv_lvl `maxTcLevel` kenv_lvl
     add :: TcVar v => v -> TcLevel -> TcLevel
     add v lvl = lvl `maxTcLevel` varLevel v
 
-tcTypeLevel :: TcType -> TcLevel
-tcTypeLevel ty = tenv_lvl `maxTcLevel` kenv_lvl
-  where
-    (tenv, kenv) = varsOfTypeDSet ty
-    tenv_lvl = nonDetStrictFoldDVarSet add topTcLevel tenv
-    kenv_lvl = nonDetStrictFoldDVarSet addk topTcLevel kenv
+-- tcTypeLevel :: TcType -> TcLevel
+-- tcTypeLevel ty = tenv_lvl `maxTcLevel` kenv_lvl
+--   where
+--     (tenv, kenv) = varsOfTypeDSet ty
+--     tenv_lvl = nonDetStrictFoldDVarSet add topTcLevel tenv
+--     kenv_lvl = nonDetStrictFoldDVarSet addk topTcLevel kenv
 
-    add :: TcVar v => v -> TcLevel -> TcLevel
-    add v lvl = lvl `maxTcLevel` varLevel v
+--     add :: TcVar v => v -> TcLevel -> TcLevel
+--     add v lvl = lvl `maxTcLevel` varLevel v
 
-    addk :: AnyKiVar -> TcLevel -> TcLevel
-    addk = handleAnyKv (\_ lvl -> lvl) add
+--     addk :: AnyKiVar -> TcLevel -> TcLevel
+--     addk = handleAnyKv (\_ lvl -> lvl) add
 
 anyMonoKindLevel :: AnyMonoKind -> TcLevel
 anyMonoKindLevel ki = nonDetStrictFoldDVarSet add topTcLevel (varsOfMonoKindDSet ki)
@@ -401,15 +401,15 @@ mkMinimalBy get_pred xs = go preds_with_eqx []
 *                                                                      *
 ********************************************************************* -}
 
-tcSplitForAllTyVarBinders :: VarHasKind tv kv => Type tv kv -> ([ForAllBinder tv], Type tv kv)
+tcSplitForAllTyVarBinders :: IsTyVar tv kv => Type tv kv -> ([ForAllBinder tv], Type tv kv)
 tcSplitForAllTyVarBinders ty = sty
   where sty = splitForAllForAllTyBinders ty
 
-tcSplitTyLamTyVarBinders :: VarHasKind tv kv => Type tv kv -> ([tv], Type tv kv)
+tcSplitTyLamTyVarBinders :: IsTyVar tv kv => Type tv kv -> ([tv], Type tv kv)
 tcSplitTyLamTyVarBinders ty = sty
   where sty = splitTyLamTyBinders ty
 
-tcSplitBigLamTyVarBinders :: VarHasKind tv kv => Type tv kv -> ([kv], Type tv kv)
+tcSplitBigLamTyVarBinders :: IsTyVar tv kv => Type tv kv -> ([kv], Type tv kv)
 tcSplitBigLamTyVarBinders ty = sty
   where sty = splitBigLamTyBinders ty
 

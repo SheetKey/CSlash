@@ -61,27 +61,27 @@ import Data.Bifunctor (bimap)
 *                                                                      *
 ********************************************************************* -}
 
-coreView :: VarHasKind tv kv => Type tv kv -> Maybe (Type tv kv)
+coreView :: IsTyVar tv kv => Type tv kv -> Maybe (Type tv kv)
 coreView (TyConApp tc tys) = expandSynTyConApp_maybe tc tys
 coreView _ = Nothing
 {-# INLINE coreView #-}
 
-coreFullView :: VarHasKind tv kv => Type tv kv -> Type tv kv
+coreFullView :: IsTyVar tv kv => Type tv kv -> Type tv kv
 coreFullView ty@(TyConApp tc _)
   | isTypeSynonymTyCon tc = core_full_view ty
 coreFullView ty = ty
 {-# INLINE coreFullView #-}
 
-core_full_view :: VarHasKind tv kv => Type tv kv -> Type tv kv
+core_full_view :: IsTyVar tv kv => Type tv kv -> Type tv kv
 core_full_view ty
   | Just ty' <- coreView ty = core_full_view ty'
   | otherwise = ty
 
-expandSynTyConApp_maybe :: VarHasKind tv kv => TyCon tv kv -> [Type tv kv] -> Maybe (Type tv kv)
+expandSynTyConApp_maybe :: IsTyVar tv kv => TyCon tv kv -> [Type tv kv] -> Maybe (Type tv kv)
 expandSynTyConApp_maybe tc arg_tys
   | Just rhs <- synTyConDefn_maybe tc
   , arg_tys `saturates` tyConArity tc
-  = Just $! (panic "expand_syn rhs arg_tys")
+  = Just $! (expand_syn rhs arg_tys)
   | otherwise
   = Nothing
 
@@ -90,10 +90,10 @@ saturates _ 0 = True
 saturates [] _ = False
 saturates (_:tys) n = assert (n >= 0) $ saturates tys (n-1)
 
-expand_syn :: VarHasKind tv kv => Type tv kv -> [Type tv kv] -> Type tv kv
+expand_syn :: IsTyVar tv kv => Type (TyVar KiVar) KiVar -> [Type tv kv] -> Type tv kv
 expand_syn rhs arg_tys
-  | null arg_tys = rhs
-  | otherwise = go rhs empty_subst arg_tys
+  | null arg_tys = asGenericTyKi rhs
+  | otherwise = go (asGenericTyKi rhs) empty_subst arg_tys
   where
     empty_subst = mkEmptyTvSubst in_scope
     in_scope = bimap mkInScopeSet mkInScopeSet $ case shallowVarsOfTypes arg_tys of
@@ -121,7 +121,7 @@ data TypeMapper tv kv tv' kv' env m = TypeMapper
 
 {-# INLINE mapType #-}
 mapType
-  :: (Monad m, VarHasKind tv kv, VarHasKind tv' kv') => TypeMapper tv kv tv' kv' () m
+  :: (Monad m, VarHasKind tv kv, IsTyVar tv' kv') => TypeMapper tv kv tv' kv' () m
   -> ( Type tv kv -> m (Type tv' kv')
      , [Type tv kv] -> m [Type tv' kv'] )
 mapType mapper = case mapTypeX mapper of
@@ -129,7 +129,7 @@ mapType mapper = case mapTypeX mapper of
 
 {-# INLINE mapTypeX #-}
 mapTypeX
-  :: (Monad m, VarHasKind tv kv, VarHasKind tv' kv') => TypeMapper tv kv tv' kv' env m
+  :: (Monad m, VarHasKind tv kv, IsTyVar tv' kv') => TypeMapper tv kv tv' kv' env m
   -> ( env -> Type tv kv -> m (Type tv' kv')
      , env -> [Type tv kv] -> m [Type tv' kv'] )
 mapTypeX (TypeMapper { tm_tyvar = tyvar
@@ -177,7 +177,7 @@ mapTypeX (TypeMapper { tm_tyvar = tyvar
 *                                                                      *
 ********************************************************************* -}
 
-getTyVar_maybe :: VarHasKind tv kv => Type tv kv -> Maybe tv
+getTyVar_maybe :: IsTyVar tv kv => Type tv kv -> Maybe tv
 getTyVar_maybe = getTyVarNoView_maybe . coreFullView
 
 getTyVarNoView_maybe :: Type tv kv -> Maybe tv
@@ -213,7 +213,7 @@ type ErrorMsgType = Type
 *                                                                      *
 ********************************************************************* -}
 
-piResultTys :: (HasDebugCallStack, VarHasKind tv kv) => Kind kv -> [Type tv kv] -> Kind kv
+piResultTys :: (HasDebugCallStack, IsTyVar tv kv) => Kind kv -> [Type tv kv] -> Kind kv
 piResultTys ki [] = ki
 piResultTys ki orig_args@(arg:args)
   | Mono mki <- ki
@@ -244,7 +244,7 @@ piResultTys ki orig_args@(arg:args)
       | otherwise
       = pprPanic "piResultTys4" (ppr ki $$ ppr orig_args $$ ppr all_args)
 
-monoPiResultTys :: VarHasKind tv kv => MonoKind kv -> [Type tv kv] -> MonoKind kv
+monoPiResultTys :: IsTyVar tv kv => MonoKind kv -> [Type tv kv] -> MonoKind kv
 monoPiResultTys ki [] = ki
 monoPiResultTys ki orig_args@(arg:args)
   | FunKi { fk_res = res } <- ki
@@ -258,11 +258,11 @@ monoPiResultTys ki orig_args@(arg:args)
 *                                                                      *
 ********************************************************************* -}
 
-mkCastTy :: VarHasKind tv kv => Type tv kv -> KindCoercion kv -> Type tv kv
+mkCastTy :: IsTyVar tv kv => Type tv kv -> KindCoercion kv -> Type tv kv
 mkCastTy orig_ty co | isReflKiCo co = orig_ty
 mkCastTy orig_ty co = mk_cast_ty orig_ty co
 
-mk_cast_ty :: VarHasKind tv kv => Type tv kv -> KindCoercion kv -> Type tv kv
+mk_cast_ty :: IsTyVar tv kv => Type tv kv -> KindCoercion kv -> Type tv kv
 mk_cast_ty orig_ty co = go orig_ty
   where
     -- go :: Type -> Type
@@ -277,7 +277,7 @@ mk_cast_ty orig_ty co = go orig_ty
 *                                                                      *
 ********************************************************************* -}
 
-splitForAllForAllTyBinders :: VarHasKind tv kv => Type tv kv -> ([ForAllBinder tv], Type tv kv)
+splitForAllForAllTyBinders :: IsTyVar tv kv => Type tv kv -> ([ForAllBinder tv], Type tv kv)
 splitForAllForAllTyBinders ty = split ty ty []
   where
     split _ (ForAllTy b res) bs = split res res (b : bs)
@@ -285,28 +285,28 @@ splitForAllForAllTyBinders ty = split ty ty []
     split orig_ty _ bs = (reverse bs, orig_ty)
 {-# INLINE splitForAllForAllTyBinders #-}
 
-splitTyLamTyBinders :: VarHasKind tv kv => Type tv kv -> ([tv], Type tv kv)
+splitTyLamTyBinders :: IsTyVar tv kv => Type tv kv -> ([tv], Type tv kv)
 splitTyLamTyBinders ty = split ty ty []
   where
     split _ (TyLamTy b res) bs = split res res (b : bs)
     split orig_ty ty bs | Just ty' <- coreView ty = split orig_ty ty' bs
     split orig_ty _ bs = (reverse bs, orig_ty)
 
-splitBigLamTyBinders :: VarHasKind tv kv => Type tv kv -> ([kv], Type tv kv)
+splitBigLamTyBinders :: IsTyVar tv kv => Type tv kv -> ([kv], Type tv kv)
 splitBigLamTyBinders ty = split ty ty []
   where
     split _ (BigTyLamTy b res) bs = split res res (b : bs)
     split orig_ty ty bs | Just ty' <- coreView ty = split orig_ty ty' bs
     split orig_ty _ bs = (reverse bs, orig_ty)
 
-splitForAllTyVars :: VarHasKind tv kv => Type tv kv -> ([tv], Type tv kv)
+splitForAllTyVars :: IsTyVar tv kv => Type tv kv -> ([tv], Type tv kv)
 splitForAllTyVars ty = split ty ty []
   where
     split _ (ForAllTy (Bndr tv _) ty) tvs = split ty ty (tv:tvs)
     split orig_ty ty tvs | Just ty' <- coreView ty = split orig_ty ty' tvs
     split orig_ty _ tvs = (reverse tvs, orig_ty)
 
-isTauTy :: VarHasKind tv kv => Type tv kv -> Bool
+isTauTy :: IsTyVar tv kv => Type tv kv -> Bool
 isTauTy ty | Just ty' <- coreView ty = isTauTy ty'
 isTauTy (TyVarTy _) = True
 isTauTy (TyConApp tc tys) = all isTauTy tys && isTauTyCon tc
@@ -316,7 +316,7 @@ isTauTy (ForAllTy {}) = False
 isTauTy (TyLamTy _ ty) = isTauTy ty
 isTauTy other = pprPanic "isTauTy" (ppr other)
 
-isForgetfulTy :: VarHasKind tv kv => Type tv kv -> Bool
+isForgetfulTy :: IsTyVar tv kv => Type tv kv -> Bool
 isForgetfulTy (TyVarTy _) = False
 isForgetfulTy (TyConApp tc tys) = isForgetfulSynTyCon tc || any isForgetfulTy tys
 isForgetfulTy (AppTy a b) = isForgetfulTy a || isForgetfulTy b
@@ -357,12 +357,12 @@ buildSynTyCon name kind arity rhs
 *                                                                      *
 ********************************************************************* -}
 
-typeKind :: (HasDebugCallStack, VarHasKind tv kv) => Type tv kv -> Kind kv
+typeKind :: (HasDebugCallStack, IsTyVar tv kv) => Type tv kv -> Kind kv
 typeKind (BigTyLamTy kv res) = mkForAllKi kv (typeKind res)
 typeKind (TyConApp tc []) = tyConKind tc
 typeKind ty = Mono $ typeMonoKind ty
 
-typeMonoKind :: (HasDebugCallStack, VarHasKind tv kv) => Type tv kv -> MonoKind kv
+typeMonoKind :: (HasDebugCallStack, IsTyVar tv kv) => Type tv kv -> MonoKind kv
 typeMonoKind (TyConApp tc tys) = handle_non_mono (piResultTys (tyConKind tc) tys)
                                  $ \ki -> vcat [ ppr tc <+> colon <+> ppr ki
                                                 , ppr tys ]

@@ -47,8 +47,21 @@ data Type tv kv
   | KindCoercion (KindCoercion kv) -- embed a kind coercion (evidence stuff)
   deriving Data.Data
 
-instance VarHasKind tv kv => Outputable (Type tv kv) where
+instance IsTyVar tv kv => Outputable (Type tv kv) where
   ppr = pprType
+
+instance AsGenericTy Type where
+  asGenericTyKi (TyVarTy tv) = TyVarTy $ toGenericTyVar $ asGenericKi tv
+  asGenericTyKi (AppTy t1 t2) = AppTy (asGenericTyKi t1) (asGenericTyKi t2)
+  asGenericTyKi (TyLamTy tv ty) = TyLamTy (toGenericTyVar $ asGenericKi tv) (asGenericTyKi ty)
+  asGenericTyKi (BigTyLamTy kv ty) = BigTyLamTy (toGenericKiVar kv) (asGenericTyKi ty)
+  asGenericTyKi (TyConApp tc tys) = TyConApp (asGenericTyKi tc) (asGenericTyKi <$> tys)
+  asGenericTyKi (ForAllTy (Bndr tv af) ty)
+    = ForAllTy (Bndr (toGenericTyVar $ asGenericKi tv) af) (asGenericTyKi ty)
+  asGenericTyKi (FunTy k a r) = FunTy (asGenericKi k) (asGenericTyKi a) (asGenericTyKi r)
+  asGenericTyKi (CastTy ty co) = CastTy (asGenericTyKi ty) (asGenericKi co)
+  asGenericTyKi (Embed ki) = Embed (asGenericKi ki)
+  asGenericTyKi (KindCoercion co) = KindCoercion (asGenericKi co)
 
 instance AsAnyTy Type where
   asAnyTy (TyVarTy tv) = TyVarTy (toAnyTyVar tv)
@@ -210,7 +223,7 @@ noView _ = Nothing
 *                                                                      *
 ********************************************************************* -}
 
-typeSize :: (VarHasKind tv kv, Outputable tv, Outputable kv) => Type tv kv -> Int
+typeSize :: (IsTyVar tv kv, Outputable tv, Outputable kv) => Type tv kv -> Int
 typeSize (TyVarTy {}) = 1
 typeSize (AppTy t1 t2) = typeSize t1 + typeSize t2
 typeSize (TyLamTy _ t) = 1 + typeSize t
@@ -222,5 +235,5 @@ typeSize (Embed _) = 1
 typeSize (CastTy ty _) = typeSize ty
 typeSize co@(KindCoercion _) = pprPanic "typeSize" (ppr co)
 
-typesSize :: (VarHasKind tv kv, Outputable tv, Outputable kv) => [Type tv kv] -> Int
+typesSize :: (IsTyVar tv kv, Outputable tv, Outputable kv) => [Type tv kv] -> Int
 typesSize tys = foldr ((+) . typeSize) 0 tys

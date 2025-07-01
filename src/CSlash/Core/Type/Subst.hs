@@ -52,7 +52,7 @@ extendTvSubst :: IsVar tv => TvSubst tv kv -> tv -> Type tv kv -> TvSubst tv kv
 extendTvSubst (TvSubst in_scope tvs ksubst) tv ty
   = TvSubst in_scope (extendVarEnv tvs tv ty) ksubst
 
-instance VarHasKind tv kv => Outputable (TvSubst tv kv) where
+instance IsTyVar tv kv => Outputable (TvSubst tv kv) where
   ppr (TvSubst in_scope tvs ksubst)
       =  text "<InScope =" <+> in_scope_doc
       $$ text " TvSubst   =" <+> ppr tvs
@@ -76,7 +76,7 @@ isValidTvSubst (TvSubst in_scope tenv ksubst@(KvSubst k_in_scope _)) =
     (tenvFVs, kcvenvFVs, kenvFVs) = shallowVarsOfTyVarEnv tenv
 
 checkValidTvSubst
-  :: (HasDebugCallStack, VarHasKind tv kv)
+  :: (HasDebugCallStack, IsTyVar tv kv)
   => TvSubst tv kv -> [Type tv kv] -> a -> a
 checkValidTvSubst subst@(TvSubst in_scope tenv ksubst@(KvSubst k_in_scope kenv)) tys a
   = assertPpr (isValidTvSubst subst)
@@ -106,20 +106,20 @@ checkValidTvSubst subst@(TvSubst in_scope tenv ksubst@(KvSubst k_in_scope kenv))
     tysKFVsInScope = needInScopeKi `varSetInScope` k_in_scope
 
 substTy
-  :: (HasDebugCallStack, VarHasKind tv kv)
+  :: (HasDebugCallStack, IsTyVar tv kv)
   => TvSubst tv kv -> Type tv kv -> Type tv kv
 substTy subst ty
   | isEmptyTvSubst subst = ty
   | otherwise = checkValidTvSubst subst [ty] $
                 subst_ty subst ty
 
-substTyUnchecked :: VarHasKind tv kv => TvSubst tv kv -> Type tv kv -> Type tv kv
+substTyUnchecked :: IsTyVar tv kv => TvSubst tv kv -> Type tv kv -> Type tv kv
 substTyUnchecked subst ty
   | isEmptyTvSubst subst = ty
   | otherwise = subst_ty subst ty
 
 subst_ty
-  :: VarHasKind tv kv
+  :: IsTyVar tv kv
   => TvSubst tv kv -> Type tv kv -> Type tv kv
 subst_ty subst@(TvSubst is tenv ksubst) ty = go ty
   where
@@ -152,11 +152,11 @@ substTyVar (TvSubst _ tenv _) tv
       Just ty -> ty
       Nothing -> TyVarTy tv
 
-substTyVarBndrUnchecked :: VarHasKind tv kv => TvSubst tv kv -> tv -> (TvSubst tv kv, tv)
+substTyVarBndrUnchecked :: IsTyVar tv kv => TvSubst tv kv -> tv -> (TvSubst tv kv, tv)
 substTyVarBndrUnchecked = substTyVarBndrUsing substMonoKi
 
 substTyVarBndrUsing
-  :: VarHasKind tv kv
+  :: IsTyVar tv kv
   => (KvSubst kv -> MonoKind kv -> MonoKind kv)
   -> TvSubst tv kv -> tv -> (TvSubst tv kv, tv)
 substTyVarBndrUsing subst_fn subst@(TvSubst in_scope tenv ksubst) old_var

@@ -120,6 +120,13 @@ data TyCon tv kv = TyCon
   , tyConDetails :: !(TyConDetails)
   }
 
+instance AsGenericTy TyCon where
+  asGenericTyKi (TyCon { tyConKind = kind, .. })
+    = let tc = TyCon { tyConKind = asGenericKi kind
+                     , tyConNullaryTy = mkNakedTyConTy tc
+                     , .. }
+      in tc
+
 instance AsAnyTy TyCon where
   asAnyTy (TyCon { {-tyConDetails = details,-} .. })
     = let tc' = TyCon { {-tyConDetails = asAnyTy details

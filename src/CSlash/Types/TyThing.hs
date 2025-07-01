@@ -25,6 +25,11 @@ data TyThing tv kv
 -- Wire-in TyThing
 type WITyThing = TyThing (TyVar KiVar) KiVar
 
+instance AsAnyTy TyThing where
+  asAnyTyKi (AnId id) = AnId $ asAnyTyKi id
+  asAnyTyKi (AConLike _) = panic "asAnyTyKi AConLike"
+  asAnyTyKi (ATyCon tc) = ATyCon $ asAnyTyKi tc
+
 instance (Outputable tv, Outputable kv) => Outputable (TyThing tv kv) where
   ppr = pprShortTyThing
 

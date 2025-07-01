@@ -52,44 +52,44 @@ writeMetaTyVar :: HasDebugCallStack => TcTyVar TcKiVar -> TcType -> ZonkM ()
 writeMetaTyVar = undefined
 
 writeMetaTyVarRef
-  :: (HasDebugCallStack, VarHasKind tv kv)
+  :: (HasDebugCallStack, IsTyVar tv kv)
   => TcTyVar AnyKiVar
   -> TcRef (MetaDetails (Type tv kv))
   -> Type tv kv
   -> ZonkM ()
-writeMetaTyVarRef tyvar ref ty
-  | not debugIsOn
-  = do traceZonk "writeMetaTyVar" (ppr tyvar <+> colon <+> ppr (varKind tyvar)
-                                   <+> text ":=" <+> ppr ty)
-       writeTcRef ref (Indirect ty)
-  | otherwise
-  = do meta_details <- readTcRef ref
-       let tv_kind = varKind tyvar
-           tv_lvl = varLevel tyvar
-       zonked_tv_kind <- zonkTcMonoKind tv_kind
-       zonked_ty <- panic "zonkTcType ty"
-       let zonked_ty_kind = typeKind zonked_ty
-           zonked_ty_lvl = tcTypeLevel zonked_ty
-           level_check_ok = not (zonked_ty_lvl `strictlyDeeperThan` tv_lvl)
-           level_check_msg = ppr zonked_ty_lvl $$ ppr tv_lvl
-                             $$ ppr tyvar $$ ppr ty $$ ppr zonked_ty
-           kind_check_ok = zonked_ty_kind `eqKind` Mono zonked_tv_kind
-           kind_msg = hang (text "Ill-kinded update to meta tyvar")
-                           2 (ppr tyvar <+> colon <+> (ppr tv_kind $$ ppr zonked_tv_kind)
-                              <+> text ":="
-                              <+> ppr ty <+> colon <+> (ppr zonked_ty_kind))
-       traceZonk "writeMetaTyVar" (ppr tyvar <+> text ":=" <+> ppr ty)
+writeMetaTyVarRef tyvar ref ty = panic "writeMetaTyVarRef"
+  -- | not debugIsOn
+  -- = do traceZonk "writeMetaTyVar" (ppr tyvar <+> colon <+> ppr (varKind tyvar)
+  --                                  <+> text ":=" <+> ppr ty)
+  --      writeTcRef ref (Indirect ty)
+  -- | otherwise
+  -- = do meta_details <- readTcRef ref
+  --      let tv_kind = varKind tyvar
+  --          tv_lvl = varLevel tyvar
+  --      zonked_tv_kind <- zonkTcMonoKind tv_kind
+  --      zonked_ty <- panic "zonkTcType ty"
+  --      let zonked_ty_kind = panic "typeKind zonked_ty"
+  --          zonked_ty_lvl = panic "tcTypeLevel zonked_ty"
+  --          level_check_ok = not (zonked_ty_lvl `strictlyDeeperThan` tv_lvl)
+  --          level_check_msg = ppr zonked_ty_lvl $$ ppr tv_lvl
+  --                            $$ ppr tyvar $$ ppr ty $$ ppr zonked_ty
+  --          kind_check_ok = zonked_ty_kind `eqKind` Mono zonked_tv_kind
+  --          kind_msg = hang (text "Ill-kinded update to meta tyvar")
+  --                          2 (ppr tyvar <+> colon <+> (ppr tv_kind $$ ppr zonked_tv_kind)
+  --                             <+> text ":="
+  --                             <+> ppr ty <+> colon <+> (ppr zonked_ty_kind))
+  --      traceZonk "writeMetaTyVar" (ppr tyvar <+> text ":=" <+> ppr ty)
 
-       massertPpr (isFlexi meta_details) (double_upd_msg meta_details)
+  --      massertPpr (isFlexi meta_details) (double_upd_msg meta_details)
 
-       massertPpr level_check_ok level_check_msg
+  --      massertPpr level_check_ok level_check_msg
 
-       massertPpr kind_check_ok kind_msg
+  --      massertPpr kind_check_ok kind_msg
 
-       writeTcRef ref (Indirect ty)
-  where
-    double_upd_msg details = hang (text "Double update of meta tyvar")
-                                  2 (ppr tyvar $$ ppr details)
+  --      writeTcRef ref (Indirect ty)
+  -- where
+  --   double_upd_msg details = hang (text "Double update of meta tyvar")
+  --                                 2 (ppr tyvar $$ ppr details)
 {-# INLINE writeMetaTyVarRef #-}
 
 writeMetaKiVar :: HasDebugCallStack => TcKiVar -> AnyMonoKind -> ZonkM ()
@@ -137,7 +137,7 @@ writeMetaKiVarRef kivar ref ki
 
 zonkTcType :: TcType -> ZonkM TcType
 zonkTcTypes :: [TcType] -> ZonkM [TcType]
-(zonkTcType, zonkTcTypes) = mapType zonkTcTypeMapper
+(zonkTcType, zonkTcTypes) = panic "mapType zonkTcTypeMapper"
   where
     zonkTcTypeMapper
       :: TypeMapper
@@ -185,9 +185,9 @@ zonkTcTyVarsToTcTyVars = mapM zonkTcTyVarToTcTyVar
 zonkTcTyVarToTcTyVar :: HasDebugCallStack => TcTyVar AnyKiVar -> ZonkM (TcTyVar AnyKiVar)
 zonkTcTyVarToTcTyVar tv = do
   ty <- zonkTcTyVar tv
-  let tv' = case getTyVar_maybe ty of
+  let tv' = case panic "getTyVar_maybe ty" of
               Just tv' -> tv'
-              Nothing -> pprPanic "zonkTcTyVarToTcTyVar" (ppr tv $$ ppr ty)
+              Nothing -> pprPanic "zonkTcTyVarToTcTyVar" (panic "ppr tv $$ ppr ty")
   return tv'
 
 {- *********************************************************************

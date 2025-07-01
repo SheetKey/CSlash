@@ -28,6 +28,7 @@ module CSlash.Types.Var
   , FromKiVar(..), FromTcKiVar(..), FromAnyKiVar(..)
   , FromId(..)
   , AsAnyTy(..), AsAnyKi(..)
+  , AsGenericTy(..), AsGenericKi(..)
 
     {-* TyVar *-}
   , TyVar, KiCoVar, KiEvVar
@@ -190,7 +191,7 @@ instance {-# OVERLAPPING #-} Outputable kv => Outputable (Var Void kv) where
        then parens (ppr (_varName var) <+> ppr_var <> ppr_tyki)
        else ppr (_varName var) <> ppr_var
     
-instance VarHasKind tv kv => Outputable (Var tv kv) where
+instance IsTyVar tv kv => Outputable (Var tv kv) where
   ppr var = 
     getPprDebug $ \ debug ->
     getPprStyle $ \ sty ->
@@ -305,9 +306,11 @@ class IsVar v => TcVar v where
 
 class ToAnyKiVar v => IsKiVar v where
   mkKiVar :: Name -> v  
+  toGenericKiVar :: KiVar -> v
 
 class (IsKiVar kv, VarHasKind tv kv, ToAnyTyVar tv kv) => IsTyVar tv kv | tv -> kv where
   mkTyVar :: Name -> MonoKind kv -> tv
+  toGenericTyVar :: TyVar kv -> tv
 
 class ToTcTyVarMaybe v tv | v -> tv where
   toTcTyVar_maybe :: v -> Maybe (TcTyVar tv)
@@ -334,9 +337,9 @@ instance ToKiVarMaybe (Var tv kv) where
 class IsVar v => ToTcKiVarMaybe v where
   toTcKiVar_maybe :: v -> Maybe TcKiVar
 
-instance VarHasKind tv kv => ToTcKiVarMaybe (Var tv kv) where
-  toTcKiVar_maybe kv@(TcKiVar' {}) = Just $ TcKiVar $ vacuousBimap' kv
-  toTcKiVar_maybe _ = Nothing
+-- instance VarHasKind tv kv => ToTcKiVarMaybe (Var tv kv) where
+--   toTcKiVar_maybe kv@(TcKiVar' {}) = Just $ TcKiVar $ vacuousBimap' kv
+--   toTcKiVar_maybe _ = Nothing
 
 class ToAnyKiVarMaybe v where
   toAnyKiVar_maybe :: v -> Maybe AnyKiVar
@@ -407,6 +410,17 @@ class AsAnyTy thing where
 
 class AsAnyKi thing where
   asAnyKi :: ToAnyKiVar kv => thing kv -> thing AnyKiVar
+
+class AsGenericTy thing where
+  asGenericTyKi :: IsTyVar tv kv => thing (TyVar KiVar) KiVar -> thing tv kv
+
+class AsGenericKi thing where
+  asGenericKi :: IsKiVar kv => thing KiVar -> thing kv
+
+instance AsGenericKi TyVar
+instance AsGenericKi AnyTyVar
+
+instance AsAnyTy Id
 
 instance AsAnyKi TyVar
 instance AsAnyKi TcTyVar
@@ -716,9 +730,9 @@ newtype Id tv kv = Id (Var tv kv)
   deriving ( NamedThing, Uniquable, Eq, Ord, Data, HasOccName
            , VarHasName, VarHasUnique)
 
-deriving instance VarHasKind tv kv => Outputable (Id tv kv)
+deriving instance IsTyVar tv kv => Outputable (Id tv kv)
     
-instance VarHasKind tv kv => VarHasType (Id tv kv) tv kv where
+instance IsTyVar tv kv => VarHasType (Id tv kv) tv kv where
   varType (Id (Id' { _varType = ty })) = ty
   varType other = pprPanic "Bad Id" (ppr other)
 

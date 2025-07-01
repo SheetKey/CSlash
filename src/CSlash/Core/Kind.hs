@@ -266,6 +266,15 @@ instance Outputable FunKiFlag where
   ppr FKF_K_K = text "[->]"
   ppr FKF_C_K = text "[=>]"
 
+instance AsGenericKi Kind where
+  asGenericKi (ForAllKi kv ki) = ForAllKi (toGenericKiVar kv) (asGenericKi ki)
+  asGenericKi (Mono ki) = Mono (asGenericKi ki)
+
+instance AsGenericKi MonoKind where
+  asGenericKi (KiVarKi kv) = KiVarKi (toGenericKiVar kv)
+  asGenericKi (KiConApp kc kis) = KiConApp kc (asGenericKi <$> kis)
+  asGenericKi (FunKi f arg res) = FunKi f (asGenericKi arg) (asGenericKi res)
+
 instance AsAnyKi Kind where
   asAnyKi (ForAllKi kv ki) = ForAllKi (toAnyKiVar kv) (asAnyKi ki)
   asAnyKi (Mono ki) = Mono (asAnyKi ki)
@@ -360,6 +369,8 @@ data KindCoercionHole kv = CoercionHole
   , ch_ref :: IORef (Maybe (KindCoercion kv))
   }
 
+instance AsGenericKi KindCoercion
+instance AsGenericKi KindCoercionHole
 instance AsAnyKi KindCoercion
 instance AsAnyKi KindCoercionHole
 

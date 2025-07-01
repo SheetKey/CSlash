@@ -56,7 +56,7 @@ import CSlash.Types.Name
 import CSlash.Types.Name.Set
 import CSlash.Types.Name.Env
 import CSlash.Types.Id
-import CSlash.Types.Var (KiVar, AnyKiVar)
+import CSlash.Types.Var (KiVar, AnyKiVar, asAnyTyKi)
 -- import CSlash.Types.Id.Info ( RecSelParent(..) )
 import CSlash.Types.Name.Reader
 import CSlash.Types.TyThing
@@ -137,7 +137,7 @@ tcLookup name = do
   local_env <- getLclTyKiEnv
   case lookupNameEnv local_env name of
     Just thing -> return thing
-    Nothing -> panic "AGlobal <$> tcLookupGlobal name"
+    Nothing -> (AGlobal . asAnyTyKi) <$> tcLookupGlobal name
 
 tcLookupTcTyCon :: HasDebugCallStack => Name -> TcM AnyTyCon
 tcLookupTcTyCon name = do

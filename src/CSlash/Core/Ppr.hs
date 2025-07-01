@@ -21,13 +21,13 @@ pprCoreExpr = undefined
 instance OutputableBndr b => Outputable (Expr b) where
   ppr expr = pprCoreExpr expr
 
-instance VarHasKind tv kv => OutputableBndr (Var tv kv) where
+instance IsTyVar tv kv => OutputableBndr (Var tv kv) where
   pprBndr = undefined
   pprInfixOcc = undefined
   pprPrefixOcc = undefined
   bndrIsJoin_maybe = undefined
 
-instance VarHasKind tv kv => OutputableBndr (Id tv kv) where
+instance IsTyVar tv kv => OutputableBndr (Id tv kv) where
   pprBndr = undefined
   pprInfixOcc = undefined
   pprPrefixOcc = undefined

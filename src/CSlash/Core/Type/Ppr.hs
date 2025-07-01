@@ -14,13 +14,13 @@ import CSlash.Utils.Misc
 import CSlash.Utils.Panic
 import CSlash.Types.Basic
 
-pprType :: VarHasKind tv kv => Type tv kv -> SDoc
+pprType :: IsTyVar tv kv => Type tv kv -> SDoc
 pprType = pprPrecType topPrec
 
-pprPrecType :: VarHasKind tv kv => PprPrec -> Type tv kv -> SDoc
+pprPrecType :: IsTyVar tv kv => PprPrec -> Type tv kv -> SDoc
 pprPrecType = pprPrecTypeX emptyTidyEnv
 
-pprPrecTypeX :: VarHasKind tv kv => MkTidyEnv tv kv -> PprPrec -> Type tv kv -> SDoc
+pprPrecTypeX :: IsTyVar tv kv => MkTidyEnv tv kv -> PprPrec -> Type tv kv -> SDoc
 pprPrecTypeX env prec ty
   = getPprStyle $ \ sty ->
     getPprDebug $ \ debug ->
@@ -36,7 +36,7 @@ pprTyVar tv = parens (ppr tv <+> colon <+> ppr kind)
   where
     kind = varKind tv
 
-debug_ppr_ty :: VarHasKind tv kv => PprPrec -> Type tv kv -> SDoc
+debug_ppr_ty :: IsTyVar tv kv => PprPrec -> Type tv kv -> SDoc
 
 debug_ppr_ty _ (TyVarTy tv) = ppr tv
 

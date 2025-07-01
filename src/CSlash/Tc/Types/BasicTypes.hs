@@ -25,7 +25,7 @@ import CSlash.Utils.Misc
 
 type TcBinderStack = [TcBinder]
 
-type TcId = Id (TcTyVar TcKiVar) TcKiVar
+type TcId = Id (AnyTyVar AnyKiVar) AnyKiVar
 
 data TcBinder
   = TcIdBndr TcId TopLevelFlag
@@ -54,7 +54,7 @@ instance HasOccName TcBinder where
 data TcTyKiThing
   = AGlobal (TyThing (AnyTyVar AnyKiVar) AnyKiVar)
   | ATcId
-    { tct_id :: Id (TcTyVar TcKiVar) TcKiVar
+    { tct_id :: TcId
     , tct_info :: IdBindingInfo
     }
   | ATyVar Name (TcTyVar AnyKiVar)

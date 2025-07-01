@@ -193,7 +193,7 @@ liftKiFV kfv f (tis, kis) (taccl, taccs, kaccl, kaccs)
       (kaccl, kaccs) -> (taccl, taccs, kaccl, kaccs)
 
 fvsOfType
-  :: VarHasKind tv kv
+  :: IsTyVar tv kv
   => Type tv kv -> TyFV tv kv
 
 fvsOfType (TyVarTy v) f (bound_vars, bks) acc@(acc_list, acc_set, kl, ks)
@@ -242,26 +242,26 @@ fvsKiVarBndr :: VarHasKind tv kv => kv -> TyFV tv kv -> TyFV tv kv
 fvsKiVarBndr var fvs = delFV (Right var) fvs
 
 fvsOfTypes
-  :: VarHasKind tv kv
+  :: IsTyVar tv kv
   => [Type tv kv] -> TyFV tv kv
 fvsOfTypes [] fv_cand in_scope acc = emptyFV fv_cand in_scope acc
 fvsOfTypes (ty:tys) fv_cand in_scope acc
   = (fvsOfType ty `unionFV` fvsOfTypes tys) fv_cand in_scope acc
 
-varsOfTypeDSet :: VarHasKind tv kv => Type tv kv -> (MkDVarSet tv, MkDVarSet kv)
+varsOfTypeDSet :: IsTyVar tv kv => Type tv kv -> (MkDVarSet tv, MkDVarSet kv)
 varsOfTypeDSet ty = case fvVarAcc (fvsOfType ty) of
   (tvs, _, kvs, _) -> (mkDVarSet tvs, mkDVarSet kvs)
 
-varsOfTypeList :: VarHasKind tv kv => Type tv kv -> ([tv], [kv])
+varsOfTypeList :: IsTyVar tv kv => Type tv kv -> ([tv], [kv])
 varsOfTypeList ty = case fvVarAcc (fvsOfType ty) of
   (tvs, _, kvs, _) -> (tvs, kvs)
 
-varsOfTypesList :: VarHasKind tv kv => [Type tv kv] -> ([tv], [kv])
+varsOfTypesList :: IsTyVar tv kv => [Type tv kv] -> ([tv], [kv])
 varsOfTypesList tys = case fvVarAcc (fvsOfTypes tys) of
   (tvs, _, kvs, _) -> (tvs, kvs)
 
 typeSomeFreeVars
-  :: VarHasKind tv kv
+  :: IsTyVar tv kv
   => (Either tv kv -> Bool) -> Type tv kv -> (MkVarSet tv, MkVarSet kv)
 typeSomeFreeVars fv_cand ty = case fvVarAcc (filterFV fv_cand $ fvsOfType ty) of
   (_, tvs, _, kvs) -> (tvs, kvs)
@@ -273,7 +273,7 @@ typeSomeFreeVars fv_cand ty = case fvVarAcc (filterFV fv_cand $ fvsOfType ty) of
 ********************************************************************* -}
 
 tyConsOfType
-  :: VarHasKind tv kv
+  :: IsTyVar tv kv
   => Type tv kv -> UniqSet (TyCon tv kv)
 tyConsOfType ty = go ty
   where
@@ -290,6 +290,6 @@ tyConsOfType ty = go ty
     go_tc tc = unitUniqSet tc
 
 tyConsOfTypes
-  :: VarHasKind tv kv
+  :: IsTyVar tv kv
   => [Type tv kv] -> UniqSet (TyCon tv kv)
 tyConsOfTypes tys = foldr (unionUniqSets . tyConsOfType) emptyUniqSet tys
