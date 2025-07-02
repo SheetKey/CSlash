@@ -24,7 +24,7 @@ import CSlash.Tc.Types.Evidence
 import CSlash.Tc.Solver.Solve ( solveSimpleGivens, solveSimpleWanteds )
 -- import GHC.Tc.Solver.Dict    ( makeSuperClasses, solveCallStack )
 -- import GHC.Tc.Solver.Rewrite ( rewriteType )
-import CSlash.Tc.Utils.Unify    ( buildVImplication )
+import CSlash.Tc.Utils.Unify    ( buildKvImplication )
 -- import GHC.Tc.Utils.TcMType as TcM
 import CSlash.Tc.Utils.Monad as TcM
 import CSlash.Tc.Zonk.TcType as TcM
@@ -122,7 +122,7 @@ report_unsolved' skol_info_anon skol_vs tclvl wanted
   = return ()
   | otherwise
   = checkNoErrs $ do
-      implic <- buildVImplication skol_info_anon skol_vs tclvl wanted
+      implic <- buildKvImplication skol_info_anon skol_vs tclvl wanted
       reportAllUnsolved (mkImplicWC (unitBag implic))
 
 simplifyTopWanteds :: WantedConstraints -> TcS WantedConstraints

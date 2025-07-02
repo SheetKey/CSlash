@@ -98,28 +98,36 @@ buildKvImplication skol_info skol_kvs tclvl wanted
   checkImplicationInvariants implic'
   return implic'
 
-emitResidualTvConstraint :: SkolemInfo -> [TcTyVar AnyKiVar] -> TcLevel -> WantedConstraints -> TcM ()
+emitResidualTvConstraint
+  :: SkolemInfo
+  -> [TcTyVar AnyKiVar]
+  -> TcLevel
+  -> WantedConstraints
+  -> TcM ()
 emitResidualTvConstraint skol_info skol_tvs tclvl wanted
   | not (isEmptyWC wanted)
-    || checkTelescopeSkol (getSkolemInfo skol_info)
-  = do implic <- panic "buildVImplication (getSkolemInfo skol_info) skol_tvs tclvl wanted"
+    || checkTelescopeSkol skol_info_anon
+  = do implic <- buildTvImplication skol_info_anon skol_tvs tclvl wanted
        emitImplication implic
   | otherwise
   = return ()
+  where
+    skol_info_anon = getSkolemInfo skol_info
 
-buildVImplication
+buildTvImplication
   :: SkolemInfoAnon
-  -> [TcKiVar]
+  -> [TcTyVar AnyKiVar]
   -> TcLevel
   -> WantedConstraints
   -> TcM Implication
-buildVImplication skol_info skol_vs tclvl wanted
-  = assertPpr (all (isSkolemVar
-                    <||> isTcVarVar) skol_vs) (ppr skol_vs) $ do
+buildTvImplication skol_info skol_vs tclvl wanted
+  = assertPpr (all (isSkolemVar <||> isTcVarVar) skol_vs) (ppr skol_vs) $ do
+      traceTc "buildTvImplication ******************************"
+        $ vcat [ ppr skol_vs, ppr skol_info, ppr wanted ]
       ev_binds <- newTcKiEvBinds
       implic <- newImplication
       let implic' = implic { ic_tclvl = tclvl
-                           , ic_skols = skol_vs
+                           , ic_skols = [] -- skol_vs
                            , ic_given_eqs = NoGivenEqs
                            , ic_wanted = wanted
                            , ic_binds = ev_binds
