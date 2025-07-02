@@ -102,14 +102,13 @@ tcCsSigType ctxt sig_ty = addSigCtxt ctxt sig_ty $ do
 
   (implic, ty) <- tc_lcs_sig_type skol_info sig_ty (expectedKindInCtxt ctxt)
 
-  -- traceTc "tcCsSigType 2" (ppr implic)
-  -- simplifyAndEmitFlatConstraints (mkImplicWC (unitBag implic))
+  traceTc "tcCsSigType 2" (ppr implic)
+  simplifyAndEmitFlatConstraints (mkImplicWC (unitBag implic))
 
-  -- ty <- liftZonkM $ zonkTcType ty
-  -- checkValidType ctxt ty
-  -- traceTc "end tcCsSigType }" (ppr ty)
-  -- return ty
-  panic "unfinished4"
+  ty <- liftZonkM $ zonkTcType ty
+  checkValidType ctxt ty
+  traceTc "end tcCsSigType }" (ppr ty)
+  return ty
 
 tc_lcs_sig_type :: SkolemInfo -> LCsSigType Rn -> ContextKind -> TcM (Implication, AnyType)
 tc_lcs_sig_type skol_info full_cs_ty@(L loc (CsSig { sig_ext = kv_nms

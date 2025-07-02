@@ -512,8 +512,16 @@ checkSkolInfoAnon sk1 sk2 = go sk1 sk2
 type AnyTyFV = TyFV (KiEvVar AnyKiVar) AnyKiVar
 type AnyKiFV = KiFV AnyKiVar
 
+varsOfCt :: Ct -> AnyKiVarSet
+varsOfCt ct = case fvVarAcc (fvsOfCt ct) of
+  (_, kvs) -> kvs
+
 fvsOfCt :: Ct -> AnyKiFV
 fvsOfCt ct = fvsOfMonoKind $ ctPred ct
+
+varsOfCts :: Cts -> AnyKiVarSet
+varsOfCts cts = case fvVarAcc (fvsOfCts cts) of
+  (_, kvs) -> kvs
 
 fvsOfCts :: Cts -> AnyKiFV
 fvsOfCts = foldr (unionFV . fvsOfCt) emptyFV

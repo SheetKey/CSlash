@@ -25,7 +25,7 @@ import CSlash.Tc.Solver.Solve ( solveSimpleGivens, solveSimpleWanteds )
 -- import GHC.Tc.Solver.Dict    ( makeSuperClasses, solveCallStack )
 -- import GHC.Tc.Solver.Rewrite ( rewriteType )
 import CSlash.Tc.Utils.Unify    ( buildKvImplication )
--- import GHC.Tc.Utils.TcMType as TcM
+import CSlash.Tc.Utils.TcMType as TcM
 import CSlash.Tc.Utils.Monad as TcM
 import CSlash.Tc.Zonk.TcType as TcM
 import CSlash.Tc.Solver.InertSet
@@ -105,6 +105,50 @@ pushLevelAndSolveX callsite thing_inside = do
                                        , text "KiEvBinds:" <+> ppr ev_binds
                                        , text "Level:" <+> ppr tclvl ])
   return (tclvl, wanted, ev_binds, res)
+
+simplifyAndEmitFlatConstraints :: WantedConstraints -> TcM ()
+simplifyAndEmitFlatConstraints wanted = do
+  (wanted, binds) <- runTcS (solveWanteds wanted)
+  wanted <- TcM.liftZonkM $ TcM.zonkWC wanted
+
+  traceTc "emitFlatConstraints {" (ppr wanted)
+  case floatKindEqualities wanted of
+    Nothing -> do traceTc "emitFlatConstraints } failing" (ppr wanted)
+                  tclvl <- TcM.getTcLevel
+                  implic <- buildKvImplication unkSkolAnon [] (pushTcLevel tclvl) wanted
+                  emitImplication implic
+                  failM
+    Just simples -> do _ <- promoteAnyKiVarSet (varsOfCts simples)
+                       traceTc "emitFlatConstraints }"
+                         $ vcat [ text "simples:" <+> ppr simples ]
+                       emitSimples simples
+
+floatKindEqualities :: WantedConstraints -> Maybe (Bag Ct)
+floatKindEqualities wc = float_wc emptyVarSet wc
+  where
+    float_wc :: AnyKiVarSet -> WantedConstraints -> Maybe (Bag Ct)
+    float_wc trapping_kvs (WC { wc_simple = simples, wc_impl = implics })
+      | all is_floatable simples
+      = do inner_simples <- flatMapBagM (float_implic trapping_kvs) implics
+           return $ simples `unionBags` inner_simples
+      | otherwise
+      = Nothing
+      where
+        is_floatable ct
+          | insolubleCt ct = False
+          | otherwise = varsOfCt ct `disjointVarSet` trapping_kvs
+
+    float_implic :: AnyKiVarSet -> Implication -> Maybe (Bag Ct)
+    float_implic trapping_kvs (Implic { ic_wanted = wanted
+                                      , ic_given_eqs = given_eqs
+                                      , ic_skols = skols
+                                      , ic_status = status })
+      | isInsolubleStatus status
+      = Nothing
+      | otherwise
+      = do simples <- float_wc (trapping_kvs `extendVarSetList` (toAnyKiVar <$> skols)) wanted
+           when (not (isEmptyBag simples) && given_eqs == MaybeGivenEqs) $ Nothing
+           return simples
 
 reportUnsolved'
   :: SkolemInfo

@@ -98,7 +98,7 @@ data TcRnMessage where
   TcRnSimplifierTooManyIterations :: Cts -> !IntWithInf -> WantedConstraints -> TcRnMessage
   TcRnBindingNameConflict :: !RdrName -> !(NE.NonEmpty SrcSpan) -> TcRnMessage
   TcRnTyThingUsedWrong :: !WrongThingSort -> !TcTyKiThing -> !Name -> TcRnMessage
-  TcRnArityMismatch :: !(TyThing (TyVar KiVar) KiVar) -> !Arity -> !Arity -> TcRnMessage
+  TcRnArityMismatch :: !(TyThing (AnyTyVar AnyKiVar) AnyKiVar) -> !Arity -> !Arity -> TcRnMessage
   deriving Generic
 
 data ShadowedNameProvenance

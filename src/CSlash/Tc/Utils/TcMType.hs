@@ -603,3 +603,13 @@ promoteKiVarSet kvs = do
            $ filter isPromotableMetaVar
            $ nonDetEltsUniqSet kvs
   return $ or bools
+
+promoteAnyKiVarSet :: AnyKiVarSet -> TcM Bool
+promoteAnyKiVarSet kvs = do
+  tclvl <- getTcLevel
+  bools <- mapM (handleAnyKv
+                 (const $ return False)
+                 (promoteMetaKiVarTo tclvl))
+           $ filter (handleAnyKv (const False) isPromotableMetaVar)
+           $ nonDetEltsUniqSet kvs
+  return $ or bools
