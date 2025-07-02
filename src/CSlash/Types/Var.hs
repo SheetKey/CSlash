@@ -67,6 +67,7 @@ module CSlash.Types.Var
   , VarBndr(..), ForAllBinder, TyVarBinder
   , binderVar, binderVars
   , mkVarBinder, mkVarBinders
+  , mapVarBinder
   ) where
 
 import Prelude hiding ((<>))
