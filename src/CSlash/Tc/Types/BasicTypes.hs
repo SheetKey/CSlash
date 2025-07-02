@@ -65,6 +65,12 @@ data TcCompleteSig = CSig
   , sig_loc :: SrcSpan
   }
 
+tcSigInfoName :: TcSigInfo -> Name
+tcSigInfoName (TcIdSig sig) = idName (sig_bndr sig)
+
+completeSigPolyId :: TcSigInfo -> TcId
+completeSigPolyId (TcIdSig sig) = sig_bndr sig
+
 {- *********************************************************************
 *                                                                      *
              TcTyKiThing

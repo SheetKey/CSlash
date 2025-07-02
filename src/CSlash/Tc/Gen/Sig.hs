@@ -56,9 +56,12 @@ import Control.Monad( unless )
 
 tcTySigs :: [LSig Rn] -> TcM ([TcId], TcSigFun)
 tcTySigs cs_sigs = checkNoErrs $ do
-  ty_sigs_s <- mapAndReportM tcTySig cs_sigs
+  ty_sigs <- mapAndReportM tcTySig cs_sigs
 
-  panic "unfinished3"
+  let poly_ids = completeSigPolyId <$> ty_sigs
+      env = mkNameEnv [(tcSigInfoName sig, sig) | sig <- ty_sigs]
+
+  return (poly_ids, lookupNameEnv env)
 
 tcTySig :: LSig Rn -> TcM TcSigInfo
 tcTySig (L loc (TypeSig _ (L _ name) sig_ty)) = setSrcSpanA loc $ do
