@@ -366,7 +366,7 @@ data KindCoercion kv
 
 data KindCoercionHole kv = CoercionHole
   { ch_co_var :: KiCoVar kv
-  , ch_ref :: IORef (Maybe (KindCoercion kv))
+  , ch_ref :: IORef (Maybe (KindCoercion AnyKiVar))
   }
 
 instance AsGenericKi KindCoercion
@@ -382,7 +382,7 @@ instance AsAnyKi KindCoercion where
   asAnyKi (HoleCo hole) = HoleCo $ asAnyKi hole
 
 instance AsAnyKi KindCoercionHole where
-  asAnyKi (CoercionHole v r) = panic "AsAnyKi KindCoeHole"
+  asAnyKi (CoercionHole v r) = CoercionHole (asAnyKi v) r
 
 instance Data.Typeable kv => Data.Data (KindCoercionHole kv)
 

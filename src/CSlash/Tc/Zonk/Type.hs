@@ -354,7 +354,7 @@ zonkKiEvBind bind@(KiEvBind { keb_lhs = var, keb_rhs = ty }) = do
 *                                                                      *
 ********************************************************************* -}
 
-unpackKiCoercionHole_maybe :: KindCoercionHole kv -> TcM (Maybe (KindCoercion kv))
+unpackKiCoercionHole_maybe :: KindCoercionHole kv -> TcM (Maybe AnyKindCoercion)
 unpackKiCoercionHole_maybe (CoercionHole { ch_ref = ref }) = readTcRef ref
 
 zonkRewriterSet :: RewriterSet -> TcM RewriterSet
