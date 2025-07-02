@@ -371,8 +371,18 @@ data KindCoercionHole kv = CoercionHole
 
 instance AsGenericKi KindCoercion
 instance AsGenericKi KindCoercionHole
-instance AsAnyKi KindCoercion
-instance AsAnyKi KindCoercionHole
+
+instance AsAnyKi KindCoercion where
+  asAnyKi (Refl ki) = Refl $ asAnyKi ki
+  asAnyKi (KiConAppCo kc cos) = KiConAppCo kc (asAnyKi <$> cos)
+  asAnyKi (FunCo f1 f2 a r) = FunCo f1 f2 (asAnyKi a) (asAnyKi r)
+  asAnyKi (KiCoVarCo cv) = KiCoVarCo $ asAnyKi cv
+  asAnyKi (SymCo co) = SymCo $ asAnyKi co
+  asAnyKi (TransCo co1 co2) = TransCo (asAnyKi co1) (asAnyKi co2)
+  asAnyKi (HoleCo hole) = HoleCo $ asAnyKi hole
+
+instance AsAnyKi KindCoercionHole where
+  asAnyKi (CoercionHole v r) = panic "AsAnyKi KindCoeHole"
 
 instance Data.Typeable kv => Data.Data (KindCoercionHole kv)
 

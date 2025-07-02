@@ -432,9 +432,18 @@ instance AsGenericKi AnyTyVar where
 
 instance AsAnyTy Id
 
-instance AsAnyKi TyVar
-instance AsAnyKi TcTyVar
-instance AsAnyKi AnyTyVar
+instance AsAnyKi TyVar where
+  asAnyKi (TyVar (TyVar' {..})) = TyVar $ TyVar' { _varKind = asAnyKi _varKind, .. }
+  asAnyKi _ = panic "AsAnyKi TyVar"
+
+instance AsAnyKi TcTyVar where
+  asAnyKi (TcTyVar (TcTyVar' {..})) = TcTyVar $ TcTyVar' { _varKind = asAnyKi _varKind, .. }
+  asAnyKi _ = panic "AsAnyKi TcTyVar"
+
+instance AsAnyKi AnyTyVar where
+  asAnyKi (AnyTyVar (TyVar' {..})) = AnyTyVar $ TyVar' { _varKind = asAnyKi _varKind, .. }
+  asAnyKi (AnyTyVar (TcTyVar' {..})) = AnyTyVar $ TcTyVar' { _varKind = asAnyKi _varKind, .. }
+  asAnyKi _ = panic "AsAnyKi AnyTyVar"
 
 {- *********************************************************************
 *                                                                      *
