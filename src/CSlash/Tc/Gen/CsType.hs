@@ -111,11 +111,13 @@ tcCsSigType ctxt sig_ty = addSigCtxt ctxt sig_ty $ do
   panic "unfinished4"
 
 tc_lcs_sig_type :: SkolemInfo -> LCsSigType Rn -> ContextKind -> TcM (Implication, AnyType)
-tc_lcs_sig_type skol_info full_cs_ty@(L loc (CsSig { sig_body = cs_ty })) ctxt_kind
+tc_lcs_sig_type skol_info full_cs_ty@(L loc (CsSig { sig_ext = kv_nms
+                                                   , sig_body = cs_ty })) ctxt_kind
   = setSrcSpanA loc $ do
   (tc_lvl, wanted, ki_ev_binds, (exp_kind, ty)) <- pushLevelAndSolveX "tc_lcs_sig_type" $ do
     exp_kind <- newExpectedKind ctxt_kind
-    ty <- tcLCsType cs_ty exp_kind
+    ty <- tcImplicitKiBndrs skol_info kv_nms
+          $ tcLCsType cs_ty exp_kind
     return (exp_kind, ty)
 
   exp_kind_vars <- candidateQKiVarsOfKind (Mono exp_kind)
@@ -860,6 +862,24 @@ smVanilla = SM { sm_clone = panic "sm_clone"
 --    Implicit kind var binders
 --------------------------------------
 
+tcImplicitKiBndrs :: SkolemInfo -> [Name] -> TcM a -> TcM ([TcKiVar], a)
+tcImplicitKiBndrs skol_info
+  = tcImplicitKiBndrsX (smVanilla { sm_clone = False
+                                  , sm_var = SMDSkolemVar skol_info })
+                       skol_info
+
+tcImplicitKiBndrsX :: SkolemMode -> SkolemInfo -> [Name] -> TcM a -> TcM ([TcKiVar], a)
+tcImplicitKiBndrsX skol_mode skol_info kv_nms thing_inside
+  | null kv_nms
+  = do res <- thing_inside
+       return ([], res)
+  | otherwise
+  = do (tclvl, wanted, (skol_kvs, res)) <- pushLevelAndCaptureConstraints
+                                           $ bindImplicitKBndrsX skol_mode kv_nms
+                                           $ thing_inside
+       emitResidualKvConstraint skol_info skol_kvs tclvl wanted
+       return (skol_kvs, res)
+
 newKiVarBndr :: SkolemMode -> Name -> TcM TcKiVar
 newKiVarBndr (SM { sm_clone = clone, sm_var = var }) name = do
   name <- case clone of
@@ -872,31 +892,6 @@ newKiVarBndr (SM { sm_clone = clone, sm_var = var }) name = do
                  lvl <- getTcLevel
                  return $ SkolemVar skol_info lvl
   return $ mkTcKiVar name details
-
--- bindImplicitKinds :: [Name] -> TcM a -> TcM ([TcKiVar], a)
--- bindImplicitKinds kv_names thing_inside = do
---   lcl_env <- getLclTypeEnv
---   kvs <- mapM (new_kv lcl_env) kv_names
---   traceTc "bindImplicitKinds" (ppr kv_names $$ ppr kvs)
---   res <- tcExtendNameKiVarEnv (kv_names `zip` kvs) thing_inside
---   return (kvs, res)
---   where
---     new_kv lcl_env name
---       | Just (AKiVar _ kv) <- lookupNameEnv lcl_env name
---       = return kv
---       | otherwise
---       = newKiVarBndr name
-
--- bindImplicitTyConKiVars :: Name -> ([TcKiVar] -> TcKind -> TcKind -> Arity -> TcM a) -> TcM a
--- bindImplicitTyConKiVars tycon_name thing_inside = do
---   tycon <- tcLookupTcTyCon tycon_name
---   let rhs_kind = tyConKind tycon
---       res_kind = tyConResKind tycon
---       arity = tyConArity tycon
---       binders = tyConKindBinders tycon
---   traceTc "bindImplicitTyConKiVars" (ppr tycon_name $$ ppr binders)
---   tcExtendKiVarEnv binders
---     $ thing_inside binders res_kind rhs_kind arity
 
 bindTyConKiVars :: Name -> ([AnyKiVar] -> AnyMonoKind -> Arity -> TcM a) -> TcM a
 bindTyConKiVars tycon_name thing_inside = do

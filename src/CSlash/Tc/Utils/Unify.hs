@@ -68,6 +68,36 @@ checkKiConstraints skol_info given thing_inside = do
             return result
     else thing_inside
 
+emitResidualKvConstraint :: SkolemInfo -> [TcKiVar] -> TcLevel -> WantedConstraints -> TcM ()
+emitResidualKvConstraint skol_info skol_kvs tclvl wanted
+  | not (isEmptyWC wanted)
+    || checkTelescopeSkol skol_info_anon
+  = do implic <- buildKvImplication skol_info_anon skol_kvs tclvl wanted
+       emitImplication implic
+  | otherwise
+  = return ()
+  where
+    skol_info_anon = getSkolemInfo skol_info
+
+buildKvImplication
+  :: SkolemInfoAnon
+  -> [TcKiVar]
+  -> TcLevel
+  -> WantedConstraints
+  -> TcM Implication
+buildKvImplication skol_info skol_kvs tclvl wanted
+  = assertPpr (all (isSkolemVar <||> isTcVarVar) skol_kvs) (ppr skol_kvs) $ do
+  ki_ev_binds <- newTcKiEvBinds
+  implic <- newImplication
+  let implic' = implic { ic_tclvl = tclvl
+                       , ic_skols = skol_kvs
+                       , ic_given_eqs = NoGivenEqs
+                       , ic_wanted = wanted
+                       , ic_binds = ki_ev_binds
+                       , ic_info = skol_info }
+  checkImplicationInvariants implic'
+  return implic'
+
 emitResidualTvConstraint :: SkolemInfo -> [TcTyVar AnyKiVar] -> TcLevel -> WantedConstraints -> TcM ()
 emitResidualTvConstraint skol_info skol_tvs tclvl wanted
   | not (isEmptyWC wanted)
