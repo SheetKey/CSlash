@@ -23,7 +23,7 @@ import CSlash.Tc.Types.Evidence( CsWrapper{-, (<.>) -})
 import CSlash.Tc.Types.BasicTypes
 
 -- import CSlash.Core( hasSomeUnfolding )
-import CSlash.Core.Type ( typeMonoKind )
+import CSlash.Core.Type ( typeKind )
 import CSlash.Core.Kind
 import CSlash.Core.Kind.Compare (eqMonoKind)
 -- import CSlash.Core.Type.Rep( mkNakedFunTy )
@@ -71,7 +71,7 @@ tcUserTypeSig :: SrcSpan -> LCsSigType Rn -> Maybe Name -> TcM TcCompleteSig
 tcUserTypeSig loc cs_sig_ty mb_name = do
   sigma_ty <- tcCsSigType ctxt_no_rrc cs_sig_ty
   traceTc "tcuser" (ppr sigma_ty)
-  massertPpr (typeMonoKind sigma_ty `eqMonoKind` (KiConApp UKd []))
+  massertPpr ((snd $ splitForAllKiVars $ typeKind sigma_ty) `eqMonoKind` (KiConApp UKd []))
     $ vcat [ text "tcUserTypeSig bad kind"
            , ppr sigma_ty ]
     
