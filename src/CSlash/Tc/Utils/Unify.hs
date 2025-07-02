@@ -453,7 +453,7 @@ instance (Outputable a, Outputable b) => Outputable (PuResult a b) where
                             , text "cts:" <+> ppr cts ])
 
 okCheckReflKi :: AnyMonoKind -> TcM (PuResult a Reduction)
-okCheckReflKi ki = return $ PuOK emptyBag $ panic "mkReflRednKi ki"
+okCheckReflKi ki = return $ PuOK emptyBag $ mkReflRednKi ki
 
 failCheckWith :: CheckTyKiEqResult -> TcM (PuResult a b)
 failCheckWith p = return $ PuFail p
