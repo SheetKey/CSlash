@@ -382,10 +382,8 @@ findUnnecessaryGivens info need_inner givens
 
 checkBadTelescope :: Implication -> TcS Bool
 checkBadTelescope (Implic { ic_info = info, ic_skols = skols })
-  | checkTelescopeSkol info
-  = panic "checkBadTelescope"
-  | otherwise
   = return False
+      
 
 warnRedundantGivens :: SkolemInfoAnon -> Bool
 warnRedundantGivens (SigSkol ctxt _ _) = case ctxt of
