@@ -45,7 +45,7 @@ type AnyType = Type (AnyTyVar AnyKiVar) AnyKiVar
 type TcType = Type (TcTyVar AnyKiVar) AnyKiVar
 
 type AnyTyVarBinder = VarBndr (AnyTyVar AnyKiVar) ForAllFlag
-type TcTyVarBinder = VarBndr (TcTyVar TcKiVar) ForAllFlag
+type TcTyVarBinder = VarBndr (TcTyVar AnyKiVar) ForAllFlag
 
 type MonoAnyTyCon = AnyTyCon
 type PolyAnyTyCon = AnyTyCon

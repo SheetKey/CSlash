@@ -60,7 +60,7 @@ type TcSigFun = Name -> Maybe TcSigInfo
 data TcSigInfo = TcIdSig TcCompleteSig
 
 data TcCompleteSig = CSig
-  { sig_ndr :: TcId
+  { sig_bndr :: TcId
   , sig_ctxt :: UserTypeCtxt
   , sig_loc :: SrcSpan
   }

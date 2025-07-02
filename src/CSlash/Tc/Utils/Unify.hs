@@ -68,7 +68,7 @@ checkKiConstraints skol_info given thing_inside = do
             return result
     else thing_inside
 
-emitResidualTvConstraint :: SkolemInfo -> [TcTyVar TcKiVar] -> TcLevel -> WantedConstraints -> TcM ()
+emitResidualTvConstraint :: SkolemInfo -> [TcTyVar AnyKiVar] -> TcLevel -> WantedConstraints -> TcM ()
 emitResidualTvConstraint skol_info skol_tvs tclvl wanted
   | not (isEmptyWC wanted)
     || checkTelescopeSkol (getSkolemInfo skol_info)

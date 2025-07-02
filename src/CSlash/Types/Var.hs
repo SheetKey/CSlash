@@ -57,7 +57,7 @@ module CSlash.Types.Var
 
     {-* Id *-}
   , Id
-  , mkGlobalVar
+  , mkGlobalVar, mkLocalVar
 
     {-* ForAllFlag *-}
   , ForAllFlag(..)
@@ -755,6 +755,10 @@ instance FromId (Var tv kv) tv kv where
 mkGlobalVar :: IdDetails tv kv -> Name -> Type tv kv -> IdInfo -> Id tv kv
 mkGlobalVar details name ty info
   = mk_id name ty GlobalId details info
+
+mkLocalVar :: IdDetails tv kv -> Name -> Type tv kv -> IdInfo -> Id tv kv
+mkLocalVar details name ty info
+  = mk_id name ty (LocalId NotExported) details info
 
 mk_id :: Name -> Type tv kv -> IdScope -> IdDetails tv kv -> IdInfo -> Id tv kv
 mk_id name ty scope details info

@@ -75,6 +75,57 @@ import Data.Coerce (coerce)
 
 {- *********************************************************************
 *                                                                      *
+              Check types AND do validity checking
+*                                                                      *
+********************************************************************* -}
+
+addSigCtxt :: Outputable cs_ty => UserTypeCtxt -> LocatedA cs_ty -> TcM a -> TcM a
+addSigCtxt ctxt cs_ty thing_inside = setSrcSpan (getLocA cs_ty)
+                                     $ addErrCtxt (pprSigCtxt ctxt cs_ty)
+                                     $ thing_inside
+
+pprSigCtxt :: Outputable cs_ty => UserTypeCtxt -> LocatedA cs_ty -> SDoc
+pprSigCtxt ctxt cs_ty
+  | Just n <- isSigMaybe ctxt
+  = hang (text "In the type signature:")
+    2 (pprPrefixOcc n <+> colon <+> ppr cs_ty)
+  | otherwise
+  = hang (text "In" <+> pprUserTypeCtxt ctxt <> colon)
+    2 (ppr cs_ty)
+
+tcCsSigType :: UserTypeCtxt -> LCsSigType Rn -> TcM AnyType
+tcCsSigType ctxt sig_ty = addSigCtxt ctxt sig_ty $ do
+  traceTc "tcCsSigType {" (ppr sig_ty)
+  let skol_info = SigTypeSkol ctxt
+  skol_info <- mkSkolemInfo skol_info
+
+  (implic, ty) <- tc_lcs_sig_type skol_info sig_ty (expectedKindInCtxt ctxt)
+
+  -- traceTc "tcCsSigType 2" (ppr implic)
+  -- simplifyAndEmitFlatConstraints (mkImplicWC (unitBag implic))
+
+  -- ty <- liftZonkM $ zonkTcType ty
+  -- checkValidType ctxt ty
+  -- traceTc "end tcCsSigType }" (ppr ty)
+  -- return ty
+  panic "unfinished4"
+
+tc_lcs_sig_type :: SkolemInfo -> LCsSigType Rn -> ContextKind -> TcM (Implication, AnyType)
+tc_lcs_sig_type skol_info full_cs_ty@(L loc (CsSig { sig_body = cs_ty })) ctxt_kind
+  = setSrcSpanA loc $ do
+  (tc_lvl, wanted, ki_ev_binds, (exp_kind, ty)) <- pushLevelAndSolveX "tc_lcs_sig_type" $ do
+    exp_kind <- newExpectedKind ctxt_kind
+    ty <- tcLCsType cs_ty exp_kind
+    return (exp_kind, ty)
+
+  exp_kind_vars <- candidateQKiVarsOfKind (Mono exp_kind)
+  traceTc "lcs_sig_type"
+    $ vcat [ text "exp_kind_vars:" <+> ppr exp_kind_vars ]
+
+  panic "unfinished5"
+
+{- *********************************************************************
+*                                                                      *
              The main kind checker (no validity checks)
 *                                                                      *
 ********************************************************************* -}
@@ -619,6 +670,9 @@ newExpectedKind :: ContextKind -> TcM AnyMonoKind
 newExpectedKind (TheMonoKind k) = return k
 newExpectedKind AnyMonoKind = asAnyKi <$> newMetaKindVar
 
+expectedKindInCtxt :: UserTypeCtxt -> ContextKind
+expectedKindInCtxt _ = AnyMonoKind
+
 {- *********************************************************************
 *                                                                      *
              Scoped tykivars that map to the same thing
@@ -750,7 +804,7 @@ tcExplicitBndrsX skol_mode bndrs thing_inside = case nonEmpty bndrs of
 bindExplicitBndrsX :: SkolemMode -> [LCsTyVarBndr Rn] -> TcM a -> TcM ([TcTyVarBinder], a)
 bindExplicitBndrsX skol_mode@(SM { sm_kind = ctxt_kind }) cs_tvs thing_inside = do
   traceTc "bindExplicitBndrs" (ppr cs_tvs)
-  panic "go cs_tvs"
+  go cs_tvs
   where
     go [] = do
       res <- thing_inside

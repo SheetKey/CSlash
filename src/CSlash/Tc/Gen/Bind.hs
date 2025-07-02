@@ -13,14 +13,14 @@ import CSlash.Cs
 -- import GHC.Rename.Bind ( rejectBootDecls )
 
 import CSlash.Tc.Errors.Types
--- import GHC.Tc.Gen.Sig
+import CSlash.Tc.Gen.Sig
 -- import GHC.Tc.Utils.Concrete ( hasFixedRuntimeRep_syntactic )
 import CSlash.Tc.Utils.Monad
 import CSlash.Tc.Types.Origin
 import CSlash.Tc.Utils.Env
 -- import GHC.Tc.Utils.Unify
 import CSlash.Tc.Solver
--- import GHC.Tc.Types.Evidence
+import CSlash.Tc.Types.Evidence
 -- import GHC.Tc.Types.Constraint
 -- import GHC.Core.Predicate
 -- import GHC.Core.UsageEnv ( bottomUE )
@@ -85,7 +85,7 @@ tcValBinds
   -> [LSig Rn]
   -> TcM thing
   -> TcM ([(RecFlag, LCsBinds Tc)], CsWrapper, thing)
-tcValBinds binds sigs thing_inside = do
+tcValBinds top_lvl binds sigs thing_inside = do
   (poly_ids, sig_fn) <- tcTySigs sigs
 
   panic "unfinished2"

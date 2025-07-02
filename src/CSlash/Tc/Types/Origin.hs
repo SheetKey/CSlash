@@ -70,6 +70,18 @@ pprUserTypeCtxt (TyVarBndrKindCtxt n) = text "the kind annotation on the type va
 pprUserTypeCtxt (TySynKindCtxt n) = text "the kind annotation on the declaration for"
                                     <+> quotes (ppr n)
 
+isSigMaybe :: UserTypeCtxt -> Maybe Name
+isSigMaybe (FunSigCtxt n _) = Just n
+isSigMaybe (ConArgCtxt n) = Just n
+isSigMaybe (PatSynCtxt n) = Just n
+isSigMaybe _ = Nothing
+
+{- *********************************************************************
+*                                                                      *
+                SkolemInfo
+*                                                                      *
+********************************************************************* -}
+
 data SkolemInfo = SkolemInfo Unique SkolemInfoAnon
 
 data SkolemInfoAnon
