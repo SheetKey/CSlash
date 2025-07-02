@@ -74,6 +74,13 @@ tcCsKind (CsKiVar _ kv) = tcKiVar (unLoc kv)
 tcCsKind (CsFunKi _ k1 k2) = tc_fun_kind k1 k2
 tcCsKind (CsParKd _ ki) = tcLCsKind ki
 
+tcArrow :: CsKind Rn -> TcM AnyMonoKind
+tcArrow CsUKd {} = return $ KiConApp UKd []
+tcArrow CsAKd {} = return $ KiConApp AKd []
+tcArrow CsLKd {} = return $ KiConApp LKd []
+tcArrow (CsKiVar _ kv) = tcKiVar (unLoc kv)
+tcArrow other = pprPanic "tcArrow" (ppr other)
+
 tc_fun_kind :: LCsKind Rn -> LCsKind Rn -> TcM AnyMonoKind
 tc_fun_kind k1 k2 = do
   k1' <- tcLCsKind k1 

@@ -249,7 +249,7 @@ tc_fun_type arr_kind ty1 ty2 exp_kind = do
                     arr_kind' exp_kind
 
 tc_arrow :: CsArrow Rn -> TcM AnyMonoKind
-tc_arrow _ = panic "tc_arrow"
+tc_arrow (CsArrow _ (L _ ki)) = tcArrow ki
 
 {- *********************************************************************
 *                                                                      *
