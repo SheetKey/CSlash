@@ -115,12 +115,12 @@ tc_lcs_sig_type :: SkolemInfo -> LCsSigType Rn -> ContextKind -> TcM (Implicatio
 tc_lcs_sig_type skol_info full_cs_ty@(L loc (CsSig { sig_ext = kv_nms
                                                    , sig_body = cs_ty })) ctxt_kind
   = setSrcSpanA loc $ do
-  (tc_lvl, wanted, ki_ev_binds, (exp_kind, (kv_bndrs, ty)))
-    <- pushLevelAndSolveX "tc_lcs_sig_type" $ do
-      exp_kind <- newExpectedKind ctxt_kind
-      stuff <- tcImplicitKiBndrs skol_info kv_nms
-               $ tcLCsType cs_ty exp_kind
-      return (exp_kind, stuff)
+  (tc_lvl, wanted, ki_ev_binds, (kv_bndrs, (exp_kind, ty)))
+    <- pushLevelAndSolveX "tc_lcs_sig_type"
+       $ tcImplicitKiBndrs skol_info kv_nms $ do
+         exp_kind <- newExpectedKind ctxt_kind
+         stuff <- tcLCsType cs_ty exp_kind
+         return (exp_kind, stuff)
 
   exp_kind_vars <- candidateQKiVarsOfKind (Mono exp_kind)
   doNotQuantifyKiVars exp_kind_vars
