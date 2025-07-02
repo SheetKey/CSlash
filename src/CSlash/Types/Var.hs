@@ -826,6 +826,9 @@ mkVarBinder argf var = Bndr var argf
 mkVarBinders :: argf -> [var] -> [VarBndr var argf]
 mkVarBinders argf = map (mkVarBinder argf)
 
+mapVarBinder :: (v -> v') -> VarBndr v argf -> VarBndr v' argf
+mapVarBinder f (Bndr v a) = Bndr (f v) a
+
 instance Outputable v => Outputable (VarBndr v ForAllFlag) where
   ppr (Bndr v Required) = ppr v
   ppr (Bndr v Specified) = braces (ppr v)

@@ -197,7 +197,7 @@ tc_cs_type t@(CsForAllTy { cst_tele = tele, cst_body = ty }) exp_kind
   where
     tc_cs_forall_ty tele ty ek = do
       (tv_bndrs, ty') <- tcTelescope tele $ tc_lcs_type ty exp_kind
-      return $ mkForAllTys (undefined tv_bndrs) ty'
+      return $ mkForAllTys (mapVarBinder toAnyTyVar <$> tv_bndrs) ty'
 
 tc_cs_type rn_ty@(CsQualTy { cst_ctxt = ctxt, cst_body = body_ty }) exp_kind
   | null (unLoc ctxt)
