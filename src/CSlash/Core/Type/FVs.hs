@@ -200,8 +200,8 @@ fvsOfType (TyVarTy v) f (bound_vars, bks) acc@(acc_list, acc_set, kl, ks)
   | not (f (Left v)) = acc
   | v `elemVarSet` bound_vars = acc
   | v `elemVarSet` acc_set = acc
-  | otherwise = case fvsOfMonoKind (varKind v) (f . Right) emptyVarSet (kl, ks) of
-                  (kl, ks) -> (v:acc_list, extendVarSet acc_set v, kl, ks)
+  | otherwise = liftKiFV (fvsOfMonoKind (varKind v)) f (bound_vars, bks)
+                (v:acc_list, extendVarSet acc_set v, kl, ks)
 
 fvsOfType (TyConApp _ tys) f bound_vars acc = fvsOfTypes tys f bound_vars acc
 
@@ -218,7 +218,40 @@ fvsOfType (ForAllTy bndr ty) f bound_vars acc
 fvsOfType (TyLamTy v ty) f bound_vars acc
   = fvsVarBndr v (fvsOfType ty) f bound_vars acc
 
-fvsOfType other _ _ _  = pprPanic "fvsOfType" (ppr other)
+fvsOfType (BigTyLamTy kv ty) f bound_vars acc
+  = delFV (Right kv) (fvsOfType ty) f bound_vars acc
+
+fvsOfType (CastTy ty kco) f bound_vars acc
+  = (fvsOfType ty `unionFV` fvsOfKiCo kco) f bound_vars acc
+
+fvsOfType (KindCoercion kco) f bound_vars acc = fvsOfKiCo kco f bound_vars acc
+
+fvsOfType (Embed ki) f bound_vars acc = liftKiFV (fvsOfMonoKind ki) f bound_vars acc
+
+fvsOfKiCo :: IsTyVar tv kv => KindCoercion kv -> TyFV tv kv
+fvsOfKiCo (Refl ki) f bound_vars acc = liftKiFV (fvsOfMonoKind ki) f bound_vars acc
+fvsOfKiCo (KiConAppCo _ cos) f bound_vars acc = fvsOfKiCos cos f bound_vars acc
+fvsOfKiCo (FunCo { fco_arg = co1, fco_res = co2 }) f bound_vars acc
+  = (fvsOfKiCo co1 `unionFV` fvsOfKiCo co2) f bound_vars acc
+fvsOfKiCo (KiCoVarCo kcv) f bound_vars acc = fvsOfKiCoVar kcv f bound_vars acc
+fvsOfKiCo (HoleCo h) f bound_vars acc = fvsOfKiCoVar (coHoleCoVar h) f bound_vars acc
+fvsOfKiCo (SymCo co) f bound_vars acc = fvsOfKiCo co f bound_vars acc
+fvsOfKiCo (TransCo co1 co2) f bound_vars acc
+  = (fvsOfKiCo co1 `unionFV` fvsOfKiCo co2) f bound_vars acc
+
+fvsOfKiCoVar :: IsTyVar tv kv => KiCoVar kv -> TyFV tv kv
+fvsOfKiCoVar _v f (bound_vars, bks) acc@(acc_list, acc_set, kl, ks)
+  | not (f (Left v)) = acc
+  | v `elemVarSet` bound_vars = acc
+  | v `elemVarSet` acc_set = acc
+  | otherwise = liftKiFV (fvsOfMonoKind (varKind v))
+                f (bound_vars, bks) (v:acc_list, extendVarSet acc_set v, kl, ks)
+  where
+    v = toGenericTyVar _v
+
+fvsOfKiCos :: IsTyVar tv kv => [KindCoercion kv] -> TyFV tv kv
+fvsOfKiCos [] f bound_vars acc = emptyFV f bound_vars acc
+fvsOfKiCos (co:cos) f bound_vars acc = (fvsOfKiCo co `unionFV` fvsOfKiCos cos) f bound_vars acc
 
 fvsBndr
   :: VarHasKind tv kv
