@@ -113,6 +113,9 @@ isEmptyDVarSet = isEmptyUniqDSet
 nonDetStrictFoldDVarSet :: (a -> b -> b) -> b -> UniqDSet a -> b
 nonDetStrictFoldDVarSet = nonDetStrictFoldUniqDSet
 
+partitionDVarSet :: (a -> Bool) -> UniqDSet a -> (UniqDSet a, UniqDSet a)
+partitionDVarSet = partitionUniqDSet
+
 delDVarSetList :: Uniquable a => UniqDSet a -> [a] -> UniqDSet a
 delDVarSetList = delListFromUniqDSet
 

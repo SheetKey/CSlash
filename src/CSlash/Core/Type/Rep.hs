@@ -145,7 +145,7 @@ mkTyLamTys = flip (foldr mkTyLamTy)
 mkBigLamTy :: kv -> Type tv kv -> Type tv kv
 mkBigLamTy = BigTyLamTy
 
-mkBigLamTys  :: [kv] -> Type tv kv -> Type tv kv
+mkBigLamTys :: [kv] -> Type tv kv -> Type tv kv
 mkBigLamTys = flip (foldr mkBigLamTy)
 
 {- *********************************************************************

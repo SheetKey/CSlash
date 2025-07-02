@@ -29,6 +29,7 @@ import CSlash.Core.Type.Tidy
 import CSlash.Core.TyCon
 import CSlash.Core.Type
 import CSlash.Core.Kind
+import CSlash.Core.Kind.FVs
 import CSlash.Core.Kind.Compare
 -- import GHC.Core.Coercion
 import CSlash.Core.Predicate
@@ -268,6 +269,9 @@ zonkAnyKiVar kv = handleAnyKv (const simple)
   ) kv
   where
     simple = return $ mkKiVarKi kv
+
+zonkAnyKiVarsAndFV :: AnyKiVarSet -> ZonkM AnyKiVarSet
+zonkAnyKiVarsAndFV kivars = varsOfMonoKinds <$> mapM zonkAnyKiVar (nonDetEltsUniqSet kivars)
 
 zonkTcKiVar :: TcKiVar -> ZonkM AnyMonoKind
 zonkTcKiVar kv 

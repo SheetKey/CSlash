@@ -518,6 +518,10 @@ fvsOfCt ct = fvsOfMonoKind $ ctPred ct
 fvsOfCts :: Cts -> AnyKiFV
 fvsOfCts = foldr (unionFV . fvsOfCt) emptyFV
 
+varsOfWC :: WantedConstraints -> (MkVarSet (KiEvVar AnyKiVar), MkVarSet AnyKiVar)
+varsOfWC wc = case fvVarAcc (fvsOfWC wc) of
+  (_, tvs, _, kvs) -> (tvs, kvs)
+
 varsOfWCList :: WantedConstraints -> ([KiEvVar AnyKiVar], [AnyKiVar])
 varsOfWCList wc = case fvVarAcc (fvsOfWC wc) of
   (tvs, _, kvs, _) -> (tvs, kvs)

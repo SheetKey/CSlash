@@ -72,6 +72,7 @@ import Control.Monad
 import Data.Tuple( swap )
 
 import Data.Coerce (coerce)
+import Control.Arrow (first)
 
 {- *********************************************************************
 *                                                                      *
@@ -114,17 +115,25 @@ tc_lcs_sig_type :: SkolemInfo -> LCsSigType Rn -> ContextKind -> TcM (Implicatio
 tc_lcs_sig_type skol_info full_cs_ty@(L loc (CsSig { sig_ext = kv_nms
                                                    , sig_body = cs_ty })) ctxt_kind
   = setSrcSpanA loc $ do
-  (tc_lvl, wanted, ki_ev_binds, (exp_kind, ty)) <- pushLevelAndSolveX "tc_lcs_sig_type" $ do
-    exp_kind <- newExpectedKind ctxt_kind
-    ty <- tcImplicitKiBndrs skol_info kv_nms
-          $ tcLCsType cs_ty exp_kind
-    return (exp_kind, ty)
+  (tc_lvl, wanted, ki_ev_binds, (exp_kind, (kv_bndrs, ty)))
+    <- pushLevelAndSolveX "tc_lcs_sig_type" $ do
+      exp_kind <- newExpectedKind ctxt_kind
+      stuff <- tcImplicitKiBndrs skol_info kv_nms
+               $ tcLCsType cs_ty exp_kind
+      return (exp_kind, stuff)
 
   exp_kind_vars <- candidateQKiVarsOfKind (Mono exp_kind)
-  traceTc "lcs_sig_type"
-    $ vcat [ text "exp_kind_vars:" <+> ppr exp_kind_vars ]
+  doNotQuantifyKiVars exp_kind_vars
 
-  panic "unfinished5"
+  traceTc "tc_lcs_sig_type" (ppr kv_nms $$ ppr kv_bndrs)
+  kv_bndrs <- zonkAndScopedSort kv_bndrs
+
+  let ty1 = mkBigLamTys (toAnyKiVar <$> kv_bndrs) ty
+  kvs <- kindGeneralizeSome skol_info wanted ty1
+
+  implic <- buildKvImplication (getSkolemInfo skol_info) kvs tc_lvl wanted
+
+  return (implic, mkBigLamTys (toAnyKiVar <$> kvs) ty1)
 
 {- *********************************************************************
 *                                                                      *
@@ -927,6 +936,40 @@ bindImplicitKBndrsX skol_mode kv_names thing_inside = do
              Kind generalization
 *                                                                      *
 ********************************************************************* -}
+
+zonkAndScopedSort :: [TcKiVar] -> TcM [TcKiVar]
+zonkAndScopedSort spec_kvs = do
+  spec_kvs <- liftZonkM $ zonkTcKiVarsToTcKiVars spec_kvs
+  return $ scopedSort spec_kvs
+
+kindGeneralizeSome :: SkolemInfo -> WantedConstraints -> AnyType -> TcM [TcKiVar]
+kindGeneralizeSome skol_info wanted ty = do
+  kvs <- candidateQKiVarsOfType ty
+  filtered_kvs <- filterConstrainedCandidates wanted kvs
+  traceTc "kindGeneralizeSome"
+    $ vcat [ text "type:" <+> ppr ty
+           , text "kvs:" <+> ppr kvs
+           , text "filtered_kvs:" <+> ppr filtered_kvs ]
+  quantifyKiVars skol_info filtered_kvs
+
+filterConstrainedCandidates
+  :: WantedConstraints
+  -> DTcKiVarSet
+  -> TcM DTcKiVarSet
+filterConstrainedCandidates wanted kvs
+  | isEmptyWC wanted
+  = return kvs
+  | otherwise
+  = do wc_kvs <- liftZonkM $ zonkAnyKiVarsAndFV (snd $ varsOfWC wanted)
+       let (to_promote, kvs') = first dVarSetToVarSet
+                                $ partitionDVarSet ((`elemVarSet` wc_kvs) . toAnyKiVar) kvs
+       traceTc "filterConstrainedCandidates"
+         $ vcat [ text "kvs:" <+> ppr kvs
+                , text "wc_kvs:" <+> ppr wc_kvs
+                , text "to_promote:" <+> ppr to_promote
+                , text "kvs':" <+> ppr kvs' ]
+       _ <- promoteKiVarSet to_promote
+       return kvs'
 
 kindGeneralizeNone :: AnyMonoKind -> TcM ()
 kindGeneralizeNone kind = do
