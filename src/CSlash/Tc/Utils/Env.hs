@@ -22,6 +22,7 @@ import CSlash.Tc.Utils.Monad
 import CSlash.Tc.Utils.TcType
 -- import {-# SOURCE #-} GHC.Tc.Utils.TcMType ( tcCheckUsage )
 import CSlash.Tc.Types.LclEnv
+import CSlash.Tc.Types.BasicTypes (TcId, IdBindingInfo(..))
 -- import GHC.Tc.Types.Evidence (HsWrapper, idHsWrapper, (<.>))
 
 -- import GHC.Core.InstEnv
@@ -31,6 +32,7 @@ import CSlash.Core.ConLike
 import CSlash.Core.TyCon
 import CSlash.Core.Type.Rep
 import CSlash.Core.Type
+import CSlash.Core.Type.FVs
 -- import GHC.Core.Coercion.Axiom
 -- import GHC.Core.Class
 
@@ -56,7 +58,7 @@ import CSlash.Types.Name
 import CSlash.Types.Name.Set
 import CSlash.Types.Name.Env
 import CSlash.Types.Id
-import CSlash.Types.Var (KiVar, AnyKiVar, asAnyTyKi)
+import CSlash.Types.Var (KiVar, AnyKiVar, asAnyTyKi, varType)
 -- import CSlash.Types.Id.Info ( RecSelParent(..) )
 import CSlash.Types.Name.Reader
 import CSlash.Types.TyThing
@@ -173,6 +175,18 @@ tcExtendNameKiVarEnv binds thing_inside
   where
     kv_binds = [TcKvBndr name kv | (name, kv) <- binds]
     names = [(name, AKiVar name kv) | (name, kv) <- binds]
+
+isTypeClosedLetBndr :: TcId -> Bool
+isTypeClosedLetBndr = noFreeVarsOfType . varType
+
+tcExtendSigIds :: TopLevelFlag -> [TcId] -> TcM a -> TcM a
+tcExtendSigIds top_lvl sig_ids thing_inside
+  = tc_extend_local_env top_lvl
+    [ (idName id, ATcId id info)
+    | id <- sig_ids
+    , let closed = isTypeClosedLetBndr id
+          info = NonClosedLet emptyNameSet closed ]
+    thing_inside
 
 tc_extend_local_env :: TopLevelFlag -> [(Name, TcTyKiThing)] -> TcM a -> TcM a
 tc_extend_local_env top_lvl extra_env thing_inside = do

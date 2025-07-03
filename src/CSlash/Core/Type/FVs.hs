@@ -6,7 +6,7 @@ import {-# SOURCE #-} CSlash.Core.Type (coreView)
 import Data.Monoid as DM ( Endo(..), Any(..) )
 import CSlash.Core.Type.Rep
 import CSlash.Core.Kind
-import CSlash.Core.Kind.FVs hiding (fvsVarBndr)
+import CSlash.Core.Kind.FVs hiding (fvsVarBndr, afvFolder)
 import CSlash.Core.TyCon
 
 import CSlash.Types.Var
@@ -92,18 +92,22 @@ deepTvFolder = TypeFolder { tf_view = noView
         do_it acc@(tacc, kcvacc, kacc)
           | v `elemVarSet` tis = acc
           | v `elemVarSet` tacc = acc
+          | Just v' <- toKiCoVar_maybe v
+          = let (kcvacc', kacc') = appEndo (deep_mki (varKind v))
+                                   (kcvacc `extendVarSet` v', kacc)
+            in (tacc, kcvacc', kacc')
           | otherwise = let (kcvacc', kacc') = appEndo (deep_mki (varKind v)) (kcvacc, kacc)
                         in (tacc `extendVarSet` v, kcvacc', kacc')
           -- see GHC note [Closing over free variable kinds] for justification of deep_mki
           -- (deep_mki starts with emptyVarSet as in_scope set)
     do_bndr (tis, kcvis, kis) tv _
       | Just kcv <- toKiCoVar_maybe tv
-      = (tis, extendVarSet kcvis kcv, kis)
+      = (extendVarSet tis tv, extendVarSet kcvis kcv, kis)
       | otherwise
       = (extendVarSet tis tv, kcvis, kis)
     do_tylambndr (tis, kcvis, kis) tv
       | Just kcv <- toKiCoVar_maybe tv
-      = (tis, extendVarSet kcvis kcv, kis)
+      = (extendVarSet tis tv, extendVarSet kcvis kcv, kis)
       | otherwise
       = (extendVarSet tis tv, kcvis, kis)
     do_kilambndr (tis, kcvis, kis) kv = (tis, kcvis, extendVarSet kis kv)
@@ -161,15 +165,17 @@ shallowTvFolder = TypeFolder { tf_view = noView
         do_it acc@(tacc, kcvacc, kacc)
           | v `elemVarSet` tis = acc
           | v `elemVarSet` tacc = acc
+          | Just v' <- toKiCoVar_maybe v
+          = (tacc, kcvacc `extendVarSet` v', kacc)
           | otherwise = (tacc `extendVarSet` v, kcvacc, kacc)
     do_bndr (tis, kcvis, kis) tv _
       | Just kcv <- toKiCoVar_maybe tv
-      = (tis, extendVarSet kcvis kcv, kis)
+      = (extendVarSet tis tv, extendVarSet kcvis kcv, kis)
       | otherwise
       = (extendVarSet tis tv, kcvis, kis)
     do_tylambndr (tis, kcvis, kis) tv
       | Just kcv <- toKiCoVar_maybe tv
-      = (tis, extendVarSet kcvis kcv, kis)
+      = (extendVarSet tis tv, extendVarSet kcvis kcv, kis)
       | otherwise
       = (extendVarSet tis tv, kcvis, kis)
     do_kilambndr (tis, kcvis, kis) kv = (tis, kcvis, extendVarSet kis kv)
@@ -298,6 +304,46 @@ typeSomeFreeVars
   => (Either tv kv -> Bool) -> Type tv kv -> (MkVarSet tv, MkVarSet kv)
 typeSomeFreeVars fv_cand ty = case fvVarAcc (filterFV fv_cand $ fvsOfType ty) of
   (_, tvs, _, kvs) -> (tvs, kvs)
+
+{- *********************************************************************
+*                                                                      *
+            Any free vars
+*                                                                      *
+********************************************************************* -}
+
+afvFolder
+  :: IsTyVar tv kv
+  => (tv -> Bool) -> (KiCoVar kv -> Bool) -> (kv -> Bool)
+  -> TypeFolder tv kv
+     (MkVarSet tv, MkVarSet (KiCoVar kv), MkVarSet kv)
+     (MkVarSet (KiCoVar kv), MkVarSet kv)
+     DM.Any DM.Any
+afvFolder f_tv f_kcv f_kv = TypeFolder { tf_view = noView
+                                 , tf_tyvar = do_tyvar
+                                 , tf_tybinder = do_bndr
+                                 , tf_tylambinder = do_tylambndr
+                                 , tf_tylamkibinder = do_kilambndr
+                                 , tf_swapEnv = \(_, kcv, kv) -> (kcv, kv)
+                                 , tf_embedKiRes = id
+                                 , tf_mkcf = mafvFolder f_kcv f_kv }
+  where
+    do_tyvar (is, _, _) tv = Any (not (tv `elemVarSet` is) && f_tv tv)
+    do_bndr (is, kcvs, kvs) tv _
+      | Just kcv <- toKiCoVar_maybe tv
+      = (is `extendVarSet` tv, kcvs `extendVarSet` kcv, kvs)
+      | otherwise
+      = (is `extendVarSet` tv, kcvs, kvs)
+    do_tylambndr (is, kcvs, kvs) tv
+      | Just kcv <- toKiCoVar_maybe tv
+      = (is `extendVarSet` tv, kcvs `extendVarSet` kcv, kvs)
+      | otherwise
+      = (is `extendVarSet` tv, kcvs, kvs)
+    do_kilambndr (tv, kcv, is) kv = (tv, kcv, is `extendVarSet` kv)
+
+noFreeVarsOfType :: IsTyVar tv kv => Type tv kv -> Bool
+noFreeVarsOfType ty = not $ DM.getAny (f ty)
+  where (f, _) = foldType (afvFolder (const True) (const True) (const True))
+                 (emptyVarSet, emptyVarSet, emptyVarSet)
 
 {- *********************************************************************
 *                                                                      *

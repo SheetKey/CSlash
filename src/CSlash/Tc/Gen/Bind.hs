@@ -88,4 +88,6 @@ tcValBinds
 tcValBinds top_lvl binds sigs thing_inside = do
   (poly_ids, sig_fn) <- tcTySigs sigs
 
-  panic "unfinished2"
+  tcExtendSigIds top_lvl poly_ids $ do
+    
+    panic "unfinished2"

@@ -267,36 +267,43 @@ fvsOfMonoKinds [] fv_cand in_scope acc = emptyFV fv_cand in_scope acc
 
 anyFreeVarsOfKind :: IsVar kv => (kv -> Bool) -> Kind kv -> Bool
 anyFreeVarsOfKind check_fv ki = DM.getAny (f ki)
-  where (f, _) = foldKind (afvFolder check_fv) emptyVarSet
+  where (f, _) = foldKind (afvFolder check_fv) (emptyVarSet, emptyVarSet)
 
 anyFreeVarsOfMonoKind :: IsVar kv => (kv -> Bool) -> MonoKind kv -> Bool
 anyFreeVarsOfMonoKind check_kv ki = DM.getAny (f ki)
-  where (f, _, _, _) = foldMonoKiCo (mafvFolder (const False) check_kv) emptyVarSet
+  where (f, _, _, _) = foldMonoKiCo (mafvFolder (const False) check_kv)
+                       (emptyVarSet, emptyVarSet)
 
 noFreeVarsOfKind :: IsVar kv => Kind kv -> Bool
 noFreeVarsOfKind ki = not $ DM.getAny (f ki)
-  where (f, _) = foldKind (afvFolder (const True)) emptyVarSet
+  where (f, _) = foldKind (afvFolder (const True)) (emptyVarSet, emptyVarSet)
 
 noFreeVarsOfMonoKind :: IsVar kv => MonoKind kv -> Bool
 noFreeVarsOfMonoKind ki = not $ DM.getAny (f ki)
-  where (f, _, _, _) = foldMonoKiCo (mafvFolder (const True) (const True)) emptyVarSet
+  where (f, _, _, _) = foldMonoKiCo (mafvFolder (const True) (const True))
+                       (emptyVarSet, emptyVarSet)
 
 {-# INLINE afvFolder #-}
-afvFolder :: IsVar kv => (kv -> Bool) -> KiCoFolder kv (MkVarSet kv) DM.Any
+afvFolder
+  :: IsVar kv
+  => (kv -> Bool)
+  -> KiCoFolder kv (MkVarSet (KiCoVar kv), MkVarSet kv) DM.Any
 afvFolder check_kv = KiCoFolder { kcf_kibinder = do_bndr
                                 , kcf_mkcf = mafvFolder (const (panic "afvFolder")) check_kv }
   where
-    do_bndr is kv = is `extendVarSet` kv
+    do_bndr (kcv, is) kv = (kcv, is `extendVarSet` kv)
 
 {-# INLINE mafvFolder #-}
 mafvFolder
-  :: IsVar kv => (KiCoVar kv -> Bool) -> (kv -> Bool) -> MKiCoFolder kv (MkVarSet kv) DM.Any
+  :: IsVar kv
+  => (KiCoVar kv -> Bool) -> (kv -> Bool)
+  -> MKiCoFolder kv (MkVarSet (KiCoVar kv), MkVarSet kv) DM.Any
 mafvFolder check_kcv check_kv = MKiCoFolder { mkcf_kivar = do_kv
                                             , mkcf_covar = do_kcv
                                             , mkcf_hole = do_hole }
   where
-    do_kv is kv = Any (not (kv `elemVarSet` is) && check_kv kv)
-    do_kcv is kcv = Any (check_kcv kcv)
+    do_kv (_, is) kv = Any (not (kv `elemVarSet` is) && check_kv kv)
+    do_kcv (is, _) kcv = Any (not (kcv `elemVarSet` is) && check_kcv kcv)
     do_hole _ _ = Any False
 
 {- *********************************************************************
