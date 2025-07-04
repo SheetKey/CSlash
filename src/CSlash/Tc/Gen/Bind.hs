@@ -1,3 +1,5 @@
+{-# LANGUAGE TupleSections #-}
+
 module CSlash.Tc.Gen.Bind where
 
 -- import {-# SOURCE #-} GHC.Tc.Gen.Match ( tcGRHSsPat, tcFunBindMatches )
@@ -39,6 +41,7 @@ import CSlash.Tc.Zonk.TcType
 -- import GHC.Core.Coercion( mkSymCo )
 -- import CSlash.Core.Type (mkStrLitTy, tidyOpenType, mkCastTy)
 -- import CSlash.Core.Type.Ppr( pprTyVars )
+import CSlash.Core.Kind
 
 -- import CSlash.Builtin.Types ( mkConstraintTupleTy, multiplicityTy, oneDataConTy  )
 import CSlash.Builtin.Types.Prim
@@ -117,13 +120,139 @@ tc_group
   -> IsGroupClosed
   -> TcM thing
   -> TcM ([(RecFlag, LCsBinds Tc)], CsWrapper, thing)
-tc_group = panic "unfinished2"
+
+tc_group top_lvl sig_fn (NonRecursive, binds) closed thing_inside = do
+  let bind = case bagToList binds of
+               [bind] -> bind
+               [] -> panic "tc_group: empty list of binds"
+               _ -> panic "tc_group: NonRecursive binds is not a singleton bag"
+  (bind', wrapper, thing) <- tc_single top_lvl sig_fn bind closed thing_inside
+  return ([(NonRecursive, bind')], wrapper, thing)
+
+tc_group _ _ _ _ _ = panic "unfinished2"
+
+tc_single
+  :: TopLevelFlag
+  -> TcSigFun
+  -> LCsBind Rn
+  -> IsGroupClosed
+  -> TcM thing
+  -> TcM (LCsBinds Tc, CsWrapper, thing)
+tc_single top_lvl sig_fn lbind@(L _ FunBind{}) closed thing_inside = do
+  (binds1, ids) <- tcPolyBinds top_lvl sig_fn NonRecursive NonRecursive closed [lbind]
+  (thing, wrapper) <- tcExtendLetEnv top_lvl sig_fn closed ids thing_inside
+  return (binds1, wrapper, thing)
+
+tc_single _ _ _ _ _ = panic "tc_single"
+
+tcPolyBinds
+  :: TopLevelFlag
+  -> TcSigFun
+  -> RecFlag
+  -> RecFlag
+  -> IsGroupClosed
+  -> [LCsBind Rn]
+  -> TcM (LCsBinds Tc, [(TcId, KiCon)])
+tcPolyBinds top_lvl sig_fn rec_group rec_tc closed bind_list
+  = setSrcSpan loc $ recoverM (recoveryCode binder_names sig_fn) $ do
+  traceTc "------------------------------------------------" empty
+  traceTc "Bindings for {" (ppr binder_names)
+  dflags <- getDynFlags
+  let plan = decideGeneralizationPlan dflags top_lvl closed sig_fn bind_list
+  traceTc "Generalization plan" (ppr plan)
+  result@(_, scaled_poly_ids) <- case plan of
+    NoGen -> tcPolyNoGen rec_tc sig_fn bind_list
+    InferGen -> tcPolyInfer rec_tc sig_fn bind_list
+    CheckGen lbind sig -> tcPolyCheck sig lbind
+
+  let poly_ids = map fst scaled_poly_ids
+
+  traceTc "} End of bindigs for"
+    $ vcat [ ppr binder_names
+           , ppr rec_group
+           , vcat [ ppr id <+> ppr (varType id) | id <- poly_ids ] ]
+
+  return result
+  where
+    binder_names = collectCsBindListBinders CollNoDictBinders bind_list
+    loc = foldr1 combineSrcSpans (map (locA . getLoc) bind_list)
+
+recoveryCode :: [Name] -> TcSigFun -> TcM (LCsBinds Tc, [(TcId, KiCon)])
+recoveryCode binder_names sig_fn = do
+  traceTc "tcBindsWithSigs: error recovery" (ppr binder_names)
+  let poly_ids = map (, UKd) $ map mk_dummy binder_names
+  return (emptyBag, poly_ids)
+  where
+    mk_dummy name
+      | Just sig <- sig_fn name
+      = completeSigPolyId sig
+      | otherwise
+      = mkLocalId name forall_a_a
+
+forall_a_a :: AnyType
+forall_a_a = panic "forall_a_a"
+
+{- *********************************************************************
+*                                                                      *
+                tcPolyNoGen
+*                                                                      *
+********************************************************************* -}
+
+tcPolyNoGen :: RecFlag -> TcSigFun -> [LCsBind Rn] -> TcM (LCsBinds Tc, [(TcId, KiCon)])
+tcPolyNoGen = panic "tcPolyNoGen"
+
+{- *********************************************************************
+*                                                                      *
+                tcPolyCheck
+*                                                                      *
+********************************************************************* -}
+
+tcPolyCheck :: TcCompleteSig -> LCsBind Rn -> TcM (LCsBinds Tc, [(TcId, KiCon)])
+tcPolyCheck = panic "tcPolyCheck"
+
+{- *********************************************************************
+*                                                                      *
+                tcPolyInfer
+*                                                                      *
+********************************************************************* -}
+
+tcPolyInfer :: RecFlag -> TcSigFun -> [LCsBind Rn] -> TcM (LCsBinds Tc, [(TcId, KiCon)])
+tcPolyInfer = panic "tcPolyInfer"
 
 {- *********************************************************************
 *                                                                      *
                 Generalisation
 *                                                                      *
 ********************************************************************* -}
+
+data GeneralizationPlan
+  = NoGen
+  | InferGen
+  | CheckGen (LCsBind Rn) TcCompleteSig
+
+instance Outputable GeneralizationPlan where
+  ppr NoGen = text "NoGen"
+  ppr InferGen = text "InferGen"
+  ppr (CheckGen _ s) = text "CheckGen" <+> ppr s
+
+decideGeneralizationPlan
+  :: DynFlags -> TopLevelFlag -> IsGroupClosed -> TcSigFun -> [LCsBind Rn] -> GeneralizationPlan
+decideGeneralizationPlan dflags top_lvl closed sig_fn lbinds
+  | Just (bind, sig) <- one_funbind_with_sig = CheckGen bind sig
+  | generalize_binds = InferGen
+  | otherwise = NoGen
+  where
+    generalize_binds
+      | isTopLevel top_lvl = True
+      | IsGroupClosed _ True <- closed = True
+      | otherwise = False -- MonoLocalBinds
+
+    one_funbind_with_sig
+      | [lbind@(L _ (FunBind { fun_id = v }))] <- lbinds
+      , Just (TcIdSig sig) <- sig_fn (unLoc v) 
+      = Just (lbind, sig)
+      | otherwise
+      = Nothing
 
 isClosedBndrGroup :: TcTyKiEnv -> Bag (LCsBind Rn) -> IsGroupClosed
 isClosedBndrGroup type_env binds = IsGroupClosed fv_env type_closed

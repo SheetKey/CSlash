@@ -201,6 +201,10 @@ collectCsValBinders flag = collect_cs_val_binders False flag
 collectCsBindsBinders :: CollectPass p => CollectFlag p -> LCsBindsLR p idR -> [IdP p]
 collectCsBindsBinders flag binds = collect_binds False flag binds []
 
+collectCsBindListBinders
+  :: forall p idR. CollectPass p => CollectFlag p -> [LCsBindLR p idR] -> [IdP p]
+collectCsBindListBinders flag = foldr (collect_bind False flag . unXRec @p) []
+
 collect_cs_val_binders
   :: CollectPass (CsPass idL)
   => Bool

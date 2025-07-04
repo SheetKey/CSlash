@@ -71,6 +71,9 @@ tcSigInfoName (TcIdSig sig) = idName (sig_bndr sig)
 completeSigPolyId :: TcSigInfo -> TcId
 completeSigPolyId (TcIdSig sig) = sig_bndr sig
 
+instance Outputable TcCompleteSig where
+  ppr (CSig { sig_bndr = bndr }) = ppr bndr <+> colon <+> ppr (varType bndr)
+
 {- *********************************************************************
 *                                                                      *
              TcTyKiThing

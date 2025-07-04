@@ -71,3 +71,7 @@ instance Outputable TopLevelFlag where
 instance Outputable SwapFlag where
   ppr IsSwapped = text "Is-swapped"
   ppr NotSwapped = text "Not-swapped"
+
+instance Outputable RecFlag where
+  ppr Recursive = text "Recursive"
+  ppr NonRecursive = text "NonRecursive"

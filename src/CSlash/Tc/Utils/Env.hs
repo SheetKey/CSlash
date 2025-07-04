@@ -22,8 +22,8 @@ import CSlash.Tc.Utils.Monad
 import CSlash.Tc.Utils.TcType
 -- import {-# SOURCE #-} GHC.Tc.Utils.TcMType ( tcCheckUsage )
 import CSlash.Tc.Types.LclEnv
-import CSlash.Tc.Types.BasicTypes (TcId, IdBindingInfo(..))
--- import GHC.Tc.Types.Evidence (HsWrapper, idHsWrapper, (<.>))
+import CSlash.Tc.Types.BasicTypes
+import CSlash.Tc.Types.Evidence (CsWrapper, idCsWrapper, (<.>))
 
 -- import GHC.Core.InstEnv
 import CSlash.Core.DataCon ( DataCon, dataConTyCon{-, flSelector-} )
@@ -33,6 +33,7 @@ import CSlash.Core.TyCon
 import CSlash.Core.Type.Rep
 import CSlash.Core.Type
 import CSlash.Core.Type.FVs
+import CSlash.Core.Kind
 -- import GHC.Core.Coercion.Axiom
 -- import GHC.Core.Class
 
@@ -187,6 +188,15 @@ tcExtendSigIds top_lvl sig_ids thing_inside
     , let closed = isTypeClosedLetBndr id
           info = NonClosedLet emptyNameSet closed ]
     thing_inside
+
+tcExtendLetEnv
+  :: TopLevelFlag
+  -> TcSigFun
+  -> IsGroupClosed
+  -> [(TcId, KiCon)]
+  -> TcM a
+  -> TcM (a, CsWrapper)
+tcExtendLetEnv = panic "tcextendletenv"
 
 tc_extend_local_env :: TopLevelFlag -> [(Name, TcTyKiThing)] -> TcM a -> TcM a
 tc_extend_local_env top_lvl extra_env thing_inside = do
