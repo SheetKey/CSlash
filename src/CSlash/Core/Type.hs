@@ -285,6 +285,13 @@ splitForAllForAllTyBinders ty = split ty ty []
     split orig_ty _ bs = (reverse bs, orig_ty)
 {-# INLINE splitForAllForAllTyBinders #-}
 
+splitForAllInvisTyBinders :: IsTyVar tv kv => Type tv kv -> ([tv], Type tv kv)
+splitForAllInvisTyBinders ty = split ty ty []
+  where
+    split _ (ForAllTy (Bndr tv Specified) ty) tvs = split ty ty (tv:tvs)
+    split orig_ty ty tvs | Just ty' <- coreView ty = split orig_ty ty' tvs
+    split orig_ty _ tvs = (reverse tvs, orig_ty)
+
 splitTyLamTyBinders :: IsTyVar tv kv => Type tv kv -> ([tv], Type tv kv)
 splitTyLamTyBinders ty = split ty ty []
   where

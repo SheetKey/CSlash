@@ -347,6 +347,11 @@ newUnique = do
   let tag = env_ut env
   liftIO $! uniqFromTag tag
 
+newNameAt :: OccName -> SrcSpan -> TcM Name
+newNameAt occ span = do
+  uniq <- newUnique
+  return $ mkInternalName uniq occ span
+
 newSysName :: OccName -> TcRnIf gbl lcl Name
 newSysName occ = do
   uniq <- newUnique

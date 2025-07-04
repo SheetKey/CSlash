@@ -21,7 +21,7 @@ import CSlash.Tc.Utils.Monad
 import CSlash.Tc.Types.Origin
 import CSlash.Tc.Types.BasicTypes
 import CSlash.Tc.Utils.Env
--- import GHC.Tc.Utils.Unify
+import CSlash.Tc.Utils.Unify
 import CSlash.Tc.Solver
 import CSlash.Tc.Types.Evidence
 -- import GHC.Tc.Types.Constraint
@@ -208,7 +208,19 @@ tcPolyNoGen = panic "tcPolyNoGen"
 ********************************************************************* -}
 
 tcPolyCheck :: TcCompleteSig -> LCsBind Rn -> TcM (LCsBinds Tc, [(TcId, KiCon)])
-tcPolyCheck = panic "tcPolyCheck"
+tcPolyCheck sig@(CSig { sig_bndr = poly_id, sig_ctxt = ctxt })
+            (L bind_loc (FunBind { fun_id = L nm_loc name, fun_body = body }))
+  = do
+  traceTc "tcPolyCheck" (ppr sig)
+
+  mono_name <- newNameAt (nameOccName name) (locA nm_loc)
+
+  (wrap_gen, (wrap_res, body'))
+    <- tcSkolemizeCompleteSig sig $ panic "tcpolycheck"
+
+  panic "unfinished3"
+
+tcPolyCheck _ _ = panic "tcPolyCheck"
 
 {- *********************************************************************
 *                                                                      *

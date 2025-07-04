@@ -52,6 +52,12 @@ extendTvSubst :: IsVar tv => TvSubst tv kv -> tv -> Type tv kv -> TvSubst tv kv
 extendTvSubst (TvSubst in_scope tvs ksubst) tv ty
   = TvSubst in_scope (extendVarEnv tvs tv ty) ksubst
 
+extendTvSubstWithClone :: IsTyVar tv kv => TvSubst tv kv -> tv -> tv -> TvSubst tv kv
+extendTvSubstWithClone (TvSubst in_scope tenv ksubst) tv tv'
+  = TvSubst (extendInScopeSet in_scope tv')
+            (extendVarEnv tenv tv (mkTyVarTy tv'))
+            ksubst
+
 instance IsTyVar tv kv => Outputable (TvSubst tv kv) where
   ppr (TvSubst in_scope tvs ksubst)
       =  text "<InScope =" <+> in_scope_doc

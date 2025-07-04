@@ -66,6 +66,9 @@ lookupVarSet = lookupUniqSet
 anyVarSet :: (a -> Bool) -> UniqSet a -> Bool
 anyVarSet = uniqSetAny
 
+mapVarSet :: Uniquable b => (a -> b) -> UniqSet a -> UniqSet b
+mapVarSet = mapUniqSet
+
 unionVarSet :: UniqSet a -> UniqSet a -> UniqSet a
 unionVarSet = unionUniqSets
 

@@ -56,6 +56,8 @@ maybeSymCo NotSwapped co = co
 data CsWrapper
   = WpHole
   | WpCompose CsWrapper CsWrapper
+  | WpTyLam (AnyTyVar AnyKiVar) -- can probably be 'TcTyVar AnyKiVar' (these should be skols)
+  | WpKiLam AnyKiVar            -- "             " 'TcKiVar'          "                     "
 
 (<.>) :: CsWrapper -> CsWrapper -> CsWrapper
 WpHole <.> c = c
@@ -64,6 +66,15 @@ c1 <.> c2 = c1 `WpCompose` c2
 
 idCsWrapper :: CsWrapper
 idCsWrapper = WpHole
+
+mkWpTyLams :: [AnyTyVar AnyKiVar] -> CsWrapper
+mkWpTyLams tvs = mk_lam_fn WpTyLam tvs
+
+mkWpKiLams :: [AnyKiVar] -> CsWrapper
+mkWpKiLams kvs = mk_lam_fn WpKiLam kvs
+
+mk_lam_fn :: (a -> CsWrapper) -> [a] -> CsWrapper
+mk_lam_fn f as = foldr (\x wrap -> f x <.> wrap) WpHole as
 
 {- *********************************************************************
 *                                                                      *

@@ -15,6 +15,7 @@ import CSlash.Tc.Utils.TcType
 import CSlash.Tc.Types.Evidence
 import CSlash.Tc.Types.Constraint
 import CSlash.Tc.Types.Origin
+import CSlash.Tc.Types.BasicTypes
 import CSlash.Tc.Zonk.TcType
 
 import CSlash.Core.Type
@@ -52,9 +53,28 @@ import qualified Data.Semigroup as S ( (<>) )
 
 {- *********************************************************************
 *                                                                      *
-          Skolemisation and matchExpectedFunTys
+          Skolemization and matchExpectedFunTys
 *                                                                      *
 ********************************************************************* -}
+
+tcSkolemizeGeneral
+  :: UserTypeCtxt
+  -> AnyType -> AnyType
+  -> ([(Name, AnyKiVar)] -> [(Name, AnyTyVar AnyKiVar)] -> AnyType -> TcM result)
+  -> TcM (CsWrapper, result)
+tcSkolemizeGeneral = panic "tcSkolemizeGeneral"
+
+tcSkolemizeCompleteSig
+  :: TcCompleteSig
+  -> ([ExpPatType] -> AnyRhoType -> TcM result)
+  -> TcM (CsWrapper, result)
+tcSkolemizeCompleteSig (CSig { sig_bndr = poly_id, sig_ctxt = ctxt, sig_loc = loc })
+                       thing_inside
+  = do
+  cur_loc <- getSrcSpanM
+  let poly_ty = varType poly_id
+  setSrcSpan loc $
+    tcSkolemizeGeneral ctxt poly_ty poly_ty $ panic "tcSkolemizeCompleteSig"
 
 checkKiConstraints :: SkolemInfoAnon -> [KiEvVar AnyKiVar] -> TcM result -> TcM result
 checkKiConstraints skol_info given thing_inside = do

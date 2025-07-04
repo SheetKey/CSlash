@@ -11,9 +11,11 @@ import Prelude hiding ((<>))
 import CSlash.Core.Type
 import CSlash.Core.Type.Rep
 import CSlash.Core.Type.FVs
+import CSlash.Core.Type.Subst
 import CSlash.Core.Kind
 import CSlash.Core.Kind.Compare
 import CSlash.Core.Kind.FVs
+import CSlash.Core.Kind.Subst
 import CSlash.Types.Var
 import CSlash.Types.Var.Set
 import CSlash.Core.TyCon
@@ -44,6 +46,12 @@ import Data.IORef (IORef)
 type AnyType = Type (AnyTyVar AnyKiVar) AnyKiVar
 type TcType = Type (TcTyVar AnyKiVar) AnyKiVar
 
+type AnyTvSubst = TvSubst (AnyTyVar AnyKiVar) AnyKiVar
+type AnyKvSubst = KvSubst AnyKiVar
+
+type AnyRhoType = AnyType
+type AnySigmaType = AnyType
+
 type AnyTyVarBinder = VarBndr (AnyTyVar AnyKiVar) ForAllFlag
 type TcTyVarBinder = VarBndr (TcTyVar AnyKiVar) ForAllFlag
 
@@ -73,10 +81,12 @@ type AnyKindCoercionHole = KindCoercionHole AnyKiVar
 ********************************************************************* -}
 
 data ExpType
-  = Check TcType
+  = Check AnyType
   | Infer !InferResult
 
 data InferResult
+
+data ExpPatType
 
 {- *********************************************************************
 *                                                                      *
@@ -401,6 +411,9 @@ mkMinimalBy get_pred xs = go preds_with_eqx []
 *                                                                      *
 ********************************************************************* -}
 
+tcSplitForAllInvisBinders :: IsTyVar tv kv => Type tv kv -> ([tv], Type tv kv)
+tcSplitForAllInvisBinders = splitForAllInvisTyBinders
+
 tcSplitForAllTyVarBinders :: IsTyVar tv kv => Type tv kv -> ([ForAllBinder tv], Type tv kv)
 tcSplitForAllTyVarBinders ty = sty
   where sty = splitForAllForAllTyBinders ty
@@ -412,6 +425,11 @@ tcSplitTyLamTyVarBinders ty = sty
 tcSplitBigLamTyVarBinders :: IsTyVar tv kv => Type tv kv -> ([kv], Type tv kv)
 tcSplitBigLamTyVarBinders ty = sty
   where sty = splitBigLamTyBinders ty
+
+tcSplitSigma :: IsTyVar tv kv => Type tv kv -> ([kv], [tv], Type tv kv)
+tcSplitSigma ty = case tcSplitBigLamTyVarBinders ty of
+                    (kvs, ty') -> case tcSplitForAllInvisBinders ty of
+                                    (tvs, tau) -> (kvs, tvs, tau)
 
 {- *********************************************************************
 *                                                                      *
