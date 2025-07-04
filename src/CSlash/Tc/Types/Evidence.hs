@@ -54,6 +54,16 @@ maybeSymCo NotSwapped co = co
 ********************************************************************* -}
   
 data CsWrapper
+  = WpHole
+  | WpCompose CsWrapper CsWrapper
+
+(<.>) :: CsWrapper -> CsWrapper -> CsWrapper
+WpHole <.> c = c
+c <.> WpHole = c
+c1 <.> c2 = c1 `WpCompose` c2
+
+idCsWrapper :: CsWrapper
+idCsWrapper = WpHole
 
 {- *********************************************************************
 *                                                                      *

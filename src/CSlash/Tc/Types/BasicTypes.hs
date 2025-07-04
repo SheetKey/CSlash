@@ -109,6 +109,9 @@ data IdBindingInfo
   | ClosedLet
   | NonClosedLet RhsNames ClosedTypeId
 
+data IsGroupClosed
+  = IsGroupClosed (NameEnv RhsNames) ClosedTypeId
+
 type RhsNames = NameSet
 
 type ClosedTypeId = Bool

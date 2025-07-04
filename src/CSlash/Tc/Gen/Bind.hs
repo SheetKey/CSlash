@@ -17,6 +17,7 @@ import CSlash.Tc.Gen.Sig
 -- import GHC.Tc.Utils.Concrete ( hasFixedRuntimeRep_syntactic )
 import CSlash.Tc.Utils.Monad
 import CSlash.Tc.Types.Origin
+import CSlash.Tc.Types.BasicTypes
 import CSlash.Tc.Utils.Env
 -- import GHC.Tc.Utils.Unify
 import CSlash.Tc.Solver
@@ -88,6 +89,78 @@ tcValBinds
 tcValBinds top_lvl binds sigs thing_inside = do
   (poly_ids, sig_fn) <- tcTySigs sigs
 
-  tcExtendSigIds top_lvl poly_ids $ do
-    
-    panic "unfinished2"
+  tcExtendSigIds top_lvl poly_ids $ 
+    tcBindGroups top_lvl sig_fn binds thing_inside
+             
+tcBindGroups
+  :: TopLevelFlag
+  -> TcSigFun
+  -> [(RecFlag, LCsBinds Rn)]
+  -> TcM thing
+  -> TcM ([(RecFlag, LCsBinds Tc)], CsWrapper, thing)
+tcBindGroups _ _ [] thing_inside = do
+  thing <- thing_inside
+  return ([], idCsWrapper, thing)
+
+tcBindGroups top_lvl sig_fn (group:groups) thing_inside = do
+  type_env <- getLclTyKiEnv
+  let closed = isClosedBndrGroup type_env (snd group)
+  (group', outer_wrapper, (groups', inner_wrapper, thing))
+    <- tc_group top_lvl sig_fn group closed
+       $ tcBindGroups top_lvl sig_fn groups thing_inside
+  return (group' ++ groups', outer_wrapper <.> inner_wrapper, thing)
+
+tc_group
+  :: TopLevelFlag
+  -> TcSigFun
+  -> (RecFlag, LCsBinds Rn)
+  -> IsGroupClosed
+  -> TcM thing
+  -> TcM ([(RecFlag, LCsBinds Tc)], CsWrapper, thing)
+tc_group = panic "unfinished2"
+
+{- *********************************************************************
+*                                                                      *
+                Generalisation
+*                                                                      *
+********************************************************************* -}
+
+isClosedBndrGroup :: TcTyKiEnv -> Bag (LCsBind Rn) -> IsGroupClosed
+isClosedBndrGroup type_env binds = IsGroupClosed fv_env type_closed
+  where
+    type_closed = allUFM (nameSetAll is_closed_type_id) fv_env
+
+    fv_env :: NameEnv NameSet
+    fv_env = mkNameEnv $ concatMap (bindFvs . unLoc) binds
+
+    bindFvs :: CsBindLR Rn Rn -> [(Name, NameSet)]
+    bindFvs (FunBind { fun_id = L _ f, fun_ext = fvs })
+      = let open_fvs = get_open_fvs fvs
+        in [(f, open_fvs)]
+    bindFvs _ = panic "bindFvs"
+
+    get_open_fvs fvs = filterNameSet (not . is_closed) fvs
+
+    is_closed :: Name -> ClosedTypeId
+    is_closed name
+      | Just thing <- lookupNameEnv type_env name
+      = case thing of
+          AGlobal {} -> True
+          ATcId { tct_info = ClosedLet } -> True
+          _ -> False
+
+      | otherwise
+      = True
+
+    is_closed_type_id :: Name -> ClosedTypeId
+    is_closed_type_id name
+      | Just thing <- lookupNameEnv type_env name
+      = case thing of
+          ATcId { tct_info = NonClosedLet _ cl } -> cl
+          ATcId { tct_info = NotLetBound } -> False
+          ATyVar {} -> False
+          AKiVar {} -> False
+          _ -> pprPanic "is_closed_id" (ppr name)
+
+      | otherwise
+      = True
