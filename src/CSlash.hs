@@ -87,6 +87,8 @@ import CSlash.Utils.Exception
 import CSlash.Utils.Monad
 import CSlash.Utils.Misc
 import CSlash.Utils.Outputable
+import CSlash.Utils.Ppr (Mode(..))
+import System.IO (stdout)
 import CSlash.Utils.Panic
 import CSlash.Utils.Logger
 import CSlash.Utils.Fingerprint
@@ -235,6 +237,11 @@ setSessionDynFlags :: (HasCallStack, CslMonad m) => DynFlags -> m ()
 setSessionDynFlags dflags0 = do
   cs_env <- getSession
   logger <- getLogger
+
+  !_ <- liftIO $ printSDocLn defaultSDocContext (PageMode False) stdout
+        $ vcat [ text "Debug package db setSessionDynFlags"
+               , ppr $ ue_home_unit_graph $ cs_unit_env cs_env ]
+
   dflags <- checkNewDynFlags logger dflags0
   let all_uids = cs_all_home_unit_ids cs_env
   case S.toList all_uids of
@@ -249,11 +256,24 @@ setUnitDynFlagsNoCheck uid dflags1 = do
   logger <- getLogger
   cs_env <- getSession
 
+  !_ <- liftIO $ printSDocLn defaultSDocContext (PageMode False) stdout
+        $ vcat [ text "Debug package db setUnitDynFlagsNoCheck"
+               , ppr $ ue_home_unit_graph $ cs_unit_env cs_env ]
+
   let old_hue = ue_findHomeUnitEnv uid (cs_unit_env cs_env)
       cached_unit_dbs = homeUnitEnv_unit_dbs old_hue
+
+  !_ <- liftIO $ printSDocLn defaultSDocContext (PageMode False) stdout
+        $ vcat [ text "Debug package db setUnitDynFlagsNoCheck/cached"
+               , ppr cached_unit_dbs ]
+
   (dbs, unit_state, home_unit, mconstants) <- liftIO $
     initUnits logger dflags1 cached_unit_dbs (cs_all_home_unit_ids cs_env)
   updated_dflags <- liftIO $ updatePlatformConstants dflags1 mconstants
+
+  !_ <- liftIO $ printSDocLn defaultSDocContext (PageMode False) stdout
+        $ vcat [ text "Debug package db setUnitDynFlagsNoCheck/dbs"
+               , ppr dbs ]
 
   let upd hue = hue { homeUnitEnv_units = unit_state
                     , homeUnitEnv_unit_dbs = Just dbs

@@ -144,7 +144,6 @@ initTc cs_env cs_src keep_rn_syntax mod loc do_this = do
                 , tcg_sigs = emptyNameSet
                 , tcg_tcs = []
                 , tcg_ksigs = emptyNameSet
-                , tcg_ki_ev_binds = emptyBag
                 , tcg_hdr_info = Nothing
                 , tcg_pc = False
                 , tcg_main = Nothing
@@ -774,30 +773,16 @@ mAX_CONTEXTS = 3
 *                                                                      *
 ********************************************************************* -}
 
-newTcKiEvBinds :: TcM KiEvBindsVar
-newTcKiEvBinds = do
-  binds_ref <- newTcRef emptyKiEvBindMap
+newTcKiCoBinds :: TcM KiCoBindsVar
+newTcKiCoBinds = do
   kcvs_ref <- newTcRef emptyVarSet
   uniq <- newUnique
-  traceTc "newTcKiEvBinds" (text "unique =" <+> ppr uniq)
-  return $ KiEvBindsVar { kebv_binds = binds_ref
-                        , kebv_kcvs = kcvs_ref
-                        , kebv_uniq = uniq }
+  traceTc "newTcKiCoBinds" (text "unique =" <+> ppr uniq)
+  return $ KiCoBindsVar { kcbv_kcvs = kcvs_ref
+                        , kcbv_uniq = uniq }
 
-getTcKiEvKiCoVars :: KiEvBindsVar -> TcM (MkVarSet (KiCoVar AnyKiVar))
-getTcKiEvKiCoVars ev_binds_var = readTcRef (kebv_kcvs ev_binds_var)
-
-getTcKiEvBindsMap :: KiEvBindsVar -> TcM KiEvBindMap
-getTcKiEvBindsMap (KiEvBindsVar { kebv_binds = ev_ref }) = readTcRef ev_ref
-
-setTcKiEvBindsMap :: KiEvBindsVar -> KiEvBindMap -> TcM ()
-setTcKiEvBindsMap (KiEvBindsVar { kebv_binds = ev_ref }) binds = writeTcRef ev_ref binds
-
-addTcKiEvBind :: KiEvBindsVar -> KiEvBind -> TcM ()
-addTcKiEvBind (KiEvBindsVar { kebv_binds = ev_ref, kebv_uniq = u }) ev_bind = do
-  traceTc "addTcKiEvBind" $ ppr u $$ ppr ev_bind
-  binds <- readTcRef ev_ref
-  writeTcRef ev_ref (extendKiEvBinds binds ev_bind)
+getTcKiCoKiCoVars :: KiCoBindsVar -> TcM (MkVarSet (KiCoVar AnyKiVar))
+getTcKiCoKiCoVars co_binds_var = readTcRef (kcbv_kcvs co_binds_var)
 
 getConstraintVar :: TcM (TcRef WantedConstraints)
 getConstraintVar = do

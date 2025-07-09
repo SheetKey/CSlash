@@ -129,7 +129,8 @@ updateHueHpt f hue =
   in hue { homeUnitEnv_hpt = hpt }
 
 instance Outputable (UnitEnvGraph HomeUnitEnv) where
-  ppr g = ppr [(k, length (homeUnitEnv_hpt hue)) | (k, hue) <- (unitEnv_elts g)]
+  ppr g = ppr [(k, length (homeUnitEnv_hpt hue), homeUnitEnv_unit_dbs hue)
+              | (k, hue) <- (unitEnv_elts g)]
 
 type UnitEnvGraphKey = UnitId
 

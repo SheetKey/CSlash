@@ -32,6 +32,8 @@ import CSlash.Types.PkgQual
 import CSlash.Utils.Misc
 import CSlash.Utils.Panic
 import CSlash.Utils.Outputable as Outputable
+import CSlash.Utils.Ppr (Mode(..))
+import System.IO (stdout)
 import CSlash.Data.Maybe
 
 import System.Environment ( getEnv )
@@ -265,7 +267,7 @@ data UnitDatabase unit = UnitDatabase
   }
 
 instance Outputable u => Outputable (UnitDatabase u) where
-  ppr (UnitDatabase fp _) = text "DB:" <+> text fp
+  ppr (UnitDatabase fp lst) = text "DB:" <+> text fp <> ppWhen (null lst) (text " empty")
 
 type UnitInfoMap = UniqMap UnitId UnitInfo
 
@@ -322,10 +324,18 @@ initUnits
   -> Set.Set UnitId
   -> IO ([UnitDatabase UnitId], UnitState, HomeUnit, Maybe PlatformConstants)
 initUnits logger dflags cached_dbs home_units = do
+  !_ <- printSDocLn defaultSDocContext (PageMode False) stdout
+        $ vcat [ text "Debug package db initUnits1"
+               , ppr cached_dbs ]
+
   let forceUnitInfoMap (state, _) = unitInfoMap state `seq` ()
   (unit_state, dbs) <- withTiming logger (text "initializing unit database")
                        forceUnitInfoMap $
                        mkUnitState logger (initUnitConfig dflags cached_dbs home_units)
+
+  !_ <- printSDocLn defaultSDocContext (PageMode False) stdout
+        $ vcat [ text "Debug package db initUnits2"
+               , ppr dbs ]
 
   putDumpFileMaybe logger Opt_D_dump_mod_map "Module Map"
     FormatText (updSDocContext (\ctx -> ctx { sdocLineLength = 200 })
@@ -368,6 +378,10 @@ readUnitDatabases :: Logger -> UnitConfig -> IO [UnitDatabase UnitId]
 readUnitDatabases logger cfg = do
   conf_refs <- getUnitDbRefs cfg
   confs <- liftM catMaybes $ mapM (resolveUnitDatabase cfg) conf_refs
+  !_ <- printSDocLn defaultSDocContext (PageMode False) stdout
+        $ vcat [ text "Debug package db readUnitDatabases/confs"
+               , vcat $ text <$> confs ]
+
   mapM (readUnitDatabase logger cfg) confs
 
 getUnitDbRefs :: UnitConfig -> IO [PkgDbRef]
@@ -408,6 +422,9 @@ resolveUnitDatabase _ (PkgDbPath name) = return $ Just name
 readUnitDatabase :: Logger -> UnitConfig -> FilePath -> IO (UnitDatabase UnitId)
 readUnitDatabase logger cfg conf_file = do
   isdir <- doesDirectoryExist conf_file
+  !_ <- printSDocLn defaultSDocContext (PageMode False) stdout
+        $ vcat [ text "Debug package db readUnitDatabase/isdir"
+               , ppr isdir ]
 
   proto_pkg_configs <-
     if isdir
@@ -596,6 +613,8 @@ findWiredInUnits
   -> VisibilityMap
   -> IO ([UnitInfo], WiringMap)
 findWiredInUnits logger prec_map pkgs vis_map = do
+  when (null pkgs) $
+    debugTraceMsg logger 2 $ text "findWiredInUnits has no packages"
   let matches :: UnitInfo -> UnitId -> Bool
       matches pc pid = unitPackageName pc == PackageName (unitIdFS pid)
 
@@ -871,15 +890,25 @@ mkUnitState
   -> IO (UnitState, [UnitDatabase UnitId])
 mkUnitState logger cfg = do
   raw_dbs <- case unitConfigDBCache cfg of
-               Nothing -> readUnitDatabases logger cfg
-               Just dbs -> return dbs
+               Nothing -> do
+                 !_ <- printSDocLn defaultSDocContext (PageMode False) stdout
+                       $ vcat [ text "Debug package db mkUnitState (Nothing)" ]
+
+                 readUnitDatabases logger cfg
+               Just dbs ->  do
+                 !_ <- printSDocLn defaultSDocContext (PageMode False) stdout
+                       $ vcat [ text "Debug package db mkUnitState (Just dbs)"
+                              , ppr dbs ]
+
+                 return dbs
   let dbs = raw_dbs
+  !_ <- printSDocLn defaultSDocContext (PageMode False) stdout
+        $ vcat [ text "Debug package db mkUnitState"
+               , ppr dbs ]
 
   let raw_other_flags = reverse (unitConfigFlagsExposed cfg)
       (hpt_flags, other_flags)
         = partition (selectHptFlag (unitConfigHomeUnits cfg)) raw_other_flags
-
-  debugTraceMsg logger 2 $ text "package flags" <+> ppr other_flags
 
   let home_unit_deps = selectHomeUnits (unitConfigHomeUnits cfg) hpt_flags
 
@@ -1096,7 +1125,7 @@ lookupModuleInAllUnits pkgs m
   = case lookupModuleWithSuggestions pkgs m NoPkgQual of
       LookupFound a b -> [(a, fst b)]
       LookupMultiple rs -> map f rs
-        where f (m, _) = (m, expectJust "lookkupModule" (lookupUnit pkgs (moduleUnit m)))
+        where f (m, _) = (m, expectJust "lookupModule" (lookupUnit pkgs (moduleUnit m)))
       _ -> []
 
 data LookupResult

@@ -236,7 +236,10 @@ fvsOfType (Embed ki) f bound_vars acc = liftKiFV (fvsOfMonoKind ki) f bound_vars
 
 fvsOfKiCo :: IsTyVar tv kv => KindCoercion kv -> TyFV tv kv
 fvsOfKiCo (Refl ki) f bound_vars acc = liftKiFV (fvsOfMonoKind ki) f bound_vars acc
-fvsOfKiCo (KiConAppCo _ cos) f bound_vars acc = fvsOfKiCos cos f bound_vars acc
+fvsOfKiCo BI_U_A f bound_vars acc = acc
+fvsOfKiCo BI_A_L f bound_vars acc = acc
+fvsOfKiCo (LiftEq co) f bound_vars acc = fvsOfKiCo co f bound_vars acc
+fvsOfKiCo (LiftLT co) f bound_vars acc = fvsOfKiCo co f bound_vars acc
 fvsOfKiCo (FunCo { fco_arg = co1, fco_res = co2 }) f bound_vars acc
   = (fvsOfKiCo co1 `unionFV` fvsOfKiCo co2) f bound_vars acc
 fvsOfKiCo (KiCoVarCo kcv) f bound_vars acc = fvsOfKiCoVar kcv f bound_vars acc

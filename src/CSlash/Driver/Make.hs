@@ -1144,9 +1144,8 @@ getPreprocessedImports cs_env src_fn mb_phase maybe_buf = do
   pi_cs_buf <- liftIO $ hGetStringBuffer pi_cs_fn
   (pi_theimps', pi_csl_prim_import, L pi_mod_name_loc pi_mod_name) <-
     ExceptT $ do
-    let imp_prelude = True
-        popts = initParserOpts pi_local_dflags
-    mimps <- getImports popts imp_prelude pi_cs_buf pi_cs_fn src_fn
+    let popts = initParserOpts pi_local_dflags
+    mimps <- getImports popts pi_cs_buf pi_cs_fn src_fn
     return (first (mkMessages . fmap mkDriverPsHeaderMessage . getMessages) mimps)
   let rn_pkg_qual = renameRawPkgQual (cs_unit_env cs_env)
       rn_imps = fmap (\(pk, lmn@(L _ mn)) -> (rn_pkg_qual mn pk, lmn))

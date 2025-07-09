@@ -67,17 +67,17 @@ tcLCsKind :: LCsKind Rn -> TcM AnyMonoKind
 tcLCsKind (L span ki) = setSrcSpanA span $ tcCsKind ki
 
 tcCsKind :: CsKind Rn -> TcM AnyMonoKind
-tcCsKind CsUKd {} = return $ KiConApp UKd []
-tcCsKind CsAKd {} = return $ KiConApp AKd []
-tcCsKind CsLKd {} = return $ KiConApp LKd []
+tcCsKind CsUKd {} = return $ BIKi UKd
+tcCsKind CsAKd {} = return $ BIKi AKd
+tcCsKind CsLKd {} = return $ BIKi LKd
 tcCsKind (CsKiVar _ kv) = tcKiVar (unLoc kv)
 tcCsKind (CsFunKi _ k1 k2) = tc_fun_kind k1 k2
 tcCsKind (CsParKd _ ki) = tcLCsKind ki
 
 tcArrow :: CsKind Rn -> TcM AnyMonoKind
-tcArrow CsUKd {} = return $ KiConApp UKd []
-tcArrow CsAKd {} = return $ KiConApp AKd []
-tcArrow CsLKd {} = return $ KiConApp LKd []
+tcArrow CsUKd {} = return $ BIKi UKd
+tcArrow CsAKd {} = return $ BIKi AKd
+tcArrow CsLKd {} = return $ BIKi LKd
 tcArrow (CsKiVar _ kv) = tcKiVar (unLoc kv)
 tcArrow other = pprPanic "tcArrow" (ppr other)
 

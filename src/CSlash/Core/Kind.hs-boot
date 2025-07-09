@@ -16,5 +16,4 @@ instance AsAnyKi MonoKind
 
 pprKind :: Outputable kv => Kind kv -> SDoc
 
-isCoVarKind :: MonoKind kv -> Bool
-isKiEvVarKind :: MonoKind kv -> Bool
+isKiCoVarKind :: MonoKind kv -> Bool

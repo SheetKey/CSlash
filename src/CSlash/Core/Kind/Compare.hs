@@ -89,11 +89,13 @@ inline_generic_eq_mono_kind_x mb_env = \k1 k2 -> k1 `seq` k2 `seq`
   in case (k1, k2) of
        _ | 1# <- reallyUnsafePtrEquality# k1 k2 -> True
 
-       (KiConApp kc1 kis1, KiConApp kc2 kis2)
-         | kc1 == kc2
-           -> gos kis1 kis2
+       (KiPredApp p1 ka1 kb1, KiPredApp p2 ka2 kb2)
+         | p1 == p2
+           -> go ka1 ka2 && go kb1 kb2
          | otherwise
            -> False
+
+       (BIKi k1, BIKi k2) -> k1 == k2
            
        (KiVarKi kv1, KiVarKi kv2)
          -> case mb_env of

@@ -250,7 +250,9 @@ fvsOfMonoKind (KiVarKi v) f bound_vars (acc_list, acc_set)
   | v `elemVarSet` bound_vars = (acc_list, acc_set)
   | v `elemVarSet` acc_set = (acc_list, acc_set)
   | otherwise = (v:acc_list, extendVarSet acc_set v)
-fvsOfMonoKind (KiConApp _ kis) f bound_vars acc = fvsOfMonoKinds kis f bound_vars acc
+fvsOfMonoKind (BIKi{}) f found_vars acc = acc
+fvsOfMonoKind (KiPredApp _ k1 k2) f bound_vars acc
+  = (fvsOfMonoKind k1 `unionFV` fvsOfMonoKind k2) f bound_vars acc
 fvsOfMonoKind (FunKi _ arg res) f bound_var acc
   = (fvsOfMonoKind arg `unionFV` fvsOfMonoKind res) f bound_var acc
 

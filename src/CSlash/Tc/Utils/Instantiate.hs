@@ -104,22 +104,21 @@ topSkolemize skolem_info ty = go init_subst idCsWrapper [] [] ty
 *                                                                      *
 ********************************************************************* -}
 
-instCallKiConstraints :: CtOrigin -> [AnyPredKind] -> TcM [KiEvType]
+instCallKiConstraints :: CtOrigin -> [AnyPredKind] -> TcM [AnyKindCoercion]
 instCallKiConstraints orig preds
   | null preds
   = return []
   | otherwise
-  = do evs <- mapM go preds
-       traceTc "instCallKiConstraints" (ppr evs)
-       return evs
+  = do kcos <- mapM go preds
+       traceTc "instCallKiConstraints" (ppr kcos)
+       return kcos
   where
-    go :: AnyPredKind -> TcM KiEvType
+    go :: AnyPredKind -> TcM AnyKindCoercion
     go pred
-      | KiConApp EQKi [k1, k2] <- pred
-      = do co <- unifyKind Nothing k1 k2
-           return $ kiEvCoercion co
+      | KiPredApp kc k1 k2 <- pred
+      = unifyKind Nothing kc k1 k2
       | otherwise
-      = emitWanted orig pred
+      = panic "instCallKiConstraints"
 
 {- *********************************************************************
 *                                                                      *

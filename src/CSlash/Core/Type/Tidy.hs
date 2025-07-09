@@ -143,8 +143,10 @@ tidyMonoKinds env kis = strictMap (tidyMonoKind env) kis
 
 tidyMonoKind :: ToTcKiVarMaybe kv => MkTidyEnv tv kv -> MonoKind kv -> MonoKind kv
 tidyMonoKind env (KiVarKi kv) = KiVarKi $! tidyKiVarOcc env kv
-tidyMonoKind _ kc@(KiConApp _ []) = kc
-tidyMonoKind env (KiConApp kc kis) = KiConApp kc $! tidyMonoKinds env kis
+tidyMonoKind _ kc@(BIKi _) = kc
+tidyMonoKind env (KiPredApp pred k1 k2) = let !k1' = tidyMonoKind env k1
+                                              !k2' = tidyMonoKind env k2
+                                          in KiPredApp pred k1' k2'
 tidyMonoKind env ki@(FunKi _ arg res) = let !arg' = tidyMonoKind env arg
                                             !res' = tidyMonoKind env res
                                         in ki { fk_arg = arg', fk_res = res' }

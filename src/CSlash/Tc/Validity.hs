@@ -210,6 +210,7 @@ check_syn_tc_app (ve@ValidityEnv { ve_ctxt = ctxt }) ty tc tys
 -- NOT for type synonyms. We always expand type synonyms (Like LiberalTypeSynonyms extension)
 -- so we do not EVER check the args of a type synonym
 check_arg_type :: ValidityEnv -> AnyType -> TcM ()
+check_arg_type _ (KindCoercion {}) = return ()
 check_arg_type ve@(ValidityEnv { ve_ctxt = ctxt }) ty = check_type ve ty
 
 tyConArityErr :: AnyTyCon -> [AnyType] -> TcRnMessage

@@ -152,7 +152,7 @@ tcPolyBinds
   -> RecFlag
   -> IsGroupClosed
   -> [LCsBind Rn]
-  -> TcM (LCsBinds Tc, [(TcId, KiCon)])
+  -> TcM (LCsBinds Tc, [(TcId, BuiltInKi)])
 tcPolyBinds top_lvl sig_fn rec_group rec_tc closed bind_list
   = setSrcSpan loc $ recoverM (recoveryCode binder_names sig_fn) $ do
   traceTc "------------------------------------------------" empty
@@ -177,7 +177,7 @@ tcPolyBinds top_lvl sig_fn rec_group rec_tc closed bind_list
     binder_names = collectCsBindListBinders CollNoDictBinders bind_list
     loc = foldr1 combineSrcSpans (map (locA . getLoc) bind_list)
 
-recoveryCode :: [Name] -> TcSigFun -> TcM (LCsBinds Tc, [(TcId, KiCon)])
+recoveryCode :: [Name] -> TcSigFun -> TcM (LCsBinds Tc, [(TcId, BuiltInKi)])
 recoveryCode binder_names sig_fn = do
   traceTc "tcBindsWithSigs: error recovery" (ppr binder_names)
   let poly_ids = map (, UKd) $ map mk_dummy binder_names
@@ -198,7 +198,7 @@ forall_a_a = panic "forall_a_a"
 *                                                                      *
 ********************************************************************* -}
 
-tcPolyNoGen :: RecFlag -> TcSigFun -> [LCsBind Rn] -> TcM (LCsBinds Tc, [(TcId, KiCon)])
+tcPolyNoGen :: RecFlag -> TcSigFun -> [LCsBind Rn] -> TcM (LCsBinds Tc, [(TcId, BuiltInKi)])
 tcPolyNoGen = panic "tcPolyNoGen"
 
 {- *********************************************************************
@@ -207,7 +207,7 @@ tcPolyNoGen = panic "tcPolyNoGen"
 *                                                                      *
 ********************************************************************* -}
 
-tcPolyCheck :: TcCompleteSig -> LCsBind Rn -> TcM (LCsBinds Tc, [(TcId, KiCon)])
+tcPolyCheck :: TcCompleteSig -> LCsBind Rn -> TcM (LCsBinds Tc, [(TcId, BuiltInKi)])
 tcPolyCheck sig@(CSig { sig_bndr = poly_id, sig_ctxt = ctxt })
             (L bind_loc (FunBind { fun_id = L nm_loc name, fun_body = body }))
   = do
@@ -228,7 +228,7 @@ tcPolyCheck _ _ = panic "tcPolyCheck"
 *                                                                      *
 ********************************************************************* -}
 
-tcPolyInfer :: RecFlag -> TcSigFun -> [LCsBind Rn] -> TcM (LCsBinds Tc, [(TcId, KiCon)])
+tcPolyInfer :: RecFlag -> TcSigFun -> [LCsBind Rn] -> TcM (LCsBinds Tc, [(TcId, BuiltInKi)])
 tcPolyInfer = panic "tcPolyInfer"
 
 {- *********************************************************************

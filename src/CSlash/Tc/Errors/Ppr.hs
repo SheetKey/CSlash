@@ -311,7 +311,7 @@ pprTcSolverReportMsg ctxt@(CEC { cec_encl = implics }) (CannotResolveRelation it
   where
     orig = errorItemOrigin item
     pred = errorItemPred item
-    (kc, kis) = getPredKcKis pred
+    (kc, k1, k2) = getPredKis pred
     ambig_kvs = ambigKvsOfKi pred
     has_ambigs = not (null ambig_kvs)
     useful_givens = getUserGivensFromImplics implics
@@ -320,7 +320,7 @@ pprTcSolverReportMsg ctxt@(CEC { cec_encl = implics }) (CannotResolveRelation it
     no_inst_msg
       = pprMismatchMsg ctxt $ CouldNotDeduce useful_givens (item :| []) Nothing
 
-    extra_note | any isMonoFunKi kis
+    extra_note | any isMonoFunKi [k1, k2]
                = text "(maybe you haven't applied a type function to enough arguments?)"
                | otherwise
                = empty
@@ -407,8 +407,8 @@ pprMismatchMsg ctxt (CouldNotDeduce useful_givens (item:|others) mb_extra)
     wanteds = map errorItemPred (item:others)
 
     no_instance_msg = case wanteds of
-                        [wanted] | KiConApp kc _ <- wanted
-                                 , kc `elem` [LTKi, LTEQKi]
+                        [wanted] | KiPredApp pred _ _ <- wanted
+                                 , pred `elem` [LTKi, LTEQKi]
                                  -> text "No instance for"
                         _ -> text "Could not solve:"
 
@@ -438,11 +438,12 @@ pprKiVarInfo ctxt (KiVarInfo kv1 mb_implic mb_kv2)
          , maybe empty (pprUntouchableVariable kv1) mb_implic
          , maybe empty mk_msg mb_kv2 ]
   where
-    mk_msg = handleAnyKv
-             (panic "pprKiVarInfo")
-             (\kv -> case tcVarDetails kv of
+    mk_msg kv = handleAnyKv
+             (\_ -> pprSkols ctxt [(unkSkolAnon, [kv])])
+             (\tckv -> case tcVarDetails tckv of
                  SkolemVar sk_info _ -> pprSkols ctxt [(getSkolemInfo sk_info, [kv])]
                  MetaVar {} -> empty)
+             kv
 
 pprAmbiguityInfo :: AmbiguityInfo -> SDoc
 pprAmbiguityInfo _ = panic "pprAmbiguityInfo"
@@ -575,7 +576,7 @@ pp_givens givens = case givens of
                                : map (ppr_given (text "or from:")) gs
   where
     ppr_given herald implic@(Implic { ic_given = gs, ic_info = skol_info })
-      = hang (herald <+> pprKiEvVarTheta (mkMinimalBy kiEvVarPred gs))
+      = hang (herald <+> pprKiCoVarTheta (mkMinimalBy kiCoVarPred gs))
         2 (sep [ text "bound by" <+> ppr skol_info
                , text "at" <+> ppr (getCtLocEnvLoc (ic_env implic)) ])
 
@@ -601,7 +602,7 @@ pprArising ct_loc
     suppress_origin
       | isGivenOrigin orig = True
       | otherwise = case orig of
-          KindEqOrigin {} -> True
+          KindCoOrigin {} -> True
           GivenOrigin {} -> False
           OccurrenceOf {} -> False
           TupleTyOrigin -> False
@@ -639,7 +640,7 @@ tidySigSkol env cx ty tv_prs = SigSkol cx (tidy_ty env ty) tv_prs'
       | otherwise
       = panic "tidyVarBndr env tv"
 
-pprSkols :: SolverReportErrCtxt -> [(SkolemInfoAnon, [TcKiVar])] -> SDoc
+pprSkols :: SolverReportErrCtxt -> [(SkolemInfoAnon, [AnyKiVar])] -> SDoc
 pprSkols ctxt zonked_ki_vars
   = let tidy_ki_vars = map (bimap (tidySkolemInfoAnon (cec_tidy ctxt)) id) zonked_ki_vars
     in vcat (map pp_one tidy_ki_vars)
@@ -666,7 +667,7 @@ pprSkols ctxt zonked_ki_vars
                                       <+> text "kind variable"
     is_or_are _ _ adjective = text "are" <+> text adjective <+> text "kind variables"
 
-skolsSpan :: [TcKiVar] -> SrcSpan
+skolsSpan :: [AnyKiVar] -> SrcSpan
 skolsSpan skol_kvs = foldr1 combineSrcSpans (map getSrcSpan skol_kvs)
 
 {- *********************************************************************

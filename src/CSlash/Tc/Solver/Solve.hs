@@ -1,7 +1,6 @@
 module CSlash.Tc.Solver.Solve where
 
-import CSlash.Tc.Solver.Relation
-import CSlash.Tc.Solver.Equality( solveKiEquality )
+import CSlash.Tc.Solver.Equality( solveKiCoercion )
 import CSlash.Tc.Solver.Irred( solveIrred )
 import CSlash.Tc.Solver.Rewrite( rewriteKi )
 import CSlash.Tc.Errors.Types
@@ -134,23 +133,17 @@ solveOne workItem = do
 solveCt :: Ct -> SolverStage Void
 solveCt (CNonCanonical ev) = solveNC ev
 solveCt (CIrredCan (IrredCt { ir_ev = ev })) = solveNC ev
-solveCt (CEqCan (KiEqCt { eq_ev = ev, eq_lhs = lhs, eq_rhs = rhs }))
-  = solveKiEquality ev (canKiEqLHSKind lhs) rhs
-solveCt (CRelCan (RelCt { rl_ev = ev })) = do
-  ev <- rewriteEvidence ev
-  case classifyPredKind (ctEvPred ev) of
-    RelPred kc k1 k2 -> solveRel (RelCt { rl_ev = ev, rl_kc = kc, rl_ki1 = k1, rl_ki2 = k2 })
-    _ -> pprPanic "solveCt" (ppr ev)
+solveCt (CKiCoCan (KiCoCt { kc_ev = ev, kc_pred = kc, kc_lhs = lhs, kc_rhs = rhs }))
+  = solveKiCoercion ev kc (canKiCoLHSKind lhs) rhs
 
 solveNC :: CtEvidence -> SolverStage Void
 solveNC ev = case classifyPredKind (ctEvPred ev) of
-  EqPred ki1 ki2 -> solveKiEquality ev ki1 ki2
+  KiCoPred kc ki1 ki2 -> solveKiCoercion ev kc ki1 ki2
   _ -> do ev <- rewriteEvidence ev
           let irred = IrredCt { ir_ev = ev, ir_reason = IrredShapeReason }
           case classifyPredKind (ctEvPred ev) of
-            RelPred kc ki1 ki2 -> solveRelNC ev kc ki1 ki2
             IrredPred {} -> solveIrred irred
-            EqPred ki1 ki2 -> solveKiEquality ev ki1 ki2
+            KiCoPred kc ki1 ki2 -> solveKiCoercion ev kc ki1 ki2
 
 {- *********************************************************************
 *                                                                      *
@@ -170,21 +163,16 @@ finish_rewrite old_ev (ReductionKi co new_pred) rewriters
   = assert (isEmptyRewriterSet rewriters)
     $ continueWith (setCtEvPredKind old_ev new_pred)
 
-finish_rewrite ev@(CtGiven { ctev_evar = old_evar, ctev_loc = loc })
+finish_rewrite ev@(CtGiven { ctev_covar = old_covar, ctev_loc = loc })
                (ReductionKi co new_pred) rewriters
   = assert (isEmptyRewriterSet rewriters) $ do
-      new_ev <- newGivenKiEvVar loc (new_pred, new_ty)
+      new_ev <- newGivenKiCoVar loc new_pred
       continueWith new_ev
-  where
-    new_ty = mkKiEvCast (kiEvVar old_evar) co
 
 finish_rewrite ev@(CtWanted { ctev_dest = dest, ctev_loc = loc, ctev_rewriters = rewriters })
                (ReductionKi co new_pred) new_rewriters
-  = do mb_new_ev <- newWanted loc rewriters' new_pred
-       setWantedKiEvType dest True $
-         mkKiEvCast (getKiEvType mb_new_ev) (mkSymKiCo co)
-       case mb_new_ev of
-         Fresh new_ev -> continueWith new_ev
-         Cached _ -> stopWith ev "Cached wanted"
+  = do new_ev <- newWanted loc rewriters' new_pred
+       setWantedKiCo dest $ mkSymKiCo co
+       continueWith new_ev
   where
     rewriters' = rewriters S.<> new_rewriters

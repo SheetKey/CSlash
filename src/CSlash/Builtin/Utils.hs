@@ -122,5 +122,7 @@ cslBuiltInExports
 builtInTyCons :: [TyCon (TyVar KiVar) KiVar]
 builtInTyCons
   = boolTyCon
+  : unitTyCon
+  : soloTyCon
   : (fst <$> elems sumArr)
   ++ (fst <$> elems tupleArr)

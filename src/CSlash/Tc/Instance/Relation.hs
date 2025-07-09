@@ -58,40 +58,40 @@ import Data.Maybe
 *                                                                    *
 ******************************************************************* -}
 
-data RelInstResult
-  = NoInstance
-  | OneInst { rir_ev :: KiEvType
-            , rir_canonical :: Bool
-            , rir_what :: InstanceWhat
-            }
-  | NotSure
+-- data RelInstResult
+--   = NoInstance
+--   | OneInst { rir_ev :: KiEvType
+--             , rir_canonical :: Bool
+--             , rir_what :: InstanceWhat
+--             }
+--   | NotSure
 
-instance Outputable RelInstResult where
-  ppr NoInstance = text "NoInstance"
-  ppr NotSure = text "NotSure"
-  ppr (OneInst _ _ what) = text "OneInst" <+> ppr what
+-- instance Outputable RelInstResult where
+--   ppr NoInstance = text "NoInstance"
+--   ppr NotSure = text "NotSure"
+--   ppr (OneInst _ _ what) = text "OneInst" <+> ppr what
 
-instanceShouldBeSaved :: InstanceWhat -> Bool
-instanceShouldBeSaved BuiltinEqInstance = False
-instanceShouldBeSaved BuiltinInstance = True
-instanceShouldBeSaved LocalInstance = False
+-- instanceShouldBeSaved :: InstanceWhat -> Bool
+-- instanceShouldBeSaved BuiltinEqInstance = False
+-- instanceShouldBeSaved BuiltinInstance = True
+-- instanceShouldBeSaved LocalInstance = False
 
-matchGlobalInst :: DynFlags -> Bool -> KiCon -> AnyMonoKind -> AnyMonoKind -> TcM RelInstResult
-matchGlobalInst dflags short_cut kc k1 k2 = case kc of
-  LTKi -> matchLTEQKi False k1 k2
-  LTEQKi -> matchLTEQKi True k1 k2
-  EQKi -> pprPanic "matchGlobalInst/EQKi" (ppr k1 $$ ppr k2)
-  other -> pprPanic "matchGlobalInst/other" (ppr other $$ ppr k1 $$ ppr k2)
+-- matchGlobalInst :: DynFlags -> Bool -> KiCon -> AnyMonoKind -> AnyMonoKind -> TcM RelInstResult
+-- matchGlobalInst dflags short_cut kc k1 k2 = case kc of
+--   LTKi -> matchLTEQKi False k1 k2
+--   LTEQKi -> matchLTEQKi True k1 k2
+--   EQKi -> pprPanic "matchGlobalInst/EQKi" (ppr k1 $$ ppr k2)
+--   other -> pprPanic "matchGlobalInst/other" (ppr other $$ ppr k1 $$ ppr k2)
 
-matchLTEQKi :: Bool -> AnyMonoKind -> AnyMonoKind -> TcM RelInstResult
-matchLTEQKi eq_ok (KiConApp kc1 []) (KiConApp kc2 [])
-  | (kc1 == kc2 && eq_ok) 
-  = return $ OneInst (KindCoercion (mkReflKiCo (KiConApp kc1 []))) True BuiltinInstance
-  | kc1 < kc2
-  = return $ OneInst (panic "IDK") True BuiltinInstance
-  | otherwise
-  = return $ NoInstance
-matchLTEQKi True (KiVarKi v1) (KiVarKi v2)
-  | v1 == v2
-  = return $ OneInst (KindCoercion (mkReflKiCo (KiVarKi v1))) True BuiltinInstance
-matchLTEQKi _ _ _ = return $ NotSure
+-- matchLTEQKi :: Bool -> AnyMonoKind -> AnyMonoKind -> TcM RelInstResult
+-- matchLTEQKi eq_ok (KiConApp kc1 []) (KiConApp kc2 [])
+--   | (kc1 == kc2 && eq_ok) 
+--   = return $ OneInst (KindCoercion (mkReflKiCo (KiConApp kc1 []))) True BuiltinInstance
+--   | kc1 < kc2
+--   = return $ OneInst (panic "IDK") True BuiltinInstance
+--   | otherwise
+--   = return $ NoInstance
+-- matchLTEQKi True (KiVarKi v1) (KiVarKi v2)
+--   | v1 == v2
+--   = return $ OneInst (KindCoercion (mkReflKiCo (KiVarKi v1))) True BuiltinInstance
+-- matchLTEQKi _ _ _ = return $ NotSure

@@ -103,7 +103,7 @@ mkTemplateTyConKindFromRes :: Int -> PMonoKind -> PKind
 mkTemplateTyConKindFromRes arity res_kind
   = let kind_vars = mkTemplateKindVars arity
         kinds = KiVarKi <$> kind_vars
-        constraints = ((KiConApp LTEQKi) . (: [res_kind])) <$> kinds
+        constraints = (flip (KiPredApp LTEQKi) res_kind) <$> kinds
         full_kind_no_constraints = foldr (FunKi FKF_K_K) res_kind kinds
         full_kind = foldr (FunKi FKF_C_K) full_kind_no_constraints constraints
         res_kind_var = case res_kind of
@@ -172,13 +172,13 @@ fUNTyCon = mkPrimTyCon fUNTyConName tc_kind 2
     tc_kind = mkTemplateTyConKind 2
 
 unrestrictedFUNTyCon :: PTyCon
-unrestrictedFUNTyCon = _mkFUNTyCon (KiConApp UKd [])
+unrestrictedFUNTyCon = _mkFUNTyCon (BIKi UKd)
 
 affineFUNTyCon :: PTyCon
-affineFUNTyCon = _mkFUNTyCon (KiConApp AKd [])
+affineFUNTyCon = _mkFUNTyCon (BIKi AKd)
 
 linearFUNTyCon :: PTyCon
-linearFUNTyCon = _mkFUNTyCon (KiConApp LKd [])
+linearFUNTyCon = _mkFUNTyCon (BIKi LKd)
 
 _mkFUNTyCon :: PMonoKind -> PTyCon
 _mkFUNTyCon res_kind = mkPrimTyCon fUNTyConName tc_kind 2

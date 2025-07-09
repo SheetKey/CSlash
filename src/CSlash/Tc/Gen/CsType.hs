@@ -114,8 +114,8 @@ tc_lcs_sig_type :: SkolemInfo -> LCsSigType Rn -> ContextKind -> TcM (Implicatio
 tc_lcs_sig_type skol_info full_cs_ty@(L loc (CsSig { sig_ext = kv_nms
                                                    , sig_body = cs_ty })) ctxt_kind
   = setSrcSpanA loc $ do
-  (tc_lvl, wanted, ki_ev_binds, (kv_bndrs, (exp_kind, ty)))
-    <- pushLevelAndSolveX "tc_lcs_sig_type"
+  (tc_lvl, wanted, (kv_bndrs, (exp_kind, ty)))
+    <- pushLevelAndSolveKindCoercionsX "tc_lcs_sig_type"
        $ tcImplicitKiBndrs skol_info kv_nms $ do
          exp_kind <- newExpectedKind ctxt_kind
          stuff <- tcLCsType cs_ty exp_kind
@@ -205,13 +205,13 @@ tc_cs_type rn_ty@(CsQualTy { cst_ctxt = ctxt, cst_body = body_ty }) exp_kind
   = do let (ctxt_kis, _) = splitInvisFunKis exp_kind
        massertPpr (ctxt_kis `equalLength` unLoc ctxt)
          $ vcat [ text "tc_cs_type CsQualTy", ppr ctxt, ppr exp_kind ]
-       (evVars, evVarKis) <- tcLCsContext ctxt
+       (coVars, coVarKis) <- tcLCsContext ctxt
        traceTc "tc_cs_type CsQualTy"
-         $ vcat [ ppr rn_ty, ppr evVars ]
-       (ty', body_ki) <- checkKiConstraints InferKindSkol evVars
+         $ vcat [ ppr rn_ty, ppr coVars ]
+       (ty', body_ki) <- checkKiConstraints InferKindSkol coVars
                          $ tc_infer_lcs_type body_ty
-       let final_ty = mkTyLamTys (toAnyTyVar <$> evVars) ty'
-           final_ki = mkInvisFunKis evVarKis body_ki
+       let final_ty = mkTyLamTys (toAnyTyVar <$> coVars) ty'
+           final_ki = mkInvisFunKis coVarKis body_ki
        checkExpectedKind rn_ty final_ty final_ki exp_kind
 
 tc_cs_type rn_ty@(CsTupleTy _ tup_args) exp_kind
@@ -336,8 +336,8 @@ inst_tuple_tycon tup_tycon tup_args = do
                  $ vcat [ ppr fun, ppr subst, ppr fun_ki, ppr all_args ]
       (theta, inner_ki) -> do
         let inst_theta = substMonoKis subst theta
-        evTys <- (asAnyTy <$>) <$> instCallKiConstraints TupleTyOrigin inst_theta
-        go_mono n (mkAppTys fun evTys) subst inner_ki all_args
+        kiCos <- instCallKiConstraints TupleTyOrigin inst_theta
+        go_mono n (mkAppTys fun (KindCoercion <$> kiCos)) subst inner_ki all_args
 
     go_mono
       :: Int
@@ -426,8 +426,14 @@ tcInferTyApps_nosat orig_cs_ty fun orig_cs_args = do
       (theta, inner_ki) -> do
         let inst_theta = substMonoKis subst theta
             orig = lCsTyCtOrigin orig_cs_ty
-        evTys <- (asAnyTy <$>) <$> instCallKiConstraints orig inst_theta
-        go_mono n (mkAppTys fun evTys) subst inner_ki all_args
+        kiCos <- instCallKiConstraints orig inst_theta
+        traceTc "tcInferTyApps (invis app)"
+          $ vcat [ text "theta:" <+> ppr theta
+                 , text "inner_ki:" <+> ppr inner_ki
+                 , text "subst:" <+> ppr subst
+                 , text "inst_theta:" <+> ppr inst_theta
+                 , text "kiCos:" <+> ppr kiCos ]
+        go_mono n (mkAppTys fun (KindCoercion <$> kiCos)) subst inner_ki all_args
 
     go_mono
       :: Int
@@ -596,10 +602,11 @@ checkExpectedKind
 checkExpectedKind cs_ty ty act_kind exp_kind = do
   traceTc "checkExpectedKind" (ppr ty $$ ppr act_kind)
 
-  let origin = KindEqOrigin { keq_actual = act_kind
-                            , keq_expected = exp_kind
-                            , keq_thing = Just $ CsTypeRnThing cs_ty
-                            , keq_visible = True }
+  let origin = KindCoOrigin { kco_actual = act_kind
+                            , kco_expected = exp_kind
+                            , kco_pred = EQKi
+                            , kco_thing = Just $ CsTypeRnThing cs_ty
+                            , kco_visible = True }
 
   traceTc "checkExpectedKindX"
     $ vcat [ ppr cs_ty
@@ -608,7 +615,7 @@ checkExpectedKind cs_ty ty act_kind exp_kind = do
 
   if act_kind `tcEqMonoKind` exp_kind
     then return ty
-    else do co_k <- unifyKindAndEmit origin act_kind exp_kind
+    else do co_k <- unifyKindAndEmit origin EQKi act_kind exp_kind
             traceTc "checkExpectedKind"
               $ vcat [ ppr act_kind, ppr exp_kind, ppr co_k ]
             return (ty `mkCastTy` co_k)
@@ -1031,15 +1038,15 @@ tcLCsKindSig ctxt cs_kind = do
   traceTc "tcLCsKindSig2" (ppr kind)
   return kind
 
-tcLCsContext :: LCsContext Rn -> TcM ([KiEvVar AnyKiVar], [AnyMonoKind])
+tcLCsContext :: LCsContext Rn -> TcM ([KiCoVar AnyKiVar], [AnyMonoKind])
 tcLCsContext = tcCsContext . unLoc
 
-tcCsContext :: CsContext Rn -> TcM ([KiEvVar AnyKiVar], [AnyMonoKind])
+tcCsContext :: CsContext Rn -> TcM ([KiCoVar AnyKiVar], [AnyMonoKind])
 tcCsContext [] = panic "tcCsContext empty"
 tcCsContext ctxt = do
   rels <- mapM tc_lcs_kdrel ctxt 
-  evVars <- newKiEvVars rels
-  return $ (evVars, rels)
+  coVars <- newKiCoVars rels
+  return $ (coVars, rels)
 
 tc_lcs_kdrel :: LCsKdRel Rn -> TcM AnyMonoKind
 tc_lcs_kdrel rel = tc_cs_kdrel (unLoc rel)
@@ -1048,11 +1055,11 @@ tc_cs_kdrel :: CsKdRel Rn -> TcM AnyMonoKind
 tc_cs_kdrel (CsKdLT _ k1 k2) = do
   k1' <- tcLCsKind k1
   k2' <- tcLCsKind k2
-  return $ mkKiConApp LTKi [k1', k2']
+  return $ mkKiPredApp LTKi k1' k2'
 tc_cs_kdrel (CsKdLTEQ _ k1 k2) = do
   k1' <- tcLCsKind k1
   k2' <- tcLCsKind k2
-  return $ mkKiConApp LTEQKi [k1', k2']
+  return $ mkKiPredApp LTEQKi k1' k2'
 
 {- *********************************************************************
 *                                                                      *

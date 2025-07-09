@@ -54,7 +54,10 @@ type PId = Id PTyVar KiVar
 
 wiredInTyCons :: [PTyCon]
 wiredInTyCons
-  = [ boolTyCon ]
+  = [ unitTyCon
+    , soloTyCon
+    , boolTyCon
+    ]
 
 mkWiredInTyConName :: BuiltInSyntax -> Module -> FastString -> Unique -> PTyCon -> Name
 mkWiredInTyConName built_in modu fs unique tycon

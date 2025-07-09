@@ -63,40 +63,27 @@ type Cts = Bag Ct
 
 data Ct
   = CIrredCan IrredCt
-  | CEqCan EqCt
-  | CRelCan RelCt
+  | CKiCoCan KiCoCt
   | CNonCanonical CtEvidence
 
-data RelCt = RelCt
-  { rl_ev :: CtEvidence
-  , rl_kc :: KiCon
-  , rl_ki1 :: AnyMonoKind
-  , rl_ki2 :: AnyMonoKind
-  }
-  
-relCtEvidence :: RelCt -> CtEvidence
-relCtEvidence = rl_ev
-
-instance Outputable RelCt where
-  ppr rel = ppr (CRelCan rel)
-
-data EqCt = KiEqCt
-  { eq_ev :: CtEvidence
-  , eq_lhs :: CanEqLHS
-  , eq_rhs :: AnyMonoKind
+data KiCoCt = KiCoCt
+  { kc_ev :: CtEvidence
+  , kc_lhs :: CanKiCoLHS
+  , kc_rhs :: AnyMonoKind
+  , kc_pred :: KiPred
   }
 
-data CanEqLHS
+data CanKiCoLHS
   = KiVarLHS AnyKiVar
 
-instance Outputable CanEqLHS where
+instance Outputable CanKiCoLHS where
   ppr (KiVarLHS kv) = ppr kv
 
-eqCtEvidence :: EqCt -> CtEvidence
-eqCtEvidence = eq_ev
+kiCoCtEvidence :: KiCoCt -> CtEvidence
+kiCoCtEvidence = kc_ev
 
-eqCtLHS :: EqCt -> CanEqLHS
-eqCtLHS = eq_lhs
+kiCoCtLHS :: KiCoCt -> CanKiCoLHS
+kiCoCtLHS = kc_lhs
 
 data IrredCt = IrredCt
   { ir_ev :: CtEvidence
@@ -201,24 +188,22 @@ allBits = [ (ctkeImpredicative, "ctkeImpredicative")
 mkNonCanonical :: CtEvidence -> Ct
 mkNonCanonical = CNonCanonical
 
-mkGivens :: CtLoc -> [KiEvVar AnyKiVar] -> [Ct]
-mkGivens loc ev_vars = map mk ev_vars
-  where mk ev_var = mkNonCanonical (CtGiven { ctev_evar = ev_var
-                                            , ctev_pred = kiEvVarPred ev_var
+mkGivens :: CtLoc -> [KiCoVar AnyKiVar] -> [Ct]
+mkGivens loc co_vars = map mk co_vars
+  where mk co_var = mkNonCanonical (CtGiven { ctev_covar = co_var
+                                            , ctev_pred = kiCoVarPred co_var
                                             , ctev_loc = loc })
 
 ctEvidence :: Ct -> CtEvidence
-ctEvidence (CEqCan (KiEqCt { eq_ev = ev })) = ev
+ctEvidence (CKiCoCan (KiCoCt { kc_ev = ev })) = ev
 ctEvidence (CIrredCan (IrredCt { ir_ev = ev })) = ev
 ctEvidence (CNonCanonical ev) = ev
-ctEvidence (CRelCan (RelCt { rl_ev = ev })) = ev
 
 updCtEvidence :: (CtEvidence -> CtEvidence) -> Ct -> Ct
 updCtEvidence upd ct = case ct of
-  CEqCan eq@(KiEqCt { eq_ev = ev }) -> CEqCan (eq { eq_ev = upd ev })
+  CKiCoCan co@(KiCoCt { kc_ev = ev }) -> CKiCoCan (co { kc_ev = upd ev })
   CIrredCan ir@(IrredCt { ir_ev = ev }) -> CIrredCan (ir { ir_ev = upd ev })
   CNonCanonical ev -> CNonCanonical (upd ev)
-  CRelCan rl@(RelCt { rl_ev = ev }) -> CRelCan (rl { rl_ev = upd ev })
 
 ctLoc :: Ct -> CtLoc
 ctLoc = ctEvLoc . ctEvidence
@@ -229,20 +214,19 @@ ctOrigin = ctLocOrigin . ctLoc
 ctPred :: Ct -> AnyPredKind
 ctPred ct = ctEvPred (ctEvidence ct)
 
-ctKiEvVar :: Ct -> KiEvVar AnyKiVar
-ctKiEvVar ct = ctEvKiEvVar (ctEvidence ct)
+ctKiCoVar :: Ct -> KiCoVar AnyKiVar
+ctKiCoVar ct = ctEvKiCoVar (ctEvidence ct)
 
 instance Outputable Ct where
   ppr ct = ppr (ctEvidence ct) <+> parens pp_short
     where
       pp_short = case ct of
-                   CEqCan {} -> text "CEqCan"
-                   CRelCan {} -> text "CRelCan"
+                   CKiCoCan {} -> text "CKiCoCan"
                    CNonCanonical {} -> text "CNonCanonical"
                    CIrredCan (IrredCt { ir_reason = reason }) -> text "CIrredCan" <> ppr reason
 
-instance Outputable EqCt where
-  ppr (KiEqCt { eq_ev = ev }) = ppr ev
+instance Outputable KiCoCt where
+  ppr (KiCoCt { kc_ev = ev }) = ppr ev
 
 isGivenLoc :: CtLoc -> Bool
 isGivenLoc loc = isGivenOrigin (ctLocOrigin loc)
@@ -373,15 +357,15 @@ data Implication = Implic
   { ic_tclvl :: TcLevel
   , ic_info :: SkolemInfoAnon
   , ic_skols :: [TcKiVar] -- as in GHC (NO KiVars or MetaKiVars, just Skolem TcKiVars)
-  , ic_given :: [KiEvVar AnyKiVar]
-  , ic_given_eqs :: HasGivenEqs
+  , ic_given :: [KiCoVar AnyKiVar]
+  , ic_given_kicos :: HasGivenKiCos
   , ic_warn_inaccessible :: Bool
   , ic_env :: !CtLocEnv
   , ic_wanted :: WantedConstraints
-  , ic_binds :: KiEvBindsVar
+  , ic_binds :: KiCoBindsVar
   , ic_status :: ImplicStatus
-  , ic_need_inner :: MkVarSet (KiEvVar AnyKiVar)
-  , ic_need_outer :: MkVarSet (KiEvVar AnyKiVar)
+  , ic_need_inner :: MkVarSet (KiCoVar AnyKiVar)
+  , ic_need_outer :: MkVarSet (KiCoVar AnyKiVar)
   }
 
 implicationPrototype :: CtLocEnv -> Implication
@@ -391,7 +375,7 @@ implicationPrototype ct_loc_env = Implic
   , ic_info = panic "newImplic:info"
   , ic_skols = []
   , ic_given = []
-  , ic_given_eqs = MaybeGivenEqs
+  , ic_given_kicos = MaybeGivenKiCos
   , ic_warn_inaccessible = panic "newImplic:warn_inaccessible"
   , ic_env = ct_loc_env
   , ic_wanted = emptyWC
@@ -401,15 +385,15 @@ implicationPrototype ct_loc_env = Implic
   }
 
 data ImplicStatus
-  = IC_Solved { ics_dead :: [KiEvVar AnyKiVar] }
+  = IC_Solved { ics_dead :: [KiCoVar AnyKiVar] }
   | IC_Insoluble
   | IC_BadTelescope
   | IC_Unsolved
 
-data HasGivenEqs
-  = NoGivenEqs
-  | LocalGivenEqs
-  | MaybeGivenEqs
+data HasGivenKiCos
+  = NoGivenKiCos
+  | LocalGivenKiCos
+  | MaybeGivenKiCos
   deriving Eq
 
 type UserGiven = Implication
@@ -421,16 +405,16 @@ instance Outputable Implication where
   ppr (Implic { ic_tclvl = tclvl
               , ic_skols = skols
               , ic_given = given
-              , ic_given_eqs = given_eqs
+              , ic_given_kicos = given_kicos
               , ic_wanted = wanted
               , ic_status = status
               , ic_info = info })
     = hang (text "Implic" <+> lbrace)
       2 (sep [ text "TcLevel =" <+> ppr tclvl
              , text "Skolems =" <+> ppr skols
-             , text "Given-eqs =" <+> ppr given_eqs
+             , text "Given-kicos =" <+> ppr given_kicos
              , text "Status =" <+> ppr status
-             , hang (text "Given =") 2 (pprKiEvVars given)
+             , hang (text "Given =") 2 (pprKiCoVars given)
              , hang (text "Wanted =") 2 (ppr wanted)
              , pprSkolInfo info ] <+> rbrace)
 
@@ -444,10 +428,10 @@ checkTelescopeSkol :: SkolemInfoAnon -> Bool
 checkTelescopeSkol (ForAllSkol {}) = True
 checkTelescopeSkol _ = False
 
-instance Outputable HasGivenEqs where
-  ppr NoGivenEqs = text "NoGivenEqs"
-  ppr LocalGivenEqs = text "LocalGivenEqs"
-  ppr MaybeGivenEqs = text "MaybeGivenEqs"
+instance Outputable HasGivenKiCos where
+  ppr NoGivenKiCos = text "NoGivenKiCos"
+  ppr LocalGivenKiCos = text "LocalGivenKiCos"
+  ppr MaybeGivenKiCos = text "MaybeGivenKiCos"
 
 {- *********************************************************************
 *                                                                      *
@@ -509,7 +493,7 @@ checkSkolInfoAnon sk1 sk2 = go sk1 sk2
 *                                                                      *
 ********************************************************************* -}
 
-type AnyTyFV = TyFV (KiEvVar AnyKiVar) AnyKiVar
+type AnyTyFV = TyFV (KiCoVar AnyKiVar) AnyKiVar
 type AnyKiFV = KiFV AnyKiVar
 
 varsOfCt :: Ct -> AnyKiVarSet
@@ -526,11 +510,11 @@ varsOfCts cts = case fvVarAcc (fvsOfCts cts) of
 fvsOfCts :: Cts -> AnyKiFV
 fvsOfCts = foldr (unionFV . fvsOfCt) emptyFV
 
-varsOfWC :: WantedConstraints -> (MkVarSet (KiEvVar AnyKiVar), MkVarSet AnyKiVar)
+varsOfWC :: WantedConstraints -> (MkVarSet (KiCoVar AnyKiVar), MkVarSet AnyKiVar)
 varsOfWC wc = case fvVarAcc (fvsOfWC wc) of
   (_, tvs, _, kvs) -> (tvs, kvs)
 
-varsOfWCList :: WantedConstraints -> ([KiEvVar AnyKiVar], [AnyKiVar])
+varsOfWCList :: WantedConstraints -> ([KiCoVar AnyKiVar], [AnyKiVar])
 varsOfWCList wc = case fvVarAcc (fvsOfWC wc) of
   (tvs, _, kvs, _) -> (tvs, kvs)
 
@@ -556,16 +540,16 @@ fvsOfBag vs_of = foldr (unionFV . vs_of) emptyFV
 *                                                                      *
 ********************************************************************* -}
 
-pprKiEvVars :: [KiEvVar AnyKiVar] -> SDoc
-pprKiEvVars ev_vars = vcat (map pprKiEvVarWithKind ev_vars)
+pprKiCoVars :: [KiCoVar AnyKiVar] -> SDoc
+pprKiCoVars co_vars = vcat (map pprKiCoVarWithKind co_vars)
 
-pprKiEvVarTheta :: [KiEvVar AnyKiVar] -> SDoc
-pprKiEvVarTheta ev_vars = pprTheta (map kiEvVarPred ev_vars)
+pprKiCoVarTheta :: [KiCoVar AnyKiVar] -> SDoc
+pprKiCoVarTheta co_vars = pprTheta (map kiCoVarPred co_vars)
   where
     pprTheta t = text "pprTheta NEEDS IMPLEMENTING" <+> ppr t
 
-pprKiEvVarWithKind :: KiEvVar AnyKiVar -> SDoc
-pprKiEvVarWithKind v = ppr v <+> colon <+> ppr (kiEvVarPred v)
+pprKiCoVarWithKind :: KiCoVar AnyKiVar -> SDoc
+pprKiCoVarWithKind v = ppr v <+> colon <+> ppr (kiCoVarPred v)
 
 {- *********************************************************************
 *                                                                      *
@@ -573,18 +557,14 @@ pprKiEvVarWithKind v = ppr v <+> colon <+> ppr (kiEvVarPred v)
 *                                                                      *
 ********************************************************************* -}
 
-data TcEvDest
-  = EvVarDest (KiEvVar AnyKiVar)
-  | HoleDest (KindCoercionHole AnyKiVar)
-
 data CtEvidence
   = CtGiven
     { ctev_pred :: AnyPredKind
-    , ctev_evar :: KiEvVar AnyKiVar
+    , ctev_covar :: KiCoVar AnyKiVar
     , ctev_loc :: CtLoc }
   | CtWanted
     { ctev_pred :: AnyPredKind
-    , ctev_dest :: TcEvDest 
+    , ctev_dest :: KindCoercionHole AnyKiVar
     , ctev_loc :: CtLoc
     , ctev_rewriters :: RewriterSet
     }
@@ -599,44 +579,27 @@ ctEvRewriters :: CtEvidence -> RewriterSet
 ctEvRewriters (CtWanted { ctev_rewriters = rewriters }) = rewriters
 ctEvRewriters _ = emptyRewriterSet
 
-ctEvType :: HasDebugCallStack => CtEvidence -> KiEvType
-ctEvType ev@(CtWanted { ctev_dest = HoleDest _ }) = KindCoercion $ ctEvKiCoercion ev
-ctEvType ev = kiEvVar (ctEvKiEvVar ev)
-
 ctEvKiCoercion :: HasDebugCallStack => CtEvidence -> KindCoercion AnyKiVar
-ctEvKiCoercion (CtGiven { ctev_pred = pred, ctev_evar = ev_var })
-  = assertPpr (isKiEqPred pred)
-    (vcat [ text "ctEvKiCoercion called on non-eq pred"
-          , ppr pred, ppr ev_var ])
-    $ mkKiCoVarCo ev_var
-ctEvKiCoercion (CtWanted { ctev_dest = dest })
-  | HoleDest hole <- dest
+ctEvKiCoercion (CtGiven { ctev_pred = pred, ctev_covar = co_var })
+  = mkKiCoVarCo co_var
+ctEvKiCoercion (CtWanted { ctev_dest = hole })
   = mkKiHoleCo hole
-  | otherwise
-  = panic "ctEvKiCoercion"
 
-ctEvKiEvVar :: CtEvidence -> KiEvVar AnyKiVar
-ctEvKiEvVar (CtWanted { ctev_dest = EvVarDest ev }) = ev
-ctEvKiEvVar (CtWanted { ctev_dest = HoleDest h }) = coHoleCoVar h
-ctEvKiEvVar (CtGiven { ctev_evar = ev }) = ev
+ctEvKiCoVar :: CtEvidence -> KiCoVar AnyKiVar
+ctEvKiCoVar (CtWanted { ctev_dest = h }) = coHoleCoVar h
+ctEvKiCoVar (CtGiven { ctev_covar = ev }) = ev
 
 arisesFromGivens :: Ct -> Bool
 arisesFromGivens ct = isGivenCt ct || isGivenLoc (ctLoc ct)
 
 setCtEvPredKind :: CtEvidence -> AnyPredKind -> CtEvidence
-setCtEvPredKind old_ctev@(CtGiven { ctev_evar = ev }) new_pred
+setCtEvPredKind old_ctev@(CtGiven { ctev_covar = co }) new_pred
   = old_ctev { ctev_pred = new_pred
-             , ctev_evar = setVarKind ev new_pred }
-setCtEvPredKind old_ctev@(CtWanted { ctev_dest = dest }) new_pred
-  = old_ctev { ctev_pred = new_pred, ctev_dest = new_dest }
+             , ctev_covar = setVarKind co new_pred }
+setCtEvPredKind old_ctev@(CtWanted { ctev_dest = hole }) new_pred
+  = old_ctev { ctev_pred = new_pred, ctev_dest = new_hole }
   where
-    new_dest = case dest of
-      EvVarDest ev -> EvVarDest (setVarKind ev new_pred)
-      HoleDest h -> HoleDest (setCoHoleKind h new_pred)
-
-instance Outputable TcEvDest where
-  ppr (HoleDest h) = text "hole" <> ppr h
-  ppr (EvVarDest ev) = ppr ev
+    new_hole = (setCoHoleKind hole new_pred)
 
 instance Outputable CtEvidence where
   ppr ev = ppr (ctEvFlavor ev)
@@ -681,7 +644,7 @@ rewriterSetFromCts :: Bag Ct -> RewriterSet
 rewriterSetFromCts cts = foldr add emptyRewriterSet cts
   where
     add ct rw_set = case ctEvidence ct of
-                      CtWanted { ctev_dest = HoleDest hole } -> rw_set `addRewriter` hole
+                      CtWanted { ctev_dest = hole } -> rw_set `addRewriter` hole
                       _ -> rw_set
 
 {- *********************************************************************
@@ -703,25 +666,25 @@ ctEvFlavor :: CtEvidence -> CtFlavor
 ctEvFlavor (CtWanted {}) = Wanted
 ctEvFlavor (CtGiven {}) = Given
 
-eqCtFlavor :: EqCt -> CtFlavor
-eqCtFlavor (KiEqCt { eq_ev = ev }) = ctEvFlavor ev
+kiCoCtFlavor :: KiCoCt -> CtFlavor
+kiCoCtFlavor (KiCoCt { kc_ev = ev }) = ctEvFlavor ev
 
 ctFlavor :: Ct -> CtFlavor
-ctFlavor (CEqCan eq_ct) = eqCtFlavor eq_ct
+ctFlavor (CKiCoCan kco_ct) = kiCoCtFlavor kco_ct
 ctFlavor ct = ctEvFlavor (ctEvidence ct)
 
-canKiEqLHS_maybe :: AnyMonoKind -> Maybe CanEqLHS
-canKiEqLHS_maybe xi
+canKiCoLHS_maybe :: AnyMonoKind -> Maybe CanKiCoLHS
+canKiCoLHS_maybe xi
   | Just kv <- getKiVar_maybe xi
   = Just $ KiVarLHS kv
   | otherwise
   = Nothing
 
-canKiEqLHSKind :: CanEqLHS -> AnyMonoKind
-canKiEqLHSKind (KiVarLHS kv) = mkKiVarKi kv
+canKiCoLHSKind :: CanKiCoLHS -> AnyMonoKind
+canKiCoLHSKind (KiVarLHS kv) = mkKiVarKi kv
 
-eqCanEqLHS :: CanEqLHS -> CanEqLHS -> Bool
-eqCanEqLHS (KiVarLHS kv1) (KiVarLHS kv2) = kv1 == kv2
+eqCanKiCoLHS :: CanKiCoLHS -> CanKiCoLHS -> Bool
+eqCanKiCoLHS (KiVarLHS kv1) (KiVarLHS kv2) = kv1 == kv2
 
 eqCanRewriteF :: CtFlavor -> CtFlavor -> Bool
 eqCanRewriteF Given _ = True

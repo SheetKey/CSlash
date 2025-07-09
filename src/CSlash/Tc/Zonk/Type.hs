@@ -293,16 +293,12 @@ zonkKiCoToCo :: AnyKindCoercion -> ZonkTcM (KindCoercion KiVar)
       (zki, zkis, zco, _) ->
         (ZonkT . flip zki, ZonkT . flip zkis, ZonkT . flip zco)
 
--- zonkKiEvBndr :: KiEvVar -> ZonkTcM KiEvVar
--- zonkKiEvBndr = updateVarKindM ({-# SCC "zonkKiEvBndr_zonkTcTypeToTypeX" #-} zonkTcTypeToTypeX) 
-
-zonkTopDecls :: Bag KiEvBind -> LCsBinds Tc -> TcM (TypeEnv, Bag KiEvBind, LCsBinds Tc)
-zonkTopDecls ki_ev_binds binds
+zonkTopDecls :: LCsBinds Tc -> TcM (TypeEnv, LCsBinds Tc)
+zonkTopDecls binds
   = initZonkEnv NoFlexi
-    $ runZonkBndrT (zonkKiEvBinds ki_ev_binds) $ \ki_ev_binds' ->
-      runZonkBndrT (zonkRecMonoBinds binds) $ \binds' -> do
+    $ runZonkBndrT (zonkRecMonoBinds binds) $ \binds' -> do
         ty_env <- panic "zonkEnvIds <$> getZonkEnv"
-        return (ty_env, ki_ev_binds', binds')
+        return (ty_env, binds')
 
 zonkRecMonoBinds :: LCsBinds Tc -> ZonkBndrTcM (LCsBinds Tc)
 zonkRecMonoBinds binds = mfix $ \new_binds -> do
@@ -323,30 +319,6 @@ zonk_bind = panic "zonk_bind"
               Constraints and evidence
 *                                                                      *
 ********************************************************************* -}
-
-zonkKiEvType :: KiEvType -> ZonkTcM KiEvType
-zonkKiEvType = panic "zonkKiEvType"
-
-zonkKiEvBinds :: Bag KiEvBind -> ZonkBndrTcM (Bag KiEvBind)
-zonkKiEvBinds binds = {-# SCC "zonkKiEvBinds" #-}
-  mfix $ \new_binds -> do
-    panic "extendKiEvZonkEnvRec (collect_ki_ev_bndrs new_binds)"
-    noBinders $ mapBagM zonkKiEvBind binds
-  where
-    collect_ki_ev_bndrs :: Bag KiEvBind -> [KiEvVar AnyKiVar]
-    collect_ki_ev_bndrs = foldr add []
-
-    add (KiEvBind { keb_lhs = var }) vars = var : vars
-
-zonkKiEvBind :: KiEvBind -> ZonkTcM KiEvBind
-zonkKiEvBind bind@(KiEvBind { keb_lhs = var, keb_rhs = ty }) = do
-  var' <- {-# SCC "zonkKiEvBndr" #-} panic "zonkKiEvBndr var"
-  -- ty' <- case getKiEqPredKis_maybe (varKind var') of
-  --          Just (ki1, ki2) | ki1 `eqMonoKind` ki2
-  --                            -> return (kiEvCoercion (mkReflKiCo ki1))
-  --          _ -> zonkKiEvType ty
-  -- return (bind { keb_lhs = var', keb_rhs = ty' })
-  panic "zonkKiEvBind"
 
 {- *********************************************************************
 *                                                                      *

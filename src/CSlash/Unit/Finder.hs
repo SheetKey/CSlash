@@ -87,12 +87,13 @@ lookupFinderCache (FinderCache ref _) key = do
 -- The three external entry points
 
 findImportedModule :: CsEnv -> ModuleName -> PkgQual -> IO FindResult
-findImportedModule cs_env mod pkg_qual =
-  let fc = cs_FC cs_env
-      mhome_unit = cs_home_unit_maybe cs_env
-      dflags = cs_dflags cs_env
-      fopts = initFinderOpts dflags
-  in findImportedModuleNoCs fc fopts (cs_unit_env cs_env) mhome_unit mod pkg_qual
+findImportedModule cs_env mod pkg_qual
+  | otherwise
+  = let fc = cs_FC cs_env
+        mhome_unit = cs_home_unit_maybe cs_env
+        dflags = cs_dflags cs_env
+        fopts = initFinderOpts dflags
+    in findImportedModuleNoCs fc fopts (cs_unit_env cs_env) mhome_unit mod pkg_qual
 
 findImportedModuleNoCs
   :: FinderCache

@@ -58,10 +58,6 @@ mkFunKiRedn af (ReductionKi arg_co arg_ki) (ReductionKi res_co res_ki)
 
 data Reductions = Reductions [AnyKindCoercion] [AnyMonoKind]
 
-mkKiConAppRedn :: KiCon -> Reductions -> Reduction
-mkKiConAppRedn kc (Reductions cos kis) = mkReductionKi (mkKiConAppCo kc cos) (mkKiConApp kc kis)
-{-# INLINE mkKiConAppRedn #-}
-
 {-# INLINE unzipRedns #-}
 unzipRedns :: [Reduction] -> Reductions
 unzipRedns = foldr accRedn (Reductions [] [])

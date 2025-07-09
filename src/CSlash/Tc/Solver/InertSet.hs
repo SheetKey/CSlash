@@ -47,33 +47,33 @@ import Control.Monad ( forM_ )
 ********************************************************************* -}
 
 data WorkList = WL
-  { wl_eqs :: [Ct]
-  , wl_rw_eqs :: [Ct]
+  { wl_kicos :: [Ct]
+  , wl_rw_kicos :: [Ct]
   , wl_rest :: [Ct]
   , wl_implics :: Bag Implication
   }
 
-extendWorkListEq :: RewriterSet -> Ct -> WorkList -> WorkList
-extendWorkListEq rewriters ct wl
+extendWorkListKiCo :: RewriterSet -> Ct -> WorkList -> WorkList
+extendWorkListKiCo rewriters ct wl
   | isEmptyRewriterSet rewriters
-  = wl { wl_eqs = ct : wl_eqs wl }
+  = wl { wl_kicos = ct : wl_kicos wl }
   | otherwise
-  = wl { wl_rw_eqs = ct : wl_rw_eqs wl }
+  = wl { wl_rw_kicos = ct : wl_rw_kicos wl }
 
-extendWorkListEqs :: RewriterSet -> Bag Ct -> WorkList -> WorkList
-extendWorkListEqs rewriters eqs wl
+extendWorkListKiCos :: RewriterSet -> Bag Ct -> WorkList -> WorkList
+extendWorkListKiCos rewriters kicos wl
   | isEmptyRewriterSet rewriters
-  = wl { wl_eqs = foldr (:) (wl_eqs wl) eqs }
+  = wl { wl_kicos = foldr (:) (wl_kicos wl) kicos }
   | otherwise
-  = wl { wl_rw_eqs = foldr (:) (wl_rw_eqs wl) eqs }
+  = wl { wl_rw_kicos = foldr (:) (wl_rw_kicos wl) kicos }
 
-extendWorkListNonEq :: Ct -> WorkList -> WorkList
-extendWorkListNonEq ct wl = wl { wl_rest = ct : wl_rest wl }
+extendWorkListNonKiCo :: Ct -> WorkList -> WorkList
+extendWorkListNonKiCo ct wl = wl { wl_rest = ct : wl_rest wl }
 
 extendWorkListCt :: Ct -> WorkList -> WorkList
 extendWorkListCt ct wl = case classifyPredKind (ctEvPred ev) of
-  EqPred {} -> extendWorkListEq rewriters ct wl
-  _ -> extendWorkListNonEq ct wl
+  KiCoPred {} -> extendWorkListKiCo rewriters ct wl
+  _ -> extendWorkListNonKiCo ct wl
   where
     ev = ctEvidence ct
     rewriters = ctEvRewriters ev  
@@ -82,24 +82,24 @@ extendWorkListCts :: Cts -> WorkList -> WorkList
 extendWorkListCts cts wl = foldr extendWorkListCt wl cts
 
 emptyWorkList :: WorkList
-emptyWorkList = WL { wl_eqs = [], wl_rw_eqs = [], wl_rest = [], wl_implics = emptyBag }
+emptyWorkList = WL { wl_kicos = [], wl_rw_kicos = [], wl_rest = [], wl_implics = emptyBag }
 
 selectWorkItem :: WorkList -> Maybe (Ct, WorkList)
-selectWorkItem wl@(WL { wl_eqs = eqs, wl_rw_eqs = rw_eqs, wl_rest = rest })
-  | ct : cts <- eqs = Just (ct, wl { wl_eqs = cts })
-  | ct:cts <- rw_eqs = Just (ct, wl { wl_rw_eqs = cts })
+selectWorkItem wl@(WL { wl_kicos = kicos, wl_rw_kicos = rw_kicos, wl_rest = rest })
+  | ct : cts <- kicos = Just (ct, wl { wl_kicos = cts })
+  | ct:cts <- rw_kicos = Just (ct, wl { wl_rw_kicos = cts })
   | ct : cts <- rest = Just (ct, wl { wl_rest = cts })
   | otherwise = Nothing
 
 instance Outputable WorkList where
-  ppr (WL { wl_eqs = eqs, wl_rw_eqs = rw_eqs, wl_rest = rest, wl_implics = implics })
+  ppr (WL { wl_kicos = kicos, wl_rw_kicos = rw_kicos, wl_rest = rest, wl_implics = implics })
     = text "WL" <+> (braces $
-                     vcat [ ppUnless (null eqs)
-                            $ text "Eqs =" <+> vcat (map ppr eqs)
-                          , ppUnless (null rw_eqs)
-                            $ text "RwEqs =" <+> vcat (map ppr rw_eqs)
+                     vcat [ ppUnless (null kicos)
+                            $ text "KiCos =" <+> vcat (map ppr kicos)
+                          , ppUnless (null rw_kicos)
+                            $ text "RwKiCos =" <+> vcat (map ppr rw_kicos)
                           , ppUnless (null rest)
-                            $ text "Non-eqs" <+> vcat (map ppr rest)
+                            $ text "Non-kicos" <+> vcat (map ppr rest)
                           , ppUnless (isEmptyBag implics)
                             $ ifPprDebug (text "Implics ="
                                           <+> vcat (map ppr (bagToList implics)))
@@ -116,29 +116,22 @@ type CycleBreakerVarStack = NonEmpty (Bag (AnyTyVar AnyKiVar, AnyType))
 data InertSet = IS
   { inert_cans :: InertCans
   -- , inert_cycle_breakers :: CycleBreakerVarStack
-  , inert_solved_rels :: RelMap RelCt
   }
 
 instance Outputable InertSet where
-  ppr (IS { inert_cans = ics, inert_solved_rels = solved_rels })
-    = vcat [ ppr ics
-           , ppUnless (null rels)
-           $ text "Solved rels =" <+> vcat (map ppr rels) ]
-    where
-      rels = bagToList $ relsToBag solved_rels
+  ppr (IS { inert_cans = ics })
+    = vcat [ ppr ics ]
 
 emptyInertCans :: InertCans
-emptyInertCans = IC { inert_eqs = emptyEqs
-                    , inert_rels = emptyRelMap
+emptyInertCans = IC { inert_kicos = emptyKiCos
                     , inert_irreds = emptyBag
-                    , inert_given_eq_lvl = topTcLevel
-                    , inert_given_eqs = False
+                    , inert_given_kico_lvl = topTcLevel
+                    , inert_given_kicos = False
                     }
 
 emptyInert :: InertSet
 emptyInert = IS { inert_cans = emptyInertCans
                 -- , inert_cycle_breakers = emptyBag :| []
-                , inert_solved_rels = emptyRelMap
                 }
 
 {- *********************************************************************
@@ -148,29 +141,28 @@ emptyInert = IS { inert_cans = emptyInertCans
 ********************************************************************* -}
 
 data InertCans = IC
-  { inert_eqs :: InertEqs
-  , inert_rels :: RelMap RelCt
+  { inert_kicos :: InertKiCos
   , inert_irreds :: InertIrreds
-  , inert_given_eq_lvl :: TcLevel
-  , inert_given_eqs :: Bool
+  , inert_given_kico_lvl :: TcLevel
+  , inert_given_kicos :: Bool
   }
 
-type InertEqs = MkDVarEnv AnyKiVar EqualCtList
+type InertKiCos = MkDVarEnv AnyKiVar KiCoCtList
 type InertIrreds = Bag IrredCt
 
 instance Outputable InertCans where
-  ppr (IC { inert_eqs = eqs
+  ppr (IC { inert_kicos = kicos
           , inert_irreds = irreds
-          , inert_given_eq_lvl = ge_lvl
-          , inert_given_eqs = given_eqs })
+          , inert_given_kico_lvl = kc_lvl
+          , inert_given_kicos = given_kicos })
     = braces $ vcat
-      [ ppUnless (isEmptyDVarEnv eqs)
-        $ text "Equalities ="
-        <+> pprBag (foldKiEqs consBag eqs emptyBag)
+      [ ppUnless (isEmptyDVarEnv kicos)
+        $ text "KindCoercions ="
+        <+> pprBag (foldKiCos consBag kicos emptyBag)
       , ppUnless (isEmptyBag irreds)
         $ text "Irreds =" <+> pprBag irreds
-      , text "Innermost given equalities =" <+> ppr ge_lvl
-      , text "Given eqs at this level =" <+> ppr given_eqs
+      , text "Innermost given kicos =" <+> ppr kc_lvl
+      , text "Given kicos at this level =" <+> ppr given_kicos
       ]
 
 {- *********************************************************************
@@ -179,52 +171,52 @@ instance Outputable InertCans where
 *                                                                      *
 ********************************************************************* -}
 
-emptyEqs :: InertEqs
-emptyEqs = emptyDVarEnv
+emptyKiCos :: InertKiCos
+emptyKiCos = emptyDVarEnv
 
-addEqToCans :: TcLevel -> EqCt -> InertCans -> InertCans
-addEqToCans tc_lvl eq_ct@(KiEqCt { eq_lhs = lhs }) ics@(IC { inert_eqs = eqs })
-  = updGivenEqs tc_lvl (CEqCan eq_ct)
+addKiCoToCans :: TcLevel -> KiCoCt -> InertCans -> InertCans
+addKiCoToCans tc_lvl kico_ct@(KiCoCt { kc_lhs = lhs }) ics@(IC { inert_kicos = kicos })
+  = updGivenKiCos tc_lvl (CKiCoCan kico_ct)
     $ case lhs of
-        KiVarLHS kv -> ics { inert_eqs = addEq eqs kv eq_ct }
+        KiVarLHS kv -> ics { inert_kicos = addKiCo kicos kv kico_ct }
 
-addEq :: InertEqs -> AnyKiVar -> EqCt -> InertEqs
-addEq old_eqs v ct
-  = extendDVarEnv_C add_eq old_eqs v [ct]
+addKiCo :: InertKiCos -> AnyKiVar -> KiCoCt -> InertKiCos
+addKiCo old_kicos v ct
+  = extendDVarEnv_C add_kico old_kicos v [ct]
   where
-    add_eq old_eqs _ = addToEqualCtList ct old_eqs
+    add_kico old_kicos _ = addToKiCoCtList ct old_kicos
 
-foldKiEqs :: (EqCt -> b -> b) -> InertEqs -> b -> b
-foldKiEqs k eqs z = foldDVarEnv (\cts z -> foldr k z cts) z eqs
+foldKiCos :: (KiCoCt -> b -> b) -> InertKiCos -> b -> b
+foldKiCos k kicos z = foldDVarEnv (\cts z -> foldr k z cts) z kicos
 
-findKiEqs :: InertCans -> AnyKiVar -> [EqCt]
-findKiEqs icans kv = concat @Maybe (lookupDVarEnv (inert_eqs icans) kv)
+findKiCos :: InertCans -> AnyKiVar -> [KiCoCt]
+findKiCos icans kv = concat @Maybe (lookupDVarEnv (inert_kicos icans) kv)
 
-findEq :: InertCans -> CanEqLHS -> [EqCt]
-findEq icans (KiVarLHS kv) = findKiEqs icans kv
+findKiCo :: InertCans -> CanKiCoLHS -> [KiCoCt]
+findKiCo icans (KiVarLHS kv) = findKiCos icans kv
 
-{-# INLINE partition_eqs_container #-}
-partition_eqs_container
+{-# INLINE partition_kicos_container #-}
+partition_kicos_container
   :: forall container
    . container
-  -> (forall b. (EqCt -> b -> b) -> container -> b -> b)
-  -> (EqCt -> container -> container)
-  -> (EqCt -> Bool)
+  -> (forall b. (KiCoCt -> b -> b) -> container -> b -> b)
+  -> (KiCoCt -> container -> container)
+  -> (KiCoCt -> Bool)
   -> container
-  -> ([EqCt], container)
-partition_eqs_container empty_container fold_container extend_container pred orig_inerts
+  -> ([KiCoCt], container)
+partition_kicos_container empty_container fold_container extend_container pred orig_inerts
   = fold_container folder orig_inerts ([], empty_container)
   where
-    folder :: EqCt -> ([EqCt], container) -> ([EqCt], container)
-    folder eq_ct (acc_true, acc_false)
-      | pred eq_ct = (eq_ct : acc_true, acc_false)
-      | otherwise = (acc_true, extend_container eq_ct acc_false)
+    folder :: KiCoCt -> ([KiCoCt], container) -> ([KiCoCt], container)
+    folder kico_ct (acc_true, acc_false)
+      | pred kico_ct = (kico_ct : acc_true, acc_false)
+      | otherwise = (acc_true, extend_container kico_ct acc_false)
 
-partitionInertEqs :: (EqCt -> Bool) -> InertEqs -> ([EqCt], InertEqs)
-partitionInertEqs = partition_eqs_container emptyEqs foldKiEqs addInertEqs
+partitionInertKiCos :: (KiCoCt -> Bool) -> InertKiCos -> ([KiCoCt], InertKiCos)
+partitionInertKiCos = partition_kicos_container emptyKiCos foldKiCos addInertKiCos
 
-addInertEqs :: EqCt -> InertEqs -> InertEqs
-addInertEqs  eq_ct@(KiEqCt { eq_lhs = KiVarLHS kv }) eqs = addEq eqs kv eq_ct
+addInertKiCos :: KiCoCt -> InertKiCos -> InertKiCos
+addInertKiCos kico_ct@(KiCoCt { kc_lhs = KiVarLHS kv }) kicos = addKiCo kicos kv kico_ct
 
 {- *********************************************************************
 *                                                                      *
@@ -232,25 +224,25 @@ addInertEqs  eq_ct@(KiEqCt { eq_lhs = KiVarLHS kv }) eqs = addEq eqs kv eq_ct
 *                                                                      *
 ********************************************************************* -}
 
-updRels :: (RelMap RelCt -> RelMap RelCt) -> InertCans -> InertCans
-updRels upd ics = ics { inert_rels = upd (inert_rels ics) }
+-- updRels :: (RelMap RelCt -> RelMap RelCt) -> InertCans -> InertCans
+-- updRels upd ics = ics { inert_rels = upd (inert_rels ics) }
 
-delRel :: RelCt -> RelMap a -> RelMap a
-delRel (RelCt { rl_kc = kc, rl_ki1 = k1, rl_ki2 = k2 }) m = delKcApp m kc k1 k2
+-- delRel :: RelCt -> RelMap a -> RelMap a
+-- delRel (RelCt { rl_kc = kc, rl_ki1 = k1, rl_ki2 = k2 }) m = delKcApp m kc k1 k2
 
-addRel :: RelCt -> RelMap RelCt -> RelMap RelCt
-addRel item@(RelCt { rl_kc = kc, rl_ki1 = k1, rl_ki2 = k2 }) rm
-  = insertKcApp rm kc k1 k2 item
+-- addRel :: RelCt -> RelMap RelCt -> RelMap RelCt
+-- addRel item@(RelCt { rl_kc = kc, rl_ki1 = k1, rl_ki2 = k2 }) rm
+--   = insertKcApp rm kc k1 k2 item
 
-addSolvedRel :: RelCt -> RelMap RelCt -> RelMap RelCt
-addSolvedRel item@(RelCt { rl_kc = kc, rl_ki1 = k1, rl_ki2 = k2 }) rm
-  = insertKcApp rm kc k1 k2 item
+-- addSolvedRel :: RelCt -> RelMap RelCt -> RelMap RelCt
+-- addSolvedRel item@(RelCt { rl_kc = kc, rl_ki1 = k1, rl_ki2 = k2 }) rm
+--   = insertKcApp rm kc k1 k2 item
 
-partitionRels :: (RelCt -> Bool) -> RelMap RelCt -> (Bag RelCt, RelMap RelCt)
-partitionRels f m = foldKcAppMap k m (emptyBag, emptyRelMap)
-  where
-    k ct (yeses, noes) | f ct = (ct `consBag` yeses, noes)
-                       | otherwise = (yeses, addRel ct noes)
+-- partitionRels :: (RelCt -> Bool) -> RelMap RelCt -> (Bag RelCt, RelMap RelCt)
+-- partitionRels f m = foldKcAppMap k m (emptyBag, emptyRelMap)
+--   where
+--     k ct (yeses, noes) | f ct = (ct `consBag` yeses, noes)
+--                        | otherwise = (yeses, addRel ct noes)
 
 {- *********************************************************************
 *                                                                      *
@@ -260,7 +252,7 @@ partitionRels f m = foldKcAppMap k m (emptyBag, emptyRelMap)
 
 addIrredToCans :: TcLevel -> IrredCt -> InertCans -> InertCans
 addIrredToCans tc_lvl irred ics
-  = updGivenEqs tc_lvl (CIrredCan irred)
+  = updGivenKiCos tc_lvl (CIrredCan irred)
     $ updIrreds (addIrred irred) ics
 
 addIrreds :: [IrredCt] -> InertIrreds -> InertIrreds
@@ -276,25 +268,25 @@ updIrreds upd ics = ics { inert_irreds = upd (inert_irreds ics) }
 
 findMatchingIrreds :: InertIrreds -> CtEvidence -> (Bag (IrredCt, SwapFlag), InertIrreds)
 findMatchingIrreds irreds ev 
-  | EqPred lki1 rki1 <- classifyPredKind pred
-  = partitionBagWith (match_eq lki1 rki1) irreds
+  | KiCoPred _ lki1 rki1 <- classifyPredKind pred
+  = partitionBagWith (match_kico lki1 rki1) irreds
   | otherwise
-  = partitionBagWith match_non_eq irreds
+  = partitionBagWith match_non_kico irreds
   where
     pred = ctEvPred ev
 
-    match_non_eq irred
+    match_non_kico irred
       | irredCtPred irred `tcEqMonoKind` pred = Left (irred, NotSwapped)
       | otherwise = Right irred
 
-    match_eq lki1 rki1 irred
-      | EqPred lki2 rki2 <- classifyPredKind (irredCtPred irred)
-      , Just swap <- match_eq_help lki1 rki1 lki2 rki2
+    match_kico lki1 rki1 irred
+      | KiCoPred _ lki2 rki2 <- classifyPredKind (irredCtPred irred)
+      , Just swap <- match_kico_help lki1 rki1 lki2 rki2
       = Left (irred, swap)
       | otherwise
       = Right irred
 
-    match_eq_help lki1 rki1 lki2 rki2
+    match_kico_help lki1 rki1 lki2 rki2
       | lki1 `tcEqMonoKind` lki2, rki1 `tcEqMonoKind` rki2
       = Just NotSwapped
       | lki1 `tcEqMonoKind` rki2, rki1 `tcEqMonoKind` lki2
@@ -308,42 +300,39 @@ findMatchingIrreds irreds ev
 *                                                                      *
 ********************************************************************* -}
 
-updGivenEqs :: TcLevel -> Ct -> InertCans -> InertCans
-updGivenEqs tclvl ct inerts@(IC { inert_given_eq_lvl = ge_lvl })
+updGivenKiCos :: TcLevel -> Ct -> InertCans -> InertCans
+updGivenKiCos tclvl ct inerts@(IC { inert_given_kico_lvl = kc_lvl })
   | not (isGivenCt ct) = inerts
-  | not_equality ct = inerts
-  | otherwise = inerts { inert_given_eq_lvl = ge_lvl'
-                       , inert_given_eqs = True }
+  | not_kico ct = inerts
+  | otherwise = inerts { inert_given_kico_lvl = kc_lvl'
+                       , inert_given_kicos = True }
   where
-    ge_lvl' | mentionsOuterVar tclvl (ctEvidence ct)
+    kc_lvl' | mentionsOuterVar tclvl (ctEvidence ct)
             = tclvl
             | otherwise
-            = ge_lvl
+            = kc_lvl
 
-    not_equality (CEqCan (KiEqCt { eq_lhs = KiVarLHS kv })) = not (isOuterKiVar tclvl kv)
-    not_equality (CEqCan _) = panic "updGivenEqs"
-    not_equality _ = False
+    not_kico (CKiCoCan (KiCoCt { kc_lhs = KiVarLHS kv })) = not (isOuterKiVar tclvl kv)
+    not_kico (CKiCoCan _) = panic "updGivenEqs"
+    not_kico _ = False
 
 data KickOutSpec
   = KOAfterUnify (MkVarSet TcKiVar)
-  | KOAfterAdding CanEqLHS
+  | KOAfterAdding CanKiCoLHS
 
 kickOutRewritableLHS :: KickOutSpec -> CtFlavor -> InertCans -> (Cts, InertCans)
-kickOutRewritableLHS ko_spec new_f ics@(IC { inert_eqs = kv_eqs
-                                           , inert_rels = relmap
+kickOutRewritableLHS ko_spec new_f ics@(IC { inert_kicos = kv_kicos
                                            , inert_irreds = irreds })
   = (kicked_out, inert_cans_in)
   where
-    inert_cans_in = ics { inert_eqs = kv_eqs_in
-                        , inert_rels = rels_in
+    inert_cans_in = ics { inert_kicos = kv_kicos_in
                         , inert_irreds = irs_in }
 
     kicked_out :: Cts
-    kicked_out = (fmap CRelCan rels_out `andCts` fmap CIrredCan irs_out)
-                 `extendCtsList` fmap CEqCan kv_eqs_out
+    kicked_out = (fmap CIrredCan irs_out)
+                 `extendCtsList` fmap CKiCoCan kv_kicos_out
 
-    (kv_eqs_out, kv_eqs_in) = partitionInertEqs kick_out_eq kv_eqs
-    (rels_out, rels_in) = partitionRels (kick_out_ct . CRelCan) relmap
+    (kv_kicos_out, kv_kicos_in) = partitionInertKiCos kick_out_kico kv_kicos
     (irs_out, irs_in) = partitionBag (kick_out_ct . CIrredCan) irreds
 
     f_kv_can_rewrite_ki :: (TcKiVar -> Bool) -> AnyMonoKind -> Bool
@@ -359,13 +348,13 @@ kickOutRewritableLHS ko_spec new_f ics@(IC { inert_eqs = kv_eqs
 
     kick_out_ct ct = f_may_rewrite (ctFlavor ct) && f_can_rewrite_ki (ctPred ct)
 
-    kick_out_eq (KiEqCt { eq_lhs = lhs, eq_rhs = rhs_ki, eq_ev = ev })
+    kick_out_kico (KiCoCt { kc_lhs = lhs, kc_rhs = rhs_ki, kc_ev = ev })
       | not (f_may_rewrite f)
       = False
       | KiVarLHS _ <- lhs
       , f `eqCanRewriteF` new_f
       = False
-      | f_can_rewrite_ki (canKiEqLHSKind lhs)
+      | f_can_rewrite_ki (canKiCoLHSKind lhs)
       = True
       | kick_out_for_inertness = True
       | kick_out_for_completeness = True
@@ -377,7 +366,7 @@ kickOutRewritableLHS ko_spec new_f ics@(IC { inert_eqs = kv_eqs
 
     is_new_lhs_ki = case ko_spec of
       KOAfterUnify vs -> is_kivar_ki_for vs
-      KOAfterAdding lhs -> (`eqMonoKind` canKiEqLHSKind lhs)
+      KOAfterAdding lhs -> (`eqMonoKind` canKiCoLHSKind lhs)
 
     is_kivar_ki_for vs ki = case getKiVar_maybe ki of
                               Just kv
@@ -399,20 +388,6 @@ isOuterKiVar tclvl kv
  = assertPpr (not (handleAnyKv (const False) (isTouchableMetaVar tclvl) kv))
    (ppr kv <+> ppr tclvl)
    $ tclvl `strictlyDeeperThan` (handleAnyKv (const topTcLevel) varLevel kv)
-
-noMatchableGivenRels :: InertSet -> CtLoc -> KiCon -> AnyMonoKind -> AnyMonoKind -> Bool
-noMatchableGivenRels inerts@(IS { inert_cans = inert_cans }) loc_w kc k1 k2
-  = not $ anyBag matchable_given
-    $ findRelsByRel (inert_rels inert_cans) kc
-  where
-    pred_w = mkRelPred kc k1 k2
-
-    matchable_given :: RelCt -> Bool
-    matchable_given (RelCt { rl_ev = ev })
-      | CtGiven { ctev_loc = loc_g, ctev_pred = pred_g } <- ev
-      = isJust $ mightEqualLater inerts pred_g loc_g pred_w loc_w
-      | otherwise
-      = False
 
 mightEqualLater :: InertSet -> AnyPredKind -> CtLoc -> AnyPredKind -> CtLoc -> Maybe (KvSubst AnyKiVar)
 mightEqualLater inert_set given_pred given_loc wanted_pred wanted_loc

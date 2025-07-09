@@ -320,10 +320,11 @@ checkKiCoercionHole kcv kco
   | otherwise
   = return kco
   where
-    (Pair k1 k2) = kiCoercionKind kco
-    ok kcv_ki | EqPred kcv_k1 kcv_k2 <- classifyPredKind kcv_ki
+    (kc, Pair k1 k2) = kiCoercionKind kco
+    ok kcv_ki | KiCoPred kcv_kc kcv_k1 kcv_k2 <- classifyPredKind kcv_ki
               = k1 `eqMonoKind` kcv_k1
                 && k2 `eqMonoKind` kcv_k2
+                && kc == kcv_kc
               | otherwise
               = False
 
@@ -338,7 +339,7 @@ zonkImplication implic@(Implic { ic_skols = skols
                                , ic_given = given
                                , ic_wanted = wanted
                                , ic_info = info }) = do
-  given' <- mapM zonkKiEvVar given
+  given' <- mapM zonkKiCoVar given
   info' <- zonkSkolemInfoAnon info
   wanted' <- zonkWCRec wanted
   return $ implic { ic_skols = skols
@@ -346,8 +347,8 @@ zonkImplication implic@(Implic { ic_skols = skols
                   , ic_wanted = wanted'
                   , ic_info = info' }
 
-zonkKiEvVar :: KiEvVar AnyKiVar -> ZonkM (KiEvVar AnyKiVar)
-zonkKiEvVar var = updateVarKindM zonkTcMonoKind var
+zonkKiCoVar :: KiCoVar AnyKiVar -> ZonkM (KiCoVar AnyKiVar)
+zonkKiCoVar var = updateVarKindM zonkTcMonoKind var
 
 zonkWC :: WantedConstraints -> ZonkM WantedConstraints
 zonkWC wc = zonkWCRec wc
@@ -365,12 +366,7 @@ zonkSimples cts = do
   return cts'
 
 zonkCt :: Ct -> ZonkM Ct
-zonkCt (CRelCan rel@(RelCt { rl_ev = ev, rl_ki1 = k1, rl_ki2 = k2 })) = do
-  ev' <- zonkCtEvidence ev
-  k1' <- zonkTcMonoKind k1
-  k2' <- zonkTcMonoKind k2
-  return $ CRelCan $ rel { rl_ev = ev', rl_ki1 = k1', rl_ki2 = k2' }
-zonkCt (CEqCan (KiEqCt { eq_ev = ev })) = mkNonCanonical <$> zonkCtEvidence ev
+zonkCt (CKiCoCan (KiCoCt { kc_ev = ev })) = mkNonCanonical <$> zonkCtEvidence ev
 zonkCt (CIrredCan ir@(IrredCt { ir_ev = ev })) = do
   ev' <- zonkCtEvidence ev
   return $ CIrredCan $ ir { ir_ev = ev' }
@@ -449,10 +445,10 @@ zonkTidyOrigin env (GivenOrigin skol_info) = do
   let skol_info2 = tidySkolemInfoAnon env skol_info1
   return (env, GivenOrigin skol_info2)
 
-zonkTidyOrigin env orig@(KindEqOrigin { keq_actual = act, keq_expected = exp }) = do
+zonkTidyOrigin env orig@(KindCoOrigin { kco_actual = act, kco_expected = exp }) = do
   (env1, act') <- zonkTidyTcMonoKind env act
   (env2, exp') <- zonkTidyTcMonoKind env1 exp
-  return (env2, orig { keq_actual = act', keq_expected = exp' })
+  return (env2, orig { kco_actual = act', kco_expected = exp' })
 
 zonkTidyOrigin env orig = return (env, orig)
 
@@ -464,5 +460,5 @@ tidyCtEvidence env ctev = ctev { ctev_pred = tidyMonoKind env ki }
   where
     ki = ctev_pred ctev
 
-tidyKiEvVar :: AnyTidyEnv -> KiEvVar AnyKiVar -> KiEvVar AnyKiVar
-tidyKiEvVar env var = updateVarKind (tidyMonoKind env) var
+tidyKiCoVar :: AnyTidyEnv -> KiCoVar AnyKiVar -> KiCoVar AnyKiVar
+tidyKiCoVar env var = updateVarKind (tidyMonoKind env) var

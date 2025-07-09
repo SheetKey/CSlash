@@ -31,8 +31,8 @@ module CSlash.Types.Var
   , AsGenericTy(..), AsGenericKi(..)
 
     {-* TyVar *-}
-  , TyVar, KiCoVar, KiEvVar
-  , mkTyVar, mkLocalKiEvVar, toKiCoVar_maybe
+  , TyVar, KiCoVar
+  , mkTyVar, toKiCoVar_maybe, mkLocalKiCoVar
 
     {-* TcTyVar *-}
   , TcTyVar
@@ -75,7 +75,7 @@ import Prelude hiding ((<>))
 import {-# SOURCE #-} CSlash.Core.Type.Rep (Type)
 import {-# SOURCE #-} CSlash.Core.Type.Ppr (pprType)
 import {-# SOURCE #-} CSlash.Core.Kind
-  (Kind, MonoKind, PredKind, pprKind, isCoVarKind, isKiEvVarKind)
+  (Kind, MonoKind, PredKind, pprKind, isKiCoVarKind)
 import {-# SOURCE #-} CSlash.Tc.Utils.TcType
   ( TcVarDetails, pprTcVarDetails )
 import {-# SOURCE #-} CSlash.Types.Id.Info (IdDetails, IdInfo, pprIdDetails)
@@ -456,18 +456,17 @@ newtype TyVar kv = TyVar (Var Void kv)
            , VarHasName, VarHasUnique)
 
 type KiCoVar = TyVar
-type KiEvVar = TyVar
 
 toKiCoVar_maybe :: VarHasKind tv kv => tv -> Maybe (KiCoVar kv)
 toKiCoVar_maybe mtv
   | Just tv <- toTyVar_maybe mtv
-  , isCoVarKind (varKind tv)
+  , isKiCoVarKind (varKind tv)
   = Just tv
   | otherwise
   = Nothing
 
-mkLocalKiEvVar :: IsTyVar kiEvVar kv => Name -> PredKind kv -> kiEvVar
-mkLocalKiEvVar name ki = assert (isKiEvVarKind ki) $ mkTyVar name ki
+mkLocalKiCoVar :: Name -> PredKind AnyKiVar -> KiCoVar AnyKiVar
+mkLocalKiCoVar name ki = assert (isKiCoVarKind ki) $ mkTyVar name ki
 
 instance ToAnyTyVar (TyVar kv) kv where
   toAnyTyVar (TyVar tv) = AnyTyVar tv

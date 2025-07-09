@@ -158,6 +158,15 @@ main' postLoadMode units dflags0 args flagWarnings = do
        
     let (dflags5, srcs, objs) = parseTargetFiles dflags4 (map unLoc fileish_args)
 
+    -- TEMP
+    cs_env <- getSession
+
+    liftIO $ debugTraceMsg logger4 0 $ text "WHAT"
+
+    liftIO $ debugTraceMsg logger4 0 $ vcat [ text "Debug package db first"
+                                            , ppr $ ue_home_unit_graph $ cs_unit_env cs_env ]
+    -- TEPM
+
     _ <- CSL.setSessionDynFlags dflags5
     dflags6 <- CSL.getSessionDynFlags
 
@@ -165,6 +174,9 @@ main' postLoadMode units dflags0 args flagWarnings = do
 
     cs_env <- getSession
     logger <- getLogger
+
+    liftIO $ debugTraceMsg logger 2 $ vcat [ text "Debug package db last"
+                                           , ppr $ ue_home_unit_graph $ cs_unit_env cs_env ]
 
     case verbosity dflags6 of
       v | v == 4 -> liftIO $ dumpUnitsSimple cs_env
@@ -479,6 +491,7 @@ removeRTS [] = []
     
 initMulti :: NE.NonEmpty String -> Csl [(String, Maybe UnitId, Maybe Phase)]
 initMulti unitArgsFiles = do
+  panic "initMulti"
   cs_env <- CSL.getSession
   let logger = cs_logger cs_env
   initial_dflags <- CSL.getSessionDynFlags

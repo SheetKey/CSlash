@@ -76,7 +76,7 @@ import CSlash.Core.Type
 --    ( FamInst, pprFamInst, famInstsRepTyCons, orphNamesOfFamInst
 --    , famInstEnvElts, extendFamInstEnvList, normaliseType )
 
-import CSlash.Parser.Header       ( mkPrelImports )
+import CSlash.Parser.Header       ( mkBuiltInImports )
 
 -- import GHC.IfaceToCore
 
@@ -166,7 +166,7 @@ tcRnModule cs_env mod_sum save_rn_syntax
         in (mkHomeModule home_unit mod, locA mod_loc)
 
 tcRnModuleTcRnM :: CsEnv -> ModSummary -> CsParsedModule -> (Module, SrcSpan) -> TcRn TcGblEnv
-tcRnModuleTcRnM cs_env mod_sum parsedModule (this_mod, prel_imp_loc) = do
+tcRnModuleTcRnM cs_env mod_sum parsedModule (this_mod, bi_imp_loc) = do
   let CsParsedModule
         { cpm_module =
             L loc (CsModule _ mod export_ies import_decls local_decls)
@@ -174,19 +174,16 @@ tcRnModuleTcRnM cs_env mod_sum parsedModule (this_mod, prel_imp_loc) = do
 
       cs_src = ms_cs_src mod_sum
 
-      implicit_prelude = False
-      prel_imports = mkPrelImports (moduleName this_mod) prel_imp_loc implicit_prelude import_decls
+      builtin_imports = mkBuiltInImports (moduleName this_mod) bi_imp_loc import_decls
 
-  when (notNull prel_imports) $
-    addDiagnostic TcRnImplicitImportOfPrelude
+  when (notNull builtin_imports) $
+    traceRn "importing builtins" empty
 
-  let simplifyImport (L _ idecl) =
-        ( renameRawPkgQual (cs_unit_env cs_env) (unLoc $ ideclName idecl) NoRawPkgQual
-        , reLoc $ ideclName idecl )
   let mkImport mod_name = noLocA $ (simpleImportDecl mod_name)
                                    { ideclImportList = Just (Exactly, noLocA []) }
+
       withReason t imps = map (, text t) imps
-      all_imports = withReason "is implicitly imported" prel_imports
+      all_imports = withReason "is implicitly imported" builtin_imports
                  ++ withReason "is directly imported" import_decls
   tcg_env <- {-# SCC "tcRnImports" #-}
              tcRnImports cs_env all_imports
@@ -241,7 +238,7 @@ tcRnSrcDecls export_ies decls = do
   (tcg_env, tcl_env, lie) <- tc_rn_src_decls decls
 
   ------ Simplify constraints ---------
-  new_ki_ev_binds <- {-# SCC "simplifyTop" #-}
+  _ <- {-# SCC "simplifyTop" #-}
     restoreEnvs (tcg_env, tcl_env) $ do
       lie_main <- checkMainType tcg_env
       simplifyTop (lie `andWC` lie_main)
@@ -251,11 +248,10 @@ tcRnSrcDecls export_ies decls = do
   traceTc "Tc9" empty
   failIfErrsM
 
-  (id_env, ki_ev_binds', binds') <- zonkTcGblEnv new_ki_ev_binds tcg_env
+  (id_env, binds') <- zonkTcGblEnv tcg_env
 
   --------- Run finalizers --------------
   let init_tcg_env = tcg_env { tcg_binds = emptyBag
-                             , tcg_ki_ev_binds = emptyBag
                              , tcg_type_env = tcg_type_env tcg_env `plusTypeEnv` id_env }
 
   traceTc "Tc11" empty
@@ -264,29 +260,25 @@ tcRnSrcDecls export_ies decls = do
   tcg_env <- restoreEnvs (tcg_env, tcl_env) $ panic "rnExports export_ies"
 
   --------- Emit the ':Main.main = runMainIO main' declaration ----------
-  (tcg_env, main_ki_ev_binds) <- restoreEnvs (tcg_env, tcl_env) $ do
+  tcg_env <- restoreEnvs (tcg_env, tcl_env) $ do
     (tcg_env, lie) <- captureTopConstraints $ checkMain export_ies
-    ki_ev_binds <- simplifyTop lie
-    return (tcg_env, ki_ev_binds)
+    simplifyTop lie
+    return tcg_env
 
   failIfErrsM
 
   ---------- Final zonking ---------------
-  (id_env_mf, ki_ev_binds_mf, binds_mf) <- zonkTcGblEnv main_ki_ev_binds tcg_env
+  (id_env_mf, binds_mf) <- zonkTcGblEnv tcg_env
 
   let !final_type_env = tcg_type_env tcg_env `plusTypeEnv` id_env_mf
-      tcg_env' = tcg_env { tcg_binds =  binds' `unionBags` binds_mf
-                         , tcg_ki_ev_binds = ki_ev_binds' `unionBags` ki_ev_binds_mf }
+      tcg_env' = tcg_env { tcg_binds =  binds' `unionBags` binds_mf }
 
   panic "setGlobalTypeEnv tcg_env' final_type_env"
 
-zonkTcGblEnv :: Bag KiEvBind -> TcGblEnv -> TcM (TypeEnv, Bag KiEvBind, LCsBinds Tc)
-zonkTcGblEnv ki_ev_binds tcg_env@(TcGblEnv { tcg_binds = binds
-                                           , tcg_ki_ev_binds = cur_ki_ev_binds })
+zonkTcGblEnv :: TcGblEnv -> TcM (TypeEnv, LCsBinds Tc)
+zonkTcGblEnv tcg_env@(TcGblEnv { tcg_binds = binds })
   = {-# SCC zonkTopDecls #-}
-  setGblEnv tcg_env $
-  let all_ki_ev_binds = cur_ki_ev_binds `unionBags` ki_ev_binds
-  in zonkTopDecls all_ki_ev_binds binds
+  setGblEnv tcg_env $ zonkTopDecls binds
 
 tc_rn_src_decls :: [LCsDecl Ps] -> TcM (TcGblEnv, TcLclEnv, WantedConstraints)
 tc_rn_src_decls ds = {-# SCC "tc_rn_src_decls" #-} do

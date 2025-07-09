@@ -158,7 +158,9 @@ loadSrcInterface_maybe
   :: SDoc -> ModuleName -> PkgQual -> RnM (MaybeErr MissingInterfaceError ModIface)
 loadSrcInterface_maybe doc mod maybe_pkg = do
   cs_env <- getTopEnv
-  res <- liftIO $ findImportedModule cs_env mod maybe_pkg
+  res <- if mod == moduleName cSLASH_BUILTIN
+         then return $ Found (panic "Found BuiltIn") cSLASH_BUILTIN
+         else liftIO $ findImportedModule cs_env mod maybe_pkg
   case res of
     Found _ mod -> initIfaceTcRn $ loadInterface doc mod ImportByUser
     err -> return $ Failed $ cannotFindModule cs_env mod err

@@ -127,6 +127,7 @@ synonymTyConsOfType ty = nonDetNameEnvElts (go ty)
     go (BigTyLamTy _ ty) = go ty
     go (CastTy ty _) = go ty
     go (Embed _) = emptyNameEnv
+    go (KindCoercion _) = emptyNameEnv
     go other = pprPanic "synonymTyConsOfType" (ppr other)
 
     go_tc tc | isTypeSynonymTyCon tc = unitNameEnv (tyConName tc) tc

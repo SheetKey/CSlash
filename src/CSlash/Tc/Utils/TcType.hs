@@ -234,15 +234,16 @@ any_rewritable_ki :: (TcKiVar -> Bool) -> AnyMonoKind -> Bool
 any_rewritable_ki kv_pred = go_mono emptyVarSet
   where
     go_mono :: MkVarSet AnyKiVar -> AnyMonoKind -> Bool
-    go_mono bvs (KiConApp kc kis) = go_kc bvs kc kis
+    go_mono bvs (KiPredApp pred k1 k2) = go_pred bvs pred k1 k2
     go_mono bvs (KiVarKi kv) = go_kv bvs kv
+    go_mono bvs (BIKi {}) = False
     go_mono bvs (FunKi _ arg res) = go_mono bvs arg || go_mono bvs res
 
     go_kv bvs kv | kv `elemVarSet` bvs = False
                  | otherwise = handleAnyKv (const False) kv_pred kv
 
-    go_kc :: MkVarSet AnyKiVar -> KiCon -> [AnyMonoKind] -> Bool
-    go_kc bvs _ kis = any (go_mono bvs) kis
+    go_pred :: MkVarSet AnyKiVar -> KiPred -> AnyMonoKind -> AnyMonoKind -> Bool
+    go_pred bvs _ ki1 ki2 = go_mono bvs ki1 || go_mono bvs ki2
 
 anyRewritableKiVar :: (TcKiVar -> Bool) -> AnyMonoKind -> Bool
 anyRewritableKiVar = any_rewritable_ki
@@ -372,30 +373,33 @@ tcSplitForAllKi_maybe = splitForAllKi_maybe
 ********************************************************************* -}
 
 isKiVarKcPred :: AnyPredKind -> Bool
-isKiVarKcPred ki = case getPredKcKis_maybe ki of
-  Just (_, kis) -> all isKiVarKi kis
+isKiVarKcPred ki = case getPredKis_maybe ki of
+  Just (_, k1, k2) -> all isKiVarKi [k1,k2]
   _ -> False
 
-kiEvVarPred :: KiCoVar AnyKiVar -> AnyMonoKind
-kiEvVarPred var = varKind var
+kiCoVarPred :: KiCoVar AnyKiVar -> AnyPredKind
+kiCoVarPred = varKind
 
 mkMinimalBy :: forall a. (a -> AnyPredKind) -> [a] -> [a]
-mkMinimalBy get_pred xs = go preds_with_eqx []
+mkMinimalBy get_pred xs = go preds_with_cox []
   where
-    preds_with_eqx :: [(AnyPredKind, [AnyPredKind], a)]
-    preds_with_eqx = [ (pred, pred : eq_extras pred, x)
+    preds_with_cox :: [(AnyPredKind, [AnyPredKind], a)]
+    preds_with_cox = [ (pred, pred : co_extras pred, x)
                      | x <- xs
                      , let pred = get_pred x ]
 
-    eq_extras pred = case classifyPredKind pred of
-                       EqPred k1 k2 -> [mkKiEqPred k2 k1]
+    co_extras pred = case classifyPredKind pred of
+                       KiCoPred EQKi k1 k2 -> [ mkKiCoPred EQKi k2 k1
+                                              , mkKiCoPred LTEQKi k1 k2
+                                              , mkKiCoPred LTEQKi k2 k1 ]
+                       KiCoPred LTKi k1 k2 -> [ mkKiCoPred LTEQKi k1 k2 ]
                        _ -> []
  
     go :: [(AnyPredKind, [AnyPredKind], a)] -> [(AnyPredKind, [AnyPredKind], a)] -> [a]
     go [] min_preds = reverse (map thdOf3 min_preds)
     go (work_item@(p, _, _) : work_list) min_preds
-      | EqPred k1 k2 <- classifyPredKind p
-      , k1 `tcEqMonoKind` k2
+      | KiCoPred kc k1 k2 <- classifyPredKind p
+      , k1 `tcEqMonoKind` k2, not (kc == LTKi)
       = go work_list min_preds
       | p `in_cloud` work_list || p `in_cloud` min_preds
       = go work_list min_preds
@@ -403,7 +407,7 @@ mkMinimalBy get_pred xs = go preds_with_eqx []
       = go work_list (work_item : min_preds)
 
     in_cloud :: AnyPredKind -> [(AnyPredKind, [AnyPredKind], a)] -> Bool
-    in_cloud p ps = or [ p `tcEqMonoKind` p' | (_, eqxs, _) <- ps, p' <- eqxs ]
+    in_cloud p ps = or [ p `tcEqMonoKind` p' | (_, coxs, _) <- ps, p' <- coxs ]
 
 {- *********************************************************************
 *                                                                      *
@@ -439,6 +443,7 @@ tcSplitSigma ty = case tcSplitBigLamTyVarBinders ty of
 
 isRigidKi :: MonoKind kv -> Bool
 isRigidKi ki = case ki of
-  KiConApp {} -> True
+  KiPredApp {} -> True
+  BIKi {} -> True
   FunKi {} -> True
   _ -> False

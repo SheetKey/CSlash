@@ -9,6 +9,7 @@ import CSlash.Tc.Utils.TcType
 import CSlash.Cs
 
 import CSlash.Core.TyCon
+import CSlash.Core.Kind
 
 import CSlash.Types.Id
 import CSlash.Types.Name
@@ -153,24 +154,25 @@ instance Outputable TyVarBndrs where
 data CtOrigin
   = GivenOrigin SkolemInfoAnon
   | OccurrenceOf Name
-  | KindEqOrigin { keq_actual :: AnyMonoKind
-                 , keq_expected :: AnyMonoKind
-                 , keq_thing :: Maybe KindedThing
-                 , keq_visible :: Bool
+  | KindCoOrigin { kco_actual :: AnyMonoKind
+                 , kco_expected :: AnyMonoKind
+                 , kco_pred :: KiPred
+                 , kco_thing :: Maybe KindedThing
+                 , kco_visible :: Bool
                  }
   | TupleTyOrigin
 
 isVisibleOrigin :: CtOrigin -> Bool
-isVisibleOrigin (KindEqOrigin { keq_visible = vis }) = vis
+isVisibleOrigin (KindCoOrigin { kco_visible = vis }) = vis
 isVisibleOrigin _ = True
 
 toInvisibleOrigin :: CtOrigin -> CtOrigin
-toInvisibleOrigin o@(KindEqOrigin {}) = o { keq_visible = True }
+toInvisibleOrigin o@(KindCoOrigin {}) = o { kco_visible = True }
 toInvisibleOrigin o = o
 
 isGivenOrigin :: CtOrigin -> Bool
 isGivenOrigin (GivenOrigin {}) = True
-isGivenOrigin (KindEqOrigin {}) = False
+isGivenOrigin (KindCoOrigin {}) = False
 isGivenOrigin (OccurrenceOf {}) = False
 isGivenOrigin TupleTyOrigin = False
 
@@ -188,9 +190,9 @@ csTyCtOrigin (CsTyVar _ (L _ name)) = OccurrenceOf name
 csTyCtOrigin _ = panic "lCsTypeCtOrigin"
 
 pprCtOrigin :: CtOrigin -> SDoc
-pprCtOrigin (KindEqOrigin k1 k2 _ _)
-  = hang (ctoHerald <+> text "a kind equality")
-         2 (sep [ppr k1, char '~', ppr k2])
+pprCtOrigin (KindCoOrigin k1 k2 kc _ _)
+  = hang (ctoHerald <+> text "a kind coercion")
+         2 (sep [ppr k1, char '`' <> ppr kc <> char '`', ppr k2])
 
 pprCtOrigin simple_origin = ctoHerald <+> pprCtO simple_origin
 

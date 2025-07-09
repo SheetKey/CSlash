@@ -43,7 +43,6 @@ import Text.Read (readPrec)
 
 getImports
   :: ParserOpts
-  -> Bool
   -> StringBuffer
   -> FilePath
   -> FilePath
@@ -52,7 +51,7 @@ getImports
          ( [(RawPkgQual, Located ModuleName)]
          , Bool
          , Located ModuleName ))         
-getImports popts implicit_prelude buf filename source_filename = do
+getImports popts buf filename source_filename = do
   let loc = mkRealSrcLoc (mkFastString filename) 1 1
   case unP parseHeader (initParserState popts buf loc) of
     PFailed pst -> return $ Left $ getPsErrorMessages pst
@@ -70,39 +69,39 @@ getImports popts implicit_prelude buf filename source_filename = do
                       ord_idecls
 
                   pre_loc = srcLocSpan (mkSrcLoc (mkFastString source_filename) 1 1)
-                  implicit_imports = mkPrelImports (unLoc mod) pre_loc implicit_prelude imps
+                  implicit_imports = mkBuiltInImports (unLoc mod) pre_loc imps
                   convImport (L _ i) = (NoRawPkgQual, reLoc $ ideclName i)
               in return ( map convImport (implicit_imports ++ ordinary_imps)
                         , not (null csl_prim_import)
                         , reLoc mod )
                                  
-mkPrelImports :: ModuleName -> SrcSpan -> Bool -> [LImportDecl Ps] -> [LImportDecl Ps]
-mkPrelImports this_mod loc implicit_prelude import_decls
-  | this_mod == pRELUDE_NAME
-    || explicit_prelude_import
-    || not implicit_prelude
-  = []
+mkBuiltInImports :: ModuleName -> SrcSpan -> [LImportDecl Ps] -> [LImportDecl Ps]
+mkBuiltInImports this_mod loc import_decls
+  | this_mod == moduleName cSLASH_BUILTIN
+  = panic "mkBuiltInImports cSLASH_BUILTIN"
+  | explicit_bi_import
+  = panic "Do not explicitly import CSL.BuiltIn"
   | otherwise
-  = [preludeImportDecl]
+  = [builtInImportDecl]
   where
-    explicit_prelude_import = any is_prelude_import import_decls
+    explicit_bi_import = any is_bi_import import_decls
 
-    is_prelude_import (L _ decl) =
-      unLoc (ideclName decl) == pRELUDE_NAME
+    is_bi_import (L _ decl) =
+      unLoc (ideclName decl) == moduleName cSLASH_BUILTIN
       -- && case ideclPkgQual decl of
       --      NoRawPkgQual -> True
       --      RawPkgQual b -> sl_fs b == unitIdFS baseUnitId
 
     loc' = noAnnSrcSpan loc
 
-    preludeImportDecl :: LImportDecl Ps
-    preludeImportDecl = L loc' $ ImportDecl
+    builtInImportDecl :: LImportDecl Ps
+    builtInImportDecl = L loc' $ ImportDecl
       { ideclExt = XImportDeclPass
                    { ideclAnn = noAnn
                    , ideclSourceText = NoSourceText
                    , ideclImplicit = True
                    }
-      , ideclName = L loc' pRELUDE_NAME
+      , ideclName = L loc' (moduleName cSLASH_BUILTIN)
       , ideclPkgQual = NoRawPkgQual
       , ideclQualified = NotQualified
       , ideclAs = Nothing

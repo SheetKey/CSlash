@@ -165,11 +165,15 @@ subst_mono_ki :: IsVar kv => KvSubst kv -> MonoKind kv -> MonoKind kv
 subst_mono_ki subst ki = go ki
   where
     go (KiVarKi kv) = substKiVar subst kv
+    go (BIKi k) = BIKi k
     go ki@(FunKi { fk_arg = arg, fk_res = res })
       = let !arg' = go arg
             !res' = go res
         in ki { fk_arg = arg', fk_res = res' }
-    go ki@(KiConApp kc kis) = (mkKiConApp $! kc) $! strictMap go kis
+    go ki@(KiPredApp pred k1 k2)
+      = let !k1' = go k1
+            !k2' = go k2
+      in (mkKiPredApp $! pred) k1' k2'
 
 substKiVar :: IsVar kv => KvSubst kv -> kv -> MonoKind kv
 substKiVar (KvSubst _ kenv) kv

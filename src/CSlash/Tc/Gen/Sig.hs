@@ -10,7 +10,7 @@ import CSlash.Cs
 import CSlash.Tc.Errors.Types ( TcRnMessage(..) )
 import CSlash.Tc.Gen.CsType
 import CSlash.Tc.Types
-import CSlash.Tc.Solver( pushLevelAndSolveX, reportUnsolved' )
+import CSlash.Tc.Solver( pushLevelAndSolveKindCoercionsX, reportUnsolvedKiCos )
 import CSlash.Tc.Utils.Monad
 import CSlash.Tc.Zonk.Type
 import CSlash.Tc.Types.Origin
@@ -74,7 +74,7 @@ tcUserTypeSig :: SrcSpan -> LCsSigType Rn -> Maybe Name -> TcM TcCompleteSig
 tcUserTypeSig loc cs_sig_ty mb_name = do
   sigma_ty <- tcCsSigType ctxt_no_rrc cs_sig_ty
   traceTc "tcuser" (ppr sigma_ty)
-  massertPpr ((snd $ splitForAllKiVars $ typeKind sigma_ty) `eqMonoKind` (KiConApp UKd []))
+  massertPpr ((snd $ splitForAllKiVars $ typeKind sigma_ty) `eqMonoKind` (BIKi UKd))
     $ vcat [ text "tcUserTypeSig bad kind"
            , ppr sigma_ty ]
     

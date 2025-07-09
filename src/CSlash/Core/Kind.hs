@@ -45,7 +45,8 @@ data Kind kv
 
 data MonoKind kv
   = KiVarKi kv
-  | KiConApp KiCon [MonoKind kv]
+  | BIKi BuiltInKi
+  | KiPredApp KiPred (MonoKind kv) (MonoKind kv)
   | FunKi
     { fk_f :: FunKiFlag
     , fk_arg :: MonoKind kv
@@ -53,59 +54,53 @@ data MonoKind kv
     }
   deriving Data.Data
 
-data KiCon
+data BuiltInKi
   = UKd
   | AKd
   | LKd
-  | LTKi
+  deriving (Show, Eq, Ord, Data.Data)
+
+data KiPred
+  = LTKi
   | LTEQKi
   | EQKi
   deriving (Show, Eq, Data.Data)
 
-instance Ord KiCon where
-  compare k1 k2
-    | _:_ <- (intersect [LTKi, LTEQKi, EQKi] [k1, k2]) = panic "Ord KiCon"
-    | k1 == k2 = EQ
-  compare UKd _ = LT
-  compare _ UKd = GT
-  compare AKd _ = LT
-  compare _ AKd = GT
-  compare k1 k2 = pprPanic "Ord KiCon unreachable" (ppr k1 <+> ppr k2)
+-- type DKiConEnv a = UniqDFM KiCon a
 
-isEqualityKiCon :: KiCon -> Bool
-isEqualityKiCon EQKi = True
-isEqualityKiCon _ = False
+-- isEmptyDKiConEnv :: DKiConEnv a -> Bool
+-- isEmptyDKiConEnv = isNullUDFM
 
-type DKiConEnv a = UniqDFM KiCon a
+-- emptyDKiConEnv :: DKiConEnv a
+-- emptyDKiConEnv = emptyUDFM
 
-isEmptyDKiConEnv :: DKiConEnv a -> Bool
-isEmptyDKiConEnv = isNullUDFM
+-- lookupDKiConEnv :: DKiConEnv a -> KiCon -> Maybe a
+-- lookupDKiConEnv = lookupUDFM
 
-emptyDKiConEnv :: DKiConEnv a
-emptyDKiConEnv = emptyUDFM
+-- adjustDKiConEnv :: (a -> a) -> DKiConEnv a -> KiCon -> DKiConEnv a
+-- adjustDKiConEnv = adjustUDFM
 
-lookupDKiConEnv :: DKiConEnv a -> KiCon -> Maybe a
-lookupDKiConEnv = lookupUDFM
+-- alterDKiConEnv :: (Maybe a -> Maybe a) -> DKiConEnv a -> KiCon -> DKiConEnv a
+-- alterDKiConEnv = alterUDFM
 
-adjustDKiConEnv :: (a -> a) -> DKiConEnv a -> KiCon -> DKiConEnv a
-adjustDKiConEnv = adjustUDFM
+-- mapMaybeDKiConEnv :: (a -> Maybe b) -> DKiConEnv a -> DKiConEnv b
+-- mapMaybeDKiConEnv = mapMaybeUDFM
 
-alterDKiConEnv :: (Maybe a -> Maybe a) -> DKiConEnv a -> KiCon -> DKiConEnv a
-alterDKiConEnv = alterUDFM
+-- foldDKiConEnv :: (a -> b -> b) -> b -> DKiConEnv a -> b
+-- foldDKiConEnv = foldUDFM
 
-mapMaybeDKiConEnv :: (a -> Maybe b) -> DKiConEnv a -> DKiConEnv b
-mapMaybeDKiConEnv = mapMaybeUDFM
-
-foldDKiConEnv :: (a -> b -> b) -> b -> DKiConEnv a -> b
-foldDKiConEnv = foldUDFM
-
-instance Uniquable KiCon where
+instance Uniquable BuiltInKi where
   getUnique kc = getUnique $ mkFastString $ show kc
 
-instance Outputable KiCon where
+instance Outputable BuiltInKi where
   ppr UKd = uKindLit
   ppr AKd = aKindLit
   ppr LKd = lKindLit
+
+instance Uniquable KiPred where
+  getUnique pred = getUnique $ mkFastString $ show pred
+
+instance Outputable KiPred where
   ppr LTKi = char '<'
   ppr LTEQKi = text "<="
   ppr EQKi = char '~'
@@ -119,9 +114,9 @@ instance Outputable v => Outputable (MonoKind v) where
 instance Eq v => Eq (MonoKind v) where
   k1 == k2 = go k1 k2
     where
-      go (KiConApp kc1 kis1) (KiConApp kc2 kis2)
-        | kc1 == kc2
-        = gos kis1 kis2
+      go (BIKi k1) (BIKi k2) = k1 == k2
+      go (KiPredApp p1 ka1 kb1) (KiPredApp p2 ka2 kb2)
+        = p1 == p2 && ka1 == ka2 && kb1 == kb2
       go (KiVarKi v) (KiVarKi v') = v == v'
       go (FunKi v1 k1 k2) (FunKi v1' k1' k2') = (v1 == v1') && go k1 k1' && go k2 k2'
       go _ _ = False
@@ -198,29 +193,10 @@ debug_ppr_ki _ _ = panic "debug_ppr_ki unreachable"
 
 debug_ppr_mono_ki :: Outputable kv => PprPrec -> MonoKind kv -> SDoc
 debug_ppr_mono_ki _ (KiVarKi kv) = ppr kv
-debug_ppr_mono_ki prec ki@(KiConApp kc args)
-  | UKd <- kc
-  , [] <- args
-  = uKindLit
-  | AKd <- kc
-  , [] <- args
-  = aKindLit
-  | LKd <- kc
-  , [] <- args
-  = lKindLit
-  | LTKi <- kc
-  , [k1, k2] <- args
+debug_ppr_mono_ki _ (BIKi ki) = ppr ki
+debug_ppr_mono_ki prec ki@(KiPredApp pred k1 k2)
   = maybeParen prec appPrec
-    $ debug_ppr_mono_ki appPrec k1 <+> text "<" <+> debug_ppr_mono_ki appPrec k2
-  | LTEQKi <- kc
-  , [k1, k2] <- args
-  = debug_ppr_mono_ki prec k1 <+> text "<=" <+> debug_ppr_mono_ki prec k2
-  | EQKi <- kc
-  , [k1, k2] <- args
-  = debug_ppr_mono_ki prec k1 <+> text "~" <+> debug_ppr_mono_ki prec k2
-  | otherwise
-  = panic "debug_ppr_ki" 
-
+    $ debug_ppr_mono_ki appPrec k1 <+> ppr pred <+> debug_ppr_mono_ki appPrec k2
 debug_ppr_mono_ki prec (FunKi { fk_f = f, fk_arg = arg, fk_res = res })
   = maybeParen prec funPrec
     $ sep [ debug_ppr_mono_ki funPrec arg, fun_arrow <+> debug_ppr_mono_ki prec res]
@@ -231,6 +207,10 @@ debug_ppr_mono_ki prec (FunKi { fk_f = f, fk_arg = arg, fk_res = res })
 
 debug_ppr_ki_co :: Outputable kv => PprPrec -> KindCoercion kv -> SDoc
 debug_ppr_ki_co _ (Refl ki) = angleBrackets (ppr ki)
+debug_ppr_ki_co _ BI_U_A = angleBrackets (text "UKd < AKd")
+debug_ppr_ki_co _ BI_A_L = angleBrackets (text "AKd < LKd")
+debug_ppr_ki_co _ (LiftEq ki) = angleBrackets (text "LiftEq" <+> ppr ki)
+debug_ppr_ki_co _ (LiftLT ki) = angleBrackets (text "LiftLT" <+> ppr ki)
 debug_ppr_ki_co prec (FunCo _ _ co1 co2)
   = maybeParen prec funPrec
     $ sep (debug_ppr_ki_co funPrec co1 : ppr_fun_tail co2)
@@ -239,14 +219,6 @@ debug_ppr_ki_co prec (FunCo _ _ co1 co2)
       = (arrow <+> debug_ppr_ki_co funPrec co1)
         : ppr_fun_tail co2
     ppr_fun_tail other = [ arrow <+> ppr other ]
-debug_ppr_ki_co prec (KiConAppCo kc [co1, co2]) = case kc of
-  LTKi -> maybeParen prec appPrec (debug_ppr_ki_co prec co1) <+> char '<' <+>
-          maybeParen prec appPrec (debug_ppr_ki_co prec co2)
-  LTEQKi -> maybeParen prec appPrec (debug_ppr_ki_co prec co1) <+> text "<=" <+>
-            maybeParen prec appPrec (debug_ppr_ki_co prec co2)
-  EQKi -> maybeParen prec appPrec (debug_ppr_ki_co prec co1) <+> char '~' <+>
-          maybeParen prec appPrec (debug_ppr_ki_co prec co2)
-  other -> pprPanic "debug_ppr_ki_co kcappco" (ppr other)
 debug_ppr_ki_co prec (SymCo co) = maybeParen prec appPrec $ sep [ text "Sym"
                                                                 , nest 4 (ppr co) ]
 debug_ppr_ki_co prec (TransCo co1 co2)
@@ -255,6 +227,7 @@ debug_ppr_ki_co prec (TransCo co1 co2)
   in maybeParen prec opPrec
      $ vcat (debug_ppr_ki_co topPrec co1 : ppr_trans co2)
 debug_ppr_ki_co _ (HoleCo co) = ppr co
+debug_ppr_ki_co _ (KiCoVarCo cv) = ppr cv
 debug_ppr_ki_co _ _ = panic "debug_ppr_ki_co"
 
 data FunKiFlag
@@ -272,7 +245,8 @@ instance AsGenericKi Kind where
 
 instance AsGenericKi MonoKind where
   asGenericKi (KiVarKi kv) = KiVarKi (toGenericKiVar kv)
-  asGenericKi (KiConApp kc kis) = KiConApp kc (asGenericKi <$> kis)
+  asGenericKi (BIKi ki) = BIKi ki
+  asGenericKi (KiPredApp pred k1 k2) = KiPredApp pred (asGenericKi k1) (asGenericKi k2)
   asGenericKi (FunKi f arg res) = FunKi f (asGenericKi arg) (asGenericKi res)
 
 instance AsAnyKi Kind where
@@ -281,7 +255,8 @@ instance AsAnyKi Kind where
 
 instance AsAnyKi MonoKind where
   asAnyKi (KiVarKi kv) = KiVarKi (toAnyKiVar kv)
-  asAnyKi (KiConApp kc kis) = KiConApp kc (asAnyKi <$> kis)
+  asAnyKi (BIKi k) = BIKi k
+  asAnyKi (KiPredApp pred k1 k2) = KiPredApp pred (asAnyKi k1) (asAnyKi k2)
   asAnyKi (FunKi f arg res) = FunKi f (asAnyKi arg) (asAnyKi res)
 
 {- **********************************************************************
@@ -351,8 +326,11 @@ mkForAllKi = ForAllKi
 ********************************************************************* -}
 
 data KindCoercion kv 
-  = Refl (MonoKind kv)
-  | KiConAppCo KiCon [KindCoercion kv]
+  = Refl (MonoKind kv) -- refl : kv = kv
+  | BI_U_A             -- builtin : u < a
+  | BI_A_L             -- builtin : a < l
+  | LiftEq (KindCoercion kv) -- LiftEq : (kv = kv) -> (kv <= kv)
+  | LiftLT (KindCoercion kv) -- LiftLT : (kv1 < kv2) -> (kv1 <= kv2)
   | FunCo
     { fco_afl :: FunKiFlag
     , fco_afr :: FunKiFlag
@@ -374,7 +352,10 @@ instance AsGenericKi KindCoercionHole
 
 instance AsAnyKi KindCoercion where
   asAnyKi (Refl ki) = Refl $ asAnyKi ki
-  asAnyKi (KiConAppCo kc cos) = KiConAppCo kc (asAnyKi <$> cos)
+  asAnyKi BI_U_A = BI_U_A
+  asAnyKi BI_A_L = BI_A_L
+  asAnyKi (LiftEq co) = LiftEq $ asAnyKi co
+  asAnyKi (LiftLT co) = LiftLT $ asAnyKi co
   asAnyKi (FunCo f1 f2 a r) = FunCo f1 f2 (asAnyKi a) (asAnyKi r)
   asAnyKi (KiCoVarCo cv) = KiCoVarCo $ asAnyKi cv
   asAnyKi (SymCo co) = SymCo $ asAnyKi co
@@ -410,12 +391,6 @@ mkTransKiCo co1 co2 | isReflKiCo co1 = co2
                     | isReflKiCo co2 = co1
 mkTransKiCo co1 co2 = TransCo co1 co2
 
-mkKiConAppCo :: HasDebugCallStack => KiCon -> [KindCoercion kv] -> KindCoercion kv
-mkKiConAppCo kc cos
-  | Just kis <- traverse isReflKiCo_maybe cos
-  = mkReflKiCo (mkKiConApp kc kis)
-  | otherwise = KiConAppCo kc cos
-
 mkFunKiCo
   :: Outputable kv
   => FunKiFlag
@@ -442,17 +417,46 @@ mkFunKiCo2 afl afr arg_co res_co
 mkKiCoVarCo :: KiCoVar kv -> KindCoercion kv
 mkKiCoVarCo cv = KiCoVarCo cv
 
-mkKiEqPred :: MonoKind kv -> MonoKind kv -> PredKind kv
-mkKiEqPred ki1 ki2 = mkKiConApp EQKi [ki1, ki2]
+mkKiCoPred :: KiPred -> MonoKind kv -> MonoKind kv -> PredKind kv
+mkKiCoPred p ki1 ki2 = mkKiPredApp p ki1 ki2
 
-kiCoercionKind :: IsVar kv => KindCoercion kv -> Pair (MonoKind kv)
-kiCoercionKind co = Pair (kicoercionLKind co) (kicoercionRKind co)
+kiCoercionKind :: IsVar kv => KindCoercion kv -> (KiPred, Pair (MonoKind kv))
+kiCoercionKind co = (kiCoercionPred co, Pair (kicoercionLKind co) (kicoercionRKind co))
+
+kiCoercionPred :: IsVar kv => KindCoercion kv -> KiPred
+kiCoercionPred co = go co
+  where
+    go (Refl _) = EQKi
+    go BI_U_A = LTKi
+    go BI_A_L = LTKi
+    go (LiftEq co) = assertPpr (go co == EQKi) (vcat [text "kiCoercionPred: LiftEq co"
+                                                     , text "but co does not have pred 'EQKi'" ])
+                     LTEQKi
+    go (LiftLT co) = assertPpr (go co == LTKi) (vcat [text "kiCoercionPred: LiftLT co"
+                                                     , text "but co does not have pred 'LTKi'" ])
+                     LTEQKi
+    go (FunCo{}) = panic "kiCoercionPred/FunCo"
+    go (KiCoVarCo cv) = kiCoVarKiPred cv
+    go (SymCo co) = case go co of
+                      EQKi -> EQKi
+                      _ -> panic "kiCoercionPred/SymCo"
+    go (TransCo co1 co2) = case (go co1, go co2) of
+                             (EQKi, kc) -> kc
+                             (kc, EQKi) -> kc
+                             (LTEQKi, kc) -> kc
+                             (kc, LTEQKi) -> kc
+                             (LTKi, LTKi) -> LTKi
+                             (_, _) -> panic "kiCoercionPred/TransCo"
+    go (HoleCo h) = kiCoVarKiPred (coHoleCoVar h)
 
 kicoercionLKind :: IsVar kv => KindCoercion kv -> MonoKind kv
 kicoercionLKind co = go co
   where
     go (Refl ki) = ki
-    go (KiConAppCo kc cos) = mkKiConApp kc (map go cos)
+    go BI_U_A = BIKi UKd
+    go BI_A_L = BIKi AKd 
+    go (LiftEq co) = kicoercionLKind co
+    go (LiftLT co) = kicoercionLKind co
     go (FunCo { fco_afl = af, fco_arg = arg, fco_res = res })
       = FunKi { fk_f = af, fk_arg = go arg, fk_res = go res }
     go (KiCoVarCo cv) = coVarLKind cv
@@ -464,7 +468,10 @@ kicoercionRKind :: IsVar kv => KindCoercion kv -> MonoKind kv
 kicoercionRKind co = go co
   where
     go (Refl ki) = ki
-    go (KiConAppCo kc cos) = mkKiConApp kc (map go cos)
+    go BI_U_A = BIKi AKd
+    go BI_A_L = BIKi LKd
+    go (LiftEq co) = kicoercionRKind co
+    go (LiftLT co) = kicoercionRKind co
     go (FunCo { fco_afr = af, fco_arg = arg, fco_res = res })
       = FunKi { fk_f = af, fk_arg = go arg, fk_res = go res }
     go (KiCoVarCo cv) = coVarRKind cv
@@ -481,19 +488,22 @@ instance Outputable kv => Outputable (KindCoercionHole kv) where
 instance Uniquable (KindCoercionHole kv) where
   getUnique (CoercionHole { ch_co_var = cv }) = getUnique cv
 
+kiCoVarKiPred :: (HasDebugCallStack, IsVar kv) => KiCoVar kv -> KiPred
+kiCoVarKiPred cv | (kc, _, _) <- coVarKinds cv = kc
+
 coVarLKind :: (HasDebugCallStack, IsVar kv) => KiCoVar kv -> MonoKind kv
-coVarLKind cv | (ki1, _) <- coVarKinds cv = ki1
+coVarLKind cv | (_, ki1, _) <- coVarKinds cv = ki1
 
 coVarRKind :: (HasDebugCallStack, IsVar kv) => KiCoVar kv -> MonoKind kv
-coVarRKind cv | (_, ki2) <- coVarKinds cv = ki2
+coVarRKind cv | (_, _, ki2) <- coVarKinds cv = ki2
 
 coVarKinds
   :: (HasDebugCallStack, IsVar kv)
   => KiCoVar kv
-  -> (MonoKind kv, MonoKind kv)
+  -> (KiPred, MonoKind kv, MonoKind kv)
 coVarKinds cv
-  | KiConApp EQKi [k1, k2] <- (varKind cv)
-  = (k1, k2)
+  | KiPredApp kc k1 k2 <- (varKind cv)
+  = (kc, k1, k2)
   | otherwise
   = pprPanic "coVarKinds" (ppr cv $$ ppr (varKind cv))
 
@@ -518,13 +528,9 @@ setCoHoleCoVar h cv = h { ch_co_var = cv }
 
 type PredKind = MonoKind
 
-isCoVarKind :: MonoKind kv -> Bool
-isCoVarKind (KiConApp EQKi _) = True
-isCoVarKind _ = False
-
-isKiEvVarKind :: MonoKind kv -> Bool
-isKiEvVarKind (KiConApp _ [_, _]) = True
-isKiEvVarKind _ = False
+isKiCoVarKind :: MonoKind kv -> Bool
+isKiCoVarKind (KiPredApp {}) = True
+isKiCoVarKind _ = False
 
 {- *********************************************************************
 *                                                                      *
@@ -579,8 +585,9 @@ foldMonoKiCo (MKiCoFolder { mkcf_kivar = kivar
   = (go_ki env, go_kis env, go_co env, go_cos env)
   where
     go_ki env (KiVarKi kv) = kivar env kv
+    go_ki env (BIKi _) = mempty
     go_ki env (FunKi _ arg res) = go_ki env arg `mappend` go_ki env res
-    go_ki env (KiConApp _ kis) = go_kis env kis
+    go_ki env (KiPredApp _ k1 k2) = go_ki env k1 `mappend` go_ki env k2
 
     go_kis _ [] = mempty
     go_kis env (k:ks) = go_ki env k `mappend` go_kis env ks
@@ -589,7 +596,10 @@ foldMonoKiCo (MKiCoFolder { mkcf_kivar = kivar
     go_cos env (c:cs) = go_co env c `mappend` go_cos env cs
 
     go_co env (Refl ki) = go_ki env ki
-    go_co env (KiConAppCo _ args) = go_cos env args
+    go_co env BI_U_A = panic "go_co BI_U_A"
+    go_co env BI_A_L = panic "go_co BI_A_L"
+    go_co env (LiftEq co) = go_co env co
+    go_co env (LiftLT co) = go_co env co
     go_co env (HoleCo hole) = cohole env hole
     go_co env (FunCo { fco_arg = c1, fco_res = c2 }) = go_co env c1 `mappend` go_co env c2
     go_co env (KiCoVarCo cv) = covar env cv
@@ -671,11 +681,9 @@ mapMKiCoX (MKiCoMapper { mkcm_kivar = kivar, mkcm_covar = covar, mkcm_hole = coh
     go_mkis !env (ki:kis) = (:) <$> go_mki env ki <*> go_mkis env kis
 
     go_mki !env (KiVarKi kv) = kivar env kv
-    go_mki !env (KiConApp kc kis)
-      | null kis
-      = return (KiConApp kc [])
-      | otherwise
-      = mkKiConApp kc <$> go_mkis env kis
+    go_mki !env (BIKi k) = return $ BIKi k
+    go_mki !env (KiPredApp pred ki1 ki2)
+      = mkKiPredApp pred <$> go_mki env ki1 <*> go_mki env ki2
     go_mki !env ki@(FunKi _ arg res) = do
       arg' <- go_mki env arg
       res' <- go_mki env res
@@ -685,6 +693,11 @@ mapMKiCoX (MKiCoMapper { mkcm_kivar = kivar, mkcm_covar = covar, mkcm_hole = coh
     go_cos !env (co:cos) = (:) <$> go_co env co <*> go_cos env cos
 
     go_co !env (Refl ki) = Refl <$> go_mki env ki
+    go_co !env BI_U_A = return BI_U_A
+    go_co !env BI_A_L = return BI_A_L
+    go_co !env (LiftEq co) = LiftEq <$> go_co env co
+    go_co !env (LiftLT co) = LiftLT <$> go_co env co
+
     go_co !env (FunCo afl afr c1 c2) = mkFunKiCo2 afl afr <$> go_co env c1 <*> go_co env c2
 
     go_co !env (KiCoVarCo cv) = covar env cv
@@ -692,12 +705,6 @@ mapMKiCoX (MKiCoMapper { mkcm_kivar = kivar, mkcm_covar = covar, mkcm_hole = coh
 
     go_co !env (SymCo co) = mkSymKiCo <$> go_co env co
     go_co !env (TransCo c1 c2) = mkTransKiCo <$> go_co env c1 <*> go_co env c2
-
-    go_co !env (KiConAppCo kc cos)
-      | null cos
-      = return $ KiConAppCo kc []
-      | otherwise
-      = mkKiConAppCo kc <$> go_cos env cos
     
 {- *********************************************************************
 *                                                                      *
@@ -728,9 +735,9 @@ isKiVarKi ki = isJust (getKiVar_maybe ki)
 
 chooseFunKiFlag :: Outputable kv => MonoKind kv -> MonoKind kv -> FunKiFlag
 chooseFunKiFlag arg_ki res_ki
-  | KiConApp _ (_:_) <- res_ki
+  | KiPredApp {} <- res_ki
   = pprPanic "chooseFunKiFlag" (text "res_ki =" <+> ppr res_ki)
-  | KiConApp _ (_:_) <- arg_ki
+  | KiPredApp {} <- arg_ki
   = FKF_C_K
   | otherwise
   = FKF_K_K  
@@ -752,8 +759,8 @@ splitMonoFunKi_maybe ki = case ki of
   FunKi f arg res -> Just (f, arg, res)
   _ -> Nothing
 
-mkKiConApp :: KiCon -> [MonoKind kv] -> MonoKind kv
-mkKiConApp kicon kis = KiConApp kicon kis
+mkKiPredApp :: KiPred -> MonoKind kv -> MonoKind kv -> MonoKind kv
+mkKiPredApp = KiPredApp
 
 isInvisibleKiFunArg :: FunKiFlag -> Bool
 isInvisibleKiFunArg af = not (isVisibleKiFunArg af)
@@ -813,6 +820,6 @@ mkForAllKisMono kis mki = foldr ForAllKi (Mono mki) kis
 
 isAtomicKi :: MonoKind kv -> Bool
 isAtomicKi (KiVarKi {}) = True
-isAtomicKi (KiConApp _ []) = True
+isAtomicKi (BIKi {}) = True
 isAtomicKi _ = False
 

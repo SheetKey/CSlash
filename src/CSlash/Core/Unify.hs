@@ -13,7 +13,6 @@ import CSlash.Core.Kind
 import CSlash.Core.Kind.Compare
 import CSlash.Core.Kind.FVs
 import CSlash.Core.Kind.Subst
-import CSlash.Core.Map.Kind
 import CSlash.Utils.FV( FV, fvVarAcc )
 import CSlash.Utils.Misc
 import CSlash.Data.Pair
@@ -141,8 +140,8 @@ niSubstKvSet subst kvs = nonDetStrictFoldUniqSet (unionVarSet . get) emptyVarSet
 
 unify_ki :: UMEnv -> MonoKind AnyKiVar -> MonoKind AnyKiVar -> UM ()
 
-unify_ki _ (KiConApp kc1 []) (KiConApp kc2 [])
-  | kc1 == kc2
+unify_ki _ (BIKi k1) (BIKi k2)
+  | k1 == k2
   = return ()
 
 unify_ki env (KiVarKi kv1) ki2 = uVar env kv1 ki2
@@ -150,10 +149,10 @@ unify_ki env (KiVarKi kv1) ki2 = uVar env kv1 ki2
 unify_ki env ki1 (KiVarKi kv2) = uVar (umSwapRn env) kv2 ki1
 
 unify_ki env ki1 ki2
-  | KiConApp kc1 kis1 <- ki1
-  , KiConApp kc2 kis2 <- ki2
-  , kc1 == kc2
-  = unify_kis env kis1 kis2
+  | KiPredApp kc1 _ _ <- ki1
+  , KiPredApp kc2 _ _ <- ki2
+  --, kc1 == kc2
+  = panic "unify_kis env kis1 kis2"
 
   | FunKi {} <- ki1
   , FunKi {} <- ki2

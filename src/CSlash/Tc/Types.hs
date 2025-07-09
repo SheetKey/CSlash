@@ -186,7 +186,6 @@ data TcGblEnv = TcGblEnv
   , tcg_rn_exports :: Maybe [(LIE Rn, Avails)]
   , tcg_rn_imports :: [LImportDecl Rn]
   , tcg_rn_decls :: Maybe (CsGroup Rn)
-  , tcg_ki_ev_binds :: Bag KiEvBind
   , tcg_tr_module :: Maybe (Id (AnyTyVar AnyKiVar) AnyKiVar)
   , tcg_binds :: LCsBinds Tc
   , tcg_sigs :: NameSet

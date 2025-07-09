@@ -81,29 +81,28 @@ newMetaKindVars n = replicateM n newMetaKindVar
 *                                                                       *
 ********************************************************************** -}
 
-newKiEvVars :: IsTyVar kiEvVar kv => [PredKind kv] -> TcM [kiEvVar]
-newKiEvVars theta = mapM newKiEvVar theta
-
-newKiEvVar :: IsTyVar kiEvVar kv => PredKind kv -> TcRnIf gbl lcl kiEvVar
-newKiEvVar ki = do
-  name <- newSysName (predKindOccName ki)
-  return $ mkLocalKiEvVar name ki
-
 predKindOccName :: PredKind kv -> OccName
 predKindOccName ki = case classifyPredKind ki of
-  EqPred {} -> mkVarOccFS (fsLit "co")
+  KiCoPred {} -> mkVarOccFS (fsLit "co")
   IrredPred {} -> mkVarOccFS (fsLit "irred")
-  RelPred {} -> mkVarOccFS (fsLit "relco")
 
 newWantedWithLoc :: CtLoc -> AnyPredKind -> TcM CtEvidence
 newWantedWithLoc loc predki = do
   dst <- case classifyPredKind predki of
-           EqPred {} -> HoleDest <$> newKiCoercionHole predki
-           _ -> EvVarDest <$> newKiEvVar predki
+           KiCoPred {} -> newKiCoercionHole predki
+           _ -> pprPanic "newWantedWithLoc" $ vcat [ ppr predki ]
   return $ CtWanted { ctev_dest = dst
                     , ctev_pred = predki
                     , ctev_loc = loc
                     , ctev_rewriters = emptyRewriterSet }
+
+newKiCoVars :: [AnyPredKind] -> TcM [KiCoVar AnyKiVar]
+newKiCoVars theta = mapM newKiCoVar theta
+
+newKiCoVar :: AnyPredKind -> TcRnIf gbl lcl (KiCoVar AnyKiVar)
+newKiCoVar ki = do
+  name <- newSysName (predKindOccName ki)
+  return (mkLocalKiCoVar name ki)
 
 newWanted :: CtOrigin -> Maybe TypeOrKind -> AnyPredKind -> TcM CtEvidence
 newWanted orig t_or_k predki = do
@@ -114,12 +113,6 @@ newWanted orig t_or_k predki = do
 -- Emitting constraints
 ----------------------------------------------
 
-emitWanted :: CtOrigin -> AnyPredKind -> TcM KiEvType 
-emitWanted origin pred = do
-  ev <- newWanted origin Nothing pred
-  emitSimple $ mkNonCanonical ev
-  return $ ctEvType ev
-
 {- *********************************************************************
 *                                                                      *
         Coercion holes
@@ -127,9 +120,9 @@ emitWanted origin pred = do
 ********************************************************************* -}
 
 newKiCoercionHole
-  :: IsKiVar kv => PredKind kv -> TcM (KindCoercionHole kv)
+  :: AnyPredKind -> TcM AnyKindCoercionHole
 newKiCoercionHole pred_ki = do
-  co_var <- newKiEvVar pred_ki
+  co_var <- newKiCoVar pred_ki
   traceTc "New coercion hole:" (ppr co_var <+> colon <+> ppr pred_ki)
   ref <- newMutVar Nothing
   return $ CoercionHole { ch_co_var = co_var, ch_ref = ref }
@@ -354,6 +347,8 @@ collect_cand_qkvs_ty orig_ty cur_lvl (boundtvs, boundkvs) dvs ty = go dvs ty
 
     go dv (Embed ki) = collect_cand_qkvs (Mono ki) cur_lvl boundkvs dv (Mono ki)
 
+    go dv (KindCoercion co) = collect_cand_qkvs_co co cur_lvl (boundtvs, boundkvs) dvs co
+
     go _ other = pprPanic "collect_cand_qkvs_ty" (ppr other)
 
     go_tv :: DTcKiVarSet -> AnyTyVar AnyKiVar -> TcM DTcKiVarSet
@@ -390,8 +385,9 @@ collect_cand_qkvs orig_ki cur_lvl bound dvs ki = go dvs ki
     go dv (ForAllKi kv ki) = collect_cand_qkvs orig_ki cur_lvl (bound `extendVarSet` kv) dv ki
 
     go_mono :: DTcKiVarSet -> AnyMonoKind -> TcM DTcKiVarSet
-    go_mono dv (KiConApp kc kis) = foldlM go_mono dv kis
+    go_mono dv (KiPredApp _ k1 k2) = foldlM go_mono dv [k1, k2]
     go_mono dv (FunKi _ k1 k2) = foldlM go_mono dv [k1, k2]
+    go_mono dv (BIKi {}) = return dv
     go_mono dv (KiVarKi kv)
       | is_bound kv = return dv
       | Just kv <- toTcKiVar_maybe kv
@@ -426,7 +422,10 @@ collect_cand_qkvs_co
 collect_cand_qkvs_co orig_co cur_lvl (boundtvs, boundkvs) = go_co
   where
     go_co dv (Refl ki) = collect_cand_qkvs (Mono ki) cur_lvl boundkvs dv (Mono ki)
-    go_co dv (KiConAppCo _ cos) = foldM go_co dv cos
+    go_co dv BI_U_A = return dv
+    go_co dv BI_A_L = return dv
+    go_co dv (LiftEq co) = go_co dv co
+    go_co dv (LiftLT co) = go_co dv co
     go_co dv (FunCo _ _ co1 co2) = foldM go_co dv [co1, co2]
 
     go_co dv (SymCo co) = go_co dv co

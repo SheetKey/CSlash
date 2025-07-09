@@ -270,11 +270,10 @@ runCsPhase pipe_env cs_env0 input_fn src_flavor = do
 
   (cs_buf, mod_name, imps, csl_prim_imp) <- do
     buf <- hGetStringBuffer input_fn
-    let imp_prelude = True
-        popts = initParserOpts dflags
+    let popts = initParserOpts dflags
         rn_pkg_qual = renameRawPkgQual (cs_unit_env cs_env)
         rn_imps = fmap (\(rpk, lmn@(L _ mn)) -> (rn_pkg_qual mn rpk, lmn))
-    eimps <- getImports popts imp_prelude buf input_fn (basename <.> suff)
+    eimps <- getImports popts buf input_fn (basename <.> suff)
     case eimps of
       Left errs -> throwErrors (CsPsMessage <$> errs)
       Right (imps, csl_prim_imp, L _ mod_name) -> return

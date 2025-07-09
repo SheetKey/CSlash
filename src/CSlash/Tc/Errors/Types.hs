@@ -8,7 +8,7 @@ import CSlash.Cs
 -- import GHC.Tc.Errors.Types.PromotionErr
 -- import GHC.Tc.Errors.Hole.FitTypes (HoleFit)
 import CSlash.Tc.Types.Constraint
-import CSlash.Tc.Types.Evidence (KiEvBindsVar)
+import CSlash.Tc.Types.Evidence (KiCoBindsVar)
 import CSlash.Tc.Types.Origin ( CtOrigin (), SkolemInfoAnon (SigSkol)
                               , InstanceWhat, KindedThing )
 -- import GHC.Tc.Types.Rank (Rank)
@@ -42,7 +42,7 @@ import CSlash.Core.DataCon (DataCon{-, FieldLabel-})
 -- import GHC.Core.Predicate (EqRel, predTypeEqRel)
 import CSlash.Core.TyCon (TyCon{-, Role, FamTyConFlav-}, AlgTyConRhs)
 import CSlash.Core.Type (Type{-, ThetaType, PredType, ErrorMsgType-}, ForAllFlag)
-import CSlash.Core.Kind (Kind, PredKind, MonoKind, KiCon)
+import CSlash.Core.Kind (Kind, PredKind, MonoKind, KiPred, KindCoercionHole, BuiltInKi)
 import CSlash.Driver.Backend (Backend)
 import CSlash.Unit.State (UnitState)
 import CSlash.Utils.Misc (filterOut)
@@ -124,7 +124,7 @@ data SolverReportWithCtxt = SolverReportWithCtxt
 data SolverReportErrCtxt = CEC
   { cec_encl :: [Implication]
   , cec_tidy :: AnyTidyEnv
-  , cec_binds :: KiEvBindsVar
+  , cec_binds :: KiCoBindsVar
   , cec_defer_type_errors :: DiagnosticReason
   , cec_expr_holes :: DiagnosticReason
   , cec_out_of_scope_holes :: DiagnosticReason
@@ -143,7 +143,7 @@ getUserGivens (CEC { cec_encl = implics }) = getUserGivensFromImplics implics
 
 data ErrorItem = EI
   { ei_pred :: AnyPredKind
-  , ei_evdest :: Maybe TcEvDest
+  , ei_evdest :: Maybe (KindCoercionHole AnyKiVar)
   , ei_flavor :: CtFlavor
   , ei_loc :: CtLoc
   , ei_m_reason :: Maybe CtIrredReason
@@ -231,7 +231,7 @@ data KiVarInfo = KiVarInfo
   }
 
 data SameKiConInfo
-  = SameKiCon KiCon
+  = SameKiCon BuiltInKi
   | SameFunKi
 
 data AmbiguityInfo = Ambiguity

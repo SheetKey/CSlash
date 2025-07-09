@@ -193,7 +193,7 @@ tcExtendLetEnv
   :: TopLevelFlag
   -> TcSigFun
   -> IsGroupClosed
-  -> [(TcId, KiCon)]
+  -> [(TcId, BuiltInKi)]
   -> TcM a
   -> TcM (a, CsWrapper)
 tcExtendLetEnv = panic "tcextendletenv"

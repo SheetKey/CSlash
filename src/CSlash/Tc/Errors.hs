@@ -82,9 +82,9 @@ import qualified Data.Semigroup as S
 *                                                                      *
 ********************************************************************* -}
 
-reportUnsolved :: WantedConstraints -> TcM (Bag KiEvBind)
+reportUnsolved :: WantedConstraints -> TcM ()
 reportUnsolved wanted = do
-  binds_var <- newTcKiEvBinds
+  binds_var <- newTcKiCoBinds
   defer_errors <- goptM Opt_DeferTypeErrors
   let type_errors | not defer_errors = ErrorWithoutFlag
                   | otherwise = panic "reportUnsolved DeferTypeErrors"
@@ -99,19 +99,16 @@ reportUnsolved wanted = do
 
   report_unsolved type_errors expr_holes out_of_scope_holes binds_var wanted
 
-  ev_binds <- getTcKiEvBindsMap binds_var
-  return $ kiEvBindMapBinds ev_binds
-
 reportAllUnsolved :: WantedConstraints -> TcM ()
 reportAllUnsolved wanted = do
-  ev_binds <- newTcKiEvBinds
-  report_unsolved ErrorWithoutFlag ErrorWithoutFlag ErrorWithoutFlag ev_binds wanted
+  co_binds <- newTcKiCoBinds
+  report_unsolved ErrorWithoutFlag ErrorWithoutFlag ErrorWithoutFlag co_binds wanted
 
 report_unsolved
   :: DiagnosticReason
   -> DiagnosticReason
   -> DiagnosticReason
-  -> KiEvBindsVar
+  -> KiCoBindsVar
   -> WantedConstraints
   -> TcM ()
 report_unsolved type_errors expr_holes out_of_scope_holes binds_var wanted
@@ -192,7 +189,7 @@ reportImplic ctxt implic@(Implic { ic_skols = kvs
 
     info' = tidySkolemInfoAnon env1 info
     implic' = implic { ic_skols = kvs'
-                     , ic_given = map (tidyKiEvVar env1) given
+                     , ic_given = map (tidyKiCoVar env1) given
                      , ic_info = info' }
 
     ctxt' = ctxt { cec_tidy = env1
@@ -212,7 +209,7 @@ warnRedundantConstraints
   :: SolverReportErrCtxt
   -> CtLocEnv
   -> SkolemInfoAnon
-  -> [KiEvVar AnyKiVar]
+  -> [KiCoVar AnyKiVar]
   -> TcM ()
 warnRedundantConstraints ctxt env info redundant_evs
   | not (cec_warn_redundant ctxt)
@@ -300,31 +297,27 @@ reportWanteds ctxt tc_lvl wc@(WC { wc_simple = simples, wc_impl = implics })
               ]
 
     report2 = [ ("Irreds", is_irred, False, mkGroupReporter mkIrredErr)
-              , ("Rels", is_rel, False, mkGroupReporter mkRelErr)
               ]
 
     is_given_eq item pred
       | Given <- ei_flavor item
-      , EqPred {} <- pred = True
+      , KiCoPred {} <- pred = True
       | otherwise = False
 
-    utterly_wrong _ (EqPred k1 k2) = isRigidKi k1 && isRigidKi k2
+    utterly_wrong _ (KiCoPred _ k1 k2) = isRigidKi k1 && isRigidKi k2
     utterly_wrong _ _ = False
 
-    very_wrong _ (EqPred k1 k2) = isSkolemKi tc_lvl k1 && isRigidKi k2
+    very_wrong _ (KiCoPred _ k1 k2) = isSkolemKi tc_lvl k1 && isRigidKi k2
     very_wrong _ _ = False
 
-    skolem_eq _ (EqPred k1 _) = isSkolemKi tc_lvl k1
+    skolem_eq _ (KiCoPred _ k1 _) = isSkolemKi tc_lvl k1
     skolem_eq _ _ = False
     
-    non_kv_eq _ (EqPred k1 _) = not (isKiVarKi k1)
+    non_kv_eq _ (KiCoPred _ k1 _) = not (isKiVarKi k1)
     non_kv_eq _ _ = False
     
-    is_homo_equality _ (EqPred _ _) = True
+    is_homo_equality _ (KiCoPred _ _ _) = True
     is_homo_equality _ _ = False
-    
-    is_rel _ (RelPred {}) = True
-    is_rel _ _ = False
     
     is_irred _ (IrredPred {}) = True
     is_irred _ _ = False
@@ -332,8 +325,9 @@ reportWanteds ctxt tc_lvl wc@(WC { wc_simple = simples, wc_impl = implics })
 isSkolemKi :: TcLevel -> AnyMonoKind -> Bool
 isSkolemKi tc_lvl ki
   | Just kv <- getKiVar_maybe ki
-  = panic "isSkolemVar kv"
-    || (panic "isTcVarVar kv && isTouchableMetaVar tc_lvl kv")
+  = handleAnyKv (const True)
+    (\kv -> isSkolemVar kv || (isTcVarVar kv && isTouchableMetaVar tc_lvl kv))
+    kv
   | otherwise
   = False
 
@@ -389,7 +383,7 @@ mkGroupReporter mk_err ctxt items
 eq_lhs_kind :: ErrorItem -> ErrorItem -> Bool
 eq_lhs_kind item1 item2
   = case (classifyPredKind (errorItemPred item1), classifyPredKind (errorItemPred item2)) of
-      (EqPred k1 _, EqPred k2 _) -> k1 `eqMonoKind` k2
+      (KiCoPred _ k1 _, KiCoPred _ k2 _) -> k1 `eqMonoKind` k2
       _ -> pprPanic "mkSkolReporter" (ppr item1 $$ ppr item2)
 
 cmp_loc :: ErrorItem -> ErrorItem -> Ordering
@@ -410,7 +404,7 @@ reportGroup mk_err ctxt items = do
 
 nonDeferrableOrigin :: CtOrigin -> Bool
 nonDeferrableOrigin OccurrenceOf {} = False
-nonDeferrableOrigin KindEqOrigin {} = False
+nonDeferrableOrigin KindCoOrigin {} = False
 nonDeferrableOrigin GivenOrigin {} = False
 nonDeferrableOrigin TupleTyOrigin = False
 
@@ -518,7 +512,7 @@ mkEqErr1 :: SolverReportErrCtxt -> ErrorItem -> TcM SolverReport
 mkEqErr1 ctxt item = do
   (ctxt, binds, item) <- relevantBindings True ctxt item
   traceTc "mkEqErr1" (ppr item $$ pprCtOrigin (errorItemOrigin item))
-  let (ki1, ki2) = getKiEqPredKis (errorItemPred item)
+  let (kc, ki1, ki2) = getPredKis (errorItemPred item)
   err_msg <- mkEqErr_help ctxt item ki1 ki2
   let report = add_relevant_bindings binds $ important ctxt err_msg
   return report
@@ -580,18 +574,21 @@ mkKiVarEqErr' ctxt item kv1 ki2
     in if | Just frr_info <- mb_concrete_reason
             -> panic "mkKiVarEqErr'1"
           | check_eq_result `ctkerHasProblem` ctkeImpredicative
-            -> do kivar_eq_info <- extraKiVarEqInfo (panic "kv1, Nothing") ki2
+            -> do kivar_eq_info <- extraKiVarEqInfo (kv1, Nothing) ki2
                   let poly_msg = CannotUnifyWithPolykind item kv1 ki2 mb_kv_info
-                      mb_kv_info | panic "isSkolemVar kv1" = Just kivar_eq_info
-                                 | otherwise = Nothing
+                      mb_kv_info | handleAnyKv (const True) isSkolemVar kv1
+                                 = Just kivar_eq_info
+                                 | otherwise
+                                 = Nothing
                       main_msg = CannotUnifyKiVariable
                                  { mismatchMsg = headline_msg
                                  , cannotUnifyReason = poly_msg }
                   return main_msg
 
-          | panic "isSkolemVar kv1"
-            || panic "isTcVarVar kv1 && not (isKiVarKi ki2)"
-            -> do kv_extra <- extraKiVarEqInfo (panic "kv1, Nothing") ki2
+          | handleAnyKv (const True)
+            (\kv1 -> isSkolemVar kv1 || isTcVarVar kv1 && not (isKiVarKi ki2))
+            kv1
+            -> do kv_extra <- extraKiVarEqInfo (kv1, Nothing) ki2
                   let reason = DifferentKiVars kv_extra
                       main_msg = CannotUnifyKiVariable
                                  { mismatchMsg = headline_msg
@@ -647,36 +644,39 @@ misMatchOrCND ctxt item ki1 ki2
                        Nothing -> False
                        Just r -> isInsolubleReason r
     level = ctLocTypeOrKind_maybe (errorItemCtLoc item) `orElse` KindLevel
-    givens = [ given | given <- getUserGivens ctxt, ic_given_eqs given /= NoGivenEqs ]
+    givens = [ given | given <- getUserGivens ctxt, ic_given_kicos given /= NoGivenKiCos ]
 
-extraKiVarEqInfo :: (TcKiVar, Maybe Implication) -> AnyMonoKind -> TcM KiVarInfo
+extraKiVarEqInfo :: (AnyKiVar, Maybe Implication) -> AnyMonoKind -> TcM KiVarInfo
 extraKiVarEqInfo (kv1, mb_implic) ki2 = do
   kv1_info <- extraKiVarInfo kv1
-  ki2_info <- panic "ki_extra ki2"
-  return $ KiVarInfo { thisKiVar = panic "kv1_info"
+  ki2_info <- ki_extra ki2
+  return $ KiVarInfo { thisKiVar = kv1_info
                      , thisKiVarIsUntouchable = mb_implic
-                     , otherKi = panic "ki2_info" }
+                     , otherKi = ki2_info }
   where
     ki_extra ki = case getKiVar_maybe ki of
                     Just kv -> Just <$> extraKiVarInfo kv
                     Nothing -> return Nothing
 
-extraKiVarInfo :: TcKiVar -> TcM TcKiVar
-extraKiVarInfo kv = 
-  case tcVarDetails kv of
-    SkolemVar skol_info lvl -> do
-      new_skol_info <- liftZonkM $ zonkSkolemInfo skol_info
-      return $ mkTcKiVar (varName kv) (SkolemVar new_skol_info lvl)
-    _ -> return kv
+extraKiVarInfo :: AnyKiVar -> TcM AnyKiVar
+extraKiVarInfo kv
+  | Just tckv <- toTcKiVar_maybe kv
+  = case tcVarDetails tckv of
+      SkolemVar skol_info lvl -> do
+        new_skol_info <- liftZonkM $ zonkSkolemInfo skol_info
+        return $ toAnyKiVar $ mkTcKiVar (varName kv) (SkolemVar new_skol_info lvl)
+      _ -> return kv
+  | otherwise
+  = return kv
  
 mkMismatchMsg :: ErrorItem -> AnyMonoKind -> AnyMonoKind -> MismatchMsg
 mkMismatchMsg item ki1 ki2 = case orig of
-  KindEqOrigin { keq_actual = keq_actual, keq_expected = keq_expected, keq_thing = mb_thing }
+  KindCoOrigin { kco_actual = kco_actual, kco_expected = kco_expected, kco_thing = mb_thing }
     -> KindEqMismatch { keq_mismatch_item = item
                       , keq_mismatch_ki1 = ki1
                       , keq_mismatch_ki2 = ki2
-                      , keq_mismatch_actual = panic "keq_actual"
-                      , keq_mismatch_expected = panic "keq_expected"
+                      , keq_mismatch_actual = kco_actual
+                      , keq_mismatch_expected = kco_expected
                       , keq_mismatch_what = mb_thing
                       , keq_mb_same_kicon = mb_same_kicon }
   _ -> BasicMismatch { mismatch_ea = NoEA
@@ -690,13 +690,10 @@ mkMismatchMsg item ki1 ki2 = case orig of
     mb_same_kicon = sameKiConExtras ki2 ki1
 
 sameKiConExtras :: AnyMonoKind -> AnyMonoKind -> Maybe SameKiConInfo
-sameKiConExtras (KiConApp kc1 _) (KiConApp kc2 _)
+sameKiConExtras (BIKi kc1) (BIKi kc2)
   | kc1 == kc2 = Just $ SameKiCon kc1
 sameKiConExtras (FunKi {}) (FunKi {}) = Just $ SameFunKi
 sameKiConExtras _ _ = Nothing
-
-      
-  
 
 {- *********************************************************************
 *                                                                      *
@@ -704,30 +701,30 @@ sameKiConExtras _ _ = Nothing
 *                                                                      *
 ********************************************************************* -}
 
-mkRelErr
-  :: HasDebugCallStack
-  => SolverReportErrCtxt
-  -> NonEmpty ErrorItem
-  -> TcM SolverReport
-mkRelErr ctxt orig_items =
-  let items = tryFilter (not . ei_suppress) orig_items
+-- mkRelErr
+--   :: HasDebugCallStack
+--   => SolverReportErrCtxt
+--   -> NonEmpty ErrorItem
+--   -> TcM SolverReport
+-- mkRelErr ctxt orig_items =
+--   let items = tryFilter (not . ei_suppress) orig_items
 
-      no_givens = null (getUserGivens ctxt)
+--       no_givens = null (getUserGivens ctxt)
 
-      mk_minimal = mkMinimalBy errorItemPred . toList
+--       mk_minimal = mkMinimalBy errorItemPred . toList
 
-      min_items = mk_minimal items
-  in do err <- mk_rel_err ctxt (head min_items)
-        return $ important ctxt err
+--       min_items = mk_minimal items
+--   in do err <- mk_rel_err ctxt (head min_items)
+--         return $ important ctxt err
 
-mk_rel_err :: HasCallStack => SolverReportErrCtxt -> ErrorItem -> TcM TcSolverReportMsg
-mk_rel_err ctxt item = do
-  (_, rel_binds, _) <- relevantBindings True ctxt item
-  return $ cannot_resolve_msg item rel_binds
+-- mk_rel_err :: HasCallStack => SolverReportErrCtxt -> ErrorItem -> TcM TcSolverReportMsg
+-- mk_rel_err ctxt item = do
+--   (_, rel_binds, _) <- relevantBindings True ctxt item
+--   return $ cannot_resolve_msg item rel_binds
 
-  where
-    cannot_resolve_msg :: ErrorItem -> RelevantBindings -> TcSolverReportMsg
-    cannot_resolve_msg  item binds = CannotResolveRelation item binds
+--   where
+--     cannot_resolve_msg :: ErrorItem -> RelevantBindings -> TcSolverReportMsg
+--     cannot_resolve_msg  item binds = CannotResolveRelation item binds
 
 {-**********************************************************************
 *                                                                      *
