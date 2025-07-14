@@ -59,7 +59,7 @@ import CSlash.Types.Name
 import CSlash.Types.Name.Set
 import CSlash.Types.Name.Env
 import CSlash.Types.Id
-import CSlash.Types.Var (KiVar, AnyKiVar, asAnyTyKi, varType)
+import CSlash.Types.Var (AnyTyVar, KiVar, AnyKiVar, asAnyTyKi, varType)
 -- import CSlash.Types.Id.Info ( RecSelParent(..) )
 import CSlash.Types.Name.Reader
 import CSlash.Types.TyThing
@@ -159,7 +159,7 @@ tcExtendKindEnvList things thing_inside = do
 tcExtendKiVarEnv :: [AnyKiVar] -> TcM r -> TcM r
 tcExtendKiVarEnv kvs thing_inside = tcExtendNameKiVarEnv (mkVarNamePairs kvs) thing_inside
 
-tcExtendNameTyVarEnv :: [(Name, TcTyVar AnyKiVar)] -> TcM r -> TcM r
+tcExtendNameTyVarEnv :: [(Name, AnyTyVar AnyKiVar)] -> TcM r -> TcM r
 tcExtendNameTyVarEnv binds thing_inside
   = tc_extend_local_env NotTopLevel names
     $ tcExtendBinderStack tv_binds

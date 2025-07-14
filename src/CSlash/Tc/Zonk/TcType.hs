@@ -414,8 +414,9 @@ tcInitTidyEnv = do
       = do let (env', occ') = tidyOccName env (nameOccName name)
                name' = tidyNameOcc name occ'
                tyvar1 = setVarName tyvar name'
-           tyvar2 <- zonkTcTyVarToTcTyVar tyvar1
-           go (env', extendVarEnv tsubst (toAnyTyVar tyvar) (toAnyTyVar tyvar2), ksubst) bs
+           tyvar2 <- handleAnyTv (return . toAnyTyVar)
+                                 (toAnyTyVar <.$> zonkTcTyVarToTcTyVar) tyvar1
+           go (env', extendVarEnv tsubst tyvar tyvar2, ksubst) bs
       | TcKvBndr name kivar <- b
       = do let (env', occ') = tidyOccName env (nameOccName name)
                name' = tidyNameOcc name occ'

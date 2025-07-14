@@ -785,7 +785,7 @@ bindTyLamTyBndrsX skol_mode@(SM { sm_kind = ctxt_kind }) cs_tvs thing_inside = d
     go ((name, mb_cs_kind) : cs_tvs) = do
       lcl_env <- getLclTyKiEnv
       tv <- tc_cs_bndr lcl_env name mb_cs_kind
-      (tvs, res) <- tcExtendNameTyVarEnv [(name, tv)]
+      (tvs, res) <- tcExtendNameTyVarEnv [(name, toAnyTyVar tv)]
                     $ go cs_tvs
       return (tv : tvs, res)
 
@@ -845,7 +845,7 @@ bindExplicitBndrsX skol_mode@(SM { sm_kind = ctxt_kind }) cs_tvs thing_inside = 
     go (L _ cs_tv : cs_tvs) = do
       lcl_env <- getLclTyKiEnv
       (tv, flag) <- tc_cs_bndr lcl_env cs_tv
-      (tvs, res) <- tcExtendNameTyVarEnv [(csTyVarName cs_tv, tv)]
+      (tvs, res) <- tcExtendNameTyVarEnv [(csTyVarName cs_tv, toAnyTyVar tv)]
                     $ go cs_tvs
       return (Bndr tv flag : tvs, res)
 

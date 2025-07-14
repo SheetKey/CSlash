@@ -87,6 +87,16 @@ data ExpType
 data InferResult
 
 data ExpPatType
+  = ExpForAllPatTy (ForAllBinder (AnyTyVar AnyKiVar))
+
+mkInvisExpPatType :: AnyTyVar AnyKiVar -> ExpPatType
+mkInvisExpPatType tv = ExpForAllPatTy (Bndr tv Specified)
+
+data ExpPatKind
+  = ExpForAllPatKi AnyKiVar
+
+mkInvisExpPatKind :: AnyKiVar -> ExpPatKind
+mkInvisExpPatKind kv = ExpForAllPatKi kv
 
 {- *********************************************************************
 *                                                                      *
@@ -432,7 +442,7 @@ tcSplitBigLamTyVarBinders ty = sty
 
 tcSplitSigma :: IsTyVar tv kv => Type tv kv -> ([kv], [tv], Type tv kv)
 tcSplitSigma ty = case tcSplitBigLamTyVarBinders ty of
-                    (kvs, ty') -> case tcSplitForAllInvisBinders ty of
+                    (kvs, ty') -> case tcSplitForAllInvisBinders ty' of
                                     (tvs, tau) -> (kvs, tvs, tau)
 
 {- *********************************************************************

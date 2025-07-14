@@ -34,7 +34,7 @@ type TcId = Id (AnyTyVar AnyKiVar) AnyKiVar
 data TcBinder
   = TcIdBndr TcId TopLevelFlag
   | TcIdBndr_ExpType Name ExpType TopLevelFlag
-  | TcTvBndr Name (TcTyVar AnyKiVar)
+  | TcTvBndr Name (AnyTyVar AnyKiVar)
   | TcKvBndr Name AnyKiVar
 
 instance Outputable TcBinder where
@@ -86,7 +86,7 @@ data TcTyKiThing
     { tct_id :: TcId
     , tct_info :: IdBindingInfo
     }
-  | ATyVar Name (TcTyVar AnyKiVar)
+  | ATyVar Name (AnyTyVar AnyKiVar)
   | AKiVar Name AnyKiVar -- should make a new type 'TcKiThing'
   | ATcTyCon AnyTyCon
 

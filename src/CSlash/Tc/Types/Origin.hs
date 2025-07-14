@@ -87,6 +87,7 @@ data SkolemInfo = SkolemInfo Unique SkolemInfoAnon
 
 data SkolemInfoAnon
   = SigSkol UserTypeCtxt AnyType [(Name, AnyTyVar AnyKiVar)]
+  | SigSkolKi UserTypeCtxt AnyType [(Name, AnyKiVar)]
   | SigTypeSkol UserTypeCtxt
   | ForAllSkol TyVarBndrs
   | TyLamTySkol [Name]
@@ -118,6 +119,7 @@ instance Outputable SkolemInfoAnon where
 
 pprSkolInfo :: SkolemInfoAnon -> SDoc
 pprSkolInfo (SigSkol cx ty _) = pprSigSkolInfo cx ty
+pprSkolInfo (SigSkolKi cx ty _) = pprSigSkolInfo cx ty
 pprSkolInfo (SigTypeSkol cx) = pprUserTypeCtxt cx
 pprSkolInfo (ForAllSkol tvs) = text "an explicit forall" <+> ppr tvs
 pprSkolInfo (TyLamTySkol tvs) = text "an explicit type lambda" <+> ppr tvs

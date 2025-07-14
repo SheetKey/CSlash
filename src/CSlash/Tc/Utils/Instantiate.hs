@@ -73,9 +73,10 @@ import Data.Function ( on )
 
 topSkolemize
   :: SkolemInfo
+  -> SkolemInfo
   -> AnySigmaType
   -> TcM (CsWrapper, [(Name, AnyKiVar)], [(Name, AnyTyVar AnyKiVar)], AnyRhoType)
-topSkolemize skolem_info ty = go init_subst idCsWrapper [] [] ty
+topSkolemize skolem_info_ki skolem_info ty = go init_subst idCsWrapper [] [] ty
   where
     init_subst = let (tvs, kcvs, kvs) = varsOfType ty
                      tvs' = tvs `unionVarSet` mapVarSet toAnyTyVar kcvs
@@ -84,7 +85,7 @@ topSkolemize skolem_info ty = go init_subst idCsWrapper [] [] ty
     go subst wrap kv_prs tv_prs ty
       | (kvs, tvs, inner_ty) <- tcSplitSigma ty
       , not (null kvs && null tvs)
-      = do (subst', kvs1, tvs1) <- tcInstSkolTyKiVarsX skolem_info subst kvs tvs
+      = do (subst', kvs1, tvs1) <- tcInstSkolTyKiVarsX skolem_info_ki skolem_info subst kvs tvs
            traceTc "topSkol"
              $ vcat [ ppr kvs <+> vcat (map (ppr . getSrcSpan) kvs)
                     , ppr kvs1 <+> vcat (map (ppr . getSrcSpan) kvs1)
@@ -95,7 +96,8 @@ topSkolemize skolem_info ty = go init_subst idCsWrapper [] [] ty
                      (tv_prs ++ (map varName tvs `zip` tvs1))
                      inner_ty
       | otherwise
-      = return (wrap, kv_prs, tv_prs, substTy subst ty)
+      = do traceTc "topSkol done" empty
+           return (wrap, kv_prs, tv_prs, substTy subst ty)
 
 {- *********************************************************************
 *                                                                      *
@@ -122,32 +124,36 @@ tcInstInvisibleKiBinder subst kv = do
 
 tcInstSkolTyKiVarsX
   :: SkolemInfo
+  -> SkolemInfo
   -> AnyTvSubst
   -> [AnyKiVar] -> [AnyTyVar AnyKiVar]
   -> TcM (AnyTvSubst, [AnyKiVar], [AnyTyVar AnyKiVar])
-tcInstSkolTyKiVarsX skol_info = tcInstSkolTyKiVarsPushLevel skol_info 
+tcInstSkolTyKiVarsX = tcInstSkolTyKiVarsPushLevel
   
 tcInstSkolTyKiVarsPushLevel
   :: SkolemInfo
+  -> SkolemInfo
   -> AnyTvSubst
   -> [AnyKiVar] -> [AnyTyVar AnyKiVar]
   -> TcM (AnyTvSubst, [AnyKiVar], [AnyTyVar AnyKiVar])
-tcInstSkolTyKiVarsPushLevel skol_info subst kvs tvs = do
+tcInstSkolTyKiVarsPushLevel skol_info_ki skol_info subst kvs tvs = do
   tc_lvl <- getTcLevel
   let !pushed_lvl = pushTcLevel tc_lvl
-  tcInstSkolTyKiVarsAt skol_info pushed_lvl subst kvs tvs
+  tcInstSkolTyKiVarsAt skol_info_ki skol_info pushed_lvl subst kvs tvs
 
 tcInstSkolTyKiVarsAt
   :: SkolemInfo
+  -> SkolemInfo
   -> TcLevel
   -> AnyTvSubst
   -> [AnyKiVar] -> [AnyTyVar AnyKiVar]
   -> TcM (AnyTvSubst, [AnyKiVar], [AnyTyVar AnyKiVar])
-tcInstSkolTyKiVarsAt skol_info lvl subst kvs tvs
+tcInstSkolTyKiVarsAt skol_info_ki skol_info lvl subst kvs tvs
   = freshenTyKiVarsX new_skol_kv new_skol_tv subst kvs tvs
   where
+    sk_details_ki = SkolemVar skol_info_ki lvl
+    new_skol_kv name = toAnyKiVar $ mkTcKiVar name sk_details_ki
     sk_details = SkolemVar skol_info lvl
-    new_skol_kv name = toAnyKiVar $ mkTcKiVar name sk_details
     new_skol_tv name kind = toAnyTyVar $ mkTcTyVar name kind sk_details
 
 instantiateTyKiVarsX

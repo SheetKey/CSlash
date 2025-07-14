@@ -70,9 +70,11 @@ tcSkolemizeGeneral ctxt top_ty expected_ty thing_inside
        return (idCsWrapper, result)
 
   | otherwise
-  = do rec { (wrap, kv_prs, tv_prs, rho_ty) <- topSkolemize skol_info expected_ty
+  = do rec { (wrap, kv_prs, tv_prs, rho_ty) <- topSkolemize skol_info_ki skol_info expected_ty
            ; let sig_skol = SigSkol ctxt top_ty tv_prs
-           ; skol_info <- mkSkolemInfo sig_skol }
+                 sig_skol_ki = SigSkolKi ctxt top_ty kv_prs
+           ; skol_info <- mkSkolemInfo sig_skol 
+           ; skol_info_ki <- mkSkolemInfo sig_skol_ki }
        traceTc "tcSkolemizeGeneral" (pprUserTypeCtxt ctxt <+> ppr kv_prs <+> ppr tv_prs)
        result <- checkKiConstraints sig_skol []
                  $ thing_inside kv_prs tv_prs rho_ty
@@ -80,7 +82,7 @@ tcSkolemizeGeneral ctxt top_ty expected_ty thing_inside
 
 tcSkolemizeCompleteSig
   :: TcCompleteSig
-  -> ([ExpPatType] -> AnyRhoType -> TcM result)
+  -> ([ExpPatKind] -> [ExpPatType] -> AnyRhoType -> TcM result)
   -> TcM (CsWrapper, result)
 tcSkolemizeCompleteSig (CSig { sig_bndr = poly_id, sig_ctxt = ctxt, sig_loc = loc })
                        thing_inside
@@ -88,7 +90,13 @@ tcSkolemizeCompleteSig (CSig { sig_bndr = poly_id, sig_ctxt = ctxt, sig_loc = lo
   cur_loc <- getSrcSpanM
   let poly_ty = varType poly_id
   setSrcSpan loc $
-    tcSkolemizeGeneral ctxt poly_ty poly_ty $ panic "tcSkolemizeCompleteSig"
+    tcSkolemizeGeneral ctxt poly_ty poly_ty $ \ kv_prs tv_prs rho_ty ->
+    setSrcSpan cur_loc
+    $ tcExtendNameKiVarEnv kv_prs
+    $ tcExtendNameTyVarEnv tv_prs
+    $ thing_inside (map (mkInvisExpPatKind . snd) kv_prs)
+                   (map (mkInvisExpPatType . snd) tv_prs)
+                   rho_ty
 
 checkKiConstraints :: SkolemInfoAnon -> [KiCoVar AnyKiVar] -> TcM result -> TcM result
 checkKiConstraints skol_info given thing_inside = do
