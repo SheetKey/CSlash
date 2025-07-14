@@ -206,6 +206,11 @@ can_ki_co_nc True _ ev kc ki1 ki2
   , kc == LTEQKi
   = canKiCoLiftReflexive ev ki1
 
+can_ki_co_nc True _ ev kc ki1 ki2
+  | ki1 `tcLTEQMonoKind` ki2
+  , kc == LTEQKi
+  = canKiCoBILTEQ ev ki1 ki2
+
 ----------------------
 -- Otherwise try to decompose
 ----------------------
@@ -448,6 +453,15 @@ canKiCoLiftLT ev kc1 kc2 = do
              _ -> pprPanic "canKiCoLT" (ppr ev $$ ppr kc1 $$ ppr kc2)
   setKiCoBindIfWanted ev $ LiftLT co
   stopWith ev "Solved by lifting built-in"
+ 
+canKiCoBILTEQ :: CtEvidence -> AnyMonoKind -> AnyMonoKind -> TcS (StopOrContinue a)
+canKiCoBILTEQ ev k1 k2 = do
+  let co = case (k1, k2) of
+             (BIKi UKd, _) -> BI_U_LTEQ k2
+             (_, BIKi LKd) -> BI_LTEQ_L k1
+             _ -> pprPanic "canKiCoBILTEQ" (ppr ev $$ ppr k1 $$ ppr k2)
+  setKiCoBindIfWanted ev co
+  stopWith ev "Solved by built-in"
 
 {- *******************************************************************
 *                                                                    *
@@ -463,6 +477,8 @@ rewriteKiCoEvidence
   -> Reduction
   -> TcS CtEvidence
 rewriteKiCoEvidence new_rewriters old_ev swapped (ReductionKi lhs_co nlhs) (ReductionKi rhs_co nrhs)
+  | IsSwapped <- swapped
+  = panic "rewriteKiCoEvidence swapped"
   | NotSwapped <- swapped
   , isReflKiCo lhs_co
   , isReflKiCo rhs_co

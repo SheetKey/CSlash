@@ -81,11 +81,6 @@ inline_generic_eq_mono_kind_x
   => Maybe (RnEnv2 kv) -> (MonoKind kv) -> (MonoKind kv) -> Bool
 inline_generic_eq_mono_kind_x mb_env = \k1 k2 -> k1 `seq` k2 `seq`
   let go = generic_eq_mono_kind_x mb_env
-
-      gos [] [] = True
-      gos (k1:ks1) (k2:ks2) = go k1 k2 && gos ks1 ks2
-      gos _ _ = False
-
   in case (k1, k2) of
        _ | 1# <- reallyUnsafePtrEquality# k1 k2 -> True
 
@@ -107,3 +102,34 @@ inline_generic_eq_mono_kind_x mb_env = \k1 k2 -> k1 `seq` k2 `seq`
             && go res1 res2
 
        _ -> False
+
+{- *********************************************************************
+*                                                                      *
+            Kind LTEQ comparison
+*                                                                      *
+********************************************************************* -}
+
+-- Returns 'False' when the kinds are not comparable.
+
+tcLTEQMonoKind :: (HasDebugCallStack, IsVar kv) => MonoKind kv -> MonoKind kv -> Bool
+tcLTEQMonoKind = lteqMonoKind
+
+lteqMonoKind :: (HasCallStack, IsVar kv) => MonoKind kv -> MonoKind kv -> Bool
+lteqMonoKind ka kb = lteq_mono_kind ka kb
+
+lteq_mono_kind :: IsVar kv => MonoKind kv -> MonoKind kv -> Bool
+lteq_mono_kind = inline_generic_lteq_mono_kind_x
+
+{-# INLINE inline_generic_lteq_mono_kind_x #-}
+inline_generic_lteq_mono_kind_x
+  :: (VarHasUnique kv, Eq kv)
+  => (MonoKind kv) -> (MonoKind kv) -> Bool
+inline_generic_lteq_mono_kind_x = \k1 k2 -> k1 `seq` k2 `seq`
+ case (k1, k2) of
+   (BIKi k1, BIKi k2) -> k1 < k2
+
+   (BIKi UKd, KiVarKi {}) -> True
+   (KiVarKi {}, BIKi LKd) -> True
+
+   _ -> False
+

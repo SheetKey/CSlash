@@ -238,6 +238,8 @@ fvsOfKiCo :: IsTyVar tv kv => KindCoercion kv -> TyFV tv kv
 fvsOfKiCo (Refl ki) f bound_vars acc = liftKiFV (fvsOfMonoKind ki) f bound_vars acc
 fvsOfKiCo BI_U_A f bound_vars acc = acc
 fvsOfKiCo BI_A_L f bound_vars acc = acc
+fvsOfKiCo (BI_U_LTEQ ki) f bound_vars acc = liftKiFV (fvsOfMonoKind ki) f bound_vars acc
+fvsOfKiCo (BI_LTEQ_L ki) f bound_vars acc = liftKiFV (fvsOfMonoKind ki) f bound_vars acc
 fvsOfKiCo (LiftEq co) f bound_vars acc = fvsOfKiCo co f bound_vars acc
 fvsOfKiCo (LiftLT co) f bound_vars acc = fvsOfKiCo co f bound_vars acc
 fvsOfKiCo (FunCo { fco_arg = co1, fco_res = co2 }) f bound_vars acc

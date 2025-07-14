@@ -106,7 +106,7 @@ pushLevelAndSolveKindCoercionsX callsite thing_inside = do
 
 simplifyAndEmitFlatConstraints :: WantedConstraints -> TcM ()
 simplifyAndEmitFlatConstraints wanted = do
-  (wanted, binds) <- panic "runTcS (solveWanteds wanted)"
+  wanted <- runTcSKindCoercions (solveWanteds wanted)
   wanted <- TcM.liftZonkM $ TcM.zonkWC wanted
 
   traceTc "emitFlatConstraints {" (ppr wanted)

@@ -306,14 +306,16 @@ uKind env kc orig_ki1 orig_ki2 = do
           (UKd, LKd) -> return $ LiftLT $ TransCo BI_U_A BI_A_L
           _ -> panic "unreachable"
 
-    go (KiPredApp _ _ _) (KiPredApp _ _ _) = panic "uKind KiPredApps"
-      -- | kc1 == kc2, equalLength kis1 kis2
-      -- = do traceTc "go-kicon" (ppr kc1 $$ ppr kis1 $$ ppr kis2)
-      --      massertPpr (kc == EQKi)
-      --        $ vcat [ text "uKind/go-kicon has non-EQKi relation"
-      --               , ppr kc, ppr orig_ki1, ppr orig_ki2 ]
-      --      cos <- zipWithM u_kc_arg kis1 kis2
-      --      return $ mkKiConAppCo kc1 cos
+    go k1@(KiPredApp p1 ka1 kb1) k2@(KiPredApp p2 ka2 kb2) 
+      | p1 == p2
+      , EQKi <- kc -- maybe this should be an assert
+      = do traceTc "go-kipred" (ppr k1 $$ ppr k2)
+           coa <- u_kc_arg ka1 ka2 
+           cob <- u_kc_arg kb1 kb2
+           massertPpr (isReflKiCo coa && isReflKiCo cob)
+             $ vcat [ text "uKind/go_kipred has non-reflexive argument coercion"
+                    , ppr coa, ppr cob ]
+           return $ mkReflKiCo k1
 
     go (FunKi FKF_K_K arg1 res1) (FunKi FKF_K_K arg2 res2) = do
       massertPpr (kc == EQKi)
@@ -485,7 +487,7 @@ simpleUnifyCheckKind lhs_kv rhs = go_mono rhs
 
     go_mono (BIKi {}) = True
 
-    go_mono (KiPredApp {}) = panic "simpleUnifyCheckKind KiPredApp"
+    go_mono (KiPredApp _ k1 k2) = go_mono k1 && go_mono k2
 
 {- *********************************************************************
 *                                                                      *
@@ -561,7 +563,7 @@ checkKiEqRhs :: KiEqFlags -> AnyMonoKind -> TcM (PuResult () Reduction)
 checkKiEqRhs flags ki = case ki of
   KiPredApp {} -> panic "checkKiEqRhs" --checkKiConApp flags ki kc kis
                -- maybe 'fail impredicative'??
-  BIKi {} -> panic "checkKiEqRhs BIKi"
+  BIKi {} -> okCheckReflKi ki
   KiVarKi kv -> checkKiVar flags kv
   FunKi { fk_f = af, fk_arg = a, fk_res = r }
     | FKF_C_K <- af

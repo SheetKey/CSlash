@@ -209,6 +209,8 @@ debug_ppr_ki_co :: Outputable kv => PprPrec -> KindCoercion kv -> SDoc
 debug_ppr_ki_co _ (Refl ki) = angleBrackets (ppr ki)
 debug_ppr_ki_co _ BI_U_A = angleBrackets (text "UKd < AKd")
 debug_ppr_ki_co _ BI_A_L = angleBrackets (text "AKd < LKd")
+debug_ppr_ki_co _ (BI_U_LTEQ ki) = angleBrackets (text "UKd < " <> ppr ki)
+debug_ppr_ki_co _ (BI_LTEQ_L ki) = angleBrackets (ppr ki <> text " < LKd")
 debug_ppr_ki_co _ (LiftEq ki) = angleBrackets (text "LiftEq" <+> ppr ki)
 debug_ppr_ki_co _ (LiftLT ki) = angleBrackets (text "LiftLT" <+> ppr ki)
 debug_ppr_ki_co prec (FunCo _ _ co1 co2)
@@ -329,6 +331,8 @@ data KindCoercion kv
   = Refl (MonoKind kv) -- refl : kv = kv
   | BI_U_A             -- builtin : u < a
   | BI_A_L             -- builtin : a < l
+  | BI_U_LTEQ (MonoKind kv)
+  | BI_LTEQ_L (MonoKind kv)
   | LiftEq (KindCoercion kv) -- LiftEq : (kv = kv) -> (kv <= kv)
   | LiftLT (KindCoercion kv) -- LiftLT : (kv1 < kv2) -> (kv1 <= kv2)
   | FunCo
@@ -354,6 +358,8 @@ instance AsAnyKi KindCoercion where
   asAnyKi (Refl ki) = Refl $ asAnyKi ki
   asAnyKi BI_U_A = BI_U_A
   asAnyKi BI_A_L = BI_A_L
+  asAnyKi (BI_U_LTEQ ki) = BI_U_LTEQ $ asAnyKi ki
+  asAnyKi (BI_LTEQ_L ki) = BI_LTEQ_L $ asAnyKi ki
   asAnyKi (LiftEq co) = LiftEq $ asAnyKi co
   asAnyKi (LiftLT co) = LiftLT $ asAnyKi co
   asAnyKi (FunCo f1 f2 a r) = FunCo f1 f2 (asAnyKi a) (asAnyKi r)
@@ -429,6 +435,8 @@ kiCoercionPred co = go co
     go (Refl _) = EQKi
     go BI_U_A = LTKi
     go BI_A_L = LTKi
+    go (BI_U_LTEQ _) = LTEQKi
+    go (BI_LTEQ_L _) = LTEQKi
     go (LiftEq co) = assertPpr (go co == EQKi) (vcat [text "kiCoercionPred: LiftEq co"
                                                      , text "but co does not have pred 'EQKi'" ])
                      LTEQKi
@@ -454,7 +462,9 @@ kicoercionLKind co = go co
   where
     go (Refl ki) = ki
     go BI_U_A = BIKi UKd
-    go BI_A_L = BIKi AKd 
+    go BI_A_L = BIKi AKd
+    go (BI_U_LTEQ _) = BIKi UKd
+    go (BI_LTEQ_L ki) = ki
     go (LiftEq co) = kicoercionLKind co
     go (LiftLT co) = kicoercionLKind co
     go (FunCo { fco_afl = af, fco_arg = arg, fco_res = res })
@@ -470,6 +480,8 @@ kicoercionRKind co = go co
     go (Refl ki) = ki
     go BI_U_A = BIKi AKd
     go BI_A_L = BIKi LKd
+    go (BI_U_LTEQ ki) = ki
+    go (BI_LTEQ_L _) = BIKi LKd
     go (LiftEq co) = kicoercionRKind co
     go (LiftLT co) = kicoercionRKind co
     go (FunCo { fco_afr = af, fco_arg = arg, fco_res = res })
@@ -598,6 +610,8 @@ foldMonoKiCo (MKiCoFolder { mkcf_kivar = kivar
     go_co env (Refl ki) = go_ki env ki
     go_co env BI_U_A = panic "go_co BI_U_A"
     go_co env BI_A_L = panic "go_co BI_A_L"
+    go_co env (BI_U_LTEQ _) = panic "go_co BI_U_LTEQ"
+    go_co env (BI_LTEQ_L _) = panic "go_co BI_LTEQ_L"
     go_co env (LiftEq co) = go_co env co
     go_co env (LiftLT co) = go_co env co
     go_co env (HoleCo hole) = cohole env hole
@@ -695,6 +709,8 @@ mapMKiCoX (MKiCoMapper { mkcm_kivar = kivar, mkcm_covar = covar, mkcm_hole = coh
     go_co !env (Refl ki) = Refl <$> go_mki env ki
     go_co !env BI_U_A = return BI_U_A
     go_co !env BI_A_L = return BI_A_L
+    go_co !env (BI_U_LTEQ ki) = BI_U_LTEQ <$> go_mki env ki
+    go_co !env (BI_LTEQ_L ki) = BI_LTEQ_L <$> go_mki env ki
     go_co !env (LiftEq co) = LiftEq <$> go_co env co
     go_co !env (LiftLT co) = LiftLT <$> go_co env co
 
