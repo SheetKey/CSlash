@@ -441,6 +441,16 @@ tcSplitSigma ty = case tcSplitBigLamTyVarBinders ty of
 *                                                                      *
 ********************************************************************* -}
 
+isSigmaTy :: IsTyVar tv kv => Type tv kv -> Bool
+isSigmaTy (ForAllTy (Bndr _ af) _) = isInvisibleForAllFlag af
+isSigmaTy (TyLamTy {}) = panic "isSigmaTy TyLamTy"
+isSigmaTy (BigTyLamTy {}) = True
+isSigmaTy ty | Just ty' <- coreView ty = isSigmaTy ty'
+isSigmaTy _ = False
+
+isRhoTy :: IsTyVar tv kv => Type tv kv -> Bool
+isRhoTy ty = not (isSigmaTy ty)
+
 isRigidKi :: MonoKind kv -> Bool
 isRigidKi ki = case ki of
   KiPredApp {} -> True

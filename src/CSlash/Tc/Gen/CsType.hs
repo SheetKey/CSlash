@@ -22,7 +22,7 @@ import CSlash.Tc.Utils.Unify
 import CSlash.Tc.Solver
 -- import GHC.Tc.Zonk.Type
 import CSlash.Tc.Utils.TcType
-import CSlash.Tc.Utils.Instantiate ( tcInstInvisibleKiBinder, instCallKiConstraints )
+import CSlash.Tc.Utils.Instantiate ( tcInstInvisibleKiBinder )
 import CSlash.Tc.Zonk.TcType
 
 import CSlash.Core.Type
@@ -494,6 +494,22 @@ tcInferTyApps_nosat orig_cs_ty fun orig_cs_args = do
     n_initial_val_args (CsValArg {} : args) = 1 + n_initial_val_args args
     n_initial_val_args (CsArgPar {} : args) = n_initial_val_args args
     n_initial_val_args _ = 0
+
+instCallKiConstraints :: CtOrigin -> [AnyPredKind] -> TcM [AnyKindCoercion]
+instCallKiConstraints orig preds
+  | null preds
+  = return []
+  | otherwise
+  = do kcos <- mapM go preds
+       traceTc "instCallKiConstraints" (ppr kcos)
+       return kcos
+  where
+    go :: AnyPredKind -> TcM AnyKindCoercion
+    go pred
+      | KiPredApp kc k1 k2 <- pred
+      = unifyKind Nothing kc k1 k2
+      | otherwise
+      = panic "instCallKiConstraints"
 
 mkAppTyM :: AnyType -> AnyMonoKind -> AnyType -> TcM AnyType
 mkAppTyM fun arg_ki arg

@@ -67,6 +67,10 @@ c1 <.> c2 = c1 `WpCompose` c2
 idCsWrapper :: CsWrapper
 idCsWrapper = WpHole
 
+isIdCsWrapper :: CsWrapper -> Bool
+isIdCsWrapper WpHole = True
+isIdCsWrapper _ = False
+
 mkWpTyLams :: [AnyTyVar AnyKiVar] -> CsWrapper
 mkWpTyLams tvs = mk_lam_fn WpTyLam tvs
 

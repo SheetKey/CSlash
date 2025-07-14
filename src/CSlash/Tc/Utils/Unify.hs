@@ -1,3 +1,4 @@
+{-# LANGUAGE RecursiveDo #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module CSlash.Tc.Utils.Unify where
@@ -8,7 +9,7 @@ import CSlash.Cs
 
 -- import GHC.Tc.Utils.Concrete ( hasFixedRuntimeRep, hasFixedRuntimeRep_syntactic )
 import CSlash.Tc.Utils.Env
--- import GHC.Tc.Utils.Instantiate
+import CSlash.Tc.Utils.Instantiate
 import CSlash.Tc.Utils.Monad
 import CSlash.Tc.Utils.TcMType
 import CSlash.Tc.Utils.TcType
@@ -62,7 +63,20 @@ tcSkolemizeGeneral
   -> AnyType -> AnyType
   -> ([(Name, AnyKiVar)] -> [(Name, AnyTyVar AnyKiVar)] -> AnyType -> TcM result)
   -> TcM (CsWrapper, result)
-tcSkolemizeGeneral = panic "tcSkolemizeGeneral"
+tcSkolemizeGeneral ctxt top_ty expected_ty thing_inside
+  | isRhoTy expected_ty
+  = do let sig_skol = SigSkol ctxt top_ty []
+       result <- checkKiConstraints sig_skol [] $ thing_inside [] [] expected_ty
+       return (idCsWrapper, result)
+
+  | otherwise
+  = do rec { (wrap, kv_prs, tv_prs, rho_ty) <- topSkolemize skol_info expected_ty
+           ; let sig_skol = SigSkol ctxt top_ty tv_prs
+           ; skol_info <- mkSkolemInfo sig_skol }
+       traceTc "tcSkolemizeGeneral" (pprUserTypeCtxt ctxt <+> ppr kv_prs <+> ppr tv_prs)
+       result <- checkKiConstraints sig_skol []
+                 $ thing_inside kv_prs tv_prs rho_ty
+       return (wrap, result)
 
 tcSkolemizeCompleteSig
   :: TcCompleteSig

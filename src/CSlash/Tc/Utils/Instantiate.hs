@@ -26,7 +26,6 @@ import CSlash.Core.DataCon
 -- import GHC.Core.Coercion.Axiom
 
 -- import {-# SOURCE #-}   GHC.Tc.Gen.Expr( tcCheckPolyExpr, tcSyntaxOp )
-import {-{-# SOURCE #-}-} CSlash.Tc.Utils.Unify( unifyKind )
 import CSlash.Tc.Utils.Monad
 import CSlash.Tc.Types.Constraint
 import CSlash.Tc.Types.Origin
@@ -103,22 +102,6 @@ topSkolemize skolem_info ty = go init_subst idCsWrapper [] [] ty
             Instantiating a call
 *                                                                      *
 ********************************************************************* -}
-
-instCallKiConstraints :: CtOrigin -> [AnyPredKind] -> TcM [AnyKindCoercion]
-instCallKiConstraints orig preds
-  | null preds
-  = return []
-  | otherwise
-  = do kcos <- mapM go preds
-       traceTc "instCallKiConstraints" (ppr kcos)
-       return kcos
-  where
-    go :: AnyPredKind -> TcM AnyKindCoercion
-    go pred
-      | KiPredApp kc k1 k2 <- pred
-      = unifyKind Nothing kc k1 k2
-      | otherwise
-      = panic "instCallKiConstraints"
 
 {- *********************************************************************
 *                                                                      *

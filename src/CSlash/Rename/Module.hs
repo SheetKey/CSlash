@@ -132,7 +132,7 @@ rnTypeDecls type_ds = do
 
   rdr_env <- getGlobalRdrEnv
   traceRn "rnTypeDecls SCC analysis" $
-    vcat [ text "rdr_env:" <+> ppr rdr_env ]
+    vcat [ text "rdr_env:" {-<+> ppr rdr_env-} ]
   let type_sccs = depAnalTypeDecls rdr_env types_w_fvs
 
       all_groups = map mk_group type_sccs

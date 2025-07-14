@@ -79,6 +79,10 @@ import Data.Foldable (find)
 tcTopBinds :: [(RecFlag, LCsBinds Rn)] -> [LSig Rn] -> TcM (TcGblEnv, TcLclEnv)
 tcTopBinds binds sigs = do
   (binds', wrap, (tcg_env, tcl_env)) <- tcValBinds TopLevel binds sigs getEnvs
+  -- massertPpr (isIdCsWrapper wrap)
+  --   (text "Non-identity wrapper at toplevel:" <+> ppr wrap)
+
+  -- let tcg_env' = tcg_env `addTypecheckedBinds` map snd binds
 
   panic "unfinished1"
 
