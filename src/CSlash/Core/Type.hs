@@ -313,6 +313,11 @@ splitForAllTyVars ty = split ty ty []
     split orig_ty ty tvs | Just ty' <- coreView ty = split orig_ty ty' tvs
     split orig_ty _ tvs = (reverse tvs, orig_ty)
 
+isForAllTy :: IsTyVar tv kv => Type tv kv -> Bool
+isForAllTy ty
+  | ForAllTy {} <- coreFullView ty = True
+  | otherwise = False
+
 isTauTy :: IsTyVar tv kv => Type tv kv -> Bool
 isTauTy ty | Just ty' <- coreView ty = isTauTy ty'
 isTauTy (TyVarTy _) = True

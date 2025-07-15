@@ -1,3 +1,4 @@
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE RecursiveDo #-}
 {-# LANGUAGE RecordWildCards #-}
 
@@ -82,7 +83,7 @@ tcSkolemizeGeneral ctxt top_ty expected_ty thing_inside
 
 tcSkolemizeCompleteSig
   :: TcCompleteSig
-  -> ([ExpPatKind] -> [ExpPatType] -> AnyRhoType -> TcM result)
+  -> ([ExpPatType] -> AnyRhoType -> TcM result)
   -> TcM (CsWrapper, result)
 tcSkolemizeCompleteSig (CSig { sig_bndr = poly_id, sig_ctxt = ctxt, sig_loc = loc })
                        thing_inside
@@ -94,8 +95,8 @@ tcSkolemizeCompleteSig (CSig { sig_bndr = poly_id, sig_ctxt = ctxt, sig_loc = lo
     setSrcSpan cur_loc
     $ tcExtendNameKiVarEnv kv_prs
     $ tcExtendNameTyVarEnv tv_prs
-    $ thing_inside (map (mkInvisExpPatKind . snd) kv_prs)
-                   (map (mkInvisExpPatType . snd) tv_prs)
+    $ thing_inside ((map (mkInvisExpPatKind . snd) kv_prs)
+                    ++ (map (mkInvisExpPatType . snd) tv_prs))
                    rho_ty
 
 checkKiConstraints :: SkolemInfoAnon -> [KiCoVar AnyKiVar] -> TcM result -> TcM result
@@ -213,6 +214,35 @@ buildImplicationFor tclvl skol_info given wanted
                             , ic_info = skol_info }
        checkImplicationInvariants implic'
        return (unitBag implic')
+
+matchExpectedFunTys
+  :: forall a
+   . ExpectedFunTyOrigin
+  -> UserTypeCtxt
+  -> VisArity
+  -> ExpSigmaType
+  -> ([ExpPatType] -> ExpRhoType -> TcM a)
+  -> TcM (CsWrapper, a)
+matchExpectedFunTys herald _ arity (Infer inf_res) thing_inside =
+  panic "matchExpectedFunTys Infer"
+
+matchExpectedFunTys herald ctx arity (Check top_ty) thing_inside
+  = check arity [] top_ty
+  where
+    check :: VisArity -> [ExpPatType] -> AnySigmaType -> TcM (CsWrapper, a)
+
+    check n_req rev_pat_tys ty
+      | isSigmaTy ty
+        || (n_req > 0 && isForAllTy ty)
+      = do panic "matchExpectedFunTys/check case 1"
+
+    check n_req rev_pat_tys rho_ty
+      | n_req == 0
+      = do let pat_tys = reverse rev_pat_tys
+           res <- thing_inside pat_tys (mkCheckExpType rho_ty)
+           return (idCsWrapper, res)
+
+    check _ _ _ = panic "matchExpectedFunTys/check unfinished"
 
 {- *********************************************************************
 *                                                                      *

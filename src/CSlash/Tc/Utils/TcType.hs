@@ -86,17 +86,28 @@ data ExpType
 
 data InferResult
 
+type ExpSigmaType = ExpType
+type ExpRhoType = ExpType
+
+instance Outputable ExpType where
+  ppr (Check ty) = text "Check" <> braces (ppr ty)
+
+mkCheckExpType :: AnyType -> ExpType
+mkCheckExpType = Check
+
 data ExpPatType
   = ExpForAllPatTy (ForAllBinder (AnyTyVar AnyKiVar))
+  | ExpForAllPatKi AnyKiVar
 
 mkInvisExpPatType :: AnyTyVar AnyKiVar -> ExpPatType
 mkInvisExpPatType tv = ExpForAllPatTy (Bndr tv Specified)
 
-data ExpPatKind
-  = ExpForAllPatKi AnyKiVar
-
-mkInvisExpPatKind :: AnyKiVar -> ExpPatKind
+mkInvisExpPatKind :: AnyKiVar -> ExpPatType
 mkInvisExpPatKind kv = ExpForAllPatKi kv
+
+instance Outputable ExpPatType where
+  ppr (ExpForAllPatTy tv) = text "forall" <+> ppr tv
+  ppr (ExpForAllPatKi kv) = text "forall" <+> ppr kv
 
 {- *********************************************************************
 *                                                                      *

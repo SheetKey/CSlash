@@ -145,6 +145,9 @@ pprSigSkolInfo ctxt ty = case ctxt of
 *                                                                      *
 ********************************************************************* -}
 
+data TypedThing
+  = NameThing Name
+
 data KindedThing
   = CsTypeRnThing (CsType Rn)
 
@@ -203,6 +206,15 @@ pprCtO (OccurrenceOf name) = hsep [text "a use of", quotes (ppr name)]
 pprCtO (GivenOrigin {}) = text "a given constraint"
 pprCtO TupleTyOrigin = text "a tuple type"
 pprCtO _ = panic "pprCtO"
+
+{- *******************************************************************
+*                                                                    *
+                       ExpectedFunTy origin
+*                                                                    *
+******************************************************************* -}
+
+data ExpectedFunTyOrigin
+  = ExpectedFunTyBody !TypedThing !(LCsExpr Rn)
 
 {- *******************************************************************
 *                                                                    *

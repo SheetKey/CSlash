@@ -60,6 +60,18 @@ data BuiltInKi
   | LKd
   deriving (Show, Eq, Ord, Data.Data)
 
+type Mult = BuiltInKi
+
+mkMultAdd :: Mult -> Mult -> Mult
+mkMultAdd _ _ = UKd
+
+mkMultMul :: Mult -> Mult -> Mult
+mkMultMul UKd m = m
+mkMultMul m UKd = m
+mkMultMul AKd m = m
+mkMultMul m AKd = m
+mkMultMul LKd LKd = LKd
+
 data KiPred
   = LTKi
   | LTEQKi

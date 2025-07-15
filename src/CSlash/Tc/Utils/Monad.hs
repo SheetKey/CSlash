@@ -29,7 +29,7 @@ import CSlash.Unit.Module.Warnings
 import CSlash.Unit.Home.ModInfo
 
 import CSlash.Core.UsageEnv
--- import GHC.Core.Multiplicity
+import CSlash.Core.Kind
 -- import GHC.Core.InstEnv
 -- import GHC.Core.FamInstEnv
 
@@ -675,6 +675,26 @@ captureConstraints thing_inside = do
   case mb_res of
     Nothing -> emitConstraints lie >> failM
     Just res -> return (res, lie)
+
+tcCollectingUsage :: TcM a -> TcM (UsageEnv, a)
+tcCollectingUsage thing_inside = do
+  local_usage_ref <- newTcRef zeroUE
+  result <- updLclEnv (\env -> env { tcl_usage = local_usage_ref }) thing_inside
+  local_usage <- readTcRef local_usage_ref
+  return (local_usage, result)
+
+tcScalingUsage :: Mult -> TcM a -> TcM a
+tcScalingUsage mult thing_inside = do
+  (usage, result) <- tcCollectingUsage thing_inside
+  traceTc "tcScalingUsage" $ vcat [ ppr mult, ppr usage ]
+  tcEmitBindingUsage $ scaleUE mult usage
+  return result
+
+tcEmitBindingUsage :: UsageEnv -> TcM ()
+tcEmitBindingUsage ue = do
+  lcl_env <- getLclEnv
+  let usage = tcl_usage lcl_env
+  updTcRef usage (addUE ue)
 
 attemptM :: TcRn r -> TcRn (Maybe r)
 attemptM thing_inside = do

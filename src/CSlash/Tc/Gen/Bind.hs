@@ -219,8 +219,11 @@ tcPolyCheck sig@(CSig { sig_bndr = poly_id, sig_ctxt = ctxt })
 
   mono_name <- newNameAt (nameOccName name) (locA nm_loc)
 
-  (wrap_gen, (wrap_res, body'))
-    <- tcSkolemizeCompleteSig sig $ panic "tcpolycheck"
+  body' <- let mono_id = mkLocalId mono_name rho_ty 
+           in tcExtendBinderStack [TcIdBndr mono_id NotTopLevel]
+              $ setSrcSpanA bind_loc
+              $ tcScalingUsage UKd
+              $ tcPolyLExprSig body sig
 
   panic "unfinished3"
 
@@ -234,6 +237,30 @@ tcPolyCheck _ _ = panic "tcPolyCheck"
 
 tcPolyInfer :: RecFlag -> TcSigFun -> [LCsBind Rn] -> TcM (LCsBinds Tc, [(TcId, BuiltInKi)])
 tcPolyInfer = panic "tcPolyInfer"
+
+{- *********************************************************************
+*                                                                      *
+                tcFunBindRHS
+*                                                                      *
+********************************************************************* -}
+-- delete later
+tcFunBindRHS
+  :: UserTypeCtxt
+  -> Name
+  -> Mult
+  -> LCsExpr Rn
+  -> [ExpPatType]
+  -> ExpRhoType
+  -> TcM (CsWrapper, LCsExpr Tc)
+tcFunBindRHS ctxt fun_name mult body invis_pat_tys exp_ty = do
+  traceTc "tcFunBindRHS 1" (ppr fun_name $$ ppr mult $$ ppr exp_ty)
+
+  (wrap, r) <- tcScalingUsage mult $ do
+    traceTc "tcFunBindRHS 2" (vcat [ pprUserTypeCtxt ctxt
+                                   , ppr invis_pat_tys
+                                   , ppr rhs_ty ])
+
+    tcInvisMatches tcBody invis_pat_tys exp_ty body
 
 {- *********************************************************************
 *                                                                      *
