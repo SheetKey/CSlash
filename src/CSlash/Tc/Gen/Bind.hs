@@ -2,7 +2,7 @@
 
 module CSlash.Tc.Gen.Bind where
 
--- import {-# SOURCE #-} GHC.Tc.Gen.Match ( tcGRHSsPat, tcFunBindMatches )
+import {-# SOURCE #-} CSlash.Tc.Gen.Match ( tcLambdaMatches )
 -- import {-# SOURCE #-} GHC.Tc.Gen.Expr  ( tcCheckMonoExpr )
 -- import {-# SOURCE #-} GHC.Tc.TyCl.PatSyn ( tcPatSynDecl, tcPatSynBuilderBind )
 
@@ -86,6 +86,8 @@ tcTopBinds binds sigs = do
 
   panic "unfinished1"
 
+tcLocalBinds :: CsLocalBinds Rn -> TcM thing -> TcM (CsLocalBinds Tc, CsWrapper, thing)
+tcLocalBinds = panic "tcLocalBinds"
 
 tcValBinds
   :: TopLevelFlag
@@ -213,17 +215,33 @@ tcPolyNoGen = panic "tcPolyNoGen"
 
 tcPolyCheck :: TcCompleteSig -> LCsBind Rn -> TcM (LCsBinds Tc, [(TcId, BuiltInKi)])
 tcPolyCheck sig@(CSig { sig_bndr = poly_id, sig_ctxt = ctxt })
-            (L bind_loc (FunBind { fun_id = L nm_loc name, fun_body = body }))
+            (L bind_loc (FunBind { fun_id = L nm_loc name, fun_body = L body_loc body }))
   = do
   traceTc "tcPolyCheck" (ppr sig)
 
   mono_name <- newNameAt (nameOccName name) (locA nm_loc)
 
-  body' <- let mono_id = mkLocalId mono_name rho_ty 
-           in tcExtendBinderStack [TcIdBndr mono_id NotTopLevel]
-              $ setSrcSpanA bind_loc
-              $ tcScalingUsage UKd
-              $ tcPolyLExprSig body sig
+  (wrap_gen, body')
+    <- tcSkolemizeCompleteSig sig $ \invis_pat_tys rho_ty ->
+       let mono_id = mkLocalId mono_name rho_ty 
+       in tcExtendBinderStack [TcIdBndr mono_id NotTopLevel]
+          $ setSrcSpanA bind_loc
+          $ tcScalingUsage UKd
+          $ setSrcSpanA body_loc
+          $ let tc_body :: CsExpr Rn -> TcM (CsExpr Tc)
+                tc_body (CsPar x (L loc e)) = setSrcSpanA loc $ do
+                  e' <- tc_body e
+                  return (CsPar x (L loc e'))
+
+                tc_body e@(CsLam x matches) = do
+                  (wrap, matches') <- tcLambdaMatches e matches invis_pat_tys
+                                      (mkCheckExpType rho_ty)
+                  return $ mkCsWrap wrap $ CsLam x matches'
+
+                tc_body e = panic "tc_body other"
+            in tc_body body
+              
+          -- $ tcFunBindRHS ctxt mono_name UKd body invis_pat_tys (mkCheckExpType rho_ty)
 
   panic "unfinished3"
 
@@ -243,24 +261,24 @@ tcPolyInfer = panic "tcPolyInfer"
                 tcFunBindRHS
 *                                                                      *
 ********************************************************************* -}
--- delete later
-tcFunBindRHS
-  :: UserTypeCtxt
-  -> Name
-  -> Mult
-  -> LCsExpr Rn
-  -> [ExpPatType]
-  -> ExpRhoType
-  -> TcM (CsWrapper, LCsExpr Tc)
-tcFunBindRHS ctxt fun_name mult body invis_pat_tys exp_ty = do
-  traceTc "tcFunBindRHS 1" (ppr fun_name $$ ppr mult $$ ppr exp_ty)
 
-  (wrap, r) <- tcScalingUsage mult $ do
-    traceTc "tcFunBindRHS 2" (vcat [ pprUserTypeCtxt ctxt
-                                   , ppr invis_pat_tys
-                                   , ppr rhs_ty ])
+-- tcFunBindRHS
+--   :: UserTypeCtxt
+--   -> Name
+--   -> Mult
+--   -> LCsExpr Rn
+--   -> [ExpPatType]
+--   -> ExpRhoType
+--   -> TcM (CsWrapper, LCsExpr Tc)
+-- tcFunBindRHS ctxt fun_name mult body invis_pat_tys exp_ty = do
+--   traceTc "tcFunBindRHS 1" (ppr fun_name $$ ppr mult $$ ppr exp_ty)
 
-    tcInvisMatches tcBody invis_pat_tys exp_ty body
+--   tcScalingUsage mult $ do
+--     traceTc "tcFunBindRHS 2" (vcat [ pprUserTypeCtxt ctxt
+--                                    , ppr invis_pat_tys
+--                                    , ppr exp_ty ])
+
+--     tcInvisMatches tcBody invis_pat_tys exp_ty 
 
 {- *********************************************************************
 *                                                                      *

@@ -45,6 +45,13 @@ data CsConPatTyArg p = CsConPatTyArg !(XConPatTyArg p) (CsTyPat p)
 
 type family XConPatTyArg p
 
+isInvisArgPat :: Pat p -> Bool
+isInvisArgPat ImpPat {} = True
+isInvisArgPat _ = False
+
+isVisArgPat :: Pat p -> Bool
+isVisArgPat = not . isInvisArgPat
+
 type CsConPatDetails p = CsConDetails (CsConPatTyArg (NoTc p)) (LPat p)
 
 csConPatArgs :: UnXRec p => CsConPatDetails p -> [LPat p]

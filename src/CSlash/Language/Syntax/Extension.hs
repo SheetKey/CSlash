@@ -113,6 +113,7 @@ type family XMultiIf x
 type family XLet x
 type family XExprWithTySig x
 type family XEmbTy x
+type family XXExpr x
 
 -- -------------------------------------
 -- HsTupArg type families

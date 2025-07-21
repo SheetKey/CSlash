@@ -262,6 +262,8 @@ type family CsDiagnosticCode c = n | n -> c where
   CsDiagnosticCode "OccursCheck"                                   = 27958
   CsDiagnosticCode "DifferentKiVars"                               = 25897
 
+  CsDiagnosticCode "TcRnMatchesHaveDiffNumArgs"                    = 91938
+
   CsDiagnosticCode "TcRnBindingOfExistingName"                     = 58805
   CsDiagnosticCode "TcRnQualifiedBinder"                           = 28329
   CsDiagnosticCode "TcRnMultipleFixityDecls"                       = 50419

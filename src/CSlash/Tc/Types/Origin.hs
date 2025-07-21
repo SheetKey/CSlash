@@ -181,6 +181,12 @@ isGivenOrigin (KindCoOrigin {}) = False
 isGivenOrigin (OccurrenceOf {}) = False
 isGivenOrigin TupleTyOrigin = False
 
+lexprCtOrigin :: LCsExpr Rn -> CtOrigin
+lexprCtOrigin (L _ e) = exprCtOrigin e
+
+exprCtOrigin :: CsExpr Rn -> CtOrigin
+exprCtOrigin = panic "exprCtOrigin"
+
 instance Outputable CtOrigin where
   ppr = pprCtOrigin
 
@@ -214,7 +220,7 @@ pprCtO _ = panic "pprCtO"
 ******************************************************************* -}
 
 data ExpectedFunTyOrigin
-  = ExpectedFunTyBody !TypedThing !(LCsExpr Rn)
+  = ExpectedFunTyLam !(CsExpr Rn)
 
 {- *******************************************************************
 *                                                                    *

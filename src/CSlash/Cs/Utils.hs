@@ -19,6 +19,8 @@ import CSlash.Language.Syntax.Extension
 import CSlash.Cs.Extension
 import CSlash.Parser.Annotation
 
+import CSlash.Tc.Types.Evidence
+
 import CSlash.Core.DataCon
 import CSlash.Core.Type ( Type )
 
@@ -137,6 +139,9 @@ mkNPat lit neg anns = NPat anns lit neg noSyntaxExpr
 mkBodyStmt :: LocatedA (bodyR Ps) -> StmtLR (CsPass idL) Ps (LocatedA (bodyR Ps))
 mkBodyStmt body = BodyStmt noExtField body
 
+mkTcBindStmt :: LPat Tc -> LocatedA (bodyR Tc) -> StmtLR Tc Tc (LocatedA (bodyR Tc))
+mkTcBindStmt pat body = BindStmt noExtField pat body
+
 mkPsBindStmt
   :: [AddEpAnn]
   -> LPat Ps
@@ -168,6 +173,16 @@ missingTupArg ann = Missing ann
 csTypeToCsSigType :: LCsType Ps -> LCsSigType Ps
 csTypeToCsSigType lty@(L loc ty) =
   L (l2l loc) $ CsSig noExtField lty
+
+{- *********************************************************************
+*                                                                      *
+        CsWrappers
+*                                                                      *
+********************************************************************* -}
+
+mkCsWrap :: CsWrapper -> CsExpr Tc -> CsExpr Tc
+mkCsWrap co_fn e | isIdCsWrapper co_fn = e
+mkCsWrap co_fn e = XExpr (WrapExpr co_fn e)
 
 {- *********************************************************************
 *                                                                      *

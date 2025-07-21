@@ -94,6 +94,7 @@ data TcRnMessage where
   TcRnMissingImportList :: IE Ps -> TcRnMessage
   TcRnImportLookup :: !ImportLookupReason -> TcRnMessage
   TcRnNotInScope :: NotInScopeError -> RdrName -> [ImportError] -> [CsHint] -> TcRnMessage
+  TcRnMatchesHaveDiffNumArgs :: !CsMatchContextRn -> !MatchArgBadMatches -> TcRnMessage
   TcRnShadowedName :: OccName -> ShadowedNameProvenance -> TcRnMessage
   TcRnSimplifierTooManyIterations :: Cts -> !IntWithInf -> WantedConstraints -> TcRnMessage
   TcRnBindingNameConflict :: !RdrName -> !(NE.NonEmpty SrcSpan) -> TcRnMessage
@@ -308,6 +309,11 @@ data CsDocContext
   | PatCtx
   | ExprWithTySigCtx
   | CsTypeCtx
+
+data MatchArgBadMatches where
+  MatchArgMatches :: { matchArgFirstMatch :: LocatedA (Match Rn body)
+                     , matchArgBadMatches :: NE.NonEmpty (LocatedA (Match Rn body)) }
+                  -> MatchArgBadMatches
 
 data WrongThingSort
   = WrongThingType

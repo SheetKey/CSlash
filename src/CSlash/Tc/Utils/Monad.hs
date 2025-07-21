@@ -488,6 +488,12 @@ wrapLocFstMA fn (L loc a) = setSrcSpanA loc $ do
   (b, c) <- fn a
   return (L loc b, c)
 
+wrapLocSndMA
+  :: (a -> TcM (b, c)) -> GenLocated (EpAnn ann) a -> TcM (b, GenLocated (EpAnn ann) c)
+wrapLocSndMA fn (L loc a) = setSrcSpanA loc $ do
+  (b, c) <- fn a
+  return (b, L loc c)
+
 setErrsVar :: TcRef (Messages TcRnMessage) -> TcRn a -> TcRn a
 setErrsVar v = updLclEnv $ \env -> env { tcl_errs = v }
 
@@ -596,6 +602,13 @@ pushCtxt ctxt = updLclEnv (updCtxt ctxt)
 updCtxt :: ErrCtxt -> TcLclEnv -> TcLclEnv
 updCtxt  ctxt env = addLclEnvErrCtxt ctxt env
  
+popErrCtxt :: TcM a -> TcM a
+popErrCtxt thing_inside = updLclEnv (\env -> setLclEnvErrCtxt (pop $ getLclEnvErrCtxt env) env)
+                          thing_inside
+  where
+    pop [] = []
+    pop (_:msgs) = msgs
+
 getCtLocM :: CtOrigin -> Maybe TypeOrKind -> TcM CtLoc
 getCtLocM origin t_or_k = do
   env <- getLclEnv

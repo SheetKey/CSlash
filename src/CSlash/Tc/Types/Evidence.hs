@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleContexts #-}
 
 module CSlash.Tc.Types.Evidence where
@@ -58,6 +59,7 @@ data CsWrapper
   | WpCompose CsWrapper CsWrapper
   | WpTyLam (AnyTyVar AnyKiVar) -- can probably be 'TcTyVar AnyKiVar' (these should be skols)
   | WpKiLam AnyKiVar            -- "             " 'TcKiVar'          "                     "
+  deriving Data.Data
 
 (<.>) :: CsWrapper -> CsWrapper -> CsWrapper
 WpHole <.> c = c

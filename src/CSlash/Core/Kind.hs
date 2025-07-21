@@ -72,6 +72,9 @@ mkMultMul AKd m = m
 mkMultMul m AKd = m
 mkMultMul LKd LKd = LKd
 
+mkMultSup :: Mult -> Mult -> Mult
+mkMultSup = mkMultMul
+
 data KiPred
   = LTKi
   | LTEQKi

@@ -40,6 +40,7 @@ data CsExpr p
   | CsLet (XLet p) (CsLocalBinds p) (LCsExpr p)
   | ExprWithTySig (XExprWithTySig p) (LCsExpr p) (LCsSigType (NoTc p))
   | CsEmbTy (XEmbTy p) (LCsType (NoTc p)) -- for cstylam and cstyapp
+  | XExpr !(XXExpr p)
 
 data CsTupArg id
   = Present (XPresent id) (LCsExpr id)

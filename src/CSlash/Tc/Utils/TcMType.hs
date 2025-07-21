@@ -139,6 +139,25 @@ fillKiCoercionHole (CoercionHole { ch_ref = ref, ch_co_var = cv }) co = do
   traceTc "Filling coercion hole" (ppr cv <+> text ":=" <+> ppr co)
   writeTcRef ref (Just co)
 
+{- **********************************************************************
+*
+                      ExpType functions
+*
+********************************************************************** -}
+
+readExpType_maybe :: MonadIO m => ExpType -> m (Maybe AnyType)
+readExpType_maybe (Check ty) = return (Just ty)
+readExpType_maybe (Infer _) = return Nothing
+{-# INLINABLE readExpType_maybe #-}
+
+readExpType :: MonadIO m => ExpType -> m AnyType
+readExpType exp_ty = do
+  mb_ty <- readExpType_maybe exp_ty
+  case mb_ty of
+    Just ty -> return ty
+    Nothing -> pprPanic "Unknown expected type" (ppr exp_ty)
+{-# INLINABLE readExpType #-}
+
 {- *********************************************************************
 *                                                                      *
         Constraints

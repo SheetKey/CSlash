@@ -158,6 +158,12 @@ instance Diagnostic TcRnMessage where
       pprImportLookup reason
     TcRnNotInScope err name imp_errs _ -> mkSimpleDecorated $
       pprScopeError name err $$ vcat (map ppr imp_errs)
+    TcRnMatchesHaveDiffNumArgs argsContext (MatchArgMatches match1 bad_matches)
+      -> mkSimpleDecorated $
+         vcat [ pprMatchContextNouns argsContext <+>
+                text "have different numbers of arguments"
+              , nest 2 (ppr (getLocA match1))
+              , nest 2 (ppr (getLocA (NE.head bad_matches))) ]
     TcRnShadowedName occ provenance ->
       let shadowed_locs = case provenance of
             ShadowedNameProvenanceLocal n -> [text "bound at" <+> ppr n]
@@ -217,6 +223,7 @@ instance Diagnostic TcRnMessage where
     TcRnMissingImportList{} -> WarningWithFlag Opt_WarnMissingImportList
     TcRnImportLookup{} -> ErrorWithoutFlag
     TcRnNotInScope{} -> ErrorWithoutFlag
+    TcRnMatchesHaveDiffNumArgs{} -> ErrorWithoutFlag
     TcRnShadowedName{} -> WarningWithFlag Opt_WarnNameShadowing
     TcRnSimplifierTooManyIterations{} -> ErrorWithoutFlag
     TcRnBindingNameConflict{} -> ErrorWithoutFlag
@@ -252,6 +259,7 @@ instance Diagnostic TcRnMessage where
            BadImportNotExportedSubordinates{} -> noHints
     TcRnImportLookup{} -> noHints
     TcRnNotInScope err _ _ hints -> scopeErrorHints err ++ hints
+    TcRnMatchesHaveDiffNumArgs{} -> noHints
     TcRnShadowedName{} -> noHints
     TcRnSimplifierTooManyIterations{} -> [SuggestIncreasedSimplifierIterations]
     TcRnBindingNameConflict{} -> noHints

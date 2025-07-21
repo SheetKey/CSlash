@@ -245,6 +245,9 @@ library
                     , CSlash.Tc.Gen.Bind
                     , CSlash.Tc.Gen.CsType
                     , CSlash.Tc.Gen.CsKind
+                    , CSlash.Tc.Gen.Expr
+                    , CSlash.Tc.Gen.Match
+                    , CSlash.Tc.Gen.Pat
                     , CSlash.Tc.Gen.Sig
                     , CSlash.Tc.Instance.Relation
                     , CSlash.Tc.Module

@@ -192,4 +192,5 @@ deriving instance Eq (IE Ps)
 deriving instance Eq (IE Rn)
 deriving instance Eq (IE Tc)
 
+deriving instance Data XXExprTc
 deriving instance Data XXPatCsTc

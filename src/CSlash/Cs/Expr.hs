@@ -20,6 +20,9 @@ import Prelude hiding ((<>))
 import CSlash.Language.Syntax.Expr
 import CSlash.Language.Syntax.Extension
 
+import CSlash.Tc.Types.Evidence
+import CSlash.Tc.Utils.TcType (AnyType)
+
 import CSlash.Data.FastString
 import CSlash.Cs.Extension
 import CSlash.Cs.Lit
@@ -170,6 +173,25 @@ type instance XPresent (CsPass _) = NoExtField
 type instance XMissing Ps = EpAnn Bool
 type instance XMissing Rn = NoExtField
 type instance XMissing Tc = NoExtField -- should be Scaled Type
+
+{- *********************************************************************
+*                                                                      *
+            XXExpr: the extension constructor of HsExpr
+*                                                                      *
+********************************************************************* -}
+
+type instance XXExpr Ps = DataConCantHappen
+type instance XXExpr Rn = DataConCantHappen
+type instance XXExpr Tc = XXExprTc
+
+data XXExprTc
+  = WrapExpr CsWrapper (CsExpr Tc)
+
+{- *********************************************************************
+*                                                                      *
+            Pretty-printing expressions
+*                                                                      *
+********************************************************************* -}
 
 instance (OutputableBndrId p) => Outputable (CsExpr (CsPass p)) where
   ppr expr = pprExpr expr
@@ -322,7 +344,7 @@ pprParendExpr p expr
   | csExprNeedsParens p expr = parens (pprExpr expr)
   | otherwise = pprExpr expr
 
-csExprNeedsParens :: IsPass p => PprPrec -> CsExpr (CsPass p) -> Bool
+csExprNeedsParens :: forall p. IsPass p => PprPrec -> CsExpr (CsPass p) -> Bool
 csExprNeedsParens prec = go
   where
     go :: CsExpr (CsPass p) -> Bool
@@ -347,6 +369,11 @@ csExprNeedsParens prec = go
     go (CsLet{}) = prec > topPrec
     go (ExprWithTySig{}) = prec >= sigPrec
     go (CsEmbTy{}) = prec > topPrec
+    go (XExpr x) = case csPass @p of
+                     Tc -> go_x_tc x
+
+    go_x_tc :: XXExprTc -> Bool
+    go_x_tc (WrapExpr _ e) = csExprNeedsParens prec e
     
 isAtomicCsExpr :: IsPass p => CsExpr (CsPass p) -> Bool
 isAtomicCsExpr (CsVar{}) = True
@@ -360,7 +387,7 @@ type instance XMG Tc b = MatchGroupTc
 
 data MatchGroupTc = MatchGroupTc
   { mg_arg_tys :: [()]
-  , mg_res_ty :: ()
+  , mg_res_ty :: AnyType
   , mk_origin :: Origin
   }
   deriving Data
@@ -440,9 +467,11 @@ matchSeparator _ = text "->"
 
 type instance XBindStmt (CsPass _) Ps b = [AddEpAnn]
 type instance XBindStmt (CsPass _) Rn b = NoExtField
-type instance XBindStmt (CsPass _) Tc b = NoExtField -- should be Type
+type instance XBindStmt (CsPass _) Tc b = NoExtField
 
-type instance XBodyStmt (CsPass _) (CsPass _) b = NoExtField
+type instance XBodyStmt (CsPass _) Ps b = NoExtField
+type instance XBodyStmt (CsPass _) Rn b = NoExtField
+type instance XBodyStmt (CsPass _) Tc b = AnyType
 
 type instance XLetStmt (CsPass _) (CsPass _) b = [AddEpAnn]
 
@@ -483,12 +512,32 @@ instance Outputable fn => Outputable (CsMatchContext fn) where
   ppr TyLamTyAlt = text "TyLamTyAlt"
   ppr (StmtCtxt _) = text "StmtCtxt _"
 
+pprMatchInCtxt :: (OutputableBndrId idR, Outputable body) => Match (CsPass idR) body -> SDoc
+pprMatchInCtxt match = hang (text "In" <+> pprMatchContext (m_ctxt match) <> colon)
+                       4 (pprMatch match)
+
+pprStmtInCtxt
+  :: (OutputableBndrId idL, OutputableBndrId idR
+     , Outputable fn, Outputable body
+     , Anno (StmtLR (CsPass idL) (CsPass idR) body) ~ SrcSpanAnnA)
+  => CsStmtContext fn
+  -> StmtLR (CsPass idL) (CsPass idR) body
+  -> SDoc
+pprStmtInCtxt ctxt stmt = hang (text "In a stmt of" <+> pprAStmtContext ctxt <> colon)
+                          2 (ppr_stmt stmt)
+  where
+    ppr_stmt stmt = pprStmt stmt
+
 pprMatchContext :: CsMatchContext fn -> SDoc
 pprMatchContext ctxt
   | want_an ctxt = text "an" <+> pprMatchContextNoun ctxt
   | otherwise = text "a" <+> pprMatchContextNoun ctxt
   where
     want_an _ = False
+
+pprMatchContextNouns :: Outputable fn => CsMatchContext fn -> SDoc
+pprMatchContextNouns (StmtCtxt ctxt) = text "pattern bindings in" $$ pprAStmtContext ctxt
+pprMatchContextNouns ctxt = pprMatchContextNoun ctxt <> char 's'
 
 pprMatchContextNoun :: CsMatchContext fn -> SDoc
 pprMatchContextNoun LamAlt = text "lambda abstraction"
