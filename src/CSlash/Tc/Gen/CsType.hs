@@ -820,19 +820,27 @@ tcExplicitBndrsX skol_mode bndrs thing_inside = case nonEmpty bndrs of
   Nothing -> do
     res <- thing_inside
     return ([], res)
-  Just bndrs1 -> do
-    (tclvl, wanted, (skol_tvs, res))
-      <- pushLevelAndCaptureConstraints
-         $ bindExplicitBndrsX skol_mode bndrs
-         $ thing_inside
-    let bndr_1 = NE.head bndrs1
-        bndr_n = NE.last bndrs1
-    skol_info <- mkSkolemInfo $ ForAllSkol $ CsTyVarBndrsRn (unLoc <$> bndrs)
-    traceTc "tcExplicitBndrsX/emitResidualTvConstraint"
-      $ vcat [ ppr (binderVars skol_tvs), ppr wanted ]
-    setSrcSpan (combineSrcSpans (getLocA bndr_1) (getLocA bndr_n))
-      $ emitResidualTvConstraint skol_info (binderVars skol_tvs) tclvl wanted
-    return (skol_tvs, res)
+  Just bndrs1 -> bindExplicitBndrsX skol_mode bndrs thing_inside
+
+    {- NOTE:
+       The following was done in GHC to prevent skolem escape.
+       We don't have that problem, since types and kinds are distinct,
+       and kinds can't be quantified by the user.
+       Thus, we DO NOT need to pushLevelAndCaptureConstraints forllowed by
+       emitResidualTvConstraint.
+    -}
+    -- (tclvl, wanted, (skol_tvs, res))
+    --   <- pushLevelAndCaptureConstraints
+    --      $ bindExplicitBndrsX skol_mode bndrs
+    --      $ thing_inside
+    -- let bndr_1 = NE.head bndrs1
+    --     bndr_n = NE.last bndrs1
+    -- skol_info <- mkSkolemInfo $ ForAllSkol $ CsTyVarBndrsRn (unLoc <$> bndrs)
+    -- traceTc "tcExplicitBndrsX/emitResidualTvConstraint"
+    --   $ vcat [ ppr (binderVars skol_tvs), ppr wanted ]
+    -- setSrcSpan (combineSrcSpans (getLocA bndr_1) (getLocA bndr_n))
+    --   $ emitResidualTvConstraint skol_info (binderVars skol_tvs) tclvl wanted
+    -- return (skol_tvs, res)
 
 bindExplicitBndrsX :: SkolemMode -> [LCsTyVarBndr Rn] -> TcM a -> TcM ([TcTyVarBinder], a)
 bindExplicitBndrsX skol_mode@(SM { sm_kind = ctxt_kind }) cs_tvs thing_inside = do

@@ -659,6 +659,8 @@ instance Outputable dead =>  Outputable (ImplicStatus dead) where
   ppr IC_Unsolved = text "Unsolved"
   ppr (IC_Solved dead) = text "Solved" <+> (braces (text "Dead givens =" <+> ppr dead))
 
+-- Probably don't need to do this.
+-- This was part of GHC's strategy to avoid skolem escape, a problem which we do not have.
 checkTelescopeSkol :: SkolemInfoAnon -> Bool
 checkTelescopeSkol (ForAllSkol {}) = True
 checkTelescopeSkol _ = False
