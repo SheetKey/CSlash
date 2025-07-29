@@ -479,7 +479,7 @@ runTcSWithKiCoBinds' restore_cycles abort_on_insoluble co_binds_var tcs = do
                    , tcs_unif_lvl = unif_lvl_var
                    , tcs_count = step_count
                    , tcs_ki_inerts = inert_var
-                   , tcs_ty_inerts = panic "runTcSWithKiCoBinds' tcs_ki_co_binds"
+                   , tcs_ty_inerts = panic "runTcSWithKiCoBinds' tcs_ty_inerts"
                    , tcs_abort_on_insoluble = abort_on_insoluble
                    , tcs_worklist = wl_var }
 
@@ -567,22 +567,17 @@ nestTcS (TcS thing_inside) = TcS $ \env@(TcSEnv { tcs_ki_inerts = ki_inerts_var
   let nest_env = env { tcs_ki_inerts = new_ki_inert_var
                      , tcs_ty_inerts = new_ty_inert_var
                      , tcs_worklist = new_wl_var }
-  res <- thing_inside nest_env
+  thing_inside nest_env
 
-  new_ki_inerts <- TcM.readTcRef new_ki_inert_var
-  new_ty_inerts <- TcM.readTcRef new_ty_inert_var
-
-  let old_kic = inert_ki_cans ki_inerts
-      old_tic = inert_ty_cans ty_inerts
-      new_kic = inert_ki_cans new_ki_inerts
-      new_tic = inert_ty_cans new_ty_inerts
-      nxt_kic = old_kic
-      nxt_tic = old_tic
-
-  TcM.writeTcRef ki_inerts_var (ki_inerts { inert_ki_cans = nxt_kic })
-  TcM.writeTcRef ty_inerts_var (ty_inerts { inert_ty_cans = nxt_tic })
-
-  return res
+nestKiTcS :: TcS a -> TcS a
+nestKiTcS (TcS thing_inside) = TcS $ \env@(TcSEnv { tcs_ki_inerts = ki_inerts_var }) -> do
+  ki_inerts <- TcM.readTcRef ki_inerts_var
+  new_ki_inert_var <- TcM.newTcRef ki_inerts
+  new_wl_var <- TcM.newTcRef emptyWorkList
+  let nest_env = env { tcs_ki_inerts = new_ki_inert_var
+                     , tcs_ty_inerts = panic "nestKiTcS tcs_ty_inerts"
+                     , tcs_worklist = new_wl_var }
+  thing_inside nest_env
 
 getUnifiedRef :: TcS (IORef Int)
 getUnifiedRef = TcS (return . tcs_unified)

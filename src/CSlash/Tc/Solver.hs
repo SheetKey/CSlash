@@ -178,7 +178,7 @@ simplifyTopWanteds wanteds = do
 
 simplifyTopKiWanteds :: WantedKiConstraints -> TcS WantedKiConstraints
 simplifyTopKiWanteds wanteds = do
-  wc_first_go <- nestTcS (solveKiWanteds wanteds)
+  wc_first_go <- nestKiTcS (solveKiWanteds wanteds)
   useUnsatisfiableGivens wc_first_go
 
 useUnsatisfiableGivens :: WantedKiConstraints -> TcS WantedKiConstraints
