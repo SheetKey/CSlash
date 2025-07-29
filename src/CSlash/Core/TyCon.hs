@@ -231,6 +231,28 @@ isMonoTcTyCon (TyCon { tyConDetails = details })
   | TcTyCon { tctc_is_poly = is_poly } <- details = not is_poly
   | otherwise = False
 
+{- -------------------------------------------
+--      Expand type-constructor applications
+-------------------------------------------- -}
+
+data ExpandSynResult tv kv tyco
+  = NoExpansion
+  | ExpandsSyn [tyco] (Type tv kv) [tyco]
+
+expandSynTyCon_maybe :: IsTyVar tv kv => TyCon tv kv -> [tyco] -> ExpandSynResult tv kv tyco
+expandSynTyCon_maybe (TyCon { tyConArity = arity, tyConDetails = details }) cos
+  | SynonymTyCon { synTcRhs = rhs } <- details
+  = if arity == 0
+    then ExpandsSyn [] (asGenericTyKi rhs) cos
+    else case cos `listLengthCmp` arity of
+           GT -> ExpandsSyn cos_1 (asGenericTyKi rhs) cos_2
+           EQ -> ExpandsSyn cos_1 (asGenericTyKi rhs) cos_2
+           LT -> NoExpansion
+  | otherwise
+  = NoExpansion
+  where
+    (cos_1, cos_2) = splitAt arity cos
+
 {- *********************************************************************
 *                                                                      *
             TyCon Construction
@@ -320,6 +342,17 @@ isPrimTyCon :: TyCon tv kv -> Bool
 isPrimTyCon (TyCon { tyConDetails = details })
   | PrimTyCon {} <- details = True
   | otherwise = False
+
+isInjectiveTyCon :: TyCon tv kv -> Bool
+isInjectiveTyCon (TyCon { tyConDetails = details }) = go details
+  where
+    go (AlgTyCon{}) = True
+    go (SynonymTyCon{}) = False
+    go (PrimTyCon{}) = True
+    go (TcTyCon{}) = True
+
+isGenerativeTyCon :: TyCon tv kv -> Bool
+isGenerativeTyCon = isInjectiveTyCon
 
 isTypeSynonymTyCon :: TyCon tv kv -> Bool
 isTypeSynonymTyCon (TyCon { tyConDetails = details })

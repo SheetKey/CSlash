@@ -4,6 +4,7 @@
 module CSlash.Tc.Utils.TcType
   ( module CSlash.Tc.Utils.TcType
   , TcTyVar, TcKiVar
+  , AnyTypeCoercion, AnyTypeCoercionHole
   ) where
 
 import Prelude hiding ((<>))
@@ -34,6 +35,7 @@ import CSlash.Types.Basic
 import CSlash.Utils.Misc
 import CSlash.Utils.Outputable
 import CSlash.Utils.Panic
+import CSlash.Data.List.SetOps (getNth)
 
 import Data.IORef (IORef)
 
@@ -50,6 +52,7 @@ type AnyTvSubst = TvSubst (AnyTyVar AnyKiVar) AnyKiVar
 type AnyKvSubst = KvSubst AnyKiVar
 
 type AnyRhoType = AnyType
+type AnyTauType = AnyType
 type AnySigmaType = AnyType
 
 type AnyTyVarBinder = VarBndr (AnyTyVar AnyKiVar) ForAllFlag
@@ -59,6 +62,8 @@ type MonoAnyTyCon = AnyTyCon
 type PolyAnyTyCon = AnyTyCon
 type MonoTcTyCon = TcTyCon
 type PolyTcTyCon = TcTyCon
+
+type AnyPredType = AnyType
 
 type AnyKind = Kind AnyKiVar
 type AnyMonoKind = MonoKind AnyKiVar
@@ -263,7 +268,7 @@ any_rewritable_ki kv_pred = go_mono emptyVarSet
     go_kv bvs kv | kv `elemVarSet` bvs = False
                  | otherwise = handleAnyKv (const False) kv_pred kv
 
-    go_pred :: MkVarSet AnyKiVar -> KiPred -> AnyMonoKind -> AnyMonoKind -> Bool
+    go_pred :: MkVarSet AnyKiVar -> KiPredCon -> AnyMonoKind -> AnyMonoKind -> Bool
     go_pred bvs _ ki1 ki2 = go_mono bvs ki1 || go_mono bvs ki2
 
 anyRewritableKiVar :: (TcKiVar -> Bool) -> AnyMonoKind -> Bool
@@ -379,13 +384,16 @@ tcSplitMonoFunKi_maybe = splitMonoFunKi_maybe
 tcSplitForAllKi_maybe :: AnyKind -> Maybe (AnyKiVar, AnyKind)
 tcSplitForAllKi_maybe = splitForAllKi_maybe
 
--- tcSplitPiKi_maybe :: Kind -> Maybe (Either (KindVar, Kind) (FunKiFlag, MonoKind, MonoKind))
--- tcSplitPiKi_maybe ki = assert (isMaybeKiBinder ski) ski
---   where
---     ski = splitPiKi_maybe ki
+tcSplitPiKi_maybe
+  :: AnyKind -> Maybe (Either (AnyKiVar, AnyKind) (FunKiFlag, AnyMonoKind, AnyMonoKind))
+tcSplitPiKi_maybe ki = ski
+  where
+    ski = splitPiKi_maybe ki
 
---     isMaybeKiBinder (Just (Left (kv, _))) = isKiVar kv
---     isMaybeKiBinder _ = True
+isVisiblePiKiBndr :: Either (AnyKiVar, AnyKind) (FunKiFlag, AnyMonoKind, AnyMonoKind) -> Bool
+isVisiblePiKiBndr (Left {}) = False
+isVisiblePiKiBndr (Right (FKF_C_K, _, _)) = False
+isVisiblePiKiBndr (Right (FKF_K_K, _, _)) = True
 
 {- *********************************************************************
 *                                                                      *
@@ -400,6 +408,9 @@ isKiVarKcPred ki = case getPredKis_maybe ki of
 
 kiCoVarPred :: KiCoVar AnyKiVar -> AnyPredKind
 kiCoVarPred = varKind
+
+tyCoVarPred :: TyCoVar (AnyTyVar AnyKiVar) AnyKiVar -> AnyPredType
+tyCoVarPred = varType
 
 mkMinimalBy :: forall a. (a -> AnyPredKind) -> [a] -> [a]
 mkMinimalBy get_pred xs = go preds_with_cox []
@@ -451,6 +462,16 @@ tcSplitBigLamTyVarBinders :: IsTyVar tv kv => Type tv kv -> ([kv], Type tv kv)
 tcSplitBigLamTyVarBinders ty = sty
   where sty = splitBigLamTyBinders ty
 
+tcSplitForAllTyVarsReqTVBindersN
+  :: IsTyVar tv kv => Arity -> Type tv kv -> (Arity, [ForAllBinder tv], Type tv kv)
+tcSplitForAllTyVarsReqTVBindersN n_req ty = split n_req ty ty []
+  where
+    split n_req _orig_ty (ForAllTy b@(Bndr _ argf) ty) bs
+      | isVisibleForAllFlag argf, n_req > 0 = split (n_req - 1) ty ty (b:bs)
+      | otherwise = split n_req ty ty (b:bs)
+    split n_req orig_ty ty bs | Just ty' <- coreView ty = split n_req orig_ty ty' bs
+    split n_req orig_ty _ bs = (n_req, reverse bs, orig_ty)
+
 tcSplitSigma :: IsTyVar tv kv => Type tv kv -> ([kv], [tv], Type tv kv)
 tcSplitSigma ty = case tcSplitBigLamTyVarBinders ty of
                     (kvs, ty') -> case tcSplitForAllInvisBinders ty' of
@@ -478,3 +499,24 @@ isRigidKi ki = case ki of
   BIKi {} -> True
   FunKi {} -> True
   _ -> False
+
+{- *********************************************************************
+*                                                                      *
+        Visiblities
+*                                                                      *
+********************************************************************* -}
+
+tyConVisibilities :: AnyTyCon -> [Bool]
+tyConVisibilities tc = map (const False) fa_kvs ++ map (const False) invis_args ++ repeat True
+  where
+    (fa_kvs, monoki) = splitForAllKiVars (tyConKind tc)
+    (invis_args, _) = splitInvisFunKis monoki
+
+isNextTyConArgVisible :: AnyTyCon -> [AnyType] -> Bool
+isNextTyConArgVisible tc tys
+  = tyConVisibilities tc `getNth` length tys
+
+isNextArgVisible :: AnyType -> Bool
+isNextArgVisible ty
+  | Just bndr <- tcSplitPiKi_maybe (typeKind ty) = isVisiblePiKiBndr bndr
+  | otherwise = True

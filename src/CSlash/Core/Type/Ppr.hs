@@ -36,6 +36,9 @@ pprTyVar tv = parens (ppr tv <+> colon <+> ppr kind)
   where
     kind = varKind tv
 
+debugPprType :: IsTyVar tv kv => Type tv kv -> SDoc
+debugPprType ty = debug_ppr_ty topPrec ty
+
 debug_ppr_ty :: IsTyVar tv kv => PprPrec -> Type tv kv -> SDoc
 
 debug_ppr_ty _ (TyVarTy tv) = ppr tv

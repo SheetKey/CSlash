@@ -58,11 +58,13 @@ primTyCons :: [PTyCon]
 primTyCons = unexposedPrimTyCons ++ exposedPrimTyCons
 
 unexposedPrimTyCons :: [PTyCon]
-unexposedPrimTyCons = []
+unexposedPrimTyCons = [ eqTyCon ]
 
 exposedPrimTyCons :: [PTyCon]
 exposedPrimTyCons
   = [ fUNTyCon ]
+
+
 
 {- *********************************************************************
 *                                                                      *
@@ -184,3 +186,26 @@ _mkFUNTyCon :: PMonoKind -> PTyCon
 _mkFUNTyCon res_kind = mkPrimTyCon fUNTyConName tc_kind 2
   where
     tc_kind = mkTemplateTyConKindFromRes 2 res_kind
+
+{- *********************************************************************
+*                                                                      *
+                Equality constraints
+*                                                                      *
+********************************************************************* -}
+
+eqTyConName :: Name
+eqTyConName = mkPrimTc (fsLit "~") eqTyConKey eqTyCon
+
+eqTyCon :: PTyCon
+eqTyCon = mkPrimTyCon eqTyConName kind 2
+  where
+    (k1, k2) = case mkTemplateKindVars 2 of
+                 [k1, k2] -> (k1, k2)
+                 _ -> undefined
+    -- forall k1 k2. k1 -> k2 -> UKd
+    kind = ForAllKi k1
+           $ ForAllKi k2
+           $ Mono
+           $ FunKi FKF_K_K (KiVarKi k1)
+           $ FunKi FKF_K_K (KiVarKi k2)
+           $ BIKi UKd

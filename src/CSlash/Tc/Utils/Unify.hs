@@ -22,8 +22,8 @@ import CSlash.Tc.Zonk.TcType
 
 import CSlash.Core.Type
 import CSlash.Core.Type.Rep
+import CSlash.Core.Type.Ppr (debugPprType)
 -- import GHC.Core.TyCo.FVs( isInjectiveInType )
--- import CSlash.Core.Type.Ppr( debugPprType {- pprTyVar -} )
 import CSlash.Core.TyCon
 -- import GHC.Core.Coercion
 import CSlash.Core.Kind
@@ -99,23 +99,33 @@ tcSkolemizeCompleteSig (CSig { sig_bndr = poly_id, sig_ctxt = ctxt, sig_loc = lo
                     ++ (map (mkInvisExpPatType . snd) tv_prs))
                    rho_ty
 
+checkTyConstraints :: SkolemInfoAnon -> [TcTyVar AnyKiVar] -> TcM result -> TcM (result)
+checkTyConstraints skol_info skol_tvs thing_inside = do
+  implication_needed <- implicationNeeded skol_info skol_tvs
+  if implication_needed
+    then panic "checkTyConstraints"
+    else panic "checkTyConstraints"
+
 checkKiConstraints :: SkolemInfoAnon -> [KiCoVar AnyKiVar] -> TcM result -> TcM result
 checkKiConstraints skol_info given thing_inside = do
-  implication_needed <- implicationNeeded skol_info given
+  implication_needed <- kiImplicationNeeded skol_info given
   
   if implication_needed
     then do (tclvl, wanted, result) <- pushLevelAndCaptureConstraints thing_inside
-            implics <- buildImplicationFor tclvl skol_info given wanted
-            emitImplications implics
+            wanted <- case onlyWantedKiConstraints_maybe wanted of
+                        Just w -> return w
+                        _ -> pprPanic "checkKiConstraints has ty constraints" (ppr wanted)
+            implics <- buildKiImplicationFor tclvl skol_info given wanted
+            emitKiImplications implics
             return result
     else thing_inside
 
-emitResidualKvConstraint :: SkolemInfo -> [TcKiVar] -> TcLevel -> WantedConstraints -> TcM ()
+emitResidualKvConstraint :: SkolemInfo -> [TcKiVar] -> TcLevel -> WantedKiConstraints -> TcM ()
 emitResidualKvConstraint skol_info skol_kvs tclvl wanted
   | not (isEmptyWC wanted)
     || checkTelescopeSkol skol_info_anon
   = do implic <- buildKvImplication skol_info_anon skol_kvs tclvl wanted
-       emitImplication implic
+       emitKiImplication implic
   | otherwise
   = return ()
   where
@@ -125,32 +135,32 @@ buildKvImplication
   :: SkolemInfoAnon
   -> [TcKiVar]
   -> TcLevel
-  -> WantedConstraints
-  -> TcM Implication
+  -> WantedKiConstraints
+  -> TcM KiImplication
 buildKvImplication skol_info skol_kvs tclvl wanted
   = assertPpr (all (isSkolemVar <||> isTcVarVar) skol_kvs) (ppr skol_kvs) $ do
   ki_co_binds <- newTcKiCoBinds
   implic <- newImplication
-  let implic' = implic { ic_tclvl = tclvl
-                       , ic_skols = skol_kvs
-                       , ic_given_kicos = NoGivenKiCos
-                       , ic_wanted = wanted
-                       , ic_binds = ki_co_binds
-                       , ic_info = skol_info }
-  checkImplicationInvariants implic'
+  let implic' = implic { kic_tclvl = tclvl
+                       , kic_skols = skol_kvs
+                       , kic_given_kicos = NoGivenKiCos
+                       , kic_wanted = wanted
+                       , kic_binds = ki_co_binds
+                       , kic_info = skol_info }
+  checkKiImplicationInvariants implic'
   return implic'
 
 emitResidualTvConstraint
   :: SkolemInfo
   -> [TcTyVar AnyKiVar]
   -> TcLevel
-  -> WantedConstraints
+  -> WantedTyConstraints
   -> TcM ()
 emitResidualTvConstraint skol_info skol_tvs tclvl wanted
   | not (isEmptyWC wanted)
     || checkTelescopeSkol skol_info_anon
   = do implic <- buildTvImplication skol_info_anon skol_tvs tclvl wanted
-       emitImplication implic
+       emitTyImplication implic
   | otherwise
   = return ()
   where
@@ -160,25 +170,39 @@ buildTvImplication
   :: SkolemInfoAnon
   -> [TcTyVar AnyKiVar]
   -> TcLevel
-  -> WantedConstraints
-  -> TcM Implication
+  -> WantedTyConstraints
+  -> TcM TyImplication
 buildTvImplication skol_info skol_vs tclvl wanted
   = assertPpr (all (isSkolemVar <||> isTcVarVar) skol_vs) (ppr skol_vs) $ do
       traceTc "buildTvImplication ******************************"
         $ vcat [ ppr skol_vs, ppr skol_info, ppr wanted ]
-      co_binds <- newTcKiCoBinds
+      co_binds <- newTcTyCoBinds
       implic <- newImplication
-      let implic' = implic { ic_tclvl = tclvl
-                           , ic_skols = [] -- skol_vs
-                           , ic_given_kicos = NoGivenKiCos
-                           , ic_wanted = wanted
-                           , ic_binds = co_binds
-                           , ic_info = skol_info }
-      checkImplicationInvariants implic'
+      let implic' = implic { tic_tclvl = tclvl
+                           , tic_skols = [] -- skol_vs
+                           , tic_given_eqs = NoGivenTyEqs
+                           , tic_wanted = wanted
+                           , tic_binds = co_binds
+                           , tic_info = skol_info }
+      checkTyImplicationInvariants implic'
       return implic'
 
-implicationNeeded :: SkolemInfoAnon -> [KiCoVar kv] -> TcM Bool
-implicationNeeded skol_info given
+implicationNeeded :: SkolemInfoAnon -> [TcTyVar AnyKiVar] -> TcM Bool
+implicationNeeded skol_info skol_tvs
+  | null skol_tvs
+  , not (alwaysBuildImplication skol_info)
+  = do tc_lvl <- getTcLevel
+       if not (isTopTcLevel tc_lvl)
+         then return False
+         else do dflags <- getDynFlags
+                 return $ gopt Opt_DeferTypeErrors dflags
+                       || gopt Opt_DeferTypedHoles dflags
+                       || gopt Opt_DeferOutOfScopeVariables dflags
+  | otherwise
+  = return True
+
+kiImplicationNeeded :: SkolemInfoAnon -> [KiCoVar kv] -> TcM Bool
+kiImplicationNeeded skol_info given
   | null given
   , not (alwaysBuildImplication skol_info)
   = do tc_lvl <- getTcLevel
@@ -194,25 +218,25 @@ implicationNeeded skol_info given
 alwaysBuildImplication :: SkolemInfoAnon -> Bool
 alwaysBuildImplication _ = False
 
-buildImplicationFor
+buildKiImplicationFor
   :: TcLevel
   -> SkolemInfoAnon
   -> [KiCoVar AnyKiVar]
-  -> WantedConstraints
-  -> TcM (Bag Implication)
-buildImplicationFor tclvl skol_info given wanted
+  -> WantedKiConstraints
+  -> TcM (Bag KiImplication)
+buildKiImplicationFor tclvl skol_info given wanted
   | isEmptyWC wanted && null given
   = return emptyBag
   | otherwise
   = do co_binds_var <- newTcKiCoBinds
        implic <- newImplication
-       let implic' = implic { ic_tclvl = tclvl
-                            , ic_skols = []
-                            , ic_given = given
-                            , ic_wanted = wanted
-                            , ic_binds = co_binds_var
-                            , ic_info = skol_info }
-       checkImplicationInvariants implic'
+       let implic' = implic { kic_tclvl = tclvl
+                            , kic_skols = []
+                            , kic_given = given
+                            , kic_wanted = wanted
+                            , kic_binds = co_binds_var
+                            , kic_info = skol_info }
+       checkKiImplicationInvariants implic'
        return (unitBag implic')
 
 matchExpectedFunTys
@@ -234,7 +258,12 @@ matchExpectedFunTys herald ctx arity (Check top_ty) thing_inside
     check n_req rev_pat_tys ty
       | isSigmaTy ty
         || (n_req > 0 && isForAllTy ty)
-      = do panic "matchExpectedFunTys/check case 1"
+      = do rec { (n_req', wrap_gen, tv_nms, bndrs, inner_ty)
+                   <- skolemizeRequired skol_info n_req ty
+               ; let sig_skol = SigSkol ctx top_ty (tv_nms `zip` skol_tvs)
+                     skol_tvs = binderVars bndrs
+               ; skol_info <- mkSkolemInfo sig_skol }
+           panic "unfinished"
 
     check n_req rev_pat_tys rho_ty
       | n_req == 0
@@ -246,11 +275,44 @@ matchExpectedFunTys herald ctx arity (Check top_ty) thing_inside
 
 {- *********************************************************************
 *                                                                      *
-                Unification
+                Type Unification
 *                                                                      *
 ********************************************************************* -}
 
-unifyKind :: Maybe KindedThing -> KiPred -> AnyMonoKind -> AnyMonoKind -> TcM AnyKindCoercion
+unifyType :: Maybe TypedThing -> AnyTauType -> AnyTauType -> TcM AnyTypeCoercion
+unifyType thing ty1 ty2 = unifyTypeAndEmit origin ty1 ty2
+  where
+    origin = TypeEqOrigin { uo_actual = ty1
+                          , uo_expected = ty2
+                          , uo_thing = thing
+                          , uo_visible = True }
+
+unifyTypeAndEmit :: CtOrigin -> AnyType -> AnyType -> TcM AnyTypeCoercion
+unifyTypeAndEmit orig ty1 ty2 = do
+  ty_ref <- newTcRef emptyBag
+  ki_ref <- newTcRef emptyBag
+  loc <- getCtLocM orig (Just TypeLevel)
+  let env = UE { u_loc = loc
+               , u_ki_rewriters = emptyKiRewriterSet
+               , u_ty_rewriters = emptyTyRewriterSet
+               , u_ty_defer = ty_ref
+               , u_ki_defer = ki_ref
+               , u_ki_unified = Nothing
+               , u_ty_unified = Nothing }
+  co <- uType env ty1 ty2
+  ty_cts <- readTcRef ty_ref
+  unless (null ty_cts) (emitTySimples ty_cts)
+  ki_cts <- readTcRef ki_ref
+  unless (null ki_cts) (emitKiSimples ki_cts)
+  return co
+
+{- *********************************************************************
+*                                                                      *
+                Kind Unification
+*                                                                      *
+********************************************************************* -}
+
+unifyKind :: Maybe KindedThing -> KiPredCon -> AnyMonoKind -> AnyMonoKind -> TcM AnyKindCoercion
 unifyKind thing kc ki1 ki2 = unifyKindAndEmit origin kc ki1 ki2
   where
     origin = KindCoOrigin { kco_actual = ki1
@@ -259,44 +321,174 @@ unifyKind thing kc ki1 ki2 = unifyKindAndEmit origin kc ki1 ki2
                           , kco_thing = thing
                           , kco_visible = True }
 
-unifyKindAndEmit :: CtOrigin -> KiPred -> AnyMonoKind -> AnyMonoKind -> TcM AnyKindCoercion
+unifyKindAndEmit :: CtOrigin -> KiPredCon -> AnyMonoKind -> AnyMonoKind -> TcM AnyKindCoercion
 unifyKindAndEmit orig kc ki1 ki2 = do
-  ref <- newTcRef emptyBag
+  ki_ref <- newTcRef emptyBag
   loc <- getCtLocM orig (Just KindLevel)
   let env = UE { u_loc = loc
-               , u_rewriters = emptyRewriterSet
-               , u_defer = ref
-               , u_unified = Nothing }
+               , u_ki_rewriters = emptyKiRewriterSet
+               , u_ki_defer = ki_ref
+               , u_ki_unified = Nothing
+               , u_ty_rewriters = panic "unifyKindAndEmit u_ty_rewriters"
+               , u_ty_defer = panic "unifyKindAndEmit u_ty_defer"
+               , u_ty_unified = panic "unifyKindAndEmit u_ty_unified" }
   co <- uKind env kc ki1 ki2
-  cts <- readTcRef ref
-  unless (null cts) (emitSimples cts)
+  ki_cts <- readTcRef ki_ref
+  unless (null ki_cts) (emitKiSimples ki_cts)
   return co
 
 {- *********************************************************************
 *                                                                      *
-                uType and uKind
+                uType
 *                                                                      *
 ********************************************************************* -}
 
 data UnifyEnv = UE
   { u_loc :: CtLoc
-  , u_rewriters :: RewriterSet
-  , u_defer :: TcRef Cts
-  , u_unified :: Maybe (TcRef [TcKiVar])
+  , u_ty_rewriters :: TyRewriterSet
+  , u_ki_rewriters :: KiRewriterSet
+  , u_ty_defer :: TcRef TyCts
+  , u_ki_defer :: TcRef KiCts
+  , u_ty_unified :: Maybe (TcRef [TcTyVar AnyKiVar])
+  , u_ki_unified :: Maybe (TcRef [TcKiVar])
   }
 
 updUEnvLoc :: UnifyEnv -> (CtLoc -> CtLoc) -> UnifyEnv
 updUEnvLoc uenv@(UE { u_loc = loc }) upd = uenv { u_loc = upd loc }
 
-uKind_defer :: UnifyEnv -> KiPred -> AnyMonoKind -> AnyMonoKind -> TcM AnyKindCoercion
-uKind_defer (UE { u_loc = loc, u_defer = ref, u_rewriters = rewriters }) kc ki1 ki2 = do
+mkKindEnv :: UnifyEnv -> AnyType -> AnyType -> UnifyEnv
+mkKindEnv env@(UE { u_loc = ctloc }) ty1 ty2
+  = env { u_loc = mkKindEqLoc ty1 ty2 ctloc }
+
+uType_defer :: UnifyEnv -> AnyType -> AnyType -> TcM AnyTypeCoercion
+uType_defer (UE { u_loc = loc, u_ty_defer = ref, u_ty_rewriters = rewriters }) ty1 ty2 = do
+  let pred_ty = mkTyEqPred ty1 ty2
+  hole <- newTyCoercionHole pred_ty
+  let ct = mkNonCanonicalTy
+           $ CtTyWanted { cttev_pred = pred_ty
+                        , cttev_dest = hole
+                        , cttev_loc = loc
+                        , cttev_rewriters = rewriters }
+      co = TyHoleCo hole
+  updTcRef ref (`snocBag` ct)
+
+  whenDOptM Opt_D_dump_tc_trace $ do
+    ctxt <- getErrCtxt
+    doc <- mkErrInfo emptyTidyEnv ctxt
+    traceTc "uType_defer"
+      $ vcat [ debugPprType ty1, debugPprType ty2, doc ]
+    traceTc "uType_defer2" (ppr co)
+
+  return co
+
+uType :: UnifyEnv -> AnyType -> AnyType -> TcM AnyTypeCoercion
+uType env orig_ty1 orig_ty2 = do
+  tclvl <- getTcLevel
+  traceTc "u_tys"
+    $ vcat [ text "tclvl" <+> ppr tclvl
+           , sep [ ppr orig_ty1, text "~", ppr orig_ty2 ] ]
+
+  co <- go orig_ty1 orig_ty2
+  if isReflTyCo co
+    then traceTc "u_tys yields no coercion:" empty
+    else traceTc "u_tys yields coercion:" (ppr co)
+  return co
+
+  where
+    go :: AnyType -> AnyType -> TcM AnyTypeCoercion
+
+    go (CastTy t1 kco1) t2 = do
+      co_tys <- uType env t1 t2
+      return $ mkCoherenceLeftCo t1 kco1 co_tys
+
+    go t1 (CastTy t2 kco2) = do
+      co_tys <- uType env t1 t2
+      return $ mkCoherenceRightCo t2 kco2 co_tys
+
+    go (TyVarTy tv1) ty2 = do
+      lookup_res <- handleAnyTv (const $ return Nothing) isFilledMetaTyVar_maybe tv1
+      case lookup_res of
+        Just ty1 -> do traceTc "found filled tyvar" (ppr tv1 <+> text ":->" <+> ppr ty1)
+                       uType env ty1 orig_ty2
+        Nothing -> uUnfilledTyVar env NotSwapped tv1 ty2
+
+    go ty1 (TyVarTy tv2) = do
+      lookup_res <- handleAnyTv (const $ return Nothing) isFilledMetaTyVar_maybe tv2
+      case lookup_res of
+        Just ty2 -> do traceTc "found filled tyvar" (ppr tv2 <+> text ":->" <+> ppr ty2)
+                       uType env orig_ty1 ty2
+        Nothing -> uUnfilledTyVar env IsSwapped tv2 ty1
+
+    go ty1@(TyConApp tc1 []) ty2@(TyConApp tc2 [])
+      | tc1 == tc2
+      = return $ mkReflTyCo ty1
+
+    go ty1 ty2
+      | Just ty1' <- coreView ty1 = go ty1' ty2
+      | Just ty2' <- coreView ty2 = go ty1 ty2'
+
+    go ty1@(FunTy { ft_kind = k1, ft_arg = arg1, ft_res = res1 })
+       ty2@(FunTy { ft_kind = k2, ft_arg = arg2, ft_res = res2 })
+      = do kco <- uKind (mkKindEnv env ty1 ty2) EQKi k1 k2
+           co_l <- uType env arg1 arg2
+           co_r <- uType env res1 res2
+           return $ mkTyFunCo kco co_l co_r
+
+    go ty1@(TyConApp tc1 tys1) ty2@(TyConApp tc2 tys2)
+      | tc1 == tc2
+      , equalLength tys1 tys2
+      , isInjectiveTyCon tc1
+      = assertPpr (isGenerativeTyCon tc1) (ppr tc1) $ do
+          traceTc "go-tycon" (ppr tc1 $$ ppr tys1 $$ ppr tys2)
+          cos <- zipWith3M u_tc_arg (tyConVisibilities tc1) tys1 tys2
+          return $ mkTyConAppCo tc1 cos
+
+    go ty1@(AppTy s1 t1) ty2@(AppTy s2 t2)
+      = go_app (isNextArgVisible s1) ty1 s1 t1 ty2 s2 t2
+
+    go ty1@(AppTy s1 t1) ty2@(TyConApp tc2 ts2)
+      | Just (ts2', t2') <- snocView ts2
+      = assert (not (tyConMustBeSaturated tc2))
+        $ go_app (isNextTyConArgVisible tc2 ts2') ty1 s1 t1 ty2 (TyConApp tc2 ts2') t2'
+
+    go ty1@(TyConApp tc1 ts1) ty2@(AppTy s2 t2)
+      | Just (ts1', t1') <- snocView ts1
+      = assert (not (tyConMustBeSaturated tc1))
+        $ go_app (isNextTyConArgVisible tc1 ts1') ty1 (TyConApp tc1 ts1') t1' ty2 s2 t2
+
+    go ty1@(KindCoercion kco1) ty2@(KindCoercion kco2) = do
+      kco <- uKind (mkKindEnv env ty1 ty2) EQKi (kiCoercionKind kco1) (kiCoercionKind kco2)
+      return $ liftKCo kco ty1
+
+    go ty1@(Embed ki1) ty2@(Embed ki2) = do
+      kco <- uKind (mkKindEnv env ty1 ty2) EQKi ki1 ki2
+      return $ liftKCo kco ty1
+
+    go ty1 ty2 = defer ty1 ty2
+
+    defer ty1 ty2
+      | panic "ty1 `tcEqType` ty2" = return (mkReflTyCo ty1)
+      | otherwise = uType_defer env orig_ty1 orig_ty2
+
+    u_tc_arg is_vis ty1 ty2 = panic "u_tc_arg"
+
+    go_app vis ty1 s1 t1 ty2 s2 t2 = panic "go_app"
+
+{- *********************************************************************
+*                                                                      *
+                uKind
+*                                                                      *
+********************************************************************* -}
+
+uKind_defer :: UnifyEnv -> KiPredCon -> AnyMonoKind -> AnyMonoKind -> TcM AnyKindCoercion
+uKind_defer (UE { u_loc = loc, u_ki_defer = ref, u_ki_rewriters = rewriters }) kc ki1 ki2 = do
   let pred_ki = mkKiCoPred kc ki1 ki2
   hole <- newKiCoercionHole pred_ki
-  let ct = mkNonCanonical
-           $ CtWanted { ctev_pred = pred_ki
-                      , ctev_dest = hole
-                      , ctev_loc = loc
-                      , ctev_rewriters = rewriters }
+  let ct = mkNonCanonicalKi
+           $ CtKiWanted { ctkev_pred = pred_ki
+                      , ctkev_dest = hole
+                      , ctkev_loc = loc
+                      , ctkev_rewriters = rewriters }
       co = HoleCo hole
   updTcRef ref (`snocBag` ct)
   whenDOptM Opt_D_dump_tc_trace $ do
@@ -308,7 +500,7 @@ uKind_defer (UE { u_loc = loc, u_defer = ref, u_rewriters = rewriters }) kc ki1 
 
   return co
 
-uKind :: UnifyEnv -> KiPred -> AnyMonoKind -> AnyMonoKind -> TcM AnyKindCoercion
+uKind :: UnifyEnv -> KiPredCon -> AnyMonoKind -> AnyMonoKind -> TcM AnyKindCoercion
 uKind env kc orig_ki1 orig_ki2 = do
   tclvl <- getTcLevel
   traceTc "u_kis"
@@ -398,18 +590,27 @@ uKind env kc orig_ki1 orig_ki2 = do
 
 {- *********************************************************************
 *                                                                      *
-                 uUnfilledVar and friends
+                 uUnfilledTyVar and friends
+*                                                                      *
+********************************************************************* -}
+
+uUnfilledTyVar :: UnifyEnv -> SwapFlag -> AnyTyVar AnyKiVar -> AnyTauType -> TcM AnyTypeCoercion
+uUnfilledTyVar = panic "uUnfilledTyVar"
+
+{- *********************************************************************
+*                                                                      *
+                 uUnfilledKiVar and friends
 *                                                                      *
 ********************************************************************* -}
 
 uUnfilledKiVar
-  :: UnifyEnv -> SwapFlag -> KiPred -> AnyKiVar -> AnyMonoKind -> TcM AnyKindCoercion
+  :: UnifyEnv -> SwapFlag -> KiPredCon -> AnyKiVar -> AnyMonoKind -> TcM AnyKindCoercion
 uUnfilledKiVar env swapped kc kv1 ki2 = do
   ki2 <- liftZonkM $ zonkTcMonoKind ki2
   uUnfilledKiVar1 env swapped kc kv1 ki2
 
 uUnfilledKiVar1
-  :: UnifyEnv -> SwapFlag -> KiPred -> AnyKiVar -> AnyMonoKind -> TcM AnyKindCoercion
+  :: UnifyEnv -> SwapFlag -> KiPredCon -> AnyKiVar -> AnyMonoKind -> TcM AnyKindCoercion
 uUnfilledKiVar1 env swapped kc kv1 ki2
   | Just kv2 <- getKiVar_maybe ki2
   = go kv2
@@ -429,7 +630,7 @@ uUnfilledKiVar1 env swapped kc kv1 ki2
       = uUnfilledKiVar2 env swapped kc kv1 ki2
 
 uUnfilledKiVar2
-  :: UnifyEnv -> SwapFlag -> KiPred -> AnyKiVar -> AnyMonoKind -> TcM AnyKindCoercion
+  :: UnifyEnv -> SwapFlag -> KiPredCon -> AnyKiVar -> AnyMonoKind -> TcM AnyKindCoercion
 uUnfilledKiVar2 env swapped kc kv1 ki2 = do
   cur_lvl <- getTcLevel
   case toTcKiVar_maybe kv1 of
@@ -439,7 +640,7 @@ uUnfilledKiVar2 env swapped kc kv1 ki2 = do
       , kc == EQKi
         -> do traceTc "uUnfilledKiVar2 ok" $ vcat [ ppr kc, ppr tckv1, ppr ki2 ]
               liftZonkM $ writeMetaKiVar tckv1 ki2
-              case u_unified env of
+              case u_ki_unified env of
                 Nothing -> return ()
                 Just uref -> updTcRef uref (tckv1 :)
               return $ case kc of

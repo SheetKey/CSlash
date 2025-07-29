@@ -173,7 +173,7 @@ instance Diagnostic TcRnMessage where
                <+> text "shadows the existing binding" <> plural shadowed_locs
              , nest 2 (vcat shadowed_locs) ]
     TcRnSimplifierTooManyIterations simples limit wc -> mkSimpleDecorated $
-      hang (text "solveWanteds: too many iterations"
+      hang (text "solveKiWanteds: too many iterations"
             <+> parens (text "limit =" <+> ppr wc))
            2 (vcat [ text "Unsolved:" <+> ppr wc
                    , text "Simples:" <+> ppr simples ])
@@ -350,7 +350,7 @@ pprCannotUnifyKiVariableReason ctxt (OccursCheck ambig_infos)
 pprCannotUnifyKiVariableReason ctxt (DifferentKiVars kv_info)
   = pprKiVarInfo ctxt kv_info
 
-pprUntouchableVariable :: AnyKiVar -> Implication -> SDoc
+pprUntouchableVariable :: AnyKiVar -> KiImplication -> SDoc
 pprUntouchableVariable _ _ = panic "pprUntouchableVariable"
 
 pprMismatchMsg :: SolverReportErrCtxt -> MismatchMsg -> SDoc
@@ -545,7 +545,7 @@ show_fixes [] = empty
 show_fixes (f:fs) = sep [ text "Possible fix:"
                         , nest 2 (vcat (f : map (text "or" <+>) fs)) ]
 
-ctxtFixes :: Bool -> AnyPredKind -> [Implication] -> [SDoc]
+ctxtFixes :: Bool -> AnyPredKind -> [KiImplication] -> [SDoc]
 ctxtFixes has_ambig_kvs pred implics
   | not has_ambig_kvs
   , isKiVarKcPred pred
@@ -557,7 +557,7 @@ ctxtFixes has_ambig_kvs pred implics
   where
     ppr_skol skol_info = ppr skol_info
 
-usefulContext :: [Implication] -> AnyPredKind -> [SkolemInfoAnon]
+usefulContext :: [KiImplication] -> AnyPredKind -> [SkolemInfoAnon]
 usefulContext implics pred = go implics
   where
     pred_kvs = varsOfMonoKind pred
@@ -565,28 +565,28 @@ usefulContext implics pred = go implics
     go [] = []
     go (ic:ics)
       | implausible ic = rest
-      | otherwise = ic_info ic : rest
-      where rest | any ((`elemVarSet` pred_kvs) . toAnyKiVar) (ic_skols ic) = []
+      | otherwise = kic_info ic : rest
+      where rest | any ((`elemVarSet` pred_kvs) . toAnyKiVar) (kic_skols ic) = []
                  | otherwise = go ics
 
     implausible ic
-      | null (ic_skols ic) = True
-      | implausible_info (ic_info ic) = True
+      | null (kic_skols ic) = True
+      | implausible_info (kic_info ic) = True
       | otherwise = False
 
     implausible_info (SigSkol (InfSigCtxt {}) _ _) = True
     implausible_info _ = False
 
-pp_givens :: [Implication] -> [SDoc]
+pp_givens :: [KiImplication] -> [SDoc]
 pp_givens givens = case givens of
                      [] -> []
                      (g:gs) -> ppr_given (text "from the context:") g
                                : map (ppr_given (text "or from:")) gs
   where
-    ppr_given herald implic@(Implic { ic_given = gs, ic_info = skol_info })
+    ppr_given herald implic@(KiImplic { kic_given = gs, kic_info = skol_info })
       = hang (herald <+> pprKiCoVarTheta (mkMinimalBy kiCoVarPred gs))
         2 (sep [ text "bound by" <+> ppr skol_info
-               , text "at" <+> ppr (getCtLocEnvLoc (ic_env implic)) ])
+               , text "at" <+> ppr (getCtLocEnvLoc (kic_env implic)) ])
 
 {- *********************************************************************
 *                                                                      *
@@ -610,6 +610,8 @@ pprArising ct_loc
     suppress_origin
       | isGivenOrigin orig = True
       | otherwise = case orig of
+          TypeEqOrigin {} -> True
+          KindEqOrigin {} -> True
           KindCoOrigin {} -> True
           GivenOrigin {} -> False
           OccurrenceOf {} -> False

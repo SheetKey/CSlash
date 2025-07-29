@@ -94,6 +94,12 @@ data KiCoBindsVar
     , kcbv_kcvs :: IORef (MkVarSet (KiCoVar AnyKiVar))
     }
 
+data TyCoBindsVar
+  = TyCoBindsVar
+    { tcbv_uniq :: Unique
+    , tcbv_tcvs :: IORef (MkVarSet (TyCoVar (AnyTyVar AnyKiVar) AnyKiVar))
+    }
+
 {- *********************************************************************
 *                                                                      *
          Evidence for holes

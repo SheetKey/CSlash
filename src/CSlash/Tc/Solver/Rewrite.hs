@@ -3,7 +3,7 @@
 module CSlash.Tc.Solver.Rewrite where
 
 import CSlash.Core.Type.Ppr ( pprTyVar )
-import CSlash.Tc.Types ( TcGblEnv(), RewriteEnv(..) )
+import CSlash.Tc.Types ( TcGblEnv(), KiRewriteEnv(..) )
 
 import CSlash.Tc.Types.Constraint
 -- import GHC.Core.Predicate
@@ -42,9 +42,9 @@ import qualified CSlash.Data.List.Infinite as Inf
 *                                                                      *
 ********************************************************************* -}
 
-newtype RewriteM a = RewriteM { runRewriteM :: RewriteEnv -> TcS a }
+newtype RewriteM a = RewriteM { runRewriteM :: KiRewriteEnv -> TcS a }
 
-mkRewriteM :: (RewriteEnv -> TcS a) -> RewriteM a
+mkRewriteM :: (KiRewriteEnv -> TcS a) -> RewriteM a
 mkRewriteM f = RewriteM (oneShot f)
 {-# INLINE mkRewriteM #-}
 
@@ -66,15 +66,15 @@ instance HasDynFlags RewriteM where
 liftTcS :: TcS a -> RewriteM a
 liftTcS thing_inside = mkRewriteM $ \_ -> thing_inside
 
-runRewriteCtEv :: CtEvidence -> RewriteM a -> TcS (a, RewriterSet)
+runRewriteCtEv :: CtKiEvidence -> RewriteM a -> TcS (a, KiRewriterSet)
 runRewriteCtEv ev = runRewrite (ctEvLoc ev) (ctEvFlavor ev)
 
-runRewrite :: CtLoc -> CtFlavor -> RewriteM a -> TcS (a, RewriterSet)
+runRewrite :: CtLoc -> CtFlavor -> RewriteM a -> TcS (a, KiRewriterSet)
 runRewrite loc flav thing_inside = do
-  rewriters_ref <- newTcRef emptyRewriterSet
-  let fmode = RE { re_loc = loc
-                 , re_flavor = flav
-                 , re_rewriters = rewriters_ref }
+  rewriters_ref <- newTcRef emptyKiRewriterSet
+  let fmode = KRE { kre_loc = loc
+                 , kre_flavor = flav
+                 , kre_rewriters = rewriters_ref }
   res <- runRewriteM thing_inside fmode
   rewriters <- readTcRef rewriters_ref
   return (res, rewriters)
@@ -83,26 +83,26 @@ traceRewriteM :: String -> SDoc -> RewriteM ()
 traceRewriteM herald doc = liftTcS $ traceTcS herald doc
 {-# INLINE traceRewriteM #-}
 
-getRewriteEnv :: RewriteM RewriteEnv
+getRewriteEnv :: RewriteM KiRewriteEnv
 getRewriteEnv = mkRewriteM $ \env -> return env
 
-getRewriteEnvField :: (RewriteEnv -> a) -> RewriteM a
+getRewriteEnvField :: (KiRewriteEnv -> a) -> RewriteM a
 getRewriteEnvField accessor = mkRewriteM $ \env -> return (accessor env)
 
 getFlavor :: RewriteM CtFlavor
-getFlavor = getRewriteEnvField re_flavor
+getFlavor = getRewriteEnvField kre_flavor
 
 getLoc :: RewriteM CtLoc
-getLoc = getRewriteEnvField re_loc
+getLoc = getRewriteEnvField kre_loc
 
 bumpDepth :: RewriteM a -> RewriteM a
 bumpDepth (RewriteM thing_inside) = mkRewriteM $ \env ->
-  let !env' = env { re_loc = bumpCtLocDepth (re_loc env) }
+  let !env' = env { kre_loc = bumpCtLocDepth (kre_loc env) }
   in thing_inside env'
 
-recordRewriter :: CtEvidence -> RewriteM ()
-recordRewriter (CtWanted { ctev_dest = hole })
-  = RewriteM $ \env -> updTcRef (re_rewriters env) (`addRewriter` hole)
+recordRewriter :: CtKiEvidence -> RewriteM ()
+recordRewriter (CtKiWanted { ctkev_dest = hole })
+  = RewriteM $ \env -> updTcRef (kre_rewriters env) (`addKiRewriter` hole)
 recordRewriter other = pprPanic "recordRewriter" (ppr other)
 
 {- *********************************************************************
@@ -111,14 +111,14 @@ recordRewriter other = pprPanic "recordRewriter" (ppr other)
 *                                                                      *
 ********************************************************************* -}
 
-rewriteKi :: CtEvidence -> AnyMonoKind -> TcS (Reduction, RewriterSet)
+rewriteKi :: CtKiEvidence -> AnyMonoKind -> TcS (Reduction, KiRewriterSet)
 rewriteKi ev ki = do
   traceTcS "rewriteKi {" (ppr ki)
   result@(redn, _) <- runRewriteCtEv ev (rewrite_one_ki ki)
   traceTcS "rewriteKi }" (ppr $ reductionReducedKind redn)
   return result
 
-rewriteKiForErrors :: CtEvidence -> AnyMonoKind -> TcS (Reduction, RewriterSet)
+rewriteKiForErrors :: CtKiEvidence -> AnyMonoKind -> TcS (Reduction, KiRewriterSet)
 rewriteKiForErrors ev ki = do
   traceTcS "rewriteKiForErrors {" (ppr ki)
   result@(redn, rewriters) <- runRewrite (ctEvLoc ev) (ctEvFlavor ev) (rewrite_one_ki ki)

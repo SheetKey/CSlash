@@ -103,14 +103,14 @@ tcCsSigType ctxt sig_ty = addSigCtxt ctxt sig_ty $ do
   (implic, ty) <- tc_lcs_sig_type skol_info sig_ty (expectedKindInCtxt ctxt)
 
   traceTc "tcCsSigType 2" (ppr implic)
-  simplifyAndEmitFlatConstraints (mkImplicWC (unitBag implic))
+  simplifyAndEmitFlatConstraints (mkKiImplicWC (unitBag implic))
 
   ty <- liftZonkM $ zonkTcType ty
   checkValidType ctxt ty
   traceTc "end tcCsSigType }" (ppr ty)
   return ty
 
-tc_lcs_sig_type :: SkolemInfo -> LCsSigType Rn -> ContextKind -> TcM (Implication, AnyType)
+tc_lcs_sig_type :: SkolemInfo -> LCsSigType Rn -> ContextKind -> TcM (KiImplication, AnyType)
 tc_lcs_sig_type skol_info full_cs_ty@(L loc (CsSig { sig_ext = kv_nms
                                                    , sig_body = cs_ty })) ctxt_kind
   = setSrcSpanA loc $ do
@@ -908,6 +908,7 @@ tcImplicitKiBndrsX skol_mode skol_info kv_nms thing_inside
   = do (tclvl, wanted, (skol_kvs, res)) <- pushLevelAndCaptureConstraints
                                            $ bindImplicitKBndrsX skol_mode kv_nms
                                            $ thing_inside
+       wanted <- onlyWantedKiConstraints wanted
        emitResidualKvConstraint skol_info skol_kvs tclvl wanted
        return (skol_kvs, res)
 
@@ -964,7 +965,7 @@ zonkAndScopedSort spec_kvs = do
   spec_kvs <- liftZonkM $ zonkTcKiVarsToTcKiVars spec_kvs
   return $ scopedSort spec_kvs
 
-kindGeneralizeSome :: SkolemInfo -> WantedConstraints -> AnyType -> TcM [TcKiVar]
+kindGeneralizeSome :: SkolemInfo -> WantedKiConstraints -> AnyType -> TcM [TcKiVar]
 kindGeneralizeSome skol_info wanted ty = do
   kvs <- candidateQKiVarsOfType ty
   filtered_kvs <- filterConstrainedCandidates wanted kvs
@@ -975,14 +976,14 @@ kindGeneralizeSome skol_info wanted ty = do
   quantifyKiVars skol_info filtered_kvs
 
 filterConstrainedCandidates
-  :: WantedConstraints
+  :: WantedKiConstraints
   -> DTcKiVarSet
   -> TcM DTcKiVarSet
 filterConstrainedCandidates wanted kvs
   | isEmptyWC wanted
   = return kvs
   | otherwise
-  = do wc_kvs <- liftZonkM $ zonkAnyKiVarsAndFV (snd $ varsOfWC wanted)
+  = do wc_kvs <- liftZonkM $ zonkAnyKiVarsAndFV (snd $ varsOfWKC wanted)
        let (to_promote, kvs') = first dVarSetToVarSet
                                 $ partitionDVarSet ((`elemVarSet` wc_kvs) . toAnyKiVar) kvs
        traceTc "filterConstrainedCandidates"

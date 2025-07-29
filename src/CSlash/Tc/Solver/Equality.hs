@@ -61,7 +61,7 @@ import Data.Void( Void )
 *                                                                      *
 ********************************************************************* -}
 
-solveKiCoercion :: CtEvidence -> KiPred -> AnyMonoKind -> AnyMonoKind -> SolverStage Void
+solveKiCoercion :: CtKiEvidence -> KiPredCon -> AnyMonoKind -> AnyMonoKind -> SolverStage Void
 solveKiCoercion ev rel ki1 ki2 = do
   Pair ki1' ki2' <- if rel /= LTKi
                     then zonkEqKinds ev ki1 ki2
@@ -91,7 +91,7 @@ updInertKiCos kico_ct = do
 *                                                                      *
 ********************************************************************* -}
 
-zonkEqKinds :: CtEvidence -> AnyMonoKind -> AnyMonoKind -> SolverStage (Pair AnyMonoKind)
+zonkEqKinds :: CtKiEvidence -> AnyMonoKind -> AnyMonoKind -> SolverStage (Pair AnyMonoKind)
 zonkEqKinds ev ki1 ki2 = Stage $ do
   res <- go_mono ki1 ki2
   case res of
@@ -168,7 +168,11 @@ zonkEqKinds ev ki1 ki2 = Stage $ do
 ********************************************************************* -}
 
 canonicalizeKiCoercion
-  :: CtEvidence -> KiPred -> AnyMonoKind -> AnyMonoKind -> SolverStage (Either IrredCt KiCoCt)
+  :: CtKiEvidence
+  -> KiPredCon
+  -> AnyMonoKind
+  -> AnyMonoKind
+  -> SolverStage (Either IrredKiCt KiCoCt)
 canonicalizeKiCoercion ev kc ki1 ki2 = Stage $ do
   traceTcS "canonicalizeKiCoercion"
     $ vcat [ ppr ev, ppr kc, ppr ki1, ppr ki2 ]
@@ -178,11 +182,11 @@ canonicalizeKiCoercion ev kc ki1 ki2 = Stage $ do
 can_ki_co_nc
   :: Bool
   -> GlobalRdrEnv
-  -> CtEvidence
-  -> KiPred
+  -> CtKiEvidence
+  -> KiPredCon
   -> AnyMonoKind
   -> AnyMonoKind
-  -> TcS (StopOrContinue (Either IrredCt KiCoCt))
+  -> TcS (StopOrContinue (Either IrredKiCt KiCoCt))
 
 can_ki_co_nc _ _ ev kc ki1@(BIKi kc1) (BIKi kc2) 
   | kc1 == kc2
@@ -251,8 +255,8 @@ can_ki_co_nc True _ ev kc ps_ki1 ps_ki2 = do
   finishCanWithIrred ShapeMismatchReason ev
 
 canDecomposableFunKi
-  :: CtEvidence
-  -> KiPred
+  :: CtKiEvidence
+  -> KiPredCon
   -> FunKiFlag
   -> (AnyMonoKind, AnyMonoKind)
   -> (AnyMonoKind, AnyMonoKind)
@@ -264,21 +268,21 @@ canDecomposableFunKi ev kc f f1@(a1, r1) f2@(a2, r2) = do
   traceTcS "canDecomposableFunKi"
     $ ppr ev $$ ppr f1 $$ ppr f2
   case ev of
-    CtWanted { ctev_dest = dest } -> do
+    CtKiWanted { ctkev_dest = dest } -> do
       (co, _, _) <- wrapUnifierTcS ev $ \uenv -> do
         arg <- uKind uenv EQKi a1 a2
         res <- uKind uenv EQKi r1 r2
         return $ mkFunKiCo f arg res
       setWantedKiCo dest co
-    CtGiven { ctev_covar = covar } -> pprPanic "canDecomposableFunKi"
+    CtKiGiven { ctkev_covar = covar } -> pprPanic "canDecomposableFunKi"
                                      $ vcat [ ppr ev, ppr f1, ppr f2 ]
   stopWith ev "Decomposed FunKi"
 
 canKiCoHardFailure
-  :: CtEvidence
+  :: CtKiEvidence
   -> AnyMonoKind
   -> AnyMonoKind
-  -> TcS (StopOrContinue (Either IrredCt a))
+  -> TcS (StopOrContinue (Either IrredKiCt a))
 canKiCoHardFailure ev ki1 ki2 = do
   traceTcS "canKiCoHardFailure" (ppr ki1 $$ ppr ki2)
   (redn1, rewriters1) <- rewriteKiForErrors ev ki1
@@ -287,14 +291,14 @@ canKiCoHardFailure ev ki1 ki2 = do
   finishCanWithIrred ShapeMismatchReason new_ev
 
 canKiCoCanLHSHomo
-  :: CtEvidence
+  :: CtKiEvidence
   -> SwapFlag
-  -> KiPred
+  -> KiPredCon
   -> CanKiCoLHS
   -> AnyMonoKind
   -> AnyMonoKind
   -> AnyMonoKind
-  -> TcS (StopOrContinue (Either IrredCt KiCoCt))
+  -> TcS (StopOrContinue (Either IrredKiCt KiCoCt))
 canKiCoCanLHSHomo ev swapped kc lhs1 ps_xi1 xi2 ps_xi2
   | Just lhs2 <- canKiCoLHS_maybe xi2
   = canKiCoCanLHS2 ev swapped lhs1 ps_xi1 lhs2 ps_xi2
@@ -302,13 +306,13 @@ canKiCoCanLHSHomo ev swapped kc lhs1 ps_xi1 xi2 ps_xi2
   = canKiCoCanLHSFinish ev swapped lhs1 ps_xi2
 
 canKiCoCanLHS2
-  :: CtEvidence
+  :: CtKiEvidence
   -> SwapFlag
   -> CanKiCoLHS
   -> AnyMonoKind
   -> CanKiCoLHS
   -> AnyMonoKind
-  -> TcS (StopOrContinue (Either IrredCt KiCoCt))
+  -> TcS (StopOrContinue (Either IrredKiCt KiCoCt))
 canKiCoCanLHS2 ev swapped lhs1 ps_xi1 lhs2 ps_xi2
   | lhs1 `eqCanKiCoLHS` lhs2
   = canKiCoReflexive ev lhs1_ki
@@ -327,15 +331,15 @@ canKiCoCanLHS2 ev swapped lhs1 ps_xi1 lhs2 ps_xi2
 
     finish_with_swapping = do
       new_ev <- rewriteKiCoEvidence
-                emptyRewriterSet ev swapped (mkReflRednKi lhs1_ki) (mkReflRednKi lhs2_ki)
+                emptyKiRewriterSet ev swapped (mkReflRednKi lhs1_ki) (mkReflRednKi lhs2_ki)
       canKiCoCanLHSFinish new_ev IsSwapped lhs2 ps_xi1
 
 canKiCoCanLHSFinish
-  :: CtEvidence
+  :: CtKiEvidence
   -> SwapFlag
   -> CanKiCoLHS
   -> AnyMonoKind
-  -> TcS (StopOrContinue (Either IrredCt KiCoCt))
+  -> TcS (StopOrContinue (Either IrredKiCt KiCoCt))
 canKiCoCanLHSFinish ev swapped lhs rhs = do
   traceTcS "canKiCoCanLHSFinish"
     $ vcat [ text "ev:" <+> ppr ev
@@ -346,11 +350,11 @@ canKiCoCanLHSFinish ev swapped lhs rhs = do
   canKiCoCanLHSFinish_try_unification ev swapped lhs rhs
 
 canKiCoCanLHSFinish_try_unification
-  :: CtEvidence
+  :: CtKiEvidence
   -> SwapFlag
   -> CanKiCoLHS
   -> AnyMonoKind
-  -> TcS (StopOrContinue (Either IrredCt KiCoCt))
+  -> TcS (StopOrContinue (Either IrredKiCt KiCoCt))
 canKiCoCanLHSFinish_try_unification ev swapped lhs rhs
   | isWanted ev
   , KiVarLHS kv <- lhs
@@ -369,7 +373,7 @@ canKiCoCanLHSFinish_try_unification ev swapped lhs rhs
                        do let kv_ki = mkKiVarKi $ toAnyKiVar kv
                           new_ev <- if isReflKiCo (reductionKindCoercion rhs_redn)
                                     then return ev
-                                    else rewriteKiCoEvidence emptyRewriterSet
+                                    else rewriteKiCoEvidence emptyKiRewriterSet
                                          ev swapped (mkReflRednKi kv_ki) rhs_redn
                           let final_rhs = reductionReducedKind rhs_redn
                    
@@ -389,18 +393,18 @@ canKiCoCanLHSFinish_try_unification ev swapped lhs rhs
     do_not_prevent_rewriting = ctkeProblem ctkeSkolemEscape S.<> ctkeProblem ctkeConcrete
 
 canKiCoCanLHSFinish_no_unification
-  :: CtEvidence
+  :: CtKiEvidence
   -> SwapFlag
   -> CanKiCoLHS
   -> AnyMonoKind
-  -> TcS (StopOrContinue (Either IrredCt KiCoCt))
+  -> TcS (StopOrContinue (Either IrredKiCt KiCoCt))
 canKiCoCanLHSFinish_no_unification ev swapped lhs rhs = do
   check_result <- checkKindEq ev lhs rhs
   case check_result of
     PuFail reason -> tryIrredInstead reason ev swapped lhs rhs
     PuOK _ rhs_redn -> do
       let lhs_ki = canKiCoLHSKind lhs
-      new_ev <- rewriteKiCoEvidence emptyRewriterSet ev swapped (mkReflRednKi lhs_ki) rhs_redn
+      new_ev <- rewriteKiCoEvidence emptyKiRewriterSet ev swapped (mkReflRednKi lhs_ki) rhs_redn
       continueWith $ Right $ KiCoCt { kc_ev = new_ev
                                     , kc_lhs = lhs
                                     , kc_rhs = reductionReducedKind rhs_redn
@@ -408,33 +412,33 @@ canKiCoCanLHSFinish_no_unification ev swapped lhs rhs = do
 
 tryIrredInstead
   :: CheckTyKiEqResult
-  -> CtEvidence
+  -> CtKiEvidence
   -> SwapFlag
   -> CanKiCoLHS
   -> AnyMonoKind
-  -> TcS (StopOrContinue (Either IrredCt a))
+  -> TcS (StopOrContinue (Either IrredKiCt a))
 tryIrredInstead reason ev swapped lhs rhs = do
   traceTcS "cantMakeCaconical" (ppr reason $$ ppr lhs $$ ppr rhs)
   new_ev <- rewriteKiCoEvidence
-            emptyRewriterSet ev swapped (mkReflRednKi $ canKiCoLHSKind lhs) (mkReflRednKi rhs)
+            emptyKiRewriterSet ev swapped (mkReflRednKi $ canKiCoLHSKind lhs) (mkReflRednKi rhs)
   finishCanWithIrred (NonCanonicalReason reason) new_ev
 
-finishCanWithIrred :: CtIrredReason -> CtEvidence -> TcS (StopOrContinue (Either IrredCt a))
+finishCanWithIrred :: CtIrredReason -> CtKiEvidence -> TcS (StopOrContinue (Either IrredKiCt a))
 finishCanWithIrred reason ev = do
   when (isInsolubleReason reason) tryEarlyAbortTcS
-  continueWith $ Left $ IrredCt { ir_ev = ev, ir_reason = reason }
+  continueWith $ Left $ IrredKiCt { ikr_ev = ev, ikr_reason = reason }
 
-canKiCoReflexive :: CtEvidence -> AnyMonoKind -> TcS (StopOrContinue a)
+canKiCoReflexive :: CtKiEvidence -> AnyMonoKind -> TcS (StopOrContinue a)
 canKiCoReflexive ev ki = do
   setKiCoBindIfWanted ev $ mkReflKiCo ki
   stopWith ev "Solved by reflexivity"
 
-canKiCoLiftReflexive :: CtEvidence -> AnyMonoKind -> TcS (StopOrContinue a)
+canKiCoLiftReflexive :: CtKiEvidence -> AnyMonoKind -> TcS (StopOrContinue a)
 canKiCoLiftReflexive ev ki = do
   setKiCoBindIfWanted ev $ LiftEq $ mkReflKiCo ki
   stopWith ev "Solved by lifting reflexivity"
 
-canKiCoLT :: CtEvidence -> BuiltInKi -> BuiltInKi -> TcS (StopOrContinue a)
+canKiCoLT :: CtKiEvidence -> BuiltInKi -> BuiltInKi -> TcS (StopOrContinue a)
 canKiCoLT ev kc1 kc2 = do
   let co = case (kc1, kc2) of
              (UKd, AKd) -> BI_U_A
@@ -444,7 +448,7 @@ canKiCoLT ev kc1 kc2 = do
   setKiCoBindIfWanted ev $ co
   stopWith ev "Solved by built-in"
 
-canKiCoLiftLT :: CtEvidence -> BuiltInKi -> BuiltInKi -> TcS (StopOrContinue a)
+canKiCoLiftLT :: CtKiEvidence -> BuiltInKi -> BuiltInKi -> TcS (StopOrContinue a)
 canKiCoLiftLT ev kc1 kc2 = do
   let co = case (kc1, kc2) of
              (UKd, AKd) -> BI_U_A
@@ -454,7 +458,7 @@ canKiCoLiftLT ev kc1 kc2 = do
   setKiCoBindIfWanted ev $ LiftLT co
   stopWith ev "Solved by lifting built-in"
  
-canKiCoBILTEQ :: CtEvidence -> AnyMonoKind -> AnyMonoKind -> TcS (StopOrContinue a)
+canKiCoBILTEQ :: CtKiEvidence -> AnyMonoKind -> AnyMonoKind -> TcS (StopOrContinue a)
 canKiCoBILTEQ ev k1 k2 = do
   let co = case (k1, k2) of
              (BIKi UKd, _) -> BI_U_LTEQ k2
@@ -470,12 +474,12 @@ canKiCoBILTEQ ev k1 k2 = do
 ******************************************************************* -}
 
 rewriteKiCoEvidence
-  :: RewriterSet
-  -> CtEvidence
+  :: KiRewriterSet
+  -> CtKiEvidence
   -> SwapFlag
   -> Reduction
   -> Reduction
-  -> TcS CtEvidence
+  -> TcS CtKiEvidence
 rewriteKiCoEvidence new_rewriters old_ev swapped (ReductionKi lhs_co nlhs) (ReductionKi rhs_co nrhs)
   | IsSwapped <- swapped
   = panic "rewriteKiCoEvidence swapped"
@@ -483,9 +487,9 @@ rewriteKiCoEvidence new_rewriters old_ev swapped (ReductionKi lhs_co nlhs) (Redu
   , isReflKiCo lhs_co
   , isReflKiCo rhs_co
   = return $ setCtEvPredKind old_ev new_pred
-  | CtGiven { ctev_covar = old_covar } <- old_ev
+  | CtKiGiven { ctkev_covar = old_covar } <- old_ev
   = panic "rewriteKiCoEvidence"
-  | CtWanted { ctev_dest = dest, ctev_rewriters = rewriters } <- old_ev
+  | CtKiWanted { ctkev_dest = dest, ctkev_rewriters = rewriters } <- old_ev
   , let rewriters' = rewriters S.<> new_rewriters
   = do (new_ev, hole_co) <- newWantedKiCo loc rewriters' EQKi nlhs nrhs
        let co = maybeSymCo swapped $ lhs_co `mkTransKiCo` hole_co `mkTransKiCo` mkSymKiCo rhs_co
@@ -496,7 +500,7 @@ rewriteKiCoEvidence new_rewriters old_ev swapped (ReductionKi lhs_co nlhs) (Redu
   where
     new_pred = mkKiCoPred kc nlhs nrhs
     loc = ctEvLoc old_ev
-    kc = fstOf3 $ getPredKis $ ctEvPred old_ev
+    kc = fstOf3 $ getPredKis $ ctKiEvPred old_ev
 
 {- *******************************************************************
 *                                                                    *
@@ -506,12 +510,12 @@ rewriteKiCoEvidence new_rewriters old_ev swapped (ReductionKi lhs_co nlhs) (Redu
 
 tryInertKiCos :: KiCoCt -> SolverStage ()
 tryInertKiCos work_item@(KiCoCt { kc_ev = ev }) = Stage $ do
-  inerts <- getInertCans
+  inerts <- getInertKiCans
   case inertsCanDischarge inerts work_item of
     Just (ev_i, swapped) -> stopWith ev "Solved from inert"
     Nothing -> continueWith ()
 
-inertsCanDischarge :: InertCans -> KiCoCt -> Maybe (CtEvidence, SwapFlag)
+inertsCanDischarge :: InertKiCans -> KiCoCt -> Maybe (CtKiEvidence, SwapFlag)
 inertsCanDischarge inerts (KiCoCt { kc_lhs = lhs_w, kc_rhs = rhs_w, kc_ev = ev_w })
   | (ev_i : _) <- [ ev_i | KiCoCt { kc_ev = ev_i, kc_rhs = rhs_i }
                            <- findKiCo inerts lhs_w
@@ -548,10 +552,10 @@ inertsCanDischarge _ _ = Nothing
 *                                                                    *
 ********************************************************************-}
 
-tryQCsIrredKiCoCt :: IrredCt -> SolverStage ()
-tryQCsIrredKiCoCt irred@(IrredCt { ir_ev = ev })
-  | KiCoPred kc k1 k2 <- classifyPredKind (ctEvPred ev)
-  = lookup_ki_co_in_qcis (CIrredCan irred) k1 k2
+tryQCsIrredKiCoCt :: IrredKiCt -> SolverStage ()
+tryQCsIrredKiCoCt irred@(IrredKiCt { ikr_ev = ev })
+  | KiCoPred kc k1 k2 <- classifyPredKind (ctKiEvPred ev)
+  = lookup_ki_co_in_qcis (CIrredCanKi irred) k1 k2
   | otherwise
   = pprPanic "solveIrredEquality" (ppr ev)
 
@@ -559,6 +563,6 @@ tryQCsKiCoCt :: KiCoCt -> SolverStage ()
 tryQCsKiCoCt work_item@(KiCoCt { kc_lhs = lhs, kc_rhs = rhs })
   = lookup_ki_co_in_qcis (CKiCoCan work_item) (canKiCoLHSKind lhs) rhs
 
-lookup_ki_co_in_qcis :: Ct -> AnyMonoKind -> AnyMonoKind -> SolverStage ()
+lookup_ki_co_in_qcis :: KiCt -> AnyMonoKind -> AnyMonoKind -> SolverStage ()
 lookup_ki_co_in_qcis work_ct lhs rhs = Stage $ do
   continueWith ()

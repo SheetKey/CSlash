@@ -254,7 +254,7 @@ zonkKiCoVarOcc cv = do
     _ -> mkKiCoVarCo <$> (lift $ liftZonkM $ panic "zonkTyVarKind cv")
 
 zonkKiCoHole :: KindCoercionHole AnyKiVar -> ZonkTcM (KindCoercion KiVar)
-zonkKiCoHole hole@(CoercionHole { ch_ref = ref, ch_co_var = cv }) = do
+zonkKiCoHole hole@(KindCoercionHole { kch_ref = ref, kch_co_var = cv }) = do
   contents <- readTcRef ref
   case contents of
     Just co -> do
@@ -327,19 +327,19 @@ zonk_bind = panic "zonk_bind"
 ********************************************************************* -}
 
 unpackKiCoercionHole_maybe :: KindCoercionHole kv -> TcM (Maybe AnyKindCoercion)
-unpackKiCoercionHole_maybe (CoercionHole { ch_ref = ref }) = readTcRef ref
+unpackKiCoercionHole_maybe (KindCoercionHole { kch_ref = ref }) = readTcRef ref
 
-zonkRewriterSet :: RewriterSet -> TcM RewriterSet
-zonkRewriterSet (RewriterSet set) = nonDetStrictFoldUniqSet go (return emptyRewriterSet) set
+zonkRewriterSet :: KiRewriterSet -> TcM KiRewriterSet
+zonkRewriterSet (KiRewriterSet set) = nonDetStrictFoldUniqSet go (return emptyKiRewriterSet) set
   where
-    --go :: KindCoercionHole -> TcM RewriterSet -> TcM RewriterSet
-    go hole m_acc = unionRewriterSet <$> check_hole hole <*> m_acc
+    --go :: KindCoercionHole -> TcM KiRewriterSet -> TcM KiRewriterSet
+    go hole m_acc = unionKiRewriterSet <$> check_hole hole <*> m_acc
 
-    --check_hole :: KindCoercionHole -> TcM RewriterSet
+    --check_hole :: KindCoercionHole -> TcM KiRewriterSet
     check_hole hole = do
       m_co <- unpackKiCoercionHole_maybe hole
       case m_co of
-        Nothing -> return $ unitRewriterSet hole
+        Nothing -> return $ unitKiRewriterSet hole
         Just co -> unUCHM (check_co co)
 
     -- check_ki :: MonoKind -> UnfilledCoercionHoleMonoid
@@ -352,11 +352,11 @@ zonkRewriterSet (RewriterSet set) = nonDetStrictFoldUniqSet go (return emptyRewr
       --                    , kcf_covar = \_ cv -> check_ki (varKind cv)
       --                    , kcf_hole = \_ -> UCHM . check_hole }
 
-newtype UnfilledCoercionHoleMonoid = UCHM { unUCHM :: TcM RewriterSet }
+newtype UnfilledCoercionHoleMonoid = UCHM { unUCHM :: TcM KiRewriterSet }
 
 instance Semigroup UnfilledCoercionHoleMonoid where
-  UCHM l <> UCHM r = UCHM (unionRewriterSet <$> l <*> r)
+  UCHM l <> UCHM r = UCHM (unionKiRewriterSet <$> l <*> r)
 
 instance Monoid UnfilledCoercionHoleMonoid where
-  mempty = UCHM (return emptyRewriterSet)
+  mempty = UCHM (return emptyKiRewriterSet)
 

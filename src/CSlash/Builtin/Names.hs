@@ -105,6 +105,9 @@ boolTyConKey = mkWiredInTyConUnique 4
 fUNTyConKey :: Unique
 fUNTyConKey = mkWiredInTyConUnique 13
 
+eqTyConKey :: Unique
+eqTyConKey = mkWiredInTyConUnique 53
+
 {- *********************************************************************
 *                                                                      *
                Uniques for wired-in DataCons

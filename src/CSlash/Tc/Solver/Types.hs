@@ -107,6 +107,8 @@ import CSlash.Utils.Panic
 
 type KiCoCtList = [KiCoCt]
 
+type TyEqCtList = [TyEqCt]
+
 addToKiCoCtList :: KiCoCt -> KiCoCtList -> KiCoCtList
 addToKiCoCtList ct old_kicos
   | debugIsOn

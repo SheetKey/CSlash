@@ -81,20 +81,30 @@ newMetaKindVars n = replicateM n newMetaKindVar
 *                                                                       *
 ********************************************************************** -}
 
+predTypeOccName :: IsTyVar tv kv => PredType tv kv -> OccName
+predTypeOccName ty = case classifyPredType ty of
+  TyEqPred {} -> mkVarOccFS (fsLit "tco")
+  TyIrredPred {} -> mkVarOccFS (fsLit "tirred")
+
 predKindOccName :: PredKind kv -> OccName
 predKindOccName ki = case classifyPredKind ki of
-  KiCoPred {} -> mkVarOccFS (fsLit "co")
-  IrredPred {} -> mkVarOccFS (fsLit "irred")
+  KiCoPred {} -> mkVarOccFS (fsLit "kco")
+  IrredPred {} -> mkVarOccFS (fsLit "kirred")
 
-newWantedWithLoc :: CtLoc -> AnyPredKind -> TcM CtEvidence
+newWantedWithLoc :: CtLoc -> AnyPredKind -> TcM CtKiEvidence
 newWantedWithLoc loc predki = do
   dst <- case classifyPredKind predki of
            KiCoPred {} -> newKiCoercionHole predki
            _ -> pprPanic "newWantedWithLoc" $ vcat [ ppr predki ]
-  return $ CtWanted { ctev_dest = dst
-                    , ctev_pred = predki
-                    , ctev_loc = loc
-                    , ctev_rewriters = emptyRewriterSet }
+  return $ CtKiWanted { ctkev_dest = dst
+                    , ctkev_pred = predki
+                    , ctkev_loc = loc
+                    , ctkev_rewriters = emptyKiRewriterSet }
+
+newTyCoVar :: AnyPredType -> TcRnIf gbl lcl (TyCoVar (AnyTyVar AnyKiVar) AnyKiVar)
+newTyCoVar ty = do
+  name <- newSysName (predTypeOccName ty)
+  return $ mkLocalTyCoVar name ty
 
 newKiCoVars :: [AnyPredKind] -> TcM [KiCoVar AnyKiVar]
 newKiCoVars theta = mapM newKiCoVar theta
@@ -104,7 +114,7 @@ newKiCoVar ki = do
   name <- newSysName (predKindOccName ki)
   return (mkLocalKiCoVar name ki)
 
-newWanted :: CtOrigin -> Maybe TypeOrKind -> AnyPredKind -> TcM CtEvidence
+newWanted :: CtOrigin -> Maybe TypeOrKind -> AnyPredKind -> TcM CtKiEvidence
 newWanted orig t_or_k predki = do
   loc <- getCtLocM orig t_or_k
   newWantedWithLoc loc predki
@@ -119,19 +129,26 @@ newWanted orig t_or_k predki = do
 *                                                                      *
 ********************************************************************* -}
 
+newTyCoercionHole :: AnyPredType -> TcM AnyTypeCoercionHole
+newTyCoercionHole pred_ty = do
+  co_var <- newTyCoVar pred_ty
+  traceTc "New coercion hole:" (ppr co_var <+> colon <+> ppr pred_ty)
+  ref <- newMutVar Nothing
+  return $ TypeCoercionHole { tch_co_var = co_var, tch_ref = ref }
+
 newKiCoercionHole
   :: AnyPredKind -> TcM AnyKindCoercionHole
 newKiCoercionHole pred_ki = do
   co_var <- newKiCoVar pred_ki
   traceTc "New coercion hole:" (ppr co_var <+> colon <+> ppr pred_ki)
   ref <- newMutVar Nothing
-  return $ CoercionHole { ch_co_var = co_var, ch_ref = ref }
+  return $ KindCoercionHole { kch_co_var = co_var, kch_ref = ref }
 
 fillKiCoercionHole
   :: AnyKindCoercionHole
   -> AnyKindCoercion
   -> TcM ()
-fillKiCoercionHole (CoercionHole { ch_ref = ref, ch_co_var = cv }) co = do
+fillKiCoercionHole (KindCoercionHole { kch_ref = ref, kch_co_var = cv }) co = do
   when debugIsOn $ do
     cts <- readTcRef ref
     whenIsJust cts $ \old_co ->
@@ -164,12 +181,11 @@ readExpType exp_ty = do
 *                                                                      *
 ********************************************************************* -}
 
-newImplication :: TcM Implication
+newImplication :: Implic impl => TcM impl
 newImplication = do
   env <- getLclEnv
   warn_inaccessible <- woptM Opt_WarnInaccessibleCode
-  return $ (implicationPrototype (mkCtLocEnv env))
-           { ic_warn_inaccessible = warn_inaccessible }
+  return $ setWarnInaccessible warn_inaccessible (implicationPrototype (mkCtLocEnv env))
 
 {- *********************************************************************
 *                                                                      *

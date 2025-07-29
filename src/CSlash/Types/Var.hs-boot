@@ -8,7 +8,7 @@ module CSlash.Types.Var
   , TyVar, TcTyVar, AnyTyVar
   , KiVar, TcKiVar, AnyKiVar
   , VarHasKind, AsAnyTy, IsTyVar
-  , AsGenericKi, AsAnyKi
+  , AsGenericTy, AsGenericKi, AsAnyKi
   ) where
 
 import {-# SOURCE #-} CSlash.Types.Name
@@ -30,3 +30,4 @@ class AsAnyTy (thing :: * -> * -> *)
 class AsAnyKi (thing :: * -> *)
 class IsTyVar tv kv | tv -> kv
 class AsGenericKi (thing :: * -> *)
+class AsGenericTy (thing :: * -> * -> *)

@@ -3,7 +3,7 @@
 module CSlash.Tc.Gen.Bind where
 
 import {-# SOURCE #-} CSlash.Tc.Gen.Match ( tcLambdaMatches )
--- import {-# SOURCE #-} GHC.Tc.Gen.Expr  ( tcCheckMonoExpr )
+import {-# SOURCE #-} CSlash.Tc.Gen.Expr  ( tcExpr )
 -- import {-# SOURCE #-} GHC.Tc.TyCl.PatSyn ( tcPatSynDecl, tcPatSynBuilderBind )
 
 import CSlash.Types.Tickish ({-CoreTickish,-} GenTickish (..))
@@ -238,7 +238,13 @@ tcPolyCheck sig@(CSig { sig_bndr = poly_id, sig_ctxt = ctxt })
                                       (mkCheckExpType rho_ty)
                   return $ mkCsWrap wrap $ CsLam x matches'
 
-                tc_body e = panic "tc_body other"
+                tc_body e@(CsTyLam x matches) = do
+                  (wrap, matches') <- tcLambdaMatches e matches invis_pat_tys
+                                      (mkCheckExpType rho_ty)
+                  return $ mkCsWrap wrap $ CsTyLam x matches'
+
+                
+                tc_body e = tcExpr e (mkCheckExpType rho_ty)
             in tc_body body
               
           -- $ tcFunBindRHS ctxt mono_name UKd body invis_pat_tys (mkCheckExpType rho_ty)

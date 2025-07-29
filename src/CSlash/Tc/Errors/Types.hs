@@ -42,7 +42,7 @@ import CSlash.Core.DataCon (DataCon{-, FieldLabel-})
 -- import GHC.Core.Predicate (EqRel, predTypeEqRel)
 import CSlash.Core.TyCon (TyCon{-, Role, FamTyConFlav-}, AlgTyConRhs)
 import CSlash.Core.Type (Type{-, ThetaType, PredType, ErrorMsgType-}, ForAllFlag)
-import CSlash.Core.Kind (Kind, PredKind, MonoKind, KiPred, KindCoercionHole, BuiltInKi)
+import CSlash.Core.Kind (Kind, PredKind, MonoKind, KiPredCon, KindCoercionHole, BuiltInKi)
 import CSlash.Driver.Backend (Backend)
 import CSlash.Unit.State (UnitState)
 import CSlash.Utils.Misc (filterOut)
@@ -96,7 +96,7 @@ data TcRnMessage where
   TcRnNotInScope :: NotInScopeError -> RdrName -> [ImportError] -> [CsHint] -> TcRnMessage
   TcRnMatchesHaveDiffNumArgs :: !CsMatchContextRn -> !MatchArgBadMatches -> TcRnMessage
   TcRnShadowedName :: OccName -> ShadowedNameProvenance -> TcRnMessage
-  TcRnSimplifierTooManyIterations :: Cts -> !IntWithInf -> WantedConstraints -> TcRnMessage
+  TcRnSimplifierTooManyIterations :: KiCts -> !IntWithInf -> WantedKiConstraints -> TcRnMessage
   TcRnBindingNameConflict :: !RdrName -> !(NE.NonEmpty SrcSpan) -> TcRnMessage
   TcRnTyThingUsedWrong :: !WrongThingSort -> !TcTyKiThing -> !Name -> TcRnMessage
   TcRnArityMismatch :: !(TyThing (AnyTyVar AnyKiVar) AnyKiVar) -> !Arity -> !Arity -> TcRnMessage
@@ -123,7 +123,7 @@ data SolverReportWithCtxt = SolverReportWithCtxt
   deriving Generic
 
 data SolverReportErrCtxt = CEC
-  { cec_encl :: [Implication]
+  { cec_encl :: [KiImplication]
   , cec_tidy :: AnyTidyEnv
   , cec_binds :: KiCoBindsVar
   , cec_defer_type_errors :: DiagnosticReason
@@ -133,7 +133,7 @@ data SolverReportErrCtxt = CEC
   , cec_suppress :: Bool
   }
 
-getUserGivens :: SolverReportErrCtxt -> [UserGiven]
+getUserGivens :: SolverReportErrCtxt -> [KiImplication]
 getUserGivens (CEC { cec_encl = implics }) = getUserGivensFromImplics implics
 
 ----------------------------------------------------------------------------
@@ -207,7 +207,7 @@ data MismatchMsg
     , keq_mb_same_kicon :: Maybe SameKiConInfo
     }
   | CouldNotDeduce
-    { cnd_user_givens :: [Implication]
+    { cnd_user_givens :: [KiImplication]
     , cnd_wanted :: NE.NonEmpty ErrorItem
     , cnd_extra :: Maybe CND_Extra
     }
@@ -227,7 +227,7 @@ data CND_Extra = CND_Extra TypeOrKind AnyMonoKind AnyMonoKind
 
 data KiVarInfo = KiVarInfo
   { thisKiVar :: AnyKiVar
-  , thisKiVarIsUntouchable :: Maybe Implication
+  , thisKiVarIsUntouchable :: Maybe KiImplication
   , otherKi :: Maybe AnyKiVar
   }
 

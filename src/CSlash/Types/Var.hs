@@ -56,7 +56,7 @@ module CSlash.Types.Var
   , filterAnyTcKiVar, filterTcKiVar
 
     {-* Id *-}
-  , Id
+  , Id, TyCoVar
   , mkGlobalVar, mkLocalVar
 
     {-* ForAllFlag *-}
@@ -66,13 +66,14 @@ module CSlash.Types.Var
     {-* VarBndr *-}
   , VarBndr(..), ForAllBinder, TyVarBinder
   , binderVar, binderVars
+  , binderFlag, binderFlags
   , mkVarBinder, mkVarBinders
   , mapVarBinder
   ) where
 
 import Prelude hiding ((<>))
 
-import {-# SOURCE #-} CSlash.Core.Type.Rep (Type)
+import {-# SOURCE #-} CSlash.Core.Type.Rep (Type, PredType)
 import {-# SOURCE #-} CSlash.Core.Type.Ppr (pprType)
 import {-# SOURCE #-} CSlash.Core.Kind
   (Kind, MonoKind, PredKind, pprKind, isKiCoVarKind)
@@ -752,6 +753,8 @@ newtype Id tv kv = Id (Var tv kv)
   deriving ( NamedThing, Uniquable, Eq, Ord, Data, HasOccName
            , VarHasName, VarHasUnique)
 
+type TyCoVar = Id
+
 deriving instance IsTyVar tv kv => Outputable (Id tv kv)
     
 instance IsTyVar tv kv => VarHasType (Id tv kv) tv kv where
@@ -828,6 +831,12 @@ binderVar (Bndr v _) = v
 
 binderVars :: [VarBndr v argf] -> [v]
 binderVars bvs = map binderVar bvs
+
+binderFlag :: VarBndr v argf -> argf
+binderFlag (Bndr _ f) = f
+
+binderFlags :: [VarBndr v argf] -> [argf]
+binderFlags bvs = map binderFlag bvs
 
 mkVarBinder :: argf -> var -> VarBndr var argf
 mkVarBinder argf var = Bndr var argf

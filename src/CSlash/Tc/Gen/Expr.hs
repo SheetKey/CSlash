@@ -73,3 +73,6 @@ tcInferRhoNC = panic "tcInferRhoNC"
 
 tcCheckMonoExpr :: LCsExpr Rn -> AnyRhoType -> TcM (LCsExpr Tc)
 tcCheckMonoExpr = panic "tcCheckMonoExpr"
+
+tcExpr :: CsExpr Rn -> ExpRhoType -> TcM (CsExpr Tc)
+tcExpr = panic "tcExpr"

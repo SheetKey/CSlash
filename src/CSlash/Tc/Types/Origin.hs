@@ -159,9 +159,15 @@ instance Outputable TyVarBndrs where
 data CtOrigin
   = GivenOrigin SkolemInfoAnon
   | OccurrenceOf Name
+  | TypeEqOrigin { uo_actual :: AnyType
+                 , uo_expected :: AnyType
+                 , uo_thing :: Maybe TypedThing
+                 , uo_visible :: Bool
+                 }
+  | KindEqOrigin AnyType AnyType CtOrigin
   | KindCoOrigin { kco_actual :: AnyMonoKind
                  , kco_expected :: AnyMonoKind
-                 , kco_pred :: KiPred
+                 , kco_pred :: KiPredCon
                  , kco_thing :: Maybe KindedThing
                  , kco_visible :: Bool
                  }
@@ -169,10 +175,12 @@ data CtOrigin
 
 isVisibleOrigin :: CtOrigin -> Bool
 isVisibleOrigin (KindCoOrigin { kco_visible = vis }) = vis
+isVisibleOrigin (TypeEqOrigin { uo_visible = vis }) = vis
 isVisibleOrigin _ = True
 
 toInvisibleOrigin :: CtOrigin -> CtOrigin
 toInvisibleOrigin o@(KindCoOrigin {}) = o { kco_visible = True }
+toInvisibleOrigin o@(TypeEqOrigin {}) = o { uo_visible = True }
 toInvisibleOrigin o = o
 
 isGivenOrigin :: CtOrigin -> Bool
@@ -180,6 +188,8 @@ isGivenOrigin (GivenOrigin {}) = True
 isGivenOrigin (KindCoOrigin {}) = False
 isGivenOrigin (OccurrenceOf {}) = False
 isGivenOrigin TupleTyOrigin = False
+isGivenOrigin (TypeEqOrigin {}) = False
+isGivenOrigin (KindEqOrigin {}) = False
 
 lexprCtOrigin :: LCsExpr Rn -> CtOrigin
 lexprCtOrigin (L _ e) = exprCtOrigin e

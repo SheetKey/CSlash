@@ -13,7 +13,7 @@ import CSlash.Core.Type
 import CSlash.Core.TyCon( TyCon )
 import CSlash.Core.Type.Rep( Type(..) )
 import CSlash.Core.DataCon
-import CSlash.Core.Predicate( Pred(..), classifyPredKind )
+import CSlash.Core.Predicate( KiPred(..), classifyPredKind )
 import CSlash.Types.Name
 import CSlash.Types.Name.Reader
 -- import CSlash.Builtin.Names ( gHC_INTERNAL_ERR, gHC_INTERNAL_UNSAFE_COERCE )

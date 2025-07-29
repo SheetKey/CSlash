@@ -46,7 +46,7 @@ data Kind kv
 data MonoKind kv
   = KiVarKi kv
   | BIKi BuiltInKi
-  | KiPredApp KiPred (MonoKind kv) (MonoKind kv)
+  | KiPredApp KiPredCon (MonoKind kv) (MonoKind kv)
   | FunKi
     { fk_f :: FunKiFlag
     , fk_arg :: MonoKind kv
@@ -75,7 +75,7 @@ mkMultMul LKd LKd = LKd
 mkMultSup :: Mult -> Mult -> Mult
 mkMultSup = mkMultMul
 
-data KiPred
+data KiPredCon
   = LTKi
   | LTEQKi
   | EQKi
@@ -112,10 +112,10 @@ instance Outputable BuiltInKi where
   ppr AKd = aKindLit
   ppr LKd = lKindLit
 
-instance Uniquable KiPred where
+instance Uniquable KiPredCon where
   getUnique pred = getUnique $ mkFastString $ show pred
 
-instance Outputable KiPred where
+instance Outputable KiPredCon where
   ppr LTKi = char '<'
   ppr LTEQKi = text "<="
   ppr EQKi = char '~'
@@ -361,9 +361,9 @@ data KindCoercion kv
   | HoleCo (KindCoercionHole kv)
   deriving Data.Data
 
-data KindCoercionHole kv = CoercionHole
-  { ch_co_var :: KiCoVar kv
-  , ch_ref :: IORef (Maybe (KindCoercion AnyKiVar))
+data KindCoercionHole kv = KindCoercionHole
+  { kch_co_var :: KiCoVar kv
+  , kch_ref :: IORef (Maybe (KindCoercion AnyKiVar))
   }
 
 instance AsGenericKi KindCoercion
@@ -384,12 +384,12 @@ instance AsAnyKi KindCoercion where
   asAnyKi (HoleCo hole) = HoleCo $ asAnyKi hole
 
 instance AsAnyKi KindCoercionHole where
-  asAnyKi (CoercionHole v r) = CoercionHole (asAnyKi v) r
+  asAnyKi (KindCoercionHole v r) = KindCoercionHole (asAnyKi v) r
 
 instance Data.Typeable kv => Data.Data (KindCoercionHole kv)
 
 coHoleCoVar :: KindCoercionHole kv -> KiCoVar kv
-coHoleCoVar = ch_co_var
+coHoleCoVar = kch_co_var
 
 isReflKiCo :: KindCoercion kv -> Bool
 isReflKiCo (Refl{}) = True
@@ -438,13 +438,17 @@ mkFunKiCo2 afl afr arg_co res_co
 mkKiCoVarCo :: KiCoVar kv -> KindCoercion kv
 mkKiCoVarCo cv = KiCoVarCo cv
 
-mkKiCoPred :: KiPred -> MonoKind kv -> MonoKind kv -> PredKind kv
+mkKiCoPred :: KiPredCon -> MonoKind kv -> MonoKind kv -> PredKind kv
 mkKiCoPred p ki1 ki2 = mkKiPredApp p ki1 ki2
 
-kiCoercionKind :: IsVar kv => KindCoercion kv -> (KiPred, Pair (MonoKind kv))
-kiCoercionKind co = (kiCoercionPred co, Pair (kicoercionLKind co) (kicoercionRKind co))
+kiCoercionParts :: IsVar kv => KindCoercion kv -> (KiPredCon, Pair (MonoKind kv))
+kiCoercionParts co = (kiCoercionPred co, Pair (kicoercionLKind co) (kicoercionRKind co))
 
-kiCoercionPred :: IsVar kv => KindCoercion kv -> KiPred
+kiCoercionKind :: IsVar kv => KindCoercion kv -> MonoKind kv
+kiCoercionKind co = case kiCoercionParts co of
+  (pred, Pair k1 k2) -> mkKiPredApp pred k1 k2
+
+kiCoercionPred :: IsVar kv => KindCoercion kv -> KiPredCon
 kiCoercionPred co = go co
   where
     go (Refl _) = EQKi
@@ -510,12 +514,12 @@ instance Outputable kv => Outputable (KindCoercion kv) where
   ppr = pprKiCo
 
 instance Outputable kv => Outputable (KindCoercionHole kv) where
-  ppr (CoercionHole { ch_co_var = cv }) = braces (ppr cv)
+  ppr (KindCoercionHole { kch_co_var = cv }) = braces (ppr cv)
 
 instance Uniquable (KindCoercionHole kv) where
-  getUnique (CoercionHole { ch_co_var = cv }) = getUnique cv
+  getUnique (KindCoercionHole { kch_co_var = cv }) = getUnique cv
 
-kiCoVarKiPred :: (HasDebugCallStack, IsVar kv) => KiCoVar kv -> KiPred
+kiCoVarKiPred :: (HasDebugCallStack, IsVar kv) => KiCoVar kv -> KiPredCon
 kiCoVarKiPred cv | (kc, _, _) <- coVarKinds cv = kc
 
 coVarLKind :: (HasDebugCallStack, IsVar kv) => KiCoVar kv -> MonoKind kv
@@ -527,7 +531,7 @@ coVarRKind cv | (_, _, ki2) <- coVarKinds cv = ki2
 coVarKinds
   :: (HasDebugCallStack, IsVar kv)
   => KiCoVar kv
-  -> (KiPred, MonoKind kv, MonoKind kv)
+  -> (KiPredCon, MonoKind kv, MonoKind kv)
 coVarKinds cv
   | KiPredApp kc k1 k2 <- (varKind cv)
   = (kc, k1, k2)
@@ -545,7 +549,7 @@ setCoHoleKind
 setCoHoleKind h k = setCoHoleCoVar h (setVarKind (coHoleCoVar h) k)
 
 setCoHoleCoVar :: KindCoercionHole kv -> KiCoVar kv -> KindCoercionHole kv
-setCoHoleCoVar h cv = h { ch_co_var = cv }
+setCoHoleCoVar h cv = h { kch_co_var = cv }
 
 {- **********************************************************************
 *                                                                       *
@@ -790,7 +794,7 @@ splitMonoFunKi_maybe ki = case ki of
   FunKi f arg res -> Just (f, arg, res)
   _ -> Nothing
 
-mkKiPredApp :: KiPred -> MonoKind kv -> MonoKind kv -> MonoKind kv
+mkKiPredApp :: KiPredCon -> MonoKind kv -> MonoKind kv -> MonoKind kv
 mkKiPredApp = KiPredApp
 
 isInvisibleKiFunArg :: FunKiFlag -> Bool

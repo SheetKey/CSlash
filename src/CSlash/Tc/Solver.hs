@@ -21,7 +21,8 @@ import CSlash.Builtin.Names
 import CSlash.Tc.Errors
 import CSlash.Tc.Errors.Types
 import CSlash.Tc.Types.Evidence
-import CSlash.Tc.Solver.Solve ( solveSimpleGivens, solveSimpleWanteds )
+import CSlash.Tc.Solver.Solve ( solveSimpleWanteds, solveSimpleTyGivens
+                              , solveSimpleKiGivens, solveSimpleKiWanteds )
 -- import GHC.Tc.Solver.Dict    ( makeSuperClasses, solveCallStack )
 -- import GHC.Tc.Solver.Rewrite ( rewriteType )
 import CSlash.Tc.Utils.Unify    ( buildKvImplication )
@@ -67,7 +68,7 @@ import CSlash.Data.Maybe     ( mapMaybe, runMaybeT, MaybeT )
 *                                                                               *
 ****************************************************************************** -}
 
-captureTopConstraints :: TcM a -> TcM (a, WantedConstraints)
+captureTopConstraints :: TcM a -> TcM (a, WantedTyConstraints)
 captureTopConstraints thing_inside = do
   static_wc_var <- TcM.newTcRef emptyWC
   (mb_res, lie) <- TcM.updGblEnv (\env -> env { tcg_static_wc = static_wc_var })
@@ -78,35 +79,38 @@ captureTopConstraints thing_inside = do
     Nothing -> do _ <- simplifyTop lie
                   failM
 
-simplifyTop :: WantedConstraints -> TcM ()
+simplifyTop :: WantedTyConstraints -> TcM ()
 simplifyTop wanteds = do 
   traceTc "simplifyTop {" $ text "wanted = " <+> ppr wanteds
-  final_wc <- runTcSKindCoercions $ simplifyTopWanteds wanteds
+  final_wc <- runTcS $ simplifyTopWanteds wanteds
   traceTc "End simplifyTop }" empty
 
-  reportUnsolved final_wc
+  panic "reportUnsolved final_wc"
 
 pushLevelAndSolveKindCoercions :: SkolemInfoAnon -> [TcKiVar] -> TcM a -> TcM a
 pushLevelAndSolveKindCoercions skol_info_anon tcbs thing_inside = do
   (tclvl, wanted, res) <- pushLevelAndSolveKindCoercionsX
-                                    "pushLevelAndSolveKindCoercions" thing_inside
+                          "pushLevelAndSolveKindCoercions" thing_inside
   report_unsolved_kicos skol_info_anon tcbs tclvl wanted
   return res
 
-pushLevelAndSolveKindCoercionsX :: String -> TcM a -> TcM (TcLevel, WantedConstraints, a)
+pushLevelAndSolveKindCoercionsX :: String -> TcM a -> TcM (TcLevel, WantedKiConstraints, a)
 pushLevelAndSolveKindCoercionsX callsite thing_inside = do
   traceTc "pushLevelAndSolveKindCoercionsX {" (text "Called from" <+> text callsite)
   (tclvl, (wanted, res)) <- pushTcLevelM $ do
     (res, wanted) <- captureConstraints thing_inside
-    wanted <- runTcSKindCoercions (simplifyTopWanteds wanted)
+    wanted <- case onlyWantedKiConstraints_maybe wanted of
+                Just w -> return w
+                _ -> pprPanic "pushLevelAndSolveKindCoercionsX type constraints" (ppr wanted)
+    wanted <- runTcSKindCoercions (simplifyTopKiWanteds wanted)
     return (wanted, res)
   traceTc "pushLevelAndSolveKindCoercionsX }" (vcat [ text "Residual:" <+> ppr wanted
                                                     , text "Level:" <+> ppr tclvl ])
   return (tclvl, wanted, res)
 
-simplifyAndEmitFlatConstraints :: WantedConstraints -> TcM ()
+simplifyAndEmitFlatConstraints :: WantedKiConstraints -> TcM ()
 simplifyAndEmitFlatConstraints wanted = do
-  wanted <- runTcSKindCoercions (solveWanteds wanted)
+  wanted <- runTcSKindCoercions (solveKiWanteds wanted)
   wanted <- TcM.liftZonkM $ TcM.zonkWC wanted
 
   traceTc "emitFlatConstraints {" (ppr wanted)
@@ -114,18 +118,18 @@ simplifyAndEmitFlatConstraints wanted = do
     Nothing -> do traceTc "emitFlatConstraints } failing" (ppr wanted)
                   tclvl <- TcM.getTcLevel
                   implic <- buildKvImplication unkSkolAnon [] (pushTcLevel tclvl) wanted
-                  emitImplication implic
+                  emitKiImplication implic
                   failM
-    Just simples -> do _ <- promoteAnyKiVarSet (varsOfCts simples)
+    Just simples -> do _ <- promoteAnyKiVarSet (varsOfKiCts simples)
                        traceTc "emitFlatConstraints }"
                          $ vcat [ text "simples:" <+> ppr simples ]
-                       emitSimples simples
+                       emitKiSimples simples
 
-floatKindEqualities :: WantedConstraints -> Maybe (Bag Ct)
+floatKindEqualities :: WantedKiConstraints -> Maybe (Bag KiCt)
 floatKindEqualities wc = float_wc emptyVarSet wc
   where
-    float_wc :: AnyKiVarSet -> WantedConstraints -> Maybe (Bag Ct)
-    float_wc trapping_kvs (WC { wc_simple = simples, wc_impl = implics })
+    float_wc :: AnyKiVarSet -> WantedKiConstraints -> Maybe (Bag KiCt)
+    float_wc trapping_kvs (WKC { wkc_simple = simples, wkc_impl = implics })
       | all is_floatable simples
       = do inner_simples <- flatMapBagM (float_implic trapping_kvs) implics
            return $ simples `unionBags` inner_simples
@@ -134,13 +138,13 @@ floatKindEqualities wc = float_wc emptyVarSet wc
       where
         is_floatable ct
           | insolubleCt ct = False
-          | otherwise = varsOfCt ct `disjointVarSet` trapping_kvs
+          | otherwise = varsOfKiCt ct `disjointVarSet` trapping_kvs
 
-    float_implic :: AnyKiVarSet -> Implication -> Maybe (Bag Ct)
-    float_implic trapping_kvs (Implic { ic_wanted = wanted
-                                      , ic_given_kicos = given_kicos
-                                      , ic_skols = skols
-                                      , ic_status = status })
+    float_implic :: AnyKiVarSet -> KiImplication -> Maybe (Bag KiCt)
+    float_implic trapping_kvs (KiImplic { kic_wanted = wanted
+                                        , kic_given_kicos = given_kicos
+                                        , kic_skols = skols
+                                        , kic_status = status })
       | isInsolubleStatus status
       = Nothing
       | otherwise
@@ -152,65 +156,71 @@ reportUnsolvedKiCos
   :: SkolemInfo
   -> [TcKiVar]
   -> TcLevel
-  -> WantedConstraints
+  -> WantedKiConstraints
   -> TcM ()
 reportUnsolvedKiCos skol_info skol_kvs tclvl wanted
   = report_unsolved_kicos (getSkolemInfo skol_info) skol_kvs tclvl wanted
 
 report_unsolved_kicos
-  :: SkolemInfoAnon -> [TcKiVar] -> TcLevel -> WantedConstraints -> TcM ()
+  :: SkolemInfoAnon -> [TcKiVar] -> TcLevel -> WantedKiConstraints -> TcM ()
 report_unsolved_kicos skol_info_anon skol_vs tclvl wanted
   | isEmptyWC wanted
   = return ()
   | otherwise
   = checkNoErrs $ do
       implic <- buildKvImplication skol_info_anon skol_vs tclvl wanted
-      reportAllUnsolved (mkImplicWC (unitBag implic))
+      reportAllUnsolved (mkKiImplicWC (unitBag implic))
 
-simplifyTopWanteds :: WantedConstraints -> TcS WantedConstraints
+simplifyTopWanteds :: WantedTyConstraints -> TcS WantedTyConstraints
 simplifyTopWanteds wanteds = do
   wc_first_go <- nestTcS (solveWanteds wanteds)
+  panic "unfinished"
+
+simplifyTopKiWanteds :: WantedKiConstraints -> TcS WantedKiConstraints
+simplifyTopKiWanteds wanteds = do
+  wc_first_go <- nestTcS (solveKiWanteds wanteds)
   useUnsatisfiableGivens wc_first_go
 
-useUnsatisfiableGivens :: WantedConstraints -> TcS WantedConstraints
+useUnsatisfiableGivens :: WantedKiConstraints -> TcS WantedKiConstraints
 useUnsatisfiableGivens wc = do
   (final_wc, did_work) <- (`runStateT` False) $ go_wc wc
   if did_work
-    then nestTcS (solveWanteds final_wc)
+    then nestTcS (solveKiWanteds final_wc)
     else return final_wc
   where
-    go_wc (WC { wc_simple = wtds, wc_impl = impls }) = do
+    go_wc (WKC { wkc_simple = wtds, wkc_impl = impls }) = do
       impls' <- mapMaybeBagM go_impl impls
-      return $ WC { wc_simple = wtds, wc_impl = impls' }
+      return $ WKC { wkc_simple = wtds, wkc_impl = impls' }
 
     go_impl impl
-      | isSolvedStatus (ic_status impl)
+      | isSolvedStatus (kic_status impl)
       = return $ Just impl
       | otherwise
-      = do wcs' <- go_wc (ic_wanted impl)
-           lift $ setImplicationStatus $ impl { ic_wanted = wcs' }    
+      = do wcs' <- go_wc (kic_wanted impl)
+           lift $ setKiImplicationStatus $ impl { kic_wanted = wcs' }    
 
-solveImplicationUsingUnsatGiven
+solveKiImplicationUsingUnsatGiven
   :: (KiCoVar AnyKiVar, AnyMonoKind)
-  -> Implication
-  -> TcS (Maybe Implication)
-solveImplicationUsingUnsatGiven unsat_given@(given_ev, _) impl@(Implic { ic_wanted = wtd
-                                                                       , ic_tclvl = tclvl
-                                                                       , ic_binds = ev_binds_var
-                                                                       , ic_need_inner = inner })
-  = do wcs <- nestImplicTcS ev_binds_var tclvl $ go_wc wtd
-       setImplicationStatus $ impl { ic_wanted = wcs
-                                   , ic_need_inner = inner `extendVarSet` given_ev }
+  -> KiImplication
+  -> TcS (Maybe KiImplication)
+solveKiImplicationUsingUnsatGiven unsat_given@(given_ev, _)
+  impl@(KiImplic { kic_wanted = wtd
+                 , kic_tclvl = tclvl
+                 , kic_binds = ev_binds_var
+                 , kic_need_inner = inner })
+  = do wcs <- nestKiImplicTcS ev_binds_var tclvl $ go_wc wtd
+       setKiImplicationStatus $ impl { kic_wanted = wcs
+                                   , kic_need_inner = inner `extendVarSet` given_ev }
   where
-    go_wc :: WantedConstraints -> TcS WantedConstraints
-    go_wc wc@(WC { wc_simple = wtds, wc_impl = impls }) = do
+    go_wc :: WantedKiConstraints -> TcS WantedKiConstraints
+    go_wc wc@(WKC { wkc_simple = wtds, wkc_impl = impls }) = do
       mapBagM_ go_simple wtds
-      impls <- mapMaybeBagM (solveImplicationUsingUnsatGiven unsat_given) impls
-      return $ wc { wc_simple = emptyBag, wc_impl = impls }
+      impls <- mapMaybeBagM (solveKiImplicationUsingUnsatGiven unsat_given) impls
+      return $ wc { wkc_simple = emptyBag, wkc_impl = impls }
 
-    go_simple :: Ct -> TcS ()
-    go_simple ct = case ctEvidence ct of
-      CtWanted { ctev_pred = pki, ctev_dest = dst }
+    go_simple :: KiCt -> TcS ()
+    go_simple ct = case ctKiEvidence ct of
+      CtKiWanted { ctkev_pred = pki, ctkev_dest = dst }
         -> do ev_type <- unsatisfiableKiEvType unsat_given pki
               panic "setWantedKiEvType dst True ev_type"
       _ -> return ()
@@ -223,9 +233,9 @@ unsatisfiableKiEvType (unsat_ev, given_msg) wtd_ki = panic "unsatisfiableKiEvTyp
                       Main Simplifier
 *                                                                      *
 ********************************************************************* -}
- 
-solveWanteds :: WantedConstraints -> TcS WantedConstraints
-solveWanteds wc
+
+solveWanteds :: WantedTyConstraints -> TcS WantedTyConstraints
+solveWanteds wc@(WTC { wtc_wkc = wkc })
   | isEmptyWC wc
   = return wc
   | otherwise
@@ -237,126 +247,253 @@ solveWanteds wc
        dflags <- getDynFlags
        solved_wc <- simplify_loop 0 (solverIterations dflags) True wc
 
-       traceTcS "solveWanteds }"
+       traceTcS "solvedWanteds }"
+         $ vcat [ text "final wc =" <+> ppr solved_wc ]
+
+       return solved_wc
+ 
+solveKiWanteds :: WantedKiConstraints -> TcS WantedKiConstraints
+solveKiWanteds wc
+  | isEmptyWC wc
+  = return wc
+  | otherwise
+  = do cur_lvl <- TcS.getTcLevel
+       traceTcS "solveKiWanteds {"
+         $ vcat [ text "Level =" <+> ppr cur_lvl
+                , ppr wc ]
+
+       dflags <- getDynFlags
+       solved_wc <- simplify_ki_loop 0 (solverIterations dflags) True wc
+
+       traceTcS "solveKiWanteds }"
          $ vcat [ text "final wc =" <+> ppr solved_wc ]
 
        return solved_wc
 
-simplify_loop :: Int -> IntWithInf -> Bool -> WantedConstraints -> TcS WantedConstraints
+simplify_loop :: Int -> IntWithInf -> Bool -> WantedTyConstraints -> TcS WantedTyConstraints
 simplify_loop n limit definitely_redo_implications
-              wc@(WC { wc_simple = simples, wc_impl = implics }) = do
-  csTraceTcS $ text "simplify_loop iteration=" <> int n
+  wtc@(WTC { wtc_simple = ty_simples
+           , wtc_impl = ty_implics
+           , wtc_wkc = wkc@(WKC { wkc_simple = ki_simples
+                                , wkc_impl = ki_implics }) })
+  = do csTraceTcS
+         $ text "simplify_loop iteration=" <> int n
+         <+> (parens $ hsep [ text "definitely_redo =" <+> ppr definitely_redo_implications
+                              <> comma
+                            , int (lengthBag ty_simples) <+> text "type simples to solve"
+                              <> comma
+                            , int (lengthBag ki_simples) <+> text "kind simples to solve" ])
+
+       traceTcS "simplify_loop: wc =" (ppr wtc)
+
+       (unifs1, wtc1) <- reportUnifications $ solveSimpleWanteds ty_simples ki_simples
+
+       wtc2 <- if not definitely_redo_implications
+                  && unifs1 == 0
+                  && isEmptyBag (wtc_impl wtc1)
+                  && isEmptyBag (wkc_impl (wtc_wkc wtc1))
+              then return (wtc { wtc_simple = wtc_simple wtc1
+                               , wtc_wkc = wkc { wkc_simple = wkc_simple (wtc_wkc wtc1) } })
+              else do (ty_implics2, ki_implics2) <- solveNestedImplications
+                        (ty_implics `unionBags` (wtc_impl wtc1))
+                        (ki_implics `unionBags` (wkc_impl (wtc_wkc wtc1)))
+                      return $ wtc { wtc_simple = wtc_simple wtc1
+                                   , wtc_impl = ty_implics2
+                                   , wtc_wkc = wkc { wkc_simple = wkc_simple (wtc_wkc wtc1)
+                                                   , wkc_impl = ki_implics2 } }
+
+       unif_happened <- resetUnificationFlag
+       csTraceTcS $ text "unif_happened" <+> ppr unif_happened
+
+       maybe_simplify_again (n+1) limit unif_happened wtc2
+
+simplify_ki_loop :: Int -> IntWithInf -> Bool -> WantedKiConstraints -> TcS WantedKiConstraints
+simplify_ki_loop n limit definitely_redo_implications
+              wc@(WKC { wkc_simple = simples, wkc_impl = implics }) = do
+  csTraceTcS $ text "simplify_ki_loop iteration=" <> int n
                <+> (parens $ hsep [ text "definitely_redo ="
                                     <+> ppr definitely_redo_implications
                                     <> comma
                                   , int (lengthBag simples) <+> text "simples to solve" ])
-  traceTcS "simplify_loop: wc =" (ppr wc)
+  traceTcS "simplify_ki_loop: wc =" (ppr wc)
 
-  (unifs1, wc1) <- reportUnifications $ solveSimpleWanteds simples
+  (unifs1, wc1) <- reportUnifications $ solveSimpleKiWanteds simples
 
   wc2 <- if not definitely_redo_implications
             && unifs1 == 0
-            && isEmptyBag (wc_impl wc1)
-         then return $ wc { wc_simple = wc_simple wc1 }
-         else do implics2 <- solveNestedImplications
-                             $ implics `unionBags` (wc_impl wc1)
-                 return $ wc { wc_simple = wc_simple wc1
-                             , wc_impl = implics2 }
+            && isEmptyBag (wkc_impl wc1)
+         then return $ wc { wkc_simple = wkc_simple wc1 }
+         else do implics2 <- solveNestedKiImplications
+                             $ implics `unionBags` (wkc_impl wc1)
+                 return $ wc { wkc_simple = wkc_simple wc1
+                             , wkc_impl = implics2 }
 
   unif_happened <- resetUnificationFlag
   csTraceTcS $ text "unif_happened" <+> ppr unif_happened
 
-  maybe_simplify_again (n+1) limit unif_happened wc2
-  
+  maybe_simplify_ki_again (n+1) limit unif_happened wc2
+
 maybe_simplify_again
   :: Int
   -> IntWithInf
   -> Bool
-  -> WantedConstraints
-  -> TcS WantedConstraints
-maybe_simplify_again n limit unif_happened wc@(WC { wc_simple = simples })
+  -> WantedTyConstraints
+  -> TcS WantedTyConstraints
+maybe_simplify_again n limit unif_happened wtc@(WTC { wtc_simple = ty_simples
+                                                    , wtc_wkc = WKC { wkc_simple = ki_simples }})
+  | n `intGtLimit` limit
+  = do addErrTcS $ panic "TcRnSimplifierTooManyIterations ty_simples ki_simples limit wc"
+       return wtc
+  | unif_happened
+  = simplify_loop n limit True wtc
+  | otherwise
+  = return wtc
+  
+maybe_simplify_ki_again
+  :: Int
+  -> IntWithInf
+  -> Bool
+  -> WantedKiConstraints
+  -> TcS WantedKiConstraints
+maybe_simplify_ki_again n limit unif_happened wc@(WKC { wkc_simple = simples })
   | n `intGtLimit` limit
   = do addErrTcS $ TcRnSimplifierTooManyIterations simples limit wc
        return wc
   | unif_happened
-  = simplify_loop n limit True wc
+  = simplify_ki_loop n limit True wc
   | otherwise
   = return wc
 
-solveNestedImplications :: Bag Implication -> TcS (Bag Implication)
-solveNestedImplications implics
+solveNestedImplications
+  :: Bag TyImplication -> Bag KiImplication
+  -> TcS (Bag TyImplication, Bag KiImplication)
+solveNestedImplications ty_implics ki_implics
+  | isEmptyBag ty_implics
+  = if isEmptyBag ki_implics
+    then return (emptyBag, emptyBag)
+    else do ki_implics' <- solveNestedKiImplications ki_implics
+            return (emptyBag, ki_implics')
+  | otherwise
+  = do traceTcS "solveNestedImplications starting {" empty
+       unsolved_ki_implics <- solveNestedKiImplications ki_implics
+       unsolved_ty_implics <- mapBagM solveTyImplication ty_implics
+       traceTcS "solveNestedImplications end }"
+         $ vcat [ text "unsolved_ty_implics =" <+> ppr unsolved_ty_implics ]
+
+       return (catBagMaybes unsolved_ty_implics, unsolved_ki_implics)
+
+solveNestedKiImplications :: Bag KiImplication -> TcS (Bag KiImplication)
+solveNestedKiImplications implics
   | isEmptyBag implics
   = return emptyBag
   | otherwise
-  = do traceTcS "solveNestedImplications starting {" empty
-       unsolved_implics <- mapBagM solveImplication implics
-       traceTcS "solveNestedImplications end }"
+  = do traceTcS "solveNestedKiImplications starting {" empty
+       unsolved_implics <- mapBagM solveKiImplication implics
+       traceTcS "solveNestedKiImplications end }"
          $ vcat [ text "unsolved_implics =" <+> ppr unsolved_implics ]
 
        return (catBagMaybes unsolved_implics)
 
-solveImplication :: Implication -> TcS (Maybe Implication)
-solveImplication imp@(Implic { ic_tclvl = tclvl
-                             , ic_binds = ev_binds_var
-                             , ic_given = given_ids
-                             , ic_wanted = wanteds
-                             , ic_info = info
-                             , ic_status = status })
+solveKiImplication :: KiImplication -> TcS (Maybe KiImplication)
+solveKiImplication imp@(KiImplic { kic_tclvl = tclvl
+                               , kic_binds = ev_binds_var
+                               , kic_given = given_ids
+                               , kic_wanted = wanteds
+                               , kic_info = info
+                               , kic_status = status })
   | isSolvedStatus status
   = return $ Just imp
   | otherwise
-  = do inerts <- getInertSet
-       traceTcS "solveImplication {" (ppr imp $$ text "Inerts" <+> ppr inerts)
+  = do inerts <- getInertKiSet
+       traceTcS "solveKiImplication {" (ppr imp $$ text "Inerts" <+> ppr inerts)
 
        (has_given_kicos, given_insols, residual_wanted)
-         <- nestImplicTcS ev_binds_var tclvl $ 
-            do let loc = mkGivenLoc tclvl info (ic_env imp)
-                   givens = mkGivens loc given_ids
-               solveSimpleGivens givens
+         <- nestKiImplicTcS ev_binds_var tclvl $ 
+            do let loc = mkGivenLoc tclvl info (kic_env imp)
+                   givens = mkKiGivens loc given_ids
+               solveSimpleKiGivens givens
                
-               residual_wanted <- solveWanteds wanteds
+               residual_wanted <- solveKiWanteds wanteds
 
                (has_kicos, given_insols) <- getHasGivenKiCos tclvl
 
                return (has_kicos, given_insols, residual_wanted)
 
-       traceTcS "solveImplication 2"
+       traceTcS "solveKiImplication 2"
          (ppr given_insols $$ ppr residual_wanted)
 
-       let final_wanted = residual_wanted `addInsols` given_insols
+       let final_wanted = residual_wanted `addKiInsols` given_insols
 
-       res_implic <- setImplicationStatus (imp { ic_given_kicos = has_given_kicos
-                                               , ic_wanted = final_wanted })
+       res_implic <- setKiImplicationStatus (imp { kic_given_kicos = has_given_kicos
+                                               , kic_wanted = final_wanted })
 
-       traceTcS "solveImplication end }"
+       kcvs <- TcS.getTcKiCoVars ev_binds_var
+       traceTcS "solveKiImplication end }"
          $ vcat [ text "has_given_kicos =" <+> ppr has_given_kicos
                 , text "res_implic =" <+> ppr res_implic ]
 
        return res_implic                   
 
-setImplicationStatus :: Implication -> TcS (Maybe Implication)
-setImplicationStatus implic@(Implic { ic_status = status
-                                    , ic_info = info
-                                    , ic_wanted = wc
-                                    , ic_given = givens })
+solveTyImplication :: TyImplication -> TcS (Maybe TyImplication)
+solveTyImplication imp@(TyImplic { tic_tclvl = tclvl
+                                 , tic_binds = ev_binds_var
+                                 , tic_given = given_ids
+                                 , tic_wanted = wanteds
+                                 , tic_info = info
+                                 , tic_status = status })
+  | isSolvedStatus status
+  = return $ Just imp
+  | otherwise
+  = do inerts <- getInertTySet
+       traceTcS "solveTyImplication {" (ppr imp $$ text "Inerts" <+> ppr inerts)
+
+       (has_given_eqs, given_insols, residual_wanted)
+         <- nestTyImplicTcS ev_binds_var tclvl $
+            do let loc = mkGivenLoc tclvl info (tic_env imp)
+                   givens = mkTyGivens loc given_ids
+               solveSimpleTyGivens givens
+               residual_wanted <- solveWanteds wanteds
+               (has_eqs, given_insols) <- getHasGivenTyEqs tclvl
+               return (has_eqs, given_insols, residual_wanted)
+
+       traceTcS "solveTyImplication 2"
+         (ppr given_insols $$ ppr residual_wanted)
+       let final_wanted = residual_wanted `addTyInsols` given_insols
+
+       res_implic <- setTyImplicationStatus (imp { tic_given_eqs = has_given_eqs
+                                                 , tic_wanted = final_wanted })
+
+       tcvs <- TcS.getTcTyCoVars ev_binds_var
+       traceTcS "solveTyImplication end }"
+         $ vcat [ text "has_given_eqs =" <+> ppr has_given_eqs
+                , text "res_implic =" <+> ppr res_implic
+                , text "implication tcvs =" <+> ppr tcvs ]
+
+       return res_implic
+
+setKiImplicationStatus :: KiImplication -> TcS (Maybe KiImplication)
+setKiImplicationStatus implic@(KiImplic { kic_status = status
+                                      , kic_info = info
+                                      , kic_wanted = wc
+                                      , kic_given = givens })
   | assertPpr (not (isSolvedStatus status)) (ppr info)
     $ not (isSolvedWC pruned_wc)
-  = do traceTcS "setImplicationStatus(not-all-solved) {" (ppr implic)
+  = do traceTcS "setKiImplicationStatus(not-all-solved) {" (ppr implic)
        implic <- neededKiCoVars implic
        let new_status | insolubleWC pruned_wc = IC_Insoluble
                       | otherwise = IC_Unsolved
-           new_implic = implic { ic_status = new_status
-                               , ic_wanted = pruned_wc }
+           new_implic = implic { kic_status = new_status
+                               , kic_wanted = pruned_wc }
 
-       traceTcS "setImplicationStatus(not-all-solved) }" (ppr new_implic)
+       traceTcS "setKiImplicationStatus(not-all-solved) }" (ppr new_implic)
 
        return $ Just new_implic
 
   | otherwise
-  = do traceTcS "setImplicationStatus(all-solved) {" (ppr implic)
+  = do traceTcS "setKiImplicationStatus(all-solved) {" (ppr implic)
 
-       implic@(Implic { ic_need_inner = need_inner
-                      , ic_need_outer = need_outer }) <- neededKiCoVars implic
+       implic@(KiImplic { kic_need_inner = need_inner
+                        , kic_need_outer = need_outer }) <- neededKiCoVars implic
 
        bad_telescope <- checkBadTelescope implic
 
@@ -372,10 +509,10 @@ setImplicationStatus implic@(Implic { ic_status = status
              | bad_telescope = IC_BadTelescope
              | otherwise = IC_Solved { ics_dead = warn_givens }
 
-           final_implic = implic { ic_status = final_status
-                                 , ic_wanted = pruned_wc }
+           final_implic = implic { kic_status = final_status
+                                 , kic_wanted = pruned_wc }
 
-       traceTcS "setImplicationStatus(all-solved) }"
+       traceTcS "setKiImplicationStatus(all-solved) }"
          $ vcat [ text "discard:" <+> ppr discard_entire_implication
                 , text "new_implic:" <+> ppr final_implic ]
 
@@ -383,20 +520,23 @@ setImplicationStatus implic@(Implic { ic_status = status
                 then Nothing
                 else Just final_implic
   where
-    WC { wc_simple = simples, wc_impl = implics } = wc
+    WKC { wkc_simple = simples, wkc_impl = implics } = wc
 
     pruned_implics = filterBag keep_me implics
 
-    pruned_wc = WC { wc_simple = simples
-                   , wc_impl = pruned_implics }
+    pruned_wc = WKC { wkc_simple = simples
+                   , wkc_impl = pruned_implics }
 
     keep_me ic
-      | IC_Solved dead_givens <- ic_status ic
+      | IC_Solved dead_givens <- kic_status ic
       , null dead_givens
-      , isEmptyBag (wc_impl (ic_wanted ic))
+      , isEmptyBag (wkc_impl (kic_wanted ic))
       = False
       | otherwise
       = True
+
+setTyImplicationStatus :: TyImplication -> TcS (Maybe TyImplication)
+setTyImplicationStatus = panic "setTyImplicationStatus"
 
 findUnnecessaryGivens
   :: SkolemInfoAnon
@@ -421,8 +561,8 @@ findUnnecessaryGivens info need_inner givens
 
     redundant_givens = filterOut is_minimal givens
 
-checkBadTelescope :: Implication -> TcS Bool
-checkBadTelescope (Implic { ic_info = info, ic_skols = skols })
+checkBadTelescope :: KiImplication -> TcS Bool
+checkBadTelescope (KiImplic { kic_info = info, kic_skols = skols })
   = return False
       
 
@@ -433,12 +573,12 @@ warnRedundantGivens (SigSkol ctxt _ _) = case ctxt of
   _ -> False
 warnRedundantGivens _ = False
 
-neededKiCoVars :: Implication -> TcS Implication
-neededKiCoVars implic@(Implic { ic_given = givens
-                              , ic_binds = co_binds_var
-                              , ic_wanted = WC { wc_impl = implics }
-                              , ic_need_inner = old_needs }) = do 
-  kcvs <- TcS.getTcKiCoKiCoVars co_binds_var
+neededKiCoVars :: KiImplication -> TcS KiImplication
+neededKiCoVars implic@(KiImplic { kic_given = givens
+                                , kic_binds = co_binds_var
+                                , kic_wanted = WKC { wkc_impl = implics }
+                                , kic_need_inner = old_needs }) = do 
+  kcvs <- TcS.getTcKiCoVars co_binds_var
 
   let seeds1 = foldr add_implic_seeds old_needs implics
       need_inner = seeds1 `unionVarSet` kcvs
@@ -451,7 +591,7 @@ neededKiCoVars implic@(Implic { ic_given = givens
            , text "need_inner:" <+> ppr need_inner
            , text "need_outer:" <+> ppr need_outer ]
 
-  return $ implic { ic_need_inner = need_inner
-                  , ic_need_outer = need_outer }
+  return $ implic { kic_need_inner = need_inner
+                  , kic_need_outer = need_outer }
   where
-    add_implic_seeds (Implic { ic_need_outer = needs }) acc = needs `unionVarSet` acc
+    add_implic_seeds (KiImplic { kic_need_outer = needs }) acc = needs `unionVarSet` acc

@@ -280,7 +280,7 @@ zonkTcGblEnv tcg_env@(TcGblEnv { tcg_binds = binds })
   = {-# SCC zonkTopDecls #-}
   setGblEnv tcg_env $ zonkTopDecls binds
 
-tc_rn_src_decls :: [LCsDecl Ps] -> TcM (TcGblEnv, TcLclEnv, WantedConstraints)
+tc_rn_src_decls :: [LCsDecl Ps] -> TcM (TcGblEnv, TcLclEnv, WantedTyConstraints)
 tc_rn_src_decls ds = {-# SCC "tc_rn_src_decls" #-} do
   let group = mkGroup ds
   (tcg_env, rn_decls) <- rnTopSrcDecls group
@@ -352,7 +352,7 @@ tcTypeDecls type_decls = do
 *                                                                      *
 ********************************************************************* -}
 
-checkMainType :: TcGblEnv -> TcRn WantedConstraints
+checkMainType :: TcGblEnv -> TcRn WantedTyConstraints
 checkMainType tcg_env = do
   cs_env <- getTopEnv
   if tcg_mod tcg_env /= mainModIs (cs_HUE cs_env)

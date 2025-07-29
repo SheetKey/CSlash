@@ -24,6 +24,7 @@ data IdDetails tv kv
   | DataConId (DataCon tv kv)
   | TickBoxOpId TickBoxOp
   | JoinId JoinArity
+  | TyCoVarId
 
 instance Outputable (IdDetails tv kv) where
   ppr = pprIdDetails
@@ -35,6 +36,7 @@ pprIdDetails other = brackets (pp other)
     pp VanillaId = panic "pprIdDetails"
     pp (DataConId _) = text "DataCon"
     pp (TickBoxOpId _) = text "TickBoxOp"
+    pp TyCoVarId = text "CoVarId"
     pp (JoinId arity) = text "JoinId" <> parens (int arity)
 
 data IdInfo = IdInfo

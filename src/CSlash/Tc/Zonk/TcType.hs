@@ -247,13 +247,13 @@ zonkTcMonoKindMapper = MKiCoMapper
   , mkcm_hole = hole }
   where
     hole :: () -> AnyKindCoercionHole -> ZonkM AnyKindCoercion
-    hole _ hole@(CoercionHole { ch_ref = ref, ch_co_var = cv }) = do
+    hole _ hole@(KindCoercionHole { kch_ref = ref, kch_co_var = cv }) = do
       contents <- readTcRef ref
       case contents of
         Just co -> do co' <- zonkKiCo co
                       checkKiCoercionHole cv co'
         Nothing -> do cv' <- zonkKiCoVarKind cv
-                      return $ HoleCo $ hole { ch_co_var = cv' }
+                      return $ HoleCo $ hole { kch_co_var = cv' }
 
 zonkAnyKiVar :: AnyKiVar -> ZonkM AnyMonoKind
 zonkAnyKiVar kv = handleAnyKv (const simple)
@@ -320,7 +320,7 @@ checkKiCoercionHole kcv kco
   | otherwise
   = return kco
   where
-    (kc, Pair k1 k2) = kiCoercionKind kco
+    (kc, Pair k1 k2) = kiCoercionParts kco
     ok kcv_ki | KiCoPred kcv_kc kcv_k1 kcv_k2 <- classifyPredKind kcv_ki
               = k1 `eqMonoKind` kcv_k1
                 && k2 `eqMonoKind` kcv_k2
@@ -334,49 +334,49 @@ checkKiCoercionHole kcv kco
 *                                                                      *
 ********************************************************************* -}
 
-zonkImplication :: Implication -> ZonkM Implication
-zonkImplication implic@(Implic { ic_skols = skols
-                               , ic_given = given
-                               , ic_wanted = wanted
-                               , ic_info = info }) = do
+zonkImplication :: KiImplication -> ZonkM KiImplication
+zonkImplication implic@(KiImplic { kic_skols = skols
+                               , kic_given = given
+                               , kic_wanted = wanted
+                               , kic_info = info }) = do
   given' <- mapM zonkKiCoVar given
   info' <- zonkSkolemInfoAnon info
   wanted' <- zonkWCRec wanted
-  return $ implic { ic_skols = skols
-                  , ic_given = given'
-                  , ic_wanted = wanted'
-                  , ic_info = info' }
+  return $ implic { kic_skols = skols
+                  , kic_given = given'
+                  , kic_wanted = wanted'
+                  , kic_info = info' }
 
 zonkKiCoVar :: KiCoVar AnyKiVar -> ZonkM (KiCoVar AnyKiVar)
 zonkKiCoVar var = updateVarKindM zonkTcMonoKind var
 
-zonkWC :: WantedConstraints -> ZonkM WantedConstraints
+zonkWC :: WantedKiConstraints -> ZonkM WantedKiConstraints
 zonkWC wc = zonkWCRec wc
 
-zonkWCRec :: WantedConstraints -> ZonkM WantedConstraints
-zonkWCRec (WC { wc_simple = simple, wc_impl = implic }) = do
+zonkWCRec :: WantedKiConstraints -> ZonkM WantedKiConstraints
+zonkWCRec (WKC { wkc_simple = simple, wkc_impl = implic }) = do
   simple' <- zonkSimples simple
   implic' <- mapBagM zonkImplication implic
-  return $ WC { wc_simple = simple', wc_impl = implic' }
+  return $ WKC { wkc_simple = simple', wkc_impl = implic' }
 
-zonkSimples :: Cts -> ZonkM Cts
+zonkSimples :: KiCts -> ZonkM KiCts
 zonkSimples cts = do
   cts' <- mapBagM zonkCt cts
   traceZonk "zonkSimples done:" (ppr cts')
   return cts'
 
-zonkCt :: Ct -> ZonkM Ct
-zonkCt (CKiCoCan (KiCoCt { kc_ev = ev })) = mkNonCanonical <$> zonkCtEvidence ev
-zonkCt (CIrredCan ir@(IrredCt { ir_ev = ev })) = do
+zonkCt :: KiCt -> ZonkM KiCt
+zonkCt (CKiCoCan (KiCoCt { kc_ev = ev })) = mkNonCanonicalKi <$> zonkCtEvidence ev
+zonkCt (CIrredCanKi ir@(IrredKiCt { ikr_ev = ev })) = do
   ev' <- zonkCtEvidence ev
-  return $ CIrredCan $ ir { ir_ev = ev' }
+  return $ CIrredCanKi $ ir { ikr_ev = ev' }
 zonkCt ct = do
-  fl' <- zonkCtEvidence (ctEvidence ct)
-  return $ mkNonCanonical fl'
+  fl' <- zonkCtEvidence (ctKiEvidence ct)
+  return $ mkNonCanonicalKi fl'
 
-zonkCtEvidence :: CtEvidence -> ZonkM CtEvidence
+zonkCtEvidence :: CtKiEvidence -> ZonkM CtKiEvidence
 zonkCtEvidence ctev = do
-  let pred = ctev_pred ctev
+  let pred = ctkev_pred ctev
   pred' <- zonkTcMonoKind pred
   return $ setCtEvPredKind ctev pred'
 
@@ -451,15 +451,15 @@ zonkTidyOrigin env orig@(KindCoOrigin { kco_actual = act, kco_expected = exp }) 
   (env2, exp') <- zonkTidyTcMonoKind env1 exp
   return (env2, orig { kco_actual = act', kco_expected = exp' })
 
-zonkTidyOrigin env orig = return (env, orig)
+zonkTidyOrigin env orig = panic "return (env, orig)"
 
-tidyCt :: AnyTidyEnv -> Ct -> Ct
-tidyCt env = updCtEvidence (tidyCtEvidence env)
+tidyCt :: AnyTidyEnv -> KiCt -> KiCt
+tidyCt env = updKiCtEvidence (tidyCtEvidence env)
 
-tidyCtEvidence :: AnyTidyEnv -> CtEvidence -> CtEvidence
-tidyCtEvidence env ctev = ctev { ctev_pred = tidyMonoKind env ki }
+tidyCtEvidence :: AnyTidyEnv -> CtKiEvidence -> CtKiEvidence
+tidyCtEvidence env ctev = ctev { ctkev_pred = tidyMonoKind env ki }
   where
-    ki = ctev_pred ctev
+    ki = ctkev_pred ctev
 
 tidyKiCoVar :: AnyTidyEnv -> KiCoVar AnyKiVar -> KiCoVar AnyKiVar
 tidyKiCoVar env var = updateVarKind (tidyMonoKind env) var

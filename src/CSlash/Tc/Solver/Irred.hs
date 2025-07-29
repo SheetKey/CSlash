@@ -22,15 +22,15 @@ import Data.Void ( Void )
 *                                                                      *
 ********************************************************************* -}
 
-solveIrred :: IrredCt -> SolverStage Void
+solveIrred :: IrredKiCt -> SolverStage Void
 solveIrred irred = do
   simpleStage $ traceTcS "solveIrred:" (ppr irred)
   tryInertIrreds irred
   tryQCsIrredCt irred
   simpleStage (updInertIrreds irred)
-  stopWithStage (irredCtEvidence irred) "Kept inert IrredCt"
+  stopWithStage (irredCtEvidence irred) "Kept inert IrredKiCt"
 
-updInertIrreds :: IrredCt -> TcS ()
+updInertIrreds :: IrredKiCt -> TcS ()
 updInertIrreds irred = do
   tc_lvl <- getTcLevel
   updInertCans $ addIrredToCans tc_lvl irred
@@ -41,18 +41,18 @@ updInertIrreds irred = do
 *                                                                      *
 ********************************************************************* -}
 
-tryInertIrreds :: IrredCt -> SolverStage ()
+tryInertIrreds :: IrredKiCt -> SolverStage ()
 tryInertIrreds irred = Stage $ do
-  ics <- getInertCans
+  ics <- getInertKiCans
   try_inert_irreds ics irred
 
-try_inert_irreds :: InertCans -> IrredCt -> TcS (StopOrContinue ())
-try_inert_irreds inerts irred_w@(IrredCt { ir_ev = ev_w, ir_reason = reason })
-  | let (matching_irreds, others) = findMatchingIrreds (inert_irreds inerts) ev_w
+try_inert_irreds :: InertKiCans -> IrredKiCt -> TcS (StopOrContinue ())
+try_inert_irreds inerts irred_w@(IrredKiCt { ikr_ev = ev_w, ikr_reason = reason })
+  | let (matching_irreds, others) = findMatchingIrreds (inert_ki_irreds inerts) ev_w
   , ((irred_i, swap) : _) <- bagToList matching_irreds
   , let ev_i = irredCtEvidence irred_i
-        ct_i = CIrredCan irred_i
-        ct_w = CIrredCan irred_w
+        ct_i = CIrredCanKi irred_i
+        ct_w = CIrredCanKi irred_w
   , not (isInsolubleReason reason) || isGiven ev_i || isGiven ev_w
   = do traceTcS "iteractIrred"
          $ vcat [ text "wanted:" <+> (ppr ct_w $$ ppr (ctOrigin ct_w))
@@ -70,8 +70,8 @@ try_inert_irreds inerts irred_w@(IrredCt { ir_ev = ev_w, ir_reason = reason })
 *                                                                      *
 ********************************************************************* -}
 
-tryQCsIrredCt :: IrredCt -> SolverStage ()
-tryQCsIrredCt (IrredCt { ir_ev = ev })
+tryQCsIrredCt :: IrredKiCt -> SolverStage ()
+tryQCsIrredCt (IrredKiCt { ikr_ev = ev })
   | isGiven ev
   = Stage $ continueWith ()
   | otherwise

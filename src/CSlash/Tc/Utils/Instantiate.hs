@@ -39,7 +39,7 @@ import CSlash.Tc.Errors.Types
 import CSlash.Tc.Zonk.Monad ( ZonkM )
 
 -- import GHC.Types.Id.Make( mkDictFunId )
-import CSlash.Types.Basic ( TypeOrKind(..), Arity )
+import CSlash.Types.Basic ( TypeOrKind(..), Arity, VisArity )
 import CSlash.Types.Error
 import CSlash.Types.SourceText
 import CSlash.Types.SrcLoc as SrcLoc
@@ -99,6 +99,32 @@ topSkolemize skolem_info_ki skolem_info ty = go init_subst idCsWrapper [] [] ty
       = do traceTc "topSkol done" empty
            return (wrap, kv_prs, tv_prs, substTy subst ty)
 
+skolemizeRequired
+  :: SkolemInfo
+  -> VisArity
+  -> AnySigmaType
+  -> TcM (VisArity, CsWrapper, [Name], [ForAllBinder (AnyTyVar AnyKiVar)], AnyRhoType)
+skolemizeRequired skolem_info n_req sigma
+  = go n_req init_subst idCsWrapper [] [] sigma
+  where
+    (tvs, kcvs, kvs) = varsOfType sigma
+    tvs' = tvs `unionVarSet` mapVarSet toAnyTyVar kcvs
+    init_subst = mkEmptyTvSubst (mkInScopeSet tvs', mkInScopeSet kvs)
+
+    go n_req subst wrap acc_nms acc_bndrs ty
+      | (n_req', bndrs, inner_ty) <- tcSplitForAllTyVarsReqTVBindersN n_req ty
+      , not (null bndrs)
+      = do (subst', bndrs1) <- tcInstSkolTyVarBndrsX skolem_info subst bndrs
+           let tvs1 = binderVars bndrs1
+           traceTc "skolemizeRequired, not fixing tv vis in wrapper" empty
+           go n_req' subst'
+             (wrap <.> mkWpTyLams tvs1)
+             (acc_nms ++ map (varName . binderVar) bndrs)
+             (acc_bndrs ++ bndrs1)
+             inner_ty
+      | otherwise
+      = return (n_req, wrap, acc_nms, acc_bndrs, substTy subst ty)
+
 {- *********************************************************************
 *                                                                      *
             Instantiating a call
@@ -129,6 +155,18 @@ tcInstSkolTyKiVarsX
   -> [AnyKiVar] -> [AnyTyVar AnyKiVar]
   -> TcM (AnyTvSubst, [AnyKiVar], [AnyTyVar AnyKiVar])
 tcInstSkolTyKiVarsX = tcInstSkolTyKiVarsPushLevel
+
+tcInstSkolTyVarBndrsX
+  :: SkolemInfo
+  -> AnyTvSubst
+  -> [ForAllBinder (AnyTyVar AnyKiVar)]
+  -> TcM (AnyTvSubst, [ForAllBinder (AnyTyVar AnyKiVar)])
+tcInstSkolTyVarBndrsX skol_info subs bndrs = do
+  (subst', kibndrs, bndrs') <- tcInstSkolTyKiVarsX skol_info skol_info subs [] (binderVars bndrs)
+  massert (null kibndrs)
+  pure (subst', zipWith Bndr bndrs' flags)
+  where
+    flags = binderFlags bndrs
   
 tcInstSkolTyKiVarsPushLevel
   :: SkolemInfo

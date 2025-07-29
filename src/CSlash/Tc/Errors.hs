@@ -82,24 +82,24 @@ import qualified Data.Semigroup as S
 *                                                                      *
 ********************************************************************* -}
 
-reportUnsolved :: WantedConstraints -> TcM ()
-reportUnsolved wanted = do
+reportUnsolvedKi :: WantedKiConstraints -> TcM ()
+reportUnsolvedKi wanted = do
   binds_var <- newTcKiCoBinds
   defer_errors <- goptM Opt_DeferTypeErrors
   let type_errors | not defer_errors = ErrorWithoutFlag
-                  | otherwise = panic "reportUnsolved DeferTypeErrors"
+                  | otherwise = panic "reportUnsolvedKi DeferTypeErrors"
 
   defer_holes <- goptM Opt_DeferTypedHoles
   let expr_holes | not defer_holes = ErrorWithoutFlag
-                 | otherwise = panic "reportUnsolved DeferTypedHoles"
+                 | otherwise = panic "reportUnsolvedKi DeferTypedHoles"
 
   defer_out_of_scope <- goptM Opt_DeferOutOfScopeVariables
   let out_of_scope_holes | not defer_out_of_scope = ErrorWithoutFlag
-                         | otherwise = panic "reportUnsolved DeferOutOfScopeVariables"
+                         | otherwise = panic "reportUnsolvedKi DeferOutOfScopeVariables"
 
   report_unsolved type_errors expr_holes out_of_scope_holes binds_var wanted
 
-reportAllUnsolved :: WantedConstraints -> TcM ()
+reportAllUnsolved :: WantedKiConstraints -> TcM ()
 reportAllUnsolved wanted = do
   co_binds <- newTcKiCoBinds
   report_unsolved ErrorWithoutFlag ErrorWithoutFlag ErrorWithoutFlag co_binds wanted
@@ -109,24 +109,24 @@ report_unsolved
   -> DiagnosticReason
   -> DiagnosticReason
   -> KiCoBindsVar
-  -> WantedConstraints
+  -> WantedKiConstraints
   -> TcM ()
 report_unsolved type_errors expr_holes out_of_scope_holes binds_var wanted
   | isEmptyWC wanted
   = return ()
   | otherwise
-  = do traceTc "reportUnsolved {" 
+  = do traceTc "reportUnsolvedKi {" 
          $ vcat [ text "type errors:" <+> ppr type_errors
                 , text "expr holes:" <+> ppr expr_holes
                 , text "scope holes:" <+> ppr out_of_scope_holes ]
-       traceTc "reportUnsolved (before zonking and tidying)" (ppr wanted)
+       traceTc "reportUnsolvedKi (before zonking and tidying)" (ppr wanted)
 
        wanted <- liftZonkM $ zonkWC wanted
        
-       let free_kvs = snd $ varsOfWCList wanted
+       let free_kvs = snd $ varsOfWKCList wanted
            tidy_env = tidyFreeKiVars (emptyTidyEnv @(AnyTyVar AnyKiVar)) free_kvs
 
-       traceTc "reportUnsolved (after zonking):"
+       traceTc "reportUnsolvedKi (after zonking):"
          $ vcat [ text "Free kivars:" <+> ppr free_kvs
                 , text "Tidy env:" <+> ppr tidy_env
                 , text "Wanted:" <+> ppr wanted ]
@@ -142,7 +142,7 @@ report_unsolved type_errors expr_holes out_of_scope_holes binds_var wanted
                           , cec_binds = binds_var }
        tc_lvl <- getTcLevel
        reportWanteds err_ctxt tc_lvl wanted
-       traceTc "reportUnsolved }" empty
+       traceTc "reportUnsolvedKi }" empty
 
 --------------------------------------------
 --      Internal functions
@@ -162,15 +162,15 @@ deferringAnyBindings (CEC { cec_defer_type_errors = ErrorWithoutFlag
                           , cec_out_of_scope_holes = ErrorWithoutFlag }) = False
 deferringAnyBindings _ = True
 
-reportImplic :: SolverReportErrCtxt -> Implication -> TcM ()
-reportImplic ctxt implic@(Implic { ic_skols = kvs
-                                 , ic_given = given
-                                 , ic_wanted = wanted
-                                 , ic_binds = evb
-                                 , ic_status = status
-                                 , ic_info = info
-                                 , ic_env = ct_loc_env
-                                 , ic_tclvl = tc_lvl }) = do
+reportImplic :: SolverReportErrCtxt -> KiImplication -> TcM ()
+reportImplic ctxt implic@(KiImplic { kic_skols = kvs
+                                   , kic_given = given
+                                   , kic_wanted = wanted
+                                   , kic_binds = evb
+                                   , kic_status = status
+                                   , kic_info = info
+                                   , kic_env = ct_loc_env
+                                   , kic_tclvl = tc_lvl }) = do
   traceTc "reportImplic"
     $ vcat [ text "tidy env:" <+> ppr (cec_tidy ctxt)
            , text "skols:" <+> ppr kvs
@@ -188,9 +188,9 @@ reportImplic ctxt implic@(Implic { ic_skols = kvs
            in assert (all isJust mkvs) $ catMaybes mkvs
 
     info' = tidySkolemInfoAnon env1 info
-    implic' = implic { ic_skols = kvs'
-                     , ic_given = map (tidyKiCoVar env1) given
-                     , ic_info = info' }
+    implic' = implic { kic_skols = kvs'
+                     , kic_given = map (tidyKiCoVar env1) given
+                     , kic_info = info' }
 
     ctxt' = ctxt { cec_tidy = env1
                  , cec_encl = implic' : cec_encl ctxt
@@ -221,19 +221,19 @@ warnRedundantConstraints ctxt env info redundant_evs
   | otherwise
   = panic "report_redundant"
 
-mkErrorItem :: Ct -> TcM (Maybe ErrorItem)
+mkErrorItem :: KiCt -> TcM (Maybe ErrorItem)
 mkErrorItem ct = do
   let loc = ctLoc ct
       flav = ctFlavor ct
-  (suppress, m_evdest) <- case ctEvidence ct of
-    CtGiven {} -> return (False, Nothing)
-    CtWanted { ctev_rewriters = rewriters, ctev_dest = dest } -> do
+  (suppress, m_evdest) <- case ctKiEvidence ct of
+    CtKiGiven {} -> return (False, Nothing)
+    CtKiWanted { ctkev_rewriters = rewriters, ctkev_dest = dest } -> do
       rewriters' <- zonkRewriterSet rewriters
-      return (not (isEmptyRewriterSet rewriters'), Just dest)
+      return (not (isEmptyKiRewriterSet rewriters'), Just dest)
   let m_reason = case ct of
-                   CIrredCan (IrredCt {ir_reason = reason}) -> Just reason
+                   CIrredCanKi (IrredKiCt {ikr_reason = reason}) -> Just reason
                    _ -> Nothing
-  return $ Just $ EI { ei_pred = ctPred ct
+  return $ Just $ EI { ei_pred = ctKiPred ct
                      , ei_evdest = m_evdest
                      , ei_flavor = flav
                      , ei_loc = loc
@@ -243,8 +243,8 @@ mkErrorItem ct = do
 unsuppressErrorItem :: ErrorItem -> ErrorItem
 unsuppressErrorItem ei = ei { ei_suppress = False }
 
-reportWanteds :: SolverReportErrCtxt -> TcLevel -> WantedConstraints -> TcM ()
-reportWanteds ctxt tc_lvl wc@(WC { wc_simple = simples, wc_impl = implics })
+reportWanteds :: SolverReportErrCtxt -> TcLevel -> WantedKiConstraints -> TcM ()
+reportWanteds ctxt tc_lvl wc@(WKC { wkc_simple = simples, wkc_impl = implics })
   | isEmptyWC wc = traceTc "reportWanteds empty WC" empty
   | otherwise
   = do tidy_items1 <- mapMaybeM mkErrorItem tidy_cts
@@ -337,7 +337,7 @@ isSkolemKi tc_lvl ki
 
 type Reporter = SolverReportErrCtxt -> NonEmpty ErrorItem -> TcM ()
 
-type ReporterSpec = (String, ErrorItem -> Pred AnyKiVar -> Bool, Bool, Reporter)
+type ReporterSpec = (String, ErrorItem -> KiPred AnyKiVar -> Bool, Bool, Reporter)
 
 mkSkolReporter :: Reporter
 mkSkolReporter ctxt items = mapM_ (reportGroup mkEqErr ctxt) (group (toList items))
@@ -404,6 +404,8 @@ reportGroup mk_err ctxt items = do
 
 nonDeferrableOrigin :: CtOrigin -> Bool
 nonDeferrableOrigin OccurrenceOf {} = False
+nonDeferrableOrigin TypeEqOrigin {} = False
+nonDeferrableOrigin KindEqOrigin {} = False
 nonDeferrableOrigin KindCoOrigin {} = False
 nonDeferrableOrigin GivenOrigin {} = False
 nonDeferrableOrigin TupleTyOrigin = False
@@ -604,18 +606,18 @@ mkKiVarEqErr' ctxt item kv1 ki2
                in return main_msg
 
           | (implic:_) <- cec_encl ctxt
-          , Implic { ic_skols = skols } <- implic
+          , KiImplic { kic_skols = skols } <- implic
           , panic "kv1 `elem` skols"
             ->  do panic "mkKiVarEqErr'/skols in implic"
           
           | (implic:_) <- cec_encl ctxt
-          , Implic { ic_skols = skols } <- implic
+          , KiImplic { kic_skols = skols } <- implic
           , let esc_skols = panic "filter (`elemVarSet` (varsOfMonoKind ki2)) skols"
           , not (panic "null esc_skols")
             ->  panic "mkKiVarEqErr'/skols in implic 2"
 
           | (implic:_) <- cec_encl ctxt
-          , Implic { ic_tclvl = lvl } <- implic
+          , KiImplic { kic_tclvl = lvl } <- implic
           -> panic "assertPpr (not (isTouchableMetaVar lvl kv1)) (ppr kv1 $$ ppr lvl)" $ do
               kv_extra <- extraKiVarEqInfo (panic "kv1, Just implic") ki2
               let kv_extra' = kv_extra { thisKiVarIsUntouchable = Just implic }
@@ -644,9 +646,9 @@ misMatchOrCND ctxt item ki1 ki2
                        Nothing -> False
                        Just r -> isInsolubleReason r
     level = ctLocTypeOrKind_maybe (errorItemCtLoc item) `orElse` KindLevel
-    givens = [ given | given <- getUserGivens ctxt, ic_given_kicos given /= NoGivenKiCos ]
+    givens = [ given | given <- getUserGivens ctxt, kic_given_kicos given /= NoGivenKiCos ]
 
-extraKiVarEqInfo :: (AnyKiVar, Maybe Implication) -> AnyMonoKind -> TcM KiVarInfo
+extraKiVarEqInfo :: (AnyKiVar, Maybe KiImplication) -> AnyMonoKind -> TcM KiVarInfo
 extraKiVarEqInfo (kv1, mb_implic) ki2 = do
   kv1_info <- extraKiVarInfo kv1
   ki2_info <- ki_extra ki2

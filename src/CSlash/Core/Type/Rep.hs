@@ -22,6 +22,7 @@ import CSlash.Utils.Binary
 import CSlash.Utils.FV
 
 import qualified Data.Data as Data hiding (TyCon)
+import Data.IORef (IORef)
 import Control.DeepSeq
 
 {- **********************************************************************
@@ -46,6 +47,8 @@ data Type tv kv
   | Embed (MonoKind kv) -- for application to a 'BigTyLamTy
   | KindCoercion (KindCoercion kv) -- embed a kind coercion (evidence stuff)
   deriving Data.Data
+
+type PredType = Type
 
 instance IsTyVar tv kv => Outputable (Type tv kv) where
   ppr = pprType
@@ -91,6 +94,116 @@ type KnotTied ty = ty
 
 {- **********************************************************************
 *                                                                       *
+            Type Coercions
+*                                                                       *
+********************************************************************** -}
+
+data TypeCoercion tv kv
+  = TyRefl (Type tv kv)
+  | GRefl (Type tv kv) (KindCoercion kv)
+  | TyConAppCo (TyCon tv kv) [TypeCoercion tv kv]
+  | AppCo (TypeCoercion tv kv) (TypeCoercion tv kv)
+  | TyFunCo
+    { tfco_ki :: (KindCoercion kv)
+    , tfco_arg :: (TypeCoercion tv kv)
+    , tfco_res :: (TypeCoercion tv kv)
+    }
+  | TyCoVarCo (TyCoVar tv kv)
+  | LiftKCo (KindCoercion kv)
+  | TySymCo (TypeCoercion tv kv)
+  | TyTransCo (TypeCoercion tv kv) (TypeCoercion tv kv)
+  | TyHoleCo (TypeCoercionHole tv kv)
+
+data TypeCoercionHole tv kv = TypeCoercionHole
+  { tch_co_var :: TyCoVar tv kv
+  , tch_ref :: IORef (Maybe (TypeCoercion (AnyTyVar AnyKiVar) AnyKiVar))
+  }
+
+instance Outputable (TypeCoercion tv kv)
+instance Outputable (TypeCoercionHole tv kv)
+
+type AnyTypeCoercion = TypeCoercion (AnyTyVar AnyKiVar) AnyKiVar
+type AnyTypeCoercionHole = TypeCoercionHole (AnyTyVar AnyKiVar) AnyKiVar
+
+liftKCo :: KindCoercion kv -> Type tv kv -> TypeCoercion tv kv
+liftKCo kco ty = if isReflKiCo kco
+                 then mkReflTyCo ty
+                 else LiftKCo kco
+
+mkReflTyCo :: Type tv kv -> TypeCoercion tv kv
+mkReflTyCo = TyRefl
+
+mkTyCoVarCo :: TyCoVar tv kv -> TypeCoercion tv kv
+mkTyCoVarCo = TyCoVarCo
+
+mkTyHoleCo :: TypeCoercionHole tv kv -> TypeCoercion tv kv
+mkTyHoleCo = TyHoleCo
+
+mkGReflCo :: Type tv kv -> KindCoercion kv -> TypeCoercion tv kv
+mkGReflCo ty kco
+  | isReflKiCo kco = TyRefl ty
+  | otherwise = GRefl ty kco
+
+mkAppCos :: TypeCoercion tv kv 
+mkAppCos = panic "mkAppCos"
+
+ty_con_app_fun_maybe
+  :: (HasDebugCallStack, Outputable a)
+  => TyCon tv kv
+  -> [a]
+  -> Maybe (a, a, a, a, a)
+ty_con_app_fun_maybe tc args
+  | tc_uniq == fUNTyConKey = fUN_case
+  | otherwise = Nothing
+  where
+    tc_uniq = tyConUnique tc
+
+    fUN_case
+      | (arg_k : res_k : fun_k : arg : res : rest) <- args
+      = assertPpr (null rest) (ppr tc <+> ppr args)
+        $ Just (arg_k, res_k, fun_k, arg, res)
+      | otherwise
+      = Nothing
+    
+mkTySymCo :: TypeCoercion tv kv -> TypeCoercion tv kv
+mkTySymCo co | isReflTyCo co = co
+mkTySymCo (TySymCo co) = co
+mkTySymCo co = TySymCo co
+
+mkTyTransCo :: TypeCoercion tv kv -> TypeCoercion tv kv -> TypeCoercion tv kv
+mkTyTransCo co1 co2
+  | isReflTyCo co1 = co2
+  | isReflTyCo co2 = co1
+  | GRefl t1 kco1 <- co1
+  , GRefl t2 kco2 <- co2
+  = GRefl t1 (mkTransKiCo kco1 kco2)
+  | otherwise
+  = TyTransCo co1 co2
+
+-- Given 'ty : k1', 'kco : k1 ~ k2', 'co : ty ~ ty2',
+-- produces 'co' : (ty |> kco) ~ ty2'
+mkCoherenceLeftCo :: Type tv kv -> KindCoercion kv -> TypeCoercion tv kv -> TypeCoercion tv kv
+mkCoherenceLeftCo ty kco co
+  | isReflKiCo kco = co
+  | otherwise = (mkTySymCo $ mkGReflCo ty kco) `mkTyTransCo` co
+
+mkCoherenceRightCo :: Type tv kv -> KindCoercion kv -> TypeCoercion tv kv -> TypeCoercion tv kv
+mkCoherenceRightCo ty kco co
+  | isReflKiCo kco = co
+  | otherwise = co `mkTyTransCo` mkGReflCo ty kco
+
+isReflTyCo :: TypeCoercion tv kv -> Bool
+isReflTyCo (TyRefl {}) = True
+isReflTyCo _ = False
+
+isReflTyCo_maybe :: IsTyVar tv kv => TypeCoercion tv kv -> Maybe (Type tv kv)
+isReflTyCo_maybe (TyRefl ty) = Just ty
+isReflTyCo_maybe (GRefl ty kco)
+  | isReflKiCo kco = pprPanic "isReflTyCo_maybe/GRefl" (ppr ty <+> text "|>" <+> ppr kco)
+isReflTyCo_maybe _ = Nothing
+
+{- **********************************************************************
+*                                                                       *
             Type FV instance
 *                                                                       *
 ********************************************************************** -}
@@ -132,6 +245,9 @@ mkNakedTyConTy tycon = TyConApp tycon []
 
 mkForAllTys :: [ForAllBinder tv] -> Type tv kv -> Type tv kv
 mkForAllTys tyvars ty = foldr ForAllTy ty tyvars
+
+mkFunTy :: HasDebugCallStack => MonoKind kv -> Type tv kv -> Type tv kv -> Type tv kv
+mkFunTy = FunTy
 
 tcMkFunTy :: MonoKind kv -> Type tv kv -> Type tv kv -> Type tv kv
 tcMkFunTy = FunTy 

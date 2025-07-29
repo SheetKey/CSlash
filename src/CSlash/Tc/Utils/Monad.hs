@@ -58,7 +58,7 @@ import CSlash.Types.Name
 -- import GHC.Types.SafeHaskell
 import CSlash.Types.Id
 import CSlash.Types.TypeEnv
-import CSlash.Types.Var (KiCoVar, AnyKiVar)
+import CSlash.Types.Var (TyCoVar, KiCoVar, AnyTyVar, AnyKiVar)
 import CSlash.Types.Var.Set
 import CSlash.Types.Var.Env
 import CSlash.Types.SrcLoc
@@ -645,7 +645,7 @@ tcTryM thing_inside = do
              Left _ -> Nothing
              Right r -> Just r
 
-capture_constraints :: TcM r -> TcM (r, WantedConstraints)
+capture_constraints :: TcM r -> TcM (r, WantedTyConstraints)
 capture_constraints thing_inside = do
   lie_var <- newTcRef emptyWC
   res <- updLclEnv (\env -> env { tcl_lie = lie_var }) thing_inside
@@ -674,7 +674,7 @@ askNoErrs thing_inside = do
       let errs_found = errorsFound msgs || insolubleWC lie
       return (res, not errs_found)
 
-tryCaptureConstraints :: TcM a -> TcM (Maybe a, WantedConstraints)
+tryCaptureConstraints :: TcM a -> TcM (Maybe a, WantedTyConstraints)
 tryCaptureConstraints thing_inside = do
   (mb_res, lie) <- capture_constraints $ tcTryM thing_inside
   let lie_to_keep = case mb_res of
@@ -682,7 +682,7 @@ tryCaptureConstraints thing_inside = do
                        Just {} -> lie
   return (mb_res, lie_to_keep)
 
-captureConstraints :: TcM a -> TcM (a, WantedConstraints)
+captureConstraints :: TcM a -> TcM (a, WantedTyConstraints)
 captureConstraints thing_inside = do
   (mb_res, lie) <- tryCaptureConstraints thing_inside
   case mb_res of
@@ -814,15 +814,26 @@ newTcKiCoBinds = do
   return $ KiCoBindsVar { kcbv_kcvs = kcvs_ref
                         , kcbv_uniq = uniq }
 
-getTcKiCoKiCoVars :: KiCoBindsVar -> TcM (MkVarSet (KiCoVar AnyKiVar))
-getTcKiCoKiCoVars co_binds_var = readTcRef (kcbv_kcvs co_binds_var)
+newTcTyCoBinds :: TcM TyCoBindsVar
+newTcTyCoBinds = do
+  tcvs_ref <- newTcRef emptyVarSet
+  uniq <- newUnique
+  traceTc "newTcTyCoBinds" (text "unique =" <+> ppr uniq)
+  return $ TyCoBindsVar { tcbv_tcvs = tcvs_ref
+                        , tcbv_uniq = uniq }
 
-getConstraintVar :: TcM (TcRef WantedConstraints)
+getTcKiCoVars :: KiCoBindsVar -> TcM (MkVarSet (KiCoVar AnyKiVar))
+getTcKiCoVars co_binds_var = readTcRef (kcbv_kcvs co_binds_var)
+
+getTcTyCoVars :: TyCoBindsVar -> TcM (MkVarSet (TyCoVar (AnyTyVar AnyKiVar) AnyKiVar))
+getTcTyCoVars co_binds_var = readTcRef (tcbv_tcvs co_binds_var)
+
+getConstraintVar :: TcM (TcRef WantedTyConstraints)
 getConstraintVar = do
   env <- getLclEnv
-  return (tcl_lie env)
+  return $ tcl_lie env 
 
-emitConstraints :: WantedConstraints -> TcM ()
+emitConstraints :: WantedTyConstraints -> TcM ()
 emitConstraints ct
   | isEmptyWC ct
   = return ()
@@ -830,27 +841,37 @@ emitConstraints ct
   = do lie_var <- getConstraintVar
        updTcRef lie_var (`andWC` ct)
 
-emitSimple :: Ct -> TcM ()
-emitSimple ct = do
+emitKiSimple :: KiCt -> TcM ()
+emitKiSimple ct = do
   lie_var <- getConstraintVar
-  updTcRef lie_var (`addSimples` unitBag ct)
+  updTcRef lie_var (`addKiSimples` unitBag ct)
 
-emitSimples :: Cts -> TcM ()
-emitSimples cts = do
+emitTySimples :: TyCts -> TcM ()
+emitTySimples cts = do
   lie_var <- getConstraintVar
-  updTcRef lie_var (`addSimples` cts)
+  updTcRef lie_var (`addTySimples` cts)
 
-emitImplication :: Implication -> TcM ()
-emitImplication ct = do
+emitKiSimples :: KiCts -> TcM ()
+emitKiSimples cts = do
   lie_var <- getConstraintVar
-  updTcRef lie_var (`addImplics` unitBag ct)
+  updTcRef lie_var (`addKiSimples` cts)
 
-emitImplications :: Bag Implication -> TcM ()
-emitImplications ct = do
+emitTyImplication :: TyImplication -> TcM ()
+emitTyImplication ct = do
   lie_var <- getConstraintVar
-  updTcRef lie_var (`addImplics` ct)
+  updTcRef lie_var (`addTyImplics` unitBag ct)
 
-pushLevelAndCaptureConstraints :: TcM a -> TcM (TcLevel, WantedConstraints, a)
+emitKiImplication :: KiImplication -> TcM ()
+emitKiImplication ct = do
+  lie_var <- getConstraintVar
+  updTcRef lie_var (`addKiImplics` unitBag ct)
+
+emitKiImplications :: Bag KiImplication -> TcM ()
+emitKiImplications ct = do
+  lie_var <- getConstraintVar
+  updTcRef lie_var (`addKiImplics` ct)
+
+pushLevelAndCaptureConstraints :: TcM a -> TcM (TcLevel, WantedTyConstraints, a)
 pushLevelAndCaptureConstraints thing_inside = do
   tclvl <- getTcLevel
   let tclvl' = pushTcLevel tclvl

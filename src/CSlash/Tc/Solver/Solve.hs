@@ -42,42 +42,88 @@ import Data.Void( Void )
 *                                                                    *
 ******************************************************************* -}
 
-solveSimpleGivens :: [Ct] -> TcS ()
-solveSimpleGivens givens
+solveSimpleTyGivens :: [TyCt] -> TcS ()
+solveSimpleTyGivens givens
   | null givens
   = return ()
   | otherwise
-  = do traceTcS "solveSimpleGivens {" (ppr givens)
-       solveSimples (listToBag givens)
-       traceTcS "End solveSimpleGivens }" empty
+  = do traceTcS "solveSimpleTyGivens {" (ppr givens)
+       solveSimples (listToBag givens) emptyBag
+       traceTcS "End solveSimpleTyGivens }" empty
 
-solveSimpleWanteds :: Cts -> TcS WantedConstraints
-solveSimpleWanteds simples = do
-  traceTcS "solveSimpleWanteds {" (ppr simples)
+solveSimpleKiGivens :: [KiCt] -> TcS ()
+solveSimpleKiGivens givens
+  | null givens
+  = return ()
+  | otherwise
+  = do traceTcS "solveSimpleKiGivens {" (ppr givens)
+       solveSimples emptyBag (listToBag givens)
+       traceTcS "End solveSimpleKiGivens }" empty
+
+solveSimpleWanteds :: TyCts -> KiCts -> TcS WantedTyConstraints
+solveSimpleWanteds ty_simples ki_simples = do
+  traceTcS "solveSimpleWanteds {" (ppr ty_simples $$ ppr ki_simples)
   dflags <- getDynFlags
-  (n, wc) <- go 1 (solverIterations dflags) (emptyWC { wc_simple = simples })
+  (n, wtc) <- go 1 (solverIterations dflags) (emptyWC { wtc_simple = ty_simples
+                                                      , wtc_wkc =
+                                                        emptyWC { wkc_simple = ki_simples } })
   traceTcS "solveSimpleWanteds end }"
+    $ vcat [ text "iterations =" <+> ppr n
+           , text "residual =" <+> ppr wtc ]
+
+  return wtc
+  where
+    go :: Int -> IntWithInf -> WantedTyConstraints -> TcS (Int, WantedTyConstraints)
+    go n limit wtc
+      | n `intGtLimit` limit
+      = failTcS $ panic "TcRnSimplifierTooManyIterations ty_simples ki_simples limit wtc"
+      | isEmptyBag (wtc_simple wtc) && isEmptyBag (wkc_simple (wtc_wkc wtc))
+      = return (n, wtc)
+      | otherwise
+      = do wtc1 <- solve_simple_wanteds wtc
+           return (n, wtc1)
+
+solveSimpleKiWanteds :: KiCts -> TcS WantedKiConstraints
+solveSimpleKiWanteds simples = do
+  traceTcS "solveSimpleKiWanteds {" (ppr simples)
+  dflags <- getDynFlags
+  (n, wc) <- go 1 (solverIterations dflags) (emptyWC { wkc_simple = simples })
+  traceTcS "solveSimpleKiWanteds end }"
     $ vcat [ text "iterations =" <+> ppr n
            , text "residual =" <+> ppr wc ]
   return wc
   where
-    go :: Int -> IntWithInf -> WantedConstraints -> TcS (Int, WantedConstraints)
+    go :: Int -> IntWithInf -> WantedKiConstraints -> TcS (Int, WantedKiConstraints)
     go n limit wc
       | n `intGtLimit` limit
       = failTcS $ TcRnSimplifierTooManyIterations simples limit wc
-      | isEmptyBag (wc_simple wc)
+      | isEmptyBag (wkc_simple wc)
       = return (n, wc)
       | otherwise
-      = do wc1 <- solve_simple_wanteds wc
+      = do wc1 <- solve_simple_ki_wanteds wc
            return (n, wc1)
 
-solve_simple_wanteds :: WantedConstraints -> TcS WantedConstraints
-solve_simple_wanteds (WC { wc_simple = simples1, wc_impl = implics1 })
+solve_simple_wanteds :: WantedTyConstraints -> TcS WantedTyConstraints
+solve_simple_wanteds (WTC { wtc_simple = ty_simples1, wtc_impl = ty_implics1
+                          , wtc_wkc = WKC { wkc_simple = ki_simples1, wkc_impl = ki_implics1 } })
   = nestTcS $ do
-      solveSimples simples1
-      (implics2, unsolved) <- getUnsolvedInerts
-      return $ WC { wc_simple = unsolved
-                  , wc_impl = implics1 `unionBags` implics2 }
+      solveSimples ty_simples1 ki_simples1
+      (ty_implics2, ty_unsolved, ki_implics2, ki_unsolved) <- getUnsolvedInerts
+      return $ WTC { wtc_simple = ty_unsolved
+                   , wtc_impl = ty_implics1 `unionBags` ty_implics2
+                   , wtc_wkc = WKC { wkc_simple = ki_unsolved
+                                   , wkc_impl = ki_implics1 `unionBags` ki_implics2 } }
+
+solve_simple_ki_wanteds :: WantedKiConstraints -> TcS WantedKiConstraints
+solve_simple_ki_wanteds (WKC { wkc_simple = simples1, wkc_impl = implics1 })
+  = nestTcS $ do
+      solveSimples emptyBag simples1
+      (ty_implics, ty_unsolved, implics2, unsolved) <- getUnsolvedInerts
+      massertPpr (isEmptyBag ty_implics && isEmptyBag ty_unsolved)
+        $ vcat [ text "solve_simple_ki_wanteds"
+               , ppr ty_implics, ppr ty_unsolved ]
+      return $ WKC { wkc_simple = unsolved
+                   , wkc_impl = implics1 `unionBags` implics2 }
                   
 {- *********************************************************************
 *                                                                      *
@@ -85,22 +131,24 @@ solve_simple_wanteds (WC { wc_simple = simples1, wc_impl = implics1 })
 *                                                                      *
 ********************************************************************* -}
 
-solveSimples :: Cts -> TcS ()
-solveSimples cts = {-# SCC "solveSimples" #-} do
-  emitWork cts
+solveSimples :: TyCts -> KiCts -> TcS ()
+solveSimples ty_cts ki_cts = {-# SCC "solveSimples" #-} do
+  emitKiWork ki_cts
+  emitTyWork ty_cts
   solve_loop
   where
     solve_loop = {-# SCC "solve_loop" #-} do
       sel <- selectNextWorkItem
       case sel of
         Nothing -> return ()
-        Just ct -> do solveOne ct
-                      solve_loop
+        Just (Right kict) -> do solveOneKi kict
+                                solve_loop
+        Just (Left tyct) -> do panic "solveSimples tyct"
 
-solveOne :: Ct -> TcS ()
-solveOne workItem = do
+solveOneKi :: KiCt -> TcS ()
+solveOneKi workItem = do
   wl <- getWorkList
-  inerts <- getInertSet
+  inerts <- getInertKiSet
   tclevel <- getTcLevel
   traceTcS "----------------------------- " empty
   traceTcS "Start solver pipeline {"
@@ -112,7 +160,7 @@ solveOne workItem = do
   bumpStepCountTcS
   solve workItem
   where
-    solve :: Ct -> TcS ()
+    solve :: KiCt -> TcS ()
     solve ct = do
       traceTcS "solve {" $ text "workitem = " <+> ppr ct
       res <- runSolverStage (solveCt ct)
@@ -130,18 +178,18 @@ solveOne workItem = do
 *                                                                      *
 ********************************************************************* -} 
 
-solveCt :: Ct -> SolverStage Void
-solveCt (CNonCanonical ev) = solveNC ev
-solveCt (CIrredCan (IrredCt { ir_ev = ev })) = solveNC ev
+solveCt :: KiCt -> SolverStage Void
+solveCt (CNonCanonicalKi ev) = solveNC ev
+solveCt (CIrredCanKi (IrredKiCt { ikr_ev = ev })) = solveNC ev
 solveCt (CKiCoCan (KiCoCt { kc_ev = ev, kc_pred = kc, kc_lhs = lhs, kc_rhs = rhs }))
   = solveKiCoercion ev kc (canKiCoLHSKind lhs) rhs
 
-solveNC :: CtEvidence -> SolverStage Void
-solveNC ev = case classifyPredKind (ctEvPred ev) of
+solveNC :: CtKiEvidence -> SolverStage Void
+solveNC ev = case classifyPredKind (ctKiEvPred ev) of
   KiCoPred kc ki1 ki2 -> solveKiCoercion ev kc ki1 ki2
   _ -> do ev <- rewriteEvidence ev
-          let irred = IrredCt { ir_ev = ev, ir_reason = IrredShapeReason }
-          case classifyPredKind (ctEvPred ev) of
+          let irred = IrredKiCt { ikr_ev = ev, ikr_reason = IrredShapeReason }
+          case classifyPredKind (ctKiEvPred ev) of
             IrredPred {} -> solveIrred irred
             KiCoPred kc ki1 ki2 -> solveKiCoercion ev kc ki1 ki2
 
@@ -151,25 +199,25 @@ solveNC ev = case classifyPredKind (ctEvPred ev) of
 *                                                                      *
 ********************************************************************* -}
 
-rewriteEvidence :: CtEvidence -> SolverStage CtEvidence
+rewriteEvidence :: CtKiEvidence -> SolverStage CtKiEvidence
 rewriteEvidence ev = Stage $ do
   traceTcS "rewriteEvidence" (ppr ev)
-  (redn, rewriters) <- rewriteKi ev (ctEvPred ev)
+  (redn, rewriters) <- rewriteKi ev (ctKiEvPred ev)
   finish_rewrite ev redn rewriters
 
-finish_rewrite :: CtEvidence -> Reduction -> RewriterSet -> TcS (StopOrContinue CtEvidence)
+finish_rewrite :: CtKiEvidence -> Reduction -> KiRewriterSet -> TcS (StopOrContinue CtKiEvidence)
 finish_rewrite old_ev (ReductionKi co new_pred) rewriters
   | isReflKiCo co
-  = assert (isEmptyRewriterSet rewriters)
+  = assert (isEmptyKiRewriterSet rewriters)
     $ continueWith (setCtEvPredKind old_ev new_pred)
 
-finish_rewrite ev@(CtGiven { ctev_covar = old_covar, ctev_loc = loc })
+finish_rewrite ev@(CtKiGiven { ctkev_covar = old_covar, ctkev_loc = loc })
                (ReductionKi co new_pred) rewriters
-  = assert (isEmptyRewriterSet rewriters) $ do
+  = assert (isEmptyKiRewriterSet rewriters) $ do
       new_ev <- newGivenKiCoVar loc new_pred
       continueWith new_ev
 
-finish_rewrite ev@(CtWanted { ctev_dest = dest, ctev_loc = loc, ctev_rewriters = rewriters })
+finish_rewrite ev@(CtKiWanted { ctkev_dest = dest, ctkev_loc = loc, ctkev_rewriters = rewriters })
                (ReductionKi co new_pred) new_rewriters
   = do new_ev <- newWanted loc rewriters' new_pred
        setWantedKiCo dest $ mkSymKiCo co

@@ -1,9 +1,7 @@
 module CSlash.Types.Id
   ( Id
 
-  , idName
-
-  , mkGlobalId, mkLocalId
+  , module CSlash.Types.Id
   ) where
 
 import CSlash.Types.Id.Info
@@ -13,6 +11,7 @@ import CSlash.Types.Var (Id)
 import qualified CSlash.Types.Var as Var
 
 import CSlash.Core.Type
+import CSlash.Core.Predicate
 import CSlash.Types.RepType
 import CSlash.Core.DataCon
 import CSlash.Types.Name
@@ -37,3 +36,9 @@ mkLocalId name ty = mkLocalIdWithInfo name ty vanillaIdInfo
 
 mkLocalIdWithInfo :: Name -> Type tv kv -> IdInfo -> Id tv kv
 mkLocalIdWithInfo name ty info = Var.mkLocalVar VanillaId name ty info
+
+mkLocalTyCoVar
+  :: Name -> PredType (AnyTyVar AnyKiVar) AnyKiVar -> TyCoVar(AnyTyVar AnyKiVar) AnyKiVar
+mkLocalTyCoVar name ty = assert (isTyCoVarType ty)
+                         $ Var.mkLocalVar TyCoVarId name ty vanillaIdInfo
+

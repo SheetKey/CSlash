@@ -133,10 +133,10 @@ instance ContainsModule gbl => ContainsModule (Env gbl lcl) where
 *                                                                      *
 ********************************************************************* -}
 
-data RewriteEnv = RE
-  { re_loc :: !CtLoc
-  , re_flavor :: !CtFlavor
-  , re_rewriters :: !(TcRef RewriterSet)
+data KiRewriteEnv = KRE
+  { kre_loc :: !CtLoc
+  , kre_flavor :: !CtFlavor
+  , kre_rewriters :: !(TcRef KiRewriterSet)
   }
 
 {- *********************************************************************
@@ -195,7 +195,7 @@ data TcGblEnv = TcGblEnv
   , tcg_pc :: !AnyPcUsage
   , tcg_main :: Maybe Name
   , tcg_top_loc :: RealSrcSpan
-  , tcg_static_wc :: TcRef WantedConstraints
+  , tcg_static_wc :: TcRef WantedTyConstraints
   , tcg_complete_matches :: !CompleteMatches
   }
 
