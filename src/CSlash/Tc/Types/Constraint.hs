@@ -681,7 +681,33 @@ instance Outputable HasGivenTyEqs where
 
 {-# INLINE checkTyImplicationInvariants #-}
 checkTyImplicationInvariants :: (HasCallStack, Applicative m) => TyImplication -> m ()
-checkTyImplicationInvariants = panic "checkTyImplicationInvariants"
+checkTyImplicationInvariants implic = when debugIsOn (check_ty_implic implic)
+
+check_ty_implic :: (HasCallStack, Applicative m) => TyImplication -> m ()
+check_ty_implic implic@(TyImplic { tic_tclvl = lvl, tic_info = skol_info, tic_skols = skols })
+  | null bads = pure ()
+  | otherwise = massertPpr False $ vcat [ text "checkTyImplicationInvariants failure"
+                                        , nest 2 $ vcat bads
+                                        , ppr implic ]
+  where
+    bads = mapMaybe check skols
+
+    check :: TcTyVar AnyKiVar -> Maybe SDoc
+    check tv = check_details tv (tcVarDetails tv)
+
+    check_details :: TcTyVar AnyKiVar -> TcVarDetails AnyType -> Maybe SDoc
+    check_details tv (SkolemVar tv_skol_info tv_lvl)
+      | not (tv_lvl `sameDepthAs` lvl)
+      = Just $ vcat [ ppr tv <+> text "has level" <+> ppr tv_lvl
+                    , text "tic_lvl" <+> ppr lvl ]
+      | not (skol_info `checkSkolInfoAnon` skol_info_anon)
+      = Just $ vcat [ ppr tv <+> text "has skol info" <+> ppr skol_info_anon
+                    , text "tic_info" <+> ppr skol_info ]
+      | otherwise
+      = Nothing
+      where
+        skol_info_anon = getSkolemInfo tv_skol_info
+    check_details tv details = Just (ppr tv <+> text "is not a SkolemTv" <+> ppr details)
 
 {-# INLINE checkKiImplicationInvariants #-}
 checkKiImplicationInvariants :: (HasCallStack, Applicative m) => KiImplication -> m ()
