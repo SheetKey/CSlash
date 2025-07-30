@@ -867,9 +867,14 @@ emitKiImplication ct = do
   updTcRef lie_var (`addKiImplics` unitBag ct)
 
 emitKiImplications :: Bag KiImplication -> TcM ()
-emitKiImplications ct = do
+emitKiImplications ct = unless (isEmptyBag ct) $ do
   lie_var <- getConstraintVar
   updTcRef lie_var (`addKiImplics` ct)
+
+emitTyImplications :: Bag TyImplication -> TcM ()
+emitTyImplications ct = unless (isEmptyBag ct) $ do
+  lie_var <- getConstraintVar
+  updTcRef lie_var (`addTyImplics` ct)
 
 pushLevelAndCaptureConstraints :: TcM a -> TcM (TcLevel, WantedTyConstraints, a)
 pushLevelAndCaptureConstraints thing_inside = do

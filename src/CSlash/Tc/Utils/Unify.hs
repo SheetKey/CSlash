@@ -103,8 +103,12 @@ checkTyConstraints :: SkolemInfoAnon -> [TcTyVar AnyKiVar] -> TcM result -> TcM 
 checkTyConstraints skol_info skol_tvs thing_inside = do
   implication_needed <- implicationNeeded skol_info skol_tvs
   if implication_needed
-    then panic "checkTyConstraints"
-    else panic "checkTyConstraints"
+    then do (tclvl, wanted, result) <- pushLevelAndCaptureConstraints thing_inside
+            implics <- buildTyImplicationFor tclvl skol_info skol_tvs wanted
+            traceTc "checkTyConstraints" (ppr tclvl $$ ppr skol_tvs)
+            emitTyImplications implics
+            return result
+    else thing_inside
 
 checkKiConstraints :: SkolemInfoAnon -> [KiCoVar AnyKiVar] -> TcM result -> TcM result
 checkKiConstraints skol_info given thing_inside = do
@@ -237,6 +241,27 @@ buildKiImplicationFor tclvl skol_info given wanted
                             , kic_binds = co_binds_var
                             , kic_info = skol_info }
        checkKiImplicationInvariants implic'
+       return (unitBag implic')
+
+buildTyImplicationFor
+  :: TcLevel
+  -> SkolemInfoAnon
+  -> [TcTyVar AnyKiVar]
+  -> WantedTyConstraints
+  -> TcM (Bag TyImplication)
+buildTyImplicationFor tclvl skol_info skol_tvs wanted
+  | isEmptyWC wanted
+  = return emptyBag
+  | otherwise
+  = do binds_var <- newTcTyCoBinds
+       implic <- newImplication
+       let implic' = implic { tic_tclvl = tclvl
+                            , tic_skols = skol_tvs
+                            , tic_given = []
+                            , tic_wanted = wanted
+                            , tic_binds = binds_var
+                            , tic_info = skol_info }
+       checkTyImplicationInvariants implic'
        return (unitBag implic')
 
 matchExpectedFunTys
