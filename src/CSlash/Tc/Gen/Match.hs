@@ -103,16 +103,17 @@ tcMatches tc_body pat_tys rhs_ty (MG { mg_alts = L l matches, mg_ext = origin })
   = do umatches <- mapM (tcCollectingUsage . tcMatch tc_body pat_tys rhs_ty) matches
        let (usages, matches') = unzip umatches
        tcEmitBindingUsage $ supUEs usages
-       pat_tys <- return $ filter_out_forall_pat_tys pat_tys
+       pat_tys <- mapM expTypeToType $ filter_out_forall_pat_tys pat_tys
 
        rhs_ty <- readExpType rhs_ty
        traceTc "tcMatches" (ppr matches' $$ ppr pat_tys $$ ppr rhs_ty)
        return $ MG { mg_alts = L l matches'
                    , mg_ext = MatchGroupTc pat_tys rhs_ty origin }
   where
-    filter_out_forall_pat_tys :: [ExpPatType] -> [()]
+    filter_out_forall_pat_tys :: [ExpPatType] -> [ExpSigmaType]
     filter_out_forall_pat_tys = mapMaybe match_fun_pat_ty
       where
+        match_fun_pat_ty (ExpFunPatTy t) = Just t
         match_fun_pat_ty ExpForAllPatTy{} = Nothing
         match_fun_pat_ty ExpForAllPatKi{} = Nothing
 

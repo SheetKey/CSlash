@@ -407,8 +407,9 @@ class FromId v tv kv | v -> tv, v -> kv where
   fromId :: Id tv kv -> v
 
 class AsAnyTy thing where
-  asAnyTy :: IsTyVar tv kv => thing tv kv -> thing (AnyTyVar kv) kv
-  asAnyTyKi :: IsTyVar tv kv => thing tv kv -> thing (AnyTyVar AnyKiVar) AnyKiVar
+  asAnyTy :: ToAnyTyVar tv kv => thing tv kv -> thing (AnyTyVar kv) kv
+  asAnyTyKi :: (ToAnyTyVar tv kv, ToAnyKiVar kv)
+            => thing tv kv -> thing (AnyTyVar AnyKiVar) AnyKiVar
 
 class AsAnyKi thing where
   asAnyKi :: ToAnyKiVar kv => thing kv -> thing AnyKiVar

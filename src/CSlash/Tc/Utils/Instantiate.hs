@@ -85,7 +85,8 @@ topSkolemize skolem_info_ki skolem_info ty = go init_subst idCsWrapper [] [] ty
     go subst wrap kv_prs tv_prs ty
       | (kvs, tvs, inner_ty) <- tcSplitSigma ty
       , not (null kvs && null tvs)
-      = do (subst', kvs1, tvs1) <- tcInstSkolTyKiVarsX skolem_info_ki skolem_info subst kvs tvs
+      = do (subst', kvs1, tctvs1) <- tcInstSkolTyKiVarsX skolem_info_ki skolem_info subst kvs tvs
+           let tvs1 = toAnyTyVar <$> tctvs1
            traceTc "topSkol"
              $ vcat [ ppr kvs <+> vcat (map (ppr . getSrcSpan) kvs)
                     , ppr kvs1 <+> vcat (map (ppr . getSrcSpan) kvs1)
@@ -103,7 +104,7 @@ skolemizeRequired
   :: SkolemInfo
   -> VisArity
   -> AnySigmaType
-  -> TcM (VisArity, CsWrapper, [Name], [ForAllBinder (AnyTyVar AnyKiVar)], AnyRhoType)
+  -> TcM (VisArity, CsWrapper, [Name], [ForAllBinder (TcTyVar AnyKiVar)], AnyRhoType)
 skolemizeRequired skolem_info n_req sigma
   = go n_req init_subst idCsWrapper [] [] sigma
   where
@@ -115,7 +116,7 @@ skolemizeRequired skolem_info n_req sigma
       | (n_req', bndrs, inner_ty) <- tcSplitForAllTyVarsReqTVBindersN n_req ty
       , not (null bndrs)
       = do (subst', bndrs1) <- tcInstSkolTyVarBndrsX skolem_info subst bndrs
-           let tvs1 = binderVars bndrs1
+           let tvs1 = toAnyTyVar <$> binderVars bndrs1
            traceTc "skolemizeRequired, not fixing tv vis in wrapper" empty
            go n_req' subst'
              (wrap <.> mkWpTyLams tvs1)
@@ -153,14 +154,14 @@ tcInstSkolTyKiVarsX
   -> SkolemInfo
   -> AnyTvSubst
   -> [AnyKiVar] -> [AnyTyVar AnyKiVar]
-  -> TcM (AnyTvSubst, [AnyKiVar], [AnyTyVar AnyKiVar])
+  -> TcM (AnyTvSubst, [AnyKiVar], [TcTyVar AnyKiVar])
 tcInstSkolTyKiVarsX = tcInstSkolTyKiVarsPushLevel
 
 tcInstSkolTyVarBndrsX
   :: SkolemInfo
   -> AnyTvSubst
   -> [ForAllBinder (AnyTyVar AnyKiVar)]
-  -> TcM (AnyTvSubst, [ForAllBinder (AnyTyVar AnyKiVar)])
+  -> TcM (AnyTvSubst, [ForAllBinder (TcTyVar AnyKiVar)])
 tcInstSkolTyVarBndrsX skol_info subs bndrs = do
   (subst', kibndrs, bndrs') <- tcInstSkolTyKiVarsX skol_info skol_info subs [] (binderVars bndrs)
   massert (null kibndrs)
@@ -173,7 +174,7 @@ tcInstSkolTyKiVarsPushLevel
   -> SkolemInfo
   -> AnyTvSubst
   -> [AnyKiVar] -> [AnyTyVar AnyKiVar]
-  -> TcM (AnyTvSubst, [AnyKiVar], [AnyTyVar AnyKiVar])
+  -> TcM (AnyTvSubst, [AnyKiVar], [TcTyVar AnyKiVar])
 tcInstSkolTyKiVarsPushLevel skol_info_ki skol_info subst kvs tvs = do
   tc_lvl <- getTcLevel
   let !pushed_lvl = pushTcLevel tc_lvl
@@ -185,35 +186,35 @@ tcInstSkolTyKiVarsAt
   -> TcLevel
   -> AnyTvSubst
   -> [AnyKiVar] -> [AnyTyVar AnyKiVar]
-  -> TcM (AnyTvSubst, [AnyKiVar], [AnyTyVar AnyKiVar])
+  -> TcM (AnyTvSubst, [AnyKiVar], [TcTyVar AnyKiVar])
 tcInstSkolTyKiVarsAt skol_info_ki skol_info lvl subst kvs tvs
   = freshenTyKiVarsX new_skol_kv new_skol_tv subst kvs tvs
   where
     sk_details_ki = SkolemVar skol_info_ki lvl
     new_skol_kv name = toAnyKiVar $ mkTcKiVar name sk_details_ki
     sk_details = SkolemVar skol_info lvl
-    new_skol_tv name kind = toAnyTyVar $ mkTcTyVar name kind sk_details
+    new_skol_tv name kind = mkTcTyVar name kind sk_details
 
 instantiateTyKiVarsX
   :: (Name -> TcM AnyKiVar)
-  -> (Name -> AnyMonoKind -> TcM (AnyTyVar AnyKiVar))
+  -> (Name -> AnyMonoKind -> TcM (TcTyVar AnyKiVar))
   -> AnyTvSubst -> [AnyKiVar] -> [AnyTyVar AnyKiVar]
-  -> TcM (AnyTvSubst, [AnyKiVar], [AnyTyVar AnyKiVar])
+  -> TcM (AnyTvSubst, [AnyKiVar], [TcTyVar AnyKiVar])
 instantiateTyKiVarsX mk_kv mk_tv (TvSubst tis tenv kvsubst) kvs tvs = do
   (kvsubst', kvs') <- instantiateKiVarsX mk_kv kvsubst kvs
   (tvsubst', tvs') <- instantiateTyVarsX mk_tv (TvSubst tis tenv kvsubst') tvs
   return (tvsubst', kvs', tvs')
 
 instantiateTyVarsX
-  :: (Name -> AnyMonoKind -> TcM (AnyTyVar AnyKiVar))
+  :: (Name -> AnyMonoKind -> TcM (TcTyVar AnyKiVar))
   -> AnyTvSubst -> [AnyTyVar AnyKiVar]
-  -> TcM (AnyTvSubst, [AnyTyVar AnyKiVar])
+  -> TcM (AnyTvSubst, [TcTyVar AnyKiVar])
 instantiateTyVarsX mk_tv subst@(TvSubst _ _ kvsubst) tvs
   = case tvs of
       [] -> return (subst, [])
       (tv:tvs) -> do let kind1 = substMonoKiUnchecked kvsubst (varKind tv)
                      tv' <- mk_tv (varName tv) kind1
-                     let subst1 = extendTvSubstWithClone subst tv tv'
+                     let subst1 = extendTvSubstWithClone subst (toAnyTyVar tv) (toAnyTyVar tv')
                      (subst', tvs') <- instantiateTyVarsX mk_tv subst1 tvs
                      return (subst', tv':tvs')
 
@@ -231,9 +232,9 @@ instantiateKiVarsX mk_kv kvsubst kvs
 
 freshenTyKiVarsX
   :: (Name -> AnyKiVar)
-  -> (Name -> AnyMonoKind -> AnyTyVar AnyKiVar)
+  -> (Name -> AnyMonoKind -> TcTyVar AnyKiVar)
   -> AnyTvSubst -> [AnyKiVar] -> [AnyTyVar AnyKiVar]
-  -> TcM (AnyTvSubst, [AnyKiVar], [AnyTyVar AnyKiVar])
+  -> TcM (AnyTvSubst, [AnyKiVar], [TcTyVar AnyKiVar])
 freshenTyKiVarsX mk_kv mk_tv = instantiateTyKiVarsX freshen_kv freshen_tv
   where
     freshen_kv :: Name -> TcM AnyKiVar
@@ -244,7 +245,7 @@ freshenTyKiVarsX mk_kv mk_tv = instantiateTyKiVarsX freshen_kv freshen_tv
           new_name = mkInternalName uniq occ_name loc
       return (mk_kv new_name)
 
-    freshen_tv :: Name -> AnyMonoKind -> TcM (AnyTyVar AnyKiVar)
+    freshen_tv :: Name -> AnyMonoKind -> TcM (TcTyVar AnyKiVar)
     freshen_tv name kind = do
       loc <- getSrcSpanM
       uniq <- newUnique

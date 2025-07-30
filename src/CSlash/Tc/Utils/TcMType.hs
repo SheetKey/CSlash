@@ -175,6 +175,10 @@ readExpType exp_ty = do
     Nothing -> pprPanic "Unknown expected type" (ppr exp_ty)
 {-# INLINABLE readExpType #-}
 
+expTypeToType :: ExpType -> TcM AnyType
+expTypeToType (Check ty) = return ty
+expTypeToType (Infer _) = panic "expTypeToType"
+
 {- *********************************************************************
 *                                                                      *
         Constraints
@@ -189,9 +193,28 @@ newImplication = do
 
 {- *********************************************************************
 *                                                                      *
-        MetaKvs
+        MetaTvs
 *                                                                      *
 ********************************************************************* -}
+
+newMetaTyVarName :: FastString -> TcM Name
+newMetaTyVarName str = newSysName (mkTyVarOccFS str)
+
+metaInfoToTyVarName :: MetaInfo -> FastString
+metaInfoToTyVarName mi = case mi of
+  TauVar -> fsLit "t"
+  VarVar -> fsLit "a"
+
+newAnonMetaTyVar :: MetaInfo -> TcMonoKind -> TcM (TcTyVar TcKiVar)
+newAnonMetaTyVar mi = newNamedAnonMetaTyVar (metaInfoToTyVarName mi) mi
+
+newNamedAnonMetaTyVar :: FastString -> MetaInfo -> TcMonoKind -> TcM (TcTyVar TcKiVar)
+newNamedAnonMetaTyVar tv_name mi kind = do
+  name <- newMetaTyVarName tv_name
+  details <- newMetaDetails mi
+  let tyvar = mkTcTyVar name kind details
+  traceTc "newAnonMetaTyVar" (ppr tyvar)
+  return tyvar
 
 isFilledMetaTyVar_maybe :: TcTyVar AnyKiVar -> TcM (Maybe AnyType)
 isFilledMetaTyVar_maybe tv
@@ -203,6 +226,25 @@ isFilledMetaTyVar_maybe tv
          Flexi -> return Nothing
   | otherwise
   = return Nothing
+
+{- *********************************************************************
+*                                                                      *
+        MetaTvs: TauTvs
+*                                                                      *
+********************************************************************* -}
+
+newFlexiTyVar :: TcMonoKind -> TcM (TcTyVar TcKiVar)
+newFlexiTyVar kind = newAnonMetaTyVar TauVar kind
+
+newOpenFlexiTyVarTy :: TcM (Type (TcTyVar TcKiVar) TcKiVar)
+newOpenFlexiTyVarTy = do
+  tv <- newOpenFlexiTyVar
+  return $ mkTyVarTy tv
+
+newOpenFlexiTyVar :: TcM (TcTyVar TcKiVar)
+newOpenFlexiTyVar = do
+  kind <- newOpenTypeKind
+  newFlexiTyVar kind
 
 {- *********************************************************************
 *                                                                      *
@@ -268,11 +310,13 @@ cloneMetaKiVarWithInfo info tc_lvl kv = do
   traceTc "cloneMetaKiVarWithInfo" (ppr kivar)
   return kivar
 
-readMetaTyVar :: MonadIO m => TcTyVar TcKiVar -> m (MetaDetails AnyType)
+readMetaTyVar :: (MonadIO m, Outputable kv) => TcTyVar kv -> m (MetaDetails AnyType)
 readMetaTyVar tyvar = assertPpr (isMetaVar tyvar) (ppr tyvar)
-  $ liftIO $ readIORef (panic "metaVarRef tyvar")
+  $ liftIO $ readIORef (metaVarRef tyvar)
 {-# SPECIALIZE readMetaTyVar :: TcTyVar TcKiVar -> TcM (MetaDetails AnyType) #-}
 {-# SPECIALIZE readMetaTyVar :: TcTyVar TcKiVar -> ZonkM (MetaDetails AnyType) #-}
+{-# SPECIALIZE readMetaTyVar :: TcTyVar AnyKiVar -> TcM (MetaDetails AnyType) #-}
+{-# SPECIALIZE readMetaTyVar :: TcTyVar AnyKiVar -> ZonkM (MetaDetails AnyType) #-}
 
 readMetaKiVar :: MonadIO m => TcKiVar -> m (MetaDetails AnyMonoKind)
 readMetaKiVar kivar = assertPpr (isMetaVar kivar) (ppr kivar)

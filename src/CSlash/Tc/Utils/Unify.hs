@@ -254,24 +254,71 @@ matchExpectedFunTys herald ctx arity (Check top_ty) thing_inside
   = check arity [] top_ty
   where
     check :: VisArity -> [ExpPatType] -> AnySigmaType -> TcM (CsWrapper, a)
-
+    -- Skolemize vis/invis quantifiers
     check n_req rev_pat_tys ty
       | isSigmaTy ty
         || (n_req > 0 && isForAllTy ty)
-      = do rec { (n_req', wrap_gen, tv_nms, bndrs, inner_ty)
+      = do rec { (n_req', wrap_gen, tv_nms, tcbndrs, inner_ty)
                    <- skolemizeRequired skol_info n_req ty
-               ; let sig_skol = SigSkol ctx top_ty (tv_nms `zip` skol_tvs)
-                     skol_tvs = binderVars bndrs
+               ; let sig_skol = SigSkol ctx top_ty (tv_nms `zip` map toAnyTyVar skol_tvs)
+                     skol_tvs = binderVars tcbndrs
+                     bndrs = (mapVarBinder toAnyTyVar) <$> tcbndrs
                ; skol_info <- mkSkolemInfo sig_skol }
-           panic "unfinished"
-
+           (wrap_res, result) <- checkTyConstraints (getSkolemInfo skol_info) skol_tvs
+                                 $ check n_req'
+                                         (reverse (map ExpForAllPatTy bndrs) ++ rev_pat_tys)
+                                         inner_ty
+           assertPpr (not (null bndrs)) (ppr ty)
+             $ return (wrap_gen <.> wrap_res, result)
+    -- Base case
     check n_req rev_pat_tys rho_ty
       | n_req == 0
       = do let pat_tys = reverse rev_pat_tys
            res <- thing_inside pat_tys (mkCheckExpType rho_ty)
            return (idCsWrapper, res)
+    -- Function types
+    check n_req rev_pat_tys (FunTy { ft_kind = ki, ft_arg = arg_ty, ft_res = res_ty }) = do
+      let arg_pos = arity - n_req + 1
+      (wrap_res, result) <- check (n_req - 1)
+                                  (mkCheckExpFunPatTy arg_ty : rev_pat_tys)
+                                  res_ty
+      let fun_wrap = mkWpFun wrap_res ki arg_ty
+      return (fun_wrap, result)
+    -- Type variables
+    check n_req rev_pat_tys ty@(TyVarTy tv)
+      | Just mtv <- toTcTyVar_maybe tv
+      = do cts <- readMetaTyVar mtv
+           case cts of
+             Indirect ty' -> check n_req rev_pat_tys ty'
+             Flexi -> defer n_req rev_pat_tys ty
+    -- coreView
+    check n_req rev_pat_tys ty
+      | Just ty' <- coreView ty = check n_req rev_pat_tys ty'
 
-    check _ _ _ = panic "matchExpectedFunTys/check unfinished"
+    check n_req rev_pat_tys res_ty
+      = addErrCtxtM (mkFunTysMsg herald (arity, top_ty))
+        $ defer n_req rev_pat_tys res_ty
+
+    defer :: VisArity -> [ExpPatType] -> AnyRhoType -> TcM (CsWrapper, a)
+    defer n_req rev_pat_tys fun_ty = do
+      (more_arg_tys, more_fun_kis)
+        <- unzip <$> mapM new_check_arg_ty_ki [arity - n_req + 1 .. arity]
+      let all_pats = reverse rev_pat_tys ++ map mkCheckExpFunPatTy more_arg_tys
+      res_ty <- asAnyTyKi <$> newOpenFlexiTyVarTy
+      result <- thing_inside all_pats (mkCheckExpType res_ty)
+
+      co <- unifyType Nothing (mkFunTys more_arg_tys more_fun_kis res_ty) fun_ty
+      return (mkWpCast co, result)
+
+new_check_arg_ty_ki :: Int -> TcM (AnyType, AnyMonoKind)
+new_check_arg_ty_ki _ = do
+  fun_ki <- asAnyKi <$> newFlexiKiVarKi
+  arg_ty <- asAnyTyKi <$> newOpenFlexiTyVarTy
+  return (arg_ty, fun_ki)
+
+mkFunTysMsg
+  :: ExpectedFunTyOrigin -> (VisArity, AnyType) -> AnyTidyEnv -> ZonkM (AnyTidyEnv, SDoc)
+mkFunTysMsg herald (n_vis_args_in_call, fun_ty) env = panic "mkFunTysMsg"
 
 {- *********************************************************************
 *                                                                      *

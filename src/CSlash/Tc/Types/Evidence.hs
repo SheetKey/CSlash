@@ -14,6 +14,7 @@ import CSlash.Types.Var
 import CSlash.Core.Ppr ()   -- Instance OutputableBndr TyVar
 import CSlash.Tc.Utils.TcType
 import CSlash.Core.Type
+import CSlash.Core.Type.Rep (mkReflTyCo, isReflTyCo)
 import CSlash.Core.Type.FVs
 import CSlash.Core.Kind
 import CSlash.Core.TyCon
@@ -57,6 +58,9 @@ maybeSymCo NotSwapped co = co
 data CsWrapper
   = WpHole
   | WpCompose CsWrapper CsWrapper
+  | WpFun CsWrapper AnyMonoKind AnyType
+    -- given 'A -> B', the wrapper is on 'B' and the type is 'A', and the kind is the fun kind
+  | WpCast AnyTypeCoercion
   | WpTyLam (AnyTyVar AnyKiVar) -- can probably be 'TcTyVar AnyKiVar' (these should be skols)
   | WpKiLam AnyKiVar            -- "             " 'TcKiVar'          "                     "
   deriving Data.Data
@@ -65,6 +69,19 @@ data CsWrapper
 WpHole <.> c = c
 c <.> WpHole = c
 c1 <.> c2 = c1 `WpCompose` c2
+
+mkWpFun :: CsWrapper -> AnyMonoKind -> AnyType -> CsWrapper
+mkWpFun WpHole _ _ = WpHole
+mkWpFun (WpCast res_co) fun_ki arg_ty = WpCast (mk_wp_fun_co fun_ki (mkReflTyCo arg_ty) res_co)
+mkWpFun co fun_ki arg_ty = WpFun co fun_ki arg_ty
+
+mk_wp_fun_co :: AnyMonoKind -> AnyTypeCoercion -> AnyTypeCoercion -> AnyTypeCoercion
+mk_wp_fun_co fun_ki arg_co res_co = mkTyFunCo (mkReflKiCo fun_ki) arg_co res_co
+
+mkWpCast :: AnyTypeCoercion -> CsWrapper
+mkWpCast co
+  | isReflTyCo co = WpHole
+  | otherwise = WpCast co
 
 idCsWrapper :: CsWrapper
 idCsWrapper = WpHole

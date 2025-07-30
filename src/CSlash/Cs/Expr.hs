@@ -386,7 +386,7 @@ type instance XMG Rn b = Origin
 type instance XMG Tc b = MatchGroupTc
 
 data MatchGroupTc = MatchGroupTc
-  { mg_arg_tys :: [()]
+  { mg_arg_tys :: [AnyType]
   , mg_res_ty :: AnyType
   , mk_origin :: Origin
   }

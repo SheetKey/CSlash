@@ -101,8 +101,12 @@ mkCheckExpType :: AnyType -> ExpType
 mkCheckExpType = Check
 
 data ExpPatType
-  = ExpForAllPatTy (ForAllBinder (AnyTyVar AnyKiVar))
+  = ExpFunPatTy ExpSigmaType
+  | ExpForAllPatTy (ForAllBinder (AnyTyVar AnyKiVar))
   | ExpForAllPatKi AnyKiVar
+
+mkCheckExpFunPatTy :: AnyType -> ExpPatType
+mkCheckExpFunPatTy = ExpFunPatTy . mkCheckExpType
 
 mkInvisExpPatType :: AnyTyVar AnyKiVar -> ExpPatType
 mkInvisExpPatType tv = ExpForAllPatTy (Bndr tv Specified)
@@ -111,6 +115,7 @@ mkInvisExpPatKind :: AnyKiVar -> ExpPatType
 mkInvisExpPatKind kv = ExpForAllPatKi kv
 
 instance Outputable ExpPatType where
+  ppr (ExpFunPatTy t) = ppr t
   ppr (ExpForAllPatTy tv) = text "forall" <+> ppr tv
   ppr (ExpForAllPatKi kv) = text "forall" <+> ppr kv
 

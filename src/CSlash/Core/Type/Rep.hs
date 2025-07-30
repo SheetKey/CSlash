@@ -113,11 +113,14 @@ data TypeCoercion tv kv
   | TySymCo (TypeCoercion tv kv)
   | TyTransCo (TypeCoercion tv kv) (TypeCoercion tv kv)
   | TyHoleCo (TypeCoercionHole tv kv)
+  deriving Data.Data
 
 data TypeCoercionHole tv kv = TypeCoercionHole
   { tch_co_var :: TyCoVar tv kv
   , tch_ref :: IORef (Maybe (TypeCoercion (AnyTyVar AnyKiVar) AnyKiVar))
   }
+
+instance (Data.Typeable tv, Data.Typeable kv) => Data.Data (TypeCoercionHole tv kv)
 
 instance Outputable (TypeCoercion tv kv)
 instance Outputable (TypeCoercionHole tv kv)
@@ -242,6 +245,11 @@ mkTyVarTys = map mkTyVarTy
 
 mkNakedTyConTy :: TyCon tv kv -> Type tv kv
 mkNakedTyConTy tycon = TyConApp tycon []
+
+mkFunTys :: [Type tv kv] -> [MonoKind kv] -> Type tv kv -> Type tv kv
+mkFunTys args fun_kis res_ty =
+  assert (args `equalLength` fun_kis)
+  $ foldr (uncurry mkFunTy) res_ty (zip fun_kis args)
 
 mkForAllTys :: [ForAllBinder tv] -> Type tv kv -> Type tv kv
 mkForAllTys tyvars ty = foldr ForAllTy ty tyvars
