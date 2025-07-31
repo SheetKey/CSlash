@@ -86,12 +86,15 @@ tcMatchPats match_ctxt pats pat_tys thing_inside
              -- ExpForAllPatTy, wants a type pattern
              loop all_pats@(pat : pats) (ExpForAllPatTy (Bndr tv vis) : pat_tys)
                | Required <- vis
-               , Just (L _ imp_pat) <- imp_lpat_maybe pat
-               = do (_, res) <- tc_ty_pat imp_pat tv $ loop pats pat_tys
-                    return res
-
+               , Just _ <- imp_lpat_maybe pat
+               = pprPanic "tcMatchPats"
+                 $ vcat [ text "Required ExpForAllPatTy but found implicit pattern"
+                        , ppr tv <+> ppr vis
+                        , ppr pat ]
+               
                | Required <- vis
-               = panic "required with no pat: use failure case of 'tc_forall_lpat'"
+               = do (_, res) <- tc_ty_pat (unLoc pat) tv $ loop pats pat_tys
+                    return res
 
                | Specified <- vis
                , Just (L _ imp_pat) <- imp_lpat_maybe pat
