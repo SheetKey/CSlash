@@ -49,7 +49,7 @@ import CSlash.Data.Pair
 *                                                                      *
 ********************************************************************* -}
 
-writeMetaTyVar :: HasDebugCallStack => TcTyVar TcKiVar -> TcType -> ZonkM ()
+writeMetaTyVar :: HasDebugCallStack => TcTyVar AnyKiVar -> AnyType -> ZonkM ()
 writeMetaTyVar = undefined
 
 writeMetaTyVarRef

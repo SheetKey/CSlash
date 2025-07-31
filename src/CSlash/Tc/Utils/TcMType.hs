@@ -607,11 +607,11 @@ defaultKiVars dvs = do
   defaulted_kvs <- mapM defaultKiVar kvs
   return [ kv | (kv, False) <- kvs `zip` defaulted_kvs ]
 
-skolemizeUnboundMetaTyVar :: SkolemInfo -> TcTyVar TcKiVar -> ZonkM (TyVar KiVar)
+skolemizeUnboundMetaTyVar :: SkolemInfo -> TcTyVar AnyKiVar -> ZonkM (TyVar KiVar)
 skolemizeUnboundMetaTyVar skol_info tv = assertPpr (isMetaVar tv) (ppr tv) $ do
   check_empty tv
   ZonkGblEnv { zge_src_span = here, zge_tc_level = tc_lvl } <- getZonkGblEnv
-  kind <- panic "zonkTcMonoKind (varKind tv)"
+  kind <- zonkTcMonoKind (varKind tv)
   let tv_name = varName tv
       final_name | isSystemName tv_name
                  = mkInternalName (nameUnique tv_name) (nameOccName tv_name) here
@@ -621,7 +621,7 @@ skolemizeUnboundMetaTyVar skol_info tv = assertPpr (isMetaVar tv) (ppr tv) $ do
       final_tv = mkTcTyVar final_name kind details
 
   traceZonk "Skolemizing" (ppr tv <+> text ":=" <+> ppr final_tv)
-  writeMetaTyVar tv (mkTyVarTy final_tv)
+  writeMetaTyVar tv (mkTyVarTy (toAnyTyVar final_tv))
   panic "return final_tv"
   where
     check_empty tv = when debugIsOn $ do

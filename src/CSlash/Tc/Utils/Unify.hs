@@ -667,7 +667,84 @@ uKind env kc orig_ki1 orig_ki2 = do
 ********************************************************************* -}
 
 uUnfilledTyVar :: UnifyEnv -> SwapFlag -> AnyTyVar AnyKiVar -> AnyTauType -> TcM AnyTypeCoercion
-uUnfilledTyVar = panic "uUnfilledTyVar"
+uUnfilledTyVar env swapped tv1 ty2 = do
+  ty2 <- liftZonkM $ zonkTcType ty2
+  uUnfilledTyVar1 env swapped tv1 ty2
+
+uUnfilledTyVar1 :: UnifyEnv -> SwapFlag -> AnyTyVar AnyKiVar -> AnyTauType -> TcM AnyTypeCoercion
+uUnfilledTyVar1 env swapped tv1 ty2
+  | Just tv2 <- getTyVar_maybe ty2
+  = go tv2
+  | otherwise
+  = uUnfilledTyVar2 env swapped tv1 ty2
+  where
+    go tv2 | tv1 == tv2
+           = return (mkReflTyCo (mkTyVarTy tv1))
+           | swapOverTyVars False tv1 tv2
+           = do tv1 <- liftZonkM $ zonkTyVarKind tv1
+                uUnfilledTyVar2 env (flipSwap swapped) tv2 (mkTyVarTy tv1)
+           | otherwise
+           = uUnfilledTyVar2 env swapped tv1 ty2
+
+uUnfilledTyVar2 :: UnifyEnv -> SwapFlag -> AnyTyVar AnyKiVar -> AnyTauType -> TcM AnyTypeCoercion
+uUnfilledTyVar2 env@(UE { u_ty_defer = def_eq_ref }) swapped tv1 ty2 = do
+  cur_lvl <- getTcLevel
+  case toTcTyVar_maybe tv1 of
+    Just tctv1
+      | touchabilityAndShapeTestType cur_lvl tctv1 ty2
+      , simpleUnifyCheckType tctv1 ty2
+        ->  do def_eqs <- readTcRef def_eq_ref
+               kco <- uKind (mkKindEnv env ty1 ty2) EQKi (typeMonoKind ty2) (varKind tctv1)
+               traceTc "uUnfilledTyVar2 ok"
+                 $ vcat [ ppr tctv1 <+> colon <+> ppr (varKind tctv1)
+                        , ppr ty2 <+> colon <+> ppr (typeMonoKind ty2)
+                        , ppr (isReflKiCo kco)
+                        , ppr kco ]
+               if isReflKiCo kco
+                 then do liftZonkM $ writeMetaTyVar tctv1 ty2
+                         case u_ty_unified env of
+                           Nothing -> return ()
+                           Just uref -> updTcRef uref (tctv1 :)
+                         return (mkReflTyCo ty2)
+                 else do writeTcRef def_eq_ref def_eqs
+                         defer
+    _ -> not_ok_so_defer cur_lvl
+  where
+    ty1 = mkTyVarTy tv1
+    defer = unSwap swapped (uType_defer env) ty1 ty2
+
+    not_ok_so_defer cur_lvl = do
+      traceTc "uUnfilledTyVar2 not ok"
+        $ vcat [ text "tv1:" <+> ppr tv1
+               , text "ty2:" <+> ppr ty2 ]
+      defer
+
+swapOverTyVars :: Bool -> AnyTyVar AnyKiVar -> AnyTyVar AnyKiVar -> Bool
+swapOverTyVars is_given tv1 tv2
+  | not is_given, pri1 == 0, pri2 > 0 = True
+  | not is_given, pri2 == 0, pri2 > 0 = False
+  | lvl1 `strictlyDeeperThan` lvl2 = False
+  | lvl2 `strictlyDeeperThan` lvl1 = True
+  | pri1 > pri2 = False
+  | pri2 > pri1 = True
+  | isSystemName tv2_name, not (isSystemName tv1_name) = True
+  | otherwise = False
+  where
+    lvl1 = handleAnyTv (const topTcLevel) varLevel tv1
+    lvl2 = handleAnyTv (const topTcLevel) varLevel tv2
+    pri1 = lhsTyPriority tv1
+    pri2 = lhsTyPriority tv2
+    tv1_name = Var.varName tv1
+    tv2_name = Var.varName tv2
+
+lhsTyPriority :: AnyTyVar AnyKiVar -> Int
+lhsTyPriority = 
+  handleAnyTv (const 0) $ \ tv ->
+  case tcVarDetails tv of
+    SkolemVar {} -> 0
+    MetaVar { mv_info = info } -> case info of
+                                    VarVar -> 1
+                                    TauVar -> 3
 
 {- *********************************************************************
 *                                                                      *
@@ -813,6 +890,35 @@ simpleUnifyCheckKind lhs_kv rhs = go_mono rhs
     go_mono (BIKi {}) = True
 
     go_mono (KiPredApp _ k1 k2) = go_mono k1 && go_mono k2
+
+simpleUnifyCheckType :: TcTyVar AnyKiVar -> AnyType -> Bool
+simpleUnifyCheckType lhs_tv rhs = go rhs
+  where
+    lhs_tv_lvl = varLevel lhs_tv
+
+    forall_ok = panic "forall_ok"
+
+    go :: AnyType -> Bool
+    go (TyVarTy tv)
+      | Just tctv <- toTcTyVar_maybe tv, lhs_tv == tctv = False
+      | handleAnyTv (const topTcLevel) varLevel tv `strictlyDeeperThan` lhs_tv_lvl = False
+      | otherwise = True
+
+    go (FunTy { ft_arg = a, ft_res = r }) = go a && go r
+
+    go (TyConApp tc tys)
+      | not forall_ok, not (isTauTyCon tc) = False
+      | otherwise = all go tys
+
+    go (ForAllTy (Bndr tv _) ty)
+      | forall_ok, Just tctv <- toTcTyVar_maybe tv = (tctv == lhs_tv || go ty)
+      | forall_ok = go ty
+      | otherwise = False
+
+    go (AppTy t1 t2) = go t1 && go t2
+    go (CastTy ty kco) = panic "simpleUnifyCheckType CastTy" -- probably do need the occFolder
+    go (KindCoercion kco) = panic "simpleUnifyCheckType KindCoercion" -- the lhs_tv could be a kcovar?
+    go other = pprPanic "simpleUnifyCheckType other" (ppr other)
 
 {- *********************************************************************
 *                                                                      *
@@ -1001,3 +1107,25 @@ checkTopShapeKind info xi
         SkolemVar {} -> True
         MetaVar { mv_info = VarVar } -> True
         _ -> False
+
+touchabilityAndShapeTestType :: TcLevel -> TcTyVar AnyKiVar -> AnyType -> Bool
+touchabilityAndShapeTestType given_eq_lvl tv rhs
+  | MetaVar { mv_info = info, mv_tclvl = tv_lvl } <- tcVarDetails tv
+  , tv_lvl `deeperThanOrSame` given_eq_lvl
+  , checkTopShapeType info rhs
+  = True
+  | otherwise
+  = False
+
+checkTopShapeType :: MetaInfo -> AnyType -> Bool
+checkTopShapeType info xi
+  = case info of
+      VarVar -> case getTyVar_maybe xi of
+                  Nothing -> False
+                  Just tv -> handleAnyTv (const True) helper tv
+      _ -> True
+  where
+    helper tv = case tcVarDetails tv of
+                  SkolemVar {} -> True
+                  MetaVar { mv_info = VarVar } -> True
+                  _ -> False
