@@ -409,6 +409,7 @@ nonDeferrableOrigin KindEqOrigin {} = False
 nonDeferrableOrigin KindCoOrigin {} = False
 nonDeferrableOrigin GivenOrigin {} = False
 nonDeferrableOrigin TupleTyOrigin = False
+nonDeferrableOrigin PatOrigin = False
 
 maybeReportError :: SolverReportErrCtxt -> NonEmpty ErrorItem -> SolverReport -> TcM ()
 maybeReportError ctxt items@(item1 :| _) (SolverReport { sr_important_msg = important

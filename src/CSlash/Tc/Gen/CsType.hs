@@ -651,6 +651,11 @@ addTypeCtxt (L _ ty) thing = addErrCtxt doc thing
   where
     doc = text "In the type" <+> quotes (ppr ty)
 
+addKindCtxt :: LCsKind Rn -> TcM a -> TcM a
+addKindCtxt (L _ ki) thing = addErrCtxt doc thing
+  where
+    doc = text "In the kind" <+> quotes (ppr ki)
+
 {- *********************************************************************
 *                                                                      *
              Kind inference for type declarations
@@ -688,6 +693,16 @@ kcInferDeclHeader name flav kv_ns kc_res_ki = addTyConFlavCtxt name flav $ do
     $ vcat [ ppr name, ppr kv_ns, ppr scoped_kvs, ppr res_kind, ppr arity ]
 
   return tycon
+
+tcCsTvbKind :: Maybe Name -> LCsKind Rn -> AnyMonoKind -> TcM ()
+tcCsTvbKind mb_name kind expected_kind = do
+  sig_kind <- tcLCsKindSig ctxt kind
+  traceTc "tcCsTvbKind:unifying" (ppr sig_kind $$ ppr expected_kind)
+  discardResult $ unifyKind mb_thing EQKi sig_kind expected_kind
+  where
+    (ctxt, mb_thing) = case mb_name of
+      Just name -> (TyVarBndrKindCtxt name, Just (KiNameThing name))
+      Nothing -> (KindSigCtxt, Nothing)
 
 {- *********************************************************************
 *                                                                      *

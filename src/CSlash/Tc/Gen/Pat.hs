@@ -1,3 +1,6 @@
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE RankNTypes #-}
 
 module CSlash.Tc.Gen.Pat where
@@ -23,6 +26,7 @@ import CSlash.Core.Type.Ppr ( pprTyVars )
 import CSlash.Tc.Utils.TcType
 import CSlash.Tc.Utils.Unify
 import CSlash.Tc.Gen.CsType
+import CSlash.Tc.Solver (solveKindCoercions)
 import CSlash.Builtin.Types
 import CSlash.Tc.Types.Evidence
 import CSlash.Tc.Types.Origin
@@ -62,7 +66,58 @@ tcMatchPats
   -> [ExpPatType]
   -> TcM a
   -> TcM ([LPat Tc], a)
-tcMatchPats = panic "tcMatchPats"
+tcMatchPats match_ctxt pats pat_tys thing_inside
+  = assertPpr (count isVisibleExpPatType pat_tys == count (isVisArgPat . unLoc) pats)
+              (ppr pats $$ ppr pat_tys)
+    $ do err_ctxt <- getErrCtxt
+         let loop :: [LPat Rn] -> [ExpPatType] -> TcM ([LPat Tc], a)
+             -- no more pats
+             loop [] pat_tys
+               = assertPpr (not (any isVisibleExpPatType pat_tys)) (ppr pats $$ ppr pat_tys)
+                 $ do res <- setErrCtxt err_ctxt thing_inside
+                      return ([], res)
+             -- ExpForAllPatTy, wants a type pattern
+             loop all_pats@(pat : pats) (ExpForAllPatTy (Bndr tv vis) : pat_tys)
+               | Required <- vis
+               , Just (L _ imp_pat) <- imp_lpat_maybe pat
+               = do (_, res) <- tc_ty_pat imp_pat tv $ loop pats pat_tys
+                    return res
+
+               | Required <- vis
+               = panic "required with no pat: use failure case of 'tc_forall_lpat'"
+
+               | Specified <- vis
+               , Just (L _ imp_pat) <- imp_lpat_maybe pat
+               = do (_, res) <- tc_ty_pat imp_pat tv $ loop pats pat_tys
+                    return res
+
+               | otherwise
+               = loop all_pats pat_tys
+             -- InvisPat with no corresponding ExpForAllPatTy
+             loop (pat : _) _
+               | Just imp_pat <- imp_lpat_maybe pat
+               = panic "failAt (locA loc) (TcRnInvisPatWithNoForAll imp_pat)"
+             -- ExpForAllPatKi
+             loop all_pats@(pat : pats) (ExpForAllPatKi kv : pat_tys)
+               = panic "tcMatchPats/ExpForAllPatKi"
+             -- ExpFunPatTy
+             loop (pat : pats) (ExpFunPatTy pat_ty : pat_tys)
+               = do (p, (ps, res)) <- tc_lpat pat_ty penv pat $ loop pats pat_tys
+                    return (p : ps, res)
+             -- failure
+             loop pats@(_:_) [] = pprPanic "tcMatchPats" (ppr pats)
+
+         loop pats pat_tys
+  where
+    penv = PE { pe_ctxt = LamPat match_ctxt, pe_orig = PatOrigin }
+
+    imp_lpat_maybe :: LPat Rn -> Maybe (LPat Rn)
+    imp_lpat_maybe (L _ pat) = imp_pat_maybe pat
+
+    imp_pat_maybe :: Pat Rn -> Maybe (LPat Rn)
+    imp_pat_maybe (ParPat _ lpat) = imp_lpat_maybe lpat
+    imp_pat_maybe (ImpPat _ lpat) = Just lpat
+    imp_pat_maybe _ = Nothing
 
 tcCheckPat_O
   :: CsMatchContextRn
@@ -110,6 +165,48 @@ tc_pat pat_ty penv ps_pat thing_inside = case ps_pat of
   --   (wrap, id) <- tcPatBndr penv name pat_ty
   --   (res, mult_wrap) <- tcCheckUsage name pat_ty $ tcExtendIdEnv1 name id thing_inside
   _ -> panic "tc_pat"
+
+tc_ty_pat :: Pat Rn -> AnyTyVar AnyKiVar -> TcM r -> TcM (AnyType, r)
+tc_ty_pat tp tv thing_inside = do
+  let mb_kind = let go pat = case pat of
+                               TyVarPat {} -> Nothing
+                               WildPat {} -> Nothing
+                               ParPat _ (L _ p) -> go p
+                               KdSigPat _ _ (CsPSK _ k) -> Just k
+                               _ -> pprPanic "tc_ty_pat" (ppr pat)
+                in go tp
+      expected_kind = varKind tv
+  traceTc "tc_ty_pat 1" (ppr expected_kind)
+  (name, is_wild) <- let go pat = case pat of
+                                    TyVarPat _ (L _ n) -> return (n, False)
+                                    WildPat _ -> (, True) <$> newSysName (mkTyVarOcc "_")
+                                    ParPat _ (L _ p) -> go p
+                                    KdSigPat _ (L _ p) _ -> go p
+                                    _ -> pprPanic "tc_ty_pat" (ppr pat)
+          in go tp
+  let mb_name = if is_wild then Nothing else Just name
+
+  pat_tv <- newPatTyVar name expected_kind
+  let sig_bv = case mb_name of
+                 Nothing -> []
+                 Just nm -> [(nm, toAnyTyVar pat_tv)]
+
+  arg_ty <- case mb_kind of
+    Nothing -> return (mkTyVarTy (toAnyTyVar pat_tv))
+    Just pat_ki -> do
+      addKindCtxt pat_ki
+        $ solveKindCoercions "tc_ty_pat"
+        $ tcCsTvbKind mb_name pat_ki expected_kind
+
+      traceTc "tc_ty_pat 2"
+        $ vcat [ text "expected_kind" <+> ppr expected_kind
+               , text "(name, pat_tv)" <+> ppr (name, pat_tv) ]
+
+      return (mkTyVarTy (toAnyTyVar pat_tv))
+
+  _ <- unifyType Nothing arg_ty (mkTyVarTy tv)
+  result <- tcExtendNameTyVarEnv sig_bv $ thing_inside
+  return (arg_ty, result)
 
 {- *********************************************************************
 *                                                                      *

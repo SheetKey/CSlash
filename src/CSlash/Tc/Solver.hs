@@ -108,6 +108,15 @@ pushLevelAndSolveKindCoercionsX callsite thing_inside = do
                                                     , text "Level:" <+> ppr tclvl ])
   return (tclvl, wanted, res)
 
+solveKindCoercions :: String -> TcM a -> TcM a
+solveKindCoercions callsite thing_inside = do
+  traceTc "solveKindCoercions {" (text "Called from" <+> text callsite)
+  (res, wanted) <- captureConstraints thing_inside
+  wanted <- onlyWantedKiConstraints wanted
+  simplifyAndEmitFlatConstraints wanted
+  traceTc "solveKindCoercions }" empty
+  return res
+
 simplifyAndEmitFlatConstraints :: WantedKiConstraints -> TcM ()
 simplifyAndEmitFlatConstraints wanted = do
   wanted <- runTcSKindCoercions (solveKiWanteds wanted)

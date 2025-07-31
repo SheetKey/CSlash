@@ -114,6 +114,11 @@ mkInvisExpPatType tv = ExpForAllPatTy (Bndr tv Specified)
 mkInvisExpPatKind :: AnyKiVar -> ExpPatType
 mkInvisExpPatKind kv = ExpForAllPatKi kv
 
+isVisibleExpPatType :: ExpPatType -> Bool
+isVisibleExpPatType (ExpForAllPatTy (Bndr _ vis)) = isVisibleForAllFlag vis
+isVisibleExpPatType (ExpFunPatTy {}) = True
+isVisibleExpPatType (ExpForAllPatKi {}) = False
+
 instance Outputable ExpPatType where
   ppr (ExpFunPatTy t) = ppr t
   ppr (ExpForAllPatTy tv) = text "forall" <+> ppr tv

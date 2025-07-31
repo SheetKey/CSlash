@@ -150,6 +150,7 @@ data TypedThing
 
 data KindedThing
   = CsTypeRnThing (CsType Rn)
+  | KiNameThing Name
 
 data TyVarBndrs = CsTyVarBndrsRn [CsTyVarBndr Rn]
 
@@ -172,6 +173,7 @@ data CtOrigin
                  , kco_visible :: Bool
                  }
   | TupleTyOrigin
+  | PatOrigin
 
 isVisibleOrigin :: CtOrigin -> Bool
 isVisibleOrigin (KindCoOrigin { kco_visible = vis }) = vis
@@ -190,6 +192,7 @@ isGivenOrigin (OccurrenceOf {}) = False
 isGivenOrigin TupleTyOrigin = False
 isGivenOrigin (TypeEqOrigin {}) = False
 isGivenOrigin (KindEqOrigin {}) = False
+isGivenOrigin PatOrigin = False
 
 lexprCtOrigin :: LCsExpr Rn -> CtOrigin
 lexprCtOrigin (L _ e) = exprCtOrigin e

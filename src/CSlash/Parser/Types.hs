@@ -30,7 +30,7 @@ data PatBuilder p
   = PatBuilderPat (Pat p)
   | PatBuilderPar (EpToken "(") (LocatedA (PatBuilder p)) (EpToken ")")
   | PatBuilderApp (LocatedA (PatBuilder p)) (LocatedA (PatBuilder p))
-  | PatBuilderAppType (LocatedA (PatBuilder p)) (CsTyPat Ps) [AddEpAnn]
+  | PatBuilderAppType (LocatedA (PatBuilder p)) (CsTyPat Ps) [AddEpAnn] -- unused i think
   | PatBuilderOpApp (LocatedA (PatBuilder p)) (LocatedN RdrName)
                     (LocatedA (PatBuilder p)) [AddEpAnn]
   | PatBuilderConOpApp (LocatedA (PatBuilder p)) (LocatedN RdrName)

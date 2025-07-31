@@ -216,6 +216,15 @@ newNamedAnonMetaTyVar tv_name mi kind = do
   traceTc "newAnonMetaTyVar" (ppr tyvar)
   return tyvar
 
+newPatTyVar :: Name -> AnyMonoKind -> TcM (TcTyVar AnyKiVar)
+newPatTyVar name kind = do
+  details <- newMetaDetails TauVar
+  uniq <- newUnique
+  let name' = name `setNameUnique` uniq
+      tyvar = mkTcTyVar name' kind details
+  traceTc "newPatTyVar" (ppr tyvar)
+  return tyvar
+
 isFilledMetaTyVar_maybe :: TcTyVar AnyKiVar -> TcM (Maybe AnyType)
 isFilledMetaTyVar_maybe tv
   -- | isTcTyVar tv

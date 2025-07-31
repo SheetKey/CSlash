@@ -587,6 +587,10 @@ getErrCtxt = do
   env <- getLclEnv
   return $ getLclEnvErrCtxt env
 
+setErrCtxt :: [ErrCtxt] -> TcM a -> TcM a
+setErrCtxt ctxt = updLclEnv (setLclEnvErrCtxt ctxt)
+{-# INLINE setErrCtxt #-}
+
 addErrCtxt :: SDoc -> TcM a -> TcM a
 addErrCtxt msg = addErrCtxtM (\env -> return (env, msg))
 {-# INLINE addErrCtxt #-}
