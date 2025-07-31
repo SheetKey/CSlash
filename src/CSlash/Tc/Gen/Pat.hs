@@ -70,7 +70,14 @@ tcMatchPats match_ctxt pats pat_tys thing_inside
   = assertPpr (count isVisibleExpPatType pat_tys == count (isVisArgPat . unLoc) pats)
               (ppr pats $$ ppr pat_tys)
     $ do err_ctxt <- getErrCtxt
-         let loop :: [LPat Rn] -> [ExpPatType] -> TcM ([LPat Tc], a)
+         let loop_init :: [LPat Rn] -> [ExpPatType] -> TcM ([LPat Tc], a)
+             -- deal with ExpForAllPatKis which should only appear at the start
+             loop_init all_pats (ExpForAllPatKi kv : pat_tys)
+               = loop_init all_pats pat_tys
+
+             loop_init all_pats pat_tys = loop all_pats pat_tys
+
+             loop :: [LPat Rn] -> [ExpPatType] -> TcM ([LPat Tc], a)
              -- no more pats
              loop [] pat_tys
                = assertPpr (not (any isVisibleExpPatType pat_tys)) (ppr pats $$ ppr pat_tys)
@@ -98,7 +105,7 @@ tcMatchPats match_ctxt pats pat_tys thing_inside
                | Just imp_pat <- imp_lpat_maybe pat
                = panic "failAt (locA loc) (TcRnInvisPatWithNoForAll imp_pat)"
              -- ExpForAllPatKi
-             loop all_pats@(pat : pats) (ExpForAllPatKi kv : pat_tys)
+             loop all_pats (ExpForAllPatKi kv : pat_tys)
                = panic "tcMatchPats/ExpForAllPatKi"
              -- ExpFunPatTy
              loop (pat : pats) (ExpFunPatTy pat_ty : pat_tys)
@@ -107,7 +114,7 @@ tcMatchPats match_ctxt pats pat_tys thing_inside
              -- failure
              loop pats@(_:_) [] = pprPanic "tcMatchPats" (ppr pats)
 
-         loop pats pat_tys
+         loop_init pats pat_tys
   where
     penv = PE { pe_ctxt = LamPat match_ctxt, pe_orig = PatOrigin }
 
