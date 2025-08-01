@@ -1,3 +1,4 @@
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleContexts #-}
 
@@ -134,6 +135,25 @@ data TyCoBindsVar
                   Pretty printing
 *                                                                      *
 ********************************************************************* -}
+
+pprCsWrapper :: CsWrapper -> (Bool -> SDoc) -> SDoc
+pprCsWrapper wrap pp_thing_inside =
+  sdocOption sdocPrintTypecheckerElaboration $ \case
+  True -> help pp_thing_inside wrap False
+  False -> pp_thing_inside False
+  where
+    help :: (Bool -> SDoc) -> CsWrapper -> Bool -> SDoc
+    help it WpHole = it
+    help it (WpCompose f1 f2) = help (help it f2) f1
+    help it (WpFun f2 fki ty1) =
+      add_parens ((parens (text "\\(x" <> colon <> ppr ty1 <> text ")."
+                           <+> help (\_ -> it True <+> text "x") f2 False))
+                   <+> colon <+> ppr fki)
+    help it _ = panic "pprCsWrapper"
+
+add_parens :: SDoc -> Bool -> SDoc
+add_parens d True = parens d
+add_parens d False = d
 
 instance Outputable KiCoBindsVar where
   ppr (KiCoBindsVar { kcbv_uniq = u }) = text "KiCoBindsVar" <> angleBrackets (ppr u)

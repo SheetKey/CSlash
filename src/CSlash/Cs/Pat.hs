@@ -39,6 +39,8 @@ import CSlash.Cs.Kind
 import CSlash.Types.Basic
 import CSlash.Types.SrcLoc
 
+import CSlash.Tc.Types.Evidence
+
 import CSlash.Utils.Outputable
 import CSlash.Types.Name.Reader (RdrName)
 import CSlash.Core.ConLike
@@ -122,7 +124,12 @@ data EpAnnImpPat = EpAnnImpPat
 
 -- ---------------------------------------------------------------------
 
-data XXPatCsTc = ExpansionPat (Pat Rn) (Pat Tc)
+data XXPatCsTc
+  = CoPat { co_cpt_wrap :: CsWrapper
+          , co_pat_inner :: Pat Tc
+          , co_pat_ty :: Type (AnyTyVar AnyKiVar) AnyKiVar
+          }
+  | ExpansionPat (Pat Rn) (Pat Tc)
 
 data CsPatExpansion a b = CsPatExpanded a b
   deriving Data
@@ -175,7 +182,8 @@ patNeedsParens p = go @p
       Rn -> case ext of
         CsPatExpanded _ pat -> go pat
       Tc -> case ext of
-        ExpansionPat _ pat -> go pat
+        ExpansionPat pat _ -> go pat
+        CoPat _ inner _ -> go inner
 
 conPatNeedsParens :: PprPrec -> CsConDetails t a -> Bool
 conPatNeedsParens p = go
@@ -209,6 +217,9 @@ pprPat (XPat ext) = case csPass @p of
     CsPatExpanded orig _ -> pprPat orig
   Tc -> case ext of
     ExpansionPat orig _ -> pprPat orig
+    CoPat co pat _ -> pprCsWrapper co $ \parens -> if parens
+                                                   then pprParendPat appPrec pat
+                                                   else pprPat pat
 
 pprUserCon
   :: (OutputableBndr con, OutputableBndrId p, Outputable (Anno (IdCsP p)))

@@ -38,7 +38,12 @@ mkLocalIdWithInfo :: Name -> Type tv kv -> IdInfo -> Id tv kv
 mkLocalIdWithInfo name ty info = Var.mkLocalVar VanillaId name ty info
 
 mkLocalTyCoVar
-  :: Name -> PredType (AnyTyVar AnyKiVar) AnyKiVar -> TyCoVar(AnyTyVar AnyKiVar) AnyKiVar
+  :: Name -> PredType (AnyTyVar AnyKiVar) AnyKiVar -> TyCoVar (AnyTyVar AnyKiVar) AnyKiVar
 mkLocalTyCoVar name ty = assert (isTyCoVarType ty)
                          $ Var.mkLocalVar TyCoVarId name ty vanillaIdInfo
 
+mkLocalIdOrTyCoVar
+  :: Name -> Type (AnyTyVar AnyKiVar) AnyKiVar -> Id (AnyTyVar AnyKiVar) AnyKiVar
+mkLocalIdOrTyCoVar name ty
+  | isTyCoVarType ty = mkLocalTyCoVar name ty
+  | otherwise = mkLocalId name ty

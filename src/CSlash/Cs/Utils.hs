@@ -184,6 +184,10 @@ mkCsWrap :: CsWrapper -> CsExpr Tc -> CsExpr Tc
 mkCsWrap co_fn e | isIdCsWrapper co_fn = e
 mkCsWrap co_fn e = XExpr (WrapExpr co_fn e)
 
+mkCsWrapPat :: CsWrapper -> Pat Tc -> Type (AnyTyVar AnyKiVar) AnyKiVar -> Pat Tc
+mkCsWrapPat co_fn p ty | isIdCsWrapper co_fn = p
+                       | otherwise = XPat $ CoPat co_fn p ty
+
 {- *********************************************************************
 *                                                                      *
         Collecting binders
@@ -338,13 +342,14 @@ instance IsPass p => CollectPass (CsPass p) where
       Rn | CsPatExpanded _ pat <- ext
            -> collect_pat flag pat
       Tc -> case ext of
+        CoPat _ pat _ -> collect_pat flag pat
         ExpansionPat _ pat -> collect_pat flag pat
   collectXXCsBindsLR ext =
     case csPass @p of
       Ps -> dataConCantHappen ext
       Rn -> dataConCantHappen ext
       Tc -> case ext of
-        AbsBinds { abs_exports = dbinds } -> (map abe_poly dbinds ++)
+        AbsBinds { abs_exports = dbinds } -> panic "(map abe_poly dbinds ++)"
 
 csTyForeignBinders :: [TypeGroup Rn] -> [Name]
 csTyForeignBinders type_decls = panic "csTyForeignBinders"

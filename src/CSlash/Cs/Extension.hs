@@ -75,7 +75,7 @@ type instance IdP (CsPass p) = IdCsP p
 type family IdCsP pass where
   IdCsP 'Parsed = RdrName
   IdCsP 'Renamed = Name
-  IdCsP 'Typechecked = (Id (TyVar KiVar) KiVar)
+  IdCsP 'Typechecked = (Id (AnyTyVar AnyKiVar) AnyKiVar)
 
 type instance NoTc (CsPass pass) = CsPass (NoCsTcPass pass)
 

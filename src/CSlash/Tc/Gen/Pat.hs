@@ -30,6 +30,7 @@ import CSlash.Tc.Solver (solveKindCoercions)
 import CSlash.Builtin.Types
 import CSlash.Tc.Types.Evidence
 import CSlash.Tc.Types.Origin
+import CSlash.Tc.Types.BasicTypes
 import CSlash.Core.TyCon
 import CSlash.Core.Type
 import CSlash.Core.DataCon
@@ -154,6 +155,21 @@ data PatEnv = PE
 
 data PatCtxt
   = LamPat CsMatchContextRn
+  | LetPat
+
+{- *********************************************************************
+*                                                                      *
+                Binders
+*                                                                      *
+********************************************************************* -}
+
+tcPatBndr :: PatEnv -> Name -> ExpSigmaType -> TcM (CsWrapper, TcId)
+tcPatBndr penv@(PE { pe_ctxt = LetPat }) bndr_name exp_pat_ty = panic "tcPatBndr let"
+
+tcPatBndr _ bndr_name pat_ty = do
+  pat_ty <- expTypeToType pat_ty
+  traceTc "tcPatBndr(not let)" (ppr bndr_name $$ ppr pat_ty)
+  return (idCsWrapper, mkLocalIdOrTyCoVar bndr_name pat_ty)
 
 {- *********************************************************************
 *                                                                      *
@@ -171,10 +187,14 @@ tc_lpat pat_ty penv (L span pat) thing_inside = setSrcSpanA span $ do
 
 tc_pat :: ExpSigmaType -> Checker (Pat Rn) (Pat Tc)
 tc_pat pat_ty penv ps_pat thing_inside = case ps_pat of
-  -- VarPat x (L l name) -> do
-  --   (wrap, id) <- tcPatBndr penv name pat_ty
-  --   (res, mult_wrap) <- tcCheckUsage name pat_ty $ tcExtendIdEnv1 name id thing_inside
-  _ -> panic "tc_pat"
+  VarPat x (L l name) -> do
+    (wrap, id) <- tcPatBndr penv name pat_ty
+    traceTc "*********** tc_pat NOT CALLING 'tcCheckUsage'" empty
+    res <- tcExtendIdEnv1 name id thing_inside
+    pat_ty <- readExpType pat_ty
+    return (mkCsWrapPat wrap (VarPat x (L l id)) pat_ty, res)
+
+  _ -> panic "tc_pat unfinished"
 
 tc_ty_pat :: Pat Rn -> AnyTyVar AnyKiVar -> TcM r -> TcM (AnyType, r)
 tc_ty_pat tp tv thing_inside = do
