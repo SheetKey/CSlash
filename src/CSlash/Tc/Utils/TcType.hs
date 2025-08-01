@@ -235,18 +235,22 @@ anyTypeLevel ty = tenv_lvl `maxTcLevel` kenv_lvl
     add :: TcVar v => v -> TcLevel -> TcLevel
     add v lvl = lvl `maxTcLevel` varLevel v
 
--- tcTypeLevel :: TcType -> TcLevel
--- tcTypeLevel ty = tenv_lvl `maxTcLevel` kenv_lvl
---   where
---     (tenv, kenv) = varsOfTypeDSet ty
---     tenv_lvl = nonDetStrictFoldDVarSet add topTcLevel tenv
---     kenv_lvl = nonDetStrictFoldDVarSet addk topTcLevel kenv
+-- not counting kinds since issues happened otherwise. Is this correct?
+tcTypeLevel :: AnyType -> TcLevel
+tcTypeLevel ty = tenv_lvl -- `maxTcLevel` kenv_lvl
+  where
+    (tenv, kenv) = varsOfTypeDSet ty
+    tenv_lvl = nonDetStrictFoldDVarSet addt topTcLevel tenv
+    kenv_lvl = nonDetStrictFoldDVarSet addk topTcLevel kenv
 
---     add :: TcVar v => v -> TcLevel -> TcLevel
---     add v lvl = lvl `maxTcLevel` varLevel v
+    add :: TcVar v => v -> TcLevel -> TcLevel
+    add v lvl = lvl `maxTcLevel` varLevel v
 
---     addk :: AnyKiVar -> TcLevel -> TcLevel
---     addk = handleAnyKv (\_ lvl -> lvl) add
+    addt :: AnyTyVar AnyKiVar -> TcLevel -> TcLevel
+    addt = handleAnyTv (\_ lvl -> lvl) add
+
+    addk :: AnyKiVar -> TcLevel -> TcLevel
+    addk = handleAnyKv (\_ lvl -> lvl) add
 
 anyMonoKindLevel :: AnyMonoKind -> TcLevel
 anyMonoKindLevel ki = nonDetStrictFoldDVarSet add topTcLevel (varsOfMonoKindDSet ki)

@@ -50,47 +50,54 @@ import CSlash.Data.Pair
 ********************************************************************* -}
 
 writeMetaTyVar :: HasDebugCallStack => TcTyVar AnyKiVar -> AnyType -> ZonkM ()
-writeMetaTyVar = undefined
+writeMetaTyVar tyvar ty
+  | not debugIsOn
+  = writeMetaTyVarRef tyvar (metaVarRef tyvar) ty
+  | MetaVar { mv_ref = ref } <- tcVarDetails tyvar
+  = writeMetaTyVarRef tyvar ref ty
+  | otherwise
+  = massertPpr False (text "Writing to non-meta tyvar" <+> ppr tyvar)
+{-# INLINE writeMetaTyVar #-}
 
 writeMetaTyVarRef
-  :: (HasDebugCallStack, IsTyVar tv kv)
+  :: HasDebugCallStack
   => TcTyVar AnyKiVar
-  -> TcRef (MetaDetails (Type tv kv))
-  -> Type tv kv
+  -> TcRef (MetaDetails AnyType)
+  -> AnyType
   -> ZonkM ()
-writeMetaTyVarRef tyvar ref ty = panic "writeMetaTyVarRef"
-  -- | not debugIsOn
-  -- = do traceZonk "writeMetaTyVar" (ppr tyvar <+> colon <+> ppr (varKind tyvar)
-  --                                  <+> text ":=" <+> ppr ty)
-  --      writeTcRef ref (Indirect ty)
-  -- | otherwise
-  -- = do meta_details <- readTcRef ref
-  --      let tv_kind = varKind tyvar
-  --          tv_lvl = varLevel tyvar
-  --      zonked_tv_kind <- zonkTcMonoKind tv_kind
-  --      zonked_ty <- panic "zonkTcType ty"
-  --      let zonked_ty_kind = panic "typeKind zonked_ty"
-  --          zonked_ty_lvl = panic "tcTypeLevel zonked_ty"
-  --          level_check_ok = not (zonked_ty_lvl `strictlyDeeperThan` tv_lvl)
-  --          level_check_msg = ppr zonked_ty_lvl $$ ppr tv_lvl
-  --                            $$ ppr tyvar $$ ppr ty $$ ppr zonked_ty
-  --          kind_check_ok = zonked_ty_kind `eqKind` Mono zonked_tv_kind
-  --          kind_msg = hang (text "Ill-kinded update to meta tyvar")
-  --                          2 (ppr tyvar <+> colon <+> (ppr tv_kind $$ ppr zonked_tv_kind)
-  --                             <+> text ":="
-  --                             <+> ppr ty <+> colon <+> (ppr zonked_ty_kind))
-  --      traceZonk "writeMetaTyVar" (ppr tyvar <+> text ":=" <+> ppr ty)
+writeMetaTyVarRef tyvar ref ty 
+  | not debugIsOn
+  = do traceZonk "writeMetaTyVar" (ppr tyvar <+> colon <+> ppr (varKind tyvar)
+                                   <+> text ":=" <+> ppr ty)
+       writeTcRef ref (Indirect ty)
+  | otherwise
+  = do meta_details <- readTcRef ref
+       let tv_kind = varKind tyvar
+           tv_lvl = varLevel tyvar
+       zonked_tv_kind <- zonkTcMonoKind tv_kind
+       zonked_ty <- zonkTcType ty
+       let zonked_ty_kind = typeKind zonked_ty
+           zonked_ty_lvl = tcTypeLevel zonked_ty
+           level_check_ok = not (zonked_ty_lvl `strictlyDeeperThan` tv_lvl)
+           level_check_msg = ppr zonked_ty_lvl $$ ppr tv_lvl
+                             $$ ppr tyvar $$ ppr ty $$ ppr zonked_ty
+           kind_check_ok = zonked_ty_kind `eqKind` Mono zonked_tv_kind
+           kind_msg = hang (text "Ill-kinded update to meta tyvar")
+                           2 (ppr tyvar <+> colon <+> (ppr tv_kind $$ ppr zonked_tv_kind)
+                              <+> text ":="
+                              <+> ppr ty <+> colon <+> (ppr zonked_ty_kind))
+       traceZonk "writeMetaTyVar" (ppr tyvar <+> text ":=" <+> ppr ty)
 
-  --      massertPpr (isFlexi meta_details) (double_upd_msg meta_details)
+       massertPpr (isFlexi meta_details) (double_upd_msg meta_details)
 
-  --      massertPpr level_check_ok level_check_msg
+       massertPpr level_check_ok level_check_msg
 
-  --      massertPpr kind_check_ok kind_msg
+       massertPpr kind_check_ok kind_msg
 
-  --      writeTcRef ref (Indirect ty)
-  -- where
-  --   double_upd_msg details = hang (text "Double update of meta tyvar")
-  --                                 2 (ppr tyvar $$ ppr details)
+       writeTcRef ref (Indirect ty)
+  where
+    double_upd_msg details = hang (text "Double update of meta tyvar")
+                                  2 (ppr tyvar $$ ppr details)
 {-# INLINE writeMetaTyVarRef #-}
 
 writeMetaKiVar :: HasDebugCallStack => TcKiVar -> AnyMonoKind -> ZonkM ()
