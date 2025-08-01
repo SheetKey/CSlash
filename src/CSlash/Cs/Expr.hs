@@ -375,6 +375,10 @@ csExprNeedsParens prec = go
     go_x_tc :: XXExprTc -> Bool
     go_x_tc (WrapExpr _ e) = csExprNeedsParens prec e
     
+stripParensCsExpr :: CsExpr (CsPass p) -> CsExpr (CsPass p)
+stripParensCsExpr  (CsPar _ (L _ e)) = stripParensCsExpr e
+stripParensCsExpr e = e
+
 isAtomicCsExpr :: IsPass p => CsExpr (CsPass p) -> Bool
 isAtomicCsExpr (CsVar{}) = True
 isAtomicCsExpr (CsUnboundVar{}) = True

@@ -5,6 +5,7 @@ import CSlash.Cs
 import CSlash.Rename.Utils
 import CSlash.Tc.Utils.Monad
 import CSlash.Tc.Utils.Unify
+import CSlash.Tc.Types.BasicTypes
 import CSlash.Types.Basic
 import CSlash.Types.Error
 import CSlash.Types.Unique.FM
@@ -15,13 +16,13 @@ import CSlash.Core.UsageEnv
 import CSlash.Tc.Errors.Types
 import CSlash.Tc.Utils.Instantiate
 -- import CSlash.Tc.Gen.App
--- import CSlash.Tc.Gen.Head
+import CSlash.Tc.Gen.Head
 -- import CSlash.Tc.Gen.Bind        ( tcLocalBinds )
 import CSlash.Rename.Env         ( addUsedGRE )
 import CSlash.Tc.Utils.Env
 -- import CSlash.Tc.Gen.Arrow
--- import CSlash.Tc.Gen.Match( tcBody, tcLambdaMatches, tcCaseMatches
---                           , tcGRHSList, tcDoStmts )
+import CSlash.Tc.Gen.Match ( tcBody, tcLambdaMatches{-, tcCaseMatches-}
+                           , tcGRHSList )
 import CSlash.Tc.Gen.CsType
 import CSlash.Tc.Utils.TcMType
 import CSlash.Tc.Zonk.TcType
@@ -60,8 +61,40 @@ import qualified Data.List.NonEmpty as NE
 ********************************************************************* -}
 
 tcPolyLExpr :: LCsExpr Rn -> ExpSigmaType -> TcM (LCsExpr Tc)
-tcPolyLExpr = panic "tcPolyLExpr"
+tcPolyLExpr (L loc expr) res_ty =
+  setSrcSpanA loc
+  $ addExprCtxt expr
+  $ do expr' <- tcPolyExpr expr res_ty
+       return (L loc expr')
 
+tcPolyExpr :: CsExpr Rn -> ExpSigmaType -> TcM (CsExpr Tc) 
+tcPolyExpr e (Infer _) = panic "tcPolyExpr infer"
+tcPolyExpr e (Check ty) = tcPolyExprCheck e (Left ty)
+
+tcPolyExprCheck :: CsExpr Rn -> Either AnySigmaType TcCompleteSig -> TcM (CsExpr Tc)
+tcPolyExprCheck  expr res_ty = outer_skolemize res_ty $ \pat_tys rho_ty ->
+  let tc_body (CsPar x (L loc e))
+        = setSrcSpanA loc $ do e' <- tc_body e
+                               return (CsPar x (L loc e'))
+
+      tc_body e@(CsLam x matches) = do
+        (wrap, matches') <- tcLambdaMatches e matches pat_tys (mkCheckExpType rho_ty)
+        return (mkCsWrap wrap $ CsLam x matches')
+
+      tc_body e = tcExpr e (mkCheckExpType rho_ty)
+  in tc_body expr
+  where
+    outer_skolemize
+      :: Either AnySigmaType TcCompleteSig
+      -> ([ExpPatType] -> AnyRhoType -> TcM (CsExpr Tc))
+      -> TcM (CsExpr Tc)
+    outer_skolemize (Left ty) thing_inside = do
+      (wrap, expr') <- tcSkolemizeExpectedType ty thing_inside
+      return (mkCsWrap wrap expr')
+    outer_skolemize (Right sig) thing_inside = do
+      (wrap, expr') <- tcSkolemizeCompleteSig sig thing_inside
+      return ( mkCsWrap wrap expr')
+        
 {- *********************************************************************
 *                                                                      *
         tcExpr: the main expression typechecker

@@ -99,6 +99,16 @@ tcSkolemizeCompleteSig (CSig { sig_bndr = poly_id, sig_ctxt = ctxt, sig_loc = lo
                     ++ (map (mkInvisExpPatType . snd) tv_prs))
                    rho_ty
 
+tcSkolemizeExpectedType
+  :: AnySigmaType
+  -> ([ExpPatType] -> AnyRhoType -> TcM result)
+  -> TcM (CsWrapper, result)
+tcSkolemizeExpectedType exp_ty thing_inside
+  = tcSkolemizeGeneral GenSigCtxt exp_ty exp_ty $ \kv_prs tv_prs rho_ty ->
+    thing_inside ((map (mkInvisExpPatKind . snd) kv_prs)
+                  ++ (map (mkInvisExpPatType . snd) tv_prs))
+                 rho_ty
+
 checkTyConstraints :: SkolemInfoAnon -> [TcTyVar AnyKiVar] -> TcM result -> TcM (result)
 checkTyConstraints skol_info skol_tvs thing_inside = do
   implication_needed <- implicationNeeded skol_info skol_tvs

@@ -246,6 +246,7 @@ library
                     , CSlash.Tc.Gen.CsType
                     , CSlash.Tc.Gen.CsKind
                     , CSlash.Tc.Gen.Expr
+                    , CSlash.Tc.Gen.Head
                     , CSlash.Tc.Gen.Match
                     , CSlash.Tc.Gen.Pat
                     , CSlash.Tc.Gen.Sig
