@@ -5,6 +5,8 @@ import {-# SOURCE #-} CSlash.Core.Type.Rep (Type)
 import {-# SOURCE #-} CSlash.Core.Kind (KindCoercion)
 import CSlash.Types.Var (IsTyVar)
 
+rewriterView :: IsTyVar tv kv => Type tv kv -> Maybe (Type tv kv)
+
 coreView :: IsTyVar tv kv => Type tv kv -> Maybe (Type tv kv)
 
 mkAppTy :: Type tv kv -> Type tv kv -> Type tv kv

@@ -4,6 +4,7 @@ module CSlash.Core.Type.FVs where
 import {-# SOURCE #-} CSlash.Core.Type (coreView)
 
 import Data.Monoid as DM ( Endo(..), Any(..) )
+import {-# SOURCE #-} CSlash.Core.Type
 import CSlash.Core.Type.Rep
 import CSlash.Core.Kind
 import CSlash.Core.Kind.FVs hiding (fvsVarBndr, afvFolder)
@@ -309,6 +310,30 @@ typeSomeFreeVars
   => (Either tv kv -> Bool) -> Type tv kv -> (MkVarSet tv, MkVarSet kv)
 typeSomeFreeVars fv_cand ty = case fvVarAcc (filterFV fv_cand $ fvsOfType ty) of
   (_, tvs, _, kvs) -> (tvs, kvs)
+
+{- *********************************************************************
+*                                                                      *
+            Injective free vars
+*                                                                      *
+********************************************************************* -}
+
+isInjectiveInType :: AnyTyVar AnyKiVar -> Type (AnyTyVar AnyKiVar) AnyKiVar -> Bool
+isInjectiveInType tv ty = go ty
+  where
+    go ty | Just ty' <- rewriterView ty = go ty'
+    go (TyVarTy tv') = tv' == tv
+    go (AppTy f a) = go f || go a
+    go (FunTy _ ty1 ty2) = go ty1 || go ty2
+    go (TyConApp tc tys) = go_tc tc tys
+    go (ForAllTy (Bndr tv' _) ty) = tv /= tv' && go ty
+    go (CastTy ty _) = go ty
+    go KindCoercion{} = False
+    go Embed{} = False
+    go (TyLamTy tv' ty) = tv /= tv' && go ty
+    go (BigTyLamTy _ ty) = go ty
+    
+
+    go_tc tc tys = any go tys
 
 {- *********************************************************************
 *                                                                      *

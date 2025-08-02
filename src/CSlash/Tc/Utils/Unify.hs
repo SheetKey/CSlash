@@ -23,7 +23,7 @@ import CSlash.Tc.Zonk.TcType
 import CSlash.Core.Type
 import CSlash.Core.Type.Rep
 import CSlash.Core.Type.Ppr (debugPprType)
--- import GHC.Core.TyCo.FVs( isInjectiveInType )
+import CSlash.Core.Type.FVs( isInjectiveInType )
 import CSlash.Core.TyCon
 -- import GHC.Core.Coercion
 import CSlash.Core.Kind
@@ -108,6 +108,15 @@ tcSkolemizeExpectedType exp_ty thing_inside
     thing_inside ((map (mkInvisExpPatKind . snd) kv_prs)
                   ++ (map (mkInvisExpPatType . snd) tv_prs))
                  rho_ty
+
+tcSkolemize
+  :: UserTypeCtxt
+  -> AnySigmaType
+  -> (AnyRhoType -> TcM result)
+  -> TcM (CsWrapper, result)
+tcSkolemize ctxt expected_ty thing_inside
+  = tcSkolemizeGeneral ctxt expected_ty expected_ty $ \_ _ rho_ty ->
+    thing_inside rho_ty
 
 checkTyConstraints :: SkolemInfoAnon -> [TcTyVar AnyKiVar] -> TcM result -> TcM (result)
 checkTyConstraints skol_info skol_tvs thing_inside = do
@@ -357,6 +366,60 @@ mkFunTysMsg herald (n_vis_args_in_call, fun_ty) env = panic "mkFunTysMsg"
 
 {- *********************************************************************
 *                                                                      *
+                Subsumption checking
+*                                                                      *
+********************************************************************* -}
+
+tcSubTypePat :: CtOrigin -> UserTypeCtxt -> ExpSigmaType -> AnySigmaType -> TcM CsWrapper
+tcSubTypePat inst_orig ctxt (Check ty_actual) ty_expected
+  = tc_sub_type unifyTypeET inst_orig ctxt ty_actual ty_expected
+tcSubTypePat _ _ (Infer _) _ = panic "tcSubTypePat infer"
+
+tc_sub_type
+  :: (AnyType -> AnyType -> TcM AnyTypeCoercion)
+  -> CtOrigin
+  -> UserTypeCtxt
+  -> AnySigmaType
+  -> AnySigmaType
+  -> TcM CsWrapper
+tc_sub_type unify inst_orig ctxt ty_actual ty_expected
+  | definitely_poly ty_expected
+  , isRhoTy ty_actual
+  = do traceTc "tc_sub_type (drop to equality)"
+         $ vcat [ text "ty_actual =" <+> ppr ty_actual
+                , text "ty_expected =" <+> ppr ty_expected ]
+       mkWpCast <$> unify ty_actual ty_expected
+
+  | otherwise
+  = do traceTc "tc_sub_type (general case)"
+         $ vcat [ text "ty_actual =" <+> ppr ty_actual
+                , text "ty_expected =" <+> ppr ty_expected ]
+       (sk_wrap, inner_wrap) <- tcSkolemize ctxt ty_expected $ \sk_rho ->
+         tc_sub_type_shallow unify inst_orig ty_actual sk_rho
+       return (sk_wrap <.> inner_wrap)
+
+tc_sub_type_shallow
+  :: (AnyType -> AnyType -> TcM AnyTypeCoercion)
+  -> CtOrigin
+  -> AnySigmaType
+  -> AnyRhoType
+  -> TcM CsWrapper
+tc_sub_type_shallow unify inst_orig ty_actual sk_rho = do
+  (wrap, rho_a) <- topInstantiate inst_orig ty_actual
+  cow <- unify rho_a sk_rho
+  return (mkWpCast cow <.> wrap)
+
+definitely_poly :: AnyType -> Bool
+definitely_poly ty
+  | (kvs, tvs, tau) <- tcSplitSigma ty
+  , (tv:_) <- tvs
+  , tv `isInjectiveInType` tau
+  = True
+  | otherwise
+  = False
+
+{- *********************************************************************
+*                                                                      *
                 Type Unification
 *                                                                      *
 ********************************************************************* -}
@@ -367,6 +430,14 @@ unifyType thing ty1 ty2 = unifyTypeAndEmit origin ty1 ty2
     origin = TypeEqOrigin { uo_actual = ty1
                           , uo_expected = ty2
                           , uo_thing = thing
+                          , uo_visible = True }
+
+unifyTypeET :: AnyTauType -> AnyTauType -> TcM AnyTypeCoercion
+unifyTypeET ty1 ty2 = unifyTypeAndEmit origin ty1 ty2
+  where
+    origin = TypeEqOrigin { uo_actual = ty2
+                          , uo_expected = ty1
+                          , uo_thing = Nothing
                           , uo_visible = True }
 
 unifyTypeAndEmit :: CtOrigin -> AnyType -> AnyType -> TcM AnyTypeCoercion

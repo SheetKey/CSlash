@@ -40,6 +40,7 @@ data UserTypeCtxt
   | ConArgCtxt Name
   | TySynCtxt Name
   | PatSynCtxt Name
+  | PatSigCtxt
   | GenSigCtxt
   | SigmaCtxt
   | TyVarBndrKindCtxt Name
@@ -63,6 +64,7 @@ pprUserTypeCtxt KindSigCtxt = text "a kind signature"
 pprUserTypeCtxt TypeAppCtxt = text "a type argument"
 pprUserTypeCtxt (ConArgCtxt c) = text "the type of the constructor" <+> quotes (ppr c)
 pprUserTypeCtxt (TySynCtxt c) = text "the RHS of the type synonym" <+> quotes (ppr c)
+pprUserTypeCtxt PatSigCtxt = text "a pattern type signature"
 pprUserTypeCtxt (PatSynCtxt _) = panic "currently unreachable"
 pprUserTypeCtxt GenSigCtxt = text "a type expected by the context"
 pprUserTypeCtxt SigmaCtxt = text "the context of a polymorphic type"
@@ -173,6 +175,7 @@ data CtOrigin
                  , kco_visible :: Bool
                  }
   | TupleTyOrigin
+  | PatSigOrigin
   | PatOrigin
 
 isVisibleOrigin :: CtOrigin -> Bool
@@ -192,6 +195,7 @@ isGivenOrigin (OccurrenceOf {}) = False
 isGivenOrigin TupleTyOrigin = False
 isGivenOrigin (TypeEqOrigin {}) = False
 isGivenOrigin (KindEqOrigin {}) = False
+isGivenOrigin PatSigOrigin = False
 isGivenOrigin PatOrigin = False
 
 lexprCtOrigin :: LCsExpr Rn -> CtOrigin
@@ -224,6 +228,7 @@ pprCtO :: HasCallStack => CtOrigin -> SDoc
 pprCtO (OccurrenceOf name) = hsep [text "a use of", quotes (ppr name)]
 pprCtO (GivenOrigin {}) = text "a given constraint"
 pprCtO TupleTyOrigin = text "a tuple type"
+pprCtO PatSigOrigin = text "a pattern type signature"
 pprCtO _ = panic "pprCtO"
 
 {- *******************************************************************

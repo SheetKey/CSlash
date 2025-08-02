@@ -461,6 +461,17 @@ mkMinimalBy get_pred xs = go preds_with_cox []
 *                                                                      *
 ********************************************************************* -}
 
+tcSplitForAllInvisTyVars :: AnyType -> ([AnyTyVar AnyKiVar], AnyType)
+tcSplitForAllInvisTyVars = tcSplitSomeForAllTyVars isInvisibleForAllFlag
+
+tcSplitSomeForAllTyVars :: (ForAllFlag -> Bool) -> AnyType -> ([AnyTyVar AnyKiVar], AnyType)
+tcSplitSomeForAllTyVars argf_pred ty = split ty ty []
+  where
+    split _ (ForAllTy (Bndr tv argf) ty) tvs
+      | argf_pred argf = split ty ty (tv:tvs)
+    split orig_ty ty tvs | Just ty' <- coreView ty = split orig_ty ty' tvs
+    split orig_ty _ tvs = (reverse tvs, orig_ty)
+
 tcSplitForAllInvisBinders :: IsTyVar tv kv => Type tv kv -> ([tv], Type tv kv)
 tcSplitForAllInvisBinders = splitForAllInvisTyBinders
 

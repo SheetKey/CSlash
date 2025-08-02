@@ -1024,6 +1024,13 @@ kindGeneralizeNone kind = do
   _ <- promoteKiVarSet $ dVarSetToVarSet dvs
   return ()
 
+kindGeneralizeNone' :: AnyKind -> TcM ()
+kindGeneralizeNone' kind = do
+  traceTc "kindGeneralizeNone'" (ppr kind)
+  dvs <- candidateQKiVarsOfKind kind
+  _ <- promoteKiVarSet $ dVarSetToVarSet dvs
+  return ()
+
 {- Note
 GHC has to do this since GHC allows user written kind signatures
 for top level declarations. E.g., in the declaration of a data/newtype/class
@@ -1058,6 +1065,37 @@ checkNeedsEtaKind :: AnyKind -> TcM ()
 checkNeedsEtaKind res_kind = case splitFunKi_maybe res_kind of
   Nothing -> return ()
   Just _ -> pprPanic "checkNeedsEtaKind" (ppr res_kind)
+
+{- *********************************************************************
+*                                                                      *
+      Pattern signatures (i.e signatures that occur in patterns)
+*                                                                      *
+********************************************************************* -}
+
+tcCsPatSigType :: UserTypeCtxt -> CsPatSigType Rn -> ContextKind -> TcM AnyType
+tcCsPatSigType ctxt (CsPS { csps_ext = CsPSRn { csps_imp_kvs = sig_ns }
+                          , csps_body = cs_ty }) ctxt_kind
+  = tc_type_in_pat ctxt cs_ty sig_ns ctxt_kind
+
+tc_type_in_pat
+  :: UserTypeCtxt
+  -> LCsType Rn
+  -> [Name] -- GHC will scope these. WE SHOULD NOT! they should already be in scope
+  -> ContextKind
+  -> TcM AnyType
+tc_type_in_pat ctxt cs_ty ns ctxt_kind = addSigCtxt ctxt cs_ty $ do
+  ty <- addTypeCtxt cs_ty
+        $ solveKindCoercions "tc_type_in_pat"
+        $ do ek <- newExpectedKind ctxt_kind
+             tcLCsType cs_ty ek
+
+  kindGeneralizeNone' (typeKind ty) -- I think this makes sense?? although there could be
+                                    -- kvs in the type? but this is just for a later kind comp
+  ty <- liftZonkM $ zonkTcType ty
+  checkValidType ctxt ty
+
+  traceTc "tc_type_in_pat" (ppr ns)
+  return ty
 
 {- *********************************************************************
 *                                                                      *

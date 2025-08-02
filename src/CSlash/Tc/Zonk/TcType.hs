@@ -441,6 +441,11 @@ tcInitOpenTidyEnv (tvs, kvs) = do
       env3 = tidyFreeTyVars env2 tvs
   return env3
 
+zonkTidyTcType :: AnyTidyEnv -> AnyType -> ZonkM (AnyTidyEnv, AnyType)
+zonkTidyTcType env ty = do
+  ty' <- zonkTcType ty
+  panic "return (tidyOpenTypeX env ty')"
+
 zonkTidyTcMonoKind :: AnyTidyEnv -> AnyMonoKind -> ZonkM (AnyTidyEnv, AnyMonoKind)
 zonkTidyTcMonoKind env ki = do
   ki' <- zonkTcMonoKind ki

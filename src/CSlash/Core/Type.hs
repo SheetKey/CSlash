@@ -63,6 +63,14 @@ import Data.Bifunctor (bimap)
 *                                                                      *
 ********************************************************************* -}
 
+rewriterView :: IsTyVar tv kv => Type tv kv -> Maybe (Type tv kv)
+rewriterView (TyConApp tc tys)
+  | isTypeSynonymTyCon tc
+  , isForgetfulSynTyCon tc
+  = expandSynTyConApp_maybe tc tys
+rewriterView _ = Nothing
+{-# INLINE rewriterView #-}
+
 coreView :: IsTyVar tv kv => Type tv kv -> Maybe (Type tv kv)
 coreView (TyConApp tc tys) = expandSynTyConApp_maybe tc tys
 coreView _ = Nothing

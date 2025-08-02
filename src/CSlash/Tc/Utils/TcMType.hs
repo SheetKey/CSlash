@@ -21,7 +21,8 @@ import CSlash.Core.ConLike
 import CSlash.Core.DataCon
 import CSlash.Core.Type.Rep
 import CSlash.Core.Type.Ppr
-import CSlash.Core.Type
+import CSlash.Core.Type.Ppr
+import CSlash.Core.Type.Subst
 import CSlash.Core.Kind
 import CSlash.Core.Kind.Subst
 import CSlash.Core.TyCon
@@ -200,6 +201,9 @@ newImplication = do
 newMetaTyVarName :: FastString -> TcM Name
 newMetaTyVarName str = newSysName (mkTyVarOccFS str)
 
+cloneMetaTyVarName :: Name -> TcM Name
+cloneMetaTyVarName name = newSysName (nameOccName name)
+
 metaInfoToTyVarName :: MetaInfo -> FastString
 metaInfoToTyVarName mi = case mi of
   TauVar -> fsLit "t"
@@ -223,6 +227,14 @@ newPatTyVar name kind = do
   let name' = name `setNameUnique` uniq
       tyvar = mkTcTyVar name' kind details
   traceTc "newPatTyVar" (ppr tyvar)
+  return tyvar
+
+cloneAnonMetaTyVar :: MetaInfo -> AnyTyVar AnyKiVar -> AnyMonoKind -> TcM (AnyTyVar AnyKiVar)
+cloneAnonMetaTyVar info tv kind = do
+  details <- newMetaDetails info
+  name <- cloneMetaTyVarName (varName tv)
+  let tyvar = toAnyTyVar $ mkTcTyVar name kind details
+  traceTc "cloneAnonMetaTyVar" (ppr tyvar <+> colon <+> ppr (varKind tyvar))
   return tyvar
 
 isFilledMetaTyVar_maybe :: TcTyVar AnyKiVar -> TcM (Maybe AnyType)
@@ -254,6 +266,16 @@ newOpenFlexiTyVar :: TcM (TcTyVar TcKiVar)
 newOpenFlexiTyVar = do
   kind <- newOpenTypeKind
   newFlexiTyVar kind
+
+newMetaTyVarX :: AnyTvSubst -> AnyTyVar AnyKiVar -> TcM (AnyTvSubst, AnyTyVar AnyKiVar)
+newMetaTyVarX = new_meta_tv_x TauVar
+
+new_meta_tv_x
+  :: MetaInfo -> AnyTvSubst -> AnyTyVar AnyKiVar -> TcM (AnyTvSubst, AnyTyVar AnyKiVar)
+new_meta_tv_x info subst@(TvSubst _ _ kvsubst) tv = do
+  new_tv <- cloneAnonMetaTyVar info tv (substMonoKi kvsubst (varKind tv))
+  let subst1 = extendTvSubstWithClone subst tv new_tv
+  return (subst1, new_tv)
 
 {- *********************************************************************
 *                                                                      *

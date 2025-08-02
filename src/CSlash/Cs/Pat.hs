@@ -84,7 +84,7 @@ type instance XNPat Tc = Type (TyVar KiVar) KiVar
 
 type instance XSigPat Ps = [AddEpAnn]
 type instance XSigPat Rn = NoExtField
-type instance XSigPat Tc = Type (TyVar KiVar) KiVar
+type instance XSigPat Tc = Type (AnyTyVar AnyKiVar) AnyKiVar
 
 type instance XKdSigPat Ps = [AddEpAnn]
 type instance XKdSigPat Rn = NoExtField

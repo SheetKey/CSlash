@@ -16,6 +16,7 @@ import CSlash.Cs
 import CSlash.Core.Predicate
 import CSlash.Core ( Expr(..) ) 
 import CSlash.Core.Type
+import CSlash.Core.Type.Ppr
 import CSlash.Core.Type.FVs
 import CSlash.Core.Type.Subst
 import CSlash.Core.Kind
@@ -125,6 +126,38 @@ skolemizeRequired skolem_info n_req sigma
              inner_ty
       | otherwise
       = return (n_req, wrap, acc_nms, acc_bndrs, substTy subst ty)
+
+topInstantiate :: CtOrigin -> AnySigmaType -> TcM (CsWrapper, AnyRhoType)
+topInstantiate orig sigma
+  | (tvs, body1) <- tcSplitForAllInvisTyVars sigma
+  , not (null tvs)
+  = do (_, wrap1, body2) <- instantiateSigma orig tvs body1
+       (wrap2, body3) <- topInstantiate orig body2
+       return (wrap2 <.> wrap1, body3)
+  | otherwise
+  = return (idCsWrapper, sigma)
+
+instantiateSigma
+  :: CtOrigin
+  -> [AnyTyVar AnyKiVar]
+  -> AnySigmaType
+  -> TcM ([AnyTyVar AnyKiVar], CsWrapper, AnySigmaType)
+instantiateSigma orig tvs body_ty = do 
+  (subst, inst_tvs) <- mapAccumLM newMetaTyVarX empty_subst tvs
+  let inst_body = substTy subst body_ty
+      inst_tv_tys = mkTyVarTys inst_tvs
+      wrap = mkWpTyApps inst_tv_tys
+  traceTc "Instantiating"
+    $ vcat [ text "origin" <+> pprCtOrigin orig
+           , text "tvs" <+> ppr tvs
+           , text "type" <+> debugPprType body_ty
+           , text "with" <+> vcat (map debugPprType inst_tv_tys) ]
+  return (inst_tvs, wrap, inst_body)
+  where
+    empty_subst = let (tvs, kcvs, kvs) = varsOfType body_ty
+                      tvs' = tvs `unionVarSet` mapVarSet toAnyTyVar kcvs
+                  in mkEmptyTvSubst (mkInScopeSet tvs', mkInScopeSet kvs)
+
 
 {- *********************************************************************
 *                                                                      *

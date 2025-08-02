@@ -616,6 +616,7 @@ pprArising ct_loc
           GivenOrigin {} -> False
           OccurrenceOf {} -> False
           TupleTyOrigin -> False
+          PatSigOrigin -> False
           PatOrigin -> False
 
 {- *********************************************************************

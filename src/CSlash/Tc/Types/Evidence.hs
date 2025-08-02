@@ -64,6 +64,7 @@ data CsWrapper
   | WpCast AnyTypeCoercion
   | WpTyLam (AnyTyVar AnyKiVar) -- can probably be 'TcTyVar AnyKiVar' (these should be skols)
   | WpKiLam AnyKiVar            -- "             " 'TcKiVar'          "                     "
+  | WpTyApp AnyType
   deriving Data.Data
 
 (<.>) :: CsWrapper -> CsWrapper -> CsWrapper
@@ -91,6 +92,9 @@ isIdCsWrapper :: CsWrapper -> Bool
 isIdCsWrapper WpHole = True
 isIdCsWrapper _ = False
 
+mkWpTyApps :: [AnyType] -> CsWrapper
+mkWpTyApps tys = mk_co_app_fn WpTyApp tys
+
 mkWpTyLams :: [AnyTyVar AnyKiVar] -> CsWrapper
 mkWpTyLams tvs = mk_lam_fn WpTyLam tvs
 
@@ -99,6 +103,9 @@ mkWpKiLams kvs = mk_lam_fn WpKiLam kvs
 
 mk_lam_fn :: (a -> CsWrapper) -> [a] -> CsWrapper
 mk_lam_fn f as = foldr (\x wrap -> f x <.> wrap) WpHole as
+
+mk_co_app_fn :: (a -> CsWrapper) -> [a] -> CsWrapper
+mk_co_app_fn f as = foldr (\x wrap -> wrap <.> f x) WpHole as
 
 {- *********************************************************************
 *                                                                      *

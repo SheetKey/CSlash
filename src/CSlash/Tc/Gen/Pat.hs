@@ -194,6 +194,22 @@ tc_pat pat_ty penv ps_pat thing_inside = case ps_pat of
     pat_ty <- readExpType pat_ty
     return (mkCsWrapPat wrap (VarPat x (L l id)) pat_ty, res)
 
+  ParPat x pat -> do
+    (pat', res) <- tc_lpat pat_ty penv pat thing_inside
+    return (ParPat x pat', res)
+
+  WildPat _ -> do
+    panic "checkManyPattern/but really we want affine constraint"
+
+  AsPat x (L nm_loc name) pat -> do
+    panic "AsPat"
+
+  SigPat _ pat sig_ty -> do
+    (inner_ty, wrap) <- tcPatSig sig_ty pat_ty
+    (pat', res) <- tc_lpat (mkCheckExpType inner_ty) penv pat thing_inside
+    pat_ty <- readExpType pat_ty
+    return (mkCsWrapPat wrap (SigPat inner_ty pat' sig_ty) pat_ty, res)
+
   _ -> panic "tc_pat unfinished"
 
 tc_ty_pat :: Pat Rn -> AnyTyVar AnyKiVar -> TcM r -> TcM (AnyType, r)
@@ -237,6 +253,30 @@ tc_ty_pat tp tv thing_inside = do
   _ <- unifyType Nothing arg_ty (mkTyVarTy tv)
   result <- tcExtendNameTyVarEnv sig_bv $ thing_inside
   return (arg_ty, result)
+
+{- *********************************************************************
+*                                                                      *
+            Pattern signatures   (pat :: type)
+*                                                                      *
+********************************************************************* -}
+
+tcPatSig :: CsPatSigType Rn -> ExpSigmaType -> TcM (AnyType, CsWrapper)
+tcPatSig sig res_ty = do
+  sig_ty <- tcCsPatSigType PatSigCtxt sig AnyMonoKind
+
+  wrap <- addErrCtxtM (mk_msg sig_ty)
+          $ tcSubTypePat PatSigOrigin PatSigCtxt res_ty sig_ty
+  return (sig_ty, wrap)
+  where
+    mk_msg sig_ty tidy_env = do
+      (tidy_env, sig_ty) <- zonkTidyTcType tidy_env sig_ty
+      res_ty <- readExpType res_ty
+      (tidy_env, res_ty) <- zonkTidyTcType tidy_env res_ty
+      let msg = vcat [ hang (text "When checking that the pattern signature:")
+                       4 (ppr sig_ty)
+                     , nest 2 (hang (text "fits the type of its context:")
+                               2 (ppr res_ty)) ]
+      return (tidy_env, msg)
 
 {- *********************************************************************
 *                                                                      *
