@@ -55,6 +55,7 @@ import CSlash.Types.Var
 import CSlash.Types.Var.Set
 import CSlash.Types.Unique.Supply
 import CSlash.Types.Unique.Set( elementOfUniqSet )
+import CSlash.Types.Basic
 
 import CSlash.Unit.Module ( HasModule, getModule, extractModule )
 import qualified CSlash.Rename.Env as TcM
@@ -793,12 +794,28 @@ newWantedKiCo
 newWantedKiCo loc rewriters kc ki1 ki2 = do
   hole <- wrapTcS $ TcM.newKiCoercionHole pki
   return ( CtKiWanted { ctkev_pred = pki
-                    , ctkev_dest = hole
-                    , ctkev_loc = loc
-                    , ctkev_rewriters = rewriters }
+                      , ctkev_dest = hole
+                      , ctkev_loc = loc
+                      , ctkev_rewriters = rewriters }
          , mkKiHoleCo hole )
   where
     pki = mkKiCoPred kc ki1 ki2
+
+newWantedKiCo_swapped
+  :: CtLoc -> KiRewriterSet
+  -> KiPredCon -> SwapFlag -> AnyMonoKind -> AnyMonoKind
+  -> TcS (CtKiEvidence, AnyKindCoercion)
+newWantedKiCo_swapped loc rewriters kc swapped ki1 ki2 = do
+  hole <- wrapTcS $ TcM.newKiCoercionHole pki
+  return ( CtKiWanted { ctkev_pred = pki
+                      , ctkev_dest = hole
+                      , ctkev_loc = loc
+                      , ctkev_rewriters = rewriters }
+         , maybeSymCo swapped (mkKiHoleCo hole) )
+  where
+    pki = case swapped of
+            NotSwapped -> mkKiCoPred kc ki1 ki2
+            IsSwapped -> mkKiCoPred kc ki2 ki1
 
 newWanted :: CtLoc -> KiRewriterSet -> AnyPredKind -> TcS CtKiEvidence
 newWanted loc rewriters pki

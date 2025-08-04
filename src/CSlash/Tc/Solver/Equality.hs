@@ -481,8 +481,6 @@ rewriteKiCoEvidence
   -> Reduction
   -> TcS CtKiEvidence
 rewriteKiCoEvidence new_rewriters old_ev swapped (ReductionKi lhs_co nlhs) (ReductionKi rhs_co nrhs)
-  | IsSwapped <- swapped
-  = panic "rewriteKiCoEvidence swapped"
   | NotSwapped <- swapped
   , isReflKiCo lhs_co
   , isReflKiCo rhs_co
@@ -491,11 +489,12 @@ rewriteKiCoEvidence new_rewriters old_ev swapped (ReductionKi lhs_co nlhs) (Redu
   = panic "rewriteKiCoEvidence"
   | CtKiWanted { ctkev_dest = dest, ctkev_rewriters = rewriters } <- old_ev
   , let rewriters' = rewriters S.<> new_rewriters
-  = do (new_ev, hole_co) <- newWantedKiCo loc rewriters' EQKi nlhs nrhs
+  = do (new_ev, hole_co) <- newWantedKiCo_swapped loc rewriters' kc swapped nlhs nrhs
        let co = maybeSymCo swapped $ lhs_co `mkTransKiCo` hole_co `mkTransKiCo` mkSymKiCo rhs_co
        setWantedKiCo dest co
-       traceTcS "rewriterEqEvidence"
-         $ vcat [ ppr old_ev, ppr nlhs, ppr nrhs, ppr co, ppr new_rewriters ]
+       traceTcS "rewriteKiCoEvidence"
+         $ vcat [ ppr old_ev, ppr swapped, ppr nlhs, ppr nrhs, ppr hole_co
+                , ppr co, ppr new_rewriters ]
        return new_ev
   where
     new_pred = mkKiCoPred kc nlhs nrhs
