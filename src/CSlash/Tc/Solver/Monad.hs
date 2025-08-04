@@ -275,6 +275,34 @@ getUnsolvedInerts = do
       | otherwise = cts
       where ct = mk_ct thing
 
+getUnsolvedKiInerts :: TcS (Bag KiImplication, KiCts)
+getUnsolvedKiInerts = do
+  (IKC { inert_kicos = kv_kicos
+       , inert_ki_irreds = ki_irreds } ) <- getInertKiCans
+
+  let unsolved_kv_kicos = foldKiCos (add_if_unsolved CKiCoCan) kv_kicos emptyCts
+      unsolved_ki_irreds = foldr (add_if_unsolved CIrredCanKi) emptyCts ki_irreds
+
+  (ty_implics, ki_implics) <- getWorkListImplics
+
+  traceTcS "getUnsolvedInerts"
+    $ vcat [ text "kv kicos =" <+> ppr unsolved_kv_kicos
+           , text "ki_irreds =" <+> ppr unsolved_ki_irreds 
+           , text "ki_implics =" <+> ppr ki_implics
+           , text "ty_implics =" <+> ppr ty_implics
+           ]
+  massert (isEmptyBag ty_implics)
+
+  return ( ki_implics
+         , unsolved_kv_kicos `andCts`
+           unsolved_ki_irreds )
+  where
+    add_if_unsolved :: Ct ct => (a -> ct) -> a -> Bag ct -> Bag ct
+    add_if_unsolved mk_ct thing cts
+      | isWantedCt ct = ct `consCts` cts
+      | otherwise = cts
+      where ct = mk_ct thing
+
 getHasGivenKiCos :: TcLevel -> TcS (HasGivenKiCos, InertKiIrreds)
 getHasGivenKiCos tclvl = do
   inerts@(IKC { inert_ki_irreds = irreds

@@ -116,12 +116,9 @@ solve_simple_wanteds (WTC { wtc_simple = ty_simples1, wtc_impl = ty_implics1
 
 solve_simple_ki_wanteds :: WantedKiConstraints -> TcS WantedKiConstraints
 solve_simple_ki_wanteds (WKC { wkc_simple = simples1, wkc_impl = implics1 })
-  = nestTcS $ do
+  = nestKiTcS $ do
       solveSimples emptyBag simples1
-      (ty_implics, ty_unsolved, implics2, unsolved) <- getUnsolvedInerts
-      massertPpr (isEmptyBag ty_implics && isEmptyBag ty_unsolved)
-        $ vcat [ text "solve_simple_ki_wanteds"
-               , ppr ty_implics, ppr ty_unsolved ]
+      (implics2, unsolved) <- getUnsolvedKiInerts
       return $ WKC { wkc_simple = unsolved
                    , wkc_impl = implics1 `unionBags` implics2 }
                   
