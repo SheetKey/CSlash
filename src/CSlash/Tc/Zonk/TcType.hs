@@ -184,23 +184,20 @@ zonkAnyTyVar tv = handleAnyTv (const simple)
 
 zonkTcTyVar :: TcTyVar AnyKiVar -> ZonkM AnyType
 zonkTcTyVar tv
-  -- | isTcTyVar tv
   = case tcVarDetails tv of
-      SkolemVar {} -> panic "zonk_kind_and_return"
+      SkolemVar {} -> zonk_kind_and_return
       MetaVar { mv_ref = ref } -> do
-        cts <- panic "readTcRef ref"
+        cts <- readTcRef ref
         case cts of
-          Flexi -> panic "zonk_kind_and_return"
+          Flexi -> zonk_kind_and_return
           Indirect ty -> do
             zty <- zonkTcType ty
-            panic "writeTcRef ref (Indirect zty)"
+            writeTcRef ref (Indirect zty)
             return zty
-  -- | otherwise
-  -- = zonk_kind_and_return
-  -- where
-  --   zonk_kind_and_return = do
-  --     z_tv <- zonkTyVarKind tv
-  --     return $ mkTyVarTy z_tv
+  where
+    zonk_kind_and_return = do
+      z_tv <- zonkTyVarKind tv
+      return $ mkTyVarTy $ toAnyTyVar z_tv
 
 zonkTcTyVarsToTcTyVars :: HasDebugCallStack => [TcTyVar AnyKiVar] -> ZonkM [TcTyVar AnyKiVar]
 zonkTcTyVarsToTcTyVars = mapM zonkTcTyVarToTcTyVar
