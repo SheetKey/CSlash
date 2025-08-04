@@ -15,7 +15,7 @@ import CSlash.Core.Kind
 import CSlash.Core.UsageEnv
 import CSlash.Tc.Errors.Types
 import CSlash.Tc.Utils.Instantiate
--- import CSlash.Tc.Gen.App
+import CSlash.Tc.Gen.App
 import CSlash.Tc.Gen.Head
 -- import CSlash.Tc.Gen.Bind        ( tcLocalBinds )
 import CSlash.Rename.Env         ( addUsedGRE )
@@ -108,4 +108,22 @@ tcCheckMonoExpr :: LCsExpr Rn -> AnyRhoType -> TcM (LCsExpr Tc)
 tcCheckMonoExpr = panic "tcCheckMonoExpr"
 
 tcExpr :: CsExpr Rn -> ExpRhoType -> TcM (CsExpr Tc)
-tcExpr = panic "tcExpr"
+-- Onto QuickLook
+tcExpr e@(CsVar {}) res_ty = tcApp e res_ty
+tcExpr e@(CsApp {}) res_ty = tcApp e res_ty
+tcExpr e@(OpApp {}) res_ty = tcApp e res_ty
+tcExpr e@(ExprWithTySig {}) res_ty = tcApp e res_ty
+-- rest
+tcExpr e@(CsOverLit _ lit) res_ty = panic "tcExpr CsOverLit"
+
+tcExpr e@(CsLit x lit) res_ty = panic "tcExpr CsLit"
+
+tcExpr (CsUnboundVar _ occ) res_ty = panic "tcExpr CsUnboundVar"
+
+tcExpr (CsPar x expr) res_ty = panic "tcExpr CsPar"
+
+tcExpr (NegApp x expr neg_expr) res_ty = panic "tcExpr NegApp"
+
+tcExpr e@(CsLam x matches) res_ty = panic "tcExpr CsLam"
+
+tcExpr e res_ty = panic "tcExpr other"

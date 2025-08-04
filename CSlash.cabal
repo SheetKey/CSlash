@@ -242,6 +242,7 @@ library
                     , CSlash.Tc.Errors.Hole
                     , CSlash.Tc.Errors.Ppr
                     , CSlash.Tc.Errors.Types
+                    , CSlash.Tc.Gen.App
                     , CSlash.Tc.Gen.Bind
                     , CSlash.Tc.Gen.CsType
                     , CSlash.Tc.Gen.CsKind

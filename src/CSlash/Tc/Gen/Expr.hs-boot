@@ -6,6 +6,7 @@ import CSlash.Tc.Types (TcM)
 import CSlash.Cs.Extension (Rn, Tc)
 
 tcPolyLExpr :: LCsExpr Rn -> ExpSigmaType -> TcM (LCsExpr Tc)
+tcPolyExpr :: CsExpr Rn -> ExpSigmaType -> TcM (CsExpr Tc) 
 
 tcInferRhoNC :: LCsExpr Rn -> TcM (LCsExpr Tc, AnyRhoType)
 
