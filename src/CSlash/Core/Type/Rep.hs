@@ -122,8 +122,11 @@ data TypeCoercionHole tv kv = TypeCoercionHole
 
 instance (Data.Typeable tv, Data.Typeable kv) => Data.Data (TypeCoercionHole tv kv)
 
-instance Outputable (TypeCoercion tv kv)
-instance Outputable (TypeCoercionHole tv kv)
+instance Outputable (TypeCoercion tv kv) where
+  ppr = const $ text "[TyCo]"
+
+instance Outputable (TypeCoercionHole tv kv) where
+  ppr = const $ text "[TyCoHole]"
 
 type AnyTypeCoercion = TypeCoercion (AnyTyVar AnyKiVar) AnyKiVar
 type AnyTypeCoercionHole = TypeCoercionHole (AnyTyVar AnyKiVar) AnyKiVar
