@@ -463,10 +463,10 @@ collect_cand_qkvs_ty orig_ty cur_lvl (boundtvs, boundkvs) dvs ty = go dvs ty
 
     go_tv :: DTcKiVarSet -> AnyTyVar AnyKiVar -> TcM DTcKiVarSet
     go_tv dv tv
-      | handleAnyTv (const topTcLevel) varLevel tv <= cur_lvl
+      | cur_lvl `deeperThanOrSame` handleAnyTv (const topTcLevel) varLevel tv
       = return dv
       | handleAnyTv (const False) (\tv -> case tcVarDetails tv of
-          SkolemVar _ lvl -> lvl > pushTcLevel cur_lvl
+          SkolemVar _ lvl -> lvl `strictlyDeeperThan` pushTcLevel cur_lvl
           _ -> False) tv
       = return dv
       | otherwise
@@ -511,10 +511,10 @@ collect_cand_qkvs orig_ki cur_lvl bound dvs ki = go dvs ki
 
     go_kv :: DTcKiVarSet -> TcKiVar -> TcM DTcKiVarSet
     go_kv dv kv
-      | varLevel kv <= cur_lvl
+      | cur_lvl `deeperThanOrSame` varLevel kv
       = return dv
       | case tcVarDetails kv of
-          SkolemVar _ lvl -> lvl > pushTcLevel cur_lvl
+          SkolemVar _ lvl -> lvl `strictlyDeeperThan` pushTcLevel cur_lvl
           _ -> False
       = return dv
       | kv `elemDVarSet` dv

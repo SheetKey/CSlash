@@ -189,6 +189,21 @@ data XXExprTc
 
 {- *********************************************************************
 *                                                                      *
+              Generating code for ExpandedThingRn
+      See Note [Handling overloaded and rebindable constructs]
+*                                                                      *
+********************************************************************* -}
+
+data CsThingRn = OrigExpr (CsExpr Rn)
+
+instance Outputable CsThingRn where
+  ppr thing = case thing of
+                OrigExpr x -> ppr_builder "<OrigExpr>:" x
+    where
+      ppr_builder prefix x = ifPprDebug (braces (text prefix <+> parens (ppr x))) (ppr x)
+
+{- *********************************************************************
+*                                                                      *
             Pretty-printing expressions
 *                                                                      *
 ********************************************************************* -}

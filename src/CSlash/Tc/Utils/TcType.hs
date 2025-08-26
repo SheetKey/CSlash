@@ -171,16 +171,27 @@ vanillaSkolemVarUnk = SkolemVar unkSkol topTcLevel
 *                                                                      *
 ********************************************************************* -}
 
-newtype TcLevel = TcLevel Int deriving (Eq, Ord)
+data TcLevel
+  = TcLevel {-# UNPACK #-} !Int
+  | QLInstVar
 
 instance Outputable TcLevel where
   ppr (TcLevel us) = ppr us
+  ppr QLInstVar = text "qlinst"
 
 maxTcLevel :: TcLevel -> TcLevel -> TcLevel
-maxTcLevel (TcLevel a) (TcLevel b) = TcLevel (a `max` b)
+maxTcLevel (TcLevel a) (TcLevel b)
+  | a > b = TcLevel a
+  | otherwise = TcLevel b
+maxTcLevel _ _ = QLInstVar
 
 minTcLevel :: TcLevel -> TcLevel -> TcLevel
-minTcLevel (TcLevel a) (TcLevel b) = TcLevel (a `min` b)
+minTcLevel (TcLevel a) (TcLevel b)
+  | a < b = TcLevel a
+  | otherwise = TcLevel b
+minTcLevel tcla@(TcLevel {}) QLInstVar = tcla
+minTcLevel QLInstVar tclb@(TcLevel {}) = tclb
+minTcLevel QLInstVar QLInstVar = QLInstVar
 
 topTcLevel :: TcLevel
 topTcLevel = TcLevel 0
@@ -191,20 +202,26 @@ isTopTcLevel _ = False
 
 pushTcLevel :: TcLevel -> TcLevel
 pushTcLevel (TcLevel us) = TcLevel (us + 1)
+pushTcLevel QLInstVar = QLInstVar
 
 strictlyDeeperThan :: TcLevel -> TcLevel -> Bool
 strictlyDeeperThan (TcLevel lvl) (TcLevel ctxt_lvl) = lvl > ctxt_lvl
+strictlyDeeperThan QLInstVar (TcLevel {}) = True
+strictlyDeeperThan _ _ = False
 
 deeperThanOrSame :: TcLevel -> TcLevel -> Bool
 deeperThanOrSame (TcLevel v_tclvl) (TcLevel ctxt_tclvl) = v_tclvl >= ctxt_tclvl
+deeperThanOrSame (TcLevel {}) QLInstVar = False
+deeperThanOrSame _ _ = True
 
 sameDepthAs :: TcLevel -> TcLevel -> Bool
 sameDepthAs (TcLevel ctxt_tclvl) (TcLevel v_tclvl)
   = ctxt_tclvl == v_tclvl
+sameDepthAs QLInstVar QLInstVar = True
+sameDepthAs _ _ = False
 
 checkTcLevelInvariant :: TcLevel -> TcLevel -> Bool
-checkTcLevelInvariant (TcLevel ctxt_tclvl) (TcLevel v_tclvl)
-  = ctxt_tclvl >= v_tclvl
+checkTcLevelInvariant lvla lvlb = lvla `deeperThanOrSame` lvlb
 
 varLevel :: TcVar v => v -> TcLevel
 varLevel v = case tcVarDetails v of
@@ -324,6 +341,11 @@ isMetaVar v = case tcVarDetails v of
 isAmbiguousVar :: TcVar v => v -> Bool
 isAmbiguousVar v = case tcVarDetails v of
   MetaVar {} -> True
+  _ -> False
+
+isQLInstVar :: TcVar v => v -> Bool
+isQLInstVar v = case tcVarDetails v of
+  MetaVar { mv_tclvl = QLInstVar } -> True
   _ -> False
 
 -- isConcreteVar_maybe :: TcVar v => v -> Maybe ConcreteKvOrigin
@@ -460,6 +482,11 @@ mkMinimalBy get_pred xs = go preds_with_cox []
           Expanding and splitting 
 *                                                                      *
 ********************************************************************* -}
+
+tcSplitForAllTyVarBinder_maybe :: AnyType -> Maybe (AnyTyVarBinder, AnyType)
+tcSplitForAllTyVarBinder_maybe ty | Just ty' <- coreView ty = tcSplitForAllTyVarBinder_maybe ty'
+tcSplitForAllTyVarBinder_maybe (ForAllTy tv ty) = Just (tv, ty)
+tcSplitForAllTyVarBinder_maybe _ = Nothing
 
 tcSplitForAllInvisTyVars :: AnyType -> ([AnyTyVar AnyKiVar], AnyType)
 tcSplitForAllInvisTyVars = tcSplitSomeForAllTyVars isInvisibleForAllFlag

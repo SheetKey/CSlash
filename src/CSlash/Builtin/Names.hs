@@ -126,5 +126,8 @@ trueDataConKey = mkWiredInDataConUnique 14
 *                                                                      *
 ********************************************************************* -}
 
+assertIdKey :: Unique 
+assertIdKey = mkWiredInMiscIdUnique 44
+
 unboundKey :: Unique
 unboundKey = mkWiredInMiscIdUnique 158

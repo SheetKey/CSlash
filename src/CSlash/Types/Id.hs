@@ -25,6 +25,8 @@ import CSlash.Utils.Misc
 import CSlash.Utils.Outputable
 import CSlash.Utils.Panic
 
+type AnyId = Id (AnyTyVar AnyKiVar) AnyKiVar
+
 idName :: Id tv kv -> Name
 idName = Var.varName
 

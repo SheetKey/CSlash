@@ -71,6 +71,12 @@ tcPolyExpr :: CsExpr Rn -> ExpSigmaType -> TcM (CsExpr Tc)
 tcPolyExpr e (Infer _) = panic "tcPolyExpr infer"
 tcPolyExpr e (Check ty) = tcPolyExprCheck e (Left ty)
 
+tcPolyLExprSig :: LCsExpr Rn -> TcCompleteSig -> TcM (LCsExpr Tc)
+tcPolyLExprSig (L loc expr) sig = setSrcSpanA loc $ do
+  traceTc "tcPolyLExprSig" (ppr loc $$ ppr expr)
+  expr' <- tcPolyExprCheck expr (Right sig)
+  return (L loc expr')
+
 tcPolyExprCheck :: CsExpr Rn -> Either AnySigmaType TcCompleteSig -> TcM (CsExpr Tc)
 tcPolyExprCheck  expr res_ty = outer_skolemize res_ty $ \pat_tys rho_ty ->
   let tc_body (CsPar x (L loc e))

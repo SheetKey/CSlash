@@ -57,6 +57,8 @@ data DataCon tv kv = MkData
   , dcInfix :: Bool
   }
 
+type AnyDataCon = DataCon (AnyTyVar AnyKiVar) AnyKiVar
+
 {- *********************************************************************
 *                                                                      *
             Instances

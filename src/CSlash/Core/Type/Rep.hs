@@ -150,6 +150,11 @@ mkGReflCo ty kco
   | isReflKiCo kco = TyRefl ty
   | otherwise = GRefl ty kco
 
+mkGReflLeftCo :: Type tv kv -> KindCoercion kv -> TypeCoercion tv kv
+mkGReflLeftCo ty kco
+  | isReflKiCo kco = mkReflTyCo ty
+  | otherwise = mkTySymCo $ mkGReflCo ty kco
+
 mkAppCos :: TypeCoercion tv kv 
 mkAppCos = panic "mkAppCos"
 

@@ -4,6 +4,7 @@ import Data.Foldable
 
 import CSlash.Core.Kind
 import CSlash.Types.Var
+import CSlash.Types.Id
 import CSlash.Types.Name
 import CSlash.Types.Name.Env
 import CSlash.Utils.Outputable
@@ -12,6 +13,11 @@ import CSlash.Utils.Panic
 data Usage = Zero | Bottom | MUsage
 
 data UsageEnv = UsageEnv !(NameEnv Mult) Bool
+
+singleUsageUE :: AnyId -> UsageEnv
+singleUsageUE x | isExternalName n = zeroUE
+                | otherwise = UsageEnv (unitNameEnv n LKd) False
+  where n = getName x
 
 zeroUE :: UsageEnv
 zeroUE = UsageEnv emptyNameEnv False

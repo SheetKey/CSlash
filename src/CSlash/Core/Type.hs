@@ -56,6 +56,7 @@ import CSlash.Data.FastString
 
 import CSlash.Data.Maybe ( orElse, isJust, firstJust, fromJust )
 import Data.Bifunctor (bimap)
+import Control.Monad ((>=>))
 
 {- *********************************************************************
 *                                                                      *
@@ -189,6 +190,9 @@ mapTypeX (TypeMapper { tm_tyvar = tyvar
 
 getTyVar_maybe :: IsTyVar tv kv => Type tv kv -> Maybe tv
 getTyVar_maybe = getTyVarNoView_maybe . coreFullView
+
+getTcTyVar_maybe :: (IsTyVar tv kv, ToTcTyVarMaybe tv kv) => Type tv kv -> Maybe (TcTyVar kv)
+getTcTyVar_maybe = getTyVar_maybe >=> toTcTyVar_maybe
 
 getTyVarNoView_maybe :: Type tv kv -> Maybe tv
 getTyVarNoView_maybe (TyVarTy tv) = Just tv

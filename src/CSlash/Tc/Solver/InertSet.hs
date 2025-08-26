@@ -561,7 +561,7 @@ solveOneFromTheOther ct_i ct_w
         | otherwise -> KeepWork
   | CtKiWanted {} <- ev_i
   = KeepWork
-  | lvl_i == lvl_w
+  | lvl_i `sameDepthAs` lvl_w
   = same_level_strategy
   | otherwise
   = different_level_strategy
@@ -579,7 +579,7 @@ solveOneFromTheOther ct_i ct_w
     lvl_i = ctLocLevel loc_i
     lvl_w = ctLocLevel loc_w
 
-    different_level_strategy = if lvl_w > lvl_i then KeepInert else KeepWork
+    different_level_strategy = if lvl_w `strictlyDeeperThan` lvl_i then KeepInert else KeepWork
 
     same_level_strategy = case (orig_i, orig_w) of
       _ -> KeepInert

@@ -55,6 +55,48 @@ import qualified Data.Semigroup as S ( (<>) )
 
 {- *********************************************************************
 *                                                                      *
+              matchActualFunTys
+*                                                                      *
+********************************************************************* -}
+
+matchActualFunTy
+  :: ExpectedFunTyOrigin
+  -> Maybe TypedThing
+  -> (Arity, AnyType)
+  -> AnyRhoType
+  -> TcM (CsWrapper, AnySigmaType, AnySigmaType)
+matchActualFunTy herald mb_thing err_info fun_ty
+  = assertPpr (isRhoTy fun_ty) (ppr fun_ty)
+    $ go fun_ty
+  where
+    go :: AnyRhoType -> TcM (CsWrapper, AnySigmaType, AnySigmaType)
+
+    go ty | Just ty' <- coreView ty = go ty'
+
+    go (FunTy { ft_arg = arg_ty, ft_res = res_ty }) = return (idCsWrapper, arg_ty, res_ty)
+
+    go ty@(TyVarTy tv)
+      | Just mtv <- toTcTyVar_maybe tv
+      , isMetaVar mtv
+      = do cts <- readMetaTyVar mtv
+           case cts of
+             Indirect ty' -> go ty'
+             Flexi -> defer ty
+
+    go ty = addErrCtxtM (mk_ctxt ty) (defer ty)
+
+    defer fun_ty = do
+      (arg_ty, fun_ki) <- new_check_arg_ty_ki 1
+      res_ty <- asAnyTyKi <$> newOpenFlexiTyVarTy
+      let unif_fun_ty = mkFunTy fun_ki arg_ty res_ty
+      co <- unifyType mb_thing fun_ty unif_fun_ty
+      return (mkWpCast co, arg_ty, res_ty)
+
+    mk_ctxt :: AnyType -> AnyTidyEnv -> ZonkM (AnyTidyEnv, SDoc)
+    mk_ctxt _ = mkFunTysMsg herald err_info
+
+{- *********************************************************************
+*                                                                      *
           Skolemization and matchExpectedFunTys
 *                                                                      *
 ********************************************************************* -}
@@ -423,6 +465,10 @@ definitely_poly ty
                 Type Unification
 *                                                                      *
 ********************************************************************* -}
+
+unifyExprType :: CsExpr Rn -> AnyType -> AnyType -> TcM AnyTypeCoercion
+unifyExprType rn_expr ty1 ty2
+  = unifyType (Just (CsExprRnThing rn_expr)) ty1 ty2
 
 unifyType :: Maybe TypedThing -> AnyTauType -> AnyTauType -> TcM AnyTypeCoercion
 unifyType thing ty1 ty2 = unifyTypeAndEmit origin ty1 ty2
@@ -961,7 +1007,7 @@ simpleUnifyCheckKind lhs_kv rhs = go_mono rhs
     go_mono (KiVarKi kv)
       | Just tckv <- toTcKiVar_maybe kv
       , lhs_kv == tckv = False
-      | handleAnyKv (const topTcLevel) varLevel kv > lhs_kv_lvl = False
+      | handleAnyKv (const topTcLevel) varLevel kv `strictlyDeeperThan` lhs_kv_lvl = False
       | otherwise = True
 
     go_mono (FunKi { fk_f = af, fk_arg = a, fk_res = r })

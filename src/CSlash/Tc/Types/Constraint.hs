@@ -729,7 +729,7 @@ check_ki_implic implic@(KiImplic { kic_tclvl = lvl, kic_info = skol_info, kic_sk
 
     check_details :: TcKiVar -> TcVarDetails AnyMonoKind -> Maybe SDoc
     check_details kv (SkolemVar kv_skol_info tv_lvl)
-      | not (tv_lvl == lvl)
+      | not (tv_lvl `sameDepthAs` lvl)
       = Just (vcat [ ppr kv <+> text "has level" <+> ppr tv_lvl
                    , text "ic_lvl" <+> ppr lvl ])
       | not (skol_info `checkSkolInfoAnon` skol_info_anon)

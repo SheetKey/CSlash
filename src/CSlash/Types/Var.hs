@@ -314,8 +314,8 @@ class (IsKiVar kv, VarHasKind tv kv, ToAnyTyVar tv kv) => IsTyVar tv kv | tv -> 
   mkTyVar :: Name -> MonoKind kv -> tv
   toGenericTyVar :: TyVar kv -> tv
 
-class ToTcTyVarMaybe v tv | v -> tv where
-  toTcTyVar_maybe :: v -> Maybe (TcTyVar tv)
+class ToTcTyVarMaybe v kv | v -> kv where
+  toTcTyVar_maybe :: v -> Maybe (TcTyVar kv)
 
 instance ToTcTyVarMaybe (Var tv kv) kv where
   toTcTyVar_maybe tv@(TcTyVar' {}) = Just $ TcTyVar $ vacuousFirst' tv

@@ -1,3 +1,6 @@
+{-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE DataKinds #-}
 
 module CSlash.Tc.Types.Origin where
@@ -149,6 +152,8 @@ pprSigSkolInfo ctxt ty = case ctxt of
 
 data TypedThing
   = NameThing Name
+  | CsExprRnThing (CsExpr Rn)
+  | CsExprTcThing (CsExpr Tc)
 
 data KindedThing
   = CsTypeRnThing (CsType Rn)
@@ -238,7 +243,9 @@ pprCtO _ = panic "pprCtO"
 ******************************************************************* -}
 
 data ExpectedFunTyOrigin
-  = ExpectedFunTyLam !(CsExpr Rn)
+  = forall (p :: Pass). Outputable (CsExpr (CsPass p))
+    => ExpectedFunTyArg !TypedThing !(CsExpr (CsPass p))
+  | ExpectedFunTyLam !(CsExpr Rn)
 
 {- *******************************************************************
 *                                                                    *

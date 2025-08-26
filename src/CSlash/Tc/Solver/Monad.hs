@@ -313,7 +313,7 @@ getHasGivenKiCos tclvl = do
 
   let given_insols = filterBag insoluble_given_equality irreds
 
-      has_gkco | kc_lvl == tclvl = MaybeGivenKiCos
+      has_gkco | kc_lvl `sameDepthAs` tclvl = MaybeGivenKiCos
                | given_kicos = LocalGivenKiCos
                | otherwise = NoGivenKiCos
 
