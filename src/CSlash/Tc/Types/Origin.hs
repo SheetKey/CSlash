@@ -158,6 +158,7 @@ data TypedThing
 data KindedThing
   = CsTypeRnThing (CsType Rn)
   | KiNameThing Name
+  | TypeThing AnyType
 
 data TyVarBndrs = CsTyVarBndrsRn [CsTyVarBndr Rn]
 

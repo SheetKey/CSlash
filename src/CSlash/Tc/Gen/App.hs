@@ -274,4 +274,76 @@ quickLookArg = panic "quickLookArg"
 ********************************************************************* -}
 
 qlUnify :: AnyType -> AnyType -> TcM ()
-qlUnify = panic "qlUnify"
+qlUnify ty1 ty2 = do
+  traceTc "qlUnify" (ppr ty1 $$ ppr ty2)
+  go ty1 ty2
+  where
+    go :: AnyType -> AnyType -> TcM ()
+
+    go (TyVarTy tv) ty2
+      | Just mtv <- toTcTyVar_maybe tv
+      , isMetaVar mtv
+      = go_kappa mtv ty2
+    go ty1 (TyVarTy tv)
+      | Just mtv <- toTcTyVar_maybe tv
+      , isMetaVar mtv
+      = go_kappa mtv ty1
+
+    go (CastTy ty1 _) ty2 = go ty1 ty2
+    go ty1 (CastTy ty2 _) = go ty1 ty2
+
+    go (TyConApp tc1 []) (TyConApp tc2 [])
+      | tc1 == tc2
+      = return ()
+
+    go rho1 rho2
+      | Just rho1 <- coreView rho1 = go rho1 rho2
+      | Just rho2 <- coreView rho2 = go rho1 rho2
+
+    go (TyConApp tc1 tys1) (TyConApp tc2 tys2)
+      | tc1 == tc2
+      , tys1 `equalLength` tys2
+      = zipWithM_ go tys1 tys2
+
+    go (FunTy { ft_kind = ki1, ft_arg = arg1, ft_res = res1 })
+       (FunTy { ft_kind = ki2, ft_arg = arg2, ft_res = res2 })
+      = do go arg1 arg2
+           traceTc "qlUnify/FunTy go ki1 ki2" (ppr ki1 $$ ppr ki2)
+           go res1 res2
+
+    go (AppTy t1a t1b) ty2
+      | Just (t2a, t2b) <- tcSplitAppTyNoView_maybe ty2
+      = do go t1a t2a
+           go t1b t2b
+
+    go ty1 (AppTy t2a t2b)
+      | Just (t1a, t1b) <- tcSplitAppTyNoView_maybe ty2
+      = do go t1a t2a
+           go t1b t2b
+
+    go _ _ = return ()
+
+    go_kappa kappa ty2 = assertPpr (isMetaVar kappa) (ppr kappa) $ do
+      cts <- readMetaTyVar kappa
+      case cts of
+        Indirect ty1 -> go ty1 ty2
+        Flexi -> do ty2 <- liftZonkM $ zonkTcType ty2
+                    go_flexi kappa ty2
+
+    go_flexi mkappa (TyVarTy tv2)
+      | let kappa = toAnyTyVar mkappa
+      , lhsTyPriority tv2 > lhsTyPriority kappa
+      , Just mtv2 <- toTcTyVar_maybe tv2
+      , isMetaVar mtv2
+      = go_flexi1 mtv2 (TyVarTy kappa)
+    go_flexi kappa ty2 = go_flexi1 kappa ty2
+
+    go_flexi1 kappa ty2
+      | simpleUnifyCheckType UC_QuickLook kappa ty2
+      = do kco <- unifyKind (Just (TypeThing ty2)) EQKi (typeMonoKind ty2) (varKind kappa)
+           let ty2' = mkCastTy ty2 kco
+           traceTc "qlUnify:update"
+             $ ppr kappa <+> text ":=" <+> ppr ty2
+           liftZonkM $ writeMetaTyVar kappa ty2'
+      | otherwise
+      = return ()

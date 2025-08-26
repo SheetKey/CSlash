@@ -819,7 +819,7 @@ uUnfilledTyVar2 env@(UE { u_ty_defer = def_eq_ref }) swapped tv1 ty2 = do
   case toTcTyVar_maybe tv1 of
     Just tctv1
       | touchabilityAndShapeTestType cur_lvl tctv1 ty2
-      , simpleUnifyCheckType tctv1 ty2
+      , simpleUnifyCheckType UC_OnTheFly tctv1 ty2
         ->  do def_eqs <- readTcRef def_eq_ref
                kco <- uKind (mkKindEnv env ty1 ty2) EQKi (typeMonoKind ty2) (varKind tctv1)
                traceTc "uUnfilledTyVar2 ok"
@@ -1018,12 +1018,18 @@ simpleUnifyCheckKind lhs_kv rhs = go_mono rhs
 
     go_mono (KiPredApp _ k1 k2) = go_mono k1 && go_mono k2
 
-simpleUnifyCheckType :: TcTyVar AnyKiVar -> AnyType -> Bool
-simpleUnifyCheckType lhs_tv rhs = go rhs
+data UnifyCheckCaller
+  = UC_OnTheFly
+  | UC_QuickLook
+
+simpleUnifyCheckType :: UnifyCheckCaller -> TcTyVar AnyKiVar -> AnyType -> Bool
+simpleUnifyCheckType caller lhs_tv rhs = go rhs
   where
     lhs_tv_lvl = varLevel lhs_tv
 
-    forall_ok = panic "forall_ok"
+    forall_ok = case caller of
+                  UC_QuickLook -> isQLInstVar lhs_tv
+                  _ -> False
 
     go :: AnyType -> Bool
     go (TyVarTy tv)

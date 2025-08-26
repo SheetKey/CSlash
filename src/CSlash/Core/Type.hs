@@ -213,6 +213,21 @@ mkAppTys ty1 [] = ty1
 mkAppTys (TyConApp tc tys1) tys2 = mkTyConApp tc (tys1 ++ tys2)
 mkAppTys ty1 tys2 = foldl' AppTy ty1 tys2
 
+splitAppTyNoView_maybe :: IsTyVar tv kv => Type tv kv -> Maybe (Type tv kv, Type tv kv)
+splitAppTyNoView_maybe (AppTy ty1 ty2) = Just (ty1, ty2)
+splitAppTyNoView_maybe (FunTy ki ty1 ty2)
+  | Just (tc, tys) <- funTyConAppTy_maybe ki ty1 ty2
+  , Just (tys', ty') <- snocView tys
+  = Just (TyConApp tc tys', ty')
+splitAppTyNoView_maybe (TyConApp tc tys)
+  | not (tyConMustBeSaturated tc) || tys `lengthExceeds` tyConArity tc
+  , Just (tys', ty') <- snocView tys
+  = Just (TyConApp tc tys', ty')
+splitAppTyNoView_maybe _ = Nothing
+
+tcSplitAppTyNoView_maybe :: IsTyVar tv kv => Type tv kv -> Maybe (Type tv kv, Type tv kv)
+tcSplitAppTyNoView_maybe = splitAppTyNoView_maybe
+
 {- *********************************************************************
 *                                                                      *
                       LitTy
