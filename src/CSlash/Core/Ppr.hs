@@ -23,14 +23,14 @@ instance OutputableBndr b => Outputable (Expr b) where
 
 instance IsTyVar tv kv => OutputableBndr (Var tv kv) where
   pprBndr = undefined
-  pprInfixOcc = undefined
-  pprPrefixOcc = undefined
+  pprInfixOcc = pprInfixName . varName
+  pprPrefixOcc = pprInfixName . varName
   bndrIsJoin_maybe = undefined
 
 instance IsTyVar tv kv => OutputableBndr (Id tv kv) where
   pprBndr = undefined
-  pprInfixOcc = undefined
-  pprPrefixOcc = undefined
+  pprInfixOcc = pprInfixName . varName
+  pprPrefixOcc = pprPrefixName . varName
   bndrIsJoin_maybe = undefined
 
 pprOcc :: OutputableBndr a => LexicalFixity -> a -> SDoc
