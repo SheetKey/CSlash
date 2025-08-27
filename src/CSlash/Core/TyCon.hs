@@ -343,6 +343,11 @@ isPrimTyCon (TyCon { tyConDetails = details })
   | PrimTyCon {} <- details = True
   | otherwise = False
 
+isAlgTyCon :: TyCon tv kv -> Bool
+isAlgTyCon (TyCon { tyConDetails = details })
+  | AlgTyCon {} <- details = True
+  | otherwise = False
+
 isInjectiveTyCon :: TyCon tv kv -> Bool
 isInjectiveTyCon (TyCon { tyConDetails = details }) = go details
   where

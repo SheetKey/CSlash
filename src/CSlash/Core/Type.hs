@@ -317,6 +317,14 @@ splitTyConAppNoView_maybe ty = case ty of
   TyConApp tc tys -> Just (tc, tys)
   _ -> Nothing
 
+tcSplitTyConApp_maybe
+  :: (HasDebugCallStack, IsTyVar tv kv)
+  => Type tv kv -> Maybe (TyCon tv kv, [Type tv kv])
+tcSplitTyConApp_maybe ty = case coreFullView ty of
+  FunTy { ft_kind = ki, ft_arg = arg, ft_res = res } -> funTyConAppTy_maybe ki arg res
+  TyConApp tc tys -> Just (tc, tys)
+  _ -> Nothing
+
 {- *********************************************************************
 *                                                                      *
                       CastTy

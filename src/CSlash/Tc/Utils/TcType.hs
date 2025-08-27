@@ -529,6 +529,27 @@ tcSplitSigma ty = case tcSplitBigLamTyVarBinders ty of
                     (kvs, ty') -> case tcSplitForAllInvisBinders ty' of
                                     (tvs, tau) -> (kvs, tvs, tau)
 
+tcSplitNestedSigmaTys :: IsTyVar tv kv => Type tv kv -> ([kv], [tv], Type tv kv)
+tcSplitNestedSigmaTys ty
+  | (arg_tys, fun_kis, body_ty) <- tcSplitFunTys ty
+  , (kvs1, tvs1, rho1) <- tcSplitSigma body_ty
+  , not (null kvs1 && null tvs1)
+  = let (kvs2, tvs2, rho2) = tcSplitNestedSigmaTys rho1
+    in (kvs1 ++ kvs2, tvs1 ++ tvs2, mkFunTys arg_tys fun_kis rho2)
+  | otherwise = ([], [], ty)
+
+tcSplitFunTys :: IsTyVar tv kv => Type tv kv -> ([Type tv kv], [MonoKind kv], Type tv kv)
+tcSplitFunTys ty = case tcSplitFunTy_maybe ty of
+                     Nothing -> ([], [], ty)
+                     Just (arg, ki, res) -> (arg:args, ki:kis, res')
+                       where (args, kis, res') = tcSplitFunTys res
+
+tcSplitFunTy_maybe :: IsTyVar tv kv => Type tv kv -> Maybe (Type tv kv, MonoKind kv, Type tv kv)
+tcSplitFunTy_maybe ty
+  | Just ty' <- coreView ty = tcSplitFunTy_maybe ty'
+tcSplitFunTy_maybe (FunTy ki arg res) = Just (arg, ki, res)
+tcSplitFunTy_maybe _ = Nothing
+
 {- *********************************************************************
 *                                                                      *
       Classifying types

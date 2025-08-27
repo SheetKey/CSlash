@@ -1,3 +1,4 @@
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -163,6 +164,10 @@ isCsValArg _ = False
 leadingValArgs :: [CsExprArg 'TcpRn] -> [LCsExpr Rn]
 leadingValArgs = panic "leadingValArgs"
 
+isValArg :: CsExprArg id -> Bool
+isValArg (EValArg {}) = True
+isValArg _ = False
+
 {- *********************************************************************
 *                                                                      *
                  tcInferAppHead
@@ -271,7 +276,41 @@ tcInferDataCon con = panic "tcInferDataCon"
 ********************************************************************* -}
 
 addFunResCtxt :: CsExpr Tc -> [CsExprArg p] -> AnyType -> ExpRhoType -> TcM a -> TcM a
-addFunResCtxt = panic "addFunResCtxt"
+addFunResCtxt fun args fun_res_ty env_ty thing_inside = do
+  env_tv <- asAnyTyKi <$> newOpenFlexiTyVarTy
+  dumping <- doptM Opt_D_dump_tc_trace
+  addLandmarkErrCtxtM (\env -> (env, ) <$> mk_msg dumping env_tv) thing_inside
+  where
+    mk_msg dumping env_tv = do
+      mb_env_ty <- readExpType_maybe env_ty
+      fun_res' <- zonkTcType fun_res_ty
+      env' <- case mb_env_ty of
+                Just env_ty -> zonkTcType env_ty
+                Nothing -> do massert dumping
+                              return env_tv
+      let (_, _, fun_tau) = tcSplitNestedSigmaTys fun_res'
+          (_, _, env_tau) = tcSplitNestedSigmaTys env'
+
+          (args_fun, _, res_fun) = tcSplitFunTys fun_tau
+          (args_env, _, res_env) = tcSplitFunTys env_tau
+          n_fun = length args_fun
+          n_env = length args_env
+          info | n_fun > n_env
+               , not_fun res_env
+               = text "Probable cause:" <+> quotes (ppr fun)
+                 <+> text "is applied to too few arguments"
+               | n_fun < n_env
+               , not_fun res_fun
+               , (n_fun + count isValArg args) >= n_env
+               = text "Possible cause:" <+> quotes (ppr fun)
+                 <+> text "is applied to too many arguments"
+               | otherwise
+               = empty
+      return info
+
+    not_fun ty = case tcSplitTyConApp_maybe ty of
+                   Just (tc, _) -> isAlgTyCon tc
+                   Nothing -> False
 
 {- *********************************************************************
 *                                                                      *

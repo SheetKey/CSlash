@@ -599,6 +599,10 @@ addErrCtxtM :: (AnyTidyEnv -> ZonkM (AnyTidyEnv, SDoc)) -> TcM a -> TcM a
 addErrCtxtM ctxt = pushCtxt (False, ctxt)
 {-# INLINE addErrCtxtM #-}
 
+addLandmarkErrCtxtM :: (AnyTidyEnv -> ZonkM (AnyTidyEnv, SDoc)) -> TcM a -> TcM a
+addLandmarkErrCtxtM ctxt = pushCtxt (True, ctxt)
+{-# INLINE addLandmarkErrCtxtM #-}
+
 pushCtxt :: ErrCtxt -> TcM a -> TcM a
 pushCtxt ctxt = updLclEnv (updCtxt ctxt)
 {-# INLINE pushCtxt #-}
