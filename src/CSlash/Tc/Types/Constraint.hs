@@ -11,6 +11,7 @@ import Prelude hiding ((<>))
 
 import CSlash.Core.Predicate
 import CSlash.Core.Type
+import CSlash.Core.Type.Compare
 import CSlash.Core.Type.FVs
 import CSlash.Core.Kind
 import CSlash.Core.Kind.FVs
@@ -744,14 +745,14 @@ check_ki_implic implic@(KiImplic { kic_tclvl = lvl, kic_info = skol_info, kic_sk
 checkSkolInfoAnon :: SkolemInfoAnon -> SkolemInfoAnon -> Bool
 checkSkolInfoAnon sk1 sk2 = go sk1 sk2
   where
-    go (SigSkol c1 t1 s1) (SigSkol c2 t2 s2) = c1 == c2 && panic "t1 `tcEqType` tc" && s1 == s2
+    go (SigSkol c1 t1 s1) (SigSkol c2 t2 s2) = c1 == c2 && t1 `tcEqType` t2 && s1 == s2
     go (SigTypeSkol cx1) (SigTypeSkol cx2) = cx1 == cx2
     go (ForAllSkol _) (ForAllSkol _) = True
     go (TyLamTySkol ids1) (TyLamTySkol ids2)
       = equalLength ids1 ids2 && and (zipWith (==) ids1 ids2)
     go (InferSkol ids1) (InferSkol ids2)
       = equalLength ids1 ids2 && and (zipWith eq_pr ids1 ids2)
-    go (UnifyForAllSkol t1) (UnifyForAllSkol t2) = panic "t1 `tcEqType` t2"
+    go (UnifyForAllSkol t1) (UnifyForAllSkol t2) = t1 `tcEqType` t2
     go (TyConSkol f1 n1) (TyConSkol f2 n2) = f1 == f2 && n1 == n2
     go (UnkSkol _) (UnkSkol _) = True
     go (ForAllSkol _) _ = True

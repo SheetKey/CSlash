@@ -79,6 +79,7 @@ library
                     , CSlash.Core.TyCon
                     , CSlash.Core.TyCon.Set
                     , CSlash.Core.Type
+                    , CSlash.Core.Type.Compare
                     , CSlash.Core.Type.FVs
                     , CSlash.Core.Type.Ppr
                     , CSlash.Core.Type.Rep
