@@ -49,3 +49,9 @@ mkLocalIdOrTyCoVar
 mkLocalIdOrTyCoVar name ty
   | isTyCoVarType ty = mkLocalTyCoVar name ty
   | otherwise = mkLocalId name ty
+
+idOccInfo :: Var.IsTyVar tv kv => Id tv kv -> OccInfo
+idOccInfo id = occInfo (Var.idInfo id)
+
+isDeadBinder :: Var.IsTyVar tv kv => Id tv kv -> Bool
+isDeadBinder bndr = isDeadOcc (idOccInfo bndr)

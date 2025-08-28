@@ -4,6 +4,6 @@ import {-# SOURCE #-} CSlash.Types.Var
 
 data Expr a
 
-type CoreBndr = ()
+type CoreBndr = Id (TyVar KiVar) KiVar
 
 type CoreExpr = Expr CoreBndr

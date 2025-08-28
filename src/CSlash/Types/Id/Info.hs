@@ -94,8 +94,11 @@ bitfieldSetArityInfo info (BitField bits) =
 oneShotInfo :: IdInfo -> OneShotInfo
 oneShotInfo = bitfieldGetOneShotInfo . bitfield
 
-arityInfo :: IdInfo -> CafInfo
-arityInfo = bitfieldGetCafInfo . bitfield
+arityInfo :: IdInfo -> ArityInfo
+arityInfo = bitfieldGetArityInfo . bitfield
+
+cafInfo :: IdInfo -> CafInfo
+cafInfo = bitfieldGetCafInfo . bitfield
 
 callArityInfo :: IdInfo -> ArityInfo
 callArityInfo = bitfieldGetCallArityInfo . bitfield

@@ -12,11 +12,15 @@ module CSlash.Types.Basic
   , module X
   ) where
 
+import Prelude hiding ((<>))
+
 import GHC.Types.Basic as X hiding
   ( TyConFlavour(..)
   , ConTag
   , pprAlternative
   , maybeParen
+  , pprShortTailCallInfo
+  , pprOneShotInfo
   )
   
 import CSlash.Language.Syntax.Basic
@@ -75,3 +79,36 @@ instance Outputable SwapFlag where
 instance Outputable RecFlag where
   ppr Recursive = text "Recursive"
   ppr NonRecursive = text "NonRecursive"
+
+instance Outputable OccInfo where
+  ppr (ManyOccs tails) = pprShortTailCallInfo tails
+  ppr IAmDead = text "Dead"
+  ppr (IAmALoopBreaker rule_only tails)
+    = text "LoopBreaker" <> pp_ro <> pprShortTailCallInfo tails
+    where pp_ro | rule_only = char '!'
+                | otherwise = empty
+  ppr (OneOcc inside_lam one_branch int_cxt tail_info)
+    = text "Once" <> pp_lam inside_lam <> ppr one_branch <> pp_args int_cxt <> pp_tail
+    where
+      pp_lam IsInsideLam = char 'L'
+      pp_lam NotInsideLam = empty
+      pp_args IsInteresting = char '!'
+      pp_args NotInteresting = empty
+      pp_tail = pprShortTailCallInfo tail_info
+
+pprShortTailCallInfo :: TailCallInfo -> SDoc
+pprShortTailCallInfo (AlwaysTailCalled ar) = char 'T' <> brackets (int ar)
+pprShortTailCallInfo NoTailCallInfo = empty
+
+instance Outputable OneShotInfo where
+  ppr = pprOneShotInfo
+
+pprOneShotInfo :: OneShotInfo -> SDoc 
+pprOneShotInfo NoOneShotInfo = text "NoOS"
+pprOneShotInfo OneShotLam = text "OneShot"
+
+instance Outputable UnfoldingSource where
+  ppr CompulsorySrc = text "Compulsory"
+  ppr StableUserSrc = text "StableUser"
+  ppr StableSystemSrc = text "StableSystem"
+  ppr VanillaSrc = text "<vanilla>"

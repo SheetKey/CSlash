@@ -58,6 +58,8 @@ module CSlash.Types.Var
     {-* Id *-}
   , Id, TyCoVar
   , mkGlobalVar, mkLocalVar
+  , idInfo, idDetails
+  , isGlobalId, isExportedId
 
     {-* ForAllFlag *-}
   , ForAllFlag(..)
@@ -781,6 +783,23 @@ mk_id name ty scope details info
              , _idScope = scope
              , _id_details = details
              , _id_info = info }
+
+idInfo :: IsTyVar tv kv => Id tv kv -> IdInfo
+idInfo (Id (Id' { _id_info = info })) = info
+idInfo other = pprPanic "idInfo" (ppr other)
+
+idDetails :: IsTyVar tv kv => Id tv kv -> IdDetails tv kv
+idDetails (Id (Id' { _id_details = details })) = details
+idDetails other = pprPanic "idDetails" (ppr other)
+
+isGlobalId :: Id tv kv -> Bool
+isGlobalId (Id (Id' { _idScope = GlobalId })) = True
+isGlobalId _ = False
+
+isExportedId :: Id tv kv -> Bool
+isExportedId (Id (Id' { _idScope = GlobalId })) = True
+isExportedId (Id (Id' { _idScope = LocalId Exported })) = True
+isExportedId _ = False
 
 {- *********************************************************************
 *                                                                      *

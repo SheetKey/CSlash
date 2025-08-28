@@ -53,6 +53,11 @@ data Bind b
   | Rec [(b, (Expr b))]
   deriving Data
 
+instance Outputable AltCon where
+  ppr (DataAlt dc) = ppr dc
+  ppr (LitAlt lit) = ppr lit
+  ppr DEFAULT = text "__DEFAULT"
+
 {- *********************************************************************
 *                                                                      *
                 Unfoldings
@@ -103,6 +108,10 @@ isEvaldUnfolding :: Unfolding -> Bool
 isEvaldUnfolding (OtherCon _) = True
 isEvaldUnfolding NoUnfolding = False
 isEvaldUnfolding (CoreUnfolding { uf_cache = cache }) = uf_is_value cache
+
+hasSomeUnfolding :: Unfolding -> Bool
+hasSomeUnfolding NoUnfolding = False
+hasSomeUnfolding _ = True
   
 {- *********************************************************************
 *                                                                      *
@@ -112,7 +121,7 @@ isEvaldUnfolding (CoreUnfolding { uf_cache = cache }) = uf_is_value cache
 
 type CoreProgram = [CoreBind]
 
-type CoreBndr = ()
+type CoreBndr = Id (TyVar KiVar) KiVar
 
 type CoreExpr = Expr CoreBndr
 
