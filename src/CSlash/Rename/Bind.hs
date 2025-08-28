@@ -92,7 +92,7 @@ rnLocalValBindsLHS fix_env binds = do
 
 rnValBindsLHS :: NameMaker -> CsValBinds Ps -> RnM (CsValBindsLR Rn Ps)
 rnValBindsLHS topP (ValBinds x mbinds sigs) = do
-  mbinds' <- mapBagM (wrapLocMA (rnBindLHS topP doc)) mbinds
+  mbinds' <- mapM (wrapLocMA (rnBindLHS topP doc)) mbinds
   return $ ValBinds x mbinds' sigs
   where
     bndrs = collectCsBindsBinders CollNoDictBinders mbinds
@@ -102,7 +102,7 @@ rnValBindsLHS _ b = pprPanic "rnValBindsLHS" (ppr b)
 rnValBindsRHS :: CsSigCtxt -> CsValBindsLR Rn Ps -> RnM (CsValBinds Rn, DefUses)
 rnValBindsRHS ctxt (ValBinds _ mbinds sigs) = do
   (sigs', sig_fvs) <- renameSigs ctxt sigs
-  binds_w_dus <- mapBagM rnLBind mbinds
+  binds_w_dus <- mapM rnLBind mbinds
   let !(anal_binds, anal_dus) = depAnalBinds binds_w_dus
 
       valbind'_dus = anal_dus `plusDU` usesOnly sig_fvs
@@ -171,15 +171,15 @@ rnBind other = pprPanic "rnBind" (ppr other)
 *                                                                      *
 ********************************************************************* -}
 
-depAnalBinds :: Bag (LCsBind Rn, Name, Uses) -> ([(RecFlag, LCsBinds Rn)], DefUses)
+depAnalBinds :: [(LCsBind Rn, Name, Uses)] -> ([(RecFlag, LCsBinds Rn)], DefUses)
 depAnalBinds binds_w_dus = (map get_binds sccs, toOL $ map get_du sccs)
   where
     sccs = depAnal (\(_, def, _) -> [def])
                    (\(_, _, uses) -> nonDetEltsUniqSet uses)
-                   (bagToList binds_w_dus)
+                   binds_w_dus
 
-    get_binds (AcyclicSCC (bind, _, _)) = (NonRecursive, unitBag bind)
-    get_binds (CyclicSCC binds'_w_dus) = (Recursive, listToBag [ b | (b, _, _) <- binds'_w_dus ])
+    get_binds (AcyclicSCC (bind, _, _)) = (NonRecursive, [bind])
+    get_binds (CyclicSCC binds'_w_dus) = (Recursive, [ b | (b, _, _) <- binds'_w_dus ])
 
     get_du (AcyclicSCC (_, bndr, uses)) = (Just (mkNameSet [bndr]), uses)
     get_du (CyclicSCC binds'_w_dus) = (Just defs, uses)

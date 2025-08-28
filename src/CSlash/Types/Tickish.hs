@@ -7,7 +7,7 @@
 
 module CSlash.Types.Tickish
   ( GenTickish(..)
-  , CsTickish
+  , CoreTickish
   ) where
 
 import CSlash.Unit.Module
@@ -19,7 +19,7 @@ import Data.Data
 data TickishPass
   = TickishPassCs
 
-type CsTickish = GenTickish 'TickishPassCs
+type CoreTickish = GenTickish 'TickishPassCs
 
 data GenTickish (pass :: TickishPass)
   = CpcTick -- CSlash program coverage tick

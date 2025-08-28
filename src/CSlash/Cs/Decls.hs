@@ -35,11 +35,11 @@ type instance XValD (CsPass _) = NoExtField
 type instance XSigD (CsPass _) = NoExtField
 
 partitionBindsAndSigs :: [LCsDecl Ps] -> (LCsBinds Ps, [LSig Ps])
-partitionBindsAndSigs [] = (emptyBag, [])
+partitionBindsAndSigs [] = ([], [])
 partitionBindsAndSigs ((L l decl) : ds) =
   let (bs, ss) = partitionBindsAndSigs ds in
     case decl of
-      ValD _ b -> (L l b `consBag` bs, ss)
+      ValD _ b -> (L l b : bs, ss)
       SigD _ s -> (bs, L l s : ss)
 
 appendGroups :: CsGroup (CsPass p) -> CsGroup (CsPass p) -> CsGroup (CsPass p)

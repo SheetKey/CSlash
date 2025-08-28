@@ -306,7 +306,7 @@ zonkRecMonoBinds binds = mfix $ \new_binds -> do
   noBinders $ zonkMonoBinds binds
 
 zonkMonoBinds :: LCsBinds Tc -> ZonkTcM (LCsBinds Tc)
-zonkMonoBinds = mapBagM zonk_lbind
+zonkMonoBinds = mapM zonk_lbind
 
 zonk_lbind :: LCsBind Tc -> ZonkTcM (LCsBind Tc)
 zonk_lbind = panic "wrapLocZonkMA zonk_bind"

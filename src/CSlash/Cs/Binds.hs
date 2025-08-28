@@ -24,6 +24,7 @@ import CSlash.Cs.Extension
 import CSlash.Cs.Type
 import CSlash.Cs.Kind
 import CSlash.Types.Tickish
+import CSlash.Tc.Types.Evidence
 import CSlash.Types.SourceText
 import CSlash.Types.SrcLoc as SrcLoc
 import CSlash.Types.Var
@@ -51,11 +52,11 @@ type instance XXValBindsLR (CsPass pL) pR = NCsValBindsLR (CsPass pL)
 
 type instance XFunBind (CsPass pL) Ps = AddEpAnn
 type instance XFunBind (CsPass pL) Rn = NameSet
-type instance XFunBind (CsPass pL) Tc = [CsTickish]
+type instance XFunBind (CsPass pL) Tc = (CsWrapper, [CoreTickish])
 
 type instance XTyFunBind (CsPass pL) Ps = [AddEpAnn]
 type instance XTyFunBind (CsPass pL) Rn = ([Name], FreeVars)
-type instance XTyFunBind (CsPass pL) Tc = [CsTickish]
+type instance XTyFunBind (CsPass pL) Tc = NoExtField
 
 type instance XXCsBindsLR Ps pR = DataConCantHappen
 type instance XXCsBindsLR Rn pR = DataConCantHappen
@@ -89,7 +90,7 @@ instance (OutputableBndrId pl, OutputableBndrId pr)
   ppr (XValBindsLR (NValBinds sccs sigs))
     = getPprDebug $ \case
         True -> vcat (map ppr sigs) $$ vcat (map ppr_scc sccs)
-        False -> pprDeclList (pprLCsBindsForUser (unionManyBags (map snd sccs)) sigs)
+        False -> pprDeclList (pprLCsBindsForUser (concat (map snd sccs)) sigs)
     where
       ppr_scc (ref_flag, binds) = pp_rec ref_flag <+> pprLCsBinds binds
       pp_rec Recursive = text "rec"
@@ -99,7 +100,7 @@ pprLCsBinds
   :: (OutputableBndrId idL, OutputableBndrId idR) => LCsBindsLR (CsPass idL) (CsPass idR) -> SDoc
 pprLCsBinds binds
   | isEmptyLCsBinds binds = empty
-  | otherwise = pprDeclList (map ppr (bagToList binds))
+  | otherwise = pprDeclList (map ppr binds)
 
 pprLCsBindsForUser
   :: (OutputableBndrId idL, OutputableBndrId idR, OutputableBndrId id2)
@@ -108,7 +109,7 @@ pprLCsBindsForUser binds sigs = map snd (sort_by_loc decls)
   where
     decls :: [(SrcSpan, SDoc)]
     decls = [(locA loc, ppr sig) | L loc sig <- sigs] ++
-            [(locA loc, ppr bind) | L loc bind <- bagToList binds]
+            [(locA loc, ppr bind) | L loc bind <- binds]
 
     sort_by_loc decls = sortBy (SrcLoc.leftmost_smallest `on` fst) decls
 
@@ -120,20 +121,20 @@ isEmptyValBinds (ValBinds _ ds sigs) = isEmptyLCsBinds ds && null sigs
 isEmptyValBinds (XValBindsLR (NValBinds ds sigs)) = null ds && null sigs
 
 emptyValBindsIn :: CsValBindsLR (CsPass a) (CsPass b)
-emptyValBindsIn = ValBinds NoAnnSortKey emptyBag []
+emptyValBindsIn = ValBinds NoAnnSortKey [] []
 
 emptyValBindsOut :: CsValBindsLR (CsPass a) (CsPass b)
 emptyValBindsOut = XValBindsLR (NValBinds [] [])
 
 emptyLCsBinds :: LCsBindsLR (CsPass idL) idR
-emptyLCsBinds = emptyBag
+emptyLCsBinds = []
 
 isEmptyLCsBinds :: LCsBindsLR (CsPass idL) idR -> Bool
-isEmptyLCsBinds = isEmptyBag
+isEmptyLCsBinds = null
 
 plusCsValBinds :: CsValBinds (CsPass a) -> CsValBinds (CsPass a) -> CsValBinds (CsPass a) 
 plusCsValBinds (ValBinds _ ds1 sigs1) (ValBinds _ ds2 sigs2)
-  = ValBinds NoAnnSortKey (ds1 `unionBags` ds2) (sigs1 ++ sigs2)
+  = ValBinds NoAnnSortKey (ds1 ++ ds2) (sigs1 ++ sigs2)
 plusCsValBinds (XValBindsLR (NValBinds ds1 sigs1)) (XValBindsLR (NValBinds ds2 sigs2))
   = XValBindsLR (NValBinds (ds1 ++ ds2) (sigs1 ++ sigs2))
 plusCsValBinds _ _ = panic "plusCsValBinds"
@@ -147,7 +148,7 @@ ppr_monobind :: forall idL idR.
              => CsBindLR (CsPass idL) (CsPass idR) -> SDoc
 ppr_monobind (FunBind { fun_id = fun
                       , fun_body = body
-                      , fun_ext = ticks })
+                      , fun_ext = ext })
   = pprTicks empty ticksDoc
     $$ whenPprDebug (pprBndr LetBind (unLoc fun))
     $$ pprLExpr body
@@ -157,11 +158,16 @@ ppr_monobind (FunBind { fun_id = fun
     ticksDoc = case csPass @idR of
                  Ps -> empty
                  Rn -> empty
-                 Tc -> if null ticks
-                       then empty
-                       else text "-- ticks = " <> ppr ticks
+                 Tc | (_, ticks) <- ext ->
+                      if null ticks
+                      then empty
+                      else text "-- ticks = " <> ppr ticks
     wrapDoc :: SDoc
-    wrapDoc = empty
+    wrapDoc = case csPass @idR of
+                Ps -> empty
+                Rn -> empty
+                Tc | (wrap, _) <- ext -> ppr wrap
+
 ppr_monobind (TyFunBind _ _ _) = text "TyFunBind ppr non implemented"
 ppr_monobind (TCVarBind { tcvar_id = var, tcvar_rhs = rhs })
   = sep [pprBndr CasePatBind var, nest 2 $ equals <+> pprExpr (unLoc rhs)]

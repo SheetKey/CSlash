@@ -143,6 +143,9 @@ data TyCoBindsVar
 *                                                                      *
 ********************************************************************* -}
 
+instance Outputable CsWrapper where
+  ppr co_fn = pprCsWrapper co_fn (no_parens (text "<>"))
+
 pprCsWrapper :: CsWrapper -> (Bool -> SDoc) -> SDoc
 pprCsWrapper wrap pp_thing_inside =
   sdocOption sdocPrintTypecheckerElaboration $ \case
@@ -161,6 +164,9 @@ pprCsWrapper wrap pp_thing_inside =
 add_parens :: SDoc -> Bool -> SDoc
 add_parens d True = parens d
 add_parens d False = d
+
+no_parens :: SDoc -> Bool -> SDoc
+no_parens d _ = d
 
 instance Outputable KiCoBindsVar where
   ppr (KiCoBindsVar { kcbv_uniq = u }) = text "KiCoBindsVar" <> angleBrackets (ppr u)

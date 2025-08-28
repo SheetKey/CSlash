@@ -251,7 +251,7 @@ tcRnSrcDecls export_ies decls = do
   (id_env, binds') <- zonkTcGblEnv tcg_env
 
   --------- Run finalizers --------------
-  let init_tcg_env = tcg_env { tcg_binds = emptyBag
+  let init_tcg_env = tcg_env { tcg_binds = []
                              , tcg_type_env = tcg_type_env tcg_env `plusTypeEnv` id_env }
 
   traceTc "Tc11" empty
@@ -271,7 +271,7 @@ tcRnSrcDecls export_ies decls = do
   (id_env_mf, binds_mf) <- zonkTcGblEnv tcg_env
 
   let !final_type_env = tcg_type_env tcg_env `plusTypeEnv` id_env_mf
-      tcg_env' = tcg_env { tcg_binds =  binds' `unionBags` binds_mf }
+      tcg_env' = tcg_env { tcg_binds =  binds' ++ binds_mf }
 
   panic "setGlobalTypeEnv tcg_env' final_type_env"
 

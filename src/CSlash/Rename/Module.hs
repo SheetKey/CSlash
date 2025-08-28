@@ -254,7 +254,7 @@ add_kisig d _ = pprPanic "add_kisig" (ppr d)
 add_bind
   :: OutputableBndrId p => LCsBind (CsPass p) -> CsValBinds (CsPass p) -> CsValBinds (CsPass p)
 add_bind b@(L _ (TyFunBind{})) _ = pprPanic "add_bind" (ppr b)
-add_bind b (ValBinds x bs sigs) = ValBinds x (bs `snocBag` b) sigs
+add_bind b (ValBinds x bs sigs) = ValBinds x (bs ++ [b]) sigs
 add_bind _ (XValBindsLR{}) = panic "add_bind"
 
 add_sig :: OutputableBndrId p => LSig (CsPass p) -> CsValBinds (CsPass p) -> CsValBinds (CsPass p)

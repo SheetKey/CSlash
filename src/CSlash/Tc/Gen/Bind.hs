@@ -128,7 +128,7 @@ tc_group
   -> TcM ([(RecFlag, LCsBinds Tc)], CsWrapper, thing)
 
 tc_group top_lvl sig_fn (NonRecursive, binds) closed thing_inside = do
-  let bind = case bagToList binds of
+  let bind = case binds of
                [bind] -> bind
                [] -> panic "tc_group: empty list of binds"
                _ -> panic "tc_group: NonRecursive binds is not a singleton bag"
@@ -187,7 +187,7 @@ recoveryCode :: [Name] -> TcSigFun -> TcM (LCsBinds Tc, [(TcId, BuiltInKi)])
 recoveryCode binder_names sig_fn = do
   traceTc "tcBindsWithSigs: error recovery" (ppr binder_names)
   let poly_ids = map (, UKd) $ map mk_dummy binder_names
-  return (emptyBag, poly_ids)
+  return ([], poly_ids)
   where
     mk_dummy name
       | Just sig <- sig_fn name
@@ -225,6 +225,8 @@ tcPolyCheck sig@(CSig { sig_bndr = poly_id, sig_ctxt = ctxt })
     <- tcSkolemizeCompleteSig sig $ \invis_pat_tys rho_ty ->
        let mono_id = mkLocalId mono_name rho_ty 
        in tcExtendBinderStack [TcIdBndr mono_id NotTopLevel]
+          -- The following is essentially an "inlining" of the
+          -- relevant parts of 'tcFunBindMatches', in particular 'tcBody'
           $ setSrcSpanA bind_loc
           $ tcScalingUsage UKd
           $ setSrcSpanA body_loc
@@ -246,10 +248,25 @@ tcPolyCheck sig@(CSig { sig_bndr = poly_id, sig_ctxt = ctxt })
                 
                 tc_body e = tcExpr e (mkCheckExpType rho_ty)
             in tc_body body
-              
-          -- $ tcFunBindRHS ctxt mono_name UKd body invis_pat_tys (mkCheckExpType rho_ty)
 
-  panic "unfinished3"
+  let poly_id2 = mkLocalId mono_name (varType poly_id)
+
+  mod <- getModule
+
+  let bind' = FunBind { fun_id = L nm_loc poly_id2
+                      , fun_body = L body_loc body'
+                      , fun_ext = (wrap_gen, []) }
+
+      export = ABE { abe_poly = panic "poly_id"
+                   , abe_mono = panic "poly_id2" }
+
+      abs_bind = L bind_loc $ XCsBindsLR
+                 $ AbsBinds { abs_tvs = []
+                            , abs_exports = [export]
+                            , abs_binds = [L bind_loc bind']
+                            , abs_sig = True }
+
+  return ([abs_bind], [(poly_id, panic "tcPolyCheck ret BIKi" :: BuiltInKi)])
 
 tcPolyCheck _ _ = panic "tcPolyCheck"
 
@@ -261,30 +278,6 @@ tcPolyCheck _ _ = panic "tcPolyCheck"
 
 tcPolyInfer :: RecFlag -> TcSigFun -> [LCsBind Rn] -> TcM (LCsBinds Tc, [(TcId, BuiltInKi)])
 tcPolyInfer = panic "tcPolyInfer"
-
-{- *********************************************************************
-*                                                                      *
-                tcFunBindRHS
-*                                                                      *
-********************************************************************* -}
-
--- tcFunBindRHS
---   :: UserTypeCtxt
---   -> Name
---   -> Mult
---   -> LCsExpr Rn
---   -> [ExpPatType]
---   -> ExpRhoType
---   -> TcM (CsWrapper, LCsExpr Tc)
--- tcFunBindRHS ctxt fun_name mult body invis_pat_tys exp_ty = do
---   traceTc "tcFunBindRHS 1" (ppr fun_name $$ ppr mult $$ ppr exp_ty)
-
---   tcScalingUsage mult $ do
---     traceTc "tcFunBindRHS 2" (vcat [ pprUserTypeCtxt ctxt
---                                    , ppr invis_pat_tys
---                                    , ppr exp_ty ])
-
---     tcInvisMatches tcBody invis_pat_tys exp_ty 
 
 {- *********************************************************************
 *                                                                      *
@@ -321,7 +314,7 @@ decideGeneralizationPlan dflags top_lvl closed sig_fn lbinds
       | otherwise
       = Nothing
 
-isClosedBndrGroup :: TcTyKiEnv -> Bag (LCsBind Rn) -> IsGroupClosed
+isClosedBndrGroup :: TcTyKiEnv -> [LCsBind Rn] -> IsGroupClosed
 isClosedBndrGroup type_env binds = IsGroupClosed fv_env type_closed
   where
     type_closed = allUFM (nameSetAll is_closed_type_id) fv_env

@@ -34,7 +34,7 @@ type LCsBinds id = LCsBindsLR id id
 
 type CsBind id = CsBindLR id id
 
-type LCsBindsLR idL idR = Bag (LCsBindLR idL idR)
+type LCsBindsLR idL idR = [LCsBindLR idL idR]
 
 type LCsBindLR idL idR = XRec idL (CsBindLR idL idR)
 
