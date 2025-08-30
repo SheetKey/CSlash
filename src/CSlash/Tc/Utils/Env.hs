@@ -1,3 +1,5 @@
+{-# LANGUAGE TupleSections #-}
+
 module CSlash.Tc.Utils.Env
   ( TyThing (..), TcTyKiThing(..)
   , module CSlash.Tc.Utils.Env
@@ -20,7 +22,7 @@ import CSlash.Iface.Load
 import CSlash.Tc.Errors.Types
 import CSlash.Tc.Utils.Monad
 import CSlash.Tc.Utils.TcType
--- import {-# SOURCE #-} GHC.Tc.Utils.TcMType ( tcCheckUsage )
+import {-# SOURCE #-} CSlash.Tc.Utils.TcMType ( tcCheckUsage )
 import CSlash.Tc.Types.LclEnv
 import CSlash.Tc.Types.BasicTypes
 import CSlash.Tc.Types.Evidence (CsWrapper, idCsWrapper, (<.>))
@@ -56,11 +58,11 @@ import CSlash.Types.SrcLoc
 import CSlash.Types.Basic hiding( SuccessFlag(..) )
 import CSlash.Types.TypeEnv
 import CSlash.Types.SourceFile
-import CSlash.Types.Name
+import CSlash.Types.Name hiding (varName)
 import CSlash.Types.Name.Set
 import CSlash.Types.Name.Env
 import CSlash.Types.Id
-import CSlash.Types.Var (AnyTyVar, KiVar, AnyKiVar, asAnyTyKi, varType)
+import CSlash.Types.Var (AnyTyVar, KiVar, AnyKiVar, asAnyTyKi, varType, varName)
 -- import CSlash.Types.Id.Info ( RecSelParent(..) )
 import CSlash.Types.Name.Reader
 import CSlash.Types.TyThing
@@ -194,28 +196,29 @@ tcExtendLetEnv
   :: TopLevelFlag
   -> TcSigFun
   -> IsGroupClosed
-  -> [Scaled TcId]
+  -> [TcId]
   -> TcM a
   -> TcM (a, CsWrapper)
 tcExtendLetEnv top_lvl sig_fn (IsGroupClosed fvs fv_type_closed) ids thing_inside
-  = panic "tcExtendLetEnv"
-  -- = tcExtendBinderStack [TcIdBndr id top_lvl | (id, _) <- ids]
-  --   $ tc_extend_local_env top_lvl
-  --     [ (varName id, ATcId { tct_id = id, tct_info = mk_tct_info id })
-  --     | (id, _) <- ids ]
-  --   $ panic "foldr check_usage ((, idCsWrapper) <$> thing_inside) names"
-  -- where
-  --   mk_tct_info id
-  --     | type_closed && isEmptyNameSet rhs_fvs = ClosedLet
-  --     | otherwise = NonClosedLet rhs_fvs type_closed
-  --     where
-  --       name = varName id
-  --       rhs_fvs = lookupNameEnv fvs name `orElse` emptyNameSet
-  --       type_closed = isTypeClosedLetBndr id
-  --                     && (fv_type_closed || hasCompleteSig sig_fn name)
+  = tcExtendBinderStack [TcIdBndr id top_lvl | id <- ids]
+    $ tc_extend_local_env top_lvl
+      [ (varName id, ATcId { tct_id = id, tct_info = mk_tct_info id })
+      | id <- ids ]
+    $ foldr check_usage ((, idCsWrapper) <$> thing_inside) ids
+  where
+    mk_tct_info id
+      | type_closed && isEmptyNameSet rhs_fvs = ClosedLet
+      | otherwise = NonClosedLet rhs_fvs type_closed
+      where
+        name = varName id
+        rhs_fvs = lookupNameEnv fvs name `orElse` emptyNameSet
+        type_closed = isTypeClosedLetBndr id
+                      && (fv_type_closed || hasCompleteSig sig_fn name)
 
-  --       -- check_usage :: 
-  --       -- check_usage
+    check_usage :: TcId -> TcM (a, CsWrapper) -> TcM (a, CsWrapper)
+    check_usage id thing_inside = do
+      ((res, inner_wrap), outer_wrap) <- tcCheckUsage (varName id) (idKind id) thing_inside
+      return (res, outer_wrap <.> inner_wrap)
 
 tcExtendIdEnv1 :: Name -> TcId -> TcM a -> TcM a
 tcExtendIdEnv1 name id thing_inside = tcExtendIdEnv2 [(name, id)] thing_inside

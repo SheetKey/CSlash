@@ -69,7 +69,7 @@ data KiPredCon
 -- Checks if a value with infered mult w1 is DEFINITELY allowed where a value of w2 is expected.
 submult :: BuiltInKi -> MonoKind kv -> Bool
 submult w1 (BIKi w2) = w1 >= w2
-sumbult LKd _ = True
+submult LKd _ = True
 submult _ _ = False
 
 -- type DKiConEnv a = UniqDFM KiCon a

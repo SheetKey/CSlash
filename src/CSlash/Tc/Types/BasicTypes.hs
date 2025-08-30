@@ -65,6 +65,12 @@ data TcCompleteSig = CSig
   , sig_loc :: SrcSpan
   }
 
+hasCompleteSig :: TcSigFun -> Name -> Bool
+hasCompleteSig sig_fn name
+  = case sig_fn name of
+      Just _ -> True
+      _ -> False
+
 tcSigInfoName :: TcSigInfo -> Name
 tcSigInfoName (TcIdSig sig) = idName (sig_bndr sig)
 

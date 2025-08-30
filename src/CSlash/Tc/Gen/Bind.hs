@@ -158,7 +158,7 @@ tcPolyBinds
   -> RecFlag
   -> IsGroupClosed
   -> [LCsBind Rn]
-  -> TcM (LCsBinds Tc, [Scaled TcId])
+  -> TcM (LCsBinds Tc, [TcId])
 tcPolyBinds top_lvl sig_fn rec_group rec_tc closed bind_list
   = setSrcSpan loc $ recoverM (recoveryCode binder_names sig_fn) $ do
   traceTc "------------------------------------------------" empty
@@ -166,12 +166,10 @@ tcPolyBinds top_lvl sig_fn rec_group rec_tc closed bind_list
   dflags <- getDynFlags
   let plan = decideGeneralizationPlan dflags top_lvl closed sig_fn bind_list
   traceTc "Generalization plan" (ppr plan)
-  result@(_, scaled_poly_ids) <- case plan of
+  result@(_, poly_ids) <- case plan of
     NoGen -> tcPolyNoGen rec_tc sig_fn bind_list
     InferGen -> tcPolyInfer rec_tc sig_fn bind_list
     CheckGen lbind sig -> tcPolyCheck sig lbind
-
-  let poly_ids = map scaledThing scaled_poly_ids
 
   traceTc "} End of bindigs for"
     $ vcat [ ppr binder_names
@@ -183,10 +181,10 @@ tcPolyBinds top_lvl sig_fn rec_group rec_tc closed bind_list
     binder_names = collectCsBindListBinders CollNoDictBinders bind_list
     loc = foldr1 combineSrcSpans (map (locA . getLoc) bind_list)
 
-recoveryCode :: [Name] -> TcSigFun -> TcM (LCsBinds Tc, [Scaled TcId])
+recoveryCode :: [Name] -> TcSigFun -> TcM (LCsBinds Tc, [TcId])
 recoveryCode binder_names sig_fn = do
   traceTc "tcBindsWithSigs: error recovery" (ppr binder_names)
-  let poly_ids = map (Scaled Many) $ map mk_dummy binder_names
+  let poly_ids = map mk_dummy binder_names
   return ([], poly_ids)
   where
     mk_dummy name
@@ -204,7 +202,7 @@ forall_a_a = panic "forall_a_a"
 *                                                                      *
 ********************************************************************* -}
 
-tcPolyNoGen :: RecFlag -> TcSigFun -> [LCsBind Rn] -> TcM (LCsBinds Tc, [Scaled TcId])
+tcPolyNoGen :: RecFlag -> TcSigFun -> [LCsBind Rn] -> TcM (LCsBinds Tc, [TcId])
 tcPolyNoGen = panic "tcPolyNoGen"
 
 {- *********************************************************************
@@ -213,7 +211,7 @@ tcPolyNoGen = panic "tcPolyNoGen"
 *                                                                      *
 ********************************************************************* -}
 
-tcPolyCheck :: TcCompleteSig -> LCsBind Rn -> TcM (LCsBinds Tc, [Scaled TcId])
+tcPolyCheck :: TcCompleteSig -> LCsBind Rn -> TcM (LCsBinds Tc, [TcId])
 tcPolyCheck sig@(CSig { sig_bndr = poly_id, sig_ctxt = ctxt })
             (L bind_loc (FunBind { fun_id = L nm_loc name, fun_body = L body_loc body }))
   = do
@@ -266,7 +264,7 @@ tcPolyCheck sig@(CSig { sig_bndr = poly_id, sig_ctxt = ctxt })
                             , abs_binds = [L bind_loc bind']
                             , abs_sig = True }
 
-  return ([abs_bind], [Scaled (panic "tcPolyCheck usage") poly_id])
+  return ([abs_bind], [poly_id])
 
 tcPolyCheck _ _ = panic "tcPolyCheck"
 
@@ -276,7 +274,7 @@ tcPolyCheck _ _ = panic "tcPolyCheck"
 *                                                                      *
 ********************************************************************* -}
 
-tcPolyInfer :: RecFlag -> TcSigFun -> [LCsBind Rn] -> TcM (LCsBinds Tc, [Scaled TcId])
+tcPolyInfer :: RecFlag -> TcSigFun -> [LCsBind Rn] -> TcM (LCsBinds Tc, [TcId])
 tcPolyInfer = panic "tcPolyInfer"
 
 {- *********************************************************************
