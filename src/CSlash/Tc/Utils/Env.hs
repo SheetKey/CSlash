@@ -76,6 +76,16 @@ import CSlash.Types.Error
 
 {- *********************************************************************
 *                                                                      *
+            An IO interface to looking up globals
+*                                                                      *
+********************************************************************* -}
+
+addTypecheckedBinds :: TcGblEnv -> [LCsBinds Tc] -> TcGblEnv
+addTypecheckedBinds tcg_env binds
+  = tcg_env { tcg_binds = foldr (++) (tcg_binds tcg_env) binds }
+
+{- *********************************************************************
+*                                                                      *
             tcLookupGlobal
 *                                                                      *
 ********************************************************************* -}

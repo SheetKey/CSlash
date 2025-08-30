@@ -79,12 +79,12 @@ import Data.Foldable (find)
 tcTopBinds :: [(RecFlag, LCsBinds Rn)] -> [LSig Rn] -> TcM (TcGblEnv, TcLclEnv)
 tcTopBinds binds sigs = do
   (binds', wrap, (tcg_env, tcl_env)) <- tcValBinds TopLevel binds sigs getEnvs
-  -- massertPpr (isIdCsWrapper wrap)
-  --   (text "Non-identity wrapper at toplevel:" <+> ppr wrap)
+  massertPpr (isIdCsWrapper wrap)
+    (text "Non-identity wrapper at toplevel:" <+> ppr wrap)
 
-  -- let tcg_env' = tcg_env `addTypecheckedBinds` map snd binds
+  let tcg_env' = tcg_env `addTypecheckedBinds` map snd binds'
 
-  panic "unfinished1"
+  return (tcg_env', tcl_env)
 
 tcLocalBinds :: CsLocalBinds Rn -> TcM thing -> TcM (CsLocalBinds Tc, CsWrapper, thing)
 tcLocalBinds = panic "tcLocalBinds"
