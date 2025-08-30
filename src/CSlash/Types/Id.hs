@@ -11,6 +11,7 @@ import CSlash.Types.Var (Id)
 import qualified CSlash.Types.Var as Var
 
 import CSlash.Core.Type
+import CSlash.Core.Kind
 import CSlash.Core.Predicate
 import CSlash.Types.RepType
 import CSlash.Core.DataCon
@@ -55,3 +56,6 @@ idOccInfo id = occInfo (Var.idInfo id)
 
 isDeadBinder :: Var.IsTyVar tv kv => Id tv kv -> Bool
 isDeadBinder bndr = isDeadOcc (idOccInfo bndr)
+
+idKind :: Var.IsTyVar tv kv => Id tv kv -> Kind kv
+idKind = typeKind . Var.varType

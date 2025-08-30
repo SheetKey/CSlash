@@ -1,3 +1,5 @@
+{-# LANGUAGE DeriveDataTypeable #-}
+
 module CSlash.Core.UsageEnv where
 
 import Data.Foldable
@@ -10,42 +12,77 @@ import CSlash.Types.Name.Env
 import CSlash.Utils.Outputable
 import CSlash.Utils.Panic
 
-data Usage = Zero | Bottom | MUsage
+import qualified Data.Data as Data
 
-data UsageEnv = UsageEnv !(NameEnv Mult) Bool
+data Usage = Zero | One | Many
+  deriving Data.Data
+
+instance Outputable Usage where
+  ppr Zero = text "0"
+  ppr One = text "1"
+  ppr Many = text "Many"
+
+data Scaled a = Scaled !Usage a
+  deriving Data.Data
+
+instance Outputable a => Outputable (Scaled a) where
+  ppr (Scaled _ t) = ppr t
+
+scaledThing :: Scaled a -> a
+scaledThing (Scaled _ a) = a
+
+addUsage :: Usage -> Usage -> Usage
+addUsage Zero u = u
+addUsage u Zero = u
+addUsage _ _ = Many
+
+supUsage :: Usage -> Usage -> Usage
+supUsage Many _ = Many
+supUsage _ Many = Many
+supUsage One _ = One
+supUsage _ One = One
+supUsage _ _ = Zero
+
+-- Takes the kind of a binder and gives the usage to scale the RHS of the binding
+bindingKindUsage :: IsVar kv => MonoKind kv -> Usage
+bindingKindUsage ki = case splitInvisFunKis ki of
+  (_, FunKi{}) -> pprPanic "bindingKindUsage" (ppr ki)
+  (_, KiPredApp{}) -> pprPanic "bindingKindUsage" (ppr ki)
+  (_, BIKi UKd) -> Zero
+  (_, BIKi AKd) -> Zero
+  (_, BIKi LKd) -> One
+  (preds, KiVarKi kv) -> panic "bindingKindUsage"
+
+data UsageEnv = UsageEnv !(NameEnv Usage)
 
 singleUsageUE :: AnyId -> UsageEnv
-singleUsageUE x | isExternalName n = zeroUE
-                | otherwise = UsageEnv (unitNameEnv n LKd) False
+singleUsageUE x | isExternalName n = emptyUE
+                | otherwise = UsageEnv (unitNameEnv n One)
   where n = getName x
 
-zeroUE :: UsageEnv
-zeroUE = UsageEnv emptyNameEnv False
-
-bottomUE :: UsageEnv
-bottomUE = UsageEnv emptyNameEnv True
+emptyUE :: UsageEnv
+emptyUE = UsageEnv emptyNameEnv
 
 addUE :: UsageEnv -> UsageEnv -> UsageEnv
-addUE (UsageEnv e1 b1) (UsageEnv e2 b2)
-  = UsageEnv (plusNameEnv_C mkMultAdd e1 e2) (b1 || b2)
+addUE (UsageEnv e1) (UsageEnv e2)
+  = UsageEnv (plusNameEnv_C addUsage e1 e2)
 
-scaleUE :: Mult -> UsageEnv -> UsageEnv
-scaleUE m (UsageEnv e _) = UsageEnv (mapNameEnv (mkMultMul m) e) False
+scaleUE :: Usage -> UsageEnv -> UsageEnv
+scaleUE u (UsageEnv e) = UsageEnv (mapNameEnv (supUsage u) e)
 
 supUE :: UsageEnv -> UsageEnv -> UsageEnv
-supUE (UsageEnv e1 False) (UsageEnv e2 False)
-  = UsageEnv (plusNameEnv_CD mkMultSup e1 UKd e1 UKd) False
-supUE (UsageEnv e1 b1) (UsageEnv e2 b2) = UsageEnv (plusNameEnv_CD2 combineUsage e1 e2) (b1 && b2)
-  where
-    combineUsage (Just x) (Just y) = mkMultSup x y
-    combineUsage Nothing (Just x) | b1 = x
-                                  | otherwise = UKd
-    combineUsage (Just x) Nothing | b2 = x
-                                  | otherwise = UKd
-    combineUsage Nothing Nothing = pprPanic "supUE" (ppr e1 <+> ppr e2)
+supUE (UsageEnv e1) (UsageEnv e2) = UsageEnv (plusNameEnv_CD supUsage e1 Zero e2 Zero)
 
 supUEs :: [UsageEnv] -> UsageEnv
-supUEs = foldr supUE bottomUE
+supUEs = foldr supUE emptyUE
+ 
+deleteUE :: NamedThing n => UsageEnv -> n -> UsageEnv
+deleteUE (UsageEnv e) x = UsageEnv (delFromNameEnv e (getName x))
+
+lookupUE :: NamedThing n => UsageEnv -> n -> Usage
+lookupUE (UsageEnv e) x = case lookupNameEnv e (getName x) of
+                            Just u -> u
+                            Nothing -> Zero
 
 instance Outputable UsageEnv where
-  ppr (UsageEnv ne b) = text "UsageEnv:" <+> ppr ne <+> ppr b
+  ppr (UsageEnv ne) = text "UsageEnv:" <+> ppr ne

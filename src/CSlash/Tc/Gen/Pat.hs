@@ -35,6 +35,7 @@ import CSlash.Core.TyCon
 import CSlash.Core.Type
 import CSlash.Core.DataCon
 import CSlash.Core.ConLike
+import CSlash.Core.UsageEnv
 import CSlash.Builtin.Names
 import CSlash.Types.Basic hiding (SuccessFlag(..))
 import CSlash.Driver.DynFlags
@@ -189,10 +190,10 @@ tc_pat :: ExpSigmaType -> Checker (Pat Rn) (Pat Tc)
 tc_pat pat_ty penv ps_pat thing_inside = case ps_pat of
   VarPat x (L l name) -> do
     (wrap, id) <- tcPatBndr penv name pat_ty
-    traceTc "*********** tc_pat NOT CALLING 'tcCheckUsage'" empty
-    res <- tcExtendIdEnv1 name id thing_inside
+    (res, mult_wrap) <- tcCheckUsage name (idKind id)
+           $ tcExtendIdEnv1 name id thing_inside
     pat_ty <- readExpType pat_ty
-    return (mkCsWrapPat wrap (VarPat x (L l id)) pat_ty, res)
+    return (mkCsWrapPat (wrap <.> mult_wrap) (VarPat x (L l id)) pat_ty, res)
 
   ParPat x pat -> do
     (pat', res) <- tc_lpat pat_ty penv pat thing_inside

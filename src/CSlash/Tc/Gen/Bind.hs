@@ -26,7 +26,7 @@ import CSlash.Tc.Solver
 import CSlash.Tc.Types.Evidence
 -- import GHC.Tc.Types.Constraint
 -- import GHC.Core.Predicate
--- import GHC.Core.UsageEnv ( bottomUE )
+import CSlash.Core.UsageEnv
 -- import GHC.Tc.Gen.HsType
 -- import GHC.Tc.Gen.Pat
 import CSlash.Tc.Utils.TcMType
@@ -158,7 +158,7 @@ tcPolyBinds
   -> RecFlag
   -> IsGroupClosed
   -> [LCsBind Rn]
-  -> TcM (LCsBinds Tc, [(TcId, BuiltInKi)])
+  -> TcM (LCsBinds Tc, [Scaled TcId])
 tcPolyBinds top_lvl sig_fn rec_group rec_tc closed bind_list
   = setSrcSpan loc $ recoverM (recoveryCode binder_names sig_fn) $ do
   traceTc "------------------------------------------------" empty
@@ -171,7 +171,7 @@ tcPolyBinds top_lvl sig_fn rec_group rec_tc closed bind_list
     InferGen -> tcPolyInfer rec_tc sig_fn bind_list
     CheckGen lbind sig -> tcPolyCheck sig lbind
 
-  let poly_ids = map fst scaled_poly_ids
+  let poly_ids = map scaledThing scaled_poly_ids
 
   traceTc "} End of bindigs for"
     $ vcat [ ppr binder_names
@@ -183,10 +183,10 @@ tcPolyBinds top_lvl sig_fn rec_group rec_tc closed bind_list
     binder_names = collectCsBindListBinders CollNoDictBinders bind_list
     loc = foldr1 combineSrcSpans (map (locA . getLoc) bind_list)
 
-recoveryCode :: [Name] -> TcSigFun -> TcM (LCsBinds Tc, [(TcId, BuiltInKi)])
+recoveryCode :: [Name] -> TcSigFun -> TcM (LCsBinds Tc, [Scaled TcId])
 recoveryCode binder_names sig_fn = do
   traceTc "tcBindsWithSigs: error recovery" (ppr binder_names)
-  let poly_ids = map (, UKd) $ map mk_dummy binder_names
+  let poly_ids = map (Scaled Many) $ map mk_dummy binder_names
   return ([], poly_ids)
   where
     mk_dummy name
@@ -204,7 +204,7 @@ forall_a_a = panic "forall_a_a"
 *                                                                      *
 ********************************************************************* -}
 
-tcPolyNoGen :: RecFlag -> TcSigFun -> [LCsBind Rn] -> TcM (LCsBinds Tc, [(TcId, BuiltInKi)])
+tcPolyNoGen :: RecFlag -> TcSigFun -> [LCsBind Rn] -> TcM (LCsBinds Tc, [Scaled TcId])
 tcPolyNoGen = panic "tcPolyNoGen"
 
 {- *********************************************************************
@@ -213,7 +213,7 @@ tcPolyNoGen = panic "tcPolyNoGen"
 *                                                                      *
 ********************************************************************* -}
 
-tcPolyCheck :: TcCompleteSig -> LCsBind Rn -> TcM (LCsBinds Tc, [(TcId, BuiltInKi)])
+tcPolyCheck :: TcCompleteSig -> LCsBind Rn -> TcM (LCsBinds Tc, [Scaled TcId])
 tcPolyCheck sig@(CSig { sig_bndr = poly_id, sig_ctxt = ctxt })
             (L bind_loc (FunBind { fun_id = L nm_loc name, fun_body = L body_loc body }))
   = do
@@ -228,7 +228,7 @@ tcPolyCheck sig@(CSig { sig_bndr = poly_id, sig_ctxt = ctxt })
           -- The following is essentially an "inlining" of the
           -- relevant parts of 'tcFunBindMatches', in particular 'tcBody'
           $ setSrcSpanA bind_loc
-          $ tcScalingUsage UKd
+          -- $ tcScalingUsage UKd -- DO I need to scale here??
           $ setSrcSpanA body_loc
           $ let tc_body :: CsExpr Rn -> TcM (CsExpr Tc)
                 tc_body (CsPar x (L loc e)) = setSrcSpanA loc $ do
@@ -266,7 +266,7 @@ tcPolyCheck sig@(CSig { sig_bndr = poly_id, sig_ctxt = ctxt })
                             , abs_binds = [L bind_loc bind']
                             , abs_sig = True }
 
-  return ([abs_bind], [(poly_id, panic "tcPolyCheck ret BIKi" :: BuiltInKi)])
+  return ([abs_bind], [Scaled (panic "tcPolyCheck usage") poly_id])
 
 tcPolyCheck _ _ = panic "tcPolyCheck"
 
@@ -276,7 +276,7 @@ tcPolyCheck _ _ = panic "tcPolyCheck"
 *                                                                      *
 ********************************************************************* -}
 
-tcPolyInfer :: RecFlag -> TcSigFun -> [LCsBind Rn] -> TcM (LCsBinds Tc, [(TcId, BuiltInKi)])
+tcPolyInfer :: RecFlag -> TcSigFun -> [LCsBind Rn] -> TcM (LCsBinds Tc, [Scaled TcId])
 tcPolyInfer = panic "tcPolyInfer"
 
 {- *********************************************************************

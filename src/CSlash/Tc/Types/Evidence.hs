@@ -65,6 +65,7 @@ data CsWrapper
   | WpTyLam (AnyTyVar AnyKiVar) -- can probably be 'TcTyVar AnyKiVar' (these should be skols)
   | WpKiLam AnyKiVar            -- "             " 'TcKiVar'          "                     "
   | WpTyApp AnyType
+  | WpMultCoercion AnyKindCoercion
   deriving Data.Data
 
 (<.>) :: CsWrapper -> CsWrapper -> CsWrapper

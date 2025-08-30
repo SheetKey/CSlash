@@ -235,12 +235,12 @@ tcStmtsAndThen ctxt stmt_chk (L loc stmt : stmts) res_ty thing_inside = do
 
 tcGuardStmt :: TcExprStmtChecker
 tcGuardStmt _ (BodyStmt _ guard) res_ty thing_inside = do
-  guard' <- tcScalingUsage UKd $ tcCheckMonoExpr guard (asAnyTyKi boolTy)
+  guard' <- tcScalingUsage Many $ tcCheckMonoExpr guard (asAnyTyKi boolTy)
   thing <- thing_inside res_ty
   return (BodyStmt (asAnyTyKi boolTy) guard', thing)
 
 tcGuardStmt ctxt (BindStmt _ pat rhs) res_ty thing_inside = do
-  (rhs', rhs_ty) <- tcScalingUsage UKd $ tcInferRhoNC rhs
+  (rhs', rhs_ty) <- tcScalingUsage Many $ tcInferRhoNC rhs
   (pat', thing) <- tcCheckPat_O (StmtCtxt ctxt) (lexprCtOrigin rhs) pat rhs_ty
                    $ thing_inside res_ty
   traceTc "tcGuardStmt"

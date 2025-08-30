@@ -460,6 +460,20 @@ definitely_poly ty
   | otherwise
   = False
 
+tcSubMult :: CtOrigin -> BuiltInKi -> AnyKind -> TcM CsWrapper
+tcSubMult origin w_actual w_expected
+  = case snd $ splitInvisFunKis $ snd $ splitForAllKiVars w_expected of
+      FunKi {} -> panic "tcSubMult" (ppr origin $$ ppr w_expected)
+      KiPredApp {} -> panic "tcSubMult" (ppr origin $$ ppr w_expected)
+      w_expected
+        | submult w_actual w_expected
+          -> return idCsWrapper
+        | otherwise
+          -> do kco <- panic "unifyKindAndEmit origin GTEQKi w_actual w_expected"
+                if isReflKiCo kco
+                  then return idCsWrapper
+                  else return $ WpMultCoercion kco
+
 {- *********************************************************************
 *                                                                      *
                 Type Unification

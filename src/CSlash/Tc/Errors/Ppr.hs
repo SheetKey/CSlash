@@ -618,6 +618,7 @@ pprArising ct_loc
           TupleTyOrigin -> False
           PatSigOrigin -> False
           PatOrigin -> False
+          UsageEnvironmentOf {} -> False
 
 {- *********************************************************************
 *                                                                      *

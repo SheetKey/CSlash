@@ -162,7 +162,7 @@ initTcWithGbl
 initTcWithGbl cs_env gbl_env loc do_this = do
   lie_var <- newIORef emptyWC
   errs_var <- newIORef emptyMessages
-  usage_var <- newIORef zeroUE
+  usage_var <- newIORef emptyUE
   let lcl_env = TcLclEnv
                 { tcl_lcl_ctxt = TcLclCtxt
                                  { tcl_loc = loc
@@ -699,12 +699,12 @@ captureConstraints thing_inside = do
 
 tcCollectingUsage :: TcM a -> TcM (UsageEnv, a)
 tcCollectingUsage thing_inside = do
-  local_usage_ref <- newTcRef zeroUE
+  local_usage_ref <- newTcRef emptyUE
   result <- updLclEnv (\env -> env { tcl_usage = local_usage_ref }) thing_inside
   local_usage <- readTcRef local_usage_ref
   return (local_usage, result)
 
-tcScalingUsage :: Mult -> TcM a -> TcM a
+tcScalingUsage :: Usage -> TcM a -> TcM a
 tcScalingUsage mult thing_inside = do
   (usage, result) <- tcCollectingUsage thing_inside
   traceTc "tcScalingUsage" $ vcat [ ppr mult, ppr usage ]

@@ -60,26 +60,16 @@ data BuiltInKi
   | LKd
   deriving (Show, Eq, Ord, Data.Data)
 
-type Mult = BuiltInKi
-
-mkMultAdd :: Mult -> Mult -> Mult
-mkMultAdd _ _ = UKd
-
-mkMultMul :: Mult -> Mult -> Mult
-mkMultMul UKd m = m
-mkMultMul m UKd = m
-mkMultMul AKd m = m
-mkMultMul m AKd = m
-mkMultMul LKd LKd = LKd
-
-mkMultSup :: Mult -> Mult -> Mult
-mkMultSup = mkMultMul
-
 data KiPredCon
   = LTKi
   | LTEQKi
   | EQKi
   deriving (Show, Eq, Data.Data)
+
+-- Checks if a value with infered mult w1 is DEFINITELY allowed where a value of w2 is expected.
+submult :: BuiltInKi -> MonoKind kv -> Bool
+submult w1 (BIKi w2) = w1 >= w2
+submult _ _ = False
 
 -- type DKiConEnv a = UniqDFM KiCon a
 

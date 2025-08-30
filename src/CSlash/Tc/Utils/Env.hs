@@ -34,6 +34,7 @@ import CSlash.Core.Type.Rep
 import CSlash.Core.Type
 import CSlash.Core.Type.FVs
 import CSlash.Core.Kind
+import CSlash.Core.UsageEnv
 -- import GHC.Core.Coercion.Axiom
 -- import GHC.Core.Class
 
@@ -193,10 +194,28 @@ tcExtendLetEnv
   :: TopLevelFlag
   -> TcSigFun
   -> IsGroupClosed
-  -> [(TcId, BuiltInKi)]
+  -> [Scaled TcId]
   -> TcM a
   -> TcM (a, CsWrapper)
-tcExtendLetEnv = panic "tcextendletenv"
+tcExtendLetEnv top_lvl sig_fn (IsGroupClosed fvs fv_type_closed) ids thing_inside
+  = panic "tcExtendLetEnv"
+  -- = tcExtendBinderStack [TcIdBndr id top_lvl | (id, _) <- ids]
+  --   $ tc_extend_local_env top_lvl
+  --     [ (varName id, ATcId { tct_id = id, tct_info = mk_tct_info id })
+  --     | (id, _) <- ids ]
+  --   $ panic "foldr check_usage ((, idCsWrapper) <$> thing_inside) names"
+  -- where
+  --   mk_tct_info id
+  --     | type_closed && isEmptyNameSet rhs_fvs = ClosedLet
+  --     | otherwise = NonClosedLet rhs_fvs type_closed
+  --     where
+  --       name = varName id
+  --       rhs_fvs = lookupNameEnv fvs name `orElse` emptyNameSet
+  --       type_closed = isTypeClosedLetBndr id
+  --                     && (fv_type_closed || hasCompleteSig sig_fn name)
+
+  --       -- check_usage :: 
+  --       -- check_usage
 
 tcExtendIdEnv1 :: Name -> TcId -> TcM a -> TcM a
 tcExtendIdEnv1 name id thing_inside = tcExtendIdEnv2 [(name, id)] thing_inside

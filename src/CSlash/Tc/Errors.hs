@@ -403,6 +403,7 @@ reportGroup mk_err ctxt items = do
   mapM_ (addDeferredBinding ctxt err) items
 
 nonDeferrableOrigin :: CtOrigin -> Bool
+nonDeferrableOrigin (UsageEnvironmentOf {}) = True
 nonDeferrableOrigin OccurrenceOf {} = False
 nonDeferrableOrigin TypeEqOrigin {} = False
 nonDeferrableOrigin KindEqOrigin {} = False

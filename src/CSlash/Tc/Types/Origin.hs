@@ -183,6 +183,7 @@ data CtOrigin
   | TupleTyOrigin
   | PatSigOrigin
   | PatOrigin
+  | UsageEnvironmentOf Name
 
 isVisibleOrigin :: CtOrigin -> Bool
 isVisibleOrigin (KindCoOrigin { kco_visible = vis }) = vis
@@ -203,6 +204,7 @@ isGivenOrigin (TypeEqOrigin {}) = False
 isGivenOrigin (KindEqOrigin {}) = False
 isGivenOrigin PatSigOrigin = False
 isGivenOrigin PatOrigin = False
+isGivenOrigin (UsageEnvironmentOf {}) = False
 
 lexprCtOrigin :: LCsExpr Rn -> CtOrigin
 lexprCtOrigin (L _ e) = exprCtOrigin e
@@ -235,6 +237,7 @@ pprCtO (OccurrenceOf name) = hsep [text "a use of", quotes (ppr name)]
 pprCtO (GivenOrigin {}) = text "a given constraint"
 pprCtO TupleTyOrigin = text "a tuple type"
 pprCtO PatSigOrigin = text "a pattern type signature"
+pprCtO (UsageEnvironmentOf x) = hsep [ text "usage of", quotes (ppr x) ]
 pprCtO _ = panic "pprCtO"
 
 {- *******************************************************************
