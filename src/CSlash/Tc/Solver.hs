@@ -183,12 +183,33 @@ report_unsolved_kicos skol_info_anon skol_vs tclvl wanted
 simplifyTopWanteds :: WantedTyConstraints -> TcS WantedTyConstraints
 simplifyTopWanteds wanteds = do
   wc_first_go <- nestTcS (solveWanteds wanteds)
-  panic "unfinished"
+  tryUnsatisfiableGivens wc_first_go
 
 simplifyTopKiWanteds :: WantedKiConstraints -> TcS WantedKiConstraints
 simplifyTopKiWanteds wanteds = do
   wc_first_go <- nestKiTcS (solveKiWanteds wanteds)
   useUnsatisfiableGivens wc_first_go
+
+-- We never 'put True' since we don't have 'Unsatisfiable' class constraints.
+-- Probably can remove these funcs.
+tryUnsatisfiableGivens:: WantedTyConstraints -> TcS WantedTyConstraints
+tryUnsatisfiableGivens wc = do
+  (final_wc, did_work) <- (`runStateT` False) $ go_wc wc
+  if did_work
+    then nestTcS (solveWanteds final_wc)
+    else return final_wc
+  where
+    go_wc (WTC { wtc_simple = wtds, wtc_impl = impls, wtc_wkc = wkc })  = do
+      final_wkc <- lift $ useUnsatisfiableGivens wkc
+      impls' <- mapMaybeBagM go_impl impls
+      return $ WTC { wtc_simple = wtds, wtc_impl = impls', wtc_wkc = final_wkc }
+
+    go_impl impl
+      | isSolvedStatus (tic_status impl)
+      = return $ Just impl
+      | otherwise
+      = do wcs' <- go_wc (tic_wanted impl)
+           lift $ setTyImplicationStatus $ impl { tic_wanted = wcs' }
 
 useUnsatisfiableGivens :: WantedKiConstraints -> TcS WantedKiConstraints
 useUnsatisfiableGivens wc = do
@@ -208,34 +229,34 @@ useUnsatisfiableGivens wc = do
       = do wcs' <- go_wc (kic_wanted impl)
            lift $ setKiImplicationStatus $ impl { kic_wanted = wcs' }    
 
-solveKiImplicationUsingUnsatGiven
-  :: (KiCoVar AnyKiVar, AnyMonoKind)
-  -> KiImplication
-  -> TcS (Maybe KiImplication)
-solveKiImplicationUsingUnsatGiven unsat_given@(given_ev, _)
-  impl@(KiImplic { kic_wanted = wtd
-                 , kic_tclvl = tclvl
-                 , kic_binds = ev_binds_var
-                 , kic_need_inner = inner })
-  = do wcs <- nestKiImplicTcS ev_binds_var tclvl $ go_wc wtd
-       setKiImplicationStatus $ impl { kic_wanted = wcs
-                                   , kic_need_inner = inner `extendVarSet` given_ev }
-  where
-    go_wc :: WantedKiConstraints -> TcS WantedKiConstraints
-    go_wc wc@(WKC { wkc_simple = wtds, wkc_impl = impls }) = do
-      mapBagM_ go_simple wtds
-      impls <- mapMaybeBagM (solveKiImplicationUsingUnsatGiven unsat_given) impls
-      return $ wc { wkc_simple = emptyBag, wkc_impl = impls }
+-- solveKiImplicationUsingUnsatGiven
+--   :: (KiCoVar AnyKiVar, AnyMonoKind)
+--   -> KiImplication
+--   -> TcS (Maybe KiImplication)
+-- solveKiImplicationUsingUnsatGiven unsat_given@(given_ev, _)
+--   impl@(KiImplic { kic_wanted = wtd
+--                  , kic_tclvl = tclvl
+--                  , kic_binds = ev_binds_var
+--                  , kic_need_inner = inner })
+--   = do wcs <- nestKiImplicTcS ev_binds_var tclvl $ go_wc wtd
+--        setKiImplicationStatus $ impl { kic_wanted = wcs
+--                                    , kic_need_inner = inner `extendVarSet` given_ev }
+--   where
+--     go_wc :: WantedKiConstraints -> TcS WantedKiConstraints
+--     go_wc wc@(WKC { wkc_simple = wtds, wkc_impl = impls }) = do
+--       mapBagM_ go_simple wtds
+--       impls <- mapMaybeBagM (solveKiImplicationUsingUnsatGiven unsat_given) impls
+--       return $ wc { wkc_simple = emptyBag, wkc_impl = impls }
 
-    go_simple :: KiCt -> TcS ()
-    go_simple ct = case ctKiEvidence ct of
-      CtKiWanted { ctkev_pred = pki, ctkev_dest = dst }
-        -> do ev_type <- unsatisfiableKiEvType unsat_given pki
-              panic "setWantedKiEvType dst True ev_type"
-      _ -> return ()
+--     go_simple :: KiCt -> TcS ()
+--     go_simple ct = case ctKiEvidence ct of
+--       CtKiWanted { ctkev_pred = pki, ctkev_dest = dst }
+--         -> do ev_type <- unsatisfiableKiEvType unsat_given pki
+--               panic "setWantedKiEvType dst True ev_type"
+--       _ -> return ()
 
-unsatisfiableKiEvType :: (KiCoVar AnyKiVar, AnyMonoKind) -> AnyMonoKind -> TcS AnyType
-unsatisfiableKiEvType (unsat_ev, given_msg) wtd_ki = panic "unsatisfiableKiEvType"
+-- unsatisfiableKiEvType :: (KiCoVar AnyKiVar, AnyMonoKind) -> AnyMonoKind -> TcS AnyType
+-- unsatisfiableKiEvType (unsat_ev, given_msg) wtd_ki = panic "unsatisfiableKiEvType"
 
 {- *********************************************************************
 *                                                                      *
