@@ -504,9 +504,9 @@ setKiImplicationStatus implic@(KiImplic { kic_status = status
        implic@(KiImplic { kic_need_inner = need_inner
                         , kic_need_outer = need_outer }) <- neededKiCoVars implic
 
-       bad_telescope <- checkBadTelescope implic
+       bad_telescope <- checkBadKiTelescope implic
 
-       let warn_givens = findUnnecessaryGivens info need_inner givens
+       let warn_givens = findUnnecessaryKiGivens info need_inner givens
 
            discard_entire_implication
              = null warn_givens
@@ -545,14 +545,91 @@ setKiImplicationStatus implic@(KiImplic { kic_status = status
       = True
 
 setTyImplicationStatus :: TyImplication -> TcS (Maybe TyImplication)
-setTyImplicationStatus = panic "setTyImplicationStatus"
+setTyImplicationStatus implic@(TyImplic { tic_status = old_status
+                                        , tic_info = info
+                                        , tic_wanted = wc
+                                        , tic_given = givens })
+  | assertPpr (not (isSolvedStatus old_status)) (ppr info)
+    $ not (isSolvedWC pruned_wc)
+  = do traceTcS "setTyImplicationStatus(not-all-solved) {" (ppr implic)
+       implic <- neededTyCoVars implic
 
-findUnnecessaryGivens
+       let new_status | insolubleWC pruned_wc = IC_Insoluble
+                      | otherwise = IC_Unsolved
+           new_implic = implic { tic_status = new_status
+                               , tic_wanted = pruned_wc }
+
+       traceTcS "setTyImplicationStatus(not-all-solved) }" (ppr new_implic)
+
+       return $ Just new_implic
+
+  | otherwise
+  = do traceTcS "setTyImplicationStatus(all-solved) {" (ppr implic)
+
+       implic@(TyImplic { tic_need_inner = need_inner
+                        , tic_need_outer = need_outer }) <- neededTyCoVars implic
+
+       bad_telescope <- checkBadTyTelescope implic
+
+       let warn_givens = findUnnecessaryTyGivens info need_inner givens
+
+           discard_entire_implication
+             = null warn_givens
+               && not bad_telescope
+               && isEmptyWC pruned_wc
+               && isEmptyVarSet need_outer
+
+           final_status
+             | bad_telescope = IC_BadTelescope
+             | otherwise = IC_Solved { ics_dead = warn_givens }
+           final_implic = implic { tic_status = final_status
+                                 , tic_wanted = pruned_wc }
+
+       traceTcS "setTyImplicationStatus(all-solved) }"
+         $ vcat [ text "discard:" <+> ppr discard_entire_implication
+                , text "new_implic:" <+> ppr final_implic ]
+
+       return $ if discard_entire_implication
+                then Nothing
+                else Just final_implic
+
+  where
+    WTC { wtc_simple = simples
+        , wtc_impl = implics
+        , wtc_wkc = wkc } = wc
+
+    WKC { wkc_simple = ki_simples
+        , wkc_impl = ki_implics } = wkc
+
+    pruned_ki_implics = filterBag keep_me_ki ki_implics
+    pruned_implics = filterBag keep_me implics
+    pruned_wc = WTC { wtc_simple = simples
+                    , wtc_impl = pruned_implics
+                    , wtc_wkc = WKC { wkc_simple = ki_simples
+                                    , wkc_impl = pruned_ki_implics } }
+
+    keep_me ic
+      | IC_Solved { ics_dead = dead_givens } <- tic_status ic
+      , null dead_givens
+      , isEmptyBag (wtc_impl (tic_wanted ic))
+      = False
+      | otherwise
+      = True
+
+    keep_me_ki ic
+      | IC_Solved dead_givens <- kic_status ic
+      , null dead_givens
+      , isEmptyBag (wkc_impl (kic_wanted ic))
+      = False
+      | otherwise
+      = True
+
+findUnnecessaryKiGivens
   :: SkolemInfoAnon
   -> MkVarSet (KiCoVar AnyKiVar)
   -> [KiCoVar AnyKiVar]
   -> [KiCoVar AnyKiVar]
-findUnnecessaryGivens info need_inner givens
+findUnnecessaryKiGivens info need_inner givens
   | not (warnRedundantGivens info)
   = []
   | not (null unused_givens)
@@ -565,15 +642,40 @@ findUnnecessaryGivens info need_inner givens
     is_used :: KiCoVar AnyKiVar -> Bool
     is_used given = given `elemVarSet` need_inner
 
-    minimal_givens = mkMinimalBy kiCoVarPred givens
+    minimal_givens = mkMinimalBy_Ki kiCoVarPred givens
     is_minimal = (`elemVarSet` mkVarSet minimal_givens)
 
     redundant_givens = filterOut is_minimal givens
 
-checkBadTelescope :: KiImplication -> TcS Bool
-checkBadTelescope (KiImplic { kic_info = info, kic_skols = skols })
+findUnnecessaryTyGivens
+  :: SkolemInfoAnon
+  -> MkVarSet (TyCoVar (AnyTyVar AnyKiVar) AnyKiVar)
+  -> [TyCoVar (AnyTyVar AnyKiVar) AnyKiVar]
+  -> [TyCoVar (AnyTyVar AnyKiVar) AnyKiVar]
+findUnnecessaryTyGivens info need_inner givens
+  | not (warnRedundantGivens info)
+  = []
+  | not (null unused_givens)
+  = unused_givens
+  | otherwise
+  = redundant_givens
+  where
+    unused_givens = filterOut is_used givens
+
+    is_used :: TyCoVar (AnyTyVar AnyKiVar) AnyKiVar -> Bool
+    is_used given = given `elemVarSet` need_inner
+
+    minimal_givens = mkMinimalBy_Ty tyCoVarPred givens
+    is_minimal = (`elemVarSet` mkVarSet minimal_givens)
+
+    redundant_givens = filterOut is_minimal givens      
+
+checkBadKiTelescope :: KiImplication -> TcS Bool
+checkBadKiTelescope (KiImplic { kic_info = info, kic_skols = skols })
   = return False
-      
+
+checkBadTyTelescope :: TyImplication -> TcS Bool
+checkBadTyTelescope _ = return False
 
 warnRedundantGivens :: SkolemInfoAnon -> Bool
 warnRedundantGivens (SigSkol ctxt _ _) = case ctxt of
@@ -581,6 +683,31 @@ warnRedundantGivens (SigSkol ctxt _ _) = case ctxt of
   ExprSigCtxt rrc -> reportRedundantConstraints rrc
   _ -> False
 warnRedundantGivens _ = False
+
+-- This might need to look into WKC.
+-- Would require tic_need_inner/outer to include KiCoVars
+neededTyCoVars :: TyImplication -> TcS TyImplication
+neededTyCoVars implic@(TyImplic { tic_given = givens
+                                , tic_binds = tyco_binds_var
+                                , tic_wanted = WTC { wtc_impl = implics }
+                                , tic_need_inner = old_needs })
+  = do tcvs <- TcS.getTcTyCoVars tyco_binds_var
+
+       let seeds1 = foldr add_implic_seeds old_needs implics
+           need_inner = seeds1 `unionVarSet` tcvs
+           need_outer = need_inner `delVarSetList` givens
+
+       traceTcS "neededTyCoVars"
+         $ vcat [ text "old_needs:" <+> ppr old_needs
+                , text "seeds1:" <+> ppr seeds1
+                , text "tcvs:" <+> ppr tcvs
+                , text "need_inner:" <+> ppr need_inner
+                , text "need_outer:" <+> ppr need_outer ]
+
+       return $ implic { tic_need_inner = need_inner
+                       , tic_need_outer = need_outer }
+  where
+    add_implic_seeds (TyImplic { tic_need_outer = needs }) acc = needs `unionVarSet` acc
 
 neededKiCoVars :: KiImplication -> TcS KiImplication
 neededKiCoVars implic@(KiImplic { kic_given = givens

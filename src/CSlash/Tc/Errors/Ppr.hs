@@ -584,7 +584,7 @@ pp_givens givens = case givens of
                                : map (ppr_given (text "or from:")) gs
   where
     ppr_given herald implic@(KiImplic { kic_given = gs, kic_info = skol_info })
-      = hang (herald <+> pprKiCoVarTheta (mkMinimalBy kiCoVarPred gs))
+      = hang (herald <+> pprKiCoVarTheta (mkMinimalBy_Ki kiCoVarPred gs))
         2 (sep [ text "bound by" <+> ppr skol_info
                , text "at" <+> ppr (getCtLocEnvLoc (kic_env implic)) ])
 

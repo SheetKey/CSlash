@@ -10,6 +10,7 @@ module CSlash.Tc.Utils.TcType
 import Prelude hiding ((<>))
 
 import CSlash.Core.Type
+import CSlash.Core.Type.Compare
 import CSlash.Core.Type.Rep
 import CSlash.Core.Type.FVs
 import CSlash.Core.Type.Subst
@@ -433,6 +434,43 @@ isVisiblePiKiBndr (Right (FKF_K_K, _, _)) = True
 
 {- *********************************************************************
 *                                                                      *
+          Predicate types
+*                                                                      *
+********************************************************************* -}
+
+tyCoVarPred :: TyCoVar (AnyTyVar AnyKiVar) AnyKiVar -> AnyPredType
+tyCoVarPred = varType
+
+mkMinimalBy_Ty :: forall a. (a -> AnyPredType) -> [a] -> [a]
+mkMinimalBy_Ty get_pred xs = go preds_with_eqs []
+  where
+    preds_with_eqs :: [(AnyPredType, [AnyPredType], a)]
+    preds_with_eqs = [ (pred, pred : eq_extras pred, x)
+                     | x <- xs
+                     , let pred = get_pred x ]
+
+    eq_extras pred = case classifyPredType pred of
+                       TyEqPred t1 t2 -> [mkTyEqPred t2 t1]
+                       _ -> []
+
+    go :: [(AnyPredType, [AnyPredType], a)] -> [(AnyPredType, [AnyPredType], a)] -> [a]
+    go [] min_preds = reverse (map thdOf3 min_preds)
+    go (work_item@(p, _, _) : work_list) min_preds
+      | TyEqPred t1 t2 <- classifyPredType p
+      , t1 `tcEqType` t2
+      = go work_list min_preds
+
+      | p `in_cloud` work_list || p `in_cloud` min_preds
+      = go work_list min_preds
+
+      | otherwise
+      = go work_list (work_item : min_preds)
+
+    in_cloud :: AnyPredType -> [(AnyPredType, [AnyPredType], a)] -> Bool
+    in_cloud p ps = or [ p `tcEqType` p' | (_, eqs, _) <- ps, p' <- eqs ]
+
+{- *********************************************************************
+*                                                                      *
           Predicate kinds
 *                                                                      *
 ********************************************************************* -}
@@ -445,11 +483,8 @@ isKiVarKcPred ki = case getPredKis_maybe ki of
 kiCoVarPred :: KiCoVar AnyKiVar -> AnyPredKind
 kiCoVarPred = varKind
 
-tyCoVarPred :: TyCoVar (AnyTyVar AnyKiVar) AnyKiVar -> AnyPredType
-tyCoVarPred = varType
-
-mkMinimalBy :: forall a. (a -> AnyPredKind) -> [a] -> [a]
-mkMinimalBy get_pred xs = go preds_with_cox []
+mkMinimalBy_Ki :: forall a. (a -> AnyPredKind) -> [a] -> [a]
+mkMinimalBy_Ki get_pred xs = go preds_with_cox []
   where
     preds_with_cox :: [(AnyPredKind, [AnyPredKind], a)]
     preds_with_cox = [ (pred, pred : co_extras pred, x)
