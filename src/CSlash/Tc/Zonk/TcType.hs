@@ -423,8 +423,11 @@ zonkSkolemInfo (SkolemInfo u sk) = SkolemInfo u <$> zonkSkolemInfoAnon sk
 
 zonkSkolemInfoAnon :: SkolemInfoAnon -> ZonkM SkolemInfoAnon
 zonkSkolemInfoAnon (SigSkol cx ty tv_prs) = do
-  ty' <- panic "zonkTcType ty"
+  ty' <- zonkTcType ty
   return $ SigSkol cx ty' tv_prs
+zonkSkolemInfoAnon (SigSkolKi cx ty kv_prs) = do
+  ty' <- zonkTcType ty
+  return $ SigSkolKi cx ty' kv_prs
 zonkSkolemInfoAnon (InferSkol ntys) = do
   ntys' <- panic "mapM do_one ntys"
   return $ InferSkol ntys'
