@@ -339,7 +339,22 @@ checkKiCoercionHole kcv kco
 ********************************************************************* -}
 
 zonkTyImplication :: TyImplication -> ZonkM TyImplication
-zonkTyImplication = panic "zonkTyImplication"
+zonkTyImplication implic@(TyImplic { tic_skols = skols
+                                   , tic_given = given
+                                   , tic_wanted = wanted
+                                   , tic_info = info })
+  = do skols' <- mapM zonkTyVarKind skols
+       given' <- mapM zonkTyCoVar given
+       info' <- zonkSkolemInfoAnon info
+       wanted' <- zonkWTCRec wanted
+       return (implic { tic_skols = skols'
+                      , tic_given = given'
+                      , tic_wanted = wanted'
+                      , tic_info = info' })
+
+zonkTyCoVar
+  :: TyCoVar (AnyTyVar AnyKiVar) AnyKiVar -> ZonkM (TyCoVar (AnyTyVar AnyKiVar) AnyKiVar)
+zonkTyCoVar var = updateIdTypeM zonkTcType var
 
 zonkImplication :: KiImplication -> ZonkM KiImplication
 zonkImplication implic@(KiImplic { kic_skols = skols
@@ -367,7 +382,7 @@ zonkWTCRec :: WantedTyConstraints -> ZonkM WantedTyConstraints
 zonkWTCRec (WTC { wtc_simple = simple, wtc_impl = implic, wtc_wkc = wkc })
   = do simple' <- zonkTySimples simple
        implic' <- mapBagM zonkTyImplication implic
-       wkc' <- zonkWKC wkc
+       wkc' <- zonkWKCRec wkc
        return (WTC { wtc_simple = simple', wtc_impl = implic, wtc_wkc = wkc' })
 
 zonkWKCRec :: WantedKiConstraints -> ZonkM WantedKiConstraints

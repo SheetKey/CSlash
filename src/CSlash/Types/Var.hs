@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE TypeFamilyDependencies #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE StandaloneDeriving #-}
@@ -61,6 +62,7 @@ module CSlash.Types.Var
   , mkGlobalVar, mkLocalVar
   , idInfo, idDetails
   , isGlobalId, isExportedId
+  , updateIdTypeM
 
     {-* ForAllFlag *-}
   , ForAllFlag(..)
@@ -804,6 +806,12 @@ isExportedId :: Id tv kv -> Bool
 isExportedId (Id (Id' { _idScope = GlobalId })) = True
 isExportedId (Id (Id' { _idScope = LocalId Exported })) = True
 isExportedId _ = False
+
+updateIdTypeM :: Monad m => (Type tv kv -> m (Type tv kv)) -> Id tv kv -> m (Id tv kv)
+updateIdTypeM f (Id id@(Id' { _varType = ty })) = do
+  !ty' <- f ty
+  return $ Id $ id { _varType = ty' }
+updateIdTypeM _ _ = panic "updateIdTypeM"
 
 {- *********************************************************************
 *                                                                      *
