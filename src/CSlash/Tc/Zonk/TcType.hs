@@ -338,6 +338,9 @@ checkKiCoercionHole kcv kco
 *                                                                      *
 ********************************************************************* -}
 
+zonkTyImplication :: TyImplication -> ZonkM TyImplication
+zonkTyImplication = panic "zonkTyImplication"
+
 zonkImplication :: KiImplication -> ZonkM KiImplication
 zonkImplication implic@(KiImplic { kic_skols = skols
                                , kic_given = given
@@ -345,7 +348,7 @@ zonkImplication implic@(KiImplic { kic_skols = skols
                                , kic_info = info }) = do
   given' <- mapM zonkKiCoVar given
   info' <- zonkSkolemInfoAnon info
-  wanted' <- zonkWCRec wanted
+  wanted' <- zonkWKCRec wanted
   return $ implic { kic_skols = skols
                   , kic_given = given'
                   , kic_wanted = wanted'
@@ -354,14 +357,30 @@ zonkImplication implic@(KiImplic { kic_skols = skols
 zonkKiCoVar :: KiCoVar AnyKiVar -> ZonkM (KiCoVar AnyKiVar)
 zonkKiCoVar var = updateVarKindM zonkTcMonoKind var
 
-zonkWC :: WantedKiConstraints -> ZonkM WantedKiConstraints
-zonkWC wc = zonkWCRec wc
+zonkWTC :: WantedTyConstraints -> ZonkM WantedTyConstraints
+zonkWTC wc = zonkWTCRec wc
 
-zonkWCRec :: WantedKiConstraints -> ZonkM WantedKiConstraints
-zonkWCRec (WKC { wkc_simple = simple, wkc_impl = implic }) = do
+zonkWKC :: WantedKiConstraints -> ZonkM WantedKiConstraints
+zonkWKC wc = zonkWKCRec wc
+
+zonkWTCRec :: WantedTyConstraints -> ZonkM WantedTyConstraints
+zonkWTCRec (WTC { wtc_simple = simple, wtc_impl = implic, wtc_wkc = wkc })
+  = do simple' <- zonkTySimples simple
+       implic' <- mapBagM zonkTyImplication implic
+       wkc' <- zonkWKC wkc
+       return (WTC { wtc_simple = simple', wtc_impl = implic, wtc_wkc = wkc' })
+
+zonkWKCRec :: WantedKiConstraints -> ZonkM WantedKiConstraints
+zonkWKCRec (WKC { wkc_simple = simple, wkc_impl = implic }) = do
   simple' <- zonkSimples simple
   implic' <- mapBagM zonkImplication implic
   return $ WKC { wkc_simple = simple', wkc_impl = implic' }
+
+zonkTySimples :: TyCts -> ZonkM TyCts
+zonkTySimples cts = do
+  cts' <- mapBagM (panic "zonkCt") cts -- UNCOMMENT NEXT LINE
+  -- traceZonk "zonkSimples done:" (ppr cts')
+  return cts'
 
 zonkSimples :: KiCts -> ZonkM KiCts
 zonkSimples cts = do
