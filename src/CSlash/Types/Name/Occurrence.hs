@@ -414,8 +414,8 @@ initTidyOccEnv = foldl' add emptyUFM
   where
     add env (OccName _ fs) = addToUFM env fs 1
 
-delTidyOccEnvList :: TidyOccEnv -> [FastString] -> TidyOccEnv
-delTidyOccEnvList = delListFromUFM
+delTidyOccEnvList :: TidyOccEnv -> [OccName] -> TidyOccEnv
+delTidyOccEnvList env occs = env `delListFromUFM` map occNameFS occs
 
 avoidClashesOccEnv :: TidyOccEnv -> [OccName] -> TidyOccEnv
 avoidClashesOccEnv env occs = go env emptyUFM occs

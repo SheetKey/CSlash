@@ -85,7 +85,7 @@ simplifyTop wanteds = do
   final_wc <- runTcS $ simplifyTopWanteds wanteds
   traceTc "End simplifyTop }" empty
 
-  panic "reportUnsolved final_wc"
+  reportUnsolved final_wc
 
 pushLevelAndSolveKindCoercions :: SkolemInfoAnon -> [TcKiVar] -> TcM a -> TcM a
 pushLevelAndSolveKindCoercions skol_info_anon tcbs thing_inside = do
@@ -120,7 +120,7 @@ solveKindCoercions callsite thing_inside = do
 simplifyAndEmitFlatConstraints :: WantedKiConstraints -> TcM ()
 simplifyAndEmitFlatConstraints wanted = do
   wanted <- runTcSKindCoercions (solveKiWanteds wanted)
-  wanted <- TcM.liftZonkM $ TcM.zonkWC wanted
+  wanted <- TcM.liftZonkM $ TcM.zonkWKC wanted
 
   traceTc "emitFlatConstraints {" (ppr wanted)
   case floatKindEqualities wanted of

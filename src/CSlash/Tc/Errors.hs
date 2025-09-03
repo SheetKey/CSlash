@@ -82,6 +82,24 @@ import qualified Data.Semigroup as S
 *                                                                      *
 ********************************************************************* -}
 
+reportUnsolved :: WantedTyConstraints -> TcM ()
+reportUnsolved wanted = do
+  tbinds_var <- newTcTyCoBinds
+  kbinds_var <- newTcKiCoBinds
+  defer_errors <- goptM Opt_DeferTypeErrors
+  let type_errors | not defer_errors = ErrorWithoutFlag
+                  | otherwise = panic "reportUnsolved DeferTypeErrors"
+
+  defer_holes <- goptM Opt_DeferTypedHoles
+  let expr_holes | not defer_holes = ErrorWithoutFlag
+                 | otherwise = panic "reportUnsolved DeferTypedHoles"
+
+  defer_out_of_scope <- goptM Opt_DeferOutOfScopeVariables
+  let out_of_scope_holes | not defer_out_of_scope = ErrorWithoutFlag
+                         | otherwise = panic "reportUnsolved DeferOutOfScopeVariables"
+
+  report_unsolved type_errors expr_holes out_of_scope_holes tbinds_var kbinds_var wanted
+
 reportUnsolvedKi :: WantedKiConstraints -> TcM ()
 reportUnsolvedKi wanted = do
   binds_var <- newTcKiCoBinds
@@ -97,21 +115,68 @@ reportUnsolvedKi wanted = do
   let out_of_scope_holes | not defer_out_of_scope = ErrorWithoutFlag
                          | otherwise = panic "reportUnsolvedKi DeferOutOfScopeVariables"
 
-  report_unsolved type_errors expr_holes out_of_scope_holes binds_var wanted
+  report_unsolved_ki type_errors expr_holes out_of_scope_holes binds_var wanted
 
 reportAllUnsolved :: WantedKiConstraints -> TcM ()
 reportAllUnsolved wanted = do
   co_binds <- newTcKiCoBinds
-  report_unsolved ErrorWithoutFlag ErrorWithoutFlag ErrorWithoutFlag co_binds wanted
+  report_unsolved_ki ErrorWithoutFlag ErrorWithoutFlag ErrorWithoutFlag co_binds wanted
 
 report_unsolved
+  :: DiagnosticReason
+  -> DiagnosticReason
+  -> DiagnosticReason
+  -> TyCoBindsVar
+  -> KiCoBindsVar
+  -> WantedTyConstraints
+  -> TcM ()
+report_unsolved type_errors expr_holes out_of_scope_holes tbinds_var kbinds_var wanted
+  | isEmptyWC wanted
+  = return ()
+  | otherwise
+  = do traceTc "reportUnsolved {"
+         $ vcat [ text "type errors:" <+> ppr type_errors
+                , text "expr holes:" <+> ppr expr_holes
+                , text "scope holes:" <+> ppr out_of_scope_holes ]
+       traceTc "reportUnsolved (before zonking and tidying)" (ppr wanted)
+
+       wanted <- liftZonkM $ zonkWTC wanted
+
+       let bound_occs = boundOccNamesOfWTC wanted
+           freeVars = varsOfWTCList wanted 
+           tidy_env = tidyAvoiding bound_occs tidyFreeTyKiVars freeVars
+
+       traceTc "reportUnsolved (after zonking):"
+         $ vcat [ text "Free vars:" <+> ppr freeVars
+                , text "Bound occs:" <+> ppr bound_occs
+                , text "Tidy env:" <+> ppr tidy_env
+                , text "Wanted:" <+> ppr wanted ]
+
+       warn_redundant <- woptM Opt_WarnRedundantConstraints
+       exp_syns <- goptM Opt_PrintExpandedSynonyms
+       let err_ctxt = CEC { cec_tencl = []
+                          , cec_kencl = []
+                          , cec_tidy = tidy_env
+                          , cec_defer_type_errors = type_errors
+                          , cec_expr_holes = expr_holes
+                          , cec_out_of_scope_holes = out_of_scope_holes
+                          , cec_suppress = insolubleWC wanted
+                          , cec_warn_redundant = warn_redundant
+                          , cec_expand_syns = exp_syns
+                          , cec_ty_binds = tbinds_var
+                          , cec_ki_binds = kbinds_var }
+       tc_lvl <- getTcLevel
+       reportWanteds err_ctxt tc_lvl wanted
+       traceTc "reportUnsolved }" empty
+
+report_unsolved_ki
   :: DiagnosticReason
   -> DiagnosticReason
   -> DiagnosticReason
   -> KiCoBindsVar
   -> WantedKiConstraints
   -> TcM ()
-report_unsolved type_errors expr_holes out_of_scope_holes binds_var wanted
+report_unsolved_ki type_errors expr_holes out_of_scope_holes binds_var wanted
   | isEmptyWC wanted
   = return ()
   | otherwise
@@ -121,10 +186,12 @@ report_unsolved type_errors expr_holes out_of_scope_holes binds_var wanted
                 , text "scope holes:" <+> ppr out_of_scope_holes ]
        traceTc "reportUnsolvedKi (before zonking and tidying)" (ppr wanted)
 
-       wanted <- liftZonkM $ zonkWC wanted
+       wanted <- liftZonkM $ zonkWKC wanted
        
-       let free_kvs = snd $ varsOfWKCList wanted
-           tidy_env = tidyFreeKiVars (emptyTidyEnv @(AnyTyVar AnyKiVar)) free_kvs
+       let bound_occs = boundOccNamesOfWKC wanted
+           free_kvs = varsOfWKCList wanted
+           tidy_env = tidyAvoiding bound_occs
+                      (tidyFreeKiVars @AnyKiVar @(AnyTyVar AnyKiVar)) free_kvs
 
        traceTc "reportUnsolvedKi (after zonking):"
          $ vcat [ text "Free kivars:" <+> ppr free_kvs
@@ -132,16 +199,19 @@ report_unsolved type_errors expr_holes out_of_scope_holes binds_var wanted
                 , text "Wanted:" <+> ppr wanted ]
 
        warn_redundant <- woptM Opt_WarnRedundantConstraints
-       let err_ctxt = CEC { cec_encl = []
+       let err_ctxt = CEC { cec_tencl = panic "report_unsolved_ki cec_tencl"
+                          , cec_kencl = []
                           , cec_tidy = tidy_env
                           , cec_defer_type_errors = type_errors
                           , cec_expr_holes = expr_holes
                           , cec_out_of_scope_holes = out_of_scope_holes
                           , cec_suppress = insolubleWC wanted
                           , cec_warn_redundant = warn_redundant
-                          , cec_binds = binds_var }
+                          , cec_expand_syns = panic "report_unsolved_ki cec_expand_syns"
+                          , cec_ty_binds = panic "report_unsolved_ki cec_ty_binds"
+                          , cec_ki_binds = binds_var }
        tc_lvl <- getTcLevel
-       reportWanteds err_ctxt tc_lvl wanted
+       reportKiWanteds err_ctxt tc_lvl wanted
        traceTc "reportUnsolvedKi }" empty
 
 --------------------------------------------
@@ -162,8 +232,8 @@ deferringAnyBindings (CEC { cec_defer_type_errors = ErrorWithoutFlag
                           , cec_out_of_scope_holes = ErrorWithoutFlag }) = False
 deferringAnyBindings _ = True
 
-reportImplic :: SolverReportErrCtxt -> KiImplication -> TcM ()
-reportImplic ctxt implic@(KiImplic { kic_skols = kvs
+reportKiImpic :: SolverReportErrCtxt -> KiImplication -> TcM ()
+reportKiImpic ctxt implic@(KiImplic { kic_skols = kvs
                                    , kic_given = given
                                    , kic_wanted = wanted
                                    , kic_binds = evb
@@ -171,14 +241,14 @@ reportImplic ctxt implic@(KiImplic { kic_skols = kvs
                                    , kic_info = info
                                    , kic_env = ct_loc_env
                                    , kic_tclvl = tc_lvl }) = do
-  traceTc "reportImplic"
+  traceTc "reportKiImpic"
     $ vcat [ text "tidy env:" <+> ppr (cec_tidy ctxt)
            , text "skols:" <+> ppr kvs
            , text "tidy skols:" <+> ppr kvs' ]
 
   when bad_telescope $ panic "reportBadTelescope ctxt ct_loc_env info kvs"
 
-  reportWanteds ctxt' tc_lvl wanted
+  reportKiWanteds ctxt' tc_lvl wanted
 
   warnRedundantConstraints ctxt' ct_loc_env info' dead_givens
   where
@@ -193,9 +263,9 @@ reportImplic ctxt implic@(KiImplic { kic_skols = kvs
                      , kic_info = info' }
 
     ctxt' = ctxt { cec_tidy = env1
-                 , cec_encl = implic' : cec_encl ctxt
+                 , cec_kencl = implic' : cec_kencl ctxt
                  , cec_suppress = insoluble || cec_suppress ctxt
-                 , cec_binds = evb  }
+                 , cec_ki_binds = evb  }
 
     dead_givens = case status of
                     IC_Solved dead -> dead
@@ -243,12 +313,23 @@ mkErrorItem ct = do
 unsuppressErrorItem :: ErrorItem -> ErrorItem
 unsuppressErrorItem ei = ei { ei_suppress = False }
 
-reportWanteds :: SolverReportErrCtxt -> TcLevel -> WantedKiConstraints -> TcM ()
-reportWanteds ctxt tc_lvl wc@(WKC { wkc_simple = simples, wkc_impl = implics })
-  | isEmptyWC wc = traceTc "reportWanteds empty WC" empty
+reportWanteds :: SolverReportErrCtxt -> TcLevel -> WantedTyConstraints -> TcM ()
+reportWanteds ctxt tc_lvl wc@(WTC { wtc_simple = simples, wtc_impl = implics, wtc_wkc = wkc })
+  | isEmptyWC wc = traceTc "reportWanteds empty WTC" empty
+  | otherwise
+  = do if isEmptyWC wkc
+         then return ()
+         else reportKiWanteds ctxt tc_lvl wkc
+       if isEmptyBag simples && isEmptyBag implics
+         then return ()
+         else panic "reportWanteds"
+
+reportKiWanteds :: SolverReportErrCtxt -> TcLevel -> WantedKiConstraints -> TcM ()
+reportKiWanteds ctxt tc_lvl wc@(WKC { wkc_simple = simples, wkc_impl = implics })
+  | isEmptyWC wc = traceTc "reportKiWanteds empty WC" empty
   | otherwise
   = do tidy_items1 <- mapMaybeM mkErrorItem tidy_cts
-       traceTc "reportWanteds 1"
+       traceTc "reportKiWanteds 1"
          $ vcat [ text "Simples =" <+> ppr simples
                 , text "Suppress =" <+> ppr (cec_suppress ctxt)
                 , text "tidy_cts =" <+> ppr tidy_cts
@@ -267,7 +348,7 @@ reportWanteds ctxt tc_lvl wc@(WKC { wkc_simple = simples, wkc_impl = implics })
            no_out_of_scope = True
            ctxt_for_insols = ctxt { cec_suppress = not no_out_of_scope }
 
-       traceTc "reportWanteds suppressed:" (ppr suppressed_items)
+       traceTc "reportKiWanteds suppressed:" (ppr suppressed_items)
        (ctxt1, items1) <- tryReporters ctxt_for_insols report1 items0
 
        let ctxt2 = ctxt1 { cec_suppress = cec_suppress ctxt || cec_suppress ctxt1 }
@@ -277,7 +358,7 @@ reportWanteds ctxt tc_lvl wc@(WKC { wkc_simple = simples, wkc_impl = implics })
                \have not been reported to the user:"
            $$ ppr leftovers)
 
-       mapBagM_ (reportImplic ctxt2) implics
+       mapBagM_ (reportKiImpic ctxt2) implics
 
        -- whenNoErrs $ do (_, more_leftovers) <- tryReporters ctxt3 report3 suppressed_items
        --                 massertPpr (null more_leftovers) (ppr more_leftovers)
@@ -373,7 +454,7 @@ zonkTidyTcLclEnvs tidy_env lcls = foldM go (tidy_env, emptyNameEnv) (concatMap c
 
 ignoreErrorReporter :: Reporter
 ignoreErrorReporter ctxt items = do
-  traceTc "mkGivenErrorReporter no" (ppr items $$ ppr (cec_encl ctxt))
+  traceTc "mkGivenErrorReporter no" (ppr items $$ ppr (cec_tencl ctxt) $$ ppr (cec_kencl ctxt))
   return ()
 
 mkGroupReporter :: (SolverReportErrCtxt -> NonEmpty ErrorItem -> TcM SolverReport) -> Reporter
@@ -608,18 +689,18 @@ mkKiVarEqErr' ctxt item kv1 ki2
                               , cannotUnifyReason = occurs_err }
                in return main_msg
 
-          | (implic:_) <- cec_encl ctxt
+          | (implic:_) <- cec_kencl ctxt
           , KiImplic { kic_skols = skols } <- implic
           , panic "kv1 `elem` skols"
             ->  do panic "mkKiVarEqErr'/skols in implic"
           
-          | (implic:_) <- cec_encl ctxt
+          | (implic:_) <- cec_kencl ctxt
           , KiImplic { kic_skols = skols } <- implic
           , let esc_skols = panic "filter (`elemVarSet` (varsOfMonoKind ki2)) skols"
           , not (panic "null esc_skols")
             ->  panic "mkKiVarEqErr'/skols in implic 2"
 
-          | (implic:_) <- cec_encl ctxt
+          | (implic:_) <- cec_kencl ctxt
           , KiImplic { kic_tclvl = lvl } <- implic
           -> panic "assertPpr (not (isTouchableMetaVar lvl kv1)) (ppr kv1 $$ ppr lvl)" $ do
               kv_extra <- extraKiVarEqInfo (panic "kv1, Just implic") ki2

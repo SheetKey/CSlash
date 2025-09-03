@@ -8,7 +8,7 @@ import CSlash.Cs
 -- import GHC.Tc.Errors.Types.PromotionErr
 -- import GHC.Tc.Errors.Hole.FitTypes (HoleFit)
 import CSlash.Tc.Types.Constraint
-import CSlash.Tc.Types.Evidence (KiCoBindsVar)
+import CSlash.Tc.Types.Evidence (TyCoBindsVar, KiCoBindsVar)
 import CSlash.Tc.Types.Origin ( CtOrigin (), SkolemInfoAnon (SigSkol)
                               , InstanceWhat, KindedThing )
 -- import GHC.Tc.Types.Rank (Rank)
@@ -123,18 +123,21 @@ data SolverReportWithCtxt = SolverReportWithCtxt
   deriving Generic
 
 data SolverReportErrCtxt = CEC
-  { cec_encl :: [KiImplication]
+  { cec_tencl :: [TyImplication]
+  , cec_kencl :: [KiImplication]
   , cec_tidy :: AnyTidyEnv
-  , cec_binds :: KiCoBindsVar
+  , cec_ty_binds :: TyCoBindsVar
+  , cec_ki_binds :: KiCoBindsVar
   , cec_defer_type_errors :: DiagnosticReason
   , cec_expr_holes :: DiagnosticReason
   , cec_out_of_scope_holes :: DiagnosticReason
   , cec_warn_redundant :: Bool
   , cec_suppress :: Bool
+  , cec_expand_syns :: Bool
   }
 
 getUserGivens :: SolverReportErrCtxt -> [KiImplication]
-getUserGivens (CEC { cec_encl = implics }) = getUserGivensFromImplics implics
+getUserGivens (CEC { cec_kencl = implics }) = getUserGivensFromImplics implics
 
 ----------------------------------------------------------------------------
 --

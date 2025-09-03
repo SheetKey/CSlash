@@ -12,9 +12,9 @@ import Prelude hiding ((<>))
 import CSlash.Core.Predicate
 import CSlash.Core.Type
 import CSlash.Core.Type.Compare
-import CSlash.Core.Type.FVs
+import CSlash.Core.Type.FVs as TyFV
 import CSlash.Core.Kind
-import CSlash.Core.Kind.FVs
+import CSlash.Core.Kind.FVs as KiFV
 -- import GHC.Core.Coercion
 -- import GHC.Core.Class
 import CSlash.Core.TyCon
@@ -255,6 +255,9 @@ updKiCtEvidence upd ct = case ct of
   CKiCoCan co@(KiCoCt { kc_ev = ev }) -> CKiCoCan (co { kc_ev = upd ev })
   CIrredCanKi ir@(IrredKiCt { ikr_ev = ev }) -> CIrredCanKi (ir { ikr_ev = upd ev })
   CNonCanonicalKi ev -> CNonCanonicalKi (upd ev)
+
+ctTyPred :: TyCt -> AnyPredType
+ctTyPred ct = ctTyEvPred $ ctTyEvidence ct
 
 ctKiPred :: KiCt -> AnyPredKind
 ctKiPred ct = ctKiEvPred $ ctKiEvidence ct
@@ -766,8 +769,34 @@ checkSkolInfoAnon sk1 sk2 = go sk1 sk2
 *                                                                      *
 ********************************************************************* -}
 
-type AnyTyFV = TyFV (KiCoVar AnyKiVar) AnyKiVar
+type AnyTyFV = TyFV (AnyTyVar AnyKiVar) AnyKiVar
 type AnyKiFV = KiFV AnyKiVar
+
+boundOccNamesOfWTC :: WantedTyConstraints -> [OccName]
+boundOccNamesOfWTC wtc = bagToList (go_wtc wtc)
+  where
+    go_wtc (WTC { wtc_impl = implics, wtc_wkc = wkc })
+      = concatMapBag go_timplic implics `unionBags` go_wkc wkc
+    go_timplic (TyImplic { tic_skols = tvs, tic_wanted = wc })
+      = listToBag (map getOccName tvs) `unionBags` go_wtc wc
+    go_wkc (WKC { wkc_impl = implics })
+      = concatMapBag go_kimplic implics
+    go_kimplic (KiImplic { kic_skols = kvs, kic_wanted = wc })
+      = listToBag (map getOccName kvs) `unionBags` go_wkc wc
+
+boundOccNamesOfWKC :: WantedKiConstraints -> [OccName]
+boundOccNamesOfWKC wkc = bagToList (go_wkc wkc)
+  where
+    go_wkc (WKC { wkc_impl = implics })
+      = concatMapBag go_kimplic implics
+    go_kimplic (KiImplic { kic_skols = kvs, kic_wanted = wc })
+      = listToBag (map getOccName kvs) `unionBags` go_wkc wc
+    
+fvsOfTyCt :: TyCt -> AnyTyFV
+fvsOfTyCt ct = fvsOfType $ ctTyPred ct
+
+fvsOfTyCts :: TyCts -> AnyTyFV
+fvsOfTyCts = foldr (unionFV . fvsOfTyCt) emptyFV
 
 varsOfKiCt :: KiCt -> AnyKiVarSet
 varsOfKiCt ct = case fvVarAcc (fvsOfKiCt ct) of
@@ -783,28 +812,53 @@ varsOfKiCts cts = case fvVarAcc (fvsOfKiCts cts) of
 fvsOfKiCts :: KiCts -> AnyKiFV
 fvsOfKiCts = foldr (unionFV . fvsOfKiCt) emptyFV
 
-varsOfWKC :: WantedKiConstraints -> (MkVarSet (KiCoVar AnyKiVar), MkVarSet AnyKiVar)
-varsOfWKC wc = case fvVarAcc (fvsOfWKC wc) of
+varsOfWTC :: WantedTyConstraints -> (MkVarSet (AnyTyVar AnyKiVar), MkVarSet AnyKiVar)
+varsOfWTC wc = case fvVarAcc (fvsOfWTC wc) of
   (_, tvs, _, kvs) -> (tvs, kvs)
 
-varsOfWKCList :: WantedKiConstraints -> ([KiCoVar AnyKiVar], [AnyKiVar])
+varsOfWKC :: WantedKiConstraints -> MkVarSet AnyKiVar
+varsOfWKC wc = case fvVarAcc (fvsOfWKC wc) of
+  (_, kvs) -> kvs
+
+varsOfWTCList :: WantedTyConstraints -> ([AnyTyVar AnyKiVar], [AnyKiVar])
+varsOfWTCList wc = case fvVarAcc (fvsOfWTC wc) of
+  (tvs, _, kvs, _) -> assertPpr (not $ any isKiCoVar tvs)
+                      (vcat [ text "varsOfWTCList free_tvs covars"
+                            , ppr tvs ])
+
+                      $ (tvs, kvs)
+
+varsOfWKCList :: WantedKiConstraints -> [AnyKiVar]
 varsOfWKCList wc = case fvVarAcc (fvsOfWKC wc) of
-  (tvs, _, kvs, _) -> (tvs, kvs)
+  (kvs, _) -> kvs
 
-fvsOfWKC :: WantedKiConstraints -> AnyTyFV
+fvsOfWTC :: WantedTyConstraints -> AnyTyFV
+fvsOfWTC (WTC { wtc_simple = simple, wtc_impl = implic, wtc_wkc = wkc })
+  = fvsOfTyCts simple `unionFV` fvsOfBag fvsOfTyImplic implic `unionFV` liftKiFV (fvsOfWKC wkc)
+
+fvsOfWKC :: WantedKiConstraints -> AnyKiFV
 fvsOfWKC (WKC { wkc_simple = simple, wkc_impl = implic })
-  = liftKiFV (fvsOfKiCts simple) `unionFV` fvsOfBag fvsOfKiImplic implic
+  = fvsOfKiCts simple `unionFV` fvsOfBag fvsOfKiImplic implic
 
-fvsOfKiImplic :: KiImplication -> AnyTyFV
+fvsOfTyImplic :: TyImplication -> AnyTyFV
+fvsOfTyImplic (TyImplic { tic_skols = skols, tic_given = givens, tic_wanted = wanted })
+  | isEmptyWC wanted
+  = emptyFV
+  | otherwise
+  = TyFV.fvsVarBndrs (toAnyTyVar <$> skols)
+    $ fvsOfTypes (varType <$> givens)
+    `unionFV` fvsOfWTC wanted
+
+fvsOfKiImplic :: KiImplication -> AnyKiFV
 fvsOfKiImplic (KiImplic { kic_skols = skols, kic_given = givens, kic_wanted = wanted })
   | isEmptyWC wanted
   = emptyFV
   | otherwise
-  = fvsKiVarBndrs (toAnyKiVar <$> skols)
-    $ fvsVarBndrs givens
-    $ fvsOfWKC wanted
+  = KiFV.fvsVarBndrs (toAnyKiVar <$> skols)
+    $ fvsOfMonoKinds (varKind <$> givens)
+    `unionFV` fvsOfWKC wanted
 
-fvsOfBag :: (a -> AnyTyFV) -> Bag a -> AnyTyFV
+fvsOfBag :: HasFVs thing => (a -> FV thing) -> Bag a -> FV thing
 fvsOfBag vs_of = foldr (unionFV . vs_of) emptyFV
 
 {- *********************************************************************

@@ -1006,7 +1006,7 @@ filterConstrainedCandidates wanted kvs
   | isEmptyWC wanted
   = return kvs
   | otherwise
-  = do wc_kvs <- liftZonkM $ zonkAnyKiVarsAndFV (snd $ varsOfWKC wanted)
+  = do wc_kvs <- liftZonkM $ zonkAnyKiVarsAndFV $ varsOfWKC wanted
        let (to_promote, kvs') = first dVarSetToVarSet
                                 $ partitionDVarSet ((`elemVarSet` wc_kvs) . toAnyKiVar) kvs
        traceTc "filterConstrainedCandidates"

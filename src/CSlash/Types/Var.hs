@@ -33,6 +33,7 @@ module CSlash.Types.Var
     {-* TyVar *-}
   , TyVar, KiCoVar
   , mkTyVar, toKiCoVar_maybe, mkLocalKiCoVar
+  , isKiCoVar
 
     {-* TcTyVar *-}
   , TcTyVar
@@ -468,6 +469,9 @@ toKiCoVar_maybe mtv
   = Just tv
   | otherwise
   = Nothing
+
+isKiCoVar :: VarHasKind tv kv => tv -> Bool
+isKiCoVar = isKiCoVarKind . varKind
 
 mkLocalKiCoVar :: Name -> PredKind AnyKiVar -> KiCoVar AnyKiVar
 mkLocalKiCoVar name ki = assert (isKiCoVarKind ki) $ mkTyVar name ki

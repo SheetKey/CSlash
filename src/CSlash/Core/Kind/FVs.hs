@@ -241,6 +241,11 @@ fvsOfKind (Mono ki) f bound_vars acc = fvsOfMonoKind ki f bound_vars acc
 fvsOfKind (ForAllKi kv ki) f bound_vars acc
   = fvsVarBndr kv (fvsOfKind ki) f bound_vars acc
 
+fvsVarBndrs
+  :: IsVar kv
+  => [kv] -> KiFV kv -> KiFV kv
+fvsVarBndrs vars fvs = foldr fvsVarBndr fvs vars
+
 fvsVarBndr :: IsVar kv => kv -> KiFV kv -> KiFV kv
 fvsVarBndr kv fvs = delFV kv fvs
 

@@ -311,7 +311,7 @@ pprTcSolverReportMsg ctxt (Mismatch mismatch_msg kv_info ambig_infos)
            , maybe empty (pprKiVarInfo ctxt) kv_info ]
            ++ (map pprAmbiguityInfo ambig_infos)
 
-pprTcSolverReportMsg ctxt@(CEC { cec_encl = implics }) (CannotResolveRelation item binds)
+pprTcSolverReportMsg ctxt@(CEC { cec_kencl = implics }) (CannotResolveRelation item binds)
   = vcat [ no_inst_msg
          , nest 2 extra_note
          , show_fixes (ctxtFixes has_ambigs pred implics)

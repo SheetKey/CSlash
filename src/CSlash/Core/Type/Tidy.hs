@@ -81,6 +81,9 @@ getHelpfulOccNameKi v
 -- tidyBigLamTyBinders tidy_env kvbs
 --   = mapAccumL tidyBigLamTyBinder (avoidNameClashes kvbs tidy_env) kvbs
 
+tidyFreeTyKiVars :: ToTcKiVarMaybe kv => MkTidyEnv tv kv -> ([tv], [kv]) -> MkTidyEnv tv kv
+tidyFreeTyKiVars env (tvs, kvs) = tidyFreeTyVars (tidyFreeKiVars env kvs) tvs
+
 tidyFreeTyVars :: MkTidyEnv tv kv -> [tv] -> MkTidyEnv tv kv
 tidyFreeTyVars = panic "tidyFreeTyVars"
 
@@ -123,6 +126,13 @@ splitForAllKiVars' ki = go ki []
   where
     go (ForAllKi kv ki) kvs = go ki (kv : kvs)
     go (Mono ki) kvs = (reverse kvs, ki)
+
+tidyAvoiding :: [OccName] -> (MkTidyEnv tv kv -> a -> MkTidyEnv tv kv) -> a -> MkTidyEnv tv kv
+tidyAvoiding bound_var_avoids do_tidy thing
+  = (occs' `delTidyOccEnvList` bound_var_avoids, tvars', kvars')
+  where
+    (occs', tvars', kvars') = do_tidy init_tidy_env thing
+    init_tidy_env = mkEmptyTidyEnv (initTidyOccEnv bound_var_avoids)
 
 tidyOpenMonoKinds
   :: ToTcKiVarMaybe kv => MkTidyEnv tv kv -> [MonoKind kv] -> (MkTidyEnv tv kv, [MonoKind kv])
