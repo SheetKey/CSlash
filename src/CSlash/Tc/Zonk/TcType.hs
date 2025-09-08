@@ -515,5 +515,12 @@ tidyKiCtEvidence env ctev = ctev { ctkev_pred = tidyMonoKind env ki }
   where
     ki = ctkev_pred ctev
 
+-- GHC's 'tidyEvVar'
+tidyTyCoVar
+  :: AnyTidyEnv
+  -> TyCoVar (AnyTyVar AnyKiVar) AnyKiVar
+  -> TyCoVar (AnyTyVar AnyKiVar) AnyKiVar
+tidyTyCoVar env var = updateVarType (tidyType env) var
+
 tidyKiCoVar :: AnyTidyEnv -> KiCoVar AnyKiVar -> KiCoVar AnyKiVar
 tidyKiCoVar env var = updateVarKind (tidyMonoKind env) var

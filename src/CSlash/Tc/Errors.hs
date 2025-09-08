@@ -233,7 +233,52 @@ deferringAnyBindings (CEC { cec_defer_type_errors = ErrorWithoutFlag
 deferringAnyBindings _ = True
 
 reportTyImplic :: SolverReportErrCtxt -> TyImplication -> TcM ()
-reportTyImplic = panic "reportTyImplic"
+reportTyImplic ctxt implic@(TyImplic { tic_skols = tvs
+                                     , tic_given = given
+                                     , tic_wanted = wanted
+                                     , tic_binds = evb
+                                     , tic_status = status
+                                     , tic_info = info
+                                     , tic_env = ct_loc_env
+                                     , tic_tclvl = tc_lvl }) = do
+  traceTc "reportTyImplic"
+    $ vcat [ text "tidy env:" <+> ppr (cec_tidy ctxt)
+           , text "skols:" <+> pprTyVars tvs
+           , text "tidy skols:" <+> pprTyVars tvs' ]
+
+  when bad_telescope $ panic "reportBadTelescope"
+
+  reportWanteds ctxt' tc_lvl wanted
+
+  warnRedundantConstraints ctxt' ct_loc_env info' (Left dead_givens)
+  where
+    insoluble = isInsolubleStatus status
+    (env1, _tvs') = tidyTyVarBndrs (cec_tidy ctxt) $ toAnyTyVar <$> tvs
+    tvs' = let mtvs = toTcTyVar_maybe <$> _tvs'
+           in assert (all isJust mtvs) $ catMaybes mtvs
+
+    info' = tidySkolemInfoAnon env1 info
+    implic' = implic { tic_skols = tvs'
+                     , tic_given = map (tidyTyCoVar env1) given
+                     , tic_info = info' }
+
+    ctxt1 = ctxt { cec_defer_type_errors = ErrorWithoutFlag
+                 , cec_expr_holes = ErrorWithoutFlag
+                 , cec_out_of_scope_holes = ErrorWithoutFlag }
+
+    ctxt' = ctxt1 { cec_tidy = env1
+                  , cec_tencl = implic' : cec_tencl ctxt
+                  , cec_suppress = insoluble || cec_suppress ctxt
+                  , cec_ty_binds = evb }
+
+    dead_givens = case status of
+                    IC_Solved { ics_dead = dead } -> dead
+                    _ -> []
+
+    bad_telescope = case status of
+      IC_BadTelescope -> True
+      _ -> False
+    
 
 reportKiImpic :: SolverReportErrCtxt -> KiImplication -> TcM ()
 reportKiImpic ctxt implic@(KiImplic { kic_skols = kvs
@@ -253,7 +298,7 @@ reportKiImpic ctxt implic@(KiImplic { kic_skols = kvs
 
   reportKiWanteds ctxt' tc_lvl wanted
 
-  warnRedundantConstraints ctxt' ct_loc_env info' dead_givens
+  warnRedundantConstraints ctxt' ct_loc_env info' (Right dead_givens)
   where
     insoluble = isInsolubleStatus status
     (env1, _kvs') = tidyKiVarBndrs (cec_tidy ctxt) $ toAnyKiVar <$> kvs
@@ -265,10 +310,14 @@ reportKiImpic ctxt implic@(KiImplic { kic_skols = kvs
                      , kic_given = map (tidyKiCoVar env1) given
                      , kic_info = info' }
 
-    ctxt' = ctxt { cec_tidy = env1
-                 , cec_kencl = implic' : cec_kencl ctxt
-                 , cec_suppress = insoluble || cec_suppress ctxt
-                 , cec_ki_binds = evb  }
+    ctxt1 = ctxt { cec_defer_type_errors = ErrorWithoutFlag
+                 , cec_expr_holes = ErrorWithoutFlag
+                 , cec_out_of_scope_holes = ErrorWithoutFlag }
+
+    ctxt' = ctxt1 { cec_tidy = env1
+                  , cec_kencl = implic' : cec_kencl ctxt
+                  , cec_suppress = insoluble || cec_suppress ctxt
+                  , cec_ki_binds = evb  }
 
     dead_givens = case status of
                     IC_Solved dead -> dead
@@ -282,12 +331,16 @@ warnRedundantConstraints
   :: SolverReportErrCtxt
   -> CtLocEnv
   -> SkolemInfoAnon
-  -> [KiCoVar AnyKiVar]
+  -> Either [TyCoVar (AnyTyVar AnyKiVar) AnyKiVar] [KiCoVar AnyKiVar]
   -> TcM ()
-warnRedundantConstraints ctxt env info redundant_evs
+warnRedundantConstraints ctxt env info evs
   | not (cec_warn_redundant ctxt)
   = return ()
-  | null redundant_evs
+  | Left redundant_evs <- evs
+  , null redundant_evs
+  = return ()
+  | Right redundant_evs <- evs
+  , null redundant_evs
   = return ()
   | SigSkol user_ctxt _ _ <- info
   = panic "report_redundant_msg True (set"

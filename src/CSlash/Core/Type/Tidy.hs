@@ -38,6 +38,11 @@ tidyTyVarBndr env@(occ_env, tsubst, ksubst) var
           name' = tidyNameOcc name occ'
           name = varName var
 
+tidyTyVarBndrs
+  :: (VarHasKind tv kv, ToTcTyVarMaybe tv kv, ToTcKiVarMaybe kv)
+  => MkTidyEnv tv kv -> [tv] -> (MkTidyEnv tv kv, [tv])
+tidyTyVarBndrs env tvs = mapAccumL tidyTyVarBndr (avoidNameClashesTy tvs env) tvs
+
 tidyKiVarBndrs :: ToTcKiVarMaybe kv => MkTidyEnv tv kv -> [kv] -> (MkTidyEnv tv kv, [kv])
 tidyKiVarBndrs tidy_env vs = mapAccumL tidyKiVarBndr (avoidNameClashesKi vs tidy_env) vs
 
@@ -55,6 +60,11 @@ avoidNameClashesKi :: ToTcKiVarMaybe kv => [kv] -> MkTidyEnv tv kv -> MkTidyEnv 
 avoidNameClashesKi vs (occ_env, tsubst, ksubst)
   = (avoidClashesOccEnv occ_env occs, tsubst, ksubst)
   where occs = map getHelpfulOccNameKi vs
+
+avoidNameClashesTy :: (ToTcTyVarMaybe tv kv) => [tv] -> MkTidyEnv tv kv -> MkTidyEnv tv kv
+avoidNameClashesTy vs (occ_env, tsubst, ksubst)
+  = (avoidClashesOccEnv occ_env occs, tsubst, ksubst)
+  where occs = map getHelpfulOccNameTy vs
 
 getHelpfulOccNameTy :: (ToTcTyVarMaybe tv kv) => tv -> OccName
 getHelpfulOccNameTy tv
