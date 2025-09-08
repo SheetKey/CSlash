@@ -312,23 +312,3 @@ mafvFolder check_kcv check_kv = MKiCoFolder { mkcf_kivar = do_kv
     do_kv (_, is) kv = Any (not (kv `elemVarSet` is) && check_kv kv)
     do_kcv (is, _) kcv = Any (not (kcv `elemVarSet` is) && check_kcv kcv)
     do_hole _ _ = Any False
-
-{- *********************************************************************
-*                                                                      *
-                 scopedSort
-*                                                                      *
-********************************************************************* -}
-
-scopedSort :: [kv] -> [kv]
-scopedSort = go []
-  where
-    go acc [] = reverse acc
-    go acc (kv:kvs) = go acc' kvs
-      where
-        acc' = insert kv acc
-
-    insert kv [] = [kv]
-    insert kv (a:as) = (kv:a:as)
-
-varsOfMonoKindsWellScoped :: IsVar kv => [MonoKind kv] -> [kv]
-varsOfMonoKindsWellScoped = scopedSort . varsOfMonoKindsList

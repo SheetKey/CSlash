@@ -232,6 +232,9 @@ deferringAnyBindings (CEC { cec_defer_type_errors = ErrorWithoutFlag
                           , cec_out_of_scope_holes = ErrorWithoutFlag }) = False
 deferringAnyBindings _ = True
 
+reportTyImplic :: SolverReportErrCtxt -> TyImplication -> TcM ()
+reportTyImplic = panic "reportTyImplic"
+
 reportKiImpic :: SolverReportErrCtxt -> KiImplication -> TcM ()
 reportKiImpic ctxt implic@(KiImplic { kic_skols = kvs
                                    , kic_given = given
@@ -291,8 +294,11 @@ warnRedundantConstraints ctxt env info redundant_evs
   | otherwise
   = panic "report_redundant"
 
-mkErrorItem :: KiCt -> TcM (Maybe ErrorItem)
-mkErrorItem ct = do
+mkTyErrorItem :: TyCt -> TcM (Maybe ErrorItem)
+mkTyErrorItem = panic "mkTyErrorItem"
+
+mkKiErrorItem :: KiCt -> TcM (Maybe ErrorItem)
+mkKiErrorItem ct = do
   let loc = ctLoc ct
       flav = ctFlavor ct
   (suppress, m_evdest) <- case ctKiEvidence ct of
@@ -303,12 +309,12 @@ mkErrorItem ct = do
   let m_reason = case ct of
                    CIrredCanKi (IrredKiCt {ikr_reason = reason}) -> Just reason
                    _ -> Nothing
-  return $ Just $ EI { ei_pred = ctKiPred ct
-                     , ei_evdest = m_evdest
-                     , ei_flavor = flav
-                     , ei_loc = loc
-                     , ei_m_reason = m_reason
-                     , ei_suppress = suppress }
+  return $ Just $ KEI { ei_ki_pred = ctKiPred ct
+                      , ei_ki_evdest = m_evdest
+                      , ei_flavor = flav
+                      , ei_loc = loc
+                      , ei_m_reason = m_reason
+                      , ei_suppress = suppress }
 
 unsuppressErrorItem :: ErrorItem -> ErrorItem
 unsuppressErrorItem ei = ei { ei_suppress = False }
@@ -317,18 +323,115 @@ reportWanteds :: SolverReportErrCtxt -> TcLevel -> WantedTyConstraints -> TcM ()
 reportWanteds ctxt tc_lvl wc@(WTC { wtc_simple = simples, wtc_impl = implics, wtc_wkc = wkc })
   | isEmptyWC wc = traceTc "reportWanteds empty WTC" empty
   | otherwise
-  = do if isEmptyWC wkc
-         then return ()
-         else reportKiWanteds ctxt tc_lvl wkc
-       if isEmptyBag simples && isEmptyBag implics
-         then return ()
-         else panic "reportWanteds"
+  = do reportKiWanteds ctxt tc_lvl wkc
+       tidy_items1 <- mapMaybeM mkTyErrorItem tidy_cts
+       traceTc "reportWanteds 1"
+         $ vcat [ text "Simples =" <+> ppr simples
+                , text "Suppress =" <+> ppr (cec_suppress ctxt)
+                , text "tidy_cts =" <+> ppr tidy_cts
+                , text "tidy_items1 =" <+> ppr tidy_items1 ]
+
+       errs_already <- ifErrsM (return True) (return False)
+       let tidy_items
+             | not errs_already
+             , all ei_suppress tidy_items1
+             = map unsuppressErrorItem tidy_items1
+             | otherwise
+             = tidy_items1
+
+           no_out_of_scope = True
+           ctxt_for_insols = ctxt { cec_suppress = not no_out_of_scope }
+
+           (suppressed_items, items0) = partition suppress tidy_items
+
+       traceTc "reportWanteds suppressed:" (ppr suppressed_items)
+       (ctxt1, items1) <- tryReporters ctxt_for_insols report1 items0
+
+       let ctxt2 = ctxt1 { cec_suppress = cec_suppress ctxt || cec_suppress ctxt1 }
+       (ctxt3, leftovers) <- tryReporters ctxt2 report2 items1
+       massertPpr (null leftovers)
+         (text "The following unsolved Wanted constraints \
+               \have not been reported to the user:"
+          $$ ppr leftovers)
+
+       mapBagM_ (reportTyImplic ctxt2) implics
+  where
+    env = cec_tidy ctxt
+    tidy_cts = bagToList (mapBag (tidyTyCt env) simples)
+
+    suppress :: ErrorItem -> Bool
+    suppress _ = False
+      
+    report1 = [ ("insoluble1", is_given_eq, False, ignoreErrorReporter)
+              , ("insolubel2", utterly_wrong, True, mkGroupReporter mkEqErr)
+              , ("skolem eq1", very_wrong, True, mkSkolReporter)
+              , ("skolem eq2", skolem_eq, True, mkSkolReporter)
+              , ("non-tv eq", non_tv_eq, True, mkSkolReporter)
+              , ("Homo eqs", is_homo_equality, True, mkGroupReporter mkEqErr)
+              , ("Other eqs", is_equality, True, mkGroupReporter mkEqErr)
+              ]
+
+    report2 = [ ("Irreds", is_irred, False, mkGroupReporter mkIrredErr) ]
+
+    is_given_eq item
+      | Given <- ei_flavor item
+      , TyEqPred {} <- pred = True
+      | otherwise = False
+      where pred = classifyPredType (ei_ty_pred item)
+
+    utterly_wrong item
+      = case classifyPredType (ei_ty_pred item) of
+          (TyEqPred ty1 ty2) -> isRigidTy ty1 && isRigidTy ty2
+          _ -> False
+
+    very_wrong item
+      = case classifyPredType (ei_ty_pred item) of
+          (TyEqPred ty1 ty2) -> isSkolemTy tc_lvl ty1 && isRigidTy ty2
+          _ -> False
+
+    skolem_eq item
+      = case classifyPredType (ei_ty_pred item) of
+          (TyEqPred ty1 _) -> isSkolemTy tc_lvl ty1
+          _ -> False
+
+    non_tv_eq item
+      = case classifyPredType (ei_ty_pred item) of
+          (TyEqPred ty1 _) -> not (isTyVarTy ty1)
+          _ -> False
+
+
+    is_homo_equality item 
+      = case classifyPredType (ei_ty_pred item) of
+          (TyEqPred ty1 ty2) -> typeKind ty1 `tcEqKind` typeKind ty2
+          _ -> False
+
+
+    is_equality item
+      = case classifyPredType (ei_ty_pred item) of
+          (TyEqPred {}) -> True 
+          _ -> False
+
+
+    is_irred item
+      = case classifyPredType (ei_ty_pred item) of
+          (TyIrredPred {}) -> True
+          _ -> False
+
+
+isSkolemTy :: TcLevel -> AnyType -> Bool
+isSkolemTy tc_lvl ty
+  | Just tv <- getTyVar_maybe ty
+  = handleAnyTv (const True)
+    (\tv -> isSkolemVar tv || (isTcVarVar tv && isTouchableMetaVar tc_lvl tv))
+    tv
+  | otherwise
+  = False
 
 reportKiWanteds :: SolverReportErrCtxt -> TcLevel -> WantedKiConstraints -> TcM ()
 reportKiWanteds ctxt tc_lvl wc@(WKC { wkc_simple = simples, wkc_impl = implics })
   | isEmptyWC wc = traceTc "reportKiWanteds empty WC" empty
   | otherwise
-  = do tidy_items1 <- mapMaybeM mkErrorItem tidy_cts
+  = do tidy_items1 <- mapMaybeM mkKiErrorItem tidy_cts
        traceTc "reportKiWanteds 1"
          $ vcat [ text "Simples =" <+> ppr simples
                 , text "Suppress =" <+> ppr (cec_suppress ctxt)
@@ -364,7 +467,7 @@ reportKiWanteds ctxt tc_lvl wc@(WKC { wkc_simple = simples, wkc_impl = implics }
        --                 massertPpr (null more_leftovers) (ppr more_leftovers)
   where
     env = cec_tidy ctxt
-    tidy_cts = bagToList (mapBag (tidyCt env) simples)
+    tidy_cts = bagToList (mapBag (tidyKiCt env) simples)
 
     suppress :: ErrorItem -> Bool
     suppress _ = False
@@ -380,28 +483,41 @@ reportKiWanteds ctxt tc_lvl wc@(WKC { wkc_simple = simples, wkc_impl = implics }
     report2 = [ ("Irreds", is_irred, False, mkGroupReporter mkIrredErr)
               ]
 
-    is_given_eq item pred
+    is_given_eq item
       | Given <- ei_flavor item
       , KiCoPred {} <- pred = True
       | otherwise = False
+      where pred = classifyPredKind (ei_ki_pred item)
 
-    utterly_wrong _ (KiCoPred _ k1 k2) = isRigidKi k1 && isRigidKi k2
-    utterly_wrong _ _ = False
+    utterly_wrong item
+      = case classifyPredKind (ei_ki_pred item) of
+          (KiCoPred _ k1 k2) -> isRigidKi k1 && isRigidKi k2
+          _ -> False
 
-    very_wrong _ (KiCoPred _ k1 k2) = isSkolemKi tc_lvl k1 && isRigidKi k2
-    very_wrong _ _ = False
+    very_wrong item
+      = case classifyPredKind (ei_ki_pred item) of
+          (KiCoPred _ k1 k2) -> isSkolemKi tc_lvl k1 && isRigidKi k2
+          _ -> False
 
-    skolem_eq _ (KiCoPred _ k1 _) = isSkolemKi tc_lvl k1
-    skolem_eq _ _ = False
+    skolem_eq item
+      = case classifyPredKind (ei_ki_pred item) of
+          (KiCoPred _ k1 _) -> isSkolemKi tc_lvl k1
+          _ -> False
     
-    non_kv_eq _ (KiCoPred _ k1 _) = not (isKiVarKi k1)
-    non_kv_eq _ _ = False
+    non_kv_eq item
+      = case classifyPredKind (ei_ki_pred item) of
+          (KiCoPred _ k1 _) -> not (isKiVarKi k1)
+          _ -> False
     
-    is_homo_equality _ (KiCoPred _ _ _) = True
-    is_homo_equality _ _ = False
+    is_homo_equality item
+      = case classifyPredKind (ei_ki_pred item) of
+          (KiCoPred _ _ _) -> True
+          _ -> False
     
-    is_irred _ (IrredPred {}) = True
-    is_irred _ _ = False
+    is_irred item
+      = case classifyPredKind (ei_ki_pred item) of
+          (IrredPred {}) -> True
+          _ -> False
 
 isSkolemKi :: TcLevel -> AnyMonoKind -> Bool
 isSkolemKi tc_lvl ki
@@ -418,7 +534,7 @@ isSkolemKi tc_lvl ki
 
 type Reporter = SolverReportErrCtxt -> NonEmpty ErrorItem -> TcM ()
 
-type ReporterSpec = (String, ErrorItem -> KiPred AnyKiVar -> Bool, Bool, Reporter)
+type ReporterSpec = (String, ErrorItem -> Bool, Bool, Reporter)
 
 mkSkolReporter :: Reporter
 mkSkolReporter ctxt items = mapM_ (reportGroup mkEqErr ctxt) (group (toList items))
@@ -463,7 +579,7 @@ mkGroupReporter mk_err ctxt items
 
 eq_lhs_kind :: ErrorItem -> ErrorItem -> Bool
 eq_lhs_kind item1 item2
-  = case (classifyPredKind (errorItemPred item1), classifyPredKind (errorItemPred item2)) of
+  = case (classifyPredKind (ei_ki_pred item1), classifyPredKind (ei_ki_pred item2)) of
       (KiCoPred _ k1 _, KiCoPred _ k2 _) -> k1 `eqMonoKind` k2
       _ -> pprPanic "mkSkolReporter" (ppr item1 $$ ppr item2)
 
@@ -505,7 +621,7 @@ maybeReportError ctxt items@(item1 :| _) (SolverReport { sr_important_msg = impo
   reportDiagnostic msg
 
 addDeferredBinding :: SolverReportErrCtxt -> SolverReport -> ErrorItem -> TcM ()
-addDeferredBinding ctxt err (EI { ei_evdest = Just dest, ei_pred = item_ki, ei_loc = loc })
+addDeferredBinding ctxt err _ --(EI { ei_evdest = Just dest, ei_pred = item_ki, ei_loc = loc })
   | deferringAnyBindings ctxt
   = panic "addDeferredBinding"
 addDeferredBinding _ _ _ = return ()
@@ -533,7 +649,7 @@ tryReporter
   -> ReporterSpec
   -> [ErrorItem]
   -> TcM (SolverReportErrCtxt, [ErrorItem])
-tryReporter ctxt (str, keep_me, suppress_after, reporter) items = case nonEmpty yeses of
+tryReporter ctxt (str, keep, suppress_after, reporter) items = case nonEmpty yeses of
   Nothing -> pure (ctxt, items)
   Just yeses -> do
     traceTc "tryReporter {" (text str <+> ppr yeses)
@@ -544,7 +660,6 @@ tryReporter ctxt (str, keep_me, suppress_after, reporter) items = case nonEmpty 
     return (ctxt', nos)
   where
     (yeses, nos) = partition keep items
-    keep item = keep_me item (classifyPredKind (errorItemPred item))
 
 mkErrorReport
   :: CtLocEnv
@@ -598,7 +713,7 @@ mkEqErr1 :: SolverReportErrCtxt -> ErrorItem -> TcM SolverReport
 mkEqErr1 ctxt item = do
   (ctxt, binds, item) <- relevantBindings True ctxt item
   traceTc "mkEqErr1" (ppr item $$ pprCtOrigin (errorItemOrigin item))
-  let (kc, ki1, ki2) = getPredKis (errorItemPred item)
+  let (kc, ki1, ki2) = getPredKis (ei_ki_pred item)
   err_msg <- mkEqErr_help ctxt item ki1 ki2
   let report = add_relevant_bindings binds $ important ctxt err_msg
   return report
@@ -724,7 +839,7 @@ misMatchOrCND ctxt item ki1 ki2
     || null givens
   = mkMismatchMsg item ki1 ki2
   | otherwise
-  = CouldNotDeduce givens (item :| []) (Just $ CND_Extra level ki1 ki2)
+  = CouldNotDeduceKi givens (item :| []) (Just $ CND_Extra level ki1 ki2)
   where
     insoluble_item = case ei_m_reason item of
                        Nothing -> False
@@ -829,7 +944,7 @@ relevantBindings want_filtering ctxt item = do
       lcl_env = ctLocEnv loc
   (env1, tidy_orig) <- liftZonkM $ zonkTidyOrigin (cec_tidy ctxt) (ctLocOrigin loc)
 
-  let ct_fvs = varsOfMonoKind (errorItemPred item)
+  let ct_fvs = varsOfMonoKind (ei_ki_pred item)
 
       loc' = setCtLocOrigin loc tidy_orig
       item' = item { ei_loc = loc' }

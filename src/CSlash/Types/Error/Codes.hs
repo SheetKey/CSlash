@@ -256,8 +256,9 @@ type family CsDiagnosticCode c = n | n -> c where
 
   CsDiagnosticCode "BasicMismatch"                                 = 18872
   CsDiagnosticCode "KindEqMismatch"                                = 89223
-  CsDiagnosticCode "CouldNotDeduce"                                = 05617
-
+  CsDiagnosticCode "CouldNotDeduceKi"                              = 05617
+  CsDiagnosticCode "CouldNotDeduceTy"                              = 71592
+  
   CsDiagnosticCode "CannotUnifyWithPolykind"                       = 91028
   CsDiagnosticCode "OccursCheck"                                   = 27958
   CsDiagnosticCode "DifferentKiVars"                               = 25897

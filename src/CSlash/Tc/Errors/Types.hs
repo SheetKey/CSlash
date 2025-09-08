@@ -12,7 +12,7 @@ import CSlash.Tc.Types.Evidence (TyCoBindsVar, KiCoBindsVar)
 import CSlash.Tc.Types.Origin ( CtOrigin (), SkolemInfoAnon (SigSkol)
                               , InstanceWhat, KindedThing )
 -- import GHC.Tc.Types.Rank (Rank)
-import CSlash.Tc.Utils.TcType (AnyKind, AnyMonoKind, AnyPredKind)
+import CSlash.Tc.Utils.TcType
 import CSlash.Types.Basic
 import CSlash.Types.Error
 import CSlash.Types.Avail
@@ -39,10 +39,10 @@ import CSlash.Core.DataCon (DataCon{-, FieldLabel-})
 -- import GHC.Core.FamInstEnv (FamInst)
 -- import GHC.Core.InstEnv (LookupInstanceErrReason, ClsInst, DFunId)
 -- import GHC.Core.PatSyn (PatSyn)
--- import GHC.Core.Predicate (EqRel, predTypeEqRel)
+import CSlash.Core.Predicate
 import CSlash.Core.TyCon (TyCon{-, Role, FamTyConFlav-}, AlgTyConRhs)
 import CSlash.Core.Type (Type{-, ThetaType, PredType, ErrorMsgType-}, ForAllFlag)
-import CSlash.Core.Kind (Kind, PredKind, MonoKind, KiPredCon, KindCoercionHole, BuiltInKi)
+import CSlash.Core.Kind
 import CSlash.Driver.Backend (Backend)
 import CSlash.Unit.State (UnitState)
 import CSlash.Utils.Misc (filterOut)
@@ -145,20 +145,39 @@ getUserGivens (CEC { cec_kencl = implics }) = getUserGivensFromImplics implics
 --
 ----------------------------------------------------------------------------
 
-data ErrorItem = EI
-  { ei_pred :: AnyPredKind
-  , ei_evdest :: Maybe (KindCoercionHole AnyKiVar)
-  , ei_flavor :: CtFlavor
-  , ei_loc :: CtLoc
-  , ei_m_reason :: Maybe CtIrredReason
-  , ei_suppress :: Bool
-  }
+data ErrorItem
+  = KEI
+    { ei_ki_pred :: AnyPredKind
+    , ei_ki_evdest :: Maybe (KindCoercionHole AnyKiVar)
+    , ei_flavor :: CtFlavor
+    , ei_loc :: CtLoc
+    , ei_m_reason :: Maybe CtIrredReason
+    , ei_suppress :: Bool
+    }
+  | TEI
+    { ei_ty_pred :: AnyPredType
+    , ei_ty_evdest :: Maybe AnyTypeCoercionHole
+    , ei_flavor :: CtFlavor
+    , ei_loc :: CtLoc
+    , ei_m_reason :: Maybe CtIrredReason
+    , ei_suppress :: Bool
+    }
 
 instance Outputable ErrorItem where
-  ppr (EI { ei_pred = pred
-          , ei_evdest = m_evdest
-          , ei_flavor = flav
-          , ei_suppress = supp })
+  ppr (KEI { ei_ki_pred = pred
+           , ei_ki_evdest = m_evdest
+           , ei_flavor = flav
+           , ei_suppress = supp })
+    = pp_supp <+> ppr flav <+> pp_dest m_evdest <+> ppr pred
+    where
+      pp_dest Nothing = empty
+      pp_dest (Just ev) = ppr ev <+> colon
+
+      pp_supp = if supp then text "suppress:" else empty
+  ppr (TEI { ei_ty_pred = pred
+           , ei_ty_evdest = m_evdest
+           , ei_flavor = flav
+           , ei_suppress = supp })
     = pp_supp <+> ppr flav <+> pp_dest m_evdest <+> ppr pred
     where
       pp_dest Nothing = empty
@@ -172,8 +191,31 @@ errorItemOrigin = ctLocOrigin . ei_loc
 errorItemCtLoc :: ErrorItem -> CtLoc
 errorItemCtLoc = ei_loc
 
-errorItemPred :: ErrorItem -> AnyPredKind
-errorItemPred = ei_pred
+errorItemHasAmbigs :: ErrorItem -> Bool
+errorItemHasAmbigs (KEI { ei_ki_pred = pred })
+  = let ambig_kvs = ambigKvsOfKi pred
+    in not (null ambig_kvs)
+errorItemHasAmbigs (TEI { ei_ty_pred = pred })
+  = let ambig_tvs = panic "ambigTvsOfTy pred"
+    in panic "not (null ambig_tvs)"
+
+errorItemExtraNote :: ErrorItem -> SDoc
+errorItemExtraNote (KEI { ei_ki_pred = pred })
+  = let (_, k1, k2) = getPredKis pred
+    in if any isMonoFunKi [k1, k2]
+       then text "(maybe you haven't applied a type function to enough arguments?)"
+       else empty
+errorItemExtraNote (TEI { ei_ty_pred = pred })
+  = let (t1, t2) = getPredTys pred
+    in panic "errorItemExtraNote"
+
+solverCtxtMismatchMsg :: SolverReportErrCtxt -> ErrorItem -> MismatchMsg
+solverCtxtMismatchMsg (CEC { cec_kencl = implics }) item@(KEI {})
+  = let useful_givens = getUserGivensFromImplics implics
+    in CouldNotDeduceKi useful_givens (item NE.:| []) Nothing
+solverCtxtMismatchMsg (CEC { cec_tencl = implics }) item@(TEI {})
+  = let useful_givens = getUserGivensFromImplics implics
+    in CouldNotDeduceTy useful_givens (item NE.:| []) Nothing
 
 data TcSolverReportMsg
   = CannotUnifyKiVariable
@@ -209,8 +251,13 @@ data MismatchMsg
     , keq_mismatch_what :: Maybe KindedThing
     , keq_mb_same_kicon :: Maybe SameKiConInfo
     }
-  | CouldNotDeduce
-    { cnd_user_givens :: [KiImplication]
+  | CouldNotDeduceTy
+    { cnd_user_ty_givens :: [TyImplication]
+    , cnd_wanted :: NE.NonEmpty ErrorItem
+    , cnd_extra :: Maybe CND_Extra
+    }
+  | CouldNotDeduceKi
+    { cnd_user_ki_givens :: [KiImplication]
     , cnd_wanted :: NE.NonEmpty ErrorItem
     , cnd_extra :: Maybe CND_Extra
     }

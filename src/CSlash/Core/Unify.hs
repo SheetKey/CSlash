@@ -117,7 +117,7 @@ niFixSubst in_scope kenv
     not_fixpoint = any in_domain range_kvs
     in_domain kv = kv `elemVarEnv` kenv
 
-    free_kvs = scopedSort (filterOut in_domain range_kvs)
+    free_kvs = filterOut in_domain range_kvs
 
     subst = foldl' add_free_kv (mkKvSubst in_scope kenv) free_kvs
 

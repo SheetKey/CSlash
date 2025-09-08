@@ -311,27 +311,25 @@ pprTcSolverReportMsg ctxt (Mismatch mismatch_msg kv_info ambig_infos)
            , maybe empty (pprKiVarInfo ctxt) kv_info ]
            ++ (map pprAmbiguityInfo ambig_infos)
 
-pprTcSolverReportMsg ctxt@(CEC { cec_kencl = implics }) (CannotResolveRelation item binds)
+pprTcSolverReportMsg ctxt@(CEC { cec_tencl = timplics, cec_kencl = kimplics })
+                     (CannotResolveRelation item binds)
   = vcat [ no_inst_msg
          , nest 2 extra_note
-         , show_fixes (ctxtFixes has_ambigs pred implics)
+         , show_fixes ctxt_fixes
          ]
   where
     orig = errorItemOrigin item
-    pred = errorItemPred item
-    (kc, k1, k2) = getPredKis pred
-    ambig_kvs = ambigKvsOfKi pred
-    has_ambigs = not (null ambig_kvs)
-    useful_givens = getUserGivensFromImplics implics
+    has_ambigs = errorItemHasAmbigs item
 
     no_inst_msg :: SDoc
     no_inst_msg
-      = pprMismatchMsg ctxt $ CouldNotDeduce useful_givens (item :| []) Nothing
+      = pprMismatchMsg ctxt $ solverCtxtMismatchMsg ctxt item
 
-    extra_note | any isMonoFunKi [k1, k2]
-               = text "(maybe you haven't applied a type function to enough arguments?)"
-               | otherwise
-               = empty
+    extra_note = errorItemExtraNote item
+
+    ctxt_fixes = case item of
+                   TEI {} -> error "pprTcSolverReportMsg"
+                   KEI { ei_ki_pred = pred } -> ctxtFixes has_ambigs pred kimplics
 
 pprCannotUnifyKiVariableReason :: SolverReportErrCtxt -> CannotUnifyKiVariableReason -> SDoc
 pprCannotUnifyKiVariableReason ctxt (CannotUnifyWithPolykind item kv1 ki2 mb_kv_info)
@@ -396,7 +394,7 @@ pprMismatchMsg ctxt (KindEqMismatch item ki1 ki2 exp act mb_thing mb_same_kc)
 
     ct_loc = errorItemCtLoc item
 
-pprMismatchMsg ctxt (CouldNotDeduce useful_givens (item:|others) mb_extra)
+pprMismatchMsg ctxt (CouldNotDeduceKi useful_givens (item:|others) mb_extra)
   = main_msg $$ case supplementary of
                   Left infos -> vcat (map (pprExpectedActualInfo ctxt) infos)
                   Right other_msg -> pprMismatchMsg ctxt other_msg
@@ -412,7 +410,7 @@ pprMismatchMsg ctxt (CouldNotDeduce useful_givens (item:|others) mb_extra)
 
     ct_loc = errorItemCtLoc item
     orig = ctLocOrigin ct_loc
-    wanteds = map errorItemPred (item:others)
+    wanteds = map ei_ki_pred (item:others)
 
     no_instance_msg = case wanteds of
                         [wanted] | KiPredApp pred _ _ <- wanted
@@ -427,6 +425,8 @@ pprMismatchMsg ctxt (CouldNotDeduce useful_givens (item:|others) mb_extra)
     missing = case wanteds of
                 [w] -> quotes (ppr w)
                 _ -> ppr wanteds
+
+pprMismatchMsg ctxt (CouldNotDeduceTy {}) = panic "cndty"
 
 {- *********************************************************************
 *                                                                      *
@@ -512,9 +512,10 @@ mismatchMsg_ExpectedActuals :: MismatchMsg -> Maybe (AnyMonoKind, AnyMonoKind)
 mismatchMsg_ExpectedActuals = \case
   BasicMismatch { mismatch_ki1 = exp, mismatch_ki2 = act } -> Just (exp, act)
   KindEqMismatch { keq_mismatch_expected = exp, keq_mismatch_actual = act } -> Just (exp, act)
-  CouldNotDeduce { cnd_extra = cnd_extra }
+  CouldNotDeduceKi { cnd_extra = cnd_extra }
     | Just (CND_Extra _ exp act) <- cnd_extra -> Just (exp, act)
     | otherwise -> Nothing
+  CouldNotDeduceTy {} -> panic "CNDTy"
 
 cannotUnifyKiVariableHints :: CannotUnifyKiVariableReason -> [CsHint]
 cannotUnifyKiVariableHints = \case

@@ -1,3 +1,4 @@
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE BangPatterns #-}
 
 module CSlash.Core.Type.Tidy where
@@ -7,8 +8,7 @@ import CSlash.Data.FastString
 import CSlash.Core.Type.Rep
 import CSlash.Core.Kind
 import CSlash.Core.Type.FVs (varsOfTypeList)
-import CSlash.Core.Kind.FVs (varsOfKindList, varsOfMonoKindList
-                            , varsOfMonoKindsWellScoped)
+import CSlash.Core.Kind.FVs (varsOfKindList, varsOfMonoKindList, varsOfMonoKindsList)
 
 import CSlash.Types.Name hiding (varName)
 import CSlash.Types.Var
@@ -25,6 +25,18 @@ import Data.List (mapAccumL)
             TidyType
 *                                                                      *
 ********************************************************************* -}
+
+tidyTyVarBndr
+  :: (VarHasKind tv kv, ToTcTyVarMaybe tv kv, ToTcKiVarMaybe kv)
+  => MkTidyEnv tv kv -> tv -> (MkTidyEnv tv kv, tv)
+tidyTyVarBndr env@(occ_env, tsubst, ksubst) var
+  = case tidyOccName occ_env (getHelpfulOccNameTy var) of
+      (occ_env', occ') -> ((occ_env', tsubst', ksubst), var')
+        where
+          tsubst' = extendVarEnv tsubst var var'
+          var' = updateVarKind (tidyMonoKind env) (setVarName var name')
+          name' = tidyNameOcc name occ'
+          name = varName var
 
 tidyKiVarBndrs :: ToTcKiVarMaybe kv => MkTidyEnv tv kv -> [kv] -> (MkTidyEnv tv kv, [kv])
 tidyKiVarBndrs tidy_env vs = mapAccumL tidyKiVarBndr (avoidNameClashesKi vs tidy_env) vs
@@ -43,6 +55,17 @@ avoidNameClashesKi :: ToTcKiVarMaybe kv => [kv] -> MkTidyEnv tv kv -> MkTidyEnv 
 avoidNameClashesKi vs (occ_env, tsubst, ksubst)
   = (avoidClashesOccEnv occ_env occs, tsubst, ksubst)
   where occs = map getHelpfulOccNameKi vs
+
+getHelpfulOccNameTy :: (ToTcTyVarMaybe tv kv) => tv -> OccName
+getHelpfulOccNameTy tv
+  | isSystemName name
+  , Just _ <- toTcTyVar_maybe tv
+  = mkTyVarOccFS (occNameFS occ `appendFS` fsLit "0")
+  | otherwise
+  = occ
+  where
+    name = varName tv
+    occ = getOccName name
 
 getHelpfulOccNameKi :: ToTcKiVarMaybe kv => kv -> OccName
 getHelpfulOccNameKi v
@@ -81,11 +104,27 @@ getHelpfulOccNameKi v
 -- tidyBigLamTyBinders tidy_env kvbs
 --   = mapAccumL tidyBigLamTyBinder (avoidNameClashes kvbs tidy_env) kvbs
 
-tidyFreeTyKiVars :: ToTcKiVarMaybe kv => MkTidyEnv tv kv -> ([tv], [kv]) -> MkTidyEnv tv kv
+tidyFreeTyKiVars
+  :: (VarHasKind tv kv, ToTcTyVarMaybe tv kv, ToTcKiVarMaybe kv)
+  => MkTidyEnv tv kv -> ([tv], [kv]) -> MkTidyEnv tv kv
 tidyFreeTyKiVars env (tvs, kvs) = tidyFreeTyVars (tidyFreeKiVars env kvs) tvs
 
-tidyFreeTyVars :: MkTidyEnv tv kv -> [tv] -> MkTidyEnv tv kv
-tidyFreeTyVars = panic "tidyFreeTyVars"
+tidyFreeTyVars
+  :: (VarHasKind tv kv, ToTcTyVarMaybe tv kv, ToTcKiVarMaybe kv)
+  => MkTidyEnv tv kv -> [tv] -> MkTidyEnv tv kv
+tidyFreeTyVars tidy_env tyvars = fst (tidyFreeTyVarsX tidy_env tyvars)
+
+tidyFreeTyVarsX
+  :: (VarHasKind tv kv, ToTcTyVarMaybe tv kv, ToTcKiVarMaybe kv)
+  => MkTidyEnv tv kv -> [tv] -> (MkTidyEnv tv kv, [tv])
+tidyFreeTyVarsX env tyvars = mapAccumL tidyFreeTyVarX env tyvars
+
+tidyFreeTyVarX
+  :: (VarHasKind tv kv, ToTcTyVarMaybe tv kv, ToTcKiVarMaybe kv)
+  => MkTidyEnv tv kv -> tv -> (MkTidyEnv tv kv, tv)
+tidyFreeTyVarX env@(_, subst, _) tv = case lookupVarEnv subst tv of
+                                        Just tyvar' -> (env, tyvar')
+                                        Nothing -> tidyTyVarBndr env tv
 
 tidyFreeKiVars :: ToTcKiVarMaybe kv => MkTidyEnv tv kv -> [kv] -> MkTidyEnv tv kv
 tidyFreeKiVars tidy_env vars = fst (tidyOpenKiVars tidy_env vars)
@@ -139,7 +178,7 @@ tidyOpenMonoKinds
 tidyOpenMonoKinds env kis = (env', tidyMonoKinds (trimmed_occ_env, tenv, var_env) kis)
   where
     (env'@(_, tenv, var_env), kvs') = tidyOpenKiVars env
-                                $ varsOfMonoKindsWellScoped kis
+                                $ varsOfMonoKindsList kis
     trimmed_occ_env = initTidyOccEnv (map getOccName kvs')
 
 tidyOpenMonoKind

@@ -188,6 +188,9 @@ mapTypeX (TypeMapper { tm_tyvar = tyvar
 *                                                                      *
 ********************************************************************* -}
 
+isTyVarTy :: IsTyVar tv kv => Type tv kv -> Bool
+isTyVarTy = isJust . getTyVar_maybe
+
 getTyVar_maybe :: IsTyVar tv kv => Type tv kv -> Maybe tv
 getTyVar_maybe = getTyVarNoView_maybe . coreFullView
 

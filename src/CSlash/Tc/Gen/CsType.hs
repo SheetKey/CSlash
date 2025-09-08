@@ -125,7 +125,7 @@ tc_lcs_sig_type skol_info full_cs_ty@(L loc (CsSig { sig_ext = kv_nms
   doNotQuantifyKiVars exp_kind_vars
 
   traceTc "tc_lcs_sig_type" (ppr kv_nms $$ ppr kv_bndrs)
-  kv_bndrs <- zonkAndScopedSort kv_bndrs
+  kv_bndrs <- liftZonkM $ zonkTcKiVarsToTcKiVars kv_bndrs
 
   let ty1 = mkBigLamTys (toAnyKiVar <$> kv_bndrs) ty
   kvs <- kindGeneralizeSome skol_info wanted ty1
@@ -982,11 +982,6 @@ bindImplicitKBndrsX skol_mode kv_names thing_inside = do
              Kind generalization
 *                                                                      *
 ********************************************************************* -}
-
-zonkAndScopedSort :: [TcKiVar] -> TcM [TcKiVar]
-zonkAndScopedSort spec_kvs = do
-  spec_kvs <- liftZonkM $ zonkTcKiVarsToTcKiVars spec_kvs
-  return $ scopedSort spec_kvs
 
 kindGeneralizeSome :: SkolemInfo -> WantedKiConstraints -> AnyType -> TcM [TcKiVar]
 kindGeneralizeSome skol_info wanted ty = do

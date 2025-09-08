@@ -142,7 +142,7 @@ zonkTyVarOcc = handleAnyTv f_any f_tc
             Nothing -> do mtv_details <- readTcRef ref
                           zonk_meta ref mtv_details
 
-    f_any tv = mkTyVarTy <$> updateVarKindM zonkTcMonoKindToMonoKindX tv
+    f_any tv = mkTyVarTy <$> changeVarKindM zonkTcMonoKindToMonoKindX tv
 
 extendMetaTvEnv :: TcTyVar AnyKiVar -> Type (TyVar KiVar) KiVar -> ZonkTcM ()
 extendMetaTvEnv tv ty = ZonkT $ \ (ZonkEnv { ze_meta_tv_env = mtv_env_ref }) ->

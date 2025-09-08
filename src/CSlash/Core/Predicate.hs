@@ -32,6 +32,16 @@ isTyEqPred ty
   | otherwise
   = False
 
+getPredTys :: IsTyVar tv kv => PredType tv kv -> (Type tv kv, Type tv kv)
+getPredTys ty = case getPredTys_maybe ty of
+                  Just tys -> tys
+                  Nothing -> pprPanic "getPredTys" (ppr ty)
+
+getPredTys_maybe :: IsTyVar tv kv => PredType tv kv -> Maybe (Type tv kv, Type tv kv)
+getPredTys_maybe ty = case splitTyConApp_maybe ty of
+                        Just (tc, [_, _, ty1, ty2]) | tc `hasKey` eqTyConKey -> Just (ty1, ty2)
+                        _ -> Nothing
+
 data KiPred kv
   = KiCoPred KiPredCon (MonoKind kv) (MonoKind kv)
   | IrredPred (PredKind kv)

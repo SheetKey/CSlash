@@ -499,11 +499,19 @@ zonkTidyOrigin env orig@(KindCoOrigin { kco_actual = act, kco_expected = exp }) 
 
 zonkTidyOrigin env orig = panic "return (env, orig)"
 
-tidyCt :: AnyTidyEnv -> KiCt -> KiCt
-tidyCt env = updKiCtEvidence (tidyCtEvidence env)
+tidyTyCt :: AnyTidyEnv -> TyCt -> TyCt
+tidyTyCt env = updTyCtEvidence (tidyTyCtEvidence env)
 
-tidyCtEvidence :: AnyTidyEnv -> CtKiEvidence -> CtKiEvidence
-tidyCtEvidence env ctev = ctev { ctkev_pred = tidyMonoKind env ki }
+tidyTyCtEvidence :: AnyTidyEnv -> CtTyEvidence -> CtTyEvidence
+tidyTyCtEvidence env ctev = ctev { cttev_pred = tidyType env ty }
+  where
+    ty = cttev_pred ctev
+
+tidyKiCt :: AnyTidyEnv -> KiCt -> KiCt
+tidyKiCt env = updKiCtEvidence (tidyKiCtEvidence env)
+
+tidyKiCtEvidence :: AnyTidyEnv -> CtKiEvidence -> CtKiEvidence
+tidyKiCtEvidence env ctev = ctev { ctkev_pred = tidyMonoKind env ki }
   where
     ki = ctkev_pred ctev
 

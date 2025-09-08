@@ -250,6 +250,12 @@ ctTyEvidence (CIrredCanTy (IrredTyCt { itr_ev = ev })) = ev
 ctTyEvidence (CTyEqCan (TyEqCt { teq_ev = ev })) = ev
 ctTyEvidence (CNonCanonicalTy ev) = ev
 
+updTyCtEvidence :: (CtTyEvidence -> CtTyEvidence) -> TyCt -> TyCt
+updTyCtEvidence upd ct = case ct of
+  CTyEqCan eq@(TyEqCt { teq_ev = ev }) -> CTyEqCan (eq { teq_ev = upd ev })
+  CIrredCanTy ir@(IrredTyCt { itr_ev = ev }) -> CIrredCanTy (ir { itr_ev = upd ev })
+  CNonCanonicalTy ev -> CNonCanonicalTy (upd ev)
+
 updKiCtEvidence :: (CtKiEvidence -> CtKiEvidence) -> KiCt -> KiCt
 updKiCtEvidence upd ct = case ct of
   CKiCoCan co@(KiCoCt { kc_ev = ev }) -> CKiCoCan (co { kc_ev = upd ev })

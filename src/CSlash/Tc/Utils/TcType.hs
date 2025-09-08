@@ -601,6 +601,9 @@ isSigmaTy _ = False
 isRhoTy :: IsTyVar tv kv => Type tv kv -> Bool
 isRhoTy ty = not (isSigmaTy ty)
 
+isRigidTy :: Type tv kv -> Bool
+isRigidTy = panic "isRigidTy"
+
 isRigidKi :: MonoKind kv -> Bool
 isRigidKi ki = case ki of
   KiPredApp {} -> True
