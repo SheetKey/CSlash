@@ -608,18 +608,18 @@ zonkTidyTcLclEnvs tidy_env lcls = foldM go (tidy_env, emptyNameEnv) (concatMap c
     go envs tc_bndr = case tc_bndr of
       TcTvBndr {} -> return envs
       TcKvBndr {} -> return envs
-      TcIdBndr id _ -> panic "go_one (idName id) (idType id) envs"
+      TcIdBndr id _ -> go_one (varName id) (varType id) envs
       TcIdBndr_ExpType name et _ -> panic "zonkTidyTcLclEnvs TcIdBndr_ExpType" --do
         -- mb_ty <- liftIO $ readExpType_maybe et
         -- case mb_ty of
         --   Just ty -> panic go_one name ty envs
         --   Nothing -> return envs
 
-    -- go_one name ty (tidy_env, name_env) = do
-    --   if name `elemNameEv` name_env
-    --     then return (tidy_env, name_env)
-    --     else do (tidy_env', tidy_ty) <- zonkTidyTcType tidy_env ty
-    --             return 
+    go_one name ty (tidy_env, name_env) = do
+      if name `elemNameEnv` name_env
+        then return (tidy_env, name_env)
+        else do (tidy_env', tidy_ty) <- zonkTidyTcType tidy_env ty
+                return (tidy_env', extendNameEnv name_env name tidy_ty)
 
 ignoreErrorReporter :: Reporter
 ignoreErrorReporter ctxt items = do
