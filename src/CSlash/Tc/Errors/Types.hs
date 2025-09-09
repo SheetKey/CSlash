@@ -329,19 +329,31 @@ data ValidHoleFits = ValidHoleFits
   }
 
 data RelevantBindings = RelevantBindings
-  { relevantBindingNamesAndKis :: [(Name, AnyKind)]
+  { relevantBindingNamesAndTys :: [(Name, AnyType)]
+  , relevantBindingNamesAndKis :: [(Name, AnyKind)] -- safe to remove, maybe shouldn't be??
   , ranOutOfFuel :: Bool
   }
 
 pprRelevantBindings :: RelevantBindings -> SDoc
-pprRelevantBindings (RelevantBindings bds ran_out_of_fuel)
-  = ppUnless (null rel_bds)
-    $ hang (text "Relevant bindings include")
-      2 (vcat (map ppr_binding rel_bds) $$ ppWhen ran_out_of_fuel discardMsg)
+pprRelevantBindings (RelevantBindings ty_bds ki_bds ran_out_of_fuel)
+  = vcat [ ppUnless (null rel_ki_bds)
+           $ hang (text "Relevant type bindings include")
+           2 (vcat (map ppr_ki_binding rel_ki_bds) $$ ppWhen ran_out_of_fuel discardMsg)
+         , ppUnless (null rel_ty_bds)
+           $ hang (text "Relevant term bindsings include")
+           2 (vcat (map ppr_ty_binding rel_ty_bds) $$ ppWhen ran_out_of_fuel discardMsg)
+         ]
+    
   where
-    ppr_binding (nm, tidy_ki) = sep [ pprPrefixOcc nm <+> colon <+> ppr tidy_ki
-                                    , nest 2 (parens (text "bound at" <+> ppr (getSrcLoc nm))) ]
-    rel_bds = filter (not . isGeneratedSrcSpan . getSrcSpan . fst) bds
+    ppr_ki_binding (nm, tidy_ki) =
+      sep [ pprPrefixOcc nm <+> colon <+> ppr tidy_ki
+          , nest 2 (parens (text "bound at" <+> ppr (getSrcLoc nm))) ]
+    rel_ki_bds = filter (not . isGeneratedSrcSpan . getSrcSpan . fst) ki_bds
+
+    ppr_ty_binding (nm, tidy_ty) =
+      sep [ pprPrefixOcc nm <+> colon <+> ppr tidy_ty
+          , nest 2 (parens (text "bound at" <+> ppr (getSrcLoc nm))) ]
+    rel_ty_bds = filter (not . isGeneratedSrcSpan . getSrcSpan . fst) ty_bds
 
 discardMsg :: SDoc
 discardMsg = text "(Some bindings suppressed;" <+>

@@ -602,7 +602,10 @@ mkSkolReporter ctxt items = mapM_ (reportGroup mkEqErr ctxt) (group (toList item
       | eq_lhs_kind item1 item2 = True
       | otherwise = False
 
-zonkTidyTcLclEnvs :: AnyTidyEnv -> [CtLocEnv] -> ZonkM (AnyTidyEnv, NameEnv AnyType)
+zonkTidyTcLclEnvs
+  :: AnyTidyEnv
+  -> [CtLocEnv]
+  -> ZonkM (AnyTidyEnv, NameEnv AnyType)
 zonkTidyTcLclEnvs tidy_env lcls = foldM go (tidy_env, emptyNameEnv) (concatMap ctl_bndrs lcls)
   where
     go envs tc_bndr = case tc_bndr of
@@ -997,7 +1000,9 @@ relevantBindings want_filtering ctxt item = do
       lcl_env = ctLocEnv loc
   (env1, tidy_orig) <- liftZonkM $ zonkTidyOrigin (cec_tidy ctxt) (ctLocOrigin loc)
 
-  let ct_fvs = varsOfMonoKind (ei_ki_pred item)
+  let ct_fvs = case item of
+                 KEI { ei_ki_pred = pred } -> (emptyVarSet, emptyVarSet, varsOfMonoKind pred)
+                 TEI { ei_ty_pred = pred } -> varsOfType pred 
 
       loc' = setCtLocOrigin loc tidy_orig
       item' = item { ei_loc = loc' }
@@ -1012,17 +1017,18 @@ relevant_bindings
   :: Bool
   -> CtLocEnv
   -> NameEnv AnyType
-  -> MkVarSet AnyKiVar
+  -> (MkVarSet (AnyTyVar AnyKiVar), MkVarSet (KiCoVar AnyKiVar), MkVarSet AnyKiVar)
   -> TcM RelevantBindings
-relevant_bindings want_filtering lcl_env lcl_name_env ct_kvs = do
+relevant_bindings want_filtering lcl_env lcl_name_env (ct_tvs, ct_kcvs, ct_kvs) = do
   dflags <- getDynFlags
   traceTc "relevant_bindings"
-    $ vcat [ ppr ct_kvs
+    $ vcat [ ppr ct_tvs
+           , ppr ct_kvs
            , pprWithCommas id [ ppr id <+> colon <+> ppr (varType id)
                               | TcIdBndr id _ <- ctl_bndrs lcl_env ]
            , pprWithCommas id [ ppr id | TcIdBndr_ExpType id _ _ <- ctl_bndrs lcl_env ] ]
-  go dflags (maxRelevantBinds dflags) emptyVarSet (RelevantBindings [] False)
-    (removeBindingShadowing $ ctl_bndrs lcl_env)
+  go dflags (maxRelevantBinds dflags) emptyVarSet emptyVarSet emptyVarSet
+     (RelevantBindings [] [] False) (removeBindingShadowing $ ctl_bndrs lcl_env)
 
   where
     run_out :: Maybe Int -> Bool
@@ -1035,40 +1041,51 @@ relevant_bindings want_filtering lcl_env lcl_name_env ct_kvs = do
     go
       :: DynFlags
       -> Maybe Int
-      -> AnyTyVarSet AnyKiVar
+      -> MkVarSet (AnyTyVar AnyKiVar)
+      -> MkVarSet (KiCoVar AnyKiVar)
+      -> MkVarSet AnyKiVar
       -> RelevantBindings
       -> [TcBinder]
       -> TcM RelevantBindings
-    go _ _ _ (RelevantBindings bds discards) []
-      = return $ RelevantBindings (reverse bds) discards
-    go dflags n_left tvs_seen rels@(RelevantBindings bds discards) (tc_bndr : tc_bndrs)
+    go _ _ _ _ _ (RelevantBindings tybds kibds discards) []
+      = return $ RelevantBindings (reverse tybds) (reverse kibds) discards
+    go dflags n_left tvs_seen kcvs_seen kvs_seen
+       rels@(RelevantBindings tybds kibds discards) (tc_bndr : tc_bndrs)
       = case tc_bndr of
-          TcTvBndr {} -> discard_it
+          TcTvBndr {} -> discard_it -- maybe don't discard (we'd need to add a lcl_ki_name_env to zonkTidyTcLclEnvs
           TcKvBndr {} -> discard_it
-          TcIdBndr id top_lvl -> panic "go2 (idName id) top_lvl"
+          TcIdBndr id top_lvl -> go2 (varName id) top_lvl
           TcIdBndr_ExpType name et top_lvl -> panic "relevant_bindings TcIdBndr_ExpType"
       where
-        discard_it = go dflags n_left tvs_seen rels tc_bndrs
+        discard_it = go dflags n_left tvs_seen kcvs_seen kvs_seen rels tc_bndrs
 
-        -- go2 id_name top_lvl = do
-        --   let tidy_ty = case lookupNameEnv lcl_name_env id_name of
-        --                   Just tty -> tty
-        --                   Nothing -> pprPanic "relevant_bindings" (ppr id_name)
-        --   traceTc "relevantBindings 1" (ppr id_name <+> colon <+> ppr tidy_ty)
-        --   let id_tvs = tyVarsOfType tidy_ty
-        --       bd = (id_name, tidy_ty)
-        --       new_seen = tvs_seen `unionVarSet` id_tvs
+        go2 id_name top_lvl = do
+          let tidy_ty = case lookupNameEnv lcl_name_env id_name of
+                          Just tty -> tty
+                          Nothing -> pprPanic "relevant_bindings" (ppr id_name)
+          traceTc "relevantBindings 1" (ppr id_name <+> colon <+> ppr tidy_ty)
+          let (id_tvs, id_kcvs, id_kvs) = varsOfType tidy_ty
+              bd = (id_name, tidy_ty)
+              new_tvs_seen = tvs_seen `unionVarSet` id_tvs
+              new_kcvs_seen = kcvs_seen `unionVarSet` id_kcvs
+              new_kvs_seen = kvs_seen `unionVarSet` id_kvs
 
-        --   if | (want_filtering && not (hasPprDebug dflags)
-        --         && id_tvs `disjointVarSet` ct_kvs)
-        --        ->  discard_it
-        --      | isTopLevel top_lvl && not (isNothing n_left)
-        --        -> discard_it
-        --      | run_out n_left && id_tvs `subVarSet` tvs_seen
-        --        -> go dflags n_left tvs_seen (RelevantBindings bds True) tc_bndrs
-        --      | otherwise
-        --        -> go dflags (dec_max n_left) new_seen
-        --              (RelevantBindings (bd:bds) discards) tc_bndrs
+          if | (want_filtering && not (hasPprDebug dflags)
+                && id_tvs `disjointVarSet` ct_tvs
+                && id_kcvs `disjointVarSet` ct_kcvs
+                && id_kvs `disjointVarSet` ct_kvs)
+               ->  discard_it
+             | isTopLevel top_lvl && not (isNothing n_left)
+               -> discard_it
+             | run_out n_left
+               && id_tvs `subVarSet` tvs_seen
+               && id_kcvs `subVarSet` kcvs_seen
+               && id_kvs `subVarSet` kvs_seen
+               -> go dflags n_left tvs_seen kcvs_seen kvs_seen
+                     (RelevantBindings tybds kibds True) tc_bndrs
+             | otherwise
+               -> go dflags (dec_max n_left) new_tvs_seen new_kcvs_seen new_kvs_seen
+                     (RelevantBindings (bd:tybds) kibds discards) tc_bndrs
 
 {-**********************************************************************
 *                                                                      *
