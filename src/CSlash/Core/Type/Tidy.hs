@@ -119,6 +119,14 @@ tidyFreeTyKiVars
   => MkTidyEnv tv kv -> ([tv], [kv]) -> MkTidyEnv tv kv
 tidyFreeTyKiVars env (tvs, kvs) = tidyFreeTyVars (tidyFreeKiVars env kvs) tvs
 
+tidyFreeTyKiVarsX
+  :: (VarHasKind tv kv, ToTcTyVarMaybe tv kv, ToTcKiVarMaybe kv)
+  => MkTidyEnv tv kv -> ([tv], [kv]) -> (MkTidyEnv tv kv, ([tv], [kv]))
+tidyFreeTyKiVarsX env (tvs, kvs)
+  = let (env1, kvs') = tidyOpenKiVars env kvs
+        (env2, tvs') = tidyFreeTyVarsX env1 tvs
+    in (env2, (tvs', kvs'))
+
 tidyFreeTyVars
   :: (VarHasKind tv kv, ToTcTyVarMaybe tv kv, ToTcKiVarMaybe kv)
   => MkTidyEnv tv kv -> [tv] -> MkTidyEnv tv kv
@@ -139,6 +147,7 @@ tidyFreeTyVarX env@(_, subst, _) tv = case lookupVarEnv subst tv of
 tidyFreeKiVars :: ToTcKiVarMaybe kv => MkTidyEnv tv kv -> [kv] -> MkTidyEnv tv kv
 tidyFreeKiVars tidy_env vars = fst (tidyOpenKiVars tidy_env vars)
 
+-- rename this func
 tidyOpenKiVars :: ToTcKiVarMaybe kv => MkTidyEnv tv kv -> [kv] -> (MkTidyEnv tv kv, [kv])
 tidyOpenKiVars env vars = mapAccumL tidyOpenKiVar env vars
 
@@ -182,6 +191,19 @@ tidyAvoiding bound_var_avoids do_tidy thing
   where
     (occs', tvars', kvars') = do_tidy init_tidy_env thing
     init_tidy_env = mkEmptyTidyEnv (initTidyOccEnv bound_var_avoids)
+
+trimTidyEnvTyKi :: IsTyVar tv kv => MkTidyEnv tv kv -> ([tv], [kv]) -> MkTidyEnv tv kv
+trimTidyEnvTyKi (occ_env, tsubst, ksubst) (tvs, kvs)
+  = (trimTidyOccEnv occ_env (map getOccName tvs ++ map getOccName kvs), tsubst, ksubst)
+
+tidyOpenTypeX
+  :: (IsTyVar tv kv, ToTcTyVarMaybe tv kv, ToTcKiVarMaybe kv)
+  => MkTidyEnv tv kv -> Type tv kv -> (MkTidyEnv tv kv, Type tv kv)
+tidyOpenTypeX env ty = (env1, tidyType inner_env ty)
+  where
+    free_tkvs = varsOfTypeList ty
+    (env1, free_tkvs') = tidyFreeTyKiVarsX env free_tkvs
+    inner_env = trimTidyEnvTyKi env1 free_tkvs'
 
 tidyOpenMonoKinds
   :: ToTcKiVarMaybe kv => MkTidyEnv tv kv -> [MonoKind kv] -> (MkTidyEnv tv kv, [MonoKind kv])

@@ -447,6 +447,13 @@ tidyOccName env occ@(OccName occ_sp fs)
         new_fs = mkFastString (base ++ show n)
         new_env = addToUFM (addToUFM env new_fs 1) base1 (n+1)
 
+trimTidyOccEnv :: TidyOccEnv -> [OccName] -> TidyOccEnv
+trimTidyOccEnv env vs = foldl' add emptyUFM vs
+  where
+    add so_far (OccName _ fs) = case lookupUFM env fs of
+                                  Just n -> addToUFM so_far fs n
+                                  Nothing -> so_far
+
 {- *********************************************************************
 *                                                                      *
                 Binary instance
