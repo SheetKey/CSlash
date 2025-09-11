@@ -210,45 +210,6 @@ tc_pat pat_ty penv ps_pat thing_inside = case ps_pat of
 
 tc_ty_pat :: Pat Rn -> AnyTyVar AnyKiVar -> TcM r -> TcM (AnyType, r)
 tc_ty_pat tp tv thing_inside = do
-  let mb_kind = let go pat = case pat of
-                               TyVarPat {} -> Nothing
-                               WildPat {} -> Nothing
-                               ParPat _ (L _ p) -> go p
-                               KdSigPat _ _ (CsPSK _ k) -> Just k
-                               _ -> pprPanic "tc_ty_pat" (ppr pat)
-                in go tp
-      expected_kind = varKind tv
-  traceTc "tc_ty_pat 1" (ppr expected_kind)
-  (name, is_wild) <- let go pat = case pat of
-                                    TyVarPat _ (L _ n) -> return (n, False)
-                                    WildPat _ -> (, True) <$> newSysName (mkTyVarOcc "_")
-                                    ParPat _ (L _ p) -> go p
-                                    KdSigPat _ (L _ p) _ -> go p
-                                    _ -> pprPanic "tc_ty_pat" (ppr pat)
-          in go tp
-  let mb_name = if is_wild then Nothing else Just name
-
-  pat_tv <- newPatTyVar name expected_kind
-  let sig_bv = case mb_name of
-                 Nothing -> []
-                 Just nm -> [(nm, toAnyTyVar pat_tv)]
-
-  arg_ty <- case mb_kind of
-    Nothing -> return (mkTyVarTy (toAnyTyVar pat_tv))
-    Just pat_ki -> do
-      addKindCtxt pat_ki
-        $ solveKindCoercions "tc_ty_pat"
-        $ tcCsTvbKind mb_name pat_ki expected_kind
-
-      traceTc "tc_ty_pat 2"
-        $ vcat [ text "expected_kind" <+> ppr expected_kind
-               , text "(name, pat_tv)" <+> ppr (name, pat_tv) ]
-
-      return (mkTyVarTy (toAnyTyVar pat_tv))
-
-  _ <- unifyType Nothing arg_ty (mkTyVarTy tv)
-  result <- tcExtendNameTyVarEnv sig_bv $ thing_inside
-  return (arg_ty, result)
 
 {- *********************************************************************
 *                                                                      *
