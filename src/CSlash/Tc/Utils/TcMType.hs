@@ -371,6 +371,15 @@ isFilledMetaKiVar_maybe kv
 *                                                                      *
 ********************************************************************* -}
 
+newPatKiVar :: Name -> TcM TcKiVar
+newPatKiVar name = do
+  details <- newMetaDetails TauVar
+  uniq <- newUnique
+  let name' = name `setNameUnique` uniq
+      kivar = mkTcKiVar name details
+  traceTc "newPatKiVar" (ppr kivar)
+  return kivar
+
 cloneAnonMetaKiVar :: MetaInfo -> AnyKiVar -> TcM TcKiVar
 cloneAnonMetaKiVar info kv = do
   details <- newMetaDetails info

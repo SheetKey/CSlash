@@ -121,13 +121,19 @@ tc_lcs_sig_type skol_info full_cs_ty@(L loc (CsSig { sig_ext = kv_nms
          stuff <- tcLCsType cs_ty exp_kind
          return (exp_kind, stuff)
 
+  traceTc "tc_lcs_sig_type" (ppr tc_lvl $$ ppr exp_kind $$ ppr ty)
+
+  -- exp_kind_vars are (afaik) all compiler generated (not user written)
   exp_kind_vars <- candidateQKiVarsOfKind (Mono exp_kind)
   doNotQuantifyKiVars exp_kind_vars
 
+  -- the kv_bndrs are all of the user writen ki vars occuring in the user written type sig
   traceTc "tc_lcs_sig_type" (ppr kv_nms $$ ppr kv_bndrs)
   kv_bndrs <- liftZonkM $ zonkTcKiVarsToTcKiVars kv_bndrs
+  traceTc "tc_lcs_sig_type" (text "zonked kv_bndrs" <+> ppr kv_bndrs)
 
   let ty1 = mkBigLamTys (toAnyKiVar <$> kv_bndrs) ty
+  -- catch any kind variables that were not user written
   kvs <- kindGeneralizeSome skol_info wanted ty1
 
   implic <- buildKvImplication (getSkolemInfo skol_info) kvs tc_lvl wanted
@@ -1012,6 +1018,14 @@ filterConstrainedCandidates wanted kvs
        _ <- promoteKiVarSet to_promote
        return kvs'
 
+typeKindGeneralizeNone :: AnyType -> TcM ()
+typeKindGeneralizeNone ty = do
+  traceTc "typeKindGeneralizeNone" (ppr ty)
+  kvs <- candidateQKiVarsOfType ty
+  traceTc "typeKindGeneralizeNone" (ppr ty $$ ppr kvs)
+  _ <- promoteKiVarSet $ dVarSetToVarSet kvs
+  return ()
+
 kindGeneralizeNone :: AnyMonoKind -> TcM ()
 kindGeneralizeNone kind = do
   traceTc "kindGeneralizeNone" (ppr kind)
@@ -1075,22 +1089,28 @@ tcCsPatSigType ctxt (CsPS { csps_ext = CsPSRn { csps_imp_kvs = sig_ns }
 tc_type_in_pat
   :: UserTypeCtxt
   -> LCsType Rn
-  -> [Name] -- GHC will scope these. WE SHOULD NOT! they should already be in scope
+  -> [Name]
   -> ContextKind
   -> TcM AnyType
 tc_type_in_pat ctxt cs_ty ns ctxt_kind = addSigCtxt ctxt cs_ty $ do
+  kv_prs <- mapM new_implicit_kv ns
   ty <- addTypeCtxt cs_ty
         $ solveKindCoercions "tc_type_in_pat"
+        $ tcExtendNameKiVarEnv kv_prs
         $ do ek <- newExpectedKind ctxt_kind
              tcLCsType cs_ty ek
 
-  kindGeneralizeNone' (typeKind ty) -- I think this makes sense?? although there could be
-                                    -- kvs in the type? but this is just for a later kind comp
+  typeKindGeneralizeNone ty
   ty <- liftZonkM $ zonkTcType ty
   checkValidType ctxt ty
 
-  traceTc "tc_type_in_pat" (ppr ns)
+  traceTc "tc_type_in_pat" (ppr kv_prs)
   return ty
+  where
+    new_implicit_kv name = do
+      kv <- newPatKiVar name
+      return (name, toAnyKiVar kv)
+              
 
 {- *********************************************************************
 *                                                                      *
