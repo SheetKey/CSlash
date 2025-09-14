@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
@@ -89,13 +90,15 @@ tcMatchPats match_ctxt pats pat_tys thing_inside
              loop all_pats@(pat : pats) (ExpForAllPatTy (Bndr tv vis) : pat_tys)
                -- we MUST have a binder of the form '/\ a' (parsed as a 'TyVarPat {}')
                | Required <- vis
-               = do () <- tc_forall_lpat tv penv pat
-                          $ loop pats pat_tys                    
+               = do (_, res) <- tc_forall_lpat tv penv pat
+                                $ loop pats pat_tys
+                    return res
 
                -- we MAY have a binder of the form '/\ {a}' (parsed as a 'ImpPat _ (TyVarPat {})'
                | Specified <- vis
-               , Just (L _ imp_pat) <- imp_lpat_maybe pat
-               = do (_, res) <- tc_ty_pat imp_pat tv $ loop pats pat_tys
+               , Just _ <- imp_lpat_maybe pat
+               = do (_, res) <- tc_forall_lpat tv penv pat
+                                $ loop pats pat_tys
                     return res
 
                | otherwise
@@ -208,8 +211,65 @@ tc_pat pat_ty penv ps_pat thing_inside = case ps_pat of
 
   _ -> panic "tc_pat unfinished"
 
-tc_ty_pat :: Pat Rn -> AnyTyVar AnyKiVar -> TcM r -> TcM (AnyType, r)
+tc_forall_lpat :: AnyTyVar AnyKiVar -> Checker (LPat Rn) (LPat Tc)
+tc_forall_lpat tv penv (L span pat) thing_inside = setSrcSpanA span $ do
+  (pat', res) <- maybeWrapPatCtxt pat (tc_forall_pat tv penv pat) thing_inside
+  return (L span pat', res)
+
+tc_forall_pat :: AnyTyVar AnyKiVar -> Checker (Pat Rn) (Pat Tc)
+
+tc_forall_pat tv penv (ParPat x lpat) thing_inside = do
+  (lpat', res) <- tc_forall_lpat tv penv lpat thing_inside
+  return (ParPat x lpat', res)
+
+tc_forall_pat tv penv (ImpPat x lpat) thing_inside = do
+  (lpat', res) <- tc_forall_lpat tv penv lpat thing_inside
+  return (ImpPat x lpat', res)
+
+tc_forall_pat tv _ pat thing_inside = do
+  tp <- pat_to_type_pat pat
+  (arg_ty, result) <- tc_ty_pat tp tv thing_inside
+  let pat' = XPat $ TyPat pat arg_ty tp
+  return (pat', result)
+
+pat_to_type_pat :: Pat Rn -> TcM (CsTyPat Rn)
+pat_to_type_pat pat = do
+  (ty, x) <- runWriterT (pat_to_type pat)
+  pure (CsTP (buildCsTyPatRn x) ty)
+
+pat_to_type :: Pat Rn -> WriterT CsTyPatRnBuilder TcM (LCsType Rn)
+
+pat_to_type (TyVarPat _ lname) = do
+  tell (tpBuilderExplicitTV (unLoc lname))
+  return b
+  where b = noLocA (CsTyVar noAnn lname)
+
+pat_to_type (WildPat _) = return b
+  where b = noLocA (CsUnboundTyVar noExtField (panic "CsUnboundTyVar rdrname"))
+
+pat_to_type (ImpPat _ pat) = pat_to_type (unLoc pat)
+
+pat_to_type (ParPat _ pat) = do
+  t <- pat_to_type (unLoc pat)
+  return (noLocA (CsParTy noAnn t))
+
+pat_to_type (KdSigPat _ pat sig_ki) = do
+  t <- pat_to_type (unLoc pat)
+  let !(CsPSK x_cspsk k) = sig_ki
+      b = noLocA (CsKindSig noAnn t k)
+  tell (tpBuilderPatSig x_cspsk)
+  return b
+
+pat_to_type pat = lift $ failWith $ panic "TcRnIllformedTypePattern pat"
+
+tc_ty_pat :: CsTyPat Rn -> AnyTyVar AnyKiVar -> TcM r -> TcM (AnyType, r)
 tc_ty_pat tp tv thing_inside = do
+  (sig_ibs, sig_kibs, arg_ty) <- tcCsTyPat tp (varKind tv)
+  _ <- unifyType Nothing arg_ty (mkTyVarTy tv)
+  result <- tcExtendNameKiVarEnv sig_kibs
+            $ tcExtendNameTyVarEnv sig_ibs
+            $ thing_inside
+  return (arg_ty, result)
 
 {- *********************************************************************
 *                                                                      *

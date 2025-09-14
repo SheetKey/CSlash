@@ -326,7 +326,7 @@ collectConPatTyArgBndrs :: CsConPatTyArg Rn -> [Name]
 collectConPatTyArgBndrs (CsConPatTyArg _ tp) = collectTyPatBndrs tp
 
 collectTyPatBndrs :: CsTyPat Rn -> [Name]
-collectTyPatBndrs (CsTP (CsTPRn nwcs imp_tvs exp_tvs) _) = nwcs ++ imp_tvs ++ exp_tvs
+collectTyPatBndrs (CsTP (CsTPRn imp_tvs exp_tvs) _) = imp_tvs ++ exp_tvs
 
 collectPatSigBndrs :: CsPatSigType Rn -> [Name]
 collectPatSigBndrs (CsPS (CsPSRn imp_tvs) _) = imp_tvs
@@ -344,6 +344,7 @@ instance IsPass p => CollectPass (CsPass p) where
       Tc -> case ext of
         CoPat _ pat _ -> collect_pat flag pat
         ExpansionPat _ pat -> collect_pat flag pat
+        _ -> panic "collectXXPat TyPat(this should only be constructed later by the type checker in Tc.Gen.Pat)"
   collectXXCsBindsLR ext =
     case csPass @p of
       Ps -> dataConCantHappen ext

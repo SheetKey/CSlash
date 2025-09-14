@@ -22,8 +22,11 @@ import CSlash.Utils.Outputable
 import Data.Data
 
 type instance XCsPSK Ps = EpAnnCO
-type instance XCsPSK Rn = NoExtField
+type instance XCsPSK Rn = CsPSKRn
 type instance XCsPSK Tc = NoExtField
+
+data CsPSKRn = CsPSKRn { cspsk_imp_kvs :: [Name] }
+  deriving Data
 
 mkCsPatSigKind :: EpAnnCO -> LCsKind Ps -> CsPatSigKind Ps
 mkCsPatSigKind ann x = CsPSK { cspsk_ext = ann

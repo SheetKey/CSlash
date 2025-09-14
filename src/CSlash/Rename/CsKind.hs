@@ -52,9 +52,9 @@ rnCsPatSigKind
 rnCsPatSigKind bindkvs ctx sig_ki thing_inside = do
   let pat_sig_ki = csPatSigKind sig_ki
       env = RKE ctx
-  do_first $ \_ -> do
+  do_first $ \imp_kvs -> do
     (pat_sig_ki', fvs1) <- rnLCsKi env pat_sig_ki
-    let sig_ki' = CsPSK noExtField pat_sig_ki'
+    let sig_ki' = CsPSK (CsPSKRn imp_kvs) pat_sig_ki'
     (res, fvs2) <- thing_inside sig_ki'
     return (res, fvs1 `plusFV` fvs2)                              
   where

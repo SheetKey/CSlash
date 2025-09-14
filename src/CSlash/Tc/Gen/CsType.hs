@@ -700,16 +700,6 @@ kcInferDeclHeader name flav kv_ns kc_res_ki = addTyConFlavCtxt name flav $ do
 
   return tycon
 
-tcCsTvbKind :: Maybe Name -> LCsKind Rn -> AnyMonoKind -> TcM ()
-tcCsTvbKind mb_name kind expected_kind = do
-  sig_kind <- tcLCsKindSig ctxt kind
-  traceTc "tcCsTvbKind:unifying" (ppr sig_kind $$ ppr expected_kind)
-  discardResult $ unifyKind mb_thing EQKi sig_kind expected_kind
-  where
-    (ctxt, mb_thing) = case mb_name of
-      Just name -> (TyVarBndrKindCtxt name, Just (KiNameThing name))
-      Nothing -> (KindSigCtxt, Nothing)
-
 {- *********************************************************************
 *                                                                      *
              Expected kinds
@@ -1086,6 +1076,60 @@ tcCsPatSigType ctxt (CsPS { csps_ext = CsPSRn { csps_imp_kvs = sig_ns }
                           , csps_body = cs_ty }) ctxt_kind
   = tc_type_in_pat ctxt cs_ty sig_ns ctxt_kind
 
+tcCsTyPat
+  :: CsTyPat Rn
+  -> AnyMonoKind
+  -> TcM ([(Name, AnyTyVar AnyKiVar)], [(Name, AnyKiVar)], AnyType)
+tcCsTyPat cs_pat@(CsTP { cstp_ext = cstp_rn, cstp_body = cs_ty }) expected_kind
+  = case tyPatToBndr cs_pat of
+      Nothing -> panic "should always be Just for now"
+      Just bndr -> tc_bndr_in_pat bndr imp_kv_ns expected_kind
+  where
+    CsTPRn { cstp_imp_kvs = imp_kv_ns } = cstp_rn
+
+tc_bndr_in_pat
+  :: CsTyVarPatBndr
+  -> [Name]
+  -> AnyMonoKind
+  -> TcM ([(Name, AnyTyVar AnyKiVar)], [(Name, AnyKiVar)], AnyType)
+tc_bndr_in_pat bndr imp_kv_ns expected_kind = do
+  let CsTvb bvar bkind = bndr
+  traceTc "tc_bndr_in_pat 1" (ppr expected_kind)
+  name <- tcCsBndrTyVarName bvar
+  tv <- toAnyTyVar <$> newPatTyVar name expected_kind
+  case bkind of
+    CsBndrNoKind -> pure (mk_tvb_pairs bndr tv, [], mkTyVarTy $ toAnyTyVar tv)
+    CsBndrKind ki -> do
+      kv_prs <- mapM new_implicit_kv imp_kv_ns
+      addKindCtxt ki
+        $ solveKindCoercions "tc_bndr_in_pat"
+        $ tcExtendNameKiVarEnv kv_prs
+        $ tcCsTvbKind bvar ki expected_kind
+      traceTc " tc_bndr_in_pat 2"
+        $ vcat [ text "expected_kind" <+> ppr expected_kind
+               , text "(name, tv)" <+> ppr (name, tv)
+               , text "kv_prs" <+> ppr kv_prs 
+               ]
+      pure (mk_tvb_pairs bndr tv, kv_prs, mkTyVarTy $ toAnyTyVar tv)
+  where
+    new_implicit_kv name = do
+      kv <- newPatKiVar name
+      return (name, toAnyKiVar kv)
+
+tcCsBndrTyVarName :: CsBndrTyVar -> TcM Name
+tcCsBndrTyVarName (CsBndrVar name) = return name
+tcCsBndrTyVarName CsBndrWildCard = newSysName (mkTyVarOcc "_")
+ 
+tcCsTvbKind :: CsBndrTyVar -> LCsKind Rn -> AnyMonoKind -> TcM ()
+tcCsTvbKind bvar kind expected_kind = do
+  sig_kind <- tcLCsKindSig ctxt kind
+  traceTc "tcCsTvbKind:unifying" (ppr sig_kind $$ ppr expected_kind)
+  discardResult $ unifyKind mb_thing EQKi sig_kind expected_kind
+  where
+    (ctxt, mb_thing) = case bvar of
+      CsBndrVar cs_nm -> (TyVarBndrKindCtxt cs_nm, Just (KiNameThing cs_nm))
+      CsBndrWildCard -> (KindSigCtxt, Nothing)
+
 tc_type_in_pat
   :: UserTypeCtxt
   -> LCsType Rn
@@ -1110,7 +1154,44 @@ tc_type_in_pat ctxt cs_ty ns ctxt_kind = addSigCtxt ctxt cs_ty $ do
     new_implicit_kv name = do
       kv <- newPatKiVar name
       return (name, toAnyKiVar kv)
-              
+
+tyPatToBndr :: CsTyPat Rn -> Maybe CsTyVarPatBndr 
+tyPatToBndr CsTP { cstp_body = L _ cs_ty } = go cs_ty
+  where
+    go :: CsType Rn -> Maybe CsTyVarPatBndr 
+    go (CsParTy _ (L _ ty)) = go ty
+    go (CsKindSig _ (L _ ty) ki) = do
+      bvar <- go_bvar ty
+      let bkind = CsBndrKind ki
+      Just $ CsTvb bvar bkind
+    go ty = do
+      bvar <- go_bvar ty
+      Just $ CsTvb bvar CsBndrNoKind
+
+    go_bvar :: CsType Rn -> Maybe CsBndrTyVar
+    go_bvar (CsTyVar _ name)
+      | isTyVarName (unLoc name)
+      = Just $ CsBndrVar $ unLoc name
+    go_bvar (CsUnboundTyVar {})
+      = Just CsBndrWildCard
+    go_bvar _ = Nothing
+
+data CsTyVarPatBndr
+  = CsTvb { tvb_var :: CsBndrTyVar
+          , tvb_kind :: CsBndrKind }
+
+mk_tvb_pairs :: CsTyVarPatBndr -> AnyTyVar AnyKiVar -> [(Name, AnyTyVar AnyKiVar)]
+mk_tvb_pairs (CsTvb bvar _) tv = case bvar of
+  CsBndrVar name -> [(name, tv)]
+  CsBndrWildCard -> []
+
+data CsBndrTyVar
+  = CsBndrVar Name
+  | CsBndrWildCard
+
+data CsBndrKind
+  = CsBndrKind (LCsKind Rn)
+  | CsBndrNoKind
 
 {- *********************************************************************
 *                                                                      *

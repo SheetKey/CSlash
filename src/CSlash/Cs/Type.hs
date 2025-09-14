@@ -24,6 +24,7 @@ module CSlash.Cs.Type
   ) where
 
 import Prelude hiding ((<>))
+import qualified Data.Semigroup as S
 
 import CSlash.Types.Fixity (LexicalFixity(..))
 import CSlash.Language.Syntax.Type
@@ -40,6 +41,7 @@ import CSlash.Parser.Annotation
 import CSlash.Utils.Outputable
 import CSlash.Core.Ppr (pprOcc)
 import CSlash.Builtin.Names ( negateName )
+import CSlash.Data.Bag
 
 import Data.Data hiding (Fixity(..))
 
@@ -64,11 +66,31 @@ data CsPSRn = CsPSRn
   deriving Data
 
 data CsTyPatRn = CsTPRn
-  { cstp_nwcs :: [Name]
-  , cstp_imp_tvs :: [Name]
-  , cstp_exp_tvs :: [Name]
+  { cstp_exp_tvs :: [Name]
+  , cstp_imp_kvs :: [Name]
   }
   deriving Data
+
+data CsTyPatRnBuilder = CsTPRnB
+  { cstpb_exp_tvs :: Bag Name
+  , cstpb_imp_kvs :: Bag Name
+  }
+
+tpBuilderExplicitTV :: Name -> CsTyPatRnBuilder
+tpBuilderExplicitTV name = mempty { cstpb_exp_tvs = unitBag name }
+
+tpBuilderPatSig :: CsPSKRn -> CsTyPatRnBuilder
+tpBuilderPatSig (CsPSKRn imp_kvs) = mempty { cstpb_imp_kvs = listToBag imp_kvs }
+
+instance Semigroup CsTyPatRnBuilder where
+  (CsTPRnB exptvs1 impkvs1) <> (CsTPRnB exptvs2 impkvs2)
+    = CsTPRnB (exptvs1 `unionBags` exptvs2) (impkvs1 `unionBags` impkvs2)
+
+instance Monoid CsTyPatRnBuilder where
+  mempty = CsTPRnB emptyBag emptyBag
+
+buildCsTyPatRn :: CsTyPatRnBuilder -> CsTyPatRn
+buildCsTyPatRn (CsTPRnB exptvs impkvs) = CsTPRn  (bagToList exptvs) (bagToList impkvs)
 
 type instance XCsSig Ps = NoExtField
 type instance XCsSig Rn = [Name]

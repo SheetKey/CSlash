@@ -40,6 +40,7 @@ import CSlash.Types.Basic
 import CSlash.Types.SrcLoc
 
 import CSlash.Tc.Types.Evidence
+import CSlash.Tc.Utils.TcType (AnyType)
 
 import CSlash.Utils.Outputable
 import CSlash.Types.Name.Reader (RdrName)
@@ -130,6 +131,7 @@ data XXPatCsTc
           , co_pat_ty :: Type (AnyTyVar AnyKiVar) AnyKiVar
           }
   | ExpansionPat (Pat Rn) (Pat Tc)
+  | TyPat (Pat Rn) AnyType (CsTyPat Rn)
 
 data CsPatExpansion a b = CsPatExpanded a b
   deriving Data
@@ -184,6 +186,7 @@ patNeedsParens p = go @p
       Tc -> case ext of
         ExpansionPat pat _ -> go pat
         CoPat _ inner _ -> go inner
+        TyPat pat _ _ -> go pat
 
 conPatNeedsParens :: PprPrec -> CsConDetails t a -> Bool
 conPatNeedsParens p = go
@@ -220,6 +223,7 @@ pprPat (XPat ext) = case csPass @p of
     CoPat co pat _ -> pprCsWrapper co $ \parens -> if parens
                                                    then pprParendPat appPrec pat
                                                    else pprPat pat
+    TyPat orig _ _ -> pprPat orig
 
 pprUserCon
   :: (OutputableBndr con, OutputableBndrId p, Outputable (Anno (IdCsP p)))
