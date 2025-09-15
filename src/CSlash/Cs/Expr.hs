@@ -186,6 +186,9 @@ type instance XXExpr Tc = XXExprTc
 
 data XXExprTc
   = WrapExpr CsWrapper (CsExpr Tc)
+  | ExpandedThingTc
+    { xtc_orig :: CsThingRn
+    , xtc_expanded :: CsExpr Tc }
 
 {- *********************************************************************
 *                                                                      *
@@ -201,6 +204,9 @@ instance Outputable CsThingRn where
                 OrigExpr x -> ppr_builder "<OrigExpr>:" x
     where
       ppr_builder prefix x = ifPprDebug (braces (text prefix <+> parens (ppr x))) (ppr x)
+
+mkExpandedExprTc :: CsExpr Rn -> CsExpr Tc -> CsExpr Tc
+mkExpandedExprTc oExpr eExpr = XExpr (ExpandedThingTc (OrigExpr oExpr) eExpr)
 
 {- *********************************************************************
 *                                                                      *
@@ -389,6 +395,17 @@ csExprNeedsParens prec = go
 
     go_x_tc :: XXExprTc -> Bool
     go_x_tc (WrapExpr _ e) = csExprNeedsParens prec e
+    go_x_tc (ExpandedThingTc thing _) = csExpandedNeedsParens thing
+
+    csExpandedNeedsParens (OrigExpr e) = csExprNeedsParens prec e
+
+gCsPar :: forall p. IsPass p => LCsExpr (CsPass p) -> CsExpr (CsPass p)
+gCsPar e = CsPar x e
+  where
+    x = case csPass @p of
+          Ps -> noAnn
+          Rn -> noExtField
+          Tc -> noExtField
     
 stripParensCsExpr :: CsExpr (CsPass p) -> CsExpr (CsPass p)
 stripParensCsExpr  (CsPar _ (L _ e)) = stripParensCsExpr e

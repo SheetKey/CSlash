@@ -155,7 +155,20 @@ splitCsApps e = go e (top_ctxt 0 e) []
     dec l (VACall f n _) = VACall f (n-1) (locA l)
 
 rebuildCsApps :: (CsExpr Tc, AppCtxt) -> [CsExprArg 'TcpTc] -> CsExpr Tc
-rebuildCsApps = panic "rebuildCsApps"
+rebuildCsApps (fun, _) [] = fun
+rebuildCsApps (fun, ctxt) (arg:args) = case arg of
+  EValArg { ea_arg = arg, ea_ctxt = ctxt' }
+    -> rebuildCsApps (CsApp noExtField lfun arg, ctxt') args
+  EWrap (EPar ctxt')
+    -> rebuildCsApps (gCsPar lfun, ctxt') args
+  EWrap (EExpand (OrigExpr oe))
+    -> rebuildCsApps (mkExpandedExprTc oe fun, ctxt) args
+  EWrap (ECsWrap wrap)
+    -> rebuildCsApps (mkCsWrap wrap fun, ctxt) args
+  where
+    lfun = L (noAnnSrcSpan $ appCtxtLoc' ctxt) fun
+
+    appCtxtLoc' v = appCtxtLoc v
 
 isCsValArg :: CsExprArg id -> Bool
 isCsValArg (EValArg {}) = True
