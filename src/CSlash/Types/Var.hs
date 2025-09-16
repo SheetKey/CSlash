@@ -815,6 +815,12 @@ updateIdTypeM f (Id id@(Id' { _varType = ty })) = do
   return $ Id $ id { _varType = ty' }
 updateIdTypeM _ _ = panic "updateIdTypeM"
 
+changeIdTypeM :: Monad m => (Type tv kv -> m (Type tv' kv')) -> Id tv kv -> m (Id tv' kv')
+changeIdTypeM f (Id (Id' { _varType = ty, .. })) = do
+  !ty' <- f ty
+  return $ Id $ Id { _varType = ty', .. }
+changeIdTypeM _ _ = panic "changeIdTypeM"
+
 {- *********************************************************************
 *                                                                      *
 *                   ForAllFlag

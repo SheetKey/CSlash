@@ -67,6 +67,14 @@ type ZonkTcM = ZonkT TcM
 
 type ZonkBndrTcM = ZonkBndrT TcM
 
+wrapLocZonkMA
+  :: (a -> ZonkTcM b)
+  -> GenLocated (EpAnn ann) a
+  -> ZonkTcM (GenLocated (EpAnn ann) b)
+wrapLocZonkMA fn (L loc a) = ZonkT $ \ze -> setSrcSpanA loc $ do
+  b <- runZonkT (fn a) ze
+  return (L loc b)
+
 {-# INLINE zonkTyBndrX #-}
 zonkTyBndrX :: AnyTyVar AnyKiVar -> ZonkBndrTcM (TyVar KiVar)
 zonkTyBndrX tv = handleAnyTv
@@ -293,6 +301,9 @@ zonkKiCoToCo :: AnyKindCoercion -> ZonkTcM (KindCoercion KiVar)
       (zki, zkis, zco, _) ->
         (ZonkT . flip zki, ZonkT . flip zkis, ZonkT . flip zco)
 
+zonkIdBndr :: AnyId -> ZonkBndrTcM (Id (TyVar KiVar) KiVar)
+zonkIdBndr = changeIdTypeM zonkTcTypeToTypeX
+
 zonkTopDecls :: LCsBinds Tc -> TcM (TypeEnv, LCsBinds Tc)
 zonkTopDecls binds
   = initZonkEnv NoFlexi
@@ -309,10 +320,28 @@ zonkMonoBinds :: LCsBinds Tc -> ZonkTcM (LCsBinds Tc)
 zonkMonoBinds = mapM zonk_lbind
 
 zonk_lbind :: LCsBind Tc -> ZonkTcM (LCsBind Tc)
-zonk_lbind = panic "wrapLocZonkMA zonk_bind"
+zonk_lbind = wrapLocZonkMA zonk_bind
 
 zonk_bind :: CsBind Tc -> ZonkTcM (CsBind Tc)
-zonk_bind = panic "zonk_bind"
+
+zonk_bind bind@(FunBind { fun_id = L loc var
+                        , fun_body = body
+                        , fun_ext = (co_fn, ticks) }) = do
+  new_var <- zonkIdBndr var
+  runZonkBndrT (zonkCoFn co_fn) $ \new_co_fn -> do
+
+    panic "zonk_bind unfinished"
+
+-- zonkCoFn :: CsWrapper -> ZonkBndrTcM CsWrapper
+-- zonkCoFn
+-- zonkCoFn
+-- zonkCoFn
+
+{- *********************************************************************
+*                                                                      *
+              Patterns
+*                                                                      *
+********************************************************************* -}
 
 {- *********************************************************************
 *                                                                      *
