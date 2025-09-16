@@ -96,16 +96,16 @@ import Debug.Trace (trace)
 *                                                                      *
 ********************************************************************* -}
 
-tcTyDecls :: [TypeGroup Rn] -> TcM TcGblEnv
+tcTyDecls :: [TypeGroup Rn] -> TcM (TcGblEnv Tc)
 tcTyDecls typeds_s = checkNoErrs $ fold_env typeds_s
   where
-    fold_env :: [TypeGroup Rn] -> TcM TcGblEnv
+    fold_env :: [TypeGroup Rn] -> TcM (TcGblEnv Tc)
     fold_env [] = getGblEnv
     fold_env (typeds : typeds_s) = do
       tcg_env <- tcTyGroup typeds
       setGblEnv tcg_env $ fold_env typeds_s
 
-tcTyGroup :: TypeGroup Rn -> TcM TcGblEnv
+tcTyGroup :: TypeGroup Rn -> TcM (TcGblEnv Tc)
 tcTyGroup (TypeGroup { group_typeds = typeds, group_kisigs = kisigs }) = do
   massertPpr (null kisigs) (ppr kisigs)
 

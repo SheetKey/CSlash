@@ -141,7 +141,7 @@ synonymTyConsOfType ty = nonDetNameEnvElts (go ty)
 *                                                                      *
 ********************************************************************* -}
 
-addTyConsToGblEnv :: [TyCon (TyVar KiVar) KiVar] -> TcM TcGblEnv
+addTyConsToGblEnv :: [TyCon (TyVar KiVar) KiVar] -> TcM (TcGblEnv Tc)
 addTyConsToGblEnv tys = assertPpr (all isTypeSynonymTyCon tys) (ppr tys) -- temporary
                         $ tcExtendTyConEnv tys
                         --  $ tcExtendGlobalEnvImplicit implicit_things

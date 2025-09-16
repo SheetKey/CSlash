@@ -29,7 +29,7 @@ data ZonkEnv = ZonkEnv
   { ze_flexi :: !ZonkFlexi
   , ze_tv_env :: MkVarEnv (TyVar KiVar) (TyVar KiVar)
   , ze_kv_env :: MkVarEnv KiVar KiVar
-  , ze_id_env :: MkVarEnv AnyId AnyId
+  , ze_id_env :: MkVarEnv ZkId ZkId
   , ze_meta_tv_env :: IORef (MkVarEnv (TcTyVar AnyKiVar) (Type (TyVar KiVar) KiVar))
   , ze_meta_kv_env :: IORef (MkVarEnv TcKiVar (MonoKind KiVar))
   }
@@ -119,7 +119,7 @@ nestZonkEnv f = ZonkBndrT $ \k -> case k () of
 getZonkEnv :: Monad m => ZonkT m ZonkEnv
 getZonkEnv = ZonkT return
 
-extendIdZonkEnvRec :: [AnyId] -> ZonkBndrT m ()
+extendIdZonkEnvRec :: [ZkId] -> ZonkBndrT m ()
 extendIdZonkEnvRec ids = nestZonkEnv $ \ze@(ZonkEnv { ze_id_env = id_env }) ->
                                          ze { ze_id_env = extendVarEnvList
                                                           id_env [(id, id) | id <- ids] }

@@ -49,6 +49,7 @@ type instance ImportDeclPkgQual Tc = PkgQual
 type instance XCImportDecl Ps = XImportDeclPass
 type instance XCImportDecl Rn = XImportDeclPass
 type instance XCImportDecl Tc = DataConCantHappen
+type instance XCImportDecl Zk = DataConCantHappen
 
 data XImportDeclPass = XImportDeclPass
   { ideclAnn :: EpAnn EpAnnImportDecl
@@ -114,6 +115,7 @@ ppr_impdecl (ImportDecl { ideclExt = impExt
                        Ps | XImportDeclPass {ideclImplicit = implicit} <- ext -> implicit
                        Rn | XImportDeclPass {ideclImplicit = implicit} <- ext -> implicit
                        Tc -> dataConCantHappen ext
+                       Zk -> dataConCantHappen ext
       in if implicit
          then text "(implicit)"
          else empty

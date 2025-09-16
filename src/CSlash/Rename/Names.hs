@@ -213,7 +213,7 @@ calculateAvails home_unit other_home_units iface imported_by =
 *                                                                      *
 ********************************************************************* -}
 
-extendGlobalRdrEnvRn :: [GlobalRdrElt] -> MiniFixityEnv -> RnM (TcGblEnv, TcLclEnv)
+extendGlobalRdrEnvRn :: [GlobalRdrElt] -> MiniFixityEnv -> RnM (TcGblEnv Tc, TcLclEnv)
 extendGlobalRdrEnvRn new_gres new_fixities = checkNoErrs $ do
   (gbl_env, lcl_env) <- getEnvs
   let rdr_env1 = tcg_rdr_env gbl_env
@@ -252,7 +252,7 @@ extendGlobalRdrEnvRn new_gres new_fixities = checkNoErrs $ do
 *                                                                      *
 ********************************************************************* -}
 
-getLocalNonValBinders :: MiniFixityEnv -> CsGroup Ps -> RnM ((TcGblEnv, TcLclEnv), NameSet)
+getLocalNonValBinders :: MiniFixityEnv -> CsGroup Ps -> RnM ((TcGblEnv Tc, TcLclEnv), NameSet)
 getLocalNonValBinders fixity_env CsGroup{ cs_valds = binds, cs_typeds = type_decls } = do
   tc_gres <- concatMapM new_tc (typeGroupTypeDecls type_decls)
   traceRn "getLocalNonValBinders 1" (ppr tc_gres)
@@ -510,7 +510,7 @@ gresFromIE decl_spec (L loc ie, gres) = map set_gre_imp gres
 *                                                                      *
 ********************************************************************* -}
 
-reportUnusedNames :: TcGblEnv -> CsSource -> RnM ()
+reportUnusedNames :: TcGblEnv Zk -> CsSource -> ZkM ()
 reportUnusedNames gbl_env cs_src = do
   panic "reportUnusedNames"
 

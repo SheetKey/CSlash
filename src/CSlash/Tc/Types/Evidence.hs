@@ -15,7 +15,7 @@ import CSlash.Types.Var
 import CSlash.Core.Ppr ()   -- Instance OutputableBndr TyVar
 import CSlash.Tc.Utils.TcType
 import CSlash.Core.Type
-import CSlash.Core.Type.Rep (mkReflTyCo, isReflTyCo)
+import CSlash.Core.Type.Rep (TypeCoercion, mkReflTyCo, isReflTyCo)
 import CSlash.Core.Type.FVs
 import CSlash.Core.Kind
 import CSlash.Core.TyCon
@@ -55,57 +55,62 @@ maybeSymCo NotSwapped co = co
                   CsWrapper
 *                                                                      *
 ********************************************************************* -}
-  
-data CsWrapper
+
+type AnyCsWrapper = CsWrapper (AnyTyVar AnyKiVar) AnyKiVar
+type ZkCsWrapper = CsWrapper (TyVar KiVar) KiVar
+
+data CsWrapper tv kv
   = WpHole
-  | WpCompose CsWrapper CsWrapper
-  | WpFun CsWrapper AnyMonoKind AnyType
+  | WpCompose (CsWrapper tv kv) (CsWrapper tv kv)
+  | WpFun (CsWrapper tv kv) (MonoKind kv) (Type tv kv)
     -- given 'A -> B', the wrapper is on 'B' and the type is 'A', and the kind is the fun kind
-  | WpCast AnyTypeCoercion
-  | WpTyLam (AnyTyVar AnyKiVar) -- can probably be 'TcTyVar AnyKiVar' (these should be skols)
-  | WpKiLam AnyKiVar            -- "             " 'TcKiVar'          "                     "
-  | WpTyApp AnyType
-  | WpMultCoercion AnyKindCoercion
+  | WpCast (TypeCoercion tv kv)
+  | WpTyLam tv            -- can probably be 'TcTyVar AnyKiVar' (these should be skols)
+  | WpKiLam kv            -- "             " 'TcKiVar'          "                     "
+  | WpTyApp (Type tv kv)
+  | WpMultCoercion (KindCoercion kv)
   deriving Data.Data
 
-(<.>) :: CsWrapper -> CsWrapper -> CsWrapper
+(<.>) :: CsWrapper tv kv -> CsWrapper tv kv -> CsWrapper tv kv
 WpHole <.> c = c
 c <.> WpHole = c
 c1 <.> c2 = c1 `WpCompose` c2
 
-mkWpFun :: CsWrapper -> AnyMonoKind -> AnyType -> CsWrapper
+mkWpFun :: IsTyVar tv kv => CsWrapper tv kv -> MonoKind kv -> Type tv kv -> CsWrapper tv kv
 mkWpFun WpHole _ _ = WpHole
 mkWpFun (WpCast res_co) fun_ki arg_ty = WpCast (mk_wp_fun_co fun_ki (mkReflTyCo arg_ty) res_co)
 mkWpFun co fun_ki arg_ty = WpFun co fun_ki arg_ty
 
-mk_wp_fun_co :: AnyMonoKind -> AnyTypeCoercion -> AnyTypeCoercion -> AnyTypeCoercion
+mk_wp_fun_co
+  :: IsTyVar tv kv
+  => MonoKind kv -> TypeCoercion tv kv -> TypeCoercion tv kv -> TypeCoercion tv kv
 mk_wp_fun_co fun_ki arg_co res_co = mkTyFunCo (mkReflKiCo fun_ki) arg_co res_co
 
-mkWpCast :: AnyTypeCoercion -> CsWrapper
+mkWpCast :: TypeCoercion tv kv -> CsWrapper tv kv
 mkWpCast co
   | isReflTyCo co = WpHole
   | otherwise = WpCast co
 
-idCsWrapper :: CsWrapper
+idCsWrapper :: CsWrapper tv kv
 idCsWrapper = WpHole
 
-isIdCsWrapper :: CsWrapper -> Bool
+isIdCsWrapper :: CsWrapper tv kv -> Bool
 isIdCsWrapper WpHole = True
 isIdCsWrapper _ = False
 
-mkWpTyApps :: [AnyType] -> CsWrapper
+mkWpTyApps :: [Type tv kv] -> CsWrapper tv kv
 mkWpTyApps tys = mk_co_app_fn WpTyApp tys
 
-mkWpTyLams :: [AnyTyVar AnyKiVar] -> CsWrapper
+mkWpTyLams :: [tv] -> CsWrapper tv kv
 mkWpTyLams tvs = mk_lam_fn WpTyLam tvs
 
-mkWpKiLams :: [AnyKiVar] -> CsWrapper
+mkWpKiLams :: [kv] -> CsWrapper tv kv
 mkWpKiLams kvs = mk_lam_fn WpKiLam kvs
 
-mk_lam_fn :: (a -> CsWrapper) -> [a] -> CsWrapper
+mk_lam_fn :: (a -> CsWrapper tv kv) -> [a] -> CsWrapper tv kv
 mk_lam_fn f as = foldr (\x wrap -> f x <.> wrap) WpHole as
 
-mk_co_app_fn :: (a -> CsWrapper) -> [a] -> CsWrapper
+mk_co_app_fn :: (a -> CsWrapper tv kv) -> [a] -> CsWrapper tv kv
 mk_co_app_fn f as = foldr (\x wrap -> wrap <.> f x) WpHole as
 
 {- *********************************************************************
@@ -144,16 +149,16 @@ data TyCoBindsVar
 *                                                                      *
 ********************************************************************* -}
 
-instance Outputable CsWrapper where
+instance IsTyVar tv kv => Outputable (CsWrapper tv kv) where
   ppr co_fn = pprCsWrapper co_fn (no_parens (text "<>"))
 
-pprCsWrapper :: CsWrapper -> (Bool -> SDoc) -> SDoc
+pprCsWrapper :: IsTyVar tv kv => CsWrapper tv kv -> (Bool -> SDoc) -> SDoc
 pprCsWrapper wrap pp_thing_inside =
   sdocOption sdocPrintTypecheckerElaboration $ \case
   True -> help pp_thing_inside wrap False
   False -> pp_thing_inside False
   where
-    help :: (Bool -> SDoc) -> CsWrapper -> Bool -> SDoc
+    -- help :: (Bool -> SDoc) -> CsWrapper -> Bool -> SDoc
     help it WpHole = it
     help it (WpCompose f1 f2) = help (help it f2) f1
     help it (WpFun f2 fki ty1) =

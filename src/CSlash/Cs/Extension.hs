@@ -43,18 +43,20 @@ data CsPass (c :: Pass) where
   Ps :: CsPass 'Parsed
   Rn :: CsPass 'Renamed
   Tc :: CsPass 'Typechecked
+  Zk :: CsPass 'Zonked
 
 instance Typeable p => Data (CsPass p) where
   gunfold _ _ _ = panic "instance Data CsPass"
   toConstr _ = panic "instance Data CsPass"
   dataTypeOf _ = panic "instance Data CsPass"
 
-data Pass = Parsed | Renamed | Typechecked
-         deriving (Data)
+data Pass = Parsed | Renamed | Typechecked | Zonked
+  deriving (Data)
 
 type Ps = CsPass 'Parsed
 type Rn = CsPass 'Renamed
 type Tc = CsPass 'Typechecked
+type Zk = CsPass 'Zonked
 
 class ( NoCsTcPass (NoCsTcPass p) ~ NoCsTcPass p
       , IsPass (NoCsTcPass p)
@@ -70,12 +72,16 @@ instance IsPass 'Renamed where
 instance IsPass 'Typechecked where
   csPass = Tc
 
+instance IsPass 'Zonked where
+  csPass = Zk
+
 type instance IdP (CsPass p) = IdCsP p
 
 type family IdCsP pass where
   IdCsP 'Parsed = RdrName
   IdCsP 'Renamed = Name
   IdCsP 'Typechecked = (Id (AnyTyVar AnyKiVar) AnyKiVar)
+  IdCsP 'Zonked = (Id (TyVar KiVar) KiVar)
 
 type instance NoTc (CsPass pass) = CsPass (NoCsTcPass pass)
 

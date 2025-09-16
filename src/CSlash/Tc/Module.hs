@@ -1,3 +1,4 @@
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE BangPatterns #-}
 
@@ -145,7 +146,11 @@ import Data.Traversable ( for )
 ********************************************************************* -}
 
 tcRnModule
-  :: CsEnv -> ModSummary -> Bool -> CsParsedModule -> IO (Messages TcRnMessage, Maybe TcGblEnv)
+  :: CsEnv
+  -> ModSummary
+  -> Bool
+  -> CsParsedModule
+  -> IO (Messages TcRnMessage, Maybe (TcGblEnv Zk))
 tcRnModule cs_env mod_sum save_rn_syntax
   parsedModule@CsParsedModule{ cpm_module = L loc this_module }
   | RealSrcSpan real_loc _ <- loc
@@ -165,7 +170,8 @@ tcRnModule cs_env mod_sum save_rn_syntax
       = let L mod_loc mod = csmodName this_module
         in (mkHomeModule home_unit mod, locA mod_loc)
 
-tcRnModuleTcRnM :: CsEnv -> ModSummary -> CsParsedModule -> (Module, SrcSpan) -> TcRn TcGblEnv
+tcRnModuleTcRnM
+  :: CsEnv -> ModSummary -> CsParsedModule -> (Module, SrcSpan) -> TcRn (TcGblEnv Zk)
 tcRnModuleTcRnM cs_env mod_sum parsedModule (this_mod, bi_imp_loc) = do
   let CsParsedModule
         { cpm_module =
@@ -211,7 +217,7 @@ tcRnModuleTcRnM cs_env mod_sum parsedModule (this_mod, bi_imp_loc) = do
 *                                                                      *
 ********************************************************************* -}
 
-tcRnImports :: CsEnv -> [(LImportDecl Ps, SDoc)] -> TcM TcGblEnv
+tcRnImports :: CsEnv -> [(LImportDecl Ps, SDoc)] -> TcM (TcGblEnv Tc)
 tcRnImports cs_env import_decls = do
   (rn_imports, rdr_env, imports, pc_info) <- rnImports import_decls
   this_mod <- getModule
@@ -233,7 +239,7 @@ tcRnImports cs_env import_decls = do
 *                                                                      *
 ********************************************************************* -}
                
-tcRnSrcDecls :: Maybe (LocatedL [LIE Ps]) -> [LCsDecl Ps] -> TcM TcGblEnv
+tcRnSrcDecls :: Maybe (LocatedL [LIE Ps]) -> [LCsDecl Ps] -> TcM (TcGblEnv Zk)
 tcRnSrcDecls export_ies decls = do
   (tcg_env, tcl_env, lie) <- tc_rn_src_decls decls
 
@@ -271,16 +277,17 @@ tcRnSrcDecls export_ies decls = do
   (id_env_mf, binds_mf) <- zonkTcGblEnv tcg_env
 
   let !final_type_env = tcg_type_env tcg_env `plusTypeEnv` id_env_mf
-      tcg_env' = tcg_env { tcg_binds =  binds' ++ binds_mf }
+      tcg_env' = let TcGblEnv {..} = tcg_env
+                 in TcGblEnv { tcg_binds =  binds' ++ binds_mf, .. }
 
   panic "setGlobalTypeEnv tcg_env' final_type_env"
 
-zonkTcGblEnv :: TcGblEnv -> TcM (TypeEnv, LCsBinds Tc)
+zonkTcGblEnv :: TcGblEnv Tc -> TcM (TypeEnv, LCsBinds Zk)
 zonkTcGblEnv tcg_env@(TcGblEnv { tcg_binds = binds })
   = {-# SCC zonkTopDecls #-}
   setGblEnv tcg_env $ zonkTopDecls binds
 
-tc_rn_src_decls :: [LCsDecl Ps] -> TcM (TcGblEnv, TcLclEnv, WantedTyConstraints)
+tc_rn_src_decls :: [LCsDecl Ps] -> TcM (TcGblEnv Tc, TcLclEnv, WantedTyConstraints)
 tc_rn_src_decls ds = {-# SCC "tc_rn_src_decls" #-} do
   let group = mkGroup ds
   (tcg_env, rn_decls) <- rnTopSrcDecls group
@@ -297,7 +304,7 @@ tc_rn_src_decls ds = {-# SCC "tc_rn_src_decls" #-} do
 *                                                                      *
 ********************************************************************* -}
 
-rnTopSrcDecls :: CsGroup Ps -> TcM (TcGblEnv, CsGroup Rn)
+rnTopSrcDecls :: CsGroup Ps -> TcM (TcGblEnv Tc, CsGroup Rn)
 rnTopSrcDecls group = do
   traceRn "rn12" empty
   (tcg_env, rn_decls) <- checkNoErrs $ rnSrcDecls group
@@ -310,7 +317,7 @@ rnTopSrcDecls group = do
   rnDump rn_decls
   return (tcg_env', rn_decls)
 
-tcTopSrcDecls :: CsGroup Rn -> TcM (TcGblEnv, TcLclEnv)
+tcTopSrcDecls :: CsGroup Rn -> TcM (TcGblEnv Tc, TcLclEnv)
 tcTopSrcDecls (CsGroup { cs_typeds = type_ds
                        , cs_valds = cs_val_binds@(XValBindsLR (NValBinds val_binds val_sigs))
                        }) = do
@@ -339,7 +346,7 @@ tcTopSrcDecls (CsGroup { cs_typeds = type_ds
 
 tcTopSrcDecls _ = panic "tcTopSrcDecls: ValBindsIn"
 
-tcTypeDecls :: [TypeGroup Rn] -> TcM TcGblEnv
+tcTypeDecls :: [TypeGroup Rn] -> TcM (TcGblEnv Tc)
 tcTypeDecls type_decls = do
   tcg_env <- tcTyDecls type_decls
   setGblEnv tcg_env $ do
@@ -352,7 +359,7 @@ tcTypeDecls type_decls = do
 *                                                                      *
 ********************************************************************* -}
 
-checkMainType :: TcGblEnv -> TcRn WantedTyConstraints
+checkMainType :: TcGblEnv Tc -> TcRn WantedTyConstraints
 checkMainType tcg_env = do
   cs_env <- getTopEnv
   if tcg_mod tcg_env /= mainModIs (cs_HUE cs_env)
@@ -366,7 +373,7 @@ checkMainType tcg_env = do
               (_:_:_) -> return emptyWC
               [main_gre] -> panic "checkMainType"
 
-checkMain :: Maybe (LocatedL [LIE Ps]) -> TcM TcGblEnv
+checkMain :: Maybe (LocatedL [LIE Ps]) -> TcM (TcGblEnv Tc)
 checkMain export_ies = do
   panic "checkMain"
 
@@ -392,6 +399,6 @@ type RenamedStuff =
 rnDump :: (Outputable a, Data a) => a -> TcRn ()
 rnDump rn = dumpOptTcRn Opt_D_dump_rn "Renamer" FormatCSlash (ppr rn)
 
-tcDump :: TcGblEnv -> TcRn ()
+tcDump :: TcGblEnv Zk -> ZkM ()
 tcDump env = do
   panic "tcDump"

@@ -25,7 +25,7 @@ import CSlash.Tc.Utils.TcType
 import {-# SOURCE #-} CSlash.Tc.Utils.TcMType ( tcCheckUsage )
 import CSlash.Tc.Types.LclEnv
 import CSlash.Tc.Types.BasicTypes
-import CSlash.Tc.Types.Evidence (CsWrapper, idCsWrapper, (<.>))
+import CSlash.Tc.Types.Evidence (AnyCsWrapper, idCsWrapper, (<.>))
 
 -- import GHC.Core.InstEnv
 import CSlash.Core.DataCon ( DataCon, dataConTyCon{-, flSelector-} )
@@ -80,7 +80,7 @@ import CSlash.Types.Error
 *                                                                      *
 ********************************************************************* -}
 
-addTypecheckedBinds :: TcGblEnv -> [LCsBinds Tc] -> TcGblEnv
+addTypecheckedBinds :: TcGblEnv p -> [LCsBinds p] -> TcGblEnv p
 addTypecheckedBinds tcg_env binds
   = tcg_env { tcg_binds = foldr (++) (tcg_binds tcg_env) binds }
 
@@ -115,7 +115,7 @@ tcLookupGlobalOnly name = do
 *                                                                      *
 ********************************************************************* -}
 
-setGlobalTypeEnv :: TcGblEnv -> TypeEnv -> TcM TcGblEnv
+setGlobalTypeEnv :: TcGblEnv p -> TypeEnv -> TcM (TcGblEnv p)
 setGlobalTypeEnv tcg_env new_type_env = do
   case lookupKnotVars (tcg_type_env_var tcg_env) (tcg_mod tcg_env) of
     Just tcg_env_var -> writeMutVar tcg_env_var new_type_env
@@ -208,7 +208,7 @@ tcExtendLetEnv
   -> IsGroupClosed
   -> [TcId]
   -> TcM a
-  -> TcM (a, CsWrapper)
+  -> TcM (a, AnyCsWrapper)
 tcExtendLetEnv top_lvl sig_fn (IsGroupClosed fvs fv_type_closed) ids thing_inside
   = tcExtendBinderStack [TcIdBndr id top_lvl | id <- ids]
     $ tc_extend_local_env top_lvl
@@ -225,7 +225,7 @@ tcExtendLetEnv top_lvl sig_fn (IsGroupClosed fvs fv_type_closed) ids thing_insid
         type_closed = isTypeClosedLetBndr id
                       && (fv_type_closed || hasCompleteSig sig_fn name)
 
-    check_usage :: TcId -> TcM (a, CsWrapper) -> TcM (a, CsWrapper)
+    check_usage :: TcId -> TcM (a, AnyCsWrapper) -> TcM (a, AnyCsWrapper)
     check_usage id thing_inside = do
       ((res, inner_wrap), outer_wrap) <- tcCheckUsage (varName id) (idKind id) thing_inside
       return (res, outer_wrap <.> inner_wrap)

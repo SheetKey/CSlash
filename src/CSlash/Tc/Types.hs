@@ -100,7 +100,7 @@ data NameShape = NameShape
 ********************************************************************* -}
 
 type TcRnIf a b = IOEnv (Env a b)
-type TcRn = TcRnIf TcGblEnv TcLclEnv
+type TcRn = TcRnIf (TcGblEnv Tc) TcLclEnv
 
 type IfM lcl = TcRnIf IfGblEnv lcl
 type IfG = IfM ()
@@ -109,6 +109,8 @@ type IfL = IfM IfLclEnv
 type RnM = TcRn
 
 type TcM = TcRn
+
+type ZkM = TcRnIf (TcGblEnv Zk) TcLclEnv
 
 data Env gbl lcl = Env
   { env_top :: !CsEnv
@@ -166,9 +168,9 @@ data IfLclEnv = IfLclEnv
 *                                                                      *
 ********************************************************************* -}
 
-data FrontendResult = FrontendTypecheck TcGblEnv
+data FrontendResult = FrontendTypecheck (TcGblEnv Zk)
 
-data TcGblEnv = TcGblEnv
+data TcGblEnv p = TcGblEnv
   { tcg_mod :: Module
   , tcg_src :: CsSource
   , tcg_rdr_env :: GlobalRdrEnv
@@ -187,7 +189,7 @@ data TcGblEnv = TcGblEnv
   , tcg_rn_imports :: [LImportDecl Rn]
   , tcg_rn_decls :: Maybe (CsGroup Rn)
   , tcg_tr_module :: Maybe (Id (AnyTyVar AnyKiVar) AnyKiVar)
-  , tcg_binds :: LCsBinds Tc
+  , tcg_binds :: LCsBinds p
   , tcg_sigs :: NameSet
   , tcg_tcs :: [TyCon (TyVar KiVar) KiVar]
   , tcg_ksigs :: NameSet
@@ -199,7 +201,7 @@ data TcGblEnv = TcGblEnv
   , tcg_complete_matches :: !CompleteMatches
   }
 
-instance ContainsModule TcGblEnv where
+instance ContainsModule (TcGblEnv p) where
   extractModule env = tcg_mod env
 
 removeBindingShadowing :: HasOccName a => [a] -> [a]

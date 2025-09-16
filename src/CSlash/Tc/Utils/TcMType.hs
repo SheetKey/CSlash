@@ -698,13 +698,13 @@ doNotQuantifyKiVars dvs
                 , ppr leftover_metas ]
        traceTc "doNotQuantifyKiVars success" empty
 
-tcCheckUsage :: Name -> AnyKind -> TcM a -> TcM (a, CsWrapper)
+tcCheckUsage :: Name -> AnyKind -> TcM a -> TcM (a, AnyCsWrapper)
 tcCheckUsage name id_kind thing_inside = do
   (local_usage, result) <- tcCollectingUsage thing_inside
   wrapper <- check_then_add_usage local_usage
   return (result, wrapper)
   where
-    check_then_add_usage :: UsageEnv -> TcM CsWrapper
+    check_then_add_usage :: UsageEnv -> TcM AnyCsWrapper
     check_then_add_usage uenv = do
       let actual_u = lookupUE uenv name
       traceTc "check_then_add_usage" (ppr id_kind $$ ppr actual_u)

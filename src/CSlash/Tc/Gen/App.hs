@@ -88,7 +88,7 @@ finishApp
   :: (CsExpr Tc, AppCtxt)
   -> [CsExprArg 'TcpTc]
   -> AnyRhoType
-  -> CsWrapper
+  -> AnyCsWrapper
   -> TcM (CsExpr Tc)
 finishApp tc_head@(tc_fun, _) tc_args app_res_rho res_wrap = do
   let res_expr = rebuildCsApps tc_head tc_args
@@ -100,7 +100,7 @@ checkResultTy
   -> [CsExprArg p]
   -> AnyRhoType
   -> ExpRhoType
-  -> TcM CsWrapper
+  -> TcM AnyCsWrapper
 checkResultTy _ _ _ app_res_rho (Infer inf_res) = panic "checkResultTy Infer"
 
 checkResultTy rn_expr (tc_fun, fun_ctxt) inst_args app_res_rho (Check res_ty) =

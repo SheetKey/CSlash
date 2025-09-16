@@ -64,12 +64,12 @@ matchActualFunTy
   -> Maybe TypedThing
   -> (Arity, AnyType)
   -> AnyRhoType
-  -> TcM (CsWrapper, AnySigmaType, AnySigmaType)
+  -> TcM (AnyCsWrapper, AnySigmaType, AnySigmaType)
 matchActualFunTy herald mb_thing err_info fun_ty
   = assertPpr (isRhoTy fun_ty) (ppr fun_ty)
     $ go fun_ty
   where
-    go :: AnyRhoType -> TcM (CsWrapper, AnySigmaType, AnySigmaType)
+    go :: AnyRhoType -> TcM (AnyCsWrapper, AnySigmaType, AnySigmaType)
 
     go ty | Just ty' <- coreView ty = go ty'
 
@@ -105,7 +105,7 @@ tcSkolemizeGeneral
   :: UserTypeCtxt
   -> AnyType -> AnyType
   -> ([(Name, AnyKiVar)] -> [(Name, AnyTyVar AnyKiVar)] -> AnyType -> TcM result)
-  -> TcM (CsWrapper, result)
+  -> TcM (AnyCsWrapper, result)
 tcSkolemizeGeneral ctxt top_ty expected_ty thing_inside
   | isRhoTy expected_ty
   = do let sig_skol = SigSkol ctxt top_ty []
@@ -126,7 +126,7 @@ tcSkolemizeGeneral ctxt top_ty expected_ty thing_inside
 tcSkolemizeCompleteSig
   :: TcCompleteSig
   -> ([ExpPatType] -> AnyRhoType -> TcM result)
-  -> TcM (CsWrapper, result)
+  -> TcM (AnyCsWrapper, result)
 tcSkolemizeCompleteSig (CSig { sig_bndr = poly_id, sig_ctxt = ctxt, sig_loc = loc })
                        thing_inside
   = do
@@ -144,7 +144,7 @@ tcSkolemizeCompleteSig (CSig { sig_bndr = poly_id, sig_ctxt = ctxt, sig_loc = lo
 tcSkolemizeExpectedType
   :: AnySigmaType
   -> ([ExpPatType] -> AnyRhoType -> TcM result)
-  -> TcM (CsWrapper, result)
+  -> TcM (AnyCsWrapper, result)
 tcSkolemizeExpectedType exp_ty thing_inside
   = tcSkolemizeGeneral GenSigCtxt exp_ty exp_ty $ \kv_prs tv_prs rho_ty ->
     thing_inside ((map (mkInvisExpPatKind . snd) kv_prs)
@@ -155,7 +155,7 @@ tcSkolemize
   :: UserTypeCtxt
   -> AnySigmaType
   -> (AnyRhoType -> TcM result)
-  -> TcM (CsWrapper, result)
+  -> TcM (AnyCsWrapper, result)
 tcSkolemize ctxt expected_ty thing_inside
   = tcSkolemizeGeneral ctxt expected_ty expected_ty $ \_ _ rho_ty ->
     thing_inside rho_ty
@@ -332,14 +332,14 @@ matchExpectedFunTys
   -> VisArity
   -> ExpSigmaType
   -> ([ExpPatType] -> ExpRhoType -> TcM a)
-  -> TcM (CsWrapper, a)
+  -> TcM (AnyCsWrapper, a)
 matchExpectedFunTys herald _ arity (Infer inf_res) thing_inside =
   panic "matchExpectedFunTys Infer"
 
 matchExpectedFunTys herald ctx arity (Check top_ty) thing_inside
   = check arity [] top_ty
   where
-    check :: VisArity -> [ExpPatType] -> AnySigmaType -> TcM (CsWrapper, a)
+    check :: VisArity -> [ExpPatType] -> AnySigmaType -> TcM (AnyCsWrapper, a)
     -- Skolemize vis/invis quantifiers
     check n_req rev_pat_tys ty
       | isSigmaTy ty
@@ -385,7 +385,7 @@ matchExpectedFunTys herald ctx arity (Check top_ty) thing_inside
       = addErrCtxtM (mkFunTysMsg herald (arity, top_ty))
         $ defer n_req rev_pat_tys res_ty
 
-    defer :: VisArity -> [ExpPatType] -> AnyRhoType -> TcM (CsWrapper, a)
+    defer :: VisArity -> [ExpPatType] -> AnyRhoType -> TcM (AnyCsWrapper, a)
     defer n_req rev_pat_tys fun_ty = do
       (more_arg_tys, more_fun_kis)
         <- unzip <$> mapM new_check_arg_ty_ki [arity - n_req + 1 .. arity]
@@ -412,7 +412,7 @@ mkFunTysMsg herald (n_vis_args_in_call, fun_ty) env = panic "mkFunTysMsg"
 *                                                                      *
 ********************************************************************* -}
 
-tcSubTypePat :: CtOrigin -> UserTypeCtxt -> ExpSigmaType -> AnySigmaType -> TcM CsWrapper
+tcSubTypePat :: CtOrigin -> UserTypeCtxt -> ExpSigmaType -> AnySigmaType -> TcM AnyCsWrapper
 tcSubTypePat inst_orig ctxt (Check ty_actual) ty_expected
   = tc_sub_type unifyTypeET inst_orig ctxt ty_actual ty_expected
 tcSubTypePat _ _ (Infer _) _ = panic "tcSubTypePat infer"
@@ -423,7 +423,7 @@ tc_sub_type
   -> UserTypeCtxt
   -> AnySigmaType
   -> AnySigmaType
-  -> TcM CsWrapper
+  -> TcM AnyCsWrapper
 tc_sub_type unify inst_orig ctxt ty_actual ty_expected
   | definitely_poly ty_expected
   , isRhoTy ty_actual
@@ -445,7 +445,7 @@ tc_sub_type_shallow
   -> CtOrigin
   -> AnySigmaType
   -> AnyRhoType
-  -> TcM CsWrapper
+  -> TcM AnyCsWrapper
 tc_sub_type_shallow unify inst_orig ty_actual sk_rho = do
   (wrap, rho_a) <- topInstantiate inst_orig ty_actual
   cow <- unify rho_a sk_rho
@@ -460,7 +460,7 @@ definitely_poly ty
   | otherwise
   = False
 
-tcSubMult :: CtOrigin -> BuiltInKi -> AnyKind -> TcM CsWrapper
+tcSubMult :: CtOrigin -> BuiltInKi -> AnyKind -> TcM AnyCsWrapper
 tcSubMult origin w_actual w_expected
   = case snd $ splitInvisFunKis $ snd $ splitForAllKiVars w_expected of
       FunKi {} -> panic "tcSubMult" (ppr origin $$ ppr w_expected)

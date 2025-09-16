@@ -52,7 +52,8 @@ type instance XXValBindsLR (CsPass pL) pR = NCsValBindsLR (CsPass pL)
 
 type instance XFunBind (CsPass pL) Ps = AddEpAnn
 type instance XFunBind (CsPass pL) Rn = NameSet
-type instance XFunBind (CsPass pL) Tc = (CsWrapper, [CoreTickish])
+type instance XFunBind (CsPass pL) Tc = (AnyCsWrapper, [CoreTickish])
+type instance XFunBind (CsPass pL) Zk = (ZkCsWrapper, [CoreTickish])
 
 type instance XTyFunBind (CsPass pL) Ps = [AddEpAnn]
 type instance XTyFunBind (CsPass pL) Rn = ([Name], FreeVars)
@@ -61,6 +62,7 @@ type instance XTyFunBind (CsPass pL) Tc = NoExtField
 type instance XXCsBindsLR Ps pR = DataConCantHappen
 type instance XXCsBindsLR Rn pR = DataConCantHappen
 type instance XXCsBindsLR Tc pR = AbsBinds
+type instance XXCsBindsLR Zk pR = AbsBinds
 
 type instance XTCVarBind (CsPass pL) (CsPass pR) = XTCVarBindCs pL pR
 type family XTCVarBindCs pL pR where
@@ -162,28 +164,34 @@ ppr_monobind (FunBind { fun_id = fun
                       if null ticks
                       then empty
                       else text "-- ticks = " <> ppr ticks
+                 Zk | (_, ticks) <- ext ->
+                      if null ticks
+                      then empty
+                      else text "-- ticks = " <> ppr ticks
     wrapDoc :: SDoc
     wrapDoc = case csPass @idR of
                 Ps -> empty
                 Rn -> empty
                 Tc | (wrap, _) <- ext -> ppr wrap
+                Zk | (wrap, _) <- ext -> ppr wrap
 
 ppr_monobind (TyFunBind _ _ _) = text "TyFunBind ppr non implemented"
 ppr_monobind (TCVarBind { tcvar_id = var, tcvar_rhs = rhs })
   = sep [pprBndr CasePatBind var, nest 2 $ equals <+> pprExpr (unLoc rhs)]
 ppr_monobind (XCsBindsLR b) = case csPass @idL of
   Tc -> ppr_absbinds b
-    where
-      ppr_absbinds (AbsBinds { abs_tvs = tyvars, abs_exports = exports, abs_binds = val_binds })
-        = sdocOption sdocPrintTypecheckerElaboration $ \case
-            False -> pprLCsBinds val_binds
-            True -> hang (text "AbsBinds" <+> brackets (interpp'SP tyvars))
-                    2 $ braces $ vcat
-                    [ text "Exports:" <+> brackets (sep (punctuate comma (map ppr exports)))
-                    , text "Exported types:"
-                      <+> vcat [pprBndr LetBind (abe_poly ex) | ex <- exports]
-                    , text "Binds:" <+> pprLCsBinds val_binds
-                    ]
+  Zk -> ppr_absbinds b
+  where
+    ppr_absbinds (AbsBinds { abs_tvs = tyvars, abs_exports = exports, abs_binds = val_binds })
+      = sdocOption sdocPrintTypecheckerElaboration $ \case
+          False -> pprLCsBinds val_binds
+          True -> hang (text "AbsBinds" <+> brackets (interpp'SP tyvars))
+                  2 $ braces $ vcat
+                  [ text "Exports:" <+> brackets (sep (punctuate comma (map ppr exports)))
+                  , text "Exported types:"
+                    <+> vcat [pprBndr LetBind (abe_poly ex) | ex <- exports]
+                  , text "Binds:" <+> pprLCsBinds val_binds
+                  ]
 
 instance Outputable ABExport where
   ppr (ABE { abe_poly = gbl, abe_mono = lcl })

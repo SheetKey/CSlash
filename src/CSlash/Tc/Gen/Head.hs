@@ -84,7 +84,7 @@ type family XEVAType (p :: TcPass) where
 data EWrap
   = EPar AppCtxt
   | EExpand CsThingRn
-  | ECsWrap CsWrapper
+  | ECsWrap AnyCsWrapper
 
 data AppCtxt
   = VACall (CsExpr Rn) Int SrcSpan
@@ -118,7 +118,7 @@ mkEValArg ctxt e = EValArg { ea_arg = e
                            , ea_ctxt = ctxt
                            , ea_arg_ty = noExtField }
  
-addArgWrap :: CsWrapper -> [CsExprArg p] -> [CsExprArg p]
+addArgWrap :: AnyCsWrapper -> [CsExprArg p] -> [CsExprArg p]
 addArgWrap wrap args
   | isIdCsWrapper wrap = args
   | otherwise = EWrap (ECsWrap wrap) : args

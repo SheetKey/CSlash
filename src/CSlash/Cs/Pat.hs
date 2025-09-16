@@ -43,6 +43,7 @@ import CSlash.Tc.Types.Evidence
 import CSlash.Tc.Utils.TcType (AnyType)
 
 import CSlash.Utils.Outputable
+import CSlash.Utils.Panic
 import CSlash.Types.Name.Reader (RdrName)
 import CSlash.Core.ConLike
 import CSlash.Core.Type
@@ -126,7 +127,7 @@ data EpAnnImpPat = EpAnnImpPat
 -- ---------------------------------------------------------------------
 
 data XXPatCsTc
-  = CoPat { co_cpt_wrap :: CsWrapper
+  = CoPat { co_cpt_wrap :: AnyCsWrapper
           , co_pat_inner :: Pat Tc
           , co_pat_ty :: Type (AnyTyVar AnyKiVar) AnyKiVar
           }
@@ -187,6 +188,7 @@ patNeedsParens p = go @p
         ExpansionPat pat _ -> go pat
         CoPat _ inner _ -> go inner
         TyPat pat _ _ -> go pat
+      Zk -> panic "patNeedsParens Zk"
 
 conPatNeedsParens :: PprPrec -> CsConDetails t a -> Bool
 conPatNeedsParens p = go
@@ -209,6 +211,7 @@ pprPat (ConPat { pat_con = con, pat_args = details, pat_con_ext = ext }) =
     Tc -> sdocOption sdocPrintTypecheckerElaboration $ \case
       False -> pprUserCon (unLoc con) details
       True -> error "pprPat"
+    Zk -> panic "pprPat Zk"
 pprPat (LitPat _ s) = ppr s
 pprPat (NPat _ l Nothing _) = ppr l
 pprPat (NPat _ l (Just _) _) = char '-' <> ppr l
@@ -224,6 +227,7 @@ pprPat (XPat ext) = case csPass @p of
                                                    then pprParendPat appPrec pat
                                                    else pprPat pat
     TyPat orig _ _ -> pprPat orig
+  Zk -> panic "pprPat Zk"
 
 pprUserCon
   :: (OutputableBndr con, OutputableBndrId p, Outputable (Anno (IdCsP p)))

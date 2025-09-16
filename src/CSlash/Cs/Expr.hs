@@ -55,6 +55,7 @@ noSyntaxExpr = case csPass @p of
   Ps -> noExtField
   Rn -> NoSyntaxExprRn
   Tc -> NoSyntaxExprTc
+  Zk -> panic "noSyntaxExpr Zk"
 
 mkSyntaxExpr :: CsExpr Rn -> SyntaxExprRn
 mkSyntaxExpr = SyntaxExprRn
@@ -185,7 +186,7 @@ type instance XXExpr Rn = DataConCantHappen
 type instance XXExpr Tc = XXExprTc
 
 data XXExprTc
-  = WrapExpr CsWrapper (CsExpr Tc)
+  = WrapExpr AnyCsWrapper (CsExpr Tc)
   | ExpandedThingTc
     { xtc_orig :: CsThingRn
     , xtc_expanded :: CsExpr Tc }
@@ -392,6 +393,7 @@ csExprNeedsParens prec = go
     go (CsEmbTy{}) = prec > topPrec
     go (XExpr x) = case csPass @p of
                      Tc -> go_x_tc x
+                     Zk -> panic "csExprNeedsParens Zk"
 
     go_x_tc :: XXExprTc -> Bool
     go_x_tc (WrapExpr _ e) = csExprNeedsParens prec e
@@ -406,6 +408,7 @@ gCsPar e = CsPar x e
           Ps -> noAnn
           Rn -> noExtField
           Tc -> noExtField
+          Zk -> panic "gCsPar Zk"
     
 stripParensCsExpr :: CsExpr (CsPass p) -> CsExpr (CsPass p)
 stripParensCsExpr  (CsPar _ (L _ e)) = stripParensCsExpr e

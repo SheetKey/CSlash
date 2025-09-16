@@ -76,7 +76,7 @@ topSkolemize
   :: SkolemInfo
   -> SkolemInfo
   -> AnySigmaType
-  -> TcM (CsWrapper, [(Name, AnyKiVar)], [(Name, AnyTyVar AnyKiVar)], AnyRhoType)
+  -> TcM (AnyCsWrapper, [(Name, AnyKiVar)], [(Name, AnyTyVar AnyKiVar)], AnyRhoType)
 topSkolemize skolem_info_ki skolem_info ty = go init_subst idCsWrapper [] [] ty
   where
     init_subst = let (tvs, kcvs, kvs) = varsOfType ty
@@ -105,7 +105,7 @@ skolemizeRequired
   :: SkolemInfo
   -> VisArity
   -> AnySigmaType
-  -> TcM (VisArity, CsWrapper, [Name], [ForAllBinder (TcTyVar AnyKiVar)], AnyRhoType)
+  -> TcM (VisArity, AnyCsWrapper, [Name], [ForAllBinder (TcTyVar AnyKiVar)], AnyRhoType)
 skolemizeRequired skolem_info n_req sigma
   = go n_req init_subst idCsWrapper [] [] sigma
   where
@@ -127,7 +127,7 @@ skolemizeRequired skolem_info n_req sigma
       | otherwise
       = return (n_req, wrap, acc_nms, acc_bndrs, substTy subst ty)
 
-topInstantiate :: CtOrigin -> AnySigmaType -> TcM (CsWrapper, AnyRhoType)
+topInstantiate :: CtOrigin -> AnySigmaType -> TcM (AnyCsWrapper, AnyRhoType)
 topInstantiate orig sigma
   | (tvs, body1) <- tcSplitForAllInvisTyVars sigma
   , not (null tvs)
@@ -141,7 +141,7 @@ instantiateSigma
   :: CtOrigin
   -> [AnyTyVar AnyKiVar]
   -> AnySigmaType
-  -> TcM ([AnyTyVar AnyKiVar], CsWrapper, AnySigmaType)
+  -> TcM ([AnyTyVar AnyKiVar], AnyCsWrapper, AnySigmaType)
 instantiateSigma orig tvs body_ty = do 
   (subst, inst_tvs) <- mapAccumLM newMetaTyVarX empty_subst tvs
   let inst_body = substTy subst body_ty

@@ -162,7 +162,7 @@ data PatCtxt
 *                                                                      *
 ********************************************************************* -}
 
-tcPatBndr :: PatEnv -> Name -> ExpSigmaType -> TcM (CsWrapper, TcId)
+tcPatBndr :: PatEnv -> Name -> ExpSigmaType -> TcM (AnyCsWrapper, TcId)
 tcPatBndr penv@(PE { pe_ctxt = LetPat }) bndr_name exp_pat_ty = panic "tcPatBndr let"
 
 tcPatBndr _ bndr_name pat_ty = do
@@ -277,7 +277,7 @@ tc_ty_pat tp tv thing_inside = do
 *                                                                      *
 ********************************************************************* -}
 
-tcPatSig :: CsPatSigType Rn -> ExpSigmaType -> TcM (AnyType, CsWrapper)
+tcPatSig :: CsPatSigType Rn -> ExpSigmaType -> TcM (AnyType, AnyCsWrapper)
 tcPatSig sig res_ty = do
   sig_ty <- tcCsPatSigType PatSigCtxt sig AnyMonoKind
 

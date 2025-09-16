@@ -304,25 +304,25 @@ zonkKiCoToCo :: AnyKindCoercion -> ZonkTcM (KindCoercion KiVar)
 zonkIdBndr :: AnyId -> ZonkTcM (Id (TyVar KiVar) KiVar)
 zonkIdBndr = changeIdTypeM zonkTcTypeToTypeX
 
-zonkTopDecls :: LCsBinds Tc -> TcM (TypeEnv, LCsBinds Tc)
+zonkTopDecls :: LCsBinds Tc -> TcM (TypeEnv, LCsBinds Zk)
 zonkTopDecls binds
   = initZonkEnv NoFlexi
     $ runZonkBndrT (zonkRecMonoBinds binds) $ \binds' -> do
         ty_env <- panic "zonkEnvIds <$> getZonkEnv"
         return (ty_env, binds')
 
-zonkRecMonoBinds :: LCsBinds Tc -> ZonkBndrTcM (LCsBinds Tc)
+zonkRecMonoBinds :: LCsBinds Tc -> ZonkBndrTcM (LCsBinds Zk)
 zonkRecMonoBinds binds = mfix $ \new_binds -> do
   extendIdZonkEnvRec (collectCsBindsBinders CollNoDictBinders new_binds)
   noBinders $ zonkMonoBinds binds
 
-zonkMonoBinds :: LCsBinds Tc -> ZonkTcM (LCsBinds Tc)
+zonkMonoBinds :: LCsBinds Tc -> ZonkTcM (LCsBinds Zk)
 zonkMonoBinds = mapM zonk_lbind
 
-zonk_lbind :: LCsBind Tc -> ZonkTcM (LCsBind Tc)
+zonk_lbind :: LCsBind Tc -> ZonkTcM (LCsBind Zk)
 zonk_lbind = wrapLocZonkMA zonk_bind
 
-zonk_bind :: CsBind Tc -> ZonkTcM (CsBind Tc)
+zonk_bind :: CsBind Tc -> ZonkTcM (CsBind Zk)
 
 zonk_bind bind@(FunBind { fun_id = L loc var
                         , fun_body = body
@@ -334,7 +334,7 @@ zonk_bind bind@(FunBind { fun_id = L loc var
 
 zonk_bind _ = panic "zonk_bind"
 
-zonkCoFn :: CsWrapper -> ZonkBndrTcM CsWrapper
+zonkCoFn :: AnyCsWrapper -> ZonkBndrTcM ZkCsWrapper
 zonkCoFn = panic "zonkCoFn"
 -- zonkCoFn
 -- zonkCoFn

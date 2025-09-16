@@ -64,7 +64,7 @@ import Data.Maybe ( isNothing, fromMaybe, mapMaybe )
 import qualified Data.Set as Set ( difference, fromList, toList, null )
 import CSlash.Types.GREInfo (ConInfo, mkConInfo{-, conInfoFields-})
 
-rnSrcDecls :: CsGroup Ps -> RnM (TcGblEnv, CsGroup Rn)
+rnSrcDecls :: CsGroup Ps -> RnM (TcGblEnv Tc, CsGroup Rn)
 rnSrcDecls group@(CsGroup { cs_valds = val_decls
                           , cs_typeds = type_decls
                           , cs_fixds = fix_decls
@@ -111,7 +111,7 @@ rnSrcDecls group@(CsGroup { cs_valds = val_decls
       traceRn "finish Dus" (ppr src_dus)
       return (final_tcg_env, rn_group)
 
-addTcgDUs :: TcGblEnv -> DefUses -> TcGblEnv
+addTcgDUs :: TcGblEnv Tc -> DefUses -> TcGblEnv Tc
 addTcgDUs tcg_env dus = tcg_env { tcg_dus = tcg_dus tcg_env `plusDU` dus }
 
 {- **************************************************************

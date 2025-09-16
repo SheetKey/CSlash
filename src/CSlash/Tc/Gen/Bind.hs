@@ -76,7 +76,7 @@ import CSlash.Data.Maybe
 import Control.Monad
 import Data.Foldable (find)
 
-tcTopBinds :: [(RecFlag, LCsBinds Rn)] -> [LSig Rn] -> TcM (TcGblEnv, TcLclEnv)
+tcTopBinds :: [(RecFlag, LCsBinds Rn)] -> [LSig Rn] -> TcM (TcGblEnv Tc, TcLclEnv)
 tcTopBinds binds sigs = do
   (binds', wrap, (tcg_env, tcl_env)) <- tcValBinds TopLevel binds sigs getEnvs
   massertPpr (isIdCsWrapper wrap)
@@ -86,7 +86,7 @@ tcTopBinds binds sigs = do
 
   return (tcg_env', tcl_env)
 
-tcLocalBinds :: CsLocalBinds Rn -> TcM thing -> TcM (CsLocalBinds Tc, CsWrapper, thing)
+tcLocalBinds :: CsLocalBinds Rn -> TcM thing -> TcM (CsLocalBinds Tc, AnyCsWrapper, thing)
 tcLocalBinds = panic "tcLocalBinds"
 
 tcValBinds
@@ -94,7 +94,7 @@ tcValBinds
   -> [(RecFlag, LCsBinds Rn)]
   -> [LSig Rn]
   -> TcM thing
-  -> TcM ([(RecFlag, LCsBinds Tc)], CsWrapper, thing)
+  -> TcM ([(RecFlag, LCsBinds Tc)], AnyCsWrapper, thing)
 tcValBinds top_lvl binds sigs thing_inside = do
   (poly_ids, sig_fn) <- tcTySigs sigs
 
@@ -106,7 +106,7 @@ tcBindGroups
   -> TcSigFun
   -> [(RecFlag, LCsBinds Rn)]
   -> TcM thing
-  -> TcM ([(RecFlag, LCsBinds Tc)], CsWrapper, thing)
+  -> TcM ([(RecFlag, LCsBinds Tc)], AnyCsWrapper, thing)
 tcBindGroups _ _ [] thing_inside = do
   thing <- thing_inside
   return ([], idCsWrapper, thing)
@@ -125,7 +125,7 @@ tc_group
   -> (RecFlag, LCsBinds Rn)
   -> IsGroupClosed
   -> TcM thing
-  -> TcM ([(RecFlag, LCsBinds Tc)], CsWrapper, thing)
+  -> TcM ([(RecFlag, LCsBinds Tc)], AnyCsWrapper, thing)
 
 tc_group top_lvl sig_fn (NonRecursive, binds) closed thing_inside = do
   let bind = case binds of
@@ -143,7 +143,7 @@ tc_single
   -> LCsBind Rn
   -> IsGroupClosed
   -> TcM thing
-  -> TcM (LCsBinds Tc, CsWrapper, thing)
+  -> TcM (LCsBinds Tc, AnyCsWrapper, thing)
 tc_single top_lvl sig_fn lbind@(L _ FunBind{}) closed thing_inside = do
   (binds1, ids) <- tcPolyBinds top_lvl sig_fn NonRecursive NonRecursive closed [lbind]
   (thing, wrapper) <- tcExtendLetEnv top_lvl sig_fn closed ids thing_inside

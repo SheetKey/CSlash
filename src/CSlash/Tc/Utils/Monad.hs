@@ -155,7 +155,7 @@ initTc cs_env cs_src keep_rn_syntax mod loc do_this = do
 
 initTcWithGbl
   :: CsEnv
-  -> TcGblEnv
+  -> TcGblEnv Tc
   -> RealSrcSpan
   -> TcM r
   -> IO (Messages TcRnMessage, Maybe r)
@@ -268,7 +268,7 @@ updEnvs upd_envs = updEnv upd
       where
         !(gbl', lcl') = upd_envs (gbl, lcl)
 
-restoreEnvs :: (TcGblEnv, TcLclEnv) -> TcRn a -> TcRn a
+restoreEnvs :: (TcGblEnv Tc, TcLclEnv) -> TcRn a -> TcRn a
 restoreEnvs (gbl, lcl) = setGblEnv gbl . restoreLclEnv lcl
 
 doptM :: DumpFlag -> TcRnIf gbl lcl Bool

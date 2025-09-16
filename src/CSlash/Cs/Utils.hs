@@ -180,11 +180,11 @@ csTypeToCsSigType lty@(L loc ty) =
 *                                                                      *
 ********************************************************************* -}
 
-mkCsWrap :: CsWrapper -> CsExpr Tc -> CsExpr Tc
+mkCsWrap :: AnyCsWrapper -> CsExpr Tc -> CsExpr Tc
 mkCsWrap co_fn e | isIdCsWrapper co_fn = e
 mkCsWrap co_fn e = XExpr (WrapExpr co_fn e)
 
-mkCsWrapPat :: CsWrapper -> Pat Tc -> Type (AnyTyVar AnyKiVar) AnyKiVar -> Pat Tc
+mkCsWrapPat :: AnyCsWrapper -> Pat Tc -> Type (AnyTyVar AnyKiVar) AnyKiVar -> Pat Tc
 mkCsWrapPat co_fn p ty | isIdCsWrapper co_fn = p
                        | otherwise = XPat $ CoPat co_fn p ty
 
@@ -345,12 +345,14 @@ instance IsPass p => CollectPass (CsPass p) where
         CoPat _ pat _ -> collect_pat flag pat
         ExpansionPat _ pat -> collect_pat flag pat
         _ -> panic "collectXXPat TyPat(this should only be constructed later by the type checker in Tc.Gen.Pat)"
+      Zk -> panic "collectXXPat Zk"
   collectXXCsBindsLR ext =
     case csPass @p of
       Ps -> dataConCantHappen ext
       Rn -> dataConCantHappen ext
       Tc -> case ext of
         AbsBinds { abs_exports = dbinds } -> panic "(map abe_poly dbinds ++)"
+      Zk -> panic "collectXXCsBindsLR Zk"
 
 csTyForeignBinders :: [TypeGroup Rn] -> [Name]
 csTyForeignBinders type_decls = panic "csTyForeignBinders"

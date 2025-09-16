@@ -56,7 +56,7 @@ tcLambdaMatches
   -> MatchGroup Rn (LCsExpr Rn)
   -> [ExpPatType]
   -> ExpSigmaType
-  -> TcM (CsWrapper, MatchGroup Tc (LCsExpr Tc))
+  -> TcM (AnyCsWrapper, MatchGroup Tc (LCsExpr Tc))
 tcLambdaMatches e matches invis_pat_tys res_ty = do
   arity <- checkArgCounts matches
 

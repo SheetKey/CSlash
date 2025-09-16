@@ -351,7 +351,7 @@ checkBidirectionFormatChars start_loc sb
 -- -----------------------------------------------------------------------------
 -- If the renamed source has been kept, extract it. Dump it if requested.
 
-extract_renamed_stuff :: ModSummary -> TcGblEnv -> Cs RenamedStuff
+extract_renamed_stuff :: ModSummary -> TcGblEnv Zk -> Cs RenamedStuff
 extract_renamed_stuff mod_summary tc_result = panic "extrace-renamed-stuff"
 
 -- -----------------------------------------------------------------------------
@@ -361,7 +361,7 @@ csTypecheckAndGetWarnings :: CsEnv -> ModSummary -> IO (FrontendResult, WarningM
 csTypecheckAndGetWarnings cs_env summary = runCs' cs_env $
   FrontendTypecheck . fst <$> cs_typecheck False summary Nothing
   
-cs_typecheck :: Bool -> ModSummary -> Maybe CsParsedModule -> Cs (TcGblEnv, RenamedStuff)
+cs_typecheck :: Bool -> ModSummary -> Maybe CsParsedModule -> Cs (TcGblEnv Zk, RenamedStuff)
 cs_typecheck keep_rn mod_summary mb_rdr_module = do
   cs_env <- getCsEnv
   let cs_src = ms_cs_src
@@ -382,7 +382,7 @@ cs_typecheck keep_rn mod_summary mb_rdr_module = do
   rn_info <- extract_renamed_stuff mod_summary tc_result
   return (tc_result, rn_info)
 
-tcRnModule' :: ModSummary -> Bool -> CsParsedModule -> Cs TcGblEnv
+tcRnModule' :: ModSummary -> Bool -> CsParsedModule -> Cs (TcGblEnv Zk)
 tcRnModule' sum save_rn_syntax mod = do
   cs_env <- getCsEnv
   dflags <- getDynFlags
