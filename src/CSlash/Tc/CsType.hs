@@ -269,9 +269,9 @@ swizzleTcTyConBndrs tc_infos
 
     swizzle_env = mkVarEnv (map swap swizzle_pairs)
 
-    --swizzleMapper :: TypeMapper () Identity
+    --swizzleMapper :: TyCoMapper () Identity
     swizzleMapper = panic "swizzleMapper"
-      -- TypeMapper { tcm_tyvar = swizzle_tv
+      -- TyCoMapper { tcm_tyvar = swizzle_tv
       --                          , tcm_tybinder = swizzle_bndr
       --                          , tcm_tylambinder = swizzle_lam_bndr
       --                          , tcm_tylamkibinder = swizzle_lam_bndr

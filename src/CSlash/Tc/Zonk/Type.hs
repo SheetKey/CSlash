@@ -28,10 +28,11 @@ import CSlash.Tc.Zonk.TcType
        ( tcInitTidyEnv{-, tcInitOpenTidyEnv -}
        , writeMetaTyVarRef
        , writeMetaKiVarRef
-       , checkKiCoercionHole )
+       , checkKiCoercionHole
+       , checkTyCoercionHole )
 
 import CSlash.Core.Type
-import CSlash.Core.Type.Rep (mkNakedTyConTy)
+import CSlash.Core.Type.Rep (mkNakedTyConTy, TypeCoercion, TypeCoercionHole(..))
 import CSlash.Core.Kind
 import CSlash.Core.TyCon
 
@@ -167,9 +168,25 @@ commitFlexiTv tv zonked_kind = do
   lift $ case flexi of
     NoFlexi -> pprPanic "NoFlexi" (ppr tv <+> colon <+> ppr zonked_kind) 
 
-zonk_typemapper :: TypeMapper (AnyTyVar AnyKiVar) AnyKiVar (TyVar KiVar) KiVar ZonkEnv TcM
-zonk_typemapper = TypeMapper
+zonkTyCoVarOcc
+  :: TyCoVar (AnyTyVar AnyKiVar) AnyKiVar
+  -> ZonkTcM (TypeCoercion (TyVar KiVar) KiVar)
+zonkTyCoVarOcc cv = mkTyCoVarCo <$> (changeIdTypeM zonkTcTypeToTypeX cv)
+
+zonkTyCoHole :: AnyTypeCoercionHole -> ZonkTcM (TypeCoercion (TyVar KiVar) KiVar)
+zonkTyCoHole hole@(TypeCoercionHole { tch_ref = ref, tch_co_var = cv }) = do
+  contents <- readTcRef ref
+  case contents of
+    Just co -> do co' <- zonkTyCoToTyCo co
+                  _ <- lift $ liftZonkM $ checkTyCoercionHole cv (panic "asAnyTyKi co'")
+                  return co'
+    Nothing -> panic "zonkTyCoHole"
+
+zonk_typemapper :: TyCoMapper (AnyTyVar AnyKiVar) AnyKiVar (TyVar KiVar) KiVar ZonkEnv TcM
+zonk_typemapper = TyCoMapper
   { tm_tyvar = \env tv -> runZonkT (zonkTyVarOcc tv) env
+  , tm_covar = \env cv -> runZonkT (zonkTyCoVarOcc cv) env
+  , tm_hole = \env co -> runZonkT (zonkTyCoHole co) env
   , tm_tybinder = \env tv _ k -> flip runZonkT env $ runZonkBndrT (zonkTyBndrX tv)
                                  $ \tv' -> ZonkT $ \env' -> (k env' tv')
   , tm_tylambinder = \env tv k -> flip runZonkT env $ runZonkBndrT (zonkTyBndrX tv)
@@ -194,8 +211,9 @@ zonkTcTyConToTyCon tc@(TyCon {..})
 
 zonkTcTypeToTypeX :: AnyType -> ZonkTcM (Type (TyVar KiVar) KiVar)
 zonkTcTypesToTypesX :: [AnyType] -> ZonkTcM [Type (TyVar KiVar) KiVar]
-(zonkTcTypeToTypeX, zonkTcTypesToTypesX) = case mapTypeX zonk_typemapper of
-  (zty, ztys) -> (ZonkT . flip zty, ZonkT . flip ztys)
+zonkTyCoToTyCo :: AnyTypeCoercion -> ZonkTcM (TypeCoercion (TyVar KiVar) KiVar)
+(zonkTcTypeToTypeX, zonkTcTypesToTypesX, zonkTyCoToTyCo) = case mapTyCoX zonk_typemapper of
+  (zty, ztys, zco, _) -> (ZonkT . flip zty, ZonkT . flip ztys, ZonkT . flip zco)
 
 zonkKiVarOcc :: HasDebugCallStack => AnyKiVar -> ZonkTcM (MonoKind KiVar)
 zonkKiVarOcc = handleAnyKv f_any f_tc
@@ -381,7 +399,16 @@ zonk_bind (XCsBindsLR (AbsBinds { abs_tvs = tyvars
 ********************************************************************* -}
 
 zonkLExpr :: LCsExpr Tc -> ZonkTcM (LCsExpr Zk)
-zonkLExpr = panic "zonkLExpr"
+zonkLExpr expr = wrapLocZonkMA zonkExpr expr
+
+zonkExpr :: CsExpr Tc -> ZonkTcM (CsExpr Zk)
+
+zonkExpr (CsVar x (L l id))
+  = assertPpr (isNothing (isDataConId_maybe id)) (ppr id) $ do
+  id' <- zonkIdOcc id
+  return (CsVar x (L l id'))
+
+zonkExpr _ = panic "zonkExpr"
 
 zonkCoFn :: AnyCsWrapper -> ZonkBndrTcM ZkCsWrapper
 zonkCoFn WpHole = return WpHole
@@ -395,12 +422,12 @@ zonkCoFn (WpFun c2 fki t1) = do
   t1' <- noBinders $ zonkTcTypeToTypeX t1
   return (WpFun c2' fki' t1')
 zonkCoFn (WpCast co) = WpCast <$> noBinders (zonkTyCoToTyCo co)
-zonkCoFn (WpTyLam tv) = assert (isImmutableVar tv) $
+zonkCoFn (WpTyLam tv) = assert (handleAnyTv (const True) isImmutableVar tv) $
                         WpTyLam <$> zonkTyBndrX tv
-zonkCoFn (WpKiLam kv) = assert (isImmutableVar kv) $
+zonkCoFn (WpKiLam kv) = assert (handleAnyKv (const True) isImmutableVar kv) $
                         WpKiLam <$> zonkKiBndrX kv
 zonkCoFn (WpTyApp ty) = WpTyApp <$> noBinders (zonkTcTypeToTypeX ty)
-zonkCoFn (WpMultCoercion co) = WpMultCoercion <$> noBinders (zonkTyCoToTyCo co)
+zonkCoFn (WpMultCoercion co) = WpMultCoercion <$> noBinders (zonkKiCoToCo co)
 
 {- *********************************************************************
 *                                                                      *

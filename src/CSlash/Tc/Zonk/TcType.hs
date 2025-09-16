@@ -25,6 +25,7 @@ import CSlash.Tc.Zonk.Monad
 
 -- import GHC.Core.InstEnv (ClsInst(is_tys))
 import CSlash.Core.Type.Rep
+import CSlash.Core.Type.Compare
 import CSlash.Core.Type.Tidy
 import CSlash.Core.TyCon
 import CSlash.Core.Type
@@ -145,15 +146,17 @@ writeMetaKiVarRef kivar ref ki
 
 zonkTcType :: AnyType -> ZonkM AnyType
 zonkTcTypes :: [AnyType] -> ZonkM [AnyType]
-(zonkTcType, zonkTcTypes) = mapType zonkTcTypeMapper
+(zonkTcType, zonkTcTypes, _, _) = mapTyCo zonkTcTyCoMapper
   where
-    zonkTcTypeMapper
-      :: TypeMapper
+    zonkTcTyCoMapper
+      :: TyCoMapper
          (AnyTyVar AnyKiVar) AnyKiVar
          (AnyTyVar AnyKiVar) AnyKiVar
          () ZonkM
-    zonkTcTypeMapper = TypeMapper
+    zonkTcTyCoMapper = TyCoMapper
       { tm_tyvar = const zonkAnyTyVar
+      , tm_covar = panic "tm_covar unused zonkTcType"
+      , tm_hole = panic "tm_hole unused zonkTcType"
       , tm_tybinder = \_ tv _ k -> zonkTyVarKind tv >>= k ()
       , tm_tylambinder = \_ tv k -> zonkTyVarKind tv >>= k ()
       , tm_tylamkibinder = \_ kv k -> k () kv
@@ -308,9 +311,31 @@ zonkKiCoVarKind kcv = do
 
 {- *********************************************************************
 *                                                                      *
-              Kind Coercion Holes
+              Coercion Holes
 *                                                                      *
 ********************************************************************* -}
+
+checkTyCoercionHole
+  :: TyCoVar (AnyTyVar AnyKiVar) AnyKiVar
+  -> AnyTypeCoercion
+  -> ZonkM AnyTypeCoercion
+checkTyCoercionHole cv co
+  | debugIsOn
+  = do cv_ty <- zonkTcType (varType cv)
+       return
+         $ assertPpr (ok cv_ty)
+         (text "Bag type coercion hole" <+>
+          ppr cv <> colon <+> vcat [ panic "ppr t1, ppr t2", ppr cv_ty ])
+         co
+  | otherwise
+  = return co
+  where
+    (Pair t1 t2) = panic "tyCoercionParts co"
+    ok cv_ty | TyEqPred cv_t1 cv_t2 <- classifyPredType cv_ty
+             = t1 `eqType` cv_t1
+               && t2 `eqType` cv_t2
+             | otherwise
+             = False
 
 checkKiCoercionHole :: KiCoVar AnyKiVar -> AnyKindCoercion -> ZonkM AnyKindCoercion
 checkKiCoercionHole kcv kco

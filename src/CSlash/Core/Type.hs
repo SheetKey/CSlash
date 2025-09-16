@@ -121,8 +121,10 @@ expand_syn rhs arg_tys
 *                                                                      *
 ********************************************************************* -}
 
-data TypeMapper tv kv tv' kv' env m = TypeMapper
+data TyCoMapper tv kv tv' kv' env m = TyCoMapper
   { tm_tyvar :: env -> tv -> m (Type tv' kv')
+  , tm_covar :: env -> TyCoVar tv kv -> m (TypeCoercion tv' kv')
+  , tm_hole :: env -> TypeCoercionHole tv kv -> m (TypeCoercion tv' kv')
   , tm_tybinder :: forall r. env -> tv -> ForAllFlag -> (env -> tv' -> m r) -> m r
   , tm_tylambinder :: forall r. env -> tv -> (env -> tv' -> m r) -> m r
   , tm_tylamkibinder :: forall r. env -> kv -> (env -> kv' -> m r) -> m r
@@ -130,26 +132,32 @@ data TypeMapper tv kv tv' kv' env m = TypeMapper
   , tm_mkcm :: MKiCoMapper kv kv' env m
   }
 
-{-# INLINE mapType #-}
-mapType
-  :: (Monad m, VarHasKind tv kv, IsTyVar tv' kv') => TypeMapper tv kv tv' kv' () m
+{-# INLINE mapTyCo #-}
+mapTyCo
+  :: (Monad m, VarHasKind tv kv, IsTyVar tv' kv') => TyCoMapper tv kv tv' kv' () m
   -> ( Type tv kv -> m (Type tv' kv')
-     , [Type tv kv] -> m [Type tv' kv'] )
-mapType mapper = case mapTypeX mapper of
-                   (go_ty, go_tys) -> (go_ty (), go_tys ())
+     , [Type tv kv] -> m [Type tv' kv']
+     , TypeCoercion tv kv -> m (TypeCoercion tv' kv')
+     , [TypeCoercion tv kv] -> m [TypeCoercion tv' kv'] )
+mapTyCo mapper = case mapTyCoX mapper of
+  (go_ty, go_tys, go_co, go_cos) -> (go_ty (), go_tys (), go_co (), go_cos ())
 
-{-# INLINE mapTypeX #-}
-mapTypeX
-  :: (Monad m, VarHasKind tv kv, IsTyVar tv' kv') => TypeMapper tv kv tv' kv' env m
+{-# INLINE mapTyCoX #-}
+mapTyCoX
+  :: (Monad m, VarHasKind tv kv, IsTyVar tv' kv') => TyCoMapper tv kv tv' kv' env m
   -> ( env -> Type tv kv -> m (Type tv' kv')
-     , env -> [Type tv kv] -> m [Type tv' kv'] )
-mapTypeX (TypeMapper { tm_tyvar = tyvar
+     , env -> [Type tv kv] -> m [Type tv' kv']
+     , env -> TypeCoercion tv kv -> m (TypeCoercion tv' kv')
+     , env -> [TypeCoercion tv kv] -> m [TypeCoercion tv' kv'] )
+mapTyCoX (TyCoMapper { tm_tyvar = tyvar
+                     , tm_covar = covar
+                     , tm_hole = cohole
                      , tm_tybinder = tybinder
                      , tm_tycon = tycon
                      , tm_tylambinder = tylambinder
                      , tm_tylamkibinder = kibinder
                      , tm_mkcm = mkcmapper })
-  = (go_ty, go_tys)
+  = (go_ty, go_tys, go_co, go_cos)
   where
     (go_mki, _, go_kco, _) = mapMKiCoX mkcmapper
 
@@ -181,6 +189,23 @@ mapTypeX (TypeMapper { tm_tyvar = tyvar
     go_ty !env (Embed ki) = Embed <$> go_mki env ki
     go_ty !env (CastTy ty kco) = mkCastTy <$> go_ty env ty <*> go_kco env kco
     go_ty !env (KindCoercion kco) = KindCoercion <$> go_kco env kco
+
+    go_cos !_ [] = return []
+    go_cos !env (co:cos) = (:) <$> go_co env co <*> go_cos env cos
+
+    go_co !env (TyRefl ty) = TyRefl <$> go_ty env ty
+    go_co !env (GRefl ty kco) = mkGReflCo <$> go_ty env ty <*> go_kco env kco
+    go_co !env (AppCo c1 c2) = mkAppCo <$> go_co env c1 <*> go_co env c2
+    go_co !env (TyFunCo kco c1 c2)
+      = mkTyFunCo <$> go_kco env kco <*> go_co env c1 <*> go_co env c2
+    go_co !env (TyCoVarCo cv) = covar env cv
+    go_co !env (TyHoleCo hole) = cohole env hole
+    go_co !env (TySymCo co) = mkTySymCo <$> go_co env co
+    go_co !env (TyTransCo c1 c2) = mkTyTransCo <$> go_co env c1 <*> go_co env c2
+    go_co !env (LiftKCo kco) = LiftKCo <$> go_kco env kco
+    go_co !env (TyConAppCo tc cos) = do
+      tc' <- tycon tc
+      mkTyConAppCo tc' <$> go_cos env cos
 
 {- *********************************************************************
 *                                                                      *
@@ -531,6 +556,18 @@ mkTyFunCo kco arg_co res_co
   = TyFunCo { tfco_ki = kco
             , tfco_arg = arg_co
             , tfco_res = res_co }
+
+mkAppCo :: IsTyVar tv kv => TypeCoercion tv kv -> TypeCoercion tv kv -> TypeCoercion tv kv
+mkAppCo co arg
+  | Just ty1 <- isReflTyCo_maybe co
+  , Just ty2 <- isReflTyCo_maybe arg
+  = mkReflTyCo (mkAppTy ty1 ty2)
+  | Just ty1 <- isReflTyCo_maybe co
+  , Just (tc, tys) <- splitTyConApp_maybe ty1
+  = mkTyConAppCo tc ((mkReflTyCo <$> tys) ++ [arg])
+mkAppCo (TyConAppCo tc args) arg
+  = mkTyConAppCo tc (args ++ [arg])
+mkAppCo co arg = AppCo co arg
 
 {- *********************************************************************
 *                                                                      *
