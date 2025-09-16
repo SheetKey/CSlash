@@ -384,9 +384,23 @@ zonkLExpr :: LCsExpr Tc -> ZonkTcM (LCsExpr Zk)
 zonkLExpr = panic "zonkLExpr"
 
 zonkCoFn :: AnyCsWrapper -> ZonkBndrTcM ZkCsWrapper
-zonkCoFn = panic "zonkCoFn"
--- zonkCoFn
--- zonkCoFn
+zonkCoFn WpHole = return WpHole
+zonkCoFn (WpCompose c1 c2) = do
+  c1' <- zonkCoFn c1
+  c2' <- zonkCoFn c2
+  return (WpCompose c1' c2')
+zonkCoFn (WpFun c2 fki t1) = do
+  c2' <- zonkCoFn c2
+  fki' <- noBinders $ zonkTcMonoKindToMonoKindX fki
+  t1' <- noBinders $ zonkTcTypeToTypeX t1
+  return (WpFun c2' fki' t1')
+zonkCoFn (WpCast co) = WpCast <$> noBinders (zonkTyCoToTyCo co)
+zonkCoFn (WpTyLam tv) = assert (isImmutableVar tv) $
+                        WpTyLam <$> zonkTyBndrX tv
+zonkCoFn (WpKiLam kv) = assert (isImmutableVar kv) $
+                        WpKiLam <$> zonkKiBndrX kv
+zonkCoFn (WpTyApp ty) = WpTyApp <$> noBinders (zonkTcTypeToTypeX ty)
+zonkCoFn (WpMultCoercion co) = WpMultCoercion <$> noBinders (zonkTyCoToTyCo co)
 
 {- *********************************************************************
 *                                                                      *
