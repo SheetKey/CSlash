@@ -332,7 +332,56 @@ zonk_bind bind@(FunBind { fun_id = L loc var
 
     panic "zonk_bind unfinished"
 
-zonk_bind _ = panic "zonk_bind"
+zonk_bind bind@(TyFunBind {}) = panic "zonk_bind TyFunBind"
+
+zonk_bind bind@(TCVarBind {}) = panic "zonk_bind TCVarBind"
+
+zonk_bind (XCsBindsLR (AbsBinds { abs_tvs = tyvars
+                                , abs_exports = exports
+                                , abs_binds = val_binds
+                                , abs_sig = has_sig }))
+  = assertPpr (null tyvars) (text "zonk_bind/AbsBinds has nonempty tyvars") $ do
+  (new_val_bind, new_exports) <- mfix $ \ ~(new_val_binds, _) ->
+    runZonkBndrT (extendIdZonkEnvRec $ collectCsBindsBinders CollNoDictBinders new_val_binds)
+    $ \_ -> do new_val_binds <- mapM zonk_val_bind val_binds
+               new_exports <- mapM zonk_export exports
+               return (new_val_binds, new_exports)
+  return $ XCsBindsLR $ AbsBinds { abs_tvs = tyvars
+                                 , abs_exports = new_exports
+                                 , abs_binds = new_val_bind
+                                 , abs_sig = has_sig }
+  where
+    zonk_val_bind lbind
+      | has_sig
+      , (L loc (FunBind { fun_id = (L mloc mono_id)
+                        , fun_body = body
+                        , fun_ext = (co_fn, ticks) })) <- lbind
+      = do new_mono_id <- changeIdTypeM zonkTcTypeToTypeX mono_id
+           runZonkBndrT (zonkCoFn co_fn) $ \new_co_fn -> do
+             new_body <- zonkLExpr body
+             return $ L loc $ FunBind { fun_id = L mloc new_mono_id
+                                      , fun_body = new_body
+                                      , fun_ext = (new_co_fn, ticks) }
+      | otherwise
+      = zonk_lbind lbind
+
+    zonk_export :: ABExport -> ZonkTcM ABExport
+    zonk_export = panic "zonk_export"
+
+{- *********************************************************************
+*                                                                      *
+              Match group
+*                                                                      *
+********************************************************************* -}
+
+{- *********************************************************************
+*                                                                      *
+              CsExpr
+*                                                                      *
+********************************************************************* -}
+
+zonkLExpr :: LCsExpr Tc -> ZonkTcM (LCsExpr Zk)
+zonkLExpr = panic "zonkLExpr"
 
 zonkCoFn :: AnyCsWrapper -> ZonkBndrTcM ZkCsWrapper
 zonkCoFn = panic "zonkCoFn"

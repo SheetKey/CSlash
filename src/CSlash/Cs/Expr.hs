@@ -20,6 +20,7 @@ import Prelude hiding ((<>))
 import CSlash.Language.Syntax.Expr
 import CSlash.Language.Syntax.Extension
 
+import CSlash.Core.Type.Rep (Type)
 import CSlash.Tc.Types.Evidence
 import CSlash.Tc.Utils.TcType (AnyType)
 
@@ -28,6 +29,7 @@ import CSlash.Cs.Extension
 import CSlash.Cs.Lit
 import CSlash.Cs.Pat
 import CSlash.Parser.Annotation
+import CSlash.Types.Var (TyVar, KiVar)
 import CSlash.Types.Basic
 import CSlash.Types.SrcLoc
 import CSlash.Types.Fixity
@@ -43,12 +45,16 @@ type family SyntaxExprCs (p :: Pass) = (r :: Data.Kind.Type) | r -> p where
   SyntaxExprCs 'Parsed = NoExtField
   SyntaxExprCs 'Renamed = SyntaxExprRn
   SyntaxExprCs 'Typechecked = SyntaxExprTc
+  SyntaxExprCs 'Zonked = SyntaxExprZk
 
 data SyntaxExprRn = SyntaxExprRn (CsExpr Rn)
                   | NoSyntaxExprRn
 
 data SyntaxExprTc = SyntaxExprTc
                   | NoSyntaxExprTc
+
+data SyntaxExprZk = SyntaxExprZk
+                  | NoSyntaxExprZk
 
 noSyntaxExpr :: forall p. IsPass p => SyntaxExpr (CsPass p)
 noSyntaxExpr = case csPass @p of
@@ -78,6 +84,7 @@ type instance XVar (CsPass _) = NoExtField
 type instance XUnboundVar Ps = Maybe EpAnnUnboundVar
 type instance XUnboundVar Rn = NoExtField
 type instance XUnboundVar Tc = DataConCantHappen
+type instance XUnboundVar Zk = DataConCantHappen
 
 type instance XOverLitE (CsPass _) = NoExtField
 type instance XLitE (CsPass _) = NoExtField
@@ -94,6 +101,7 @@ type instance XAppTy Ps = NoExtField -- should be Type
 type instance XOpApp Ps = [AddEpAnn]
 type instance XOpApp Rn = Fixity
 type instance XOpApp Tc = DataConCantHappen
+type instance XOpApp Zk = DataConCantHappen
 
 type instance XSectionL Ps = NoExtField
 type instance XSectionR Ps = NoExtField
@@ -101,46 +109,58 @@ type instance XSectionL Rn = NoExtField
 type instance XSectionR Rn = NoExtField
 type instance XSectionL Tc = DataConCantHappen
 type instance XSectionR Tc = DataConCantHappen
+type instance XSectionL Zk = DataConCantHappen
+type instance XSectionR Zk = DataConCantHappen
 
 type instance XNegApp Ps = [AddEpAnn]
 type instance XNegApp Rn = NoExtField
 type instance XNegApp Tc = NoExtField
+type instance XNegApp Zk = NoExtField
 
 type instance XPar Ps = (EpToken "(", EpToken ")")
 type instance XPar Rn = NoExtField
 type instance XPar Tc = NoExtField
+type instance XPar Zk = NoExtField
 
 type instance XExplicitTuple Ps = [AddEpAnn]
 type instance XExplicitTuple Rn = NoExtField
 type instance XExplicitTuple Tc = NoExtField
+type instance XExplicitTuple Zk = NoExtField
 
 type instance XExplicitSum Ps = AnnExplicitSum
 type instance XExplicitSum Rn = NoExtField
 type instance XExplicitSum Tc = NoExtField -- should be [Type]
+type instance XExplicitSum Zk = NoExtField -- should be [Type]
 
 type instance XCase Ps = EpAnnCsCase
 type instance XCase Rn = CsMatchContextRn
 type instance XCase Tc = CsMatchContextRn
+type instance XCase Zk = CsMatchContextRn
 
 type instance XIf Ps = AnnsIf
 type instance XIf Rn = NoExtField
 type instance XIf Tc = NoExtField
+type instance XIf Zk = NoExtField
 
 type instance XMultiIf Ps = [AddEpAnn]
 type instance XMultiIf Rn = NoExtField
 type instance XMultiIf Tc = NoExtField -- should be Type
+type instance XMultiIf Zk = NoExtField -- should be Type
 
 type instance XLet Ps = (EpToken "let", EpToken "in")
 type instance XLet Rn = NoExtField
 type instance XLet Tc = NoExtField
+type instance XLet Zk = NoExtField
 
 type instance XExprWithTySig Ps = [AddEpAnn]
 type instance XExprWithTySig Rn = NoExtField
 type instance XExprWithTySig Tc = NoExtField
+type instance XExprWithTySig Zk = NoExtField
 
 type instance XEmbTy Ps = [AddEpAnn]
 type instance XEmbTy Rn = NoExtField
 type instance XEmbTy Tc = DataConCantHappen
+type instance XEmbTy Zk = DataConCantHappen
 
 type instance Anno [LocatedA ((StmtLR (CsPass pl) (CsPass pr) (LocatedA (body (CsPass pr)))))]
   = SrcSpanAnnL
@@ -174,6 +194,7 @@ type instance XPresent (CsPass _) = NoExtField
 type instance XMissing Ps = EpAnn Bool
 type instance XMissing Rn = NoExtField
 type instance XMissing Tc = NoExtField -- should be Scaled Type
+type instance XMissing Zk = NoExtField -- should be Scaled Type
 
 {- *********************************************************************
 *                                                                      *
@@ -184,6 +205,7 @@ type instance XMissing Tc = NoExtField -- should be Scaled Type
 type instance XXExpr Ps = DataConCantHappen
 type instance XXExpr Rn = DataConCantHappen
 type instance XXExpr Tc = XXExprTc
+type instance XXExpr Zk = XXExprTc
 
 data XXExprTc
   = WrapExpr AnyCsWrapper (CsExpr Tc)
@@ -423,6 +445,7 @@ isAtomicCsExpr _ = False
 type instance XMG Ps b = Origin
 type instance XMG Rn b = Origin
 type instance XMG Tc b = MatchGroupTc
+type instance XMG Zk b = MatchGroupTc
 
 data MatchGroupTc = MatchGroupTc
   { mg_arg_tys :: [AnyType]
@@ -507,10 +530,12 @@ matchSeparator _ = text "->"
 type instance XBindStmt (CsPass _) Ps b = [AddEpAnn]
 type instance XBindStmt (CsPass _) Rn b = NoExtField
 type instance XBindStmt (CsPass _) Tc b = NoExtField
+type instance XBindStmt (CsPass _) Zk b = NoExtField
 
 type instance XBodyStmt (CsPass _) Ps b = NoExtField
 type instance XBodyStmt (CsPass _) Rn b = NoExtField
 type instance XBodyStmt (CsPass _) Tc b = AnyType
+type instance XBodyStmt (CsPass _) Zk b = Type (TyVar KiVar) KiVar
 
 type instance XLetStmt (CsPass _) (CsPass _) b = [AddEpAnn]
 

@@ -24,6 +24,7 @@ import Data.Data
 type instance XCsPSK Ps = EpAnnCO
 type instance XCsPSK Rn = CsPSKRn
 type instance XCsPSK Tc = NoExtField
+type instance XCsPSK Zk = NoExtField
 
 data CsPSKRn = CsPSKRn { cspsk_imp_kvs :: [Name] }
   deriving Data

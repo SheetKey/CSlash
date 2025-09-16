@@ -45,6 +45,7 @@ isImportDeclQualified _ = True
 type instance ImportDeclPkgQual Ps = RawPkgQual
 type instance ImportDeclPkgQual Rn = PkgQual
 type instance ImportDeclPkgQual Tc = PkgQual
+type instance ImportDeclPkgQual Zk = PkgQual
 
 type instance XCImportDecl Ps = XImportDeclPass
 type instance XCImportDecl Rn = XImportDeclPass
@@ -64,10 +65,12 @@ type instance Anno [LocatedA (IE (CsPass p))] = SrcSpanAnnL
 deriving instance Data (IEWrappedName Ps)
 deriving instance Data (IEWrappedName Rn)
 deriving instance Data (IEWrappedName Tc)
+deriving instance Data (IEWrappedName Zk)
 
 deriving instance Eq (IEWrappedName Ps)
 deriving instance Eq (IEWrappedName Rn)
 deriving instance Eq (IEWrappedName Tc)
+deriving instance Eq (IEWrappedName Zk)
 
 data EpAnnImportDecl = EpAnnImportDecl
   { importDeclAnnImport :: EpaLocation
@@ -137,14 +140,17 @@ type instance Anno (IE (CsPass p)) = SrcSpanAnnA
 type instance XIEVar Ps = NoExtField
 type instance XIEVar Rn = NoExtField
 type instance XIEVar Tc = NoExtField
+type instance XIEVar Zk = NoExtField
 
 type instance XIEModuleContents Ps = [AddEpAnn]
 type instance XIEModuleContents Rn = NoExtField
 type instance XIEModuleContents Tc = NoExtField
+type instance XIEModuleContents Zk = NoExtField
 
 type instance XIETyVar Ps = NoExtField
 type instance XIETyVar Rn = NoExtField
 type instance XIETyVar Tc = NoExtField
+type instance XIETyVar Zk = NoExtField
 
 type instance Anno (LocatedA (IE (CsPass p))) = SrcSpanAnnA
 

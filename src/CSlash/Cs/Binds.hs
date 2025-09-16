@@ -58,11 +58,12 @@ type instance XFunBind (CsPass pL) Zk = (ZkCsWrapper, [CoreTickish])
 type instance XTyFunBind (CsPass pL) Ps = [AddEpAnn]
 type instance XTyFunBind (CsPass pL) Rn = ([Name], FreeVars)
 type instance XTyFunBind (CsPass pL) Tc = NoExtField
+type instance XTyFunBind (CsPass pL) Zk = NoExtField
 
 type instance XXCsBindsLR Ps pR = DataConCantHappen
 type instance XXCsBindsLR Rn pR = DataConCantHappen
-type instance XXCsBindsLR Tc pR = AbsBinds
-type instance XXCsBindsLR Zk pR = AbsBinds
+type instance XXCsBindsLR Tc pR = AbsBinds Tc
+type instance XXCsBindsLR Zk pR = AbsBinds Zk
 
 type instance XTCVarBind (CsPass pL) (CsPass pR) = XTCVarBindCs pL pR
 type family XTCVarBindCs pL pR where
@@ -71,10 +72,10 @@ type family XTCVarBindCs pL pR where
 
 -- ---------------------------------------------------------------------
 
-data AbsBinds = AbsBinds
+data AbsBinds p = AbsBinds
   { abs_tvs :: [TyVar KiVar]
   , abs_exports :: [ABExport]
-  , abs_binds :: LCsBinds Tc
+  , abs_binds :: LCsBinds p
   , abs_sig :: Bool
   }
 
@@ -213,6 +214,7 @@ type instance XFixSig (CsPass p) = ([AddEpAnn], SourceText)
 type instance XFixitySig Ps = NamespaceSpecifier
 type instance XFixitySig Rn = NamespaceSpecifier
 type instance XFixitySig Tc = NoExtField
+type instance XFixitySig Zk = NoExtField
 
 data NamespaceSpecifier
   = NoNamespaceSpecifier

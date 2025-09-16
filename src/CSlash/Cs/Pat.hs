@@ -54,6 +54,7 @@ import Data.Data
 type instance XWildPat Ps = NoExtField
 type instance XWildPat Rn = NoExtField
 type instance XWildPat Tc = Type (TyVar KiVar) KiVar
+type instance XWildPat Zk = Type (TyVar KiVar) KiVar
 
 type instance XVarPat (CsPass _) = NoExtField
 type instance XTyVarPat (CsPass _) = NoExtField
@@ -61,52 +62,64 @@ type instance XTyVarPat (CsPass _) = NoExtField
 type instance XAsPat Ps = EpToken "@"
 type instance XAsPat Rn = NoExtField
 type instance XAsPat Tc = NoExtField
+type instance XAsPat Zk = NoExtField
 
 type instance XParPat Ps = (EpToken "(", EpToken ")")
 type instance XParPat Rn = NoExtField
 type instance XParPat Tc = NoExtField
+type instance XParPat Zk = NoExtField
 
 type instance XTuplePat Ps = [AddEpAnn]
 type instance XTuplePat Rn = NoExtField
 type instance XTuplePat Tc = [Type (TyVar KiVar) KiVar]
+type instance XTuplePat Zk = [Type (TyVar KiVar) KiVar]
 
 type instance XSumPat Ps = EpAnnSumPat
 type instance XSumPat Rn = NoExtField
 type instance XSumPat Tc = [Type (TyVar KiVar) KiVar]
+type instance XSumPat Zk = [Type (TyVar KiVar) KiVar]
 
 type instance XConPat Ps = [AddEpAnn]
 type instance XConPat Rn = NoExtField
 type instance XConPat Tc = ConPatTc 
+type instance XConPat Zk = ConPatTc 
 
 type instance XLitPat (CsPass _) = NoExtField
 
 type instance XNPat Ps = [AddEpAnn]
 type instance XNPat Rn = [AddEpAnn]
 type instance XNPat Tc = Type (TyVar KiVar) KiVar
+type instance XNPat Zk = Type (TyVar KiVar) KiVar
 
 type instance XSigPat Ps = [AddEpAnn]
 type instance XSigPat Rn = NoExtField
 type instance XSigPat Tc = Type (AnyTyVar AnyKiVar) AnyKiVar
+type instance XSigPat Zk = Type (AnyTyVar AnyKiVar) AnyKiVar
 
 type instance XKdSigPat Ps = [AddEpAnn]
 type instance XKdSigPat Rn = NoExtField
 type instance XKdSigPat Tc = Kind KiVar
+type instance XKdSigPat Zk = Kind KiVar
 
 type instance XImpPat Ps = EpAnnImpPat
 type instance XImpPat Rn = NoExtField
 type instance XImpPat Tc = NoExtField
+type instance XImpPat Zk = NoExtField
 
 type instance XXPat Ps = DataConCantHappen
 type instance XXPat Rn = CsPatExpansion (Pat Rn) (Pat Rn)
 type instance XXPat Tc = XXPatCsTc
+type instance XXPat Zk = XXPatCsTc
 
 type instance ConLikeP Ps = RdrName
 type instance ConLikeP Rn = Name
 type instance ConLikeP Tc = ConLike (TyVar KiVar) KiVar
+type instance ConLikeP Zk = ConLike (TyVar KiVar) KiVar
 
 type instance XConPatTyArg Ps = [AddEpAnn]
 type instance XConPatTyArg Rn = NoExtField
 type instance XConPatTyArg Tc = NoExtField
+type instance XConPatTyArg Zk = NoExtField
 
 data EpAnnSumPat = EpAnnSumPat
   { sumPatParens :: [AddEpAnn]

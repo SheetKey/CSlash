@@ -37,6 +37,7 @@ data OverLitTc = OverLitTc
 type instance XOverLit Ps = NoExtField
 type instance XOverLit Rn = OverLitRn
 type instance XOverLit Tc = OverLitTc
+type instance XOverLit Zk = OverLitTc
 
 csOverLitNeedsParens :: PprPrec -> CsOverLit x -> Bool
 csOverLitNeedsParens p (OverLit { ol_val = olv }) = go olv

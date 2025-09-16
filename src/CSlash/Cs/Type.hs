@@ -55,10 +55,12 @@ mkCsForAllTele an bndrs = CsForAll { csf_x = an, csf_bndrs = bndrs }
 type instance XCsPS Ps = EpAnnCO
 type instance XCsPS Rn = CsPSRn
 type instance XCsPS Tc = CsPSRn
+type instance XCsPS Zk = CsPSRn
 
 type instance XCsTP Ps = NoExtField
 type instance XCsTP Rn = CsTyPatRn
 type instance XCsTP Tc = DataConCantHappen
+type instance XCsTP Zk = DataConCantHappen
 
 data CsPSRn = CsPSRn
   { csps_imp_kvs :: [Name]
@@ -95,6 +97,7 @@ buildCsTyPatRn (CsTPRnB exptvs impkvs) = CsTPRn  (bagToList exptvs) (bagToList i
 type instance XCsSig Ps = NoExtField
 type instance XCsSig Rn = [Name]
 type instance XCsSig Tc = [Name]
+type instance XCsSig Zk = [Name]
 
 type instance XKindedTyVar (CsPass _) = [AddEpAnn]
 type instance XImpKindedTyVar (CsPass _) = [AddEpAnn]
@@ -113,6 +116,7 @@ type instance XTyVar (CsPass _) = [AddEpAnn]
 type instance XUnboundTyVar Ps = Maybe EpAnnUnboundTyVar
 type instance XUnboundTyVar Rn = NoExtField
 type instance XUnboundTyVar Tc = DataConCantHappen
+type instance XUnboundTyVar Zk = DataConCantHappen
 type instance XAppTy (CsPass _) = NoExtField
 type instance XFunTy (CsPass _) = NoExtField
 type instance XTupleTy (CsPass _) = AnnParen
@@ -128,12 +132,15 @@ type instance XTySectionL Rn = NoExtField
 type instance XTySectionR Rn = NoExtField
 type instance XTySectionL Tc = DataConCantHappen
 type instance XTySectionR Tc = DataConCantHappen
+type instance XTySectionL Zk = DataConCantHappen
+type instance XTySectionR Zk = DataConCantHappen
 
 type instance XTyPresent (CsPass _) = NoExtField
 
 type instance XTyMissing Ps = EpAnn Bool
 type instance XTyMissing Rn = NoExtField
 type instance XTyMissing Tc = NoExtField -- should be Scaled Type
+type instance XTyMissing Zk = NoExtField -- should be Scaled Type
 
 type instance XValArg (CsPass _) = NoExtField
 type instance XTypeArg (CsPass _) = NoExtField
@@ -155,6 +162,7 @@ data EpArrow
 type instance XCsArrow Ps = EpArrow
 type instance XCsArrow Rn = NoExtField
 type instance XCsArrow Tc = NoExtField
+type instance XCsArrow Zk = NoExtField
 
 instance (OutputableBndrId p) => Outputable (CsArrow (CsPass p)) where
   ppr arr = parens (pprCsArrow arr)
