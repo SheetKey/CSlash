@@ -301,7 +301,7 @@ zonkKiCoToCo :: AnyKindCoercion -> ZonkTcM (KindCoercion KiVar)
       (zki, zkis, zco, _) ->
         (ZonkT . flip zki, ZonkT . flip zkis, ZonkT . flip zco)
 
-zonkIdBndr :: AnyId -> ZonkBndrTcM (Id (TyVar KiVar) KiVar)
+zonkIdBndr :: AnyId -> ZonkTcM (Id (TyVar KiVar) KiVar)
 zonkIdBndr = changeIdTypeM zonkTcTypeToTypeX
 
 zonkTopDecls :: LCsBinds Tc -> TcM (TypeEnv, LCsBinds Tc)
@@ -332,8 +332,10 @@ zonk_bind bind@(FunBind { fun_id = L loc var
 
     panic "zonk_bind unfinished"
 
--- zonkCoFn :: CsWrapper -> ZonkBndrTcM CsWrapper
--- zonkCoFn
+zonk_bind _ = panic "zonk_bind"
+
+zonkCoFn :: CsWrapper -> ZonkBndrTcM CsWrapper
+zonkCoFn = panic "zonkCoFn"
 -- zonkCoFn
 -- zonkCoFn
 

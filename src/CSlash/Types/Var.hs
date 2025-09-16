@@ -63,6 +63,7 @@ module CSlash.Types.Var
   , idInfo, idDetails
   , isGlobalId, isExportedId
   , updateIdTypeM
+  , changeIdTypeM
 
     {-* ForAllFlag *-}
   , ForAllFlag(..)
@@ -818,7 +819,7 @@ updateIdTypeM _ _ = panic "updateIdTypeM"
 changeIdTypeM :: Monad m => (Type tv kv -> m (Type tv' kv')) -> Id tv kv -> m (Id tv' kv')
 changeIdTypeM f (Id (Id' { _varType = ty, .. })) = do
   !ty' <- f ty
-  return $ Id $ Id { _varType = ty', .. }
+  return $ Id $ Id' { _varType = ty', _id_details = panic "changeIdTypeM/idDetails", .. }
 changeIdTypeM _ _ = panic "changeIdTypeM"
 
 {- *********************************************************************
