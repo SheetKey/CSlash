@@ -302,7 +302,7 @@ zonkTopDecls binds
 
 zonkRecMonoBinds :: LCsBinds Tc -> ZonkBndrTcM (LCsBinds Tc)
 zonkRecMonoBinds binds = mfix $ \new_binds -> do
-  panic "extendIdZonkEnvRec (collectCsBindsBinders CollNoDictBinders new_binds)"
+  extendIdZonkEnvRec (collectCsBindsBinders CollNoDictBinders new_binds)
   noBinders $ zonkMonoBinds binds
 
 zonkMonoBinds :: LCsBinds Tc -> ZonkTcM (LCsBinds Tc)

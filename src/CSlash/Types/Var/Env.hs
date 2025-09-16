@@ -265,6 +265,9 @@ varSetInScope vars (InScope s1) = vars `subVarSet` s1
 extendVarEnv :: Uniquable v => MkVarEnv v a -> v -> a -> MkVarEnv v a
 extendVarEnv = addToUFM
 
+extendVarEnvList :: Uniquable v => MkVarEnv v a -> [(v, a)] -> MkVarEnv v a
+extendVarEnvList = addListToUFM
+
 delVarEnv :: Uniquable v => MkVarEnv v a -> v -> MkVarEnv v a
 delVarEnv = delFromUFM
 
