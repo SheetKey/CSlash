@@ -255,8 +255,8 @@ tcPolyCheck sig@(CSig { sig_bndr = poly_id, sig_ctxt = ctxt })
                       , fun_body = L body_loc body'
                       , fun_ext = (wrap_gen, []) }
 
-      export = ABE { abe_poly = panic "poly_id"
-                   , abe_mono = panic "poly_id2" }
+      export = ABE { abe_poly = poly_id
+                   , abe_mono = poly_id2 }
 
       abs_bind = L bind_loc $ XCsBindsLR
                  $ AbsBinds { abs_tvs = []

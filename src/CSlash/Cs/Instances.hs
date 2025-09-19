@@ -47,7 +47,8 @@ deriving instance Data (CsBindLR Zk Zk)
 deriving instance Data (AbsBinds Tc)
 deriving instance Data (AbsBinds Zk)
 
-deriving instance Data ABExport
+deriving instance Data (ABExport Tc)
+deriving instance Data (ABExport Zk)
 
 deriving instance Data (Sig Ps)
 deriving instance Data (Sig Rn)

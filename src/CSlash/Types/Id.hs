@@ -60,3 +60,14 @@ isDeadBinder bndr = isDeadOcc (idOccInfo bndr)
 
 idKind :: Var.IsTyVar tv kv => Id tv kv -> Kind kv
 idKind = typeKind . Var.varType
+
+{- *********************************************************************
+*                                                                      *
+            Special Ids
+*                                                                      *
+********************************************************************* -}
+
+isDataConId_maybe :: Var.IsTyVar tv kv => Id tv kv -> Maybe (DataCon tv kv)
+isDataConId_maybe id = case Var.idDetails id of
+                         DataConId con -> Just con
+                         _ -> Nothing

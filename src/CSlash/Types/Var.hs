@@ -61,7 +61,7 @@ module CSlash.Types.Var
   , Id, TyCoVar
   , mkGlobalVar, mkLocalVar
   , idInfo, idDetails
-  , isGlobalId, isExportedId
+  , isGlobalId, isExportedId, isLocalId
   , updateIdTypeM
   , changeIdTypeM
 
@@ -821,6 +821,10 @@ changeIdTypeM f (Id (Id' { _varType = ty, .. })) = do
   !ty' <- f ty
   return $ Id $ Id' { _varType = ty', _id_details = panic "changeIdTypeM/idDetails", .. }
 changeIdTypeM _ _ = panic "changeIdTypeM"
+
+isLocalId :: Id tv kv -> Bool
+isLocalId (Id (Id' { _idScope = LocalId _ })) = True
+isLocalId _ = False
 
 {- *********************************************************************
 *                                                                      *

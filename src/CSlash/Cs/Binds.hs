@@ -74,14 +74,14 @@ type family XTCVarBindCs pL pR where
 
 data AbsBinds p = AbsBinds
   { abs_tvs :: [TyVar KiVar]
-  , abs_exports :: [ABExport]
+  , abs_exports :: [ABExport p]
   , abs_binds :: LCsBinds p
   , abs_sig :: Bool
   }
 
-data ABExport = ABE
-  { abe_poly :: Id (TyVar KiVar) KiVar
-  , abe_mono :: Id (TyVar KiVar) KiVar
+data ABExport p = ABE
+  { abe_poly :: IdP p
+  , abe_mono :: IdP p
   }
 
 -- ---------------------------------------------------------------------
@@ -194,7 +194,7 @@ ppr_monobind (XCsBindsLR b) = case csPass @idL of
                   , text "Binds:" <+> pprLCsBinds val_binds
                   ]
 
-instance Outputable ABExport where
+instance OutputableBndrId p => Outputable (ABExport (CsPass p)) where
   ppr (ABE { abe_poly = gbl, abe_mono = lcl })
     = sep [ppr gbl, nest 2 (text "<=" <+> ppr lcl)]
 

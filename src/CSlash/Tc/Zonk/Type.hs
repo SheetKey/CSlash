@@ -319,7 +319,15 @@ zonkKiCoToCo :: AnyKindCoercion -> ZonkTcM (KindCoercion KiVar)
       (zki, zkis, zco, _) ->
         (ZonkT . flip zki, ZonkT . flip zkis, ZonkT . flip zco)
 
-zonkIdBndr :: AnyId -> ZonkTcM (Id (TyVar KiVar) KiVar)
+zonkIdOcc :: AnyId -> ZonkTcM ZkId
+zonkIdOcc id
+  | isLocalId id
+  = do ZonkEnv { ze_id_env = id_env } <- getZonkEnv
+       return $ lookupVarEnv_Directly id_env (varUnique id) `orElse` panic "zonkIdOcc"
+  | otherwise
+  = panic "return id" -- make a type mapper in maybe monad that does toTy/KiVar_maybe on vars
+
+zonkIdBndr :: AnyId -> ZonkTcM ZkId
 zonkIdBndr = changeIdTypeM zonkTcTypeToTypeX
 
 zonkTopDecls :: LCsBinds Tc -> TcM (TypeEnv, LCsBinds Zk)
@@ -383,7 +391,7 @@ zonk_bind (XCsBindsLR (AbsBinds { abs_tvs = tyvars
       | otherwise
       = zonk_lbind lbind
 
-    zonk_export :: ABExport -> ZonkTcM ABExport
+    zonk_export :: ABExport Tc -> ZonkTcM (ABExport Zk)
     zonk_export = panic "zonk_export"
 
 {- *********************************************************************
