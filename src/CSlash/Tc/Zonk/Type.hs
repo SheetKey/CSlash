@@ -63,6 +63,7 @@ import CSlash.Data.Bag
 import Control.Monad
 import Control.Monad.Trans.Class ( lift )
 import Data.Semigroup
+import Data.List.NonEmpty (NonEmpty)
 
 type ZonkTcM = ZonkT TcM
 
@@ -75,6 +76,13 @@ wrapLocZonkMA
 wrapLocZonkMA fn (L loc a) = ZonkT $ \ze -> setSrcSpanA loc $ do
   b <- runZonkT (fn a) ze
   return (L loc b)
+
+wrapLocZonkBndrMA
+  :: (a -> ZonkBndrTcM b)
+  -> GenLocated (EpAnn ann) a
+  -> ZonkBndrTcM (GenLocated (EpAnn ann) b)
+wrapLocZonkBndrMA fn (L loc a) = ZonkBndrT $ \k -> ZonkT $ \ze ->
+  setSrcSpanA loc $ runZonkT (runZonkBndrT (fn a) $ \b -> k (L loc b)) ze
 
 {-# INLINE zonkTyBndrX #-}
 zonkTyBndrX :: AnyTyVar AnyKiVar -> ZonkBndrTcM (TyVar KiVar)
@@ -327,6 +335,13 @@ zonkIdOcc id
   | otherwise
   = panic "return id" -- make a type mapper in maybe monad that does toTy/KiVar_maybe on vars
 
+zonkIdBndrX :: AnyId -> ZonkBndrTcM ZkId
+zonkIdBndrX v = do
+  id <- noBinders $ zonkIdBndr v
+  extendIdZonkEnv id
+  return id
+{-# INLINE zonkIdBndrX #-}
+
 zonkIdBndr :: AnyId -> ZonkTcM ZkId
 zonkIdBndr = changeIdTypeM zonkTcTypeToTypeX
 
@@ -336,6 +351,17 @@ zonkTopDecls binds
     $ runZonkBndrT (zonkRecMonoBinds binds) $ \binds' -> do
         ty_env <- panic "zonkEnvIds <$> getZonkEnv"
         return (ty_env, binds')
+
+zonkLocalBinds :: CsLocalBinds Tc -> ZonkBndrTcM (CsLocalBinds Zk)
+zonkLocalBinds (EmptyLocalBinds x) = return $ EmptyLocalBinds x
+zonkLocalBinds (CsValBinds _ (ValBinds {})) = panic "zonkLocalBind ValBinds"
+zonkLocalBinds (CsValBinds x (XValBindsLR (NValBinds binds sigs))) = do
+  new_binds <- traverse go binds
+  return $ CsValBinds x (XValBindsLR (NValBinds new_binds sigs))
+  where
+    go (r, b) = do
+      b' <- zonkRecMonoBinds b
+      return (r, b')
 
 zonkRecMonoBinds :: LCsBinds Tc -> ZonkBndrTcM (LCsBinds Zk)
 zonkRecMonoBinds binds = mfix $ \new_binds -> do
@@ -400,6 +426,49 @@ zonk_bind (XCsBindsLR (AbsBinds { abs_tvs = tyvars
 *                                                                      *
 ********************************************************************* -}
 
+zonkMatchGroup
+  :: ( Anno (GRHS Tc (LocatedA (body Tc))) ~ EpAnnCO
+     , Anno (GRHS Tc (LocatedA (body Tc))) ~ Anno (GRHS Zk (LocatedA (body Zk)))
+     , Anno (Match Tc (LocatedA (body Tc))) ~ Anno (Match Zk (LocatedA (body Zk)))
+     , Anno [LMatch Tc (LocatedA (body Tc))] ~ Anno [LMatch Zk (LocatedA (body Zk))]
+     )
+  => (LocatedA (body Tc) -> ZonkTcM (LocatedA (body Zk)))
+  -> MatchGroup Tc (LocatedA (body Tc))
+  -> ZonkTcM (MatchGroup Zk (LocatedA (body Zk)))
+zonkMatchGroup zBody (MG { mg_alts = L l ms, mg_ext = MatchGroupTc arg_tys res_ty origin }) = do
+  ms' <- mapM (zonkMatch zBody) ms
+  arg_tys' <- zonkTcTypesToTypesX arg_tys
+  res_ty' <- zonkTcTypeToTypeX res_ty
+  return $ MG { mg_alts = L l ms'
+              , mg_ext = MatchGroupZk arg_tys' res_ty' origin }
+
+zonkMatch
+  :: ( Anno (GRHS Tc (LocatedA (body Tc))) ~ EpAnnCO
+     , Anno (GRHS Tc (LocatedA (body Tc))) ~ Anno (GRHS Zk (LocatedA (body Zk)))
+     , Anno (Match Tc (LocatedA (body Tc))) ~ Anno (Match Zk (LocatedA (body Zk))) )
+  => (LocatedA (body Tc) -> ZonkTcM (LocatedA (body Zk)))
+  -> LMatch Tc (LocatedA (body Tc))
+  -> ZonkTcM (LMatch Zk (LocatedA (body Zk)))
+zonkMatch zBody (L loc match@(Match { m_pats = L l pats
+                                    , m_grhss = grhss })) = 
+  runZonkBndrT (zonkPats pats) $ \ new_pats -> do
+    new_grhss <- zonkGRHSs zBody grhss
+    return (L loc (match { m_pats = L l new_pats, m_grhss = new_grhss }))
+
+zonkGRHSs
+  :: ( Anno (GRHS Tc (LocatedA (body Tc))) ~ EpAnnCO
+     , Anno (GRHS Tc (LocatedA (body Tc))) ~ Anno (GRHS Zk (LocatedA (body Zk))) )
+  => (LocatedA (body Tc) -> ZonkTcM (LocatedA (body Zk)))
+  -> GRHSs Tc (LocatedA (body Tc))
+  -> ZonkTcM (GRHSs Zk (LocatedA (body Zk)))
+zonkGRHSs zBody (GRHSs x grhss) = do
+  new_grhss <- mapM (wrapLocZonkMA zonk_grhs) grhss
+  return (GRHSs x new_grhss)
+  where
+    zonk_grhs (GRHS xx guarded rhs)
+      = runZonkBndrT (zonkStmts zonkLExpr guarded) $ \ new_guarded ->
+          GRHS xx new_guarded <$> zBody rhs
+
 {- *********************************************************************
 *                                                                      *
               CsExpr
@@ -415,6 +484,18 @@ zonkExpr (CsVar x (L l id))
   = assertPpr (isNothing (isDataConId_maybe id)) (ppr id) $ do
   id' <- zonkIdOcc id
   return (CsVar x (L l id'))
+
+zonkExpr (CsUnboundVar x _) = dataConCantHappen x
+
+zonkExpr (CsLit x lit) = panic "return (CsLit x lit)"
+
+zonkExpr (CsOverLit x lit) = do
+  lit' <- zonkOverLit lit
+  return (CsOverLit x lit')
+
+zonkExpr (CsLam x matches) = do
+  new_matches <- zonkMatchGroup zonkLExpr matches
+  return (CsLam x new_matches)
 
 zonkExpr _ = panic "zonkExpr"
 
@@ -437,11 +518,91 @@ zonkCoFn (WpKiLam kv) = assert (handleAnyKv (const True) isImmutableVar kv) $
 zonkCoFn (WpTyApp ty) = WpTyApp <$> noBinders (zonkTcTypeToTypeX ty)
 zonkCoFn (WpMultCoercion co) = WpMultCoercion <$> noBinders (zonkKiCoToCo co)
 
+zonkOverLit :: CsOverLit Tc -> ZonkTcM (CsOverLit Zk)
+zonkOverLit = panic "zonkOverLit"
+
+zonkStmts
+  :: ( Anno (StmtLR Tc Tc (LocatedA (body Tc))) ~ SrcSpanAnnA
+     , Anno (StmtLR Tc Tc (LocatedA (body Tc))) ~ Anno (StmtLR Zk Zk (LocatedA (body Zk))) )
+  => (LocatedA (body Tc) -> ZonkTcM (LocatedA (body Zk)))
+  -> [LStmt Tc (LocatedA (body Tc))]
+  -> ZonkBndrTcM [LStmt Zk (LocatedA (body Zk))]
+zonkStmts _ [] = return []
+zonkStmts zBody (s:ss) = do
+  s' <- wrapLocZonkBndrMA (zonkStmt zBody) s
+  ss' <- zonkStmts zBody ss
+  return (s' : ss')
+
+zonkStmt
+  :: ( Anno (StmtLR Tc Tc (LocatedA (body Tc))) ~ SrcSpanAnnA
+     , Anno (StmtLR Tc Tc (LocatedA (body Tc))) ~ Anno (StmtLR Zk Zk (LocatedA (body Zk))) )
+  => (LocatedA (body Tc) -> ZonkTcM (LocatedA (body Zk)))
+  -> Stmt Tc (LocatedA (body Tc))
+  -> ZonkBndrTcM (Stmt Zk (LocatedA (body Zk)))
+
+zonkStmt zBody (BodyStmt ty body) = do
+  new_body <- noBinders $ zBody body
+  new_ty <- noBinders $ zonkTcTypeToTypeX ty
+  return $ BodyStmt new_ty new_body
+
+zonkStmt _ (LetStmt x binds) = LetStmt x <$> zonkLocalBinds binds
+
+zonkStmt zBody (BindStmt x pat body) = do
+  new_body <- noBinders $ zBody body
+  new_pat <- zonkPat pat
+  return $ BindStmt x new_pat new_body
+
 {- *********************************************************************
 *                                                                      *
               Patterns
 *                                                                      *
 ********************************************************************* -}
+
+zonkPat :: LPat Tc -> ZonkBndrTcM (LPat Zk)
+zonkPat pat = wrapLocZonkBndrMA zonk_pat pat
+
+zonk_pat :: Pat Tc -> ZonkBndrTcM (Pat Zk)
+
+zonk_pat (ParPat x p) = do
+  p' <- zonkPat p
+  return (ParPat x p')
+  
+zonk_pat (WildPat ty) = return (WildPat ty)
+
+zonk_pat (VarPat x (L l v)) = do
+  v' <- zonkIdBndrX v
+  return (VarPat x (L l v'))
+  
+zonk_pat (AsPat x (L loc v) pat) = do
+  v' <- zonkIdBndrX v
+  pat' <- zonkPat pat
+  return (AsPat x (L loc v') pat')
+
+zonk_pat (TuplePat tys pats) = do
+  pats' <- zonkPats pats
+  return (TuplePat tys pats')
+
+zonk_pat (SumPat tys pat alt arity) = do
+  pat' <- zonkPat pat
+  return (SumPat tys pat' alt arity)
+
+zonk_pat (ConPat {}) = panic "zonk ConPat"
+
+zonk_pat (LitPat x lit) = return $ panic "LitPat x lit"
+
+zonk_pat (SigPat ty pat cs_ty) = do
+  ty' <- noBinders $ zonkTcTypeToTypeX ty
+  pat' <- zonkPat pat
+  return $ SigPat ty' pat' cs_ty
+
+zonk_pat (NPat ty (L l lit) mb_new eq_expr) = panic "zonk NPat"
+
+zonk_pat _ = panic "zonk_pat"
+
+zonkPats :: Traversable f => f (LPat Tc) -> ZonkBndrTcM (f (LPat Zk))
+zonkPats = traverse zonkPat
+{-# SPECIALIZE zonkPats :: [LPat Tc] -> ZonkBndrTcM [LPat Zk] #-}
+{-# SPECIALIZE zonkPats :: NonEmpty (LPat Tc) -> ZonkBndrTcM (NonEmpty (LPat Zk)) #-}
 
 {- *********************************************************************
 *                                                                      *

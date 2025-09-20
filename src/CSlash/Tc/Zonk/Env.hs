@@ -124,6 +124,10 @@ extendIdZonkEnvRec ids = nestZonkEnv $ \ze@(ZonkEnv { ze_id_env = id_env }) ->
                                          ze { ze_id_env = extendVarEnvList
                                                           id_env [(id, id) | id <- ids] }
 
+extendIdZonkEnv :: ZkId -> ZonkBndrT m ()
+extendIdZonkEnv id = nestZonkEnv $ \ze@(ZonkEnv { ze_id_env = id_env }) ->
+                                     ze { ze_id_env = extendVarEnv id_env id id }
+
 extendTyZonkEnv :: TyVar KiVar -> ZonkBndrT m ()
 extendTyZonkEnv tv = nestZonkEnv $ \ze@(ZonkEnv { ze_tv_env = ty_env }) ->
                                      ze { ze_tv_env = extendVarEnv ty_env tv tv }

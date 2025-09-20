@@ -87,6 +87,7 @@ type instance NoTc (CsPass pass) = CsPass (NoCsTcPass pass)
 
 type family NoCsTcPass (p :: Pass) :: Pass where
   NoCsTcPass 'Typechecked = 'Renamed
+  NoCsTcPass 'Zonked = 'Renamed
   NoCsTcPass other = other
 
 type OutputableBndrId pass =

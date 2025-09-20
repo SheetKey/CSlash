@@ -445,12 +445,19 @@ isAtomicCsExpr _ = False
 type instance XMG Ps b = Origin
 type instance XMG Rn b = Origin
 type instance XMG Tc b = MatchGroupTc
-type instance XMG Zk b = MatchGroupTc
+type instance XMG Zk b = MatchGroupZk
 
 data MatchGroupTc = MatchGroupTc
   { mg_arg_tys :: [AnyType]
   , mg_res_ty :: AnyType
-  , mk_origin :: Origin
+  , mg_origin :: Origin
+  }
+  deriving Data
+
+data MatchGroupZk = MatchGroupZk
+  { zkmg_arg_tys :: [Type (TyVar KiVar) KiVar]
+  , zkmg_res_ty :: Type (TyVar KiVar) KiVar
+  , zkmg_origin :: Origin
   }
   deriving Data
 

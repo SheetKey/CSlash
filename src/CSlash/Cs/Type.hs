@@ -371,6 +371,7 @@ type instance Anno (CsTyVarBndr (CsPass p)) = SrcSpanAnnA
 type instance Anno (CsTyVarBndr Ps) = SrcSpanAnnA
 type instance Anno (CsTyVarBndr Rn) = SrcSpanAnnA
 type instance Anno (CsTyVarBndr Tc) = SrcSpanAnnA
+type instance Anno (CsTyVarBndr Zk) = SrcSpanAnnA
 type instance Anno [LocatedA (Match (CsPass p) (LocatedA (CsType (CsPass p))))] = SrcSpanAnnL
 type instance Anno (Match (CsPass p) (LocatedA (CsType (CsPass p)))) = SrcSpanAnnA
 type instance Anno (GRHS (CsPass p) (LocatedA (CsType (CsPass p)))) = EpAnnCO
