@@ -497,6 +497,10 @@ zonkExpr (CsLam x matches) = do
   new_matches <- zonkMatchGroup zonkLExpr matches
   return (CsLam x new_matches)
 
+zonkExpr (CsTyLam x matches) = do
+  new_matches <- zonkMatchGroup zonkLExpr matches
+  return (CsTyLam x new_matches)
+
 zonkExpr _ = panic "zonkExpr"
 
 zonkCoFn :: AnyCsWrapper -> ZonkBndrTcM ZkCsWrapper
