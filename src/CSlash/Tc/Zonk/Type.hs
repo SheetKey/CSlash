@@ -327,6 +327,10 @@ zonkKiCoToCo :: AnyKindCoercion -> ZonkTcM (KindCoercion KiVar)
       (zki, zkis, zco, _) ->
         (ZonkT . flip zki, ZonkT . flip zkis, ZonkT . flip zco)
 
+zonkEnvIds :: ZonkEnv -> TypeEnv
+zonkEnvIds (ZonkEnv { ze_id_env = id_env })
+  = mkNameEnv [(getName id, AnId id) | id <- nonDetEltsUFM id_env]
+
 zonkIdOcc :: AnyId -> ZonkTcM ZkId
 zonkIdOcc id
   | isLocalId id
@@ -349,7 +353,7 @@ zonkTopDecls :: LCsBinds Tc -> TcM (TypeEnv, LCsBinds Zk)
 zonkTopDecls binds
   = initZonkEnv NoFlexi
     $ runZonkBndrT (zonkRecMonoBinds binds) $ \binds' -> do
-        ty_env <- panic "zonkEnvIds <$> getZonkEnv"
+        ty_env <- zonkEnvIds <$> getZonkEnv
         return (ty_env, binds')
 
 zonkLocalBinds :: CsLocalBinds Tc -> ZonkBndrTcM (CsLocalBinds Zk)
@@ -418,7 +422,11 @@ zonk_bind (XCsBindsLR (AbsBinds { abs_tvs = tyvars
       = zonk_lbind lbind
 
     zonk_export :: ABExport Tc -> ZonkTcM (ABExport Zk)
-    zonk_export = panic "zonk_export"
+    zonk_export (ABE { abe_poly = poly_id, abe_mono = mono_id }) = do
+      new_poly_id <- zonkIdBndr poly_id
+      new_mono_id <- zonkIdOcc mono_id
+      return $ ABE { abe_poly = new_poly_id
+                   , abe_mono = new_mono_id }
 
 {- *********************************************************************
 *                                                                      *
@@ -501,7 +509,21 @@ zonkExpr (CsTyLam x matches) = do
   new_matches <- zonkMatchGroup zonkLExpr matches
   return (CsTyLam x new_matches)
 
-zonkExpr _ = panic "zonkExpr"
+zonkExpr (CsApp x e1 e2) = do
+  new_e1 <- zonkLExpr e1
+  new_e2 <- zonkLExpr e2
+  return $ CsApp x new_e1 new_e2
+
+zonkExpr (XExpr (WrapExpr co_fn expr))
+  = runZonkBndrT (zonkCoFn co_fn) $ \new_co_fn -> do
+      new_expr <- zonkExpr expr
+      return (XExpr (WrapExprZk new_co_fn new_expr))
+
+zonkExpr (XExpr (ExpandedThingTc thing expr)) = do
+  new_expr <- zonkExpr expr
+  return $ XExpr (ExpandedThingZk thing new_expr)
+
+zonkExpr other = pprPanic "zonkExpr" (ppr other)
 
 zonkCoFn :: AnyCsWrapper -> ZonkBndrTcM ZkCsWrapper
 zonkCoFn WpHole = return WpHole

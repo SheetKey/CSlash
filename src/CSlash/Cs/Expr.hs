@@ -205,13 +205,19 @@ type instance XMissing Zk = NoExtField -- should be Scaled Type
 type instance XXExpr Ps = DataConCantHappen
 type instance XXExpr Rn = DataConCantHappen
 type instance XXExpr Tc = XXExprTc
-type instance XXExpr Zk = XXExprTc
+type instance XXExpr Zk = XXExprZk
 
 data XXExprTc
   = WrapExpr AnyCsWrapper (CsExpr Tc)
   | ExpandedThingTc
     { xtc_orig :: CsThingRn
     , xtc_expanded :: CsExpr Tc }
+
+data XXExprZk
+  = WrapExprZk ZkCsWrapper (CsExpr Zk)
+  | ExpandedThingZk
+    { xzk_orig :: CsThingRn
+    , xzk_expanded :: CsExpr Zk }
 
 {- *********************************************************************
 *                                                                      *

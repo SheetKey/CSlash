@@ -236,4 +236,5 @@ deriving instance Eq (IE Zk)
 deriving instance Data CsThingRn
 
 deriving instance Data XXExprTc
+deriving instance Data XXExprZk
 deriving instance Data XXPatCsTc
