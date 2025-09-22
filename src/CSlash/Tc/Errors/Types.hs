@@ -101,6 +101,7 @@ data TcRnMessage where
   TcRnBindingNameConflict :: !RdrName -> !(NE.NonEmpty SrcSpan) -> TcRnMessage
   TcRnTyThingUsedWrong :: !WrongThingSort -> !TcTyKiThing -> !Name -> TcRnMessage
   TcRnArityMismatch :: !(TyThing (AnyTyVar AnyKiVar) AnyKiVar) -> !Arity -> !Arity -> TcRnMessage
+  TcRnMissingMain :: !Bool -> !Module -> !OccName -> TcRnMessage
   deriving Generic
 
 data ShadowedNameProvenance

@@ -272,6 +272,7 @@ type family CsDiagnosticCode c = n | n -> c where
   CsDiagnosticCode "TcRnUnusedName"                                = 40910
   CsDiagnosticCode "TcRnModMissingRealSrcSpan"                     = 84170
   CsDiagnosticCode "TcRnImplicitImportOfPrelude"                   = 20540
+  CsDiagnosticCode "TcRnMissingMain"                               = 67120
   CsDiagnosticCode "TcRnTypeSynonymCycle"                          = 97522
   CsDiagnosticCode "TcRnSelfImport"                                = 43281
   CsDiagnosticCode "TcRnNoExplicitImportList"                      = 16029

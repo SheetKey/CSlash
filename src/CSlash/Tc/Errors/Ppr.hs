@@ -200,6 +200,13 @@ instance Diagnostic TcRnMessage where
         n_arguments | thing_arity == 0 = text "no arguments"
                     | thing_arity == 1 = text "1 argument"
                     | otherwise = hsep [int thing_arity, text "arguments"]
+    TcRnMissingMain explicit_export_list main_mod main_occ -> mkSimpleDecorated $
+      text "The" <+> ppMainFn main_occ
+      <+> text "is not" <+> defOrExp <+> text "module"
+      <+> quotes (ppr main_mod)
+      where
+        defOrExp | explicit_export_list = text "exported by"
+                 | otherwise = text "defined in"
 
   diagnosticReason = \case
     TcRnUnknownMessage m -> diagnosticReason m
@@ -232,6 +239,7 @@ instance Diagnostic TcRnMessage where
     TcRnBindingNameConflict{} -> ErrorWithoutFlag
     TcRnTyThingUsedWrong{} -> ErrorWithoutFlag
     TcRnArityMismatch{} -> ErrorWithoutFlag
+    TcRnMissingMain{} -> ErrorWithoutFlag
 
   diagnosticHints = \case
     TcRnUnknownMessage m -> diagnosticHints m
@@ -269,6 +277,7 @@ instance Diagnostic TcRnMessage where
     TcRnBindingNameConflict{} -> noHints
     TcRnTyThingUsedWrong{} -> noHints
     TcRnArityMismatch{} -> noHints
+    TcRnMissingMain{} -> noHints
 
   diagnosticCode = constructorCode
 

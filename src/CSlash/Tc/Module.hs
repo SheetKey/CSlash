@@ -1,3 +1,4 @@
+{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE BangPatterns #-}
@@ -375,12 +376,39 @@ checkMainType tcg_env = do
 
 checkMain :: Maybe (LocatedL [LIE Ps]) -> TcM (TcGblEnv Tc)
 checkMain export_ies = do
-  panic "checkMain"
+  cs_env <- getTopEnv
+  tcg_env <- getGblEnv
+
+  let dflags = cs_dflags cs_env
+      main_mod = mainModIs (cs_HUE cs_env)
+      main_occ = getMainOcc dflags
+
+      exported_mains :: [Name]
+      exported_mains = [ name | avail <- tcg_exports tcg_env
+                              , name <- availNames avail
+                              , nameOccName name == main_occ ]
+
+  if | tcg_mod tcg_env /= main_mod
+       -> return tcg_env
+       
+     | [main_name] <- exported_mains
+       -> generateMainBinding tcg_env main_name
+
+     | otherwise
+       -> assert (null exported_mains) $ do
+            addErrTc (noMainMsg main_mod main_occ)
+            return tcg_env
+  where
+    noMainMsg main_mod main_occ = TcRnMissingMain explicit_export_list main_mod main_occ
+    explicit_export_list = isJust export_ies
 
 getMainOcc :: DynFlags -> OccName
 getMainOcc dflags = case mainFunIs dflags of
                       Just fn -> mkVarOccFS (mkFastString fn)
                       Nothing -> mkVarOccFS (fsLit "main")
+
+generateMainBinding :: TcGblEnv Tc -> Name -> TcM (TcGblEnv Tc)
+generateMainBinding tcg_env main_name = panic "generateMainBinding"
 
 type RenamedStuff =
   Maybe ( CsGroup Rn

@@ -456,6 +456,22 @@ trimTidyOccEnv env vs = foldl' add emptyUFM vs
 
 {- *********************************************************************
 *                                                                      *
+                Utilities for "main"
+*                                                                      *
+********************************************************************* -}
+
+mainOcc :: OccName
+mainOcc = mkVarOccFS (fsLit "main")
+
+ppMainFn :: OccName -> SDoc
+ppMainFn main_occ
+  | main_occ == mainOcc
+  = text "IO action" <+> quotes (ppr main_occ)
+  | otherwise
+  = text "main IO action" <+> quotes (ppr main_occ)
+
+{- *********************************************************************
+*                                                                      *
                 Binary instance
 *                                                                      *
 ********************************************************************* -}
