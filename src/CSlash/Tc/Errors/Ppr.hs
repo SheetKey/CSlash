@@ -154,6 +154,8 @@ instance Diagnostic TcRnMessage where
     TcRnMissingImportList ie -> mkDecorated
       [ text "The import item" <+> quotes (ppr ie)
         <+> text "does not have ann explicit import list" ]
+    TcRnMissingExportList mod -> mkSimpleDecorated $
+      formatExportItemError (text "module" <+> ppr mod) "is missing an export list"
     TcRnImportLookup reason -> mkSimpleDecorated $
       pprImportLookup reason
     TcRnNotInScope err name imp_errs _ -> mkSimpleDecorated $
@@ -221,6 +223,7 @@ instance Diagnostic TcRnMessage where
     TcRnNoExplicitImportList{} -> WarningWithFlag Opt_WarnMissingImportList
     TcRnDodgyImports{} -> WarningWithFlag Opt_WarnDodgyImports
     TcRnMissingImportList{} -> WarningWithFlag Opt_WarnMissingImportList
+    TcRnMissingExportList{} -> WarningWithFlag Opt_WarnMissingExportList
     TcRnImportLookup{} -> ErrorWithoutFlag
     TcRnNotInScope{} -> ErrorWithoutFlag
     TcRnMatchesHaveDiffNumArgs{} -> ErrorWithoutFlag
@@ -247,6 +250,7 @@ instance Diagnostic TcRnMessage where
     TcRnNoExplicitImportList{} -> noHints
     TcRnDodgyImports{} -> noHints
     TcRnMissingImportList{} -> noHints
+    TcRnMissingExportList{} -> noHints
     TcRnImportLookup (ImportLookupBad k _ is ie) ->
       let mod_name = moduleName $ is_mod is
           occ = rdrNameOcc $ ieName ie
@@ -281,6 +285,11 @@ dodgy_msg kind tc ie = panic "dodgy_msg"
 
 dodgy_msg_insert :: GlobalRdrElt -> IE Rn
 dodgy_msg_insert tc_gre = panic "dodgy_msg_insert"
+
+formatExportItemError :: SDoc -> String -> SDoc
+formatExportItemError exportedThing reason = hsep [ text "The export item"
+                                                  , quotes exportedThing
+                                                  , text reason ]
 
 {- *********************************************************************
 *                                                                      *

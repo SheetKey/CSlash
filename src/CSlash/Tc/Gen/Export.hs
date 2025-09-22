@@ -81,7 +81,7 @@ exports_from_avail
   -> Module
   -> RnM (Maybe [(LIE Rn, Avails)], Avails)
 exports_from_avail Nothing rdr_env _ this_mod = do
-  panic "addDiagnostic (TcRnMissingExportList $ moduleName this_mod)"
+  addDiagnostic (TcRnMissingExportList $ moduleName this_mod)
   let avails = map fix_faminst . gresToAvailInfo . filter isLocalGRE . globalRdrEnvElts $ rdr_env
   return (Nothing, avails)
   where

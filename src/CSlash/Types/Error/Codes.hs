@@ -276,6 +276,7 @@ type family CsDiagnosticCode c = n | n -> c where
   CsDiagnosticCode "TcRnSelfImport"                                = 43281
   CsDiagnosticCode "TcRnNoExplicitImportList"                      = 16029
   CsDiagnosticCode "TcRnMissingImportList"                         = 77037
+  CsDiagnosticCode "TcRnMissingExportList"                         = 85401
   CsDiagnosticCode "TcRnShadowedName"                              = 63397
   CsDiagnosticCode "TcRnSimplifierTooManyIterations"               = 95822
   CsDiagnosticCode "TcRnBindingNameConflict"                       = 10498

@@ -93,6 +93,7 @@ data TcRnMessage where
   TcRnDodgyImports :: !DodgyImportsReason -> TcRnMessage
   TcRnMissingImportList :: IE Ps -> TcRnMessage
   TcRnImportLookup :: !ImportLookupReason -> TcRnMessage
+  TcRnMissingExportList :: ModuleName -> TcRnMessage
   TcRnNotInScope :: NotInScopeError -> RdrName -> [ImportError] -> [CsHint] -> TcRnMessage
   TcRnMatchesHaveDiffNumArgs :: !CsMatchContextRn -> !MatchArgBadMatches -> TcRnMessage
   TcRnShadowedName :: OccName -> ShadowedNameProvenance -> TcRnMessage
