@@ -174,7 +174,7 @@ data TcGblEnv p = TcGblEnv
   { tcg_mod :: Module
   , tcg_src :: CsSource
   , tcg_rdr_env :: GlobalRdrEnv
-  , tcg_default :: Maybe [AnyType]
+  , tcg_default :: Maybe [AnyType] -- remove this
   , tcg_fix_env :: FixityEnv
   , tcg_type_env :: TypeEnv
   , tcg_type_env_var :: KnotVars (IORef TypeEnv)

@@ -20,7 +20,7 @@ import CSlash.Tc.Zonk.Type
 -- import GHC.Tc.Gen.Expr
 -- import GHC.Tc.Gen.App( tcInferSigma )
 import CSlash.Tc.Utils.Monad
--- import GHC.Tc.Gen.Export
+import CSlash.Tc.Gen.Export
 import CSlash.Tc.Types.Evidence
 import CSlash.Tc.Types.Constraint
 import CSlash.Tc.Types.Origin
@@ -263,7 +263,7 @@ tcRnSrcDecls export_ies decls = do
   traceTc "Tc11" empty
 
   --------- Deal with the exports ----------
-  tcg_env <- restoreEnvs (tcg_env, tcl_env) $ panic "rnExports export_ies"
+  tcg_env <- restoreEnvs (tcg_env, tcl_env) $ rnExports export_ies
 
   --------- Emit the ':Main.main = runMainIO main' declaration ----------
   tcg_env <- restoreEnvs (tcg_env, tcl_env) $ do

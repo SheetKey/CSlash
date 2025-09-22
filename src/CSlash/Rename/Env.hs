@@ -227,6 +227,12 @@ lookupGlobalOccRn_base :: WhichGREs GREInfo -> RdrName -> RnM (Maybe GlobalRdrEl
 lookupGlobalOccRn_base which_gres rdr_name = runMaybeT . MaybeT $
   lookupGreRn_maybe which_gres rdr_name
 
+lookupInfoOccRn ::RdrName -> RnM [Name]
+lookupInfoOccRn rdr_name = lookupExactOrOrig rdr_name (\gre -> [greName gre]) $ do
+  rdr_env <- getGlobalRdrEnv
+  let nms = map greName $ lookupGRE rdr_env (LookupRdrName rdr_name (RelevantGREs False))
+  return nms
+
 data GreLookupResult
   = GreNotFound
   | OneNameMatch GlobalRdrElt

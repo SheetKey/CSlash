@@ -42,6 +42,10 @@ availSubordinateNames avail@(AvailTC _ ns)
 -- -----------------------------------------------------------------------------
 -- Operations on AvailInfo
 
+availsToNameSet :: [AvailInfo] -> NameSet
+availsToNameSet avails = foldr add emptyNameSet avails
+  where add avail set = extendNameSetList set (availNames avail)
+
 availName :: AvailInfo -> Name
 availName (Avail n) = n
 availName (AvailTC n _) = n

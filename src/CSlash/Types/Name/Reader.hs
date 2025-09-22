@@ -24,6 +24,7 @@ import CSlash.Types.Unique
 import CSlash.Types.Unique.FM
 import CSlash.Types.Unique.Set
 import CSlash.Types.Name
+import CSlash.Types.Name.Env
 import CSlash.Types.Name.Set
 import CSlash.Types.Name.Occurrence
 import CSlash.Unit.Types
@@ -373,10 +374,51 @@ mkParent _ (Avail _) = NoParent
 mkParent n (AvailTC m _) | n == m = NoParent
                          | otherwise = ParentIs m
 
+greParent_maybe :: GlobalRdrEltX info -> Maybe Name
+greParent_maybe gre = case gre_par gre of
+                        NoParent -> Nothing
+                        ParentIs n -> Just n
+
 gresToNameSet :: [GlobalRdrEltX info] -> NameSet
 gresToNameSet gres = foldr add emptyNameSet gres
   where
     add gre set = extendNameSet set (greName gre)
+
+gresToAvailInfo :: [GlobalRdrEltX info] -> [AvailInfo]
+gresToAvailInfo gres = nonDetNameEnvElts avail_env
+  where
+    (avail_env , _) = foldl' add (emptyNameEnv, emptyNameSet) gres
+
+    add (env, done) gre
+      | name `elemNameSet` done
+      = (env, done)
+      | otherwise
+      = ( extendNameEnv_Acc comp availFromGRE env key gre
+        , done `extendNameSet` name )
+      where
+        name = greName gre
+        key = case greParent_maybe gre of
+                Just parent -> parent
+                Nothing -> greName gre
+
+    comp _ (Avail n) = Avail n
+    comp gre (AvailTC m ns) = case gre_par gre of
+      NoParent -> AvailTC m (greName gre : ns)
+      ParentIs {} -> AvailTC m (insertChildIntoChildren m ns (greName gre))
+
+    insertChildIntoChildren _ [] k = [k]
+    insertChildIntoChildren p (n:ns) k
+      | p == k = k:n:ns
+      | otherwise = n:k:ns
+
+availFromGRE :: GlobalRdrEltX info -> AvailInfo
+availFromGRE (GRE { gre_name = child, gre_par = parent }) = case parent of
+  ParentIs p -> AvailTC p [child]
+  NoParent
+    | isTyConName child
+      -> AvailTC child [child]
+    | otherwise
+      -> Avail child
 
 emptyGlobalRdrEnv :: GlobalRdrEnvX info
 emptyGlobalRdrEnv = emptyOccEnv
