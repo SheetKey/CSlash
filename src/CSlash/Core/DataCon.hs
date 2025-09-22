@@ -1,3 +1,5 @@
+{-# LANGUAGE RecordWildCards #-}
+
 module CSlash.Core.DataCon where
 
 import CSlash.Language.Syntax.Basic
@@ -75,6 +77,12 @@ instance Uniquable (DataCon tv kv) where
 instance NamedThing (DataCon tv kv) where
   getName = dcName
 
+instance AsAnyTy DataCon where
+  asAnyTyKi (MkData {..}) = MkData { dcId = asAnyTyKi dcId
+                                   , dcTyCon = asAnyTyKi dcTyCon
+                                   , dcType = asAnyTyKi dcType
+                                   , .. }
+
 instance Outputable (DataCon tv kv) where
   ppr con = ppr (dataConName con)
 
@@ -86,9 +94,6 @@ instance (Data.Typeable tv, Data.Typeable kv) => Data.Data (DataCon tv kv) where
   toConstr _   = abstractConstr "DataCon"
   gunfold _ _  = error "gunfold"
   dataTypeOf _ = mkNoRepType "DataCon"
-
-instance AsAnyTy DataCon where
-  asAnyTy = panic "asAnyTy DataCon"
 
 {- *********************************************************************
 *                                                                      *

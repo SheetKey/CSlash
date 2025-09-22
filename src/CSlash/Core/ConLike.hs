@@ -49,6 +49,10 @@ instance NamedThing (ConLike tv kv) where
   getName (RealDataCon dc) = getName dc
   getName (PatSynCon) = error "getName PatSynCon"
 
+instance AsAnyTy ConLike where
+  asAnyTyKi PatSynCon = PatSynCon
+  asAnyTyKi (RealDataCon dc) = RealDataCon $ asAnyTyKi dc
+
 instance Outputable (ConLike tv kv) where
   ppr (RealDataCon dc) = ppr dc
   ppr (PatSynCon) = error "ppr PatSynCon"
