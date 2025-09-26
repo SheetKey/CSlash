@@ -21,6 +21,7 @@ import CSlash.Language.Syntax.Expr
 import CSlash.Language.Syntax.Extension
 
 import CSlash.Core.Type.Rep (Type)
+import CSlash.Core.ConLike
 import CSlash.Tc.Types.Evidence
 import CSlash.Tc.Utils.TcType (AnyType)
 
@@ -29,8 +30,8 @@ import CSlash.Cs.Extension
 import CSlash.Cs.Lit
 import CSlash.Cs.Pat
 import CSlash.Parser.Annotation
-import CSlash.Types.Var (TyVar, KiVar)
-import CSlash.Types.Basic
+import CSlash.Types.Var (TyVar, KiVar, AnyTyVar, AnyKiVar)
+import CSlash.Types.Basic hiding (ConLike)
 import CSlash.Types.SrcLoc
 import CSlash.Types.Fixity
 import CSlash.Utils.Outputable
@@ -212,6 +213,7 @@ data XXExprTc
   | ExpandedThingTc
     { xtc_orig :: CsThingRn
     , xtc_expanded :: CsExpr Tc }
+  | ConLikeTc (ConLike (AnyTyVar AnyKiVar) AnyKiVar)
 
 data XXExprZk
   = WrapExprZk ZkCsWrapper (CsExpr Zk)
@@ -426,6 +428,7 @@ csExprNeedsParens prec = go
     go_x_tc :: XXExprTc -> Bool
     go_x_tc (WrapExpr _ e) = csExprNeedsParens prec e
     go_x_tc (ExpandedThingTc thing _) = csExpandedNeedsParens thing
+    go_x_tc (ConLikeTc {}) = False
 
     csExpandedNeedsParens (OrigExpr e) = csExprNeedsParens prec e
 

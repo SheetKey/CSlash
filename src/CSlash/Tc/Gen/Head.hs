@@ -280,7 +280,8 @@ check_local_id :: AnyId -> TcM ()
 check_local_id id = tcEmitBindingUsage $ singleUsageUE id
 
 tcInferDataCon :: AnyDataCon -> TcM (CsExpr Tc, AnySigmaType)
-tcInferDataCon con = panic "tcInferDataCon"
+tcInferDataCon con = return ( XExpr (ConLikeTc (RealDataCon con))
+                            , dataConType con )
 
 {- *********************************************************************
 *                                                                      *

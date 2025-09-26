@@ -5,7 +5,7 @@ module CSlash.Core.DataCon where
 import CSlash.Language.Syntax.Basic
 import CSlash.Language.Syntax.Module.Name
 
-import CSlash.Builtin.Types.Prim (mkTemplateTyVars, mkTemplateKindVars, mkTemplateFunKindVars)
+import CSlash.Builtin.Types.Prim
 import CSlash.Core.Type as Type
 import CSlash.Core.Kind
 import CSlash.Core.TyCon
@@ -24,13 +24,14 @@ import CSlash.Types.Unique.Set
 import CSlash.Utils.Outputable
 import CSlash.Utils.Misc
 import CSlash.Utils.Panic
+import CSlash.Utils.Trace
 
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Builder as BSB
 import qualified Data.ByteString.Lazy    as LBS
 import qualified Data.Data as Data
 import Data.Char
-import Data.List( find )
+import Data.List( find, inits )
 import Numeric (showInt)
 
 {- *********************************************************************
@@ -123,71 +124,54 @@ mkDataCon name declared_infix tycon tag id ty arity
                  , dcArity = arity
                  }
 
-mkDataConTy :: TyCon tv kv -> Arity -> Type tv kv
-mkDataConTy tycon arity = panic "dc_type"
-  -- where
-  --   fun_kind_vars = mkTemplateFunKindVars arity
-  --   fun_kinds = KiVarKi <$> fun_kind_vars
+-- TyCon is the result type.
+-- Arity is the number of term arguments
+-- (does not include type args since builtin data-cons don't
+-- have visible (only specified) type args)
+-- This SHOULD NOT be used (as is) for Pattern Synonyms if we ever add them
+-- Could change name to 'mkPcDataConTy' (them 'mkDataConTy', a more general version, would accempt arg types)
+mkDataConTy :: PTyCon -> Arity -> PType 
+mkDataConTy tycon arity = 
+  pprTrace "mkDataConTy"
+  (vcat [ ppr tycon
+        , ppr arity
+        , ppr tc_kind
+        , ppr dc_type
+        ]) $
+  assert (arity == length fa_kvs - 1 && arity == length arg_kis) $
+  dc_type
+  where
+    tc_kind = tyConKind tycon
+    (fa_kvs, tc_mono_kind) = splitForAllKiVars tc_kind
+    (ki_preds, tc_tau_kind) = splitInvisFunKis tc_mono_kind
+    (arg_kis, res_ki) = splitFunKis tc_tau_kind
 
-  --   arg_kind_vars = mkTemplateKindVars arity
-  --   arg_kinds = KiVarKi <$> arg_kind_vars
-  --   ty_vars = mkTemplateTyVars arg_kinds
-  --   tc_binders = mkSpecifiedTyConBinders ty_vars
-  --   arg_tys = mkTyVarTys ty_vars
+    -- make KiCoVars for preds and tvs from arity (using the kinds of fa_kvs (arity == length fa_kvs))
+    -- make new KiVars for the arrow kinds
+    -- want: /\fa_kvs -> forall kicos. forall tvs. tv1 -> ... -> tvn -> TyCon fa_kvs kicos tvs
 
-  --   res_type = mkTyConApp tycon arg_tys
-  --   res_kind = case tyConResKind tycon of
-  --                kd@(KiVarKi var)
-  --                  | isKiVar var -> kd
-  --                kc@(KiCon _) -> kc
-  --                _ -> panic "mkDataConType: 'tyConResKind tycon' is not valid"
+    fun_ki_vars = mkTemplateFunKindVars arity
+    fun_kis = KiVarKi <$> fun_ki_vars
+    fun_ki_preds = let want_lts = inits arg_kis
+                   in assert (length want_lts - 1 == length fun_kis) $
+                      concat $ zipWith (fmap . (KiPredApp LTEQKi)) fun_kis want_lts
 
-  --   arg_kind_constrs = (`LTEQKd` res_kind) <$> arg_kinds
-  --   fun_kind_constrs = concatMap (\ (kf, i) ->
-  --                                    let kds = take i arg_kinds
-  --                                    in (`LTEQKd` kf) <$> kds)
-  --                      $ fun_kinds `zip` [0..]
-  --   full_constrs = KdContext $ arg_kind_constrs ++ fun_kind_constrs
+    final_preds = ki_preds ++ fun_ki_preds
+    kcos = mkTemplateKiCoVars final_preds
 
-  --   dc_partial_type = foldr2 FunTy res_type fun_kinds arg_tys
-  --   dc_type = WithContext full_constrs $ foldr ForAllTy dc_partial_type tc_binders    
+    arg_ty_vars = mkTemplateTyVars arg_kis
+    arg_tys = TyVarTy <$> arg_ty_vars
 
--- mkDataConTy
---   :: [TypeVar]     -- ^ type arguments
---   -> [ForAllTyBinder] -- ^ bound type arguments
---   -> [Type]        -- ^ types of value arguments
---   -> TyCon         -- ^ the tycon we're constructing
---   -> Type
--- mkDataConTy tyvars b_tyvars arg_tys tycon
---   = assert (binderVars b_tyvars == tyvars) dc_type
---   where
---     funKindVars = mkTemplateFunKindVars $ length arg_tys
---     funKinds = KiVarKi <$> funKindVars
-
---     types = Type.TyVarTy <$> tyvars
---     res_type = mkTyConApp tycon types
+    ffoldr :: (a -> b -> b) -> [a] -> b -> b
+    ffoldr f l r = foldr f r l
     
---     arg_ty_kinds = (\ty -> case ty of
---                              Type.TyVarTy tv 
---                                | isTypeVar tv -> varKind tv
---                              _ -> panic "mkDataConType: arg_ty is not 'TyVarTy (TyVar _ _ _)'")
---                    <$> arg_tys
---     res_kind = case tyConResKind tycon of
---                  kd@(KiVarKi var)
---                    | isKiVar var -> kd
---                  UKd -> UKd
---                  AKd -> AKd
---                  LKd -> LKd
---                  _ -> panic "mkDataConType: 'tyConResKind tycon' is not valid"
---     arg_ty_constrs =  (`LTEQKd` res_kind) <$> arg_ty_kinds
---     fun_kind_constrs = concatMap (\ (kf, i) ->
---                                      let kds = take i arg_ty_kinds
---                                      in (`LTEQKd` kf) <$> kds)
---                        $ funKinds `zip` [0..]
---     full_constrs = KdContext $ arg_ty_constrs ++ fun_kind_constrs
-
---     dc_partial_type = foldr2 FunTy res_type funKinds arg_tys
---     dc_type = WithContext full_constrs $ foldr ForAllTy dc_partial_type b_tyvars
+    dc_type = ffoldr BigTyLamTy fa_kvs $ -- /\k1..kn ->
+              ffoldr ForAllTy ((flip Bndr Specified) <$> kcos) $ -- forall kco1..kcon.
+              ffoldr ForAllTy ((flip Bndr Specified) <$> arg_ty_vars) $ -- forall a..b.
+              ffoldr (uncurry FunTy) (zip fun_kis arg_tys) $ -- a -> .. -> b ->
+              mkTyConApp tycon $ (Embed . KiVarKi <$> fa_kvs)
+                              ++ (TyVarTy <$> kcos) -- maybe should be KindCoercion (mkKiCoVarCo <$> kcos) ??
+                              ++ arg_tys
 
 dataConName :: DataCon tv kv -> Name
 dataConName = dcName

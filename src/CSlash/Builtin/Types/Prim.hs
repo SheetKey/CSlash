@@ -142,6 +142,17 @@ mkTemplateTyVarsFrom i kinds
 mkTemplateTyVars :: [PMonoKind] -> [PTyVar]
 mkTemplateTyVars kinds = mkTemplateTyVarsFrom (length kinds) kinds
 
+mkTemplateKiCoVarsFrom :: Int -> [PMonoKind] -> [PTyVar]
+mkTemplateKiCoVarsFrom i kinds
+  = [ mkTyVar name kind
+    | (kind, index) <- zip kinds [0..(i-1)]
+    , let name_str = "kco" ++ show index
+          name = mk_kv_name (index + i + 1) name_str
+    ]
+
+mkTemplateKiCoVars :: [PMonoKind] -> [PTyVar]
+mkTemplateKiCoVars kinds = mkTemplateKiCoVarsFrom (length kinds) kinds
+
 -- mkTemplateTyConBindersFrom :: Int -> [Kind] -> [TyConBinder]
 -- mkTemplateTyConBindersFrom i kinds
 --   = mkSpecifiedTyConBinders (mkTemplateTyVarsFrom i kinds)
