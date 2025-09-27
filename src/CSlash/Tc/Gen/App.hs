@@ -123,7 +123,7 @@ tcValArgs :: [CsExprArg 'TcpInst] -> TcM [CsExprArg 'TcpTc]
 tcValArgs = mapM tcValArg
 
 tcValArg :: CsExprArg 'TcpInst -> TcM (CsExprArg 'TcpTc)
-tcValArg (EWrap {}) = panic "tcValArg EWrap"
+tcValArg (EWrap ew) = return $ EWrap ew
 
 tcValArg (EValArg { ea_ctxt = ctxt
                   , ea_arg = larg@(L arg_loc arg)
