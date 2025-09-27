@@ -684,7 +684,11 @@ uType env orig_ty1 orig_ty2 = do
       | ty1 `tcEqType` ty2 = return (mkReflTyCo ty1)
       | otherwise = uType_defer env orig_ty1 orig_ty2
 
-    u_tc_arg is_vis ty1 ty2 = panic "u_tc_arg"
+    u_tc_arg is_vis ty1 ty2 = do
+      traceTc "u_tc_arg" (ppr ty1 $$ ppr ty2)
+      uType env_arg ty1 ty2
+      where
+        env_arg = env { u_loc = adjustCtLoc is_vis False (u_loc env) }                      
 
     go_app vis ty1 s1 t1 ty2 s2 t2 = panic "go_app"
 
@@ -719,7 +723,7 @@ uKind env kc orig_ki1 orig_ki2 = do
   tclvl <- getTcLevel
   traceTc "u_kis"
     $ vcat [ text "tclvl" <+> ppr tclvl
-           , sep [ ppr orig_ki1, char '`' <> ppr kc <> char '`', ppr orig_ki2 ] ]
+           , sep [ ppr orig_ki1, ppr kc, ppr orig_ki2 ] ]
   co <- go orig_ki1 orig_ki2
   if isReflKiCo co
     then traceTc "u_kis yields no coercion" empty
@@ -797,7 +801,7 @@ uKind env kc orig_ki1 orig_ki2 = do
 
     ------------------
     u_kc_arg ki1 ki2 = do
-      traceTc "u_tc_arg" (ppr ki1 $$ ppr ki2)
+      traceTc "u_kc_arg" (ppr ki1 $$ ppr ki2)
       uKind env_arg kc ki1 ki2
       where
         env_arg = env { u_loc = adjustCtLoc False True (u_loc env) }
