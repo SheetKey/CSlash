@@ -66,7 +66,7 @@ tcApp rn_expr exp_res_ty = do
   let tc_head = (tc_fun, fun_ctxt)
 
   (inst_args, app_res_rho) <- setTcLevel QLInstVar
-                              $ tcInstFun True tc_head fun_sigma rn_args
+                              $ tcInstFun tc_head fun_sigma rn_args
 
   traceTc "tcApp:DoQL" (ppr rn_fun $$ ppr app_res_rho)
 
@@ -149,12 +149,11 @@ tcValArg (EValArg { ea_ctxt = ctxt
 ********************************************************************* -}
 
 tcInstFun
-  :: Bool
-  -> (CsExpr Tc, AppCtxt)
+  :: (CsExpr Tc, AppCtxt)
   -> AnySigmaType
   -> [CsExprArg 'TcpRn]
   -> TcM ([CsExprArg 'TcpInst], AnySigmaType)
-tcInstFun inst_final (tc_fun, fun_ctxt) fun_sigma rn_args = do
+tcInstFun (tc_fun, fun_ctxt) fun_sigma rn_args = do
   traceTc "tcInstFun"
     $ vcat [ text "tc_fun" <+> ppr tc_fun
            , text "fun_sigma" <+> ppr fun_sigma
@@ -171,6 +170,8 @@ tcInstFun inst_final (tc_fun, fun_ctxt) fun_sigma rn_args = do
                             CsUnboundVar {} -> True
                             _ -> False
 
+    inst_fun :: [CsExprArg 'TcpRn] -> ForAllFlag -> Bool
+    inst_fun [] = isInvisibleForAllFlag
     inst_fun (EValArg {} : _) = isInvisibleForAllFlag
     inst_fun _ = const False
 
@@ -197,6 +198,8 @@ tcInstFun inst_final (tc_fun, fun_ctxt) fun_sigma rn_args = do
     go1 pos acc fun_ty (arg : rest_args)
       | fun_is_out_of_scope, looks_like_type_arg arg
       = go pos acc fun_ty rest_args
+
+    go1 pos acc (BigTyLamTy{}) args = panic "go1 BigTyLamTy"
 
     go1 pos acc fun_ty args
       | (tvs, body1) <- tcSplitSomeForAllTyVars (inst_fun args) fun_ty

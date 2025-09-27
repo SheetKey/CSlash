@@ -113,10 +113,13 @@ type family XPass (p :: TcPass) where
   XPass 'TcpInst = 'Renamed
   XPass 'TcpTc = 'Typechecked
 
+-- Needs to check the 'e':
+-- It could be 'Embed'ing a type, in which case it should be ETypeArg!
 mkEValArg :: AppCtxt -> LCsExpr Rn -> CsExprArg 'TcpRn
-mkEValArg ctxt e = EValArg { ea_arg = e
-                           , ea_ctxt = ctxt
-                           , ea_arg_ty = noExtField }
+mkEValArg ctxt e = panic "mkEValArg"
+-- EValArg { ea_arg = e
+--                            , ea_ctxt = ctxt
+--                            , ea_arg_ty = noExtField }
  
 addArgWrap :: AnyCsWrapper -> [CsExprArg p] -> [CsExprArg p]
 addArgWrap wrap args
