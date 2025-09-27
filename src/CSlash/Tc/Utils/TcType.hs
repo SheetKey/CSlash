@@ -518,6 +518,13 @@ mkMinimalBy_Ki get_pred xs = go preds_with_cox []
 *                                                                      *
 ********************************************************************* -}
 
+tcSplitBigLamKiVars :: AnyType -> ([AnyKiVar], AnyType)
+tcSplitBigLamKiVars ty = split ty ty []
+  where
+    split _ (BigTyLamTy kv ty) kvs = split ty ty (kv:kvs)
+    split orig_ty ty kvs | Just ty' <- coreView ty = split orig_ty ty' kvs
+    split orig_ty _ kvs = (reverse kvs, orig_ty)
+
 tcSplitForAllTyVarBinder_maybe :: AnyType -> Maybe (AnyTyVarBinder, AnyType)
 tcSplitForAllTyVarBinder_maybe ty | Just ty' <- coreView ty = tcSplitForAllTyVarBinder_maybe ty'
 tcSplitForAllTyVarBinder_maybe (ForAllTy tv ty) = Just (tv, ty)

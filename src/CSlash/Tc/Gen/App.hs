@@ -199,13 +199,12 @@ tcInstFun (tc_fun, fun_ctxt) fun_sigma rn_args = do
       | fun_is_out_of_scope, looks_like_type_arg arg
       = go pos acc fun_ty rest_args
 
-    go1 pos acc (BigTyLamTy{}) args = panic "go1 BigTyLamTy"
-
     go1 pos acc fun_ty args
-      | (tvs, body1) <- tcSplitSomeForAllTyVars (inst_fun args) fun_ty
-      , not (null tvs)
-      = do (_, wrap, fun_rho) <- addHeadCtxt fun_ctxt
-                                 $ instantiateSigma fun_orig tvs body1
+      | (kvs, body1) <- tcSplitBigLamKiVars fun_ty
+      , (tvs, body2) <- tcSplitSomeForAllTyVars (inst_fun args) body1
+      , not (null kvs && null tvs)
+      = do (_, _, wrap, fun_rho) <- addHeadCtxt fun_ctxt
+                                 $ instantiateSigma fun_orig kvs tvs body2 fun_ty
            go pos (addArgWrap wrap acc) fun_rho args
 
     go1 _ acc fun_ty [] = do

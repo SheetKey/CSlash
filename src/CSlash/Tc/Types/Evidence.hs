@@ -68,6 +68,7 @@ data CsWrapper tv kv
   | WpTyLam tv            -- can probably be 'TcTyVar AnyKiVar' (these should be skols)
   | WpKiLam kv            -- "             " 'TcKiVar'          "                     "
   | WpTyApp (Type tv kv)
+  | WpKiApp (MonoKind kv)
   | WpMultCoercion (KindCoercion kv)
   deriving Data.Data
 
@@ -100,6 +101,9 @@ isIdCsWrapper _ = False
 
 mkWpTyApps :: [Type tv kv] -> CsWrapper tv kv
 mkWpTyApps tys = mk_co_app_fn WpTyApp tys
+
+mkWpKiApps :: [MonoKind kv] -> CsWrapper tv kv
+mkWpKiApps kis = mk_co_app_fn WpKiApp kis
 
 mkWpTyLams :: [tv] -> CsWrapper tv kv
 mkWpTyLams tvs = mk_lam_fn WpTyLam tvs

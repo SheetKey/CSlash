@@ -542,6 +542,7 @@ zonkCoFn (WpTyLam tv) = assert (handleAnyTv (const True) isImmutableVar tv) $
 zonkCoFn (WpKiLam kv) = assert (handleAnyKv (const True) isImmutableVar kv) $
                         WpKiLam <$> zonkKiBndrX kv
 zonkCoFn (WpTyApp ty) = WpTyApp <$> noBinders (zonkTcTypeToTypeX ty)
+zonkCoFn (WpKiApp ki) = WpKiApp <$> noBinders (zonkTcMonoKindToMonoKindX ki)
 zonkCoFn (WpMultCoercion co) = WpMultCoercion <$> noBinders (zonkKiCoToCo co)
 
 zonkOverLit :: CsOverLit Tc -> ZonkTcM (CsOverLit Zk)

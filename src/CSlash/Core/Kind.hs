@@ -297,6 +297,8 @@ instance Uniquable kv => HasFVs (Kind kv) where
 -- Simple Kind Constructors
 class SKC kind where
   mkKiVarKi :: v -> kind v
+  mkKiVarKis :: [v] -> [kind v]
+  mkKiVarKis = map mkKiVarKi
 
 instance SKC MonoKind where
   mkKiVarKi = KiVarKi

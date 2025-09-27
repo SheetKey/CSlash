@@ -129,35 +129,44 @@ skolemizeRequired skolem_info n_req sigma
 
 topInstantiate :: CtOrigin -> AnySigmaType -> TcM (AnyCsWrapper, AnyRhoType)
 topInstantiate orig sigma
-  | (tvs, body1) <- tcSplitForAllInvisTyVars sigma
-  , not (null tvs)
-  = do (_, wrap1, body2) <- instantiateSigma orig tvs body1
-       (wrap2, body3) <- topInstantiate orig body2
-       return (wrap2 <.> wrap1, body3)
+  | (kvs, body1) <- tcSplitBigLamKiVars sigma
+  , (tvs, body2) <- tcSplitForAllInvisTyVars body1
+  , not (null kvs && null tvs)
+  = do (_, _, wrap1, body3) <- instantiateSigma orig kvs tvs body1 sigma
+       (wrap2, body4) <- topInstantiate orig body3
+       return (wrap2 <.> wrap1, body4)
   | otherwise
   = return (idCsWrapper, sigma)
 
 instantiateSigma
   :: CtOrigin
+  -> [AnyKiVar]
   -> [AnyTyVar AnyKiVar]
   -> AnySigmaType
-  -> TcM ([AnyTyVar AnyKiVar], AnyCsWrapper, AnySigmaType)
-instantiateSigma orig tvs body_ty = do 
-  (subst, inst_tvs) <- mapAccumLM newMetaTyVarX empty_subst tvs
+  -> AnySigmaType -- the type before splitting of kvs and tvs (for finding in_scope)
+  -> TcM ([AnyKiVar], [AnyTyVar AnyKiVar], AnyCsWrapper, AnySigmaType)
+instantiateSigma orig kvs tvs body_ty orig_type = do
+  (kv_subst, inst_kvs) <- mapAccumLM newMetaKiVarX empty_kv_subst kvs
+  (subst, inst_tvs) <- mapAccumLM newMetaTyVarX (mk_empty_tv_subst kv_subst) tvs
   let inst_body = substTy subst body_ty
+      inst_kv_kis = mkKiVarKis inst_kvs
       inst_tv_tys = mkTyVarTys inst_tvs
-      wrap = mkWpTyApps inst_tv_tys
+      wrap = mkWpTyApps inst_tv_tys <.> mkWpKiApps inst_kv_kis
   traceTc "Instantiating"
     $ vcat [ text "origin" <+> pprCtOrigin orig
+           , text "kvs" <+> ppr kvs
            , text "tvs" <+> ppr tvs
            , text "type" <+> debugPprType body_ty
-           , text "with" <+> vcat (map debugPprType inst_tv_tys) ]
-  return (inst_tvs, wrap, inst_body)
+           , text "orig_type" <+> debugPprType orig_type
+           , text "with" <+> vcat (map debugPprMonoKind inst_kv_kis
+                                   ++ map debugPprType inst_tv_tys) ]
+  return (inst_kvs, inst_tvs, wrap, inst_body)
   where
-    empty_subst = let (tvs, kcvs, kvs) = varsOfType body_ty
-                      tvs' = tvs `unionVarSet` mapVarSet toAnyTyVar kcvs
-                  in mkEmptyTvSubst (mkInScopeSet tvs', mkInScopeSet kvs)
-
+    (empty_kv_subst, mk_empty_tv_subst)
+      = let (tvs, kcvs, kvs) = varsOfType orig_type
+            tvs' = tvs `unionVarSet` mapVarSet toAnyTyVar kcvs
+        in ( mkEmptyKvSubst (mkInScopeSet kvs)
+           , mkTvSubstFromKvs (mkInScopeSet tvs') )
 
 {- *********************************************************************
 *                                                                      *
