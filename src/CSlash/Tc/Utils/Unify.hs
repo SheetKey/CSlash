@@ -22,6 +22,7 @@ import CSlash.Tc.Zonk.TcType
 
 import CSlash.Core.Type
 import CSlash.Core.Type.Rep
+import CSlash.Core.Type.Compare (tcEqType)
 import CSlash.Core.Type.Ppr (debugPprType)
 import CSlash.Core.Type.FVs( isInjectiveInType )
 import CSlash.Core.TyCon
@@ -680,7 +681,7 @@ uType env orig_ty1 orig_ty2 = do
     go ty1 ty2 = defer ty1 ty2
 
     defer ty1 ty2
-      | panic "ty1 `tcEqType` ty2" = return (mkReflTyCo ty1)
+      | ty1 `tcEqType` ty2 = return (mkReflTyCo ty1)
       | otherwise = uType_defer env orig_ty1 orig_ty2
 
     u_tc_arg is_vis ty1 ty2 = panic "u_tc_arg"
