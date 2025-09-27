@@ -657,14 +657,7 @@ reportGroup mk_err ctxt items = do
 
 nonDeferrableOrigin :: CtOrigin -> Bool
 nonDeferrableOrigin (UsageEnvironmentOf {}) = True
-nonDeferrableOrigin OccurrenceOf {} = False
-nonDeferrableOrigin TypeEqOrigin {} = False
-nonDeferrableOrigin KindEqOrigin {} = False
-nonDeferrableOrigin KindCoOrigin {} = False
-nonDeferrableOrigin GivenOrigin {} = False
-nonDeferrableOrigin TupleTyOrigin = False
-nonDeferrableOrigin PatSigOrigin = False
-nonDeferrableOrigin PatOrigin = False
+nonDeferrableOrigin _ = False
 
 maybeReportError :: SolverReportErrCtxt -> NonEmpty ErrorItem -> SolverReport -> TcM ()
 maybeReportError ctxt items@(item1 :| _) (SolverReport { sr_important_msg = important

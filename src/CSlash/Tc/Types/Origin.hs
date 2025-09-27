@@ -165,7 +165,7 @@ data TyVarBndrs = CsTyVarBndrsRn [CsTyVarBndr Rn]
 instance Outputable TyVarBndrs where
   ppr (CsTyVarBndrsRn bndrs) = fsep (map ppr bndrs)
 
-data CtOrigin
+data CtOrigin -- DOUBLE CHECK PATTERN MATCHES IF YOU ADD 'AmbiguityCheckOrigin' OR 'CycleBreakerOrigin'
   = GivenOrigin SkolemInfoAnon
   | OccurrenceOf Name
   | TypeEqOrigin { uo_actual :: AnyType
@@ -180,14 +180,20 @@ data CtOrigin
                  , kco_thing :: Maybe KindedThing
                  , kco_visible :: Bool
                  }
+  | LiteralOrigin (CsOverLit Rn)
+  | SectionOrigin
+  | ExprSigOrigin
   | TupleTyOrigin
   | PatSigOrigin
   | PatOrigin
   | UsageEnvironmentOf Name
+  | IfThenElseOrigin
+  | Shouldn'tHappenOrigin String
 
 isVisibleOrigin :: CtOrigin -> Bool
 isVisibleOrigin (KindCoOrigin { kco_visible = vis }) = vis
 isVisibleOrigin (TypeEqOrigin { uo_visible = vis }) = vis
+isVisibleOrigin (KindEqOrigin _ _ sub_orig) = isVisibleOrigin sub_orig
 isVisibleOrigin _ = True
 
 toInvisibleOrigin :: CtOrigin -> CtOrigin
@@ -197,20 +203,49 @@ toInvisibleOrigin o = o
 
 isGivenOrigin :: CtOrigin -> Bool
 isGivenOrigin (GivenOrigin {}) = True
-isGivenOrigin (KindCoOrigin {}) = False
-isGivenOrigin (OccurrenceOf {}) = False
-isGivenOrigin TupleTyOrigin = False
-isGivenOrigin (TypeEqOrigin {}) = False
-isGivenOrigin (KindEqOrigin {}) = False
-isGivenOrigin PatSigOrigin = False
-isGivenOrigin PatOrigin = False
-isGivenOrigin (UsageEnvironmentOf {}) = False
+isGivenOrigin _ = False
 
 lexprCtOrigin :: LCsExpr Rn -> CtOrigin
 lexprCtOrigin (L _ e) = exprCtOrigin e
 
 exprCtOrigin :: CsExpr Rn -> CtOrigin
-exprCtOrigin = panic "exprCtOrigin"
+exprCtOrigin (CsVar _ (L _ name)) = OccurrenceOf name
+exprCtOrigin (CsUnboundVar {}) = Shouldn'tHappenOrigin "unbound variable"
+exprCtOrigin (CsOverLit _ lit) = LiteralOrigin lit
+exprCtOrigin (CsLit {}) = Shouldn'tHappenOrigin "concrete literal"
+exprCtOrigin (CsLam _ ms) = matchesCtOrigin ms
+exprCtOrigin (CsTyLam _ ms) = matchesCtOrigin ms
+exprCtOrigin (CsApp _ e1 _) = lexprCtOrigin e1
+exprCtOrigin (CsTyApp {}) = panic "CsTyApp"
+exprCtOrigin (OpApp _ _ op _) = lexprCtOrigin op
+exprCtOrigin (NegApp _ e _) = lexprCtOrigin e
+exprCtOrigin (CsPar _ e) = lexprCtOrigin e
+exprCtOrigin (SectionL _ _ _) = SectionOrigin
+exprCtOrigin (SectionR _ _ _) = SectionOrigin
+exprCtOrigin (ExplicitTuple {}) = Shouldn'tHappenOrigin "explicit tuple"
+exprCtOrigin (ExplicitSum {}) = Shouldn'tHappenOrigin "explicit sum"
+exprCtOrigin (CsCase _ _ matches) = matchesCtOrigin matches
+exprCtOrigin (CsIf {}) = IfThenElseOrigin
+exprCtOrigin (CsMultiIf _ rhs) = lGRHSCtOrigin rhs
+exprCtOrigin (CsLet _ _ e) = lexprCtOrigin e
+exprCtOrigin (ExprWithTySig {}) = ExprSigOrigin
+exprCtOrigin (CsEmbTy {}) = Shouldn'tHappenOrigin "type expression"
+exprCtOrigin (XExpr x) = dataConCantHappen x
+
+matchesCtOrigin :: MatchGroup Rn (LCsExpr Rn) -> CtOrigin
+matchesCtOrigin (MG { mg_alts = alts })
+  | L _ [L _ match] <- alts
+  , Match { m_grhss = grhss } <- match
+  = grhssCtOrigin grhss
+  | otherwise
+  = Shouldn'tHappenOrigin "multi-way match"
+
+grhssCtOrigin :: GRHSs Rn (LCsExpr Rn) -> CtOrigin
+grhssCtOrigin (GRHSs { grhssGRHSs = lgrhss }) = lGRHSCtOrigin lgrhss
+
+lGRHSCtOrigin :: [LGRHS Rn (LCsExpr Rn)] -> CtOrigin
+lGRHSCtOrigin [L _ (GRHS _ _ (L _ e))] = exprCtOrigin e
+lGRHSCtOrigin _ = Shouldn'tHappenOrigin "multi-way GRHS"
 
 instance Outputable CtOrigin where
   ppr = pprCtOrigin
@@ -226,18 +261,36 @@ csTyCtOrigin (CsTyVar _ (L _ name)) = OccurrenceOf name
 csTyCtOrigin _ = panic "lCsTypeCtOrigin"
 
 pprCtOrigin :: CtOrigin -> SDoc
+
+pprCtOrigin (GivenOrigin sk) = ctoHerald <+> ppr sk
+
+pprCtOrigin (TypeEqOrigin t1 t2 _ vis)
+  = hang (ctoHerald <+> text "a type equality" <> whenPprDebug (brackets (ppr vis)))
+    2 (sep [ppr t1, char '~', ppr t2])
+
 pprCtOrigin (KindCoOrigin k1 k2 kc _ _)
   = hang (ctoHerald <+> text "a kind coercion")
          2 (sep [ppr k1, char '`' <> ppr kc <> char '`', ppr k2])
+
+pprCtOrigin (KindEqOrigin t1 t2 _)
+  = hang (ctoHerald <+> text "a kind equality arising from")
+    2 (sep [ppr t1, char '~', ppr t2])
+
+pprCtOrigin (Shouldn'tHappenOrigin note)
+  = vcat [ text "<< This should not appear in error messages. If you see this"
+         , text "in an error message, it is a bug relating to"
+           <+> quotes (text note) ]
 
 pprCtOrigin simple_origin = ctoHerald <+> pprCtO simple_origin
 
 pprCtO :: HasCallStack => CtOrigin -> SDoc
 pprCtO (OccurrenceOf name) = hsep [text "a use of", quotes (ppr name)]
-pprCtO (GivenOrigin {}) = text "a given constraint"
+
 pprCtO TupleTyOrigin = text "a tuple type"
 pprCtO PatSigOrigin = text "a pattern type signature"
 pprCtO (UsageEnvironmentOf x) = hsep [ text "usage of", quotes (ppr x) ]
+
+pprCtO (GivenOrigin {}) = text "a given constraint"
 pprCtO _ = panic "pprCtO"
 
 {- *******************************************************************

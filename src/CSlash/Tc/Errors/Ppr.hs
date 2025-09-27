@@ -632,12 +632,7 @@ pprArising ct_loc
           TypeEqOrigin {} -> True
           KindEqOrigin {} -> True
           KindCoOrigin {} -> True
-          GivenOrigin {} -> False
-          OccurrenceOf {} -> False
-          TupleTyOrigin -> False
-          PatSigOrigin -> False
-          PatOrigin -> False
-          UsageEnvironmentOf {} -> False
+          _ -> False
 
 {- *********************************************************************
 *                                                                      *
