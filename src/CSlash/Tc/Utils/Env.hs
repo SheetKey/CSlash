@@ -109,6 +109,13 @@ tcLookupGlobalOnly name = do
              Just thing -> thing
              Nothing -> pprPanic "tcLookupGlobalOnly" (ppr name)
 
+tcLookupTyCon :: Name -> TcM (TyCon (TyVar KiVar) KiVar)
+tcLookupTyCon name = do
+  thing <- tcLookupGlobal name
+  case thing of
+    ATyCon tc -> return tc
+    _ -> wrongThingErr WrongThingTyCon (AGlobal $ asAnyTyKi thing) name
+
 {- *********************************************************************
 *                                                                      *
                 Extending the global environment
@@ -154,6 +161,21 @@ tcLookup name = do
   case lookupNameEnv local_env name of
     Just thing -> return thing
     Nothing -> (AGlobal . asAnyTyKi) <$> tcLookupGlobal name
+
+tcLookupId :: Name -> TcM AnyId
+tcLookupId name = do
+  thing <- tcLookupIdMaybe name
+  case thing of
+    Just id -> return id
+    _ -> pprPanic "tcLookupId" (ppr name)
+
+tcLookupIdMaybe :: Name -> TcM (Maybe AnyId)
+tcLookupIdMaybe name = do
+  thing <- tcLookup name
+  case thing of
+    ATcId { tct_id = id } -> return $ Just $ asAnyTyKi id
+    AGlobal (AnId id) -> return $ Just $ asAnyTyKi id
+    _ -> return Nothing
 
 tcLookupTcTyCon :: HasDebugCallStack => Name -> TcM AnyTyCon
 tcLookupTcTyCon name = do

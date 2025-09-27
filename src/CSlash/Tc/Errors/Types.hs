@@ -382,6 +382,7 @@ data MatchArgBadMatches where
 data WrongThingSort
   = WrongThingType
   | WrongThingKind
+  | WrongThingTyCon
 
 type TySynCycleTyCons = [Either (TyCon (TyVar KiVar) KiVar) (LCsBind Rn)]
 

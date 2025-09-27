@@ -418,6 +418,15 @@ tcSubTypePat inst_orig ctxt (Check ty_actual) ty_expected
   = tc_sub_type unifyTypeET inst_orig ctxt ty_actual ty_expected
 tcSubTypePat _ _ (Infer _) _ = panic "tcSubTypePat infer"
 
+tcSubTypeSigma
+  :: CtOrigin
+  -> UserTypeCtxt
+  -> AnySigmaType
+  -> AnySigmaType
+  -> TcM AnyCsWrapper
+tcSubTypeSigma orig ctxt ty_actual ty_expected
+  = tc_sub_type (unifyType Nothing) orig ctxt ty_actual ty_expected
+
 tc_sub_type
   :: (AnyType -> AnyType -> TcM AnyTypeCoercion)
   -> CtOrigin

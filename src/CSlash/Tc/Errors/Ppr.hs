@@ -734,6 +734,7 @@ pprWrongThingSort :: WrongThingSort -> SDoc
 pprWrongThingSort = text . \case
   WrongThingType -> "type"
   WrongThingKind -> "kind"
+  WrongThingTyCon -> "type constructor"
 
 pprImportLookup :: ImportLookupReason -> SDoc
 pprImportLookup _ = panic "pprImportLookup"

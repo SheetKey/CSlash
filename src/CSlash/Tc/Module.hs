@@ -16,7 +16,7 @@ import CSlash.Tc.Errors.Types
 -- import GHC.Tc.Gen.HsType
 -- import GHC.Tc.Validity( checkValidType )
 -- import GHC.Tc.Gen.Match
--- import GHC.Tc.Utils.Unify( checkConstraints, tcSubTypeSigma )
+import CSlash.Tc.Utils.Unify( checkTyConstraints, tcSubTypeSigma )
 import CSlash.Tc.Zonk.Type
 -- import GHC.Tc.Gen.Expr
 -- import GHC.Tc.Gen.App( tcInferSigma )
@@ -56,7 +56,7 @@ import CSlash.Rename.Module
 import CSlash.Iface.Env     ( externalizeName )
 import CSlash.Iface.Load
 
--- import CSlash.Builtin.Types ( mkListTy, anyTypeOfKind )
+import CSlash.Builtin.Types ( unitTyConName )
 import CSlash.Builtin.Names
 import CSlash.Builtin.Utils
 
@@ -70,6 +70,7 @@ import CSlash.Core.TyCon
 import CSlash.Core.DataCon
 import CSlash.Core.Type.Rep
 import CSlash.Core.Type
+import CSlash.Core.Kind
 -- import GHC.Core.Class
 -- import GHC.Core.Coercion.Axiom
 -- import GHC.Core.Reduction ( Reduction(..) )
@@ -95,6 +96,7 @@ import CSlash.Types.Name.Reader
 import CSlash.Types.Fixity.Env
 import CSlash.Types.Id as Id
 import CSlash.Types.Id.Info( IdDetails(..) )
+import CSlash.Types.Var (asAnyTyKi)
 import CSlash.Types.Var.Env
 import CSlash.Types.TypeEnv
 import CSlash.Types.Unique.FM
@@ -372,7 +374,19 @@ checkMainType tcg_env = do
             case filter isLocalGRE main_gres of
               [] -> return emptyWC
               (_:_:_) -> return emptyWC
-              [main_gre] -> panic "checkMainType"
+              [main_gre] -> do let main_name = greName main_gre
+                                   ctxt = FunSigCtxt main_name NoRRC
+                               main_id <- tcLookupId main_name
+                               io_ty <- getIOType
+                               let main_ty = varType main_id
+                                   eq_orig = TypeEqOrigin { uo_actual = main_ty
+                                                          , uo_expected = io_ty
+                                                          , uo_thing = Nothing
+                                                          , uo_visible = True }
+                               (_, lie) <- captureTopConstraints
+                                           $ setMainCtxt main_name io_ty
+                                           $ tcSubTypeSigma eq_orig ctxt main_ty io_ty
+                               return lie
 
 checkMain :: Maybe (LocatedL [LIE Ps]) -> TcM (TcGblEnv Tc)
 checkMain export_ies = do
@@ -409,6 +423,25 @@ getMainOcc dflags = case mainFunIs dflags of
 
 generateMainBinding :: TcGblEnv Tc -> Name -> TcM (TcGblEnv Tc)
 generateMainBinding tcg_env main_name = panic "generateMainBinding"
+
+getIOType :: TcM AnyType
+getIOType = do
+  ioTyCon <- asAnyTyKi <$> tcLookupTyCon ioTyConName
+  unitTyCon <- asAnyTyKi <$> tcLookupTyCon unitTyConName
+  return $ mkTyConApp ioTyCon [ Embed (BIKi UKd)
+                              , mkTyConApp unitTyCon [ Embed (BIKi UKd) ]
+                              ]
+
+setMainCtxt :: Name -> AnyType -> TcM a -> TcM a
+setMainCtxt main_name io_ty thing_inside
+  = setSrcSpan (getSrcSpan main_name)
+    $ addErrCtxt main_ctxt
+    $ checkTyConstraints skol_info []
+    $ thing_inside
+  where
+    skol_info = SigSkol (FunSigCtxt main_name NoRRC) io_ty []
+    main_ctxt = text "When checking the type of the"
+                <+> ppMainFn (nameOccName main_name)
 
 type RenamedStuff =
   Maybe ( CsGroup Rn

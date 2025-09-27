@@ -102,6 +102,24 @@ main_RDR_Unqual = mkUnqual varName (fsLit "main")
 negateName :: Name
 negateName = panic "negateName"
 
+ioTyConName :: Name
+ioTyConName = tcQual cSLASH_TYPES (fsLit "IO") ioTyConKey
+
+{- *********************************************************************
+*                                                                      *
+               Local helpers
+*                                                                      *
+********************************************************************* -}
+
+tcQual :: Module -> FastString -> Unique -> Name
+{-# INLINE tcQual #-}
+tcQual modu str unique = mk_known_key_name tcName modu str unique
+
+mk_known_key_name :: NameSpace -> Module -> FastString -> Unique -> Name
+{-# INLINE mk_known_key_name #-}
+mk_known_key_name space modu str unique
+  = mkExternalName unique modu (mkOccNameFS space str) noSrcSpan
+
 {- *********************************************************************
 *                                                                      *
                Uniques for wired-in TyCons
@@ -116,6 +134,9 @@ fUNTyConKey = mkWiredInTyConUnique 13
 
 eqTyConKey :: Unique
 eqTyConKey = mkWiredInTyConUnique 53
+
+ioTyConKey :: Unique
+ioTyConKey = mkWiredInTyConUnique 57
 
 {- *********************************************************************
 *                                                                      *

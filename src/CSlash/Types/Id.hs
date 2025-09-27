@@ -1,5 +1,5 @@
 module CSlash.Types.Id
-  ( Id
+  ( Id, Var.varType
 
   , module CSlash.Types.Id
   ) where
