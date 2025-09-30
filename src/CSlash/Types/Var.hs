@@ -440,7 +440,10 @@ instance AsGenericKi AnyTyVar where
     = AnyTyVar $ TcTyVar' { _varKind = asGenericKi kind, .. }
   asGenericKi other = panic "AsGenericKi TyVar other"
 
-instance AsAnyTy Id
+instance AsAnyTy Id where
+  asAnyTyKi (Id (Id' {..})) = Id $ Id'
+    { _varType = asAnyTyKi _varType, _id_details = asAnyTyKi _id_details, .. }
+  asAnyTyKi _ = panic "AsAnyTy Id"
 
 instance AsAnyKi TyVar where
   asAnyKi (TyVar (TyVar' {..})) = TyVar $ TyVar' { _varKind = asAnyKi _varKind, .. }
