@@ -80,16 +80,12 @@ mkDataConId wkr_name data_con
 
 leftSectionName :: Name
 leftSectionName = panic "leftTySectionName"
---  = mkWiredInIdName cSLASH_PRIM (fsLit "leftSection") leftSectionKey leftSectionId
 
 rightSectionName :: Name
 rightSectionName = panic "rightTySectionName"
---  = mkWiredInIdName cSLASH_PRIM (fsLit "rightSection") rightSectionKey rightSectionId
 
 leftTySectionName :: Name
 leftTySectionName = panic "leftTySectionName"
---  = mkWiredInIdName cSLASH_PRIM (fsLit "leftTySection") leftTySectionKey leftTySectionId
 
 rightTySectionName :: Name
 rightTySectionName = panic "rightTySectionName"
---  = mkWiredInIdName cSLASH_PRIM (fsLit "rightTySection") rightTySectionKey rightTySectionId

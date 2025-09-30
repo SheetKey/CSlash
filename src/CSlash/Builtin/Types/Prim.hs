@@ -1,6 +1,7 @@
 module CSlash.Builtin.Types.Prim where
 
 import {-# SOURCE #-} CSlash.Types.TyThing (mkATyCon)
+import {-# SOURCE #-} CSlash.Core.Type (buildSynTyCon, mkTyConApp, typeKind)
 
 import CSlash.Core.TyCon
 import CSlash.Core.Type.Rep
@@ -18,7 +19,7 @@ import CSlash.Types.Unique
 import CSlash.Builtin.Uniques
 import CSlash.Builtin.Names
 import CSlash.Utils.Misc ( changeLast )
-import CSlash.Utils.Panic ( assertPpr )
+import CSlash.Utils.Panic ( panic, assertPpr )
 import CSlash.Utils.Outputable
 import CSlash.Utils.Trace
 
@@ -42,7 +43,7 @@ mkPrimTc = mkGenPrimTc UserSyntax
 
 mkGenPrimTc :: BuiltInSyntax -> FastString -> Unique -> PTyCon -> Name
 mkGenPrimTc built_in_syntax occ key tycon
-  = mkWiredInName cSLASH_PRIM
+  = mkWiredInName cSLASH_BUILTIN
                   (mkTcOccFS occ)
                   key
                   (mkATyCon tycon)
@@ -63,8 +64,6 @@ unexposedPrimTyCons = [ eqTyCon ]
 exposedPrimTyCons :: [PTyCon]
 exposedPrimTyCons
   = [ fUNTyCon ]
-
-
 
 {- *********************************************************************
 *                                                                      *
@@ -220,3 +219,72 @@ eqTyCon = mkPrimTyCon eqTyConName kind 2
            $ FunKi FKF_K_K (KiVarKi k1)
            $ FunKi FKF_K_K (KiVarKi k2)
            $ BIKi UKd
+
+{- *********************************************************************
+*                                                                      *
+                IO
+*                                                                      *
+********************************************************************* -}
+
+realWorldTyConName :: Name
+realWorldTyConName = mkPrimTc (fsLit "RealWorld#") realWorldTyConKey realWorldTyCon
+
+realWorldTyCon :: PTyCon
+realWorldTyCon = mkPrimTyCon realWorldTyConName (Mono (BIKi LKd)) 0
+
+ioResTyConName :: Name
+ioResTyConName = mkPrimTc (fsLit "IORes") ioResTyConKey ioResTyCon
+
+ioResTyCon :: PTyCon
+ioResTyCon = mkPrimTyCon ioResTyConName kind 1
+  where
+    kva = case mkTemplateKindVars 1 of
+            [k1] -> k1
+            _ -> panic "unreachable"
+
+    -- This is essentially a '(a : k, World# : LKd) : LKd'
+    kind = ForAllKi kva $
+           Mono $
+           FunKi FKF_K_K (KiVarKi kva) (BIKi LKd)
+
+primIoTyConName :: Name
+primIoTyConName = mkPrimTc (fsLit "PrimIO") primIoTyConKey primIoTyCon
+
+primIoTyCon :: PTyCon
+primIoTyCon = buildSynTyCon primIoTyConName kind 1 rhs
+  where
+    kva = case mkTemplateKindVars 1 of
+            [k1] -> k1
+            _ -> panic "unreachable"
+    kvf = case mkTemplateFunKindVars 1 of
+            [k] -> k
+            _ -> panic "unreachable"
+
+    tva = case mkTemplateTyVars [mkKiVarKi kva] of
+            [tv] -> tv
+            _ -> panic "unreachable"
+
+    kind = typeKind rhs
+
+    -- /\kva kvf -> \a : kva -> (World# : LKd) -kvf> (IORes kva a : LKd)
+    -- Values of this type are kvf functions from linear World#
+    -- to linear World# paired with a kva value.
+    rhs = BigTyLamTy kva $
+          BigTyLamTy kvf $
+          TyLamTy tva $
+          FunTy (KiVarKi kvf)
+                (mkTyConTy realWorldTyCon)
+                (mkTyConApp ioResTyCon [ Embed (KiVarKi kva), TyVarTy tva ])
+
+ioTyConName :: Name
+ioTyConName = mkPrimTc (fsLit "IO") ioTyConKey ioTyCon
+
+ioTyCon :: PTyCon
+ioTyCon = mkPrimTyCon ioTyConName kind 1
+  where
+    (kva, kvb) = case mkTemplateKindVars 2 of
+            [k1, k2] -> (k1, k2)
+            _ -> panic "unreachable"
+
+    kind = ForAllKi kva $ ForAllKi kvb $ Mono $
+           FunKi FKF_K_K (KiVarKi kva) (KiVarKi kvb)

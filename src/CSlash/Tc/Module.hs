@@ -57,6 +57,7 @@ import CSlash.Iface.Env     ( externalizeName )
 import CSlash.Iface.Load
 
 import CSlash.Builtin.Types ( unitTyConName )
+import CSlash.Builtin.Types.Prim ( ioTyConName )
 import CSlash.Builtin.Names
 import CSlash.Builtin.Utils
 
@@ -428,7 +429,7 @@ getIOType :: TcM AnyType
 getIOType = do
   ioTyCon <- asAnyTyKi <$> tcLookupTyCon ioTyConName
   unitTyCon <- asAnyTyKi <$> tcLookupTyCon unitTyConName
-  return $ mkTyConApp ioTyCon [ Embed (BIKi UKd)
+  return $ mkTyConApp ioTyCon [ Embed (BIKi UKd), Embed (BIKi UKd)
                               , mkTyConApp unitTyCon [ Embed (BIKi UKd) ]
                               ]
 

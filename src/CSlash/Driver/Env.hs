@@ -36,8 +36,6 @@ import CSlash.Types.Name.Env
 import CSlash.Types.TyThing
 import CSlash.Types.Var (TyVar, KiVar)
 
-import CSlash.Builtin.Names ( cSLASH_PRIM )
-
 import CSlash.Data.Maybe
 
 import CSlash.Utils.Exception as Ex

@@ -231,7 +231,6 @@ loadInterface doc_str mod from
                           dontLeakTheHUG $ do
                             massertPpr ((isOneShot (csMode (cs_dflags cs_env)))
                                         || moduleUnitId mod `notElem` cs_all_home_unit_ids cs_env
-                                        || mod == cSLASH_PRIM
                                         || mod == cSLASH_BUILTIN)
                               (text "Attempting to load home package interface into the EPS"
                                $$ ppr hug $$ doc_str $$ ppr mod $$ ppr (moduleUnitId mod))
@@ -338,9 +337,7 @@ findAndReadIface  cs_env doc_str mod wanted_mod = do
                                , ppr mod <> semi ]
                         , nest 4 (text "reason:" <+> doc_str) ]
 
-  if | mod `installedModuleEq` cSLASH_PRIM
-       -> return (Succeeded (cslPrimIface, "<built in interface for CSL.Prim>"))
-     | mod `installedModuleEq` cSLASH_BUILTIN
+  if | mod `installedModuleEq` cSLASH_BUILTIN
        -> return (Succeeded (cslBuiltInIface, "<built in interface for CSL.BuiltIn>"))
      | otherwise
        -> do let fopts = initFinderOpts dflags
@@ -441,17 +438,6 @@ readIface dflags name_cache wanted_mod file_path = do
         Wired-in interface for GHC.Prim
 *                                                                      *
 ********************************************************************* -}
-
-cslPrimIface :: ModIface
-cslPrimIface = empty_iface
-  { mi_exports = cslPrimExports
-  , mi_decls = []
-  , mi_fixities = fixities
-  , mi_final_exts = (mi_final_exts empty_iface) { mi_fix_fn = mkIfaceFixCache fixities }
-  }
-  where
-    empty_iface = emptyFullModIface cSLASH_PRIM
-    fixities = trace "cslPrimIface/fixities" []
 
 cslBuiltInIface :: ModIface
 cslBuiltInIface = empty_iface

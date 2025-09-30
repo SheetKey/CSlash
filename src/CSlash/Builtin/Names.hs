@@ -60,14 +60,8 @@ basicKnownKeyNames
 *                                                                      *
 ********************************************************************* -}
 
-cSLASH_PRIM :: Module
-cSLASH_PRIM = mkPrimModule (fsLit "CSL.Prim")
-
 cSLASH_BUILTIN :: Module
 cSLASH_BUILTIN = mkPrimModule (fsLit "CSL.BuiltIn")
-
-cSLASH_TYPES :: Module
-cSLASH_TYPES = mkPrimModule (fsLit "CSL.Types")
 
 rOOT_MAIN :: Module
 rOOT_MAIN= mkMainModule (fsLit ":Main")
@@ -102,9 +96,6 @@ main_RDR_Unqual = mkUnqual varName (fsLit "main")
 negateName :: Name
 negateName = panic "negateName"
 
-ioTyConName :: Name
-ioTyConName = tcQual cSLASH_TYPES (fsLit "IO") ioTyConKey
-
 {- *********************************************************************
 *                                                                      *
                Local helpers
@@ -132,8 +123,17 @@ boolTyConKey = mkWiredInTyConUnique 4
 fUNTyConKey :: Unique
 fUNTyConKey = mkWiredInTyConUnique 13
 
+realWorldTyConKey :: Unique
+realWorldTyConKey = mkWiredInTyConUnique 37
+
 eqTyConKey :: Unique
 eqTyConKey = mkWiredInTyConUnique 53
+
+ioResTyConKey :: Unique
+ioResTyConKey = mkWiredInTyConUnique 55
+
+primIoTyConKey :: Unique
+primIoTyConKey = mkWiredInTyConUnique 56
 
 ioTyConKey :: Unique
 ioTyConKey = mkWiredInTyConUnique 57

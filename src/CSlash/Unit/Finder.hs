@@ -26,7 +26,7 @@ module CSlash.Unit.Finder
 
 import CSlash.Platform.Ways
 
-import CSlash.Builtin.Names ( cSLASH_PRIM, cSLASH_BUILTIN )
+import CSlash.Builtin.Names ( cSLASH_BUILTIN )
 
 import CSlash.Unit.Env
 import CSlash.Unit.Types
@@ -329,9 +329,7 @@ findInstalledHomeModule fc fopts home_unit mod_name =
         | otherwise = (home_path, source_exts)
 
   in homeSearchCache fc home_unit mod_name $
-     if | mod `installedModuleEq` cSLASH_PRIM
-          -> return (InstalledFound (error "CSL.Prim ModLocation") mod)
-        | mod `installedModuleEq` cSLASH_BUILTIN
+     if | mod `installedModuleEq` cSLASH_BUILTIN
           -> return (InstalledFound (error "CSL.BuiltIn ModLocation") mod)
         | otherwise
           -> searchPathExts search_dirs mod exts
@@ -356,9 +354,7 @@ findPackageModule_ fc fopts mod pkg_conf = do
   massertPpr (moduleUnit mod == unitId pkg_conf)
              (ppr (moduleUnit mod) <+> ppr (unitId pkg_conf))
   modLocationCache fc mod $
-    if | mod `installedModuleEq` cSLASH_PRIM
-         -> return (InstalledFound (error "CSL.Prim ModLocation") mod)
-       | mod `installedModuleEq` cSLASH_BUILTIN
+    if | mod `installedModuleEq` cSLASH_BUILTIN
          -> return (InstalledFound (error "CSL.BuiltIn ModLocation") mod)
        | otherwise
          -> let tag = waysBuildTag (finder_ways fopts)

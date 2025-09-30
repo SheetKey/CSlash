@@ -65,7 +65,7 @@ getImports popts buf filename source_filename = do
                   ord_idecls = imps
 
                   (ordinary_imps, csl_prim_import)
-                    = partition ((/= moduleName cSLASH_PRIM) . unLoc . ideclName . unLoc)
+                    = partition ((/= moduleName cSLASH_BUILTIN) . unLoc . ideclName . unLoc)
                       ord_idecls
 
                   pre_loc = srcLocSpan (mkSrcLoc (mkFastString source_filename) 1 1)
