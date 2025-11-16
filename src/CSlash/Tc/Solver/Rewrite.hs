@@ -213,6 +213,10 @@ rewrite_one_ty (KindCoercion kco) = do
   co' <- rewrite_kco kco
   return $ mkReflKiCoRedn co'
 
+rewrite_one_ty (Embed mki) = do
+  redn <- rewrite_one_ki mki
+  return $ embedKiRedn redn
+
 rewrite_one_ty other = pprPanic "rewrite_one_ty other" (ppr other)
 
 rewrite_kco :: AnyKindCoercion -> RewriteM AnyKindCoercion

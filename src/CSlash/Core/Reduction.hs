@@ -39,6 +39,9 @@ data TyReduction = TyReduction
   { reductionTypeCoercion :: AnyTypeCoercion
   , reductionReducedType :: !AnyType }
 
+embedKiRedn :: KiReduction -> TyReduction
+embedKiRedn (KiReduction kco mki) = mkTyReduction (LiftKCo kco) (Embed mki)
+
 mkTyReduction :: AnyTypeCoercion -> AnyType -> TyReduction
 mkTyReduction co ty = TyReduction co ty
 {-# INLINE mkTyReduction #-}
