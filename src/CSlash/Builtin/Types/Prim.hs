@@ -209,12 +209,15 @@ eqTyConName = mkPrimTc (fsLit "~") eqTyConKey eqTyCon
 eqTyCon :: PTyCon
 eqTyCon = mkPrimTyCon eqTyConName kind 2
   where
-    k1 = mkTemplateKindVar
+    (k1, k2) = case mkTemplateKindVars 2 of
+                 [k1, k2] -> (k1, k2)
+                 _ -> undefined
     -- forall k1. k -> k -> UKd
     kind = ForAllKi k1
+           $ ForAllKi k2
            $ Mono
            $ FunKi FKF_K_K (KiVarKi k1)
-           $ FunKi FKF_K_K (KiVarKi k1)
+           $ FunKi FKF_K_K (KiVarKi k2)
            $ BIKi UKd
 
 {- *********************************************************************

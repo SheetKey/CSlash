@@ -657,8 +657,7 @@ mkAppCos co1 cos = foldl' mkAppCo co1 cos
 
 mkTyEqPred :: IsTyVar tv kv => Type tv kv -> Type tv kv -> Type tv kv
 mkTyEqPred ty1 ty2
-  = assertPpr (ki1 `eqMonoKind` ki2) (ppr ty1 $$ ppr ki1 $$ ppr ty2 $$ ppr ki2)
-    $ mkTyConApp (asGenericTyKi eqTyCon) [Embed ki1, ty1, ty2]
+  = mkTyConApp (asGenericTyKi eqTyCon) [Embed ki1, Embed ki2, ty1, ty2]
   where
     ki1 = typeMonoKind ty1
     ki2 = typeMonoKind ty2
