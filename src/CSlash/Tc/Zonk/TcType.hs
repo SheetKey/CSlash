@@ -412,33 +412,48 @@ zonkWTCRec (WTC { wtc_simple = simple, wtc_impl = implic, wtc_wkc = wkc })
 
 zonkWKCRec :: WantedKiConstraints -> ZonkM WantedKiConstraints
 zonkWKCRec (WKC { wkc_simple = simple, wkc_impl = implic }) = do
-  simple' <- zonkSimples simple
+  simple' <- zonkKiSimples simple
   implic' <- mapBagM zonkImplication implic
   return $ WKC { wkc_simple = simple', wkc_impl = implic' }
 
 zonkTySimples :: TyCts -> ZonkM TyCts
 zonkTySimples cts = do
-  cts' <- mapBagM (panic "zonkCt") cts -- UNCOMMENT NEXT LINE
-  -- traceZonk "zonkSimples done:" (ppr cts')
-  return cts'
-
-zonkSimples :: KiCts -> ZonkM KiCts
-zonkSimples cts = do
-  cts' <- mapBagM zonkCt cts
+  cts' <- mapBagM zonkTyCt cts
   traceZonk "zonkSimples done:" (ppr cts')
   return cts'
 
-zonkCt :: KiCt -> ZonkM KiCt
-zonkCt (CKiCoCan (KiCoCt { kc_ev = ev })) = mkNonCanonicalKi <$> zonkCtEvidence ev
-zonkCt (CIrredCanKi ir@(IrredKiCt { ikr_ev = ev })) = do
-  ev' <- zonkCtEvidence ev
+zonkKiSimples :: KiCts -> ZonkM KiCts
+zonkKiSimples cts = do
+  cts' <- mapBagM zonkKiCt cts
+  traceZonk "zonkSimples done:" (ppr cts')
+  return cts'
+
+zonkTyCt :: TyCt -> ZonkM TyCt
+zonkTyCt (CTyEqCan (TyEqCt { teq_ev = ev })) = mkNonCanonicalTy <$> zonkCtTyEvidence ev
+zonkTyCt (CIrredCanTy ir@(IrredTyCt { itr_ev = ev })) = do
+  ev' <- zonkCtTyEvidence ev
+  return $ CIrredCanTy $ ir { itr_ev = ev' }
+zonkTyCt ct = do
+  fl' <- zonkCtTyEvidence (ctTyEvidence ct)
+  return $ mkNonCanonicalTy fl'
+
+zonkKiCt :: KiCt -> ZonkM KiCt
+zonkKiCt (CKiCoCan (KiCoCt { kc_ev = ev })) = mkNonCanonicalKi <$> zonkCtKiEvidence ev
+zonkKiCt (CIrredCanKi ir@(IrredKiCt { ikr_ev = ev })) = do
+  ev' <- zonkCtKiEvidence ev
   return $ CIrredCanKi $ ir { ikr_ev = ev' }
-zonkCt ct = do
-  fl' <- zonkCtEvidence (ctKiEvidence ct)
+zonkKiCt ct = do
+  fl' <- zonkCtKiEvidence (ctKiEvidence ct)
   return $ mkNonCanonicalKi fl'
 
-zonkCtEvidence :: CtKiEvidence -> ZonkM CtKiEvidence
-zonkCtEvidence ctev = do
+zonkCtTyEvidence :: CtTyEvidence -> ZonkM CtTyEvidence
+zonkCtTyEvidence ctev = do
+  let pred = cttev_pred ctev
+  pred' <- zonkTcType pred
+  return $ setCtEvPredType ctev pred'
+
+zonkCtKiEvidence :: CtKiEvidence -> ZonkM CtKiEvidence
+zonkCtKiEvidence ctev = do
   let pred = ctkev_pred ctev
   pred' <- zonkTcMonoKind pred
   return $ setCtEvPredKind ctev pred'
