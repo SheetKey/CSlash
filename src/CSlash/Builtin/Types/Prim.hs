@@ -226,6 +226,12 @@ eqTyCon = mkPrimTyCon eqTyConName kind 2
 *                                                                      *
 ********************************************************************* -}
 
+{- TODY*********
+'realWorld' should stay a prim: it should not have any data constructors.
+
+The remaining IO types should be moved to BuiltIn.Types since they all have data cons.
+-}
+
 realWorldTyConName :: Name
 realWorldTyConName = mkPrimTc (fsLit "RealWorld#") realWorldTyConKey realWorldTyCon
 

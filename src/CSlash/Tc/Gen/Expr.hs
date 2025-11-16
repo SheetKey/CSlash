@@ -8,6 +8,7 @@ import CSlash.Tc.Utils.Unify
 import CSlash.Tc.Types.BasicTypes
 import CSlash.Types.Basic
 import CSlash.Types.Error
+import CSlash.Types.Var
 import CSlash.Types.Unique.FM
 import CSlash.Types.Unique.Map
 import CSlash.Types.Unique.Set
@@ -111,7 +112,14 @@ tcInferRhoNC :: LCsExpr Rn -> TcM (LCsExpr Tc, AnyRhoType)
 tcInferRhoNC = panic "tcInferRhoNC"
 
 tcCheckMonoExpr :: LCsExpr Rn -> AnyRhoType -> TcM (LCsExpr Tc)
-tcCheckMonoExpr = panic "tcCheckMonoExpr"
+tcCheckMonoExpr expr res_ty = tcMonoExpr expr (mkCheckExpType res_ty)
+
+tcMonoExpr :: LCsExpr Rn -> ExpRhoType -> TcM (LCsExpr Tc)
+tcMonoExpr (L loc expr) res_ty
+  = setSrcSpanA loc
+    $ addExprCtxt expr
+    $ do expr' <- tcExpr expr res_ty
+         return (L loc expr')
 
 tcExpr :: CsExpr Rn -> ExpRhoType -> TcM (CsExpr Tc)
 -- Onto QuickLook
@@ -131,5 +139,12 @@ tcExpr (CsPar x expr) res_ty = panic "tcExpr CsPar"
 tcExpr (NegApp x expr neg_expr) res_ty = panic "tcExpr NegApp"
 
 tcExpr e@(CsLam x matches) res_ty = panic "tcExpr CsLam"
+
+tcExpr (CsIf x pred b1 b2) res_ty = do
+  pred' <- tcCheckMonoExpr pred (asAnyTyKi boolTy)
+  (u1, b1') <- tcCollectingUsage $ tcMonoExpr b1 res_ty
+  (u2, b2') <- tcCollectingUsage $ tcMonoExpr b1 res_ty
+  tcEmitBindingUsage (supUE u1 u2)
+  return (CsIf x pred' b1' b2')
 
 tcExpr e res_ty = panic "tcExpr other"
