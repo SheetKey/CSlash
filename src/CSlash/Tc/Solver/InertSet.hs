@@ -17,6 +17,7 @@ import CSlash.Types.Basic( SwapFlag(..) )
 -- import GHC.Core.Reduction
 import CSlash.Core.Predicate
 import CSlash.Core.Type.FVs
+import CSlash.Core.Type.Compare
 import CSlash.Core.Kind.FVs
 import CSlash.Core.Kind
 import CSlash.Core.Kind.Subst
@@ -71,6 +72,13 @@ extendWorkListTyEq rewriters ct wl
   | otherwise
   = wl { wl_rw_tyeqs = ct : wl_rw_tyeqs wl }
 
+extendWorkListTyEqs :: TyRewriterSet -> Bag TyCt -> WorkList -> WorkList
+extendWorkListTyEqs rewriters new_eqs wl
+  | isEmptyTyRewriterSet rewriters
+  = wl { wl_tyeqs = foldr (:) (wl_tyeqs wl) new_eqs }
+  | otherwise
+  = wl { wl_rw_tyeqs = foldr (:) (wl_rw_tyeqs wl) new_eqs }
+
 extendWorkListKiCos :: KiRewriterSet -> Bag KiCt -> WorkList -> WorkList
 extendWorkListKiCos rewriters kicos wl
   | isEmptyKiRewriterSet rewriters
@@ -91,6 +99,9 @@ extendWorkListKiCt ct wl = case classifyPredKind (ctKiEvPred ev) of
   where
     ev = ctKiEvidence ct
     rewriters = ctKiEvRewriters ev  
+
+extendWorkListTyImplic :: TyImplication -> WorkList -> WorkList
+extendWorkListTyImplic implic wl = wl { wl_ty_implics = implic `consBag` wl_ty_implics wl }
 
 extendWorkListTyCt :: TyCt -> WorkList -> WorkList
 extendWorkListTyCt ct wl = case classifyPredType (ctTyEvPred ev) of
@@ -269,6 +280,18 @@ emptyKiCos = emptyDVarEnv
 emptyTyEqs :: InertTyEqs
 emptyTyEqs = emptyDVarEnv
 
+addTyEqToCans :: TcLevel -> TyEqCt -> InertTyCans -> InertTyCans
+addTyEqToCans tc_lvl tyeq_ct@(TyEqCt { teq_lhs = lhs }) ics@(ITC { inert_tyeqs = eqs })
+  = updGivenTyEqs tc_lvl (CTyEqCan tyeq_ct)
+    $ case lhs of
+        TyVarLHS tv -> ics { inert_tyeqs = addTyEq eqs tv tyeq_ct }
+
+addTyEq :: InertTyEqs -> AnyTyVar AnyKiVar -> TyEqCt -> InertTyEqs
+addTyEq old_eqs tv ct
+  = extendDVarEnv_C add_eq old_eqs tv [ct]
+  where
+    add_eq old_eqs _ = addToTyEqCtList ct old_eqs
+
 addKiCoToCans :: TcLevel -> KiCoCt -> InertKiCans -> InertKiCans
 addKiCoToCans tc_lvl kico_ct@(KiCoCt { kc_lhs = lhs }) ics@(IKC { inert_kicos = kicos })
   = updGivenKiCos tc_lvl (CKiCoCan kico_ct)
@@ -286,6 +309,12 @@ foldKiCos k kicos z = foldDVarEnv (\cts z -> foldr k z cts) z kicos
 
 foldTyEqs :: (TyEqCt -> b -> b) -> InertTyEqs -> b -> b
 foldTyEqs k eqs z = foldDVarEnv (\cts z -> foldr k z cts) z eqs
+
+findTyEqs :: InertTyCans -> AnyTyVar AnyKiVar -> [TyEqCt]
+findTyEqs icans tv = concat @Maybe (lookupDVarEnv (inert_tyeqs icans) tv)
+
+findTyEq :: InertTyCans -> CanTyEqLHS -> [TyEqCt]
+findTyEq icans (TyVarLHS tv) = findTyEqs icans tv
 
 findKiCos :: InertKiCans -> AnyKiVar -> [KiCoCt]
 findKiCos icans kv = concat @Maybe (lookupDVarEnv (inert_kicos icans) kv)
@@ -348,24 +377,70 @@ addInertKiCos kico_ct@(KiCoCt { kc_lhs = KiVarLHS kv }) kicos = addKiCo kicos kv
 *                                                                      *
 ********************************************************************* -}
 
-addIrredToCans :: TcLevel -> IrredKiCt -> InertKiCans -> InertKiCans
-addIrredToCans tc_lvl irred ics
-  = updGivenKiCos tc_lvl (CIrredCanKi irred)
-    $ updIrreds (addIrred irred) ics
+addIrredTyToCans :: TcLevel -> IrredTyCt -> InertTyCans -> InertTyCans
+addIrredTyToCans tc_lvl irred ics
+  = updGivenTyEqs tc_lvl (CIrredCanTy irred)
+    $ updIrredTys (addIrredTy irred) ics
 
-addIrreds :: [IrredKiCt] -> InertKiIrreds -> InertKiIrreds
-addIrreds extras irreds
+addIrredKiToCans :: TcLevel -> IrredKiCt -> InertKiCans -> InertKiCans
+addIrredKiToCans tc_lvl irred ics
+  = updGivenKiCos tc_lvl (CIrredCanKi irred)
+    $ updIrredKis (addIrredKi irred) ics
+
+addIrredTys :: [IrredTyCt] -> InertTyIrreds -> InertTyIrreds
+addIrredTys extras irreds
   | null extras = irreds
   | otherwise = irreds `unionBags` listToBag extras
 
-addIrred :: IrredKiCt -> InertKiIrreds -> InertKiIrreds
-addIrred extra irreds = irreds `snocBag` extra
+addIrredKis :: [IrredKiCt] -> InertKiIrreds -> InertKiIrreds
+addIrredKis extras irreds
+  | null extras = irreds
+  | otherwise = irreds `unionBags` listToBag extras
 
-updIrreds :: (InertKiIrreds -> InertKiIrreds) -> InertKiCans -> InertKiCans
-updIrreds upd ics = ics { inert_ki_irreds = upd (inert_ki_irreds ics) }
+addIrredTy :: IrredTyCt -> InertTyIrreds -> InertTyIrreds
+addIrredTy extra irreds = irreds `snocBag` extra
 
-findMatchingIrreds :: InertKiIrreds -> CtKiEvidence -> (Bag (IrredKiCt, SwapFlag), InertKiIrreds)
-findMatchingIrreds irreds ev 
+addIrredKi :: IrredKiCt -> InertKiIrreds -> InertKiIrreds
+addIrredKi extra irreds = irreds `snocBag` extra
+
+updIrredTys :: (InertTyIrreds -> InertTyIrreds) -> InertTyCans -> InertTyCans
+updIrredTys upd ics = ics { inert_ty_irreds = upd (inert_ty_irreds ics) }
+
+updIrredKis :: (InertKiIrreds -> InertKiIrreds) -> InertKiCans -> InertKiCans
+updIrredKis upd ics = ics { inert_ki_irreds = upd (inert_ki_irreds ics) }
+
+findMatchingIrredTys
+  :: InertTyIrreds -> CtTyEvidence -> (Bag (IrredTyCt, SwapFlag), InertTyIrreds)
+findMatchingIrredTys irreds ev
+  | TyEqPred lty1 rty1 <- classifyPredType pred
+  = partitionBagWith (match_eq lty1 rty1) irreds
+  | otherwise
+  = partitionBagWith match_non_eq irreds
+  where
+    pred = ctTyEvPred ev
+
+    match_non_eq irred
+      | irredTyCtPred irred `tcEqType` pred = Left (irred, NotSwapped)
+      | otherwise = Right irred
+
+    match_eq lty1 rty1 irred
+      | TyEqPred lty2 rty2 <- classifyPredType (irredTyCtPred irred)
+      , Just swap <- match_eq_help lty1 rty1 lty2 rty2
+      = Left (irred, swap)
+      | otherwise
+      = Right irred
+
+    match_eq_help lty1 rty1 lty2 rty2
+      | lty1 `tcEqType` lty2, rty1 `tcEqType` rty2
+      = Just NotSwapped
+      | lty1 `tcEqType` rty2, rty1 `tcEqType` lty2
+      = Just IsSwapped
+      | otherwise
+      = Nothing
+
+findMatchingIrredKis
+  :: InertKiIrreds -> CtKiEvidence -> (Bag (IrredKiCt, SwapFlag), InertKiIrreds)
+findMatchingIrredKis irreds ev 
   | KiCoPred _ lki1 rki1 <- classifyPredKind pred
   = partitionBagWith (match_kico lki1 rki1) irreds
   | otherwise
@@ -374,11 +449,11 @@ findMatchingIrreds irreds ev
     pred = ctKiEvPred ev
 
     match_non_kico irred
-      | irredCtPred irred `tcEqMonoKind` pred = Left (irred, NotSwapped)
+      | irredKiCtPred irred `tcEqMonoKind` pred = Left (irred, NotSwapped)
       | otherwise = Right irred
 
     match_kico lki1 rki1 irred
-      | KiCoPred _ lki2 rki2 <- classifyPredKind (irredCtPred irred)
+      | KiCoPred _ lki2 rki2 <- classifyPredKind (irredKiCtPred irred)
       , Just swap <- match_kico_help lki1 rki1 lki2 rki2
       = Left (irred, swap)
       | otherwise
@@ -398,25 +473,26 @@ findMatchingIrreds irreds ev
 *                                                                      *
 ********************************************************************* -}
 
+-- Need to handle [Let-bound skolems] if I ever add `t1 ~ t2` in user code
+updGivenTyEqs :: TcLevel -> TyCt -> InertTyCans -> InertTyCans
+updGivenTyEqs tclvl ct inerts
+  | not (isGivenCt ct) = inerts
+  | otherwise = inerts { inert_given_tyeq_lvl = tclvl
+                       , inert_given_tyeqs = True }
+
 updGivenKiCos :: TcLevel -> KiCt -> InertKiCans -> InertKiCans
 updGivenKiCos tclvl ct inerts@(IKC { inert_given_kico_lvl = kc_lvl })
   | not (isGivenCt ct) = inerts
-  | not_kico ct = inerts
-  | otherwise = inerts { inert_given_kico_lvl = kc_lvl'
+  | otherwise = inerts { inert_given_kico_lvl = tclvl
                        , inert_given_kicos = True }
-  where
-    kc_lvl' | mentionsOuterVar tclvl (ctKiEvidence ct)
-            = tclvl
-            | otherwise
-            = kc_lvl
-
-    not_kico (CKiCoCan (KiCoCt { kc_lhs = KiVarLHS kv })) = not (isOuterKiVar tclvl kv)
-    not_kico (CKiCoCan _) = panic "updGivenEqs"
-    not_kico _ = False
 
 data KiKickOutSpec
   = KOAfterUnify (MkVarSet TcKiVar)
   | KOAfterAdding CanKiCoLHS
+
+data TyKickOutSpec
+  = TKOAfterUnify (MkVarSet (TcTyVar AnyKiVar))
+  | TKOAfterAdding CanTyEqLHS
 
 kickOutRewritableLHSKi :: KiKickOutSpec -> CtFlavor -> InertKiCans -> (KiCts, InertKiCans)
 kickOutRewritableLHSKi ko_spec new_f ics@(IKC { inert_kicos = kv_kicos
@@ -551,8 +627,38 @@ instance Outputable InteractResult where
   ppr KeepInert = text "keep inert"
   ppr KeepWork = text "keep work-item"
 
-solveOneFromTheOther :: KiCt -> KiCt -> InteractResult
-solveOneFromTheOther ct_i ct_w
+solveOneTyFromTheOther :: TyCt -> TyCt -> InteractResult
+solveOneTyFromTheOther ct_i ct_w
+  | CtTyWanted {} <- ev_w
+  = case ev_i of
+      CtTyGiven {} -> KeepInert
+      CtTyWanted {}
+        | ((<) `on` ctLocSpan) loc_i loc_w -> KeepInert
+        | otherwise -> KeepWork
+  | CtTyWanted {} <- ev_i
+  = KeepWork
+  | lvl_i `sameDepthAs` lvl_w
+  = same_level_strategy
+  | otherwise
+  = different_level_strategy
+  where
+    ev_i = ctTyEvidence ct_i
+    ev_w = ctTyEvidence ct_w
+
+    loc_i = ctEvLoc ev_i
+    loc_w = ctEvLoc ev_w
+    orig_i = ctLocOrigin loc_i
+    orig_w = ctLocOrigin loc_w
+    lvl_i = ctLocLevel loc_i
+    lvl_w = ctLocLevel loc_w
+
+    different_level_strategy = if lvl_w `strictlyDeeperThan` lvl_i then KeepInert else KeepWork
+
+    same_level_strategy = case (orig_i, orig_w) of
+      _ -> KeepInert
+  
+solveOneKiFromTheOther :: KiCt -> KiCt -> InteractResult
+solveOneKiFromTheOther ct_i ct_w
   | CtKiWanted {} <- ev_w
   = case ev_i of
       CtKiGiven {} -> KeepInert
@@ -569,8 +675,6 @@ solveOneFromTheOther ct_i ct_w
   where
     ev_i = ctKiEvidence ct_i
     ev_w = ctKiEvidence ct_w
-
-    pred = ctKiEvPred ev_i
 
     loc_i = ctEvLoc ev_i
     loc_w = ctEvLoc ev_w

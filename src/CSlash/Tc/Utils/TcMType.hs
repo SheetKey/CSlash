@@ -86,6 +86,7 @@ predTypeOccName :: IsTyVar tv kv => PredType tv kv -> OccName
 predTypeOccName ty = case classifyPredType ty of
   TyEqPred {} -> mkVarOccFS (fsLit "tco")
   TyIrredPred {} -> mkVarOccFS (fsLit "tirred")
+  ForAllPred {} -> mkVarOccFS (fsLit "df")
 
 predKindOccName :: PredKind kv -> OccName
 predKindOccName ki = case classifyPredKind ki of
@@ -115,10 +116,10 @@ newKiCoVar ki = do
   name <- newSysName (predKindOccName ki)
   return (mkLocalKiCoVar name ki)
 
-newWanted :: CtOrigin -> Maybe TypeOrKind -> AnyPredKind -> TcM CtKiEvidence
-newWanted orig t_or_k predki = do
-  loc <- getCtLocM orig t_or_k
-  newWantedWithLoc loc predki
+-- newWanted :: CtOrigin -> Maybe TypeOrKind -> AnyPredKind -> TcM CtKiEvidence
+-- newWanted orig t_or_k predki = do
+--   loc <- getCtLocM orig t_or_k
+--   newWantedWithLoc loc predki
 
 ----------------------------------------------
 -- Emitting constraints
@@ -144,6 +145,15 @@ newKiCoercionHole pred_ki = do
   traceTc "New coercion hole:" (ppr co_var <+> colon <+> ppr pred_ki)
   ref <- newMutVar Nothing
   return $ KindCoercionHole { kch_co_var = co_var, kch_ref = ref }
+
+fillTyCoercionHole :: AnyTypeCoercionHole -> AnyTypeCoercion -> TcM ()
+fillTyCoercionHole (TypeCoercionHole { tch_ref = ref, tch_co_var = cv }) co = do
+  when debugIsOn $ do
+    cts <- readTcRef ref
+    whenIsJust cts $ \old_co ->
+      pprPanic "Filling a filled coercion hole" (ppr cv $$ ppr co $$ ppr old_co)
+  traceTc "Filling coercion hole" (ppr cv <+> text ":=" <+> ppr co)
+  writeTcRef ref (Just co)
 
 fillKiCoercionHole
   :: AnyKindCoercionHole
@@ -340,6 +350,17 @@ cloneMetaKiVarWithInfo info tc_lvl kv = do
       kivar = mkTcKiVar name' details
   traceTc "cloneMetaKiVarWithInfo" (ppr kivar)
   return kivar
+
+cloneMetaTyVarWithInfo :: MetaInfo -> TcLevel -> TcTyVar AnyKiVar -> TcM (TcTyVar AnyKiVar)
+cloneMetaTyVarWithInfo info tc_lvl tv = do
+  ref <- newMutVar Flexi
+  name' <- cloneMetaTyVarName (varName tv)
+  let details = MetaVar { mv_info = info
+                        , mv_ref = ref
+                        , mv_tclvl = tc_lvl }
+      tyvar = mkTcTyVar name' (varKind tv) details
+  traceTc "cloneMetaTyVarWithInfo" (ppr tyvar)
+  return tyvar
 
 readMetaTyVar :: (MonadIO m, Outputable kv) => TcTyVar kv -> m (MetaDetails AnyType)
 readMetaTyVar tyvar = assertPpr (isMetaVar tyvar) (ppr tyvar)
@@ -551,6 +572,7 @@ collect_cand_qkvs_co orig_co cur_lvl (boundtvs, boundkvs) = go_co
 
     go_co dv (SymCo co) = go_co dv co
     go_co dv (TransCo co1 co2) = foldM go_co dv [co1, co2]
+    go_co dv (SelCo _ co) = go_co dv co
 
     go_co dv (HoleCo hole) = do
       m_co <- unpackKiCoercionHole_maybe hole

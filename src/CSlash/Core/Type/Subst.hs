@@ -51,6 +51,9 @@ mkTvSubstFromKvs is kv = TvSubst is emptyVarEnv kv
 isEmptyTvSubst :: TvSubst tv kv -> Bool
 isEmptyTvSubst (TvSubst _ tv_env kv_subst) = isEmptyVarEnv tv_env && isEmptyKvSubst kv_subst
 
+getTvSubstInScope :: TvSubst tv kv -> (InScopeSet tv, InScopeSet kv)
+getTvSubstInScope (TvSubst tis _ (KvSubst kis _)) = (tis, kis)
+
 extendTvSubst :: IsVar tv => TvSubst tv kv -> tv -> Type tv kv -> TvSubst tv kv
 extendTvSubst (TvSubst in_scope tvs ksubst) tv ty
   = TvSubst in_scope (extendVarEnv tvs tv ty) ksubst
@@ -60,6 +63,16 @@ extendTvSubstWithClone (TvSubst in_scope tenv ksubst) tv tv'
   = TvSubst (extendInScopeSet in_scope tv')
             (extendVarEnv tenv tv (mkTyVarTy tv'))
             ksubst
+
+extendTvSubstAndInScope
+  :: IsTyVar tv kv => TvSubst tv kv -> tv -> Type tv kv -> TvSubst tv kv
+extendTvSubstAndInScope (TvSubst tis tenv (KvSubst kis kenv)) tv ty
+  = TvSubst (tis `extendInScopeSetSet` tyvars)
+            (extendVarEnv tenv tv ty)
+            (KvSubst (kis `extendInScopeSetSet` kivars) kenv)
+  where
+    (tvs, kcvs, kivars) = varsOfType ty
+    tyvars = tvs `unionVarSet` mapVarSet toGenericTyVar kcvs
 
 instance IsTyVar tv kv => Outputable (TvSubst tv kv) where
   ppr (TvSubst in_scope tvs ksubst)

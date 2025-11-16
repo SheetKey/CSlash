@@ -112,6 +112,7 @@ data TypeCoercion tv kv
   | LiftKCo (KindCoercion kv)
   | TySymCo (TypeCoercion tv kv)
   | TyTransCo (TypeCoercion tv kv) (TypeCoercion tv kv)
+  | LRCo LeftOrRight (TypeCoercion tv kv)
   | TyHoleCo (TypeCoercionHole tv kv)
   deriving Data.Data
 
@@ -128,16 +129,18 @@ instance Outputable (TypeCoercion tv kv) where
 instance Outputable (TypeCoercionHole tv kv) where
   ppr = const $ text "[TyCoHole]"
 
+instance Uniquable (TypeCoercionHole tv kv) where
+  getUnique (TypeCoercionHole { tch_co_var = cv }) = getUnique cv
+
 type AnyTypeCoercion = TypeCoercion (AnyTyVar AnyKiVar) AnyKiVar
 type AnyTypeCoercionHole = TypeCoercionHole (AnyTyVar AnyKiVar) AnyKiVar
 
-liftKCo :: KindCoercion kv -> Type tv kv -> TypeCoercion tv kv
-liftKCo kco ty = if isReflKiCo kco
-                 then mkReflTyCo ty
-                 else LiftKCo kco
+liftKCo :: KindCoercion kv -> TypeCoercion tv kv
+liftKCo = LiftKCo
 
 mkReflTyCo :: Type tv kv -> TypeCoercion tv kv
-mkReflTyCo = TyRefl
+mkReflTyCo (Embed ki) = LiftKCo (mkReflKiCo ki)
+mkReflTyCo ty = TyRefl ty
 
 mkTyCoVarCo :: TyCoVar tv kv -> TypeCoercion tv kv
 mkTyCoVarCo = TyCoVarCo
@@ -150,13 +153,15 @@ mkGReflCo ty kco
   | isReflKiCo kco = TyRefl ty
   | otherwise = GRefl ty kco
 
+mkGReflRightCo :: Type tv kv -> KindCoercion kv -> TypeCoercion tv kv 
+mkGReflRightCo ty kco
+  | isReflKiCo kco = mkReflTyCo ty
+  | otherwise = mkGReflCo ty kco
+
 mkGReflLeftCo :: Type tv kv -> KindCoercion kv -> TypeCoercion tv kv
 mkGReflLeftCo ty kco
   | isReflKiCo kco = mkReflTyCo ty
-  | otherwise = mkTySymCo $ mkGReflCo ty kco
-
-mkAppCos :: TypeCoercion tv kv 
-mkAppCos = panic "mkAppCos"
+  | otherwise = mkSymTyCo $ mkGReflCo ty kco
 
 ty_con_app_fun_maybe
   :: (HasDebugCallStack, Outputable a)
@@ -176,13 +181,20 @@ ty_con_app_fun_maybe tc args
       | otherwise
       = Nothing
     
-mkTySymCo :: TypeCoercion tv kv -> TypeCoercion tv kv
-mkTySymCo co | isReflTyCo co = co
-mkTySymCo (TySymCo co) = co
-mkTySymCo co = TySymCo co
+mkSymTyCo :: TypeCoercion tv kv -> TypeCoercion tv kv
+mkSymTyCo co | isReflTyCo co = co
+mkSymTyCo (TySymCo co) = co
+mkSymTyCo (LiftKCo kco) = LiftKCo $ mkSymKiCo kco
+mkSymTyCo co = TySymCo co
 
 mkTyTransCo :: TypeCoercion tv kv -> TypeCoercion tv kv -> TypeCoercion tv kv
 mkTyTransCo co1 co2
+  | LiftKCo kco1 <- co1
+  = case co2 of
+      LiftKCo kco2 -> LiftKCo $ mkTransKiCo kco1 kco2
+      _ -> pprPanic "mkTyTransCo" (ppr co1 $$ ppr co2)
+  | LiftKCo _ <- co2
+  = pprPanic "mkTyTransCo" (ppr co1 $$ ppr co2)
   | isReflTyCo co1 = co2
   | isReflTyCo co2 = co1
   | GRefl t1 kco1 <- co1
@@ -196,21 +208,42 @@ mkTyTransCo co1 co2
 mkCoherenceLeftCo :: Type tv kv -> KindCoercion kv -> TypeCoercion tv kv -> TypeCoercion tv kv
 mkCoherenceLeftCo ty kco co
   | isReflKiCo kco = co
-  | otherwise = (mkTySymCo $ mkGReflCo ty kco) `mkTyTransCo` co
+  | otherwise = (mkSymTyCo $ mkGReflCo ty kco) `mkTyTransCo` co
 
 mkCoherenceRightCo :: Type tv kv -> KindCoercion kv -> TypeCoercion tv kv -> TypeCoercion tv kv
 mkCoherenceRightCo ty kco co
   | isReflKiCo kco = co
   | otherwise = co `mkTyTransCo` mkGReflCo ty kco
 
+mkGReflLeftMCo :: Type tv kv -> Maybe (KindCoercion kv) -> TypeCoercion tv kv
+mkGReflLeftMCo ty Nothing = mkReflTyCo ty
+mkGReflLeftMCo ty (Just kco) = mkGReflLeftCo ty kco
+
+mkGReflRightMCo :: Type tv kv -> Maybe (KindCoercion kv) -> TypeCoercion tv kv
+mkGReflRightMCo ty Nothing = mkReflTyCo ty
+mkGReflRightMCo ty (Just kco) = mkGReflRightCo ty kco
+
+mkCoherenceRightMCo
+  :: Type tv kv -> Maybe (KindCoercion kv) -> TypeCoercion tv kv -> TypeCoercion tv kv
+mkCoherenceRightMCo _ Nothing co2 = co2
+mkCoherenceRightMCo ty (Just kco) co2 = mkCoherenceRightCo ty kco co2
+
+tyCoHoleCoVar :: TypeCoercionHole tv kv -> TyCoVar tv kv
+tyCoHoleCoVar = tch_co_var
+
 isReflTyCo :: TypeCoercion tv kv -> Bool
 isReflTyCo (TyRefl {}) = True
+isReflTyCo (GRefl _ kco) = isReflKiCo kco
+isReflTyCo (LiftKCo kco) = isReflKiCo kco
 isReflTyCo _ = False
 
 isReflTyCo_maybe :: IsTyVar tv kv => TypeCoercion tv kv -> Maybe (Type tv kv)
 isReflTyCo_maybe (TyRefl ty) = Just ty
 isReflTyCo_maybe (GRefl ty kco)
   | isReflKiCo kco = pprPanic "isReflTyCo_maybe/GRefl" (ppr ty <+> text "|>" <+> ppr kco)
+isReflTyCo_maybe (LiftKCo kco)
+  | Just ki <- isReflKiCo_maybe kco
+  = Just (Embed ki)
 isReflTyCo_maybe _ = Nothing
 
 {- **********************************************************************
@@ -286,32 +319,37 @@ mkBigLamTys = flip (foldr mkBigLamTy)
 *                                                                      *
 ********************************************************************* -}
 
-data TypeFolder tv kv env env' b a  = TypeFolder
-  { tf_view :: Type tv kv -> Maybe (Type tv kv)
-  , tf_tyvar :: env -> tv -> a
-  , tf_tybinder :: env -> tv -> ForAllFlag -> env
-  , tf_tylambinder :: env -> tv -> env
-  , tf_tylamkibinder :: env -> kv -> env
-  , tf_swapEnv :: env -> env'
-  , tf_embedKiRes :: b -> a
-  , tf_mkcf :: MKiCoFolder kv env' b
+data TyCoFolder tv kv env env' b a  = TyCoFolder
+  { tcf_view :: Type tv kv -> Maybe (Type tv kv)
+  , tcf_tyvar :: env -> tv -> a
+  , tcf_covar :: env -> TyCoVar tv kv -> a
+  , tcf_hole :: env -> TypeCoercionHole tv kv -> a
+  , tcf_tybinder :: env -> tv -> ForAllFlag -> env
+  , tcf_tylambinder :: env -> tv -> env
+  , tcf_tylamkibinder :: env -> kv -> env
+  , tcf_swapEnv :: env -> env'
+  , tcf_embedKiRes :: b -> a
+  , tcf_mkcf :: MKiCoFolder kv env' b
   }
 
-{-# INLINE foldType #-}
-foldType
+{-# INLINE foldTyCo #-}
+foldTyCo
   :: (Monoid a, Monoid b, Outputable tv, Outputable kv, VarHasKind tv kv)
-  => TypeFolder tv kv env env' b a
+  => TyCoFolder tv kv env env' b a
   -> env
-  -> (Type tv kv -> a, [Type tv kv] -> a)
-foldType (TypeFolder { tf_view = view
-                     , tf_tyvar = tyvar
-                     , tf_tybinder = tybinder
-                     , tf_tylambinder = tylambinder
-                     , tf_tylamkibinder = tylamkibinder
-                     , tf_swapEnv = tokenv
-                     , tf_embedKiRes = embedRes
-                     , tf_mkcf = mkcf }) env
-  = (go_ty env, go_tys env)
+  -> ( Type tv kv -> a, [Type tv kv] -> a
+     , TypeCoercion tv kv -> a, [TypeCoercion tv kv] -> a )
+foldTyCo (TyCoFolder { tcf_view = view
+                     , tcf_tyvar = tyvar
+                     , tcf_covar = covar
+                     , tcf_hole = cohole
+                     , tcf_tybinder = tybinder
+                     , tcf_tylambinder = tylambinder
+                     , tcf_tylamkibinder = tylamkibinder
+                     , tcf_swapEnv = tokenv
+                     , tcf_embedKiRes = embedRes
+                     , tcf_mkcf = mkcf }) env
+  = (go_ty env, go_tys env, go_co env, go_cos env)
   where
     go_ty env ty | Just ty' <- view ty = go_ty env ty'
     go_ty env (TyVarTy tv) = tyvar env tv
@@ -345,6 +383,28 @@ foldType (TypeFolder { tf_view = view
 
     go_tys _ [] = mempty
     go_tys env (t:ts) = go_ty env t `mappend` go_tys env ts
+
+    go_cos _ [] = mempty
+    go_cos env (c:cs) = go_co env c `mappend` go_cos env cs
+
+    go_co env (TyRefl ty) = go_ty env ty
+    go_co env (GRefl ty kco) = go_ty env ty `mappend` embedRes (go_kco kco)
+      where go_kco = case foldMonoKiCo mkcf (tokenv env) of
+                       (_, _, f, _) -> f
+    go_co env (TyConAppCo _ cos) = go_cos env cos
+    go_co env (AppCo c1 c2) = go_co env c1 `mappend` go_co env c2
+    go_co env (TyCoVarCo cv) = covar env cv
+    go_co env (TyHoleCo hole) = cohole env hole
+    go_co env (TySymCo co) = go_co env co
+    go_co env (TyTransCo c1 c2) = go_co env c1 `mappend` go_co env c2
+    go_co env (LRCo _ co) = go_co env co
+    go_co env (LiftKCo kco) = embedRes $ go_kco kco
+      where go_kco = case foldMonoKiCo mkcf (tokenv env) of
+                       (_, _, f, _) -> f
+    go_co env (TyFunCo kco c1 c2)
+      = embedRes (go_kco kco) `mappend` go_co env c1 `mappend` go_co env c2
+      where go_kco = case foldMonoKiCo mkcf (tokenv env) of
+                       (_, _, f, _) -> f
 
 noView :: Type tv kv -> Maybe (Type tv kv)
 noView _ = Nothing

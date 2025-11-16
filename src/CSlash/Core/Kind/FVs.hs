@@ -50,6 +50,7 @@ varsOfMonoKiVarEnv kis = varsOfMonoKinds (nonDetEltsUFM kis)
 varsOfKind :: IsVar kv => Kind kv -> MkVarSet kv
 varsOfKind ki = case runKiCoVars (deep_ki ki) of
   (_, kvs) -> kvs
+  -- maybe this should be 'assert (isEmptyVarSet kcvs)'
 
 varsOfKinds
   :: IsVar kv => [Kind kv] -> MkVarSet kv

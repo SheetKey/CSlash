@@ -135,10 +135,11 @@ instance ContainsModule gbl => ContainsModule (Env gbl lcl) where
 *                                                                      *
 ********************************************************************* -}
 
-data KiRewriteEnv = KRE
-  { kre_loc :: !CtLoc
-  , kre_flavor :: !CtFlavor
-  , kre_rewriters :: !(TcRef KiRewriterSet)
+data RewriteEnv = RE
+  { re_loc :: !CtLoc
+  , re_flavor :: !CtFlavor
+  , re_ty_rewriters :: !(TcRef TyRewriterSet)
+  , re_ki_rewriters :: !(TcRef KiRewriterSet)
   }
 
 {- *********************************************************************

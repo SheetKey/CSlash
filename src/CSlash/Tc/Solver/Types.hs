@@ -109,6 +109,27 @@ type KiCoCtList = [KiCoCt]
 
 type TyEqCtList = [TyEqCt]
 
+addToTyEqCtList :: TyEqCt -> TyEqCtList -> TyEqCtList
+addToTyEqCtList ct old_eqs
+  | debugIsOn
+  = case ct of
+      TyEqCt { teq_lhs = TyVarLHS tv }
+        -> assert (all (shares_lhs tv) old_eqs)
+           $ assertPpr (null bad_prs)
+                       (vcat [ text "bad_prs" <+> ppr bad_prs
+                             , text "ct:old_eqs" <+> ppr (ct : old_eqs) ])
+           $ (ct : old_eqs)
+  | otherwise
+  = ct : old_eqs
+  where
+    shares_lhs tv (TyEqCt { teq_lhs = TyVarLHS old_tv }) = tv == old_tv
+    shares_lhs _ _ = False
+
+    bad_prs = filter is_bad_pair (distinctPairs (ct : old_eqs))
+
+    is_bad_pair :: (TyEqCt, TyEqCt) -> Bool
+    is_bad_pair (ct1, ct2) = tyEqCtFlavor ct1 `eqCanRewriteF` tyEqCtFlavor ct2
+
 addToKiCoCtList :: KiCoCt -> KiCoCtList -> KiCoCtList
 addToKiCoCtList ct old_kicos
   | debugIsOn

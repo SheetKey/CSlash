@@ -68,6 +68,7 @@ module CSlash.Types.Var
     {-* ForAllFlag *-}
   , ForAllFlag(..)
   , isVisibleForAllFlag, isInvisibleForAllFlag
+  , eqForAllVis
   
     {-* VarBndr *-}
   , VarBndr(..), ForAllBinder, TyVarBinder
@@ -75,6 +76,10 @@ module CSlash.Types.Var
   , binderFlag, binderFlags
   , mkVarBinder, mkVarBinders
   , mapVarBinder
+
+    {-* PiKiBinder *-}
+  , PiKiBinder(..)
+  , namedPiKiBinder_maybe
   ) where
 
 import Prelude hiding ((<>))
@@ -82,7 +87,7 @@ import Prelude hiding ((<>))
 import {-# SOURCE #-} CSlash.Core.Type.Rep (Type, PredType)
 import {-# SOURCE #-} CSlash.Core.Type.Ppr (pprType)
 import {-# SOURCE #-} CSlash.Core.Kind
-  (Kind, MonoKind, PredKind, pprKind, isKiCoVarKind)
+  (Kind, MonoKind, PredKind, FunKiFlag, pprKind, isKiCoVarKind)
 import {-# SOURCE #-} CSlash.Tc.Utils.TcType
   ( TcVarDetails, pprTcVarDetails )
 import {-# SOURCE #-} CSlash.Types.Id.Info (IdDetails, IdInfo, pprIdDetails)
@@ -840,6 +845,11 @@ data ForAllFlag
   | Required  -- type application is required at call sight
   deriving (Eq, Ord, Data)
 
+eqForAllVis :: ForAllFlag -> ForAllFlag -> Bool
+eqForAllVis Required Required = True
+eqForAllVis Specified Specified = True
+eqForAllVis _ _ = False
+
 isVisibleForAllFlag :: ForAllFlag -> Bool
 isVisibleForAllFlag af = not (isInvisibleForAllFlag af)
 
@@ -908,3 +918,22 @@ instance (Binary v, Binary f) => Binary (VarBndr v f) where
     v <- get bh
     f <- get bh
     return $ Bndr v f
+
+{- **********************************************************************
+*                                                                       *
+                  PiBinder
+*                                                                       *
+********************************************************************** -}
+
+data PiKiBinder kv
+  = Named kv
+  | Anon (MonoKind kv) FunKiFlag
+  deriving Data
+
+instance Outputable kv => Outputable (PiKiBinder kv) where
+  ppr (Anon ki af) = ppr af <+> ppr ki
+  ppr (Named v) = ppr v
+
+namedPiKiBinder_maybe :: PiKiBinder kv -> Maybe kv
+namedPiKiBinder_maybe (Named kv) = Just kv
+namedPiKiBinder_maybe _ = Nothing

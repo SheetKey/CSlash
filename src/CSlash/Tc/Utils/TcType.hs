@@ -592,6 +592,10 @@ tcSplitFunTy_maybe ty
 tcSplitFunTy_maybe (FunTy ki arg res) = Just (arg, ki, res)
 tcSplitFunTy_maybe _ = Nothing
 
+tcSplitAppTy_maybe :: IsTyVar tv kv => Type tv kv -> Maybe (Type tv kv, Type tv kv)
+tcSplitAppTy_maybe ty | Just ty' <- coreView ty = tcSplitAppTy_maybe ty'
+tcSplitAppTy_maybe ty = tcSplitAppTyNoView_maybe ty
+
 {- *********************************************************************
 *                                                                      *
       Classifying types

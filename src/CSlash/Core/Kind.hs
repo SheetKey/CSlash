@@ -12,6 +12,8 @@ module CSlash.Core.Kind
 
 import Prelude hiding ((<>))
 
+import {-# SOURCE #-} CSlash.Core.Kind.Compare (eqMonoKind)
+
 import CSlash.Types.Var
 import CSlash.Types.Var.Env
 import CSlash.Types.Var.Set
@@ -24,6 +26,7 @@ import CSlash.Utils.Panic
 import CSlash.Utils.FV
 import CSlash.Data.FastString
 import CSlash.Data.Pair
+import CSlash.Data.Maybe
 import CSlash.Types.Unique.DFM
 
 import Data.IORef
@@ -329,6 +332,14 @@ mkInvisFunKis_nc args res = foldr (mkFunKi_nc FKF_C_K) res args
 mkForAllKi :: kv -> Kind kv -> Kind kv
 mkForAllKi = ForAllKi
 
+mkPiKi :: (HasDebugCallStack, IsKiVar kv) => PiKiBinder kv -> Kind kv -> Kind kv
+mkPiKi (Anon ki1 af) (Mono ki2) = Mono $ mkFunKi af ki1 ki2
+mkPiKi (Named bndr) ki = mkForAllKi bndr ki
+mkPiKi other_b other_k = pprPanic "mkPiKi" (ppr other_b $$ ppr other_k)
+
+mkPiKis :: (HasDebugCallStack, IsKiVar kv) => [PiKiBinder kv] -> Kind kv -> Kind kv
+mkPiKis kbs ki = foldr mkPiKi ki kbs
+
 {- *********************************************************************
 *                                                                      *
                 Coercions
@@ -351,6 +362,7 @@ data KindCoercion kv
   | KiCoVarCo (KiCoVar kv)
   | SymCo (KindCoercion kv)
   | TransCo (KindCoercion kv) (KindCoercion kv)
+  | SelCo CoSel (KindCoercion kv)
   | HoleCo (KindCoercionHole kv)
   deriving Data.Data
 
@@ -358,6 +370,20 @@ data KindCoercionHole kv = KindCoercionHole
   { kch_co_var :: KiCoVar kv
   , kch_ref :: IORef (Maybe (KindCoercion AnyKiVar))
   }
+
+data CoSel
+  = SelFun FunSel
+  deriving Data.Data
+
+data FunSel = SelArg | SelRes
+  deriving Data.Data
+
+instance Outputable CoSel where
+  ppr (SelFun fs) = text "Fun" <> parens (ppr fs)
+
+instance Outputable FunSel where
+  ppr SelArg = text "arg"
+  ppr SelRes = text "res"
 
 instance AsGenericKi KindCoercion
 instance AsGenericKi KindCoercionHole
@@ -374,6 +400,7 @@ instance AsAnyKi KindCoercion where
   asAnyKi (KiCoVarCo cv) = KiCoVarCo $ asAnyKi cv
   asAnyKi (SymCo co) = SymCo $ asAnyKi co
   asAnyKi (TransCo co1 co2) = TransCo (asAnyKi co1) (asAnyKi co2)
+  asAnyKi (SelCo cs co) = SelCo cs (asAnyKi co)
   asAnyKi (HoleCo hole) = HoleCo $ asAnyKi hole
 
 instance AsAnyKi KindCoercionHole where
@@ -392,6 +419,52 @@ isReflKiCo_maybe :: KindCoercion kv -> Maybe (MonoKind kv)
 isReflKiCo_maybe (Refl ki) = Just ki
 isReflKiCo_maybe _ = Nothing
 
+mkSelCo
+  :: (HasDebugCallStack, IsKiVar kv)
+  => CoSel -> KindCoercion kv -> KindCoercion kv
+mkSelCo n co = mkSelCo_maybe n co `orElse` SelCo n co
+
+mkSelCo_maybe
+  :: (HasDebugCallStack, IsKiVar kv)
+  => CoSel -> KindCoercion kv -> Maybe (KindCoercion kv)
+mkSelCo_maybe cs co
+  = assertPpr (good_call cs) bad_call_msg
+    $ go cs co
+  where
+    go (SelFun SelArg) (FunCo _ _ arg _) = Just arg
+    go (SelFun SelRes) (FunCo _ _ _ res) = Just res
+    go cs (SymCo co) = do
+      co' <- go cs co
+      return $ mkSymKiCo co'
+    go cs co
+      | Just ki <- isReflKiCo_maybe co
+      = Just (mkReflKiCo (selectFromKind cs ki))
+
+      | (EQKi, Pair ki1 ki2) <- kiCoercionParts co
+      , let ski1 = selectFromKind cs ki1
+            ski2 = selectFromKind cs ki2
+      , ski1 `eqMonoKind` ski2
+      = Just (mkReflKiCo ski1)
+      | otherwise = Nothing
+
+    (pred, Pair ki1 ki2) = kiCoercionParts co
+    bad_call_msg = vcat [ text "KindCoercion =" <+> ppr co
+                        , text "LHS ki =" <+> ppr ki1
+                        , text "KiPred =" <+> ppr pred
+                        , text "RHS ki =" <+> ppr ki2
+                        , text "cs =" <+> ppr cs ]
+
+    good_call SelFun{} = isMonoFunKi ki1 && isMonoFunKi ki2 && pred == EQKi      
+
+selectFromKind :: (HasDebugCallStack, IsKiVar kv) => CoSel -> MonoKind kv -> MonoKind kv
+selectFromKind (SelFun SelArg) ki
+  | Just (_, arg, _) <- splitMonoFunKi_maybe ki
+  = arg
+selectFromKind  (SelFun SelRes) ki
+  | Just (_, _, res) <- splitMonoFunKi_maybe ki
+  = res
+selectFromKind cs ki = pprPanic "selectFromKind" (ppr cs $$ ppr ki)
+
 mkReflKiCo :: MonoKind kv -> KindCoercion kv
 mkReflKiCo ki = Refl ki
 
@@ -400,10 +473,17 @@ mkSymKiCo co | isReflKiCo co = co
 mkSymKiCo (SymCo co) = co
 mkSymKiCo co = SymCo co
 
+mkSymMKiCo :: Maybe (KindCoercion kv) -> Maybe (KindCoercion kv)
+mkSymMKiCo = fmap mkSymKiCo
+
 mkTransKiCo :: KindCoercion kv -> KindCoercion kv -> KindCoercion kv
 mkTransKiCo co1 co2 | isReflKiCo co1 = co2
                     | isReflKiCo co2 = co1
 mkTransKiCo co1 co2 = TransCo co1 co2
+
+mkTransMKiCoR :: KindCoercion kv -> Maybe (KindCoercion kv) -> Maybe (KindCoercion kv)
+mkTransMKiCoR co1 Nothing = if isReflKiCo co1 then Nothing else Just co1
+mkTransMKiCoR co1 (Just co2) = Just $ mkTransKiCo co1 co2
 
 mkFunKiCo
   :: Outputable kv
@@ -434,14 +514,14 @@ mkKiCoVarCo cv = KiCoVarCo cv
 mkKiCoPred :: KiPredCon -> MonoKind kv -> MonoKind kv -> PredKind kv
 mkKiCoPred p ki1 ki2 = mkKiPredApp p ki1 ki2
 
-kiCoercionParts :: IsVar kv => KindCoercion kv -> (KiPredCon, Pair (MonoKind kv))
+kiCoercionParts :: IsKiVar kv => KindCoercion kv -> (KiPredCon, Pair (MonoKind kv))
 kiCoercionParts co = (kiCoercionPred co, Pair (kicoercionLKind co) (kicoercionRKind co))
 
-kiCoercionKind :: IsVar kv => KindCoercion kv -> MonoKind kv
+kiCoercionKind :: IsKiVar kv => KindCoercion kv -> MonoKind kv
 kiCoercionKind co = case kiCoercionParts co of
   (pred, Pair k1 k2) -> mkKiPredApp pred k1 k2
 
-kiCoercionPred :: IsVar kv => KindCoercion kv -> KiPredCon
+kiCoercionPred :: IsKiVar kv => KindCoercion kv -> KiPredCon
 kiCoercionPred co = go co
   where
     go (Refl _) = EQKi
@@ -468,8 +548,9 @@ kiCoercionPred co = go co
                              (LTKi, LTKi) -> LTKi
                              (_, _) -> panic "kiCoercionPred/TransCo"
     go (HoleCo h) = kiCoVarKiPred (coHoleCoVar h)
+    go (SelCo{}) = EQKi
 
-kicoercionLKind :: IsVar kv => KindCoercion kv -> MonoKind kv
+kicoercionLKind :: IsKiVar kv => KindCoercion kv -> MonoKind kv
 kicoercionLKind co = go co
   where
     go (Refl ki) = ki
@@ -484,9 +565,10 @@ kicoercionLKind co = go co
     go (KiCoVarCo cv) = coVarLKind cv
     go (SymCo co) = kicoercionRKind co
     go (TransCo co1 _) = go co1
+    go (SelCo d co) = selectFromKind d (go co)
     go (HoleCo h) = coVarLKind (coHoleCoVar h)
 
-kicoercionRKind :: IsVar kv => KindCoercion kv -> MonoKind kv
+kicoercionRKind :: IsKiVar kv => KindCoercion kv -> MonoKind kv
 kicoercionRKind co = go co
   where
     go (Refl ki) = ki
@@ -501,6 +583,7 @@ kicoercionRKind co = go co
     go (KiCoVarCo cv) = coVarRKind cv
     go (SymCo co) = kicoercionLKind co
     go (TransCo _ co2) = go co2
+    go (SelCo d co) = selectFromKind d (go co)
     go (HoleCo h) = coVarRKind (coHoleCoVar h)
 
 instance Outputable kv => Outputable (KindCoercion kv) where
@@ -628,6 +711,7 @@ foldMonoKiCo (MKiCoFolder { mkcf_kivar = kivar
     go_co env (LiftLT co) = go_co env co
     go_co env (HoleCo hole) = cohole env hole
     go_co env (FunCo { fco_arg = c1, fco_res = c2 }) = go_co env c1 `mappend` go_co env c2
+    go_co env (SelCo _ co) = go_co env co
     go_co env (KiCoVarCo cv) = covar env cv
 
     go_co env (SymCo co) = go_co env co
@@ -652,7 +736,7 @@ data MKiCoMapper kv kv' env m = MKiCoMapper
 
 {-# INLINE mapKind #-}
 mapKind
-  :: (Monad m, Outputable kv')
+  :: (Monad m, IsKiVar kv')
   => KiCoMapper kv kv' () m
   -> ( Kind kv -> m (Kind kv')
      , [Kind kv] -> m [Kind kv'] )
@@ -661,7 +745,7 @@ mapKind mapper = case mapKindX mapper of
 
 {-# INLINE mapMKiCo #-}
 mapMKiCo
-  :: (Monad m, Outputable kv')
+  :: (Monad m, IsKiVar kv')
   => MKiCoMapper kv kv' () m
   -> ( MonoKind kv -> m (MonoKind kv')
      , [MonoKind kv] -> m [MonoKind kv']
@@ -672,7 +756,7 @@ mapMKiCo mapper = case mapMKiCoX mapper of
 
 {-# INLINE mapKindX #-}
 mapKindX
-  :: (Monad m, Outputable kv')
+  :: (Monad m, IsKiVar kv')
   => KiCoMapper kv kv' env m
   -> ( env -> Kind kv -> m (Kind kv')
      , env -> [Kind kv] -> m [Kind kv'] )
@@ -694,7 +778,7 @@ mapKindX (KiCoMapper { kcm_kibinder = kibinder, kcm_mkcm = mkcmapper })
 
 {-# INLINE mapMKiCoX #-}
 mapMKiCoX
-  :: (Monad m, Outputable kv')
+  :: (Monad m, IsKiVar kv')
   => MKiCoMapper kv kv' env m
   -> ( env -> MonoKind kv -> m (MonoKind kv')
      , env -> [MonoKind kv] -> m [MonoKind kv']
@@ -733,6 +817,7 @@ mapMKiCoX (MKiCoMapper { mkcm_kivar = kivar, mkcm_covar = covar, mkcm_hole = coh
 
     go_co !env (SymCo co) = mkSymKiCo <$> go_co env co
     go_co !env (TransCo c1 c2) = mkTransKiCo <$> go_co env c1 <*> go_co env c2
+    go_co !env (SelCo i co) = mkSelCo i <$> go_co env co
     
 {- *********************************************************************
 *                                                                      *
@@ -833,6 +918,12 @@ splitFunKis ki = split ki []
     split (FunKi { fk_arg = arg, fk_res = res }) bs = split res (arg:bs)
     split ki bs = (reverse bs, ki)
 
+splitMonoPiKis :: MonoKind kv -> ([PiKiBinder kv], MonoKind kv)
+splitMonoPiKis ki = split ki []
+  where
+    split (FunKi af arg res) bs = split res (Anon arg af : bs)
+    split res bs = (reverse bs, res)
+
 splitInvisFunKis :: MonoKind kv -> ([MonoKind kv], MonoKind kv)
 splitInvisFunKis ki = split ki []
   where
@@ -851,3 +942,6 @@ isAtomicKi (KiVarKi {}) = True
 isAtomicKi (BIKi {}) = True
 isAtomicKi _ = False
 
+isForAllKi :: Kind kv -> Bool
+isForAllKi ForAllKi{} = True
+isForAllKi Mono{} = False

@@ -7,7 +7,7 @@ import Data.Monoid as DM ( Endo(..), Any(..) )
 import {-# SOURCE #-} CSlash.Core.Type
 import CSlash.Core.Type.Rep
 import CSlash.Core.Kind
-import CSlash.Core.Kind.FVs hiding (fvsVarBndr, afvFolder)
+import CSlash.Core.Kind.FVs hiding (fvsVarBndr, afvFolder, runCoVars)
 import CSlash.Core.TyCon
 
 import CSlash.Types.Var
@@ -40,6 +40,12 @@ runTyKiVars
 {-# INLINE runTyKiVars #-}
 runTyKiVars f = appEndo f (emptyVarSet, emptyVarSet, emptyVarSet)
 
+runCoVars
+  :: Endo (MkVarSet (TyCoVar tv kv), MkVarSet (KiCoVar kv))
+  -> (MkVarSet (TyCoVar tv kv), MkVarSet (KiCoVar kv))
+{-# INLINE runCoVars #-}
+runCoVars f = appEndo f (emptyVarSet, emptyVarSet)
+
 {- *********************************************************************
 *                                                                      *
           Deep free variables
@@ -62,31 +68,35 @@ deep_ty
   :: VarHasKind tv kv
   => Type tv kv
   -> Endo (MkVarSet tv, MkVarSet (KiCoVar kv), MkVarSet kv)
-deep_ty = fst $ foldType deepTvFolder (emptyVarSet, emptyVarSet, emptyVarSet)
+deep_ty = case foldTyCo deepTvFolder (emptyVarSet, emptyVarSet, emptyVarSet) of
+  (f, _, _, _) -> f
 
 deep_tys
   :: VarHasKind tv kv
   => [Type tv kv]
   -> Endo (MkVarSet tv, MkVarSet (KiCoVar kv), MkVarSet kv)
-deep_tys = snd $ foldType deepTvFolder (emptyVarSet, emptyVarSet, emptyVarSet)
+deep_tys = case foldTyCo deepTvFolder (emptyVarSet, emptyVarSet, emptyVarSet) of
+  (_, f, _, _) -> f
 
 deepTvFolder
   :: VarHasKind tv kv
-  => TypeFolder tv kv
+  => TyCoFolder tv kv
      (MkVarSet tv, MkVarSet (KiCoVar kv), MkVarSet kv)
      (MkVarSet (KiCoVar kv), MkVarSet kv)
      (Endo (MkVarSet (KiCoVar kv), MkVarSet kv))
      (Endo (MkVarSet tv, MkVarSet (KiCoVar kv), MkVarSet kv))
-deepTvFolder = TypeFolder { tf_view = noView
-                          , tf_tyvar = do_tv
-                          , tf_tybinder = do_bndr
-                          , tf_tylambinder = do_tylambndr
-                          , tf_tylamkibinder = do_kilambndr
-                          , tf_swapEnv = \(_, kcv, kv) -> (kcv, kv)
-                          , tf_embedKiRes = \(Endo f) -> Endo $ \(tv, kcv, kv) ->
+deepTvFolder = TyCoFolder { tcf_view = noView
+                          , tcf_tyvar = do_tv
+                          , tcf_covar = panic "deepTvFolder do_covar"
+                          , tcf_hole = panic "deepTvFolder do_hole"
+                          , tcf_tybinder = do_bndr
+                          , tcf_tylambinder = do_tylambndr
+                          , tcf_tylamkibinder = do_kilambndr
+                          , tcf_swapEnv = \(_, kcv, kv) -> (kcv, kv)
+                          , tcf_embedKiRes = \(Endo f) -> Endo $ \(tv, kcv, kv) ->
                               let (kcv', kv') = f (kcv, kv)
                               in (tv, kcv', kv')
-                          , tf_mkcf = deepMKcvFolder }
+                          , tcf_mkcf = deepMKcvFolder }
   where
     do_tv (tis, _, _) v = Endo do_it
       where
@@ -135,31 +145,35 @@ shallow_ty
   :: VarHasKind tv kv
   => Type tv kv
   -> Endo (MkVarSet tv, MkVarSet (KiCoVar kv), MkVarSet kv)
-shallow_ty = fst $ foldType shallowTvFolder (emptyVarSet, emptyVarSet, emptyVarSet)
+shallow_ty = case foldTyCo shallowTvFolder (emptyVarSet, emptyVarSet, emptyVarSet) of
+  (f, _, _, _) -> f
 
 shallow_tys
   :: VarHasKind tv kv
   => [Type tv kv]
   -> Endo (MkVarSet tv, MkVarSet (KiCoVar kv), MkVarSet kv)
-shallow_tys = snd $ foldType shallowTvFolder (emptyVarSet, emptyVarSet, emptyVarSet)
+shallow_tys = case foldTyCo shallowTvFolder (emptyVarSet, emptyVarSet, emptyVarSet) of
+  (_, f, _, _) -> f
 
 shallowTvFolder
   :: VarHasKind tv kv
-  => TypeFolder tv kv
+  => TyCoFolder tv kv
      (MkVarSet tv, MkVarSet (KiCoVar kv), MkVarSet kv)
      (MkVarSet (KiCoVar kv), MkVarSet kv)
      (Endo (MkVarSet (KiCoVar kv), MkVarSet kv))
      (Endo (MkVarSet tv, MkVarSet (KiCoVar kv), MkVarSet kv))
-shallowTvFolder = TypeFolder { tf_view = noView
-                             , tf_tyvar = do_tv
-                             , tf_tybinder = do_bndr
-                             , tf_tylambinder = do_tylambndr
-                             , tf_tylamkibinder = do_kilambndr
-                             , tf_swapEnv = \(_, kcv, kv) -> (kcv, kv)
-                             , tf_embedKiRes = \(Endo f) -> Endo $ \(tv, kcv, kv) ->
+shallowTvFolder = TyCoFolder { tcf_view = noView
+                             , tcf_tyvar = do_tv
+                             , tcf_covar = panic "shallowTvFolder do_covar"
+                             , tcf_hole = panic "shallowTvFolder do_hole"
+                             , tcf_tybinder = do_bndr
+                             , tcf_tylambinder = do_tylambndr
+                             , tcf_tylamkibinder = do_kilambndr
+                             , tcf_swapEnv = \(_, kcv, kv) -> (kcv, kv)
+                             , tcf_embedKiRes = \(Endo f) -> Endo $ \(tv, kcv, kv) ->
                                  let (kcv', kv') = f (kcv, kv)
                                  in (tv, kcv', kv')
-                             , tf_mkcf = shallowMKcvFolder }
+                             , tcf_mkcf = shallowMKcvFolder }
   where
     do_tv (tis, _, _) v = Endo do_it
       where
@@ -180,6 +194,89 @@ shallowTvFolder = TypeFolder { tf_view = noView
       | otherwise
       = (extendVarSet tis tv, kcvis, kis)
     do_kilambndr (tis, kcvis, kis) kv = (tis, kcvis, extendVarSet kis kv)
+
+{- *********************************************************************
+*                                                                      *
+          Free coercion variables
+*                                                                      *
+********************************************************************* -}
+
+coVarsOfType
+  :: IsTyVar tv kv => Type tv kv -> (MkVarSet (TyCoVar tv kv), MkVarSet (KiCoVar kv))
+coVarsOfTypes
+  :: IsTyVar tv kv => [Type tv kv] -> (MkVarSet (TyCoVar tv kv), MkVarSet (KiCoVar kv))
+coVarsOfTyCo
+  :: IsTyVar tv kv => TypeCoercion tv kv -> (MkVarSet (TyCoVar tv kv), MkVarSet (KiCoVar kv))
+coVarsOfTyCos
+  :: IsTyVar tv kv
+  => [TypeCoercion tv kv] -> (MkVarSet (TyCoVar tv kv), MkVarSet (KiCoVar kv))
+
+coVarsOfType ty = runCoVars (deep_cv_ty ty)
+coVarsOfTypes tys = runCoVars (deep_cv_tys tys)
+coVarsOfTyCo co = runCoVars (deep_cv_co co)
+coVarsOfTyCos cos = runCoVars (deep_cv_cos cos)
+
+deep_cv_ty
+  :: IsTyVar tv kv => Type tv kv -> Endo (MkVarSet (TyCoVar tv kv), MkVarSet (KiCoVar kv))
+deep_cv_ty = case foldTyCo deepCoVarFolder (emptyVarSet, emptyVarSet) of
+  (f, _, _, _) -> f
+
+deep_cv_tys
+  :: IsTyVar tv kv => [Type tv kv] -> Endo (MkVarSet (TyCoVar tv kv), MkVarSet (KiCoVar kv))
+deep_cv_tys = case foldTyCo deepCoVarFolder (emptyVarSet, emptyVarSet) of
+  (_, f, _, _) -> f
+
+deep_cv_co
+  :: IsTyVar tv kv
+  => TypeCoercion tv kv -> Endo (MkVarSet (TyCoVar tv kv), MkVarSet (KiCoVar kv))
+deep_cv_co = case foldTyCo deepCoVarFolder (emptyVarSet, emptyVarSet) of
+  (_, _, f, _) -> f
+
+deep_cv_cos
+  :: IsTyVar tv kv
+  => [TypeCoercion tv kv] -> Endo (MkVarSet (TyCoVar tv kv), MkVarSet (KiCoVar kv))
+deep_cv_cos = case foldTyCo deepCoVarFolder (emptyVarSet, emptyVarSet) of
+  (_, _, _, f) -> f
+
+deepCoVarFolder
+  :: IsTyVar tv kv
+  => TyCoFolder tv kv
+     (MkVarSet (TyCoVar tv kv), MkVarSet (KiCoVar kv))
+     (MkVarSet (KiCoVar kv))
+     (Endo (MkVarSet (KiCoVar kv)))
+     (Endo (MkVarSet (TyCoVar tv kv), MkVarSet (KiCoVar kv)))
+deepCoVarFolder = TyCoFolder { tcf_view = noView
+                             , tcf_tyvar = do_tyvar
+                             , tcf_covar = do_covar
+                             , tcf_hole = do_hole
+                             , tcf_tybinder = do_bndr
+                             , tcf_tylambinder = do_tylambinder
+                             , tcf_tylamkibinder = do_kilambinder
+                             , tcf_swapEnv = \(_, kcv) -> kcv
+                             , tcf_embedKiRes = \(Endo f) -> Endo $ \(tcv, kcv) ->
+                                 let kcv' = f kcv
+                                 in (tcv, kcv')
+                             , tcf_mkcf = deepKiCoVarFolder
+                             }
+  where
+    do_tyvar _ _ = mempty
+
+    do_covar (is, _) v = Endo do_it
+      where
+        do_it acc@(tacc, kacc) | v `elemVarSet` is = acc
+                               | v `elemVarSet` tacc = acc
+                               | otherwise = appEndo (deep_cv_ty (varType v))
+                                             $ (tacc `extendVarSet` v, kacc)
+
+    do_bndr is@(tis, kis) v _
+      | Just kcv <- toKiCoVar_maybe v = (tis, extendVarSet kis kcv)
+      | otherwise = is
+    do_tylambinder is@(tis, kis) v
+      | Just kcv <- toKiCoVar_maybe v = (tis, extendVarSet kis kcv)
+      | otherwise = is
+    do_kilambinder is _ = is
+
+    do_hole is hole = do_covar is (tyCoHoleCoVar hole)
 
 {- *********************************************************************
 *                                                                      *
@@ -250,6 +347,7 @@ fvsOfKiCo (HoleCo h) f bound_vars acc = fvsOfKiCoVar (coHoleCoVar h) f bound_var
 fvsOfKiCo (SymCo co) f bound_vars acc = fvsOfKiCo co f bound_vars acc
 fvsOfKiCo (TransCo co1 co2) f bound_vars acc
   = (fvsOfKiCo co1 `unionFV` fvsOfKiCo co2) f bound_vars acc
+fvsOfKiCo (SelCo _ co) f bound_vars acc = fvsOfKiCo co f bound_vars acc
 
 fvsOfKiCoVar :: IsTyVar tv kv => KiCoVar kv -> TyFV tv kv
 fvsOfKiCoVar _v f (bound_vars, bks) acc@(acc_list, acc_set, kl, ks)
@@ -344,18 +442,20 @@ isInjectiveInType tv ty = go ty
 afvFolder
   :: IsTyVar tv kv
   => (tv -> Bool) -> (KiCoVar kv -> Bool) -> (kv -> Bool)
-  -> TypeFolder tv kv
+  -> TyCoFolder tv kv
      (MkVarSet tv, MkVarSet (KiCoVar kv), MkVarSet kv)
      (MkVarSet (KiCoVar kv), MkVarSet kv)
      DM.Any DM.Any
-afvFolder f_tv f_kcv f_kv = TypeFolder { tf_view = noView
-                                 , tf_tyvar = do_tyvar
-                                 , tf_tybinder = do_bndr
-                                 , tf_tylambinder = do_tylambndr
-                                 , tf_tylamkibinder = do_kilambndr
-                                 , tf_swapEnv = \(_, kcv, kv) -> (kcv, kv)
-                                 , tf_embedKiRes = id
-                                 , tf_mkcf = mafvFolder f_kcv f_kv }
+afvFolder f_tv f_kcv f_kv = TyCoFolder { tcf_view = noView
+                                       , tcf_tyvar = do_tyvar
+                                       , tcf_covar = panic "afvFolder do_covar"
+                                       , tcf_hole = panic "do_hole"
+                                       , tcf_tybinder = do_bndr
+                                       , tcf_tylambinder = do_tylambndr
+                                       , tcf_tylamkibinder = do_kilambndr
+                                       , tcf_swapEnv = \(_, kcv, kv) -> (kcv, kv)
+                                       , tcf_embedKiRes = id
+                                       , tcf_mkcf = mafvFolder f_kcv f_kv }
   where
     do_tyvar (is, _, _) tv = Any (not (tv `elemVarSet` is) && f_tv tv)
     do_bndr (is, kcvs, kvs) tv _
@@ -372,7 +472,7 @@ afvFolder f_tv f_kcv f_kv = TypeFolder { tf_view = noView
 
 noFreeVarsOfType :: IsTyVar tv kv => Type tv kv -> Bool
 noFreeVarsOfType ty = not $ DM.getAny (f ty)
-  where (f, _) = foldType (afvFolder (const True) (const True) (const True))
+  where (f, _, _, _) = foldTyCo (afvFolder (const True) (const True) (const True))
                  (emptyVarSet, emptyVarSet, emptyVarSet)
 
 {- *********************************************************************

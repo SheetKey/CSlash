@@ -1,8 +1,10 @@
+{-# LANGUAGE RecursiveDo #-}
+
 module CSlash.Tc.Solver.Solve where
 
-import CSlash.Tc.Solver.Equality( solveKiCoercion )
-import CSlash.Tc.Solver.Irred( solveIrred )
-import CSlash.Tc.Solver.Rewrite( rewriteKi )
+import CSlash.Tc.Solver.Equality( solveTyEquality, solveKiCoercion )
+import CSlash.Tc.Solver.Irred( solveIrredTy, solveIrredKi )
+import CSlash.Tc.Solver.Rewrite( rewriteTy, rewriteKi )
 import CSlash.Tc.Errors.Types
 import CSlash.Tc.Utils.TcType
 import CSlash.Tc.Types.Evidence
@@ -12,6 +14,7 @@ import CSlash.Tc.Types.Constraint
 import CSlash.Tc.Solver.InertSet
 import CSlash.Tc.Solver.Monad
 
+import CSlash.Core.Type
 import CSlash.Core.Kind
 import CSlash.Core.Predicate
 import CSlash.Core.Reduction
@@ -140,7 +143,34 @@ solveSimples ty_cts ki_cts = {-# SCC "solveSimples" #-} do
         Nothing -> return ()
         Just (Right kict) -> do solveOneKi kict
                                 solve_loop
-        Just (Left tyct) -> do panic "solveSimples tyct"
+        Just (Left tyct) -> do solveOneTy tyct
+                               solve_loop
+
+solveOneTy :: TyCt -> TcS ()
+solveOneTy workItem = do
+  wl <- getWorkList
+  inerts <- getInertTySet
+  tclevel <- getTcLevel
+  traceTcS "----------------------------- " empty
+  traceTcS "Start solver pipeline {"
+    $ vcat [ text "tclevel =" <+> ppr tclevel
+           , text "work item =" <+> ppr workItem
+           , text "inerts =" <+> ppr inerts
+           , text "rest of worklist =" <+> ppr wl ]
+
+  bumpStepCountTcS
+  solve workItem
+  where
+    solve :: TyCt -> TcS ()
+    solve ct = do
+      traceTcS "solve {" (text "workitem =" <+> ppr ct)
+      res <- runSolverStage (solveTyCt ct)
+      traceTcS "end solve }" (ppr res)
+      case res of
+        StartAgain ct -> do traceTcS "Go round again" (ppr ct)
+                            solve ct
+        Stop ev s -> do traceFireTcS ev s
+                        traceTcS "End solver pipeline }" empty
 
 solveOneKi :: KiCt -> TcS ()
 solveOneKi workItem = do
@@ -160,7 +190,7 @@ solveOneKi workItem = do
     solve :: KiCt -> TcS ()
     solve ct = do
       traceTcS "solve {" $ text "workitem = " <+> ppr ct
-      res <- runSolverStage (solveCt ct)
+      res <- runSolverStage (solveKiCt ct)
       traceTcS "end solve }" (ppr res)
       case res of
         StartAgain ct -> do traceTcS "Go round again" (ppr ct)
@@ -175,20 +205,55 @@ solveOneKi workItem = do
 *                                                                      *
 ********************************************************************* -} 
 
-solveCt :: KiCt -> SolverStage Void
-solveCt (CNonCanonicalKi ev) = solveNC ev
-solveCt (CIrredCanKi (IrredKiCt { ikr_ev = ev })) = solveNC ev
-solveCt (CKiCoCan (KiCoCt { kc_ev = ev, kc_pred = kc, kc_lhs = lhs, kc_rhs = rhs }))
+solveTyCt :: TyCt -> TySolverStage Void
+solveTyCt (CNonCanonicalTy ev) = solveTyNC ev
+solveTyCt (CIrredCanTy (IrredTyCt { itr_ev = ev })) = solveTyNC ev
+solveTyCt (CTyEqCan (TyEqCt { teq_ev = ev, teq_lhs = lhs, teq_rhs = rhs }))
+  = solveTyEquality ev (canTyEqLHSType lhs) rhs
+
+solveTyNC :: CtTyEvidence -> TySolverStage Void
+solveTyNC ev = case classifyPredType (ctTyEvPred ev) of
+  TyEqPred ty1 ty2 -> solveTyEquality ev ty1 ty2
+  _ -> do ev <- rewriteTyEvidence ev
+          let irred = IrredTyCt { itr_ev = ev, itr_reason = IrredShapeReason }
+          case classifyPredType (ctTyEvPred ev) of
+            ForAllPred tvs p -> panic "Stage $ solveForAll ev tvs p"
+            TyIrredPred {} -> solveIrredTy irred
+            TyEqPred ty1 ty2 -> solveTyEquality ev ty1 ty2
+
+solveKiCt :: KiCt -> KiSolverStage Void
+solveKiCt (CNonCanonicalKi ev) = solveKiNC ev
+solveKiCt (CIrredCanKi (IrredKiCt { ikr_ev = ev })) = solveKiNC ev
+solveKiCt (CKiCoCan (KiCoCt { kc_ev = ev, kc_pred = kc, kc_lhs = lhs, kc_rhs = rhs }))
   = solveKiCoercion ev kc (canKiCoLHSKind lhs) rhs
 
-solveNC :: CtKiEvidence -> SolverStage Void
-solveNC ev = case classifyPredKind (ctKiEvPred ev) of
+solveKiNC :: CtKiEvidence -> KiSolverStage Void
+solveKiNC ev = case classifyPredKind (ctKiEvPred ev) of
   KiCoPred kc ki1 ki2 -> solveKiCoercion ev kc ki1 ki2
   _ -> do ev <- rewriteEvidence ev
           let irred = IrredKiCt { ikr_ev = ev, ikr_reason = IrredShapeReason }
           case classifyPredKind (ctKiEvPred ev) of
-            IrredPred {} -> solveIrred irred
+            IrredPred {} -> solveIrredKi irred
             KiCoPred kc ki1 ki2 -> solveKiCoercion ev kc ki1 ki2
+
+-- solveForAll
+--   :: CtTyEvidence
+--   -> [AnyTyVar AnyKiVar]
+--   -> AnyPredType
+--   -> TcS (StopOrContinueTy Void)
+-- solveForAll ev@(CtTyWanted { cttev_dest = hole, cttev_rewriters = rewriters, cttev_loc = loc })
+--             tvs pred
+--   = setSrcSpan (getCtLocEnvLoc $ ctLocEnv loc) $ do
+--     let (tvs, kcvs, kvs) = varsOfType pred
+--         all_tvs = tvs `unionVarSet` mapVarSet toAnyTyVar kcvs
+--         empty_subst
+--           = mkEmptyTvSubst (mkInScopeSet $ all_tvs `delVarSetList` tvs, mkInScopeSet kvs)
+--         qc_origin = ctLocOrigin loc
+
+--     rec skol_info <- mkSkolemInfo skol_info_anon
+--         (subst, skol_tvs) <- tcInstSkolTyVarsX skol_info empty_subst tvs
+--         let inst_pred = substTy subst pred
+--         skol_info_anon = 
 
 {- *********************************************************************
 *                                                                      *
@@ -196,27 +261,61 @@ solveNC ev = case classifyPredKind (ctKiEvPred ev) of
 *                                                                      *
 ********************************************************************* -}
 
-rewriteEvidence :: CtKiEvidence -> SolverStage CtKiEvidence
+rewriteTyEvidence :: CtTyEvidence -> TySolverStage CtTyEvidence
+rewriteTyEvidence ev = Stage $ do
+  traceTcS "rewriteTyEvidence" (ppr ev)
+  (redn, tyrewriters, kirewriters) <- rewriteTy ev (ctTyEvPred ev)
+  finish_ty_rewrite ev redn tyrewriters kirewriters
+
+finish_ty_rewrite
+  :: CtTyEvidence
+  -> TyReduction
+  -> TyRewriterSet
+  -> KiRewriterSet
+  -> TcS (StopOrContinueTy CtTyEvidence)
+finish_ty_rewrite old_ev (TyReduction co new_pred) tyrewriters kirewriters
+  | isReflTyCo co
+  = assert (isEmptyTyRewriterSet tyrewriters && isEmptyKiRewriterSet kirewriters)
+    $ continueWith (setCtEvPredType old_ev new_pred)
+
+finish_ty_rewrite ev@(CtTyGiven { cttev_covar = old_covar, cttev_loc = loc })
+                  (TyReduction co new_pred) tyrewriters kirewriters
+  = assert (isEmptyTyRewriterSet tyrewriters && isEmptyKiRewriterSet kirewriters)
+    $ do new_ev <- newGivenTyCoVar loc new_pred
+         continueWith new_ev
+
+finish_ty_rewrite ev@(CtTyWanted { cttev_dest = hole
+                                 , cttev_loc = loc
+                                 , cttev_rewriters = rewriters })
+                  (TyReduction co new_pred) tyrewriters kirewriters
+  = do new_ev <- newWantedTy loc rewriters' new_pred
+       traceTcS "******************* IGNORING kirewriters" empty
+       setWantedTyCo hole $ mkSymTyCo co
+       continueWith new_ev
+  where rewriters' = rewriters S.<> tyrewriters
+
+rewriteEvidence :: CtKiEvidence -> KiSolverStage CtKiEvidence
 rewriteEvidence ev = Stage $ do
   traceTcS "rewriteEvidence" (ppr ev)
   (redn, rewriters) <- rewriteKi ev (ctKiEvPred ev)
   finish_rewrite ev redn rewriters
 
-finish_rewrite :: CtKiEvidence -> Reduction -> KiRewriterSet -> TcS (StopOrContinue CtKiEvidence)
-finish_rewrite old_ev (ReductionKi co new_pred) rewriters
+finish_rewrite
+  :: CtKiEvidence -> KiReduction -> KiRewriterSet -> TcS (StopOrContinueKi CtKiEvidence)
+finish_rewrite old_ev (KiReduction co new_pred) rewriters
   | isReflKiCo co
   = assert (isEmptyKiRewriterSet rewriters)
     $ continueWith (setCtEvPredKind old_ev new_pred)
 
 finish_rewrite ev@(CtKiGiven { ctkev_covar = old_covar, ctkev_loc = loc })
-               (ReductionKi co new_pred) rewriters
+               (KiReduction co new_pred) rewriters
   = assert (isEmptyKiRewriterSet rewriters) $ do
       new_ev <- newGivenKiCoVar loc new_pred
       continueWith new_ev
 
 finish_rewrite ev@(CtKiWanted { ctkev_dest = dest, ctkev_loc = loc, ctkev_rewriters = rewriters })
-               (ReductionKi co new_pred) new_rewriters
-  = do new_ev <- newWanted loc rewriters' new_pred
+               (KiReduction co new_pred) new_rewriters
+  = do new_ev <- newWantedKi loc rewriters' new_pred
        setWantedKiCo dest $ mkSymKiCo co
        continueWith new_ev
   where

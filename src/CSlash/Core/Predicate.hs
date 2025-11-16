@@ -15,11 +15,17 @@ import CSlash.Data.FastString
 data TyPred tv kv
   = TyEqPred (Type tv kv) (Type tv kv)
   | TyIrredPred (PredType tv kv)
+  | ForAllPred [tv] (PredType tv kv)
 
 classifyPredType :: IsTyVar tv kv => PredType tv kv -> TyPred tv kv
 classifyPredType ev_ty = case splitTyConApp_maybe ev_ty of
   Just (tc, [_, _, ty1, ty2])
     | tc `hasKey` eqTyConKey -> TyEqPred ty1 ty2
+
+  _ | (tvs, rho) <- splitForAllTyVars ev_ty
+    , not (null tvs)
+    -> ForAllPred tvs rho
+
   _ -> TyIrredPred ev_ty
 
 isTyCoVarType :: IsTyVar tv kv => Type tv kv -> Bool

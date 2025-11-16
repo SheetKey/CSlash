@@ -44,6 +44,9 @@ extendInScopeSetList :: Uniquable a => InScopeSet a -> [a] -> InScopeSet a
 extendInScopeSetList (InScope in_scope) vs
    = InScope $ foldl' extendVarSet in_scope vs
 
+extendInScopeSetSet :: InScopeSet a -> MkVarSet a -> InScopeSet a
+extendInScopeSetSet (InScope is) vs = InScope (is `unionVarSet`  vs)
+
 elemInScopeSet :: Uniquable a => a -> InScopeSet a -> Bool
 elemInScopeSet v (InScope in_scope) = v `elemVarSet` in_scope
 

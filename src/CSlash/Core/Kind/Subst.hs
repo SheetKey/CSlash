@@ -29,6 +29,7 @@ import CSlash.Utils.Panic
 *                                                                       *
 ********************************************************************** -}
 
+-- This all needs to change if KiCoVars ever end up appearing in Kinds, not just types
 data KvSubst kv = KvSubst (InScopeSet kv) (KvSubstEnv kv)
 
 type KvSubstEnv kv = MkVarEnv kv (MonoKind kv)
@@ -45,6 +46,10 @@ mkEmptyKvSubst in_scope = KvSubst in_scope emptyVarEnv
 isEmptyKvSubst :: KvSubst kv -> Bool
 isEmptyKvSubst (KvSubst _ kv_env)
   = isEmptyVarEnv kv_env
+
+extendKvSubstInScopeSet :: IsVar kv => KvSubst kv -> MkVarSet kv -> KvSubst kv
+extendKvSubstInScopeSet (KvSubst is kvs) vs
+  = KvSubst (is `extendInScopeSetSet` vs) kvs
 
 extendKvSubst :: IsVar kv => KvSubst kv -> kv -> MonoKind kv -> KvSubst kv
 extendKvSubst (KvSubst in_scope kvs) kv ki

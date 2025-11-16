@@ -199,6 +199,13 @@ tcInstSkolTyKiVarsX
   -> TcM (AnyTvSubst, [AnyKiVar], [TcTyVar AnyKiVar])
 tcInstSkolTyKiVarsX = tcInstSkolTyKiVarsPushLevel
 
+tcInstSkolTyVarsX
+  :: SkolemInfo -> AnyTvSubst -> [AnyTyVar AnyKiVar] -> TcM (AnyTvSubst, [TcTyVar AnyKiVar])
+tcInstSkolTyVarsX skol_info subs vars = do
+  (subst', kivars, tyvars) <- tcInstSkolTyKiVarsX skol_info skol_info subs [] vars
+  massert (null kivars)
+  pure (subst', tyvars)
+
 tcInstSkolTyVarBndrsX
   :: SkolemInfo
   -> AnyTvSubst

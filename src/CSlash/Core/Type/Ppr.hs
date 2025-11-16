@@ -17,6 +17,9 @@ import CSlash.Types.Basic
 pprType :: IsTyVar tv kv => Type tv kv -> SDoc
 pprType = pprPrecType topPrec
 
+pprParendType :: IsTyVar tv kv => Type tv kv -> SDoc
+pprParendType = pprPrecType appPrec
+
 pprPrecType :: IsTyVar tv kv => PprPrec -> Type tv kv -> SDoc
 pprPrecType = pprPrecTypeX emptyTidyEnv
 

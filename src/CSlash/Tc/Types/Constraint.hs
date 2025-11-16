@@ -92,11 +92,20 @@ data TyEqCt = TyEqCt
 data CanTyEqLHS
   = TyVarLHS (AnyTyVar AnyKiVar)
 
+instance Outputable CanTyEqLHS where
+  ppr (TyVarLHS tv) = ppr tv
+
 instance Outputable CanKiCoLHS where
   ppr (KiVarLHS kv) = ppr kv
 
+tyEqCtEvidence :: TyEqCt -> CtTyEvidence
+tyEqCtEvidence = teq_ev
+
 kiCoCtEvidence :: KiCoCt -> CtKiEvidence
 kiCoCtEvidence = kc_ev
+
+tyEqCtLHS :: TyEqCt -> CanTyEqLHS
+tyEqCtLHS = teq_lhs
 
 kiCoCtLHS :: KiCoCt -> CanKiCoLHS
 kiCoCtLHS = kc_lhs
@@ -123,11 +132,17 @@ instance IrredCt IrredKiCt where
     = isInsolubleReason reason
 
 
-irredCtEvidence :: IrredKiCt -> CtKiEvidence
-irredCtEvidence = ikr_ev
+irredKiCtEvidence :: IrredKiCt -> CtKiEvidence
+irredKiCtEvidence = ikr_ev
 
-irredCtPred :: IrredKiCt -> AnyPredKind
-irredCtPred = ctKiEvPred . irredCtEvidence
+irredTyCtEvidence :: IrredTyCt -> CtTyEvidence
+irredTyCtEvidence = itr_ev
+
+irredTyCtPred :: IrredTyCt -> AnyPredType
+irredTyCtPred = ctTyEvPred . irredTyCtEvidence
+
+irredKiCtPred :: IrredKiCt -> AnyPredKind
+irredKiCtPred = ctKiEvPred . irredKiCtEvidence
 
 instance Outputable IrredKiCt where
   ppr irred = ppr (CIrredCanKi irred)
@@ -983,6 +998,16 @@ ctEvKiCoVar :: CtKiEvidence -> KiCoVar AnyKiVar
 ctEvKiCoVar (CtKiWanted { ctkev_dest = h }) = coHoleCoVar h
 ctEvKiCoVar (CtKiGiven { ctkev_covar = ev }) = ev
 
+setCtEvPredType :: CtTyEvidence -> AnyType -> CtTyEvidence
+setCtEvPredType old_ctev@(CtTyGiven { cttev_covar = ev }) new_pred
+  = old_ctev { cttev_pred = new_pred
+             , cttev_covar = setVarType ev new_pred }
+setCtEvPredType old_ctev@(CtTyWanted { cttev_dest = hole }) new_pred
+  = old_ctev { cttev_pred = new_pred
+             , cttev_dest = new_hole }
+  where
+    new_hole = setCoHoleType hole new_pred
+
 setCtEvPredKind :: CtKiEvidence -> AnyPredKind -> CtKiEvidence
 setCtEvPredKind old_ctev@(CtKiGiven { ctkev_covar = co }) new_pred
   = old_ctev { ctkev_pred = new_pred
@@ -1039,6 +1064,9 @@ isEmptyTyRewriterSet = coerce (isEmptyUniqSet @RWTyCoHole)
 addKiRewriter :: KiRewriterSet -> RWKiCoHole -> KiRewriterSet
 addKiRewriter = coerce (addOneToUniqSet @RWKiCoHole)
 
+addTyRewriter :: TyRewriterSet -> RWTyCoHole -> TyRewriterSet
+addTyRewriter = coerce (addOneToUniqSet @RWTyCoHole)
+
 kiRewriterSetFromCts :: Bag KiCt -> KiRewriterSet
 kiRewriterSetFromCts cts = foldr add emptyKiRewriterSet cts
   where
@@ -1061,8 +1089,18 @@ instance Outputable CtFlavor where
   ppr Given = text "[G]"
   ppr Wanted = text "[W]"
 
+tyEqCtFlavor :: TyEqCt -> CtFlavor
+tyEqCtFlavor (TyEqCt { teq_ev = ev }) = ctEvFlavor ev
+
 kiCoCtFlavor :: KiCoCt -> CtFlavor
 kiCoCtFlavor (KiCoCt { kc_ev = ev }) = ctEvFlavor ev
+
+canTyEqLHS_maybe :: AnyType -> Maybe CanTyEqLHS
+canTyEqLHS_maybe xi
+  | Just tv <- getTyVar_maybe xi
+  = Just $ TyVarLHS tv
+  | otherwise
+  = Nothing
 
 canKiCoLHS_maybe :: AnyMonoKind -> Maybe CanKiCoLHS
 canKiCoLHS_maybe xi
@@ -1071,8 +1109,17 @@ canKiCoLHS_maybe xi
   | otherwise
   = Nothing
 
+canTyEqLHSType :: CanTyEqLHS -> AnyType
+canTyEqLHSType (TyVarLHS tv) = mkTyVarTy tv
+
+canTyEqLHSKind :: CanTyEqLHS -> AnyMonoKind
+canTyEqLHSKind (TyVarLHS tv) = varKind tv
+
 canKiCoLHSKind :: CanKiCoLHS -> AnyMonoKind
 canKiCoLHSKind (KiVarLHS kv) = mkKiVarKi kv
+
+eqCanTyEqLHS :: CanTyEqLHS -> CanTyEqLHS -> Bool
+eqCanTyEqLHS (TyVarLHS tv1) (TyVarLHS tv2) = tv1 == tv2
 
 eqCanKiCoLHS :: CanKiCoLHS -> CanKiCoLHS -> Bool
 eqCanKiCoLHS (KiVarLHS kv1) (KiVarLHS kv2) = kv1 == kv2

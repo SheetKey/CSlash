@@ -15,7 +15,7 @@ import CSlash.Types.Var
 import CSlash.Core.Ppr ()   -- Instance OutputableBndr TyVar
 import CSlash.Tc.Utils.TcType
 import CSlash.Core.Type
-import CSlash.Core.Type.Rep (TypeCoercion, mkReflTyCo, isReflTyCo)
+import CSlash.Core.Type.Rep (TypeCoercion, mkReflTyCo, isReflTyCo, mkSymTyCo)
 import CSlash.Core.Type.FVs
 import CSlash.Core.Kind
 import CSlash.Core.TyCon
@@ -46,9 +46,13 @@ import CSlash.Types.Unique.Set
 
 import qualified Data.Semigroup as S
 
-maybeSymCo :: SwapFlag -> KindCoercion kv -> KindCoercion kv
-maybeSymCo IsSwapped co = mkSymKiCo co
-maybeSymCo NotSwapped co = co
+maybeSymTyCo :: SwapFlag -> TypeCoercion tv kv -> TypeCoercion tv kv
+maybeSymTyCo IsSwapped co = mkSymTyCo co
+maybeSymTyCo NotSwapped co = co
+
+maybeSymKiCo :: SwapFlag -> KindCoercion kv -> KindCoercion kv
+maybeSymKiCo IsSwapped co = mkSymKiCo co
+maybeSymKiCo NotSwapped co = co
 
 {- *********************************************************************
 *                                                                      *
