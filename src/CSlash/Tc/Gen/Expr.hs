@@ -132,7 +132,7 @@ tcExpr e@(CsOverLit _ lit) res_ty = panic "tcExpr CsOverLit"
 
 tcExpr e@(CsLit x lit) res_ty = panic "tcExpr CsLit"
 
-tcExpr (CsUnboundVar _ occ) res_ty = panic "tcExpr CsUnboundVar"
+tcExpr (CsUnboundVar _ occ) res_ty = pprPanic "tcExpr CsUnboundVar" (ppr occ $$ ppr res_ty)
 
 tcExpr (CsPar x expr) res_ty = panic "tcExpr CsPar"
 
