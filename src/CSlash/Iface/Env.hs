@@ -91,6 +91,10 @@ externalizeName mod name = do
         cache' = extendOrigNameCache cache mod occ name'
     in pure (cache', name')
 
+setNameModule :: Maybe Module -> Name -> TcRnIf m n Name
+setNameModule Nothing n = return n
+setNameModule (Just m) n = newGlobalBinder m (nameOccName n) (nameSrcSpan n)
+
 {- *********************************************************************
 *                                                                      *
                 Tracing

@@ -1337,6 +1337,9 @@ instUnitToUnit state iuid = improveUnit state $ VirtUnit iuid
 
 type ShHoleSubst = ModuleNameEnv Module
 
+renameHoleModule :: UnitState -> ShHoleSubst -> Module -> Module
+renameHoleModule state = renameHoleModule' (unitInfoMap state) (preloadClosure state)
+
 renameHoleModule' :: UnitInfoMap -> PreloadUnitClosure -> ShHoleSubst -> Module -> Module
 renameHoleModule' pkg_map closure env m
   | not (isHoleModule m)

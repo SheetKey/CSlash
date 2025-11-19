@@ -300,13 +300,11 @@ computeInterface cs_env doc_str mod0 = do
       , isHomeUnitIndefinite home_unit
         -> find_iface imod
            >>= \case Succeeded (iface0, path) ->
-                       rnModIface cs_env (instUnitInsts (moduleUnit indef)) Nothing  iface0
+                       rnModIface cs_env (instUnitInsts (moduleUnit indef)) Nothing iface0
                        >>= \case Right x -> return (Succeeded (x, path))
                                  Left errs -> throwErrors (CsTcRnMessage <$> errs)
                      Failed err -> return (Failed err)
     (mod, _) -> find_iface mod
-
-rnModIface _ _ _ iface = trace "rnModIface" $ return $ Right iface
 
 addDeclsToPTE :: PackageTypeEnv -> [(Name, WITyThing)] -> PackageTypeEnv
 addDeclsToPTE pte things = extendNameEnvList pte things
