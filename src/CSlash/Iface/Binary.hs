@@ -43,7 +43,7 @@ readBinIfaceHeader
   -> CheckHiWay
   -> TraceBinIFace
   -> FilePath
-  -> IO (Fingerprint, BinHandle)
+  -> IO (Fingerprint, ReadBinHandle)
 readBinIfaceHeader profile checkHiWay traceBinIFace hi_path = do
   let platform = profilePlatform profile
 
@@ -98,12 +98,12 @@ readBinIface profile name_cache checkHiWay traceBinIface hi_path = do
 
   return mod_iface { mi_src_hash = src_hash }
 
-getWithUserData :: Binary a => NameCache -> BinHandle -> IO a
+getWithUserData :: Binary a => NameCache -> ReadBinHandle -> IO a
 getWithUserData name_cache bh = do
   bh <- getTables name_cache bh
   get bh
 
-getTables :: NameCache -> BinHandle -> IO BinHandle
+getTables :: NameCache -> ReadBinHandle -> IO ReadBinHandle
 getTables name_cache bh = do
   dict <- Binary.forwardGet bh (getDictionary bh)
 
@@ -124,7 +124,7 @@ binaryInterfaceMagic platform
 -- The symbol table
 --
 
-getSymbolTable :: BinHandle -> NameCache -> IO SymbolTable
+getSymbolTable :: ReadBinHandle -> NameCache -> IO SymbolTable
 getSymbolTable bh name_cache = do
   sz <- get bh :: IO Int
 
@@ -149,7 +149,7 @@ getSymtabName
   :: NameCache
   -> Dictionary
   -> SymbolTable
-  -> BinHandle
+  -> ReadBinHandle
   -> IO Name
 getSymtabName _ _ symtab bh = do
   i :: Word32 <- get bh

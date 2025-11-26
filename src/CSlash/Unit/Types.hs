@@ -19,7 +19,7 @@ import CSlash.Utils.Fingerprint
 import CSlash.Utils.Outputable
 import CSlash.Utils.Misc
 
-import Control.DeepSeq
+import Control.DeepSeq (NFData(..))
 import Data.Data
 import Data.List (sortBy)
 import Data.Function
@@ -32,6 +32,11 @@ data GenModule unit = Module
   , moduleName :: !ModuleName
   }
   deriving (Eq, Ord, Data, Functor)
+
+instance Data ModuleName where
+  toConstr _ = abstractConstr "ModuleName"
+  gunfold _ _ = error "gunfold"
+  dataTypeOf _ = mkNoRepType "ModuleName"
 
 type Module = GenModule Unit
 

@@ -213,6 +213,9 @@ pprIfaceTvBndr (tv, kd) (SuppressBndrSig suppress_sig) (UseBndrParens use_parens
     maybe_parens | use_parens = parens
                  | otherwise = id
 
+putIfaceType :: WriteBinHandle -> IfaceType -> IO ()
+putIfaceType = panic "putIfaceType"
+
 instance Binary IfaceBndr where
   put_ bh (IfaceIdBndr aa) = do
     putByte bh 0

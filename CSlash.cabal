@@ -389,8 +389,8 @@ library
                     , CSlash.Version
 
     build-depends:    base >= 4.20
-                    , ghc ^>= 9.10.1
-                    , ghc-boot ^>= 9.10.1
+                    , ghc ^>= 9.12.2
+                    , ghc-boot ^>= 9.12.2
                     , array
                     , filepath
                     , directory

@@ -1,10 +1,48 @@
+{-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE TypeFamilyDependencies #-}
 
-module CSlash.Unit.Module.ModIface where
+module CSlash.Unit.Module.ModIface
+  ( ModIface
+  , ModIface_
+    ( mi_module
+    , mi_cs_src
+    , mi_deps
+    , mi_usages
+    , mi_exports
+    , mi_fixities
+    , mi_anns
+    , mi_decls
+    , mi_extra_decls
+    , mi_globals
+    , mi_pc
+    , mi_complete_matches
+    , mi_final_exts
+    , mi_src_hash
+    , mi_hi_bytes
+    )
+  , pattern ModIface
+  , set_mi_module
+  , set_mi_decls
+  , set_mi_deps
+  , set_mi_exports
+  , IfaceBinHandle(..)
+  , PartialModIface
+  , ModIfaceBackend(..)
+  , IfaceDeclExts
+  , IfaceBackendExts
+  , IfaceExport
+  , mi_mn
+  , emptyPartialModIface
+  , emptyFullModIface
+  , mkIfaceHashCache
+  , emptyIfaceHashCache
+  ) where
 
 import CSlash.Iface.Syntax
 -- import GHC.Iface.Ext.Fields
@@ -74,7 +112,7 @@ data ModIface_ (phase :: ModIfacePhase) = PrivateModIface
   , mi_anns_ :: [IfaceAnnotation]
   , mi_decls_ :: [IfaceDeclExts phase]
   , mi_extra_decls_ :: Maybe [IfaceBindingX IfaceMaybeRhs IfaceTopBndrInfo]
-  , mi_globals :: !(Maybe IfGlobalRdrEnv)
+  , mi_globals_ :: !(Maybe IfGlobalRdrEnv)
   , mi_pc_ :: !AnyPcUsage
   , mi_complete_matches_ :: ![IfaceCompleteMatch]
   , mi_final_exts_ :: !(IfaceBackendExts phase)
@@ -83,16 +121,16 @@ data ModIface_ (phase :: ModIfacePhase) = PrivateModIface
   }
 
 mi_mn :: ModIface -> ModuleName
-mi_mn = moduleName . mi_module 
+mi_mn = moduleName . mi_module_
 
 mi_semantic_module :: ModIface_ a -> Module
-mi_semantic_module = mi_module
+mi_semantic_module = mi_module_
 
 instance Binary ModIface where
-  put_ bh (PrivateModIface { mi_final_exts = ModIfaceBackend {..}, .. }) = do
+  put_ bh (PrivateModIface { mi_final_exts_ = ModIfaceBackend {..}, .. }) = do
     put_ bh mi_module_
     put_ bh mi_cs_src_
-    put_ bh mi_iface_hash_
+    put_ bh mi_iface_hash
     put_ bh mi_mod_hash
     put_ bh mi_flag_hash
     put_ bh mi_opt_hash
@@ -111,7 +149,7 @@ instance Binary ModIface where
   get bh = do
     mi_module_ <- get bh
     mi_cs_src_ <- get bh
-    mi_iface_hash_ <- get bh
+    mi_iface_hash <- get bh
     mi_mod_hash <- get bh
     mi_flag_hash <- get bh
     mi_opt_hash <- get bh
@@ -127,9 +165,10 @@ instance Binary ModIface where
     mi_pc_ <- get bh
     mi_complete_matches_ <- get bh
     return $ PrivateModIface
-      { mi_src_hash = fingerprint0
-      , mi_globals = Nothing
-      , mi_final_exts = ModIfaceBackend
+      { mi_src_hash_ = fingerprint0
+      , mi_hi_bytes_ = FullIfaceBinHandle Strict.Nothing
+      , mi_globals_ = Nothing
+      , mi_final_exts_ = ModIfaceBackend
                         { mi_fix_fn = mkIfaceFixCache mi_fixities_
                         , mi_hash_fn = mkIfaceHashCache mi_decls_
                         , ..
@@ -140,10 +179,11 @@ instance Binary ModIface where
 type IfaceExport = AvailInfo
 
 emptyPartialModIface :: Module -> PartialModIface
-emptyPartialModIface mod = ModIface
+emptyPartialModIface mod = PrivateModIface
   { mi_module_ = mod
   , mi_cs_src_ = CsSrcFile
   , mi_src_hash_ = fingerprint0
+  , mi_hi_bytes_ = PartialIfaceBinHandle
   , mi_deps_ = noDependencies
   , mi_usages_ = []
   , mi_exports_ = []
@@ -161,6 +201,7 @@ emptyFullModIface :: Module -> ModIface
 emptyFullModIface mod =
   (emptyPartialModIface mod)
   { mi_decls_ = []
+  , mi_hi_bytes_ = FullIfaceBinHandle Strict.Nothing
   , mi_final_exts_ = ModIfaceBackend
     { mi_iface_hash = fingerprint0
     , mi_mod_hash = fingerprint0
@@ -199,7 +240,68 @@ set_mi_deps val iface = clear_mi_hi_bytes $ iface { mi_deps_ = val }
 
 clear_mi_hi_bytes :: ModIface_ phase -> ModIface_ phase
 clear_mi_hi_bytes iface = iface
-  { mi_hi_bytes_ = case mi_hi_bytes iface of
+  { mi_hi_bytes_ = case mi_hi_bytes_ iface of
       PartialIfaceBinHandle -> PartialIfaceBinHandle
       FullIfaceBinHandle _ -> FullIfaceBinHandle Strict.Nothing
   }
+
+{-# INLINE ModIface #-}
+{-# INLINE mi_module #-}
+{-# INLINE mi_cs_src #-}
+{-# INLINE mi_deps #-}
+{-# INLINE mi_usages #-}
+{-# INLINE mi_exports #-}
+{-# INLINE mi_fixities #-}
+{-# INLINE mi_anns #-}
+{-# INLINE mi_decls #-}
+{-# INLINE mi_extra_decls #-}
+{-# INLINE mi_globals #-}
+{-# INLINE mi_pc #-}
+{-# INLINE mi_complete_matches #-}
+{-# INLINE mi_final_exts #-}
+{-# INLINE mi_src_hash #-}
+{-# INLINE mi_hi_bytes #-}
+{-# COMPLETE ModIface #-}
+
+pattern ModIface ::
+  Module -> CsSource -> Dependencies -> [Usage] ->
+  [IfaceExport] -> [(OccName, Fixity)] -> 
+  [IfaceAnnotation] -> [IfaceDeclExts phase] ->
+  Maybe [IfaceBindingX IfaceMaybeRhs IfaceTopBndrInfo] -> 
+  Maybe IfGlobalRdrEnv ->
+  AnyPcUsage -> [IfaceCompleteMatch] -> 
+  IfaceBackendExts phase -> Fingerprint -> IfaceBinHandle phase ->
+  ModIface_ phase
+pattern ModIface
+  { mi_module
+  , mi_cs_src
+  , mi_deps
+  , mi_usages
+  , mi_exports
+  , mi_fixities
+  , mi_anns
+  , mi_decls
+  , mi_extra_decls
+  , mi_globals
+  , mi_pc
+  , mi_complete_matches
+  , mi_final_exts
+  , mi_src_hash
+  , mi_hi_bytes
+  } <- PrivateModIface
+    { mi_module_ = mi_module
+    , mi_cs_src_ = mi_cs_src
+    , mi_deps_ = mi_deps
+    , mi_usages_ = mi_usages
+    , mi_exports_ = mi_exports
+    , mi_fixities_ = mi_fixities
+    , mi_anns_ = mi_anns
+    , mi_decls_ = mi_decls
+    , mi_extra_decls_ = mi_extra_decls
+    , mi_globals_ = mi_globals
+    , mi_pc_ = mi_pc
+    , mi_complete_matches_ = mi_complete_matches
+    , mi_final_exts_ = mi_final_exts
+    , mi_src_hash_ = mi_src_hash
+    , mi_hi_bytes_ = mi_hi_bytes
+    }

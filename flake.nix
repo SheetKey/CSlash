@@ -20,7 +20,7 @@
       let
         pkgs = nixpkgs.legacyPackages.${system};
 
-        haskellPackages = pkgs.haskell.packages.ghc910;
+        haskellPackages = pkgs.haskell.packages.ghc912;
 
         packageName = "csl";
 
@@ -53,7 +53,7 @@
 
         devShell = pkgs.mkShell {
           buildInputs = with pkgs; [
-            haskell.compiler.ghc910
+            haskell.compiler.ghc912
             # cabal-install
             haskellPackages.haskell-language-server
             # haskellPackages.implicit-hie
