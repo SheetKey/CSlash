@@ -29,6 +29,10 @@ module CSlash.Unit.Module.ModIface
   , pattern ModIface
   , set_mi_module
   , set_mi_decls
+  , set_mi_extra_decls
+  , set_mi_anns
+  , set_mi_fixities
+  , set_mi_final_exts
   , set_mi_deps
   , set_mi_exports
   , IfaceBinHandle(..)
@@ -38,6 +42,7 @@ module CSlash.Unit.Module.ModIface
   , IfaceBackendExts
   , IfaceExport
   , mi_mn
+  , mi_semantic_module
   , emptyPartialModIface
   , emptyFullModIface
   , mkIfaceHashCache
@@ -235,8 +240,21 @@ set_mi_exports val iface = clear_mi_hi_bytes $ iface { mi_exports_ = val }
 set_mi_decls :: [IfaceDeclExts phase] -> ModIface_ phase -> ModIface_ phase
 set_mi_decls val iface = clear_mi_hi_bytes $ iface { mi_decls_ = val }
 
+set_mi_extra_decls
+  :: Maybe [IfaceBindingX IfaceMaybeRhs IfaceTopBndrInfo] -> ModIface_ phase -> ModIface_ phase
+set_mi_extra_decls val iface = clear_mi_hi_bytes $ iface { mi_extra_decls_ = val }
+
 set_mi_deps :: Dependencies -> ModIface_ phase -> ModIface_ phase
 set_mi_deps val iface = clear_mi_hi_bytes $ iface { mi_deps_ = val }
+
+set_mi_anns :: [IfaceAnnotation] -> ModIface_ phase -> ModIface_ phase
+set_mi_anns val iface = clear_mi_hi_bytes $ iface { mi_anns_ = val }  
+
+set_mi_final_exts :: IfaceBackendExts phase -> ModIface_ phase -> ModIface_ phase
+set_mi_final_exts val iface = clear_mi_hi_bytes $ iface { mi_final_exts_ = val }
+
+set_mi_fixities :: [(OccName, Fixity)] -> ModIface_ phase -> ModIface_ phase
+set_mi_fixities val iface = clear_mi_hi_bytes $ iface { mi_fixities_ = val }
 
 clear_mi_hi_bytes :: ModIface_ phase -> ModIface_ phase
 clear_mi_hi_bytes iface = iface

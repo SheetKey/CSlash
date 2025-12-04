@@ -22,7 +22,7 @@ import CSlash.Driver.DynFlags
 import CSlash.Iface.Syntax
 -- import GHC.Iface.Ext.Fields
 import CSlash.Iface.Binary
--- import GHC.Iface.Rename
+import CSlash.Iface.Rename
 import CSlash.Iface.Env
 import CSlash.Iface.Errors as Iface_Errors
 
@@ -85,6 +85,8 @@ import CSlash.Driver.Env.KnotVars
 import CSlash.Iface.Errors.Types
 
 import Debug.Trace (trace)
+
+import Data.Function ((&))
 
 {- *********************************************************************
 *                                                                      *
@@ -239,7 +241,9 @@ loadInterface doc_str mod from
                             new_eps_complete_matches <-
                               tcIfaceCompleteMatches (mi_complete_matches iface)
                             let final_iface = iface
-                                  { mi_decls = panic "No mi_decls in PIT" }
+                                  & set_mi_decls (panic "No mi_decls in PIT")
+                                  & set_mi_anns (panic "No mi_anns in PIT")
+                                  & set_mi_extra_decls (panic "No mi_extra_decls in PIT")
                             updateEps_ $ \eps ->
                               if elemModuleEnv mod (eps_PIT eps)
                               then eps
@@ -439,11 +443,10 @@ readIface dflags name_cache wanted_mod file_path = do
 
 cslBuiltInIface :: ModIface
 cslBuiltInIface = empty_iface
-  { mi_exports = cslBuiltInExports
-  , mi_decls = []
-  , mi_fixities = fixities
-  , mi_final_exts = (mi_final_exts empty_iface) { mi_fix_fn = mkIfaceFixCache fixities }
-  }
+  & set_mi_exports cslBuiltInExports
+  & set_mi_decls []
+  & set_mi_fixities fixities
+  & set_mi_final_exts ((mi_final_exts empty_iface) { mi_fix_fn = mkIfaceFixCache fixities })
   where
     empty_iface = emptyFullModIface cSLASH_BUILTIN
     fixities = []

@@ -30,6 +30,9 @@ import Data.Word
 import Data.IORef
 import Control.Monad
 import Data.Bits ((.&.), shiftR)
+import Data.Typeable (Typeable)
+import Data.Function ((&))
+import System.IO.Unsafe
 
 data CheckHiWay = CheckHiWay | IgnoreHiWay
   deriving Eq
@@ -94,9 +97,9 @@ readBinIface
 readBinIface profile name_cache checkHiWay traceBinIface hi_path = do
   (src_hash, bh) <- readBinIfaceHeader profile checkHiWay traceBinIface hi_path
 
-  mod_iface <- getWithUserData name_cache bh
+  mod_iface <- panic "getIfaceWithExtFields name_cache bh"
 
-  return mod_iface { mi_src_hash = src_hash }
+  return $ mod_iface & panic "addSourceFingerprint src_hash"
 
 getWithUserData :: Binary a => NameCache -> ReadBinHandle -> IO a
 getWithUserData name_cache bh = do
@@ -105,14 +108,28 @@ getWithUserData name_cache bh = do
 
 getTables :: NameCache -> ReadBinHandle -> IO ReadBinHandle
 getTables name_cache bh = do
-  dict <- Binary.forwardGet bh (getDictionary bh)
+  bhRef <- newIORef (error "used too soon")
 
-  let bh_fs = setUserData bh $ newReadState (error "getSymtabName") (getDictFastString dict)
+  ud <- unsafeInterleaveIO (readIORef bhRef)
 
-  symtab <- Binary.forwardGet bh_fs (getSymbolTable bh_fs name_cache)
+  fsReaderTable <- panic "initFastStringReaderTable"
+  nameReaderTable <- panic "initNameReaderTable name_cache"
+  ifaceTypeReaderTable <- panic "initReadIfaceTypeTable ud"
 
-  return $ setUserData bh $ newReadState (getSymtabName name_cache dict symtab)
-                                         (getDictFastString dict)
+  let decodeReaderTable :: Typeable a => ReaderTable a -> ReadBinHandle -> IO ReadBinHandle
+      decodeReaderTable tbl bh0 = do
+        table <- Binary.forwardGetRel bh (getTable tbl bh0)
+        let binaryReader = mkReaderFromTable tbl table
+        pure $ panic "addReaderToUserDate binaryReader bh0"
+
+  bhFinal <- foldM (\bh0 act -> act bh0) bh
+    [ panic "decodeReaderTable fsReaderTable"
+    , panic "decodeReaderTable nameReaderTable"
+    , panic "decodeReaderTable ifaceTypeReaderTable"
+    ]
+
+  writeIORef bhRef (getReaderUserData bhFinal)
+  pure bhFinal
 
 binaryInterfaceMagic :: Platform -> FixedLengthEncoding Word32
 binaryInterfaceMagic platform
@@ -124,7 +141,7 @@ binaryInterfaceMagic platform
 -- The symbol table
 --
 
-getSymbolTable :: ReadBinHandle -> NameCache -> IO SymbolTable
+getSymbolTable :: ReadBinHandle -> NameCache -> IO (SymbolTable Name)
 getSymbolTable bh name_cache = do
   sz <- get bh :: IO Int
 
@@ -146,12 +163,10 @@ getSymbolTable bh name_cache = do
     return (cache, arr)
 
 getSymtabName
-  :: NameCache
-  -> Dictionary
-  -> SymbolTable
+  :: SymbolTable Name
   -> ReadBinHandle
   -> IO Name
-getSymtabName _ _ symtab bh = do
+getSymtabName symtab bh = do
   i :: Word32 <- get bh
   case i .&. 0xC0000000 of
     0x00000000 -> return $! symtab ! fromIntegral i

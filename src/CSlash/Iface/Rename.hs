@@ -123,7 +123,7 @@ rnIfaceGlobal n = do
   let unit_state = cs_units cs_env
       home_unit = cs_home_unit cs_env
   iface_semantic_mod <- fmap sh_if_semantic_module getGblEnv
-  mb_nsbust <- fmap sh_if_shape getGblEnv
+  mb_nsubst <- fmap sh_if_shape getGblEnv
   hmap <- getHoleSubst
   let m = nameModule n
       m' = renameHoleModule unit_state hmap m
