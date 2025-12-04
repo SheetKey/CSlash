@@ -409,7 +409,8 @@ tyConDataCons_maybe (TyCon { tyConDetails = details })
   = case rhs of
       TupleTyCon { data_con = con } -> Just [con]
       SumTyCon { data_cons = cons } -> Just cons
-      _ -> Nothing
+      DataTyCon { data_cons = cons } -> Just cons
+      AbstractTyCon -> Nothing
 tyConDataCons_maybe _ = Nothing   
 
 synTyConDefn_maybe :: TyCon tv kv -> Maybe (Type (TyVar KiVar) KiVar)
