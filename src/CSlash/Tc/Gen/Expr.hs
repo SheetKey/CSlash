@@ -141,7 +141,7 @@ tcExpr (NegApp x expr neg_expr) res_ty = panic "tcExpr NegApp"
 tcExpr e@(CsLam x matches) res_ty = panic "tcExpr CsLam"
 
 tcExpr (CsIf x pred b1 b2) res_ty = do
-  pred' <- tcCheckMonoExpr pred (asAnyTyKi boolTy)
+  pred' <- tcCheckMonoExpr pred $ mkAppTy (asAnyTyKi boolTy) (Embed $ BIKi UKd)
   (u1, b1') <- tcCollectingUsage $ tcMonoExpr b1 res_ty
   (u2, b2') <- tcCollectingUsage $ tcMonoExpr b1 res_ty
   tcEmitBindingUsage (supUE u1 u2)
