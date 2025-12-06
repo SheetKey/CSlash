@@ -75,11 +75,20 @@ data CsExprArg (p :: TcPass) where
              , ea_arg_ty :: !(XEVAType p)
              , ea_arg :: LCsExpr (CsPass (XPass p)) }
           -> CsExprArg p
+  ETypeArg :: { ea_ctxt :: AppCtxt
+              , ea_loc :: SrcSpanAnnA
+              , ea_cs_ty :: LCsType Rn
+              , ea_ty_arg :: !(XETAType p) }
+              -> CsExprArg p
   EWrap :: EWrap -> CsExprArg p
 
 type family XEVAType (p :: TcPass) where
   XEVAType 'TcpInst = AnySigmaType
   XEVAType _ = NoExtField
+
+type family XETAType (p :: TcPass) where
+  XETAType 'TcpRn = NoExtField
+  XETAType _ = AnyType
 
 data EWrap
   = EPar AppCtxt
@@ -95,6 +104,7 @@ instance Outputable AppCtxt where
 instance OutputableBndrId (XPass p) => Outputable (CsExprArg p) where
   ppr (EValArg { ea_arg = arg, ea_ctxt = ctxt })
     = text "EValArg" <> braces (ppr ctxt) <+> ppr arg
+  ppr (ETypeArg { ea_cs_ty = cs_ty }) = braces (ppr cs_ty)
   ppr (EWrap wrap) = ppr wrap
 
 instance Outputable EWrap where
@@ -116,10 +126,16 @@ type family XPass (p :: TcPass) where
 -- Needs to check the 'e':
 -- It could be 'Embed'ing a type, in which case it should be ETypeArg!
 mkEValArg :: AppCtxt -> LCsExpr Rn -> CsExprArg 'TcpRn
-mkEValArg ctxt e = panic "mkEValArg"
--- EValArg { ea_arg = e
---                            , ea_ctxt = ctxt
---                            , ea_arg_ty = noExtField }
+mkEValArg ctxt (L l (CsEmbTy _ ty)) = mkETypeArg ctxt ty l
+mkEValArg ctxt e = EValArg { ea_arg = e
+                           , ea_ctxt = ctxt
+                           , ea_arg_ty = noExtField }
+
+mkETypeArg :: AppCtxt -> LCsType Rn -> SrcSpanAnnA -> CsExprArg 'TcpRn
+mkETypeArg ctxt cs_ty l = ETypeArg { ea_ctxt = ctxt
+                                   , ea_loc = l
+                                   , ea_cs_ty = cs_ty
+                                   , ea_ty_arg = noExtField }
  
 addArgWrap :: AnyCsWrapper -> [CsExprArg p] -> [CsExprArg p]
 addArgWrap wrap args
@@ -162,6 +178,8 @@ rebuildCsApps (fun, _) [] = fun
 rebuildCsApps (fun, ctxt) (arg:args) = case arg of
   EValArg { ea_arg = arg, ea_ctxt = ctxt' }
     -> rebuildCsApps (CsApp noExtField lfun arg, ctxt') args
+  ETypeArg { ea_cs_ty = cs_ty, ea_ty_arg = ty, ea_ctxt = ctxt', ea_loc = l }
+    -> rebuildCsApps (CsApp noExtField lfun (L l (CsEmbTy ty cs_ty)), ctxt') args
   EWrap (EPar ctxt')
     -> rebuildCsApps (gCsPar lfun, ctxt') args
   EWrap (EExpand (OrigExpr oe))

@@ -123,6 +123,7 @@ tcValArgs :: [CsExprArg 'TcpInst] -> TcM [CsExprArg 'TcpTc]
 tcValArgs = mapM tcValArg
 
 tcValArg :: CsExprArg 'TcpInst -> TcM (CsExprArg 'TcpTc)
+tcValArg (ETypeArg l loc cs_ty ty) = return (ETypeArg l loc cs_ty ty)
 tcValArg (EWrap ew) = return $ EWrap ew
 
 tcValArg (EValArg { ea_ctxt = ctxt
@@ -220,6 +221,12 @@ tcInstFun (tc_fun, fun_ctxt) fun_sigma rn_args = do
 
     go1 pos acc fun_ty (EWrap w : args) = go1 pos (EWrap w : acc) fun_ty args
 
+    go1 pos acc fun_ty (ETypeArg { ea_ctxt = ctxt, ea_loc = loc, ea_cs_ty = cs_ty } : rest_args)
+      = do
+      (ty_arg, inst_ty) <- tcVTA fun_ty cs_ty
+      let arg' = ETypeArg { ea_ctxt = ctxt, ea_loc = loc, ea_cs_ty = cs_ty, ea_ty_arg = ty_arg }
+      go pos (arg' : acc) inst_ty rest_args
+
     go1 pos acc fun_ty args@(EValArg {} : _)
       | Just kappa <- getTcTyVar_maybe fun_ty
       , isQLInstVar kappa
@@ -256,6 +263,9 @@ addArgCtxt = panic "addArgCtxt"
               Visible type application
 *                                                                      *
 ********************************************************************* -}
+
+tcVTA :: AnyType -> LCsType Rn -> TcM (AnyType, AnyType)
+tcVTA = panic "tcVTA"
 
 tcVDQ :: (AnyTyVarBinder, AnyType) -> LCsExpr Rn -> TcM (AnyType, AnyType)
 tcVDQ = panic "tcVDQ"

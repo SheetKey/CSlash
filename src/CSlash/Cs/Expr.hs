@@ -97,7 +97,7 @@ type instance XTyApp (CsPass _) = NoExtField
 
 type instance XAppTy Ps = NoExtField
 type instance XAppTy Rn = NoExtField
-type instance XAppTy Ps = NoExtField -- should be Type
+type instance XAppTy Tc = NoExtField -- should be Type
 
 type instance XOpApp Ps = [AddEpAnn]
 type instance XOpApp Rn = Fixity
@@ -160,8 +160,8 @@ type instance XExprWithTySig Zk = NoExtField
 
 type instance XEmbTy Ps = [AddEpAnn]
 type instance XEmbTy Rn = NoExtField
-type instance XEmbTy Tc = DataConCantHappen
-type instance XEmbTy Zk = DataConCantHappen
+type instance XEmbTy Tc = AnyType
+type instance XEmbTy Zk = Type (TyVar KiVar) KiVar
 
 type instance Anno [LocatedA ((StmtLR (CsPass pl) (CsPass pr) (LocatedA (body (CsPass pr)))))]
   = SrcSpanAnnL
