@@ -183,7 +183,8 @@ zonkAnyTyVar tv = handleAnyTv (const simple)
                                    return zty
   ) tv
   where
-    simple = return $ mkTyVarTy tv
+    simple = do z_tv <- zonkTyVarKind tv
+                return $ mkTyVarTy z_tv
 
 zonkTcTyVar :: TcTyVar AnyKiVar -> ZonkM AnyType
 zonkTcTyVar tv
