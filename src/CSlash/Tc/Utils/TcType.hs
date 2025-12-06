@@ -90,13 +90,21 @@ data ExpType
   = Check AnyType
   | Infer !InferResult
 
-data InferResult
+data InferResult = IR
+  { ir_uniq :: Unique
+  , ir_lvl :: TcLevel
+  , ir_ref :: IORef (Maybe AnyType) }
 
 type ExpSigmaType = ExpType
 type ExpRhoType = ExpType
 
 instance Outputable ExpType where
   ppr (Check ty) = text "Check" <> braces (ppr ty)
+  ppr (Infer ir) = ppr ir
+
+instance Outputable InferResult where
+  ppr (IR { ir_uniq = u, ir_lvl = lvl })
+    = text "Infer" <> braces (ppr u <> comma <> ppr lvl)
 
 mkCheckExpType :: AnyType -> ExpType
 mkCheckExpType = Check

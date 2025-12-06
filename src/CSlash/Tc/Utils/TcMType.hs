@@ -19,6 +19,7 @@ import CSlash.Builtin.Names
 
 import CSlash.Core.ConLike
 import CSlash.Core.DataCon
+import CSlash.Core.Type
 import CSlash.Core.Type.Rep
 import CSlash.Core.Type.Ppr
 import CSlash.Core.Type.Ppr
@@ -173,9 +174,19 @@ fillKiCoercionHole (KindCoercionHole { kch_ref = ref, kch_co_var = cv }) co = do
 *
 ********************************************************************** -}
 
+new_inferExpType :: TcM ExpType
+new_inferExpType = do
+  u <- newUnique
+  tclvl <- getTcLevel
+  traceTc "newInferExpType" (ppr u <+> ppr tclvl)
+  ref <- newMutVar Nothing
+  return $ Infer $ IR { ir_uniq = u
+                      , ir_lvl = tclvl
+                      , ir_ref = ref }
+
 readExpType_maybe :: MonadIO m => ExpType -> m (Maybe AnyType)
 readExpType_maybe (Check ty) = return (Just ty)
-readExpType_maybe (Infer _) = return Nothing
+readExpType_maybe (Infer (IR { ir_ref = ref })) = liftIO $ readIORef ref
 {-# INLINABLE readExpType_maybe #-}
 
 readExpType :: MonadIO m => ExpType -> m AnyType
@@ -188,7 +199,44 @@ readExpType exp_ty = do
 
 expTypeToType :: ExpType -> TcM AnyType
 expTypeToType (Check ty) = return ty
-expTypeToType (Infer _) = panic "expTypeToType"
+expTypeToType (Infer inf_res) = inferResultToType inf_res
+
+inferResultToType :: InferResult -> TcM AnyType
+inferResultToType (IR { ir_uniq = u, ir_lvl = tc_lvl, ir_ref = ref }) = do
+  mb_inferred_ty <- readTcRef ref
+  tau <- case mb_inferred_ty of
+    Just ty -> do ensureMonoType ty
+                  return ty
+    Nothing -> do tau <- new_meta
+                  writeMutVar ref (Just tau)
+                  return tau
+  traceTc "Forcing ExpType to be monomorphic:"
+    (ppr u <+> text ":=" <+> ppr tau)
+  return tau
+  where
+    new_meta = do
+      ki <- newMetaKiVarKiAtLevel tc_lvl
+      newMetaTyVarTyAtLevel tc_lvl ki
+
+tcInfer :: (ExpSigmaType -> TcM a) -> TcM (a, AnySigmaType)
+tcInfer tc_check = do
+  res_ty <- new_inferExpType
+  result <- tc_check res_ty
+  res_ty <- readExpType res_ty
+  return (result, res_ty)
+
+{- *********************************************************************
+*                                                                      *
+              Promoting types
+*                                                                      *
+********************************************************************* -}
+
+ensureMonoType :: AnyType -> TcM ()
+ensureMonoType res_ty
+  | isTauTy res_ty
+  = return ()
+  | otherwise
+  = panic "ensureMonoType"
 
 {- *********************************************************************
 *                                                                      *
@@ -287,6 +335,12 @@ new_meta_tv_x info subst@(TvSubst _ _ kvsubst) tv = do
   let subst1 = extendTvSubstWithClone subst tv new_tv
   return (subst1, new_tv)
 
+newMetaTyVarTyAtLevel :: TcLevel -> AnyMonoKind -> TcM AnyType
+newMetaTyVarTyAtLevel tc_lvl kind = do
+  details <- newTauVarDetailsAtLevel tc_lvl
+  name <- newMetaTyVarName (fsLit "p")
+  return $ mkTyVarTy $ toAnyTyVar $ mkTcTyVar name kind details
+
 {- *********************************************************************
 *                                                                      *
         MetaKvs
@@ -323,11 +377,12 @@ newMetaDetails info = do
                    , mv_ref = ref
                    , mv_tclvl = tclvl }
 
--- newMetaDetailsK :: MetaInfoK -> TcM TcKiVarDetails
--- newMetaDetailsK info = do
---   ref <- newMutVar Flexi
---   tclvl <- getTcLevel
---   return (MetaKv { mkv_info = info, mkv_ref = ref, mkv_tclvl = tclvl })
+newTauVarDetailsAtLevel :: TcLevel -> TcM (TcVarDetails tk)
+newTauVarDetailsAtLevel tclvl = do
+  ref <- newMutVar Flexi
+  return $ MetaVar { mv_info = TauVar
+                   , mv_ref = ref
+                   , mv_tclvl = tclvl }
 
 cloneMetaKiVar :: TcKiVar -> TcM TcKiVar
 cloneMetaKiVar kv = {-assert (isTcKiVar kv) $ -}do
@@ -434,6 +489,12 @@ new_meta_kv_x info subst kv = do
   new_kv <- toAnyKiVar <$> cloneAnonMetaKiVar info kv
   let subst1 = extendKvSubstWithClone subst kv new_kv
   return (subst1, new_kv)
+
+newMetaKiVarKiAtLevel :: TcLevel -> TcM AnyMonoKind
+newMetaKiVarKiAtLevel tc_lvl = do
+  details <- newTauVarDetailsAtLevel tc_lvl
+  name <- newMetaKiVarName (fsLit "pk")
+  return $ mkKiVarKi $ toAnyKiVar $ mkTcKiVar name details
 
 {- *********************************************************************
 *                                                                      *

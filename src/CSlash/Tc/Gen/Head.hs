@@ -213,7 +213,7 @@ tcInferAppHead (fun, ctxt) = addHeadCtxt ctxt $ do
   mb_tc_fun <- tcInferAppHead_maybe fun
   case mb_tc_fun of
     Just (fun', fun_sigma) -> return (fun', fun_sigma)
-    Nothing -> panic "tcInfer (tcExpr fun)"
+    Nothing -> tcInfer (tcExpr fun)
 
 tcInferAppHead_maybe :: CsExpr Rn -> TcM (Maybe (CsExpr Tc, AnySigmaType))
 tcInferAppHead_maybe fun = case fun of
