@@ -274,7 +274,6 @@ ppr_expr (CsLit _ lit) = ppr lit
 ppr_expr (CsLam _ matches) = pprMatches matches
 ppr_expr e@(CsApp {}) = ppr_apps e []
 ppr_expr (CsTyLam _ matches) = pprMatches matches
-ppr_expr e@(CsTyApp {}) = ppr_tyapps e []
 ppr_expr (OpApp _ e1 op e2)
   | Just pp_op <- ppr_infix_expr (unLoc op)
   = pp_infixly pp_op
@@ -367,14 +366,6 @@ ppr_apps
 ppr_apps (CsApp _ (L _ fun) arg) args = ppr_apps fun (arg:args)
 ppr_apps fun args = hang (ppr_expr fun) 2 (fsep (map ppr args))
 
-ppr_tyapps
-  :: (OutputableBndrId p)
-  => CsExpr (CsPass p)
-  -> [(LCsExpr (CsPass p))]
-  -> SDoc
-ppr_tyapps (CsTyApp _ (L _ fun) arg) args = ppr_tyapps fun (arg:args)
-ppr_tyapps fun args = hang (ppr_expr fun) 2 (fsep (map ppr args))
-
 pprDebugParendExpr
   :: (OutputableBndrId p)
   => PprPrec -> LCsExpr (CsPass p)
@@ -407,7 +398,6 @@ csExprNeedsParens prec = go
     go (CsLam{}) = prec > topPrec
     go (CsApp{}) = prec >= appPrec
     go (CsTyLam{}) = prec > topPrec
-    go (CsTyApp{}) = prec >= appPrec
     go (OpApp{}) = prec >= opPrec
     go (NegApp{}) = prec > topPrec
     go (CsPar{}) = False

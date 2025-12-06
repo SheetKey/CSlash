@@ -216,7 +216,6 @@ exprCtOrigin (CsLit {}) = Shouldn'tHappenOrigin "concrete literal"
 exprCtOrigin (CsLam _ ms) = matchesCtOrigin ms
 exprCtOrigin (CsTyLam _ ms) = matchesCtOrigin ms
 exprCtOrigin (CsApp _ e1 _) = lexprCtOrigin e1
-exprCtOrigin (CsTyApp {}) = panic "CsTyApp"
 exprCtOrigin (OpApp _ _ op _) = lexprCtOrigin op
 exprCtOrigin (NegApp _ e _) = lexprCtOrigin e
 exprCtOrigin (CsPar _ e) = lexprCtOrigin e

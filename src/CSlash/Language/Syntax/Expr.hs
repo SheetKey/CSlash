@@ -24,7 +24,6 @@ data CsExpr p
   | CsLam (XLam p) (MatchGroup p (LCsExpr p))
   | CsApp (XApp p) (LCsExpr p) (LCsExpr p)
   | CsTyLam (XTyLam p) (MatchGroup p (LCsExpr p)) -- could probably remove (add Matchcontext to cslam fields)
-  | CsTyApp (XTyApp p) (LCsExpr p) (LCsExpr p) -- remove
   | OpApp (XOpApp p) (LCsExpr p) (LCsExpr p) (LCsExpr p)
   -- this could change to BinOp:
   -- we can parse prefix occurence as a binary operator (maybe a bad idea)
@@ -39,7 +38,7 @@ data CsExpr p
   | CsMultiIf (XMultiIf p) [LGRHS p (LCsExpr p)]
   | CsLet (XLet p) (CsLocalBinds p) (LCsExpr p)
   | ExprWithTySig (XExprWithTySig p) (LCsExpr p) (LCsSigType (NoTc p))
-  | CsEmbTy (XEmbTy p) (LCsType (NoTc p)) -- for cstylam and cstyapp
+  | CsEmbTy (XEmbTy p) (LCsType (NoTc p)) -- for cstylam
   | XExpr !(XXExpr p)
 
 data CsTupArg id

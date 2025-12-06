@@ -94,8 +94,6 @@ rnExpr (CsTyLam x matches) = do
   (matches', fvs_ms) <- rnMatchGroup DoBindKVs TyLamAlt rnLExpr matches
   return (CsTyLam x matches', fvs_ms)
 
-rnExpr (CsTyApp {}) = panic "rnExpr CsTyApp"
-
 rnExpr (OpApp _ e1 op e2) = do
   (e1', fv_e1) <- rnLExpr e1
   (e2', fv_e2) <- rnLExpr e2
