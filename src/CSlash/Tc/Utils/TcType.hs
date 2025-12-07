@@ -49,6 +49,9 @@ import Data.IORef (IORef)
 type AnyType = Type (AnyTyVar AnyKiVar) AnyKiVar
 type TcType = Type (TcTyVar AnyKiVar) AnyKiVar
 
+type AnyTypeCoercion = TypeCoercion (AnyTyVar AnyKiVar) AnyKiVar
+type AnyTypeCoercionHole = TypeCoercionHole (AnyTyVar AnyKiVar) AnyKiVar
+
 type AnyTvSubst = TvSubst (AnyTyVar AnyKiVar) AnyKiVar
 type AnyKvSubst = KvSubst AnyKiVar
 

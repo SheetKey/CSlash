@@ -132,9 +132,6 @@ instance Outputable (TypeCoercionHole tv kv) where
 instance Uniquable (TypeCoercionHole tv kv) where
   getUnique (TypeCoercionHole { tch_co_var = cv }) = getUnique cv
 
-type AnyTypeCoercion = TypeCoercion (AnyTyVar AnyKiVar) AnyKiVar
-type AnyTypeCoercionHole = TypeCoercionHole (AnyTyVar AnyKiVar) AnyKiVar
-
 liftKCo :: KindCoercion kv -> TypeCoercion tv kv
 liftKCo = LiftKCo
 

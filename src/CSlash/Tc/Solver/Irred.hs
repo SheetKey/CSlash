@@ -1,6 +1,6 @@
 module CSlash.Tc.Solver.Irred where
 
-import CSlash.Core.Type.Rep (AnyTypeCoercion, mkSymTyCo)
+import CSlash.Core.Type.Rep (mkSymTyCo)
 import CSlash.Core.Kind (mkSymKiCo)
 
 import CSlash.Tc.Types.Constraint
@@ -8,7 +8,7 @@ import CSlash.Tc.Solver.InertSet
 -- import GHC.Tc.Solver.Dict( matchLocalInst, chooseInstance )
 import CSlash.Tc.Solver.Monad
 import CSlash.Tc.Types.Evidence
-import CSlash.Tc.Utils.TcType (AnyKindCoercion)
+import CSlash.Tc.Utils.TcType (AnyTypeCoercion, AnyKindCoercion)
 
 -- import GHC.Core.Coercion
 

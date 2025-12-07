@@ -335,8 +335,14 @@ matchExpectedFunTys
   -> ExpSigmaType
   -> ([ExpPatType] -> ExpRhoType -> TcM a)
   -> TcM (AnyCsWrapper, a)
-matchExpectedFunTys herald _ arity (Infer inf_res) thing_inside =
-  panic "matchExpectedFunTys Infer"
+matchExpectedFunTys herald _ arity (Infer inf_res) thing_inside = do
+  (arg_tys, fun_kis) <- unzip <$> mapM new_infer_arg_ty_ki [1..arity]
+  res_ty <- newInferExpType
+  result <- thing_inside (map ExpFunPatTy arg_tys) res_ty
+  arg_tys <- mapM readExpType arg_tys
+  res_ty <- readExpType res_ty
+  co <- fillInferResult (mkFunTys arg_tys fun_kis res_ty) inf_res
+  return (mkWpCast co, result)
 
 matchExpectedFunTys herald ctx arity (Check top_ty) thing_inside
   = check arity [] top_ty
@@ -398,6 +404,12 @@ matchExpectedFunTys herald ctx arity (Check top_ty) thing_inside
       co <- unifyType Nothing (mkFunTys more_arg_tys more_fun_kis res_ty) fun_ty
       return (mkWpCast co, result)
 
+new_infer_arg_ty_ki :: Int -> TcM (ExpSigmaType, AnyMonoKind)
+new_infer_arg_ty_ki _ = do
+  ki <- asAnyKi <$> newFlexiKiVarKi
+  inf_hole <- newInferExpType
+  return (inf_hole, ki)
+
 new_check_arg_ty_ki :: Int -> TcM (AnyType, AnyMonoKind)
 new_check_arg_ty_ki _ = do
   fun_ki <- asAnyKi <$> newFlexiKiVarKi
@@ -407,6 +419,31 @@ new_check_arg_ty_ki _ = do
 mkFunTysMsg
   :: ExpectedFunTyOrigin -> (VisArity, AnyType) -> AnyTidyEnv -> ZonkM (AnyTidyEnv, SDoc)
 mkFunTysMsg herald (n_vis_args_in_call, fun_ty) env = panic "mkFunTysMsg"
+
+{- *********************************************************************
+*                                                                      *
+                fillInferResult
+*                                                                      *
+********************************************************************* -}
+
+fillInferResult :: AnyType -> InferResult -> TcM AnyTypeCoercion
+fillInferResult act_res_ty (IR { ir_uniq = u, ir_lvl = res_lvl, ir_ref = ref }) = do
+  mb_exp_res_ty <- readTcRef ref
+  case mb_exp_res_ty of
+    Just exp_res_ty -> do
+      traceTc "Joining inferred ExpType"
+        $ ppr u <> colon <+> ppr act_res_ty <+> char '~' <+> ppr exp_res_ty
+      cur_lvl <- getTcLevel
+      unless (cur_lvl `sameDepthAs` res_lvl)
+        $ ensureMonoType act_res_ty
+      unifyType Nothing act_res_ty exp_res_ty
+
+    Nothing -> do
+      traceTc "Filling inferred ExpType"
+        $ ppr u <+> text ":=" <+> ppr act_res_ty
+      (prom_co, act_res_ty) <- promoteTcType res_lvl act_res_ty
+      writeTcRef ref $ Just act_res_ty
+      return prom_co
 
 {- *********************************************************************
 *                                                                      *
@@ -502,6 +539,14 @@ unifyType thing ty1 ty2 = unifyTypeAndEmit origin ty1 ty2
                           , uo_expected = ty2
                           , uo_thing = thing
                           , uo_visible = True }
+
+unifyInvisibleType :: AnyTauType -> AnyTauType -> TcM AnyTypeCoercion
+unifyInvisibleType ty1 ty2 = unifyTypeAndEmit origin ty1 ty2
+  where
+    origin = TypeEqOrigin { uo_actual = ty1
+                          , uo_expected = ty2
+                          , uo_thing = Nothing
+                          , uo_visible = False }
 
 unifyTypeET :: AnyTauType -> AnyTauType -> TcM AnyTypeCoercion
 unifyTypeET ty1 ty2 = unifyTypeAndEmit origin ty1 ty2

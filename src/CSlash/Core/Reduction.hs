@@ -19,7 +19,8 @@ import qualified CSlash.Data.List.Infinite as Inf
 import CSlash.Types.Var ( VarBndr(..), PiKiBinder(..), setVarKind )
 import CSlash.Types.Var.Env
 import CSlash.Types.Var.Set ( TyVarSet, AnyKiVarSet )
-import CSlash.Tc.Utils.TcType (AnyMonoKind, AnyKindCoercion, AnyType, AnyKvSubst)
+import CSlash.Tc.Utils.TcType
+  (AnyMonoKind, AnyKindCoercion, AnyType, AnyKvSubst, AnyTypeCoercion)
 
 import CSlash.Utils.Misc ( HasDebugCallStack, equalLength )
 import CSlash.Utils.Outputable

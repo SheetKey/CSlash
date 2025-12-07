@@ -138,7 +138,9 @@ tcExpr (CsPar x expr) res_ty = panic "tcExpr CsPar"
 
 tcExpr (NegApp x expr neg_expr) res_ty = panic "tcExpr NegApp"
 
-tcExpr e@(CsLam x matches) res_ty = panic "tcExpr CsLam"
+tcExpr e@(CsLam x matches) res_ty = do
+  (wrap, matches') <- tcLambdaMatches e matches [] res_ty
+  return $ mkCsWrap wrap $ CsLam x matches'
 
 tcExpr (CsIf x pred b1 b2) res_ty = do
   pred' <- tcCheckMonoExpr pred $ mkAppTy (asAnyTyKi boolTy) (Embed $ BIKi UKd)

@@ -5,7 +5,7 @@ import CSlash.Platform
 
 import CSlash.Driver.DynFlags
 
-import {-# SOURCE #-} CSlash.Tc.Utils.Unify ( tcSubMult )
+import {-# SOURCE #-} CSlash.Tc.Utils.Unify ( tcSubMult, unifyInvisibleType )
 import CSlash.Tc.Types.Origin
 import CSlash.Tc.Types.Constraint
 import CSlash.Tc.Types.Evidence
@@ -174,6 +174,9 @@ fillKiCoercionHole (KindCoercionHole { kch_ref = ref, kch_co_var = cv }) co = do
 *
 ********************************************************************** -}
 
+newInferExpType :: TcM ExpType
+newInferExpType = new_inferExpType
+
 new_inferExpType :: TcM ExpType
 new_inferExpType = do
   u <- newUnique
@@ -237,6 +240,20 @@ ensureMonoType res_ty
   = return ()
   | otherwise
   = panic "ensureMonoType"
+
+promoteTcType :: TcLevel -> AnyType -> TcM (AnyTypeCoercion, AnyType)
+promoteTcType dest_lvl ty = do
+  cur_lvl <- getTcLevel
+  if cur_lvl `sameDepthAs` dest_lvl
+    then return (mkReflTyCo ty, ty)
+    else promote_it
+  where
+    promote_it :: TcM (AnyTypeCoercion, AnyType)
+    promote_it = do
+      ki <- newMetaKiVarKiAtLevel dest_lvl
+      prom_ty <- newMetaTyVarTyAtLevel dest_lvl ki
+      co <- unifyInvisibleType ty prom_ty
+      return (co, prom_ty)
 
 {- *********************************************************************
 *                                                                      *
