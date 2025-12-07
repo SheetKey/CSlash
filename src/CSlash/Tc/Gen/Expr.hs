@@ -69,7 +69,7 @@ tcPolyLExpr (L loc expr) res_ty =
        return (L loc expr')
 
 tcPolyExpr :: CsExpr Rn -> ExpSigmaType -> TcM (CsExpr Tc) 
-tcPolyExpr e (Infer _) = panic "tcPolyExpr infer"
+tcPolyExpr e (Infer inf) = tcExpr e (Infer inf)
 tcPolyExpr e (Check ty) = tcPolyExprCheck e (Left ty)
 
 tcPolyLExprSig :: LCsExpr Rn -> TcCompleteSig -> TcM (LCsExpr Tc)
