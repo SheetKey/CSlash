@@ -296,7 +296,7 @@ addArgCtxt :: AppCtxt -> LCsExpr Rn -> TcM a -> TcM a
 addArgCtxt ctxt (L arg_loc arg) thing_inside = 
   case ctxt of
     VACall fun arg_no _ -> setSrcSpanA arg_loc
-                           $ assErrCtxt (funAppCtxt fun arg arg_no)
+                           $ addErrCtxt (funAppCtxt fun arg arg_no)
                            $ thing_inside
 
 {- *********************************************************************
