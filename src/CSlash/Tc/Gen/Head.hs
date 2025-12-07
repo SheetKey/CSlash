@@ -122,7 +122,7 @@ instance OutputableBndrId (XPass p) => Outputable (CsExprArg p) where
 
 instance Outputable EWrap where
   ppr (EPar _) = text "EPar"
-  ppr (ECsWrap w) = text "ECsWrap" <+> panic "ppr w"
+  ppr (ECsWrap w) = text "ECsWrap" <+> ppr w
   ppr (EExpand orig) = text "EExpand" <+> ppr orig
 
 appCtxtLoc :: AppCtxt -> SrcSpan
