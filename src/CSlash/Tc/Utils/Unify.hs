@@ -1126,8 +1126,17 @@ simpleUnifyCheckType caller lhs_tv rhs = go rhs
     go (AppTy t1 t2) = go t1 && go t2
     go (CastTy ty kco) = panic "simpleUnifyCheckType CastTy" -- probably do need the occFolder
     go (KindCoercion kco) = panic "simpleUnifyCheckType KindCoercion" -- the lhs_tv could be a kcovar?
+
+    go (Embed mki) = go_ki mki
     go other = pprPanic "simpleUnifyCheckType other" (ppr other)
 
+    go_ki (KiVarKi kv)
+      | handleAnyKv (const topTcLevel) varLevel kv `strictlyDeeperThan` lhs_tv_lvl = False
+      | otherwise = True
+    go_ki BIKi{} = True
+    go_ki KiPredApp{} = False -- ??
+    go_ki FunKi { fk_f = af } = isVisibleKiFunArg af
+    
 {- *********************************************************************
 *                                                                      *
                  Equality invariant checking
