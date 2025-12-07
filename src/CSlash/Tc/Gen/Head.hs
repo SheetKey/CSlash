@@ -75,11 +75,21 @@ data CsExprArg (p :: TcPass) where
              , ea_arg_ty :: !(XEVAType p)
              , ea_arg :: LCsExpr (CsPass (XPass p)) }
           -> CsExprArg p
+  EValArgQL :: { eaql_ctxt :: AppCtxt
+               , eaql_arg_ty :: AnySigmaType
+               , eaql_larg :: LCsExpr Rn
+               , eaql_tc_fun :: (CsExpr Tc, AppCtxt)
+               , eaql_fun_ue :: UsageEnv
+               , eaql_args :: [CsExprArg 'TcpInst]
+               , eaql_wanted :: WantedTyConstraints
+               , eaql_encl :: Bool
+               , eaql_res_rho :: AnyRhoType }
+            -> CsExprArg 'TcpInst
   ETypeArg :: { ea_ctxt :: AppCtxt
               , ea_loc :: SrcSpanAnnA
               , ea_cs_ty :: LCsType Rn
               , ea_ty_arg :: !(XETAType p) }
-              -> CsExprArg p
+           -> CsExprArg p
   EWrap :: EWrap -> CsExprArg p
 
 type family XEVAType (p :: TcPass) where
@@ -104,6 +114,9 @@ instance Outputable AppCtxt where
 instance OutputableBndrId (XPass p) => Outputable (CsExprArg p) where
   ppr (EValArg { ea_arg = arg, ea_ctxt = ctxt })
     = text "EValArg" <> braces (ppr ctxt) <+> ppr arg
+  ppr (EValArgQL { eaql_tc_fun = fun, eaql_args = args, eaql_res_rho = ty })
+    = hang (text "EValArgQL" <+> ppr fun)
+      2 (vcat [ ppr args, text "eaql_ty:" <+> ppr ty ])
   ppr (ETypeArg { ea_cs_ty = cs_ty }) = braces (ppr cs_ty)
   ppr (EWrap wrap) = ppr wrap
 

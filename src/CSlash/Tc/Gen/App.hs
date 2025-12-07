@@ -1,3 +1,4 @@
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE DataKinds #-}
 
 module CSlash.Tc.Gen.App where
@@ -145,6 +146,40 @@ tcValArg (EValArg { ea_ctxt = ctxt
                     , ea_arg = L arg_loc arg'
                     , ea_arg_ty = noExtField })
 
+tcValArg (EValArgQL { eaql_wanted = wanted
+                    , eaql_ctxt = ctxt
+                    , eaql_arg_ty = arg_ty
+                    , eaql_larg = larg@(L arg_loc rn_expr)
+                    , eaql_tc_fun = tc_head
+                    , eaql_fun_ue = head_ue
+                    , eaql_args = inst_args
+                    , eaql_encl = arg_influences_enclosing_call
+                    , eaql_res_rho = app_res_rho })
+  = addArgCtxt ctxt larg $ do
+  exp_arg_ty <- liftZonkM $ zonkTcType arg_ty
+  traceTc "tcEValArgQL {"
+    $ vcat [ text "app_res_rho:" <+> ppr app_res_rho
+           , text "exp_arg_ty:" <+> ppr exp_arg_ty
+           , text "args:" <+> ppr inst_args ]
+
+  (wrap, arg') <- tcScalingUsage (panic "tcValArg Mult")
+                  $ tcSkolemize GenSigCtxt exp_arg_ty $ \ exp_arg_rho -> do
+                    emitConstraints wanted
+                    tcEmitBindingUsage head_ue
+                    unless arg_influences_enclosing_call
+                      $ qlUnify app_res_rho exp_arg_rho
+                    tc_args <- tcValArgs inst_args
+                    app_res_rho <- liftZonkM $ zonkTcType app_res_rho
+                    res_wrap <- checkResultTy rn_expr tc_head inst_args app_res_rho
+                                              (mkCheckExpType exp_arg_rho)
+                    finishApp tc_head tc_args app_res_rho res_wrap
+  traceTc "tcEValArgQL }"
+    $ vcat [ text "app_res_rho:" <+> ppr app_res_rho ]
+
+  return $ EValArg { ea_ctxt = ctxt
+                   , ea_arg = L arg_loc (mkCsWrap wrap arg')
+                   , ea_arg_ty = noExtField }
+
 {- *********************************************************************
 *                                                                      *
               Instantiating the call
@@ -279,7 +314,128 @@ tcVDQ = panic "tcVDQ"
 ********************************************************************* -}
 
 quickLookArg :: AppCtxt -> LCsExpr Rn -> AnySigmaType -> TcM (CsExprArg 'TcpInst)
-quickLookArg = panic "quickLookArg"
+quickLookArg ctxt larg orig_arg_ty = do
+  is_rho <- tcIsDeepRho orig_arg_ty
+  traceTc "qla" (ppr orig_arg_ty $$ ppr is_rho)
+  if not is_rho
+    then skipQuickLook ctxt larg orig_arg_ty
+    else quickLookArg1 ctxt larg orig_arg_ty
+
+skipQuickLook :: AppCtxt -> LCsExpr Rn -> AnyRhoType -> TcM (CsExprArg 'TcpInst)
+skipQuickLook ctxt larg arg_ty = return $ EValArg { ea_ctxt = ctxt
+                                                  , ea_arg = larg
+                                                  , ea_arg_ty = arg_ty }
+
+tcIsDeepRho :: AnyType -> TcM Bool
+tcIsDeepRho ty = go ty
+  where
+    go ty
+      | isSigmaTy ty = return False
+      | Just kappa <- getTcTyVar_maybe ty
+      , isQLInstVar kappa
+      = do info <- readMetaTyVar kappa
+           case info of
+             Indirect arg_ty' -> go arg_ty'
+             Flexi -> return True
+      | otherwise = return True
+
+isGuardedTy :: AnyType -> Bool
+isGuardedTy ty
+  | Just (tc, _) <- tcSplitTyConApp_maybe ty = isGenerativeTyCon tc
+  | Just {} <- tcSplitAppTy_maybe ty = True
+  | otherwise = False
+
+quickLookArg1 :: AppCtxt -> LCsExpr Rn -> AnyRhoType -> TcM (CsExprArg 'TcpInst)
+quickLookArg1 ctxt larg@(L _ arg) orig_arg_rho = addArgCtxt ctxt larg $ do
+  ((rn_fun, fun_ctxt), rn_args) <- splitCsApps arg
+  (fun_ue, mb_fun_ty) <- tcCollectingUsage $ tcInferAppHead_maybe rn_fun
+  traceTc "quickLookArg {"
+    $ vcat [ text "arg:" <+> ppr arg
+           , text "orig_arg_rho:" <+> ppr orig_arg_rho
+           , text "head:" <+> ppr rn_fun <+> colon <+> ppr mb_fun_ty
+           , text "args:" <+> ppr rn_args ]
+
+  case mb_fun_ty of
+    Nothing -> skipQuickLook ctxt larg orig_arg_rho
+    Just (tc_fun, fun_sigma) -> do
+      let tc_head = (tc_fun, fun_ctxt)
+      ((inst_args, app_res_rho), wanted) <- captureConstraints
+        $ tcInstFun tc_head fun_sigma rn_args
+
+      traceTc "quickLookArg2"
+        $ vcat [ text "arg:" <+> ppr arg
+               , text "orig_arg_rho:" <+> ppr orig_arg_rho
+               , text "app_res_rho:" <+> ppr app_res_rho ]
+
+      arg_influences_enclosing_call <- if isGuardedTy orig_arg_rho
+                                       then return True
+                                       else not <$> anyFreeKappa app_res_rho
+      when arg_influences_enclosing_call
+        $ qlUnify app_res_rho orig_arg_rho
+
+      traceTc "quickLookArg done }" (ppr rn_fun)
+
+      return $ EValArgQL { eaql_ctxt = ctxt
+                         , eaql_arg_ty = orig_arg_rho
+                         , eaql_larg = larg
+                         , eaql_tc_fun = tc_head
+                         , eaql_fun_ue = fun_ue
+                         , eaql_args = inst_args
+                         , eaql_wanted = wanted
+                         , eaql_encl = arg_influences_enclosing_call
+                         , eaql_res_rho = app_res_rho }
+
+{- *********************************************************************
+*                                                                      *
+                 Folding over instantiation variables
+*                                                                      *
+********************************************************************* -}
+
+anyFreeKappa :: AnyType -> TcM Bool
+anyFreeKappa ty = unTcMBool (foldQLInstVars go_tv ty)
+  where
+    go_tv tv = TCMB $ do info <- readMetaTyVar tv
+                         case info of
+                           Indirect ty -> anyFreeKappa ty
+                           Flexi -> return True
+
+newtype TcMBool = TCMB { unTcMBool :: TcM Bool }
+
+instance Semigroup TcMBool where
+  TCMB ml <> TCMB mr = TCMB $ do l <- ml
+                                 if l
+                                   then return True
+                                   else  mr
+
+instance Monoid TcMBool where
+  mempty = TCMB $ return False
+
+foldQLInstVars :: forall a. Monoid a => (TcTyVar AnyKiVar -> a) -> AnyType -> a
+{-# INLINE foldQLInstVars #-}
+foldQLInstVars check_tv ty = do_ty ty
+  where
+    (do_ty, _, _, _) = foldTyCo folder ()
+
+    folder :: TyCoFolder (AnyTyVar AnyKiVar) AnyKiVar () () () a
+    folder = TyCoFolder { tcf_view = noView
+                        , tcf_tyvar = do_tv
+                        , tcf_covar = mempty
+                        , tcf_hole = do_hole
+                        , tcf_tybinder = \_ _ _ -> ()
+                        , tcf_tylambinder = \_ _ -> ()
+                        , tcf_tylamkibinder = \_ _ -> ()
+                        , tcf_swapEnv = \_ -> ()
+                        , tcf_embedKiRes = \_ -> mempty
+                        , tcf_mkcf = MKiCoFolder { mkcf_kivar = \_ _ -> ()
+                                                 , mkcf_covar = \_ _ -> ()
+                                                 , mkcf_hole = \_ _ -> () }
+                        }
+    do_hole _ hole = do_ty (tyCoVarPred (tyCoHoleCoVar hole))
+
+    do_tv :: () -> AnyTyVar AnyKiVar -> a
+    do_tv _ tv | Just tctv <- toTcTyVar_maybe tv
+               , isQLInstVar tctv = check_tv tctv
+               | otherwise = mempty
 
 {- *********************************************************************
 *                                                                      *
