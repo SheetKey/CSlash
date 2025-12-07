@@ -101,7 +101,9 @@ checkResultTy
   -> AnyRhoType
   -> ExpRhoType
   -> TcM AnyCsWrapper
-checkResultTy _ _ _ app_res_rho (Infer inf_res) = panic "checkResultTy Infer"
+checkResultTy _ _ _ app_res_rho (Infer inf_res) = do
+  co <- fillInferResult app_res_rho inf_res
+  return $ mkWpCast co
 
 checkResultTy rn_expr (tc_fun, fun_ctxt) inst_args app_res_rho (Check res_ty) =
   perhaps_add_res_ty_ctxt $ do
