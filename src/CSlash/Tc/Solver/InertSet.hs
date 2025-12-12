@@ -16,6 +16,7 @@ import CSlash.Types.Basic( SwapFlag(..) )
 
 -- import GHC.Core.Reduction
 import CSlash.Core.Predicate
+import CSlash.Core.Type
 import CSlash.Core.Type.FVs
 import CSlash.Core.Type.Compare
 import CSlash.Core.Kind.FVs
@@ -322,6 +323,32 @@ findKiCos icans kv = concat @Maybe (lookupDVarEnv (inert_kicos icans) kv)
 findKiCo :: InertKiCans -> CanKiCoLHS -> [KiCoCt]
 findKiCo icans (KiVarLHS kv) = findKiCos icans kv
 
+{-# INLINE partition_tyeqs_container #-}
+partition_tyeqs_container
+  :: forall container
+   . container
+  -> (forall b. (TyEqCt -> b -> b) -> container -> b -> b)
+  -> (TyEqCt -> container -> container)
+  -> (TyEqCt -> Bool)
+  -> container
+  -> ([TyEqCt], container)
+partition_tyeqs_container empty_container fold_container extend_container pred orig_inerts
+  = fold_container folder orig_inerts ([], empty_container)
+  where
+    folder :: TyEqCt -> ([TyEqCt], container) -> ([TyEqCt], container)
+    folder eq_ct (acc_true, acc_false)
+      | pred eq_ct = (eq_ct : acc_true, acc_false)
+      | otherwise = (acc_true, extend_container eq_ct acc_false)
+
+partitionInertTyEqs
+  :: (TyEqCt -> Bool)
+  -> InertTyEqs
+  -> ([TyEqCt], InertTyEqs)
+partitionInertTyEqs = partition_tyeqs_container emptyTyEqs foldTyEqs addInertTyEqs
+
+addInertTyEqs :: TyEqCt -> InertTyEqs -> InertTyEqs
+addInertTyEqs eq_ct@(TyEqCt { teq_lhs = TyVarLHS tv }) eqs = addTyEq eqs tv eq_ct
+
 {-# INLINE partition_kicos_container #-}
 partition_kicos_container
   :: forall container
@@ -494,6 +521,65 @@ data TyKickOutSpec
   = TKOAfterUnify (MkVarSet (TcTyVar AnyKiVar))
   | TKOAfterAdding CanTyEqLHS
 
+kickOutRewritableLHSTy :: TyKickOutSpec -> CtFlavor -> InertTyCans -> (TyCts, InertTyCans)
+kickOutRewritableLHSTy ko_spec new_f ics@(ITC { inert_tyeqs = tv_eqs
+                                              , inert_ty_irreds = irreds })
+  = (kicked_out, inert_cans_in)
+  where
+    inert_cans_in = ics { inert_tyeqs = tv_eqs_in
+                        , inert_ty_irreds = irs_in }
+
+    kicked_out :: TyCts
+    kicked_out = (fmap CIrredCanTy irs_out)
+                 `extendCtsList` fmap CTyEqCan tv_eqs_out
+
+    (tv_eqs_out, tv_eqs_in) = partitionInertTyEqs kick_out_eq tv_eqs
+    (irs_out, irs_in) = partitionBag kick_out_irred irreds
+
+    f_tv_can_rewrite_ty look check_tv ty = anyRewritableTyVar can_rewrite ty
+      where
+        can_rewrite tv = look && check_tv tv
+
+    f_can_rewrite_ty look = case ko_spec of
+      TKOAfterUnify tvs -> f_tv_can_rewrite_ty look (`elemVarSet` tvs)
+      TKOAfterAdding (TyVarLHS tv) -> f_tv_can_rewrite_ty look ((== tv) . toAnyTyVar)
+
+    f_may_rewrite f = new_f `eqCanRewriteF` f
+
+    kick_out_irred (IrredTyCt { itr_ev = ev })
+      = f_may_rewrite (ctEvFlavor ev)
+        && f_can_rewrite_ty True pred
+      where
+        pred = ctTyEvPred ev
+
+    kick_out_eq (TyEqCt { teq_lhs = lhs, teq_rhs = rhs_ty, teq_ev = ev })
+      | not (f_may_rewrite f)
+      = False
+      | f_can_rewrite_ty True (canTyEqLHSType lhs)
+      = True
+      | let look | f_can_rewrite_f = False
+                 | otherwise = True
+      , f_can_rewrite_ty look rhs_ty
+      = True
+      | not f_can_rewrite_f
+      , is_new_lhs rhs_ty
+      = True
+      | otherwise = False
+      where
+        f_can_rewrite_f = f `eqCanRewriteF` new_f
+        f = ctEvFlavor ev
+
+    is_new_lhs = case ko_spec of
+      TKOAfterUnify tvs -> is_tyvar_ty_for tvs
+      TKOAfterAdding lhs -> (`eqType` canTyEqLHSType lhs)
+
+    is_tyvar_ty_for tvs ty = case getTyVar_maybe ty of
+                               Just tv
+                                 | Just tctv <- toTcTyVar_maybe tv
+                                   -> tctv `elemVarSet` tvs
+                               _ -> False
+      
+-- TODO: REWRITE THIS
 kickOutRewritableLHSKi :: KiKickOutSpec -> CtFlavor -> InertKiCans -> (KiCts, InertKiCans)
 kickOutRewritableLHSKi ko_spec new_f ics@(IKC { inert_kicos = kv_kicos
                                              , inert_ki_irreds = irreds })
@@ -507,36 +593,40 @@ kickOutRewritableLHSKi ko_spec new_f ics@(IKC { inert_kicos = kv_kicos
                  `extendCtsList` fmap CKiCoCan kv_kicos_out
 
     (kv_kicos_out, kv_kicos_in) = partitionInertKiCos kick_out_kico kv_kicos
-    (irs_out, irs_in) = partitionBag (kick_out_ct . CIrredCanKi) irreds
+    (irs_out, irs_in) = partitionBag kick_out_irred irreds
 
-    f_kv_can_rewrite_ki :: (TcKiVar -> Bool) -> AnyMonoKind -> Bool
-    f_kv_can_rewrite_ki = anyRewritableKiVar 
+    f_kv_can_rewrite_ki :: Bool -> (TcKiVar -> Bool) -> AnyMonoKind -> Bool
+    f_kv_can_rewrite_ki look check_kv ki
+      = anyRewritableKiVar can_rewrite ki
+      where
+        can_rewrite kv = look && check_kv kv
 
-    {-# INLINE f_can_rewrite_ki #-}
-    f_can_rewrite_ki :: AnyMonoKind -> Bool
-    f_can_rewrite_ki = case ko_spec of
-      KOAfterUnify kvs -> f_kv_can_rewrite_ki (`elemVarSet` kvs)
-      KOAfterAdding (KiVarLHS kv) -> f_kv_can_rewrite_ki ((== kv) . toAnyKiVar)
+    f_can_rewrite_ki :: Bool -> AnyMonoKind -> Bool
+    f_can_rewrite_ki look = case ko_spec of
+      KOAfterUnify kvs -> f_kv_can_rewrite_ki look (`elemVarSet` kvs)
+      KOAfterAdding (KiVarLHS kv) -> f_kv_can_rewrite_ki look ((== kv) . toAnyKiVar)
 
     f_may_rewrite f = new_f `eqCanRewriteF` f
 
-    kick_out_ct ct = f_may_rewrite (ctFlavor ct) && f_can_rewrite_ki (ctKiPred ct)
+    kick_out_irred (IrredKiCt { ikr_ev = ev })
+      = f_may_rewrite (ctEvFlavor ev) && f_can_rewrite_ki True (ctKiEvPred ev)
 
     kick_out_kico (KiCoCt { kc_lhs = lhs, kc_rhs = rhs_ki, kc_ev = ev })
       | not (f_may_rewrite f)
       = False
-      | KiVarLHS _ <- lhs
-      , f `eqCanRewriteF` new_f
-      = False
-      | f_can_rewrite_ki (canKiCoLHSKind lhs)
+      | f_can_rewrite_ki True (canKiCoLHSKind lhs)
       = True
-      | kick_out_for_inertness = True
-      | kick_out_for_completeness = True
+      | let look | f_can_rewrite_f = False
+                 | otherwise = True
+      , f_can_rewrite_ki look rhs_ki
+      = True
+      | not f_can_rewrite_f
+      , is_new_lhs_ki rhs_ki
+      = True
       | otherwise = False
       where
+        f_can_rewrite_f = f `eqCanRewriteF` new_f
         f = ctEvFlavor ev
-        kick_out_for_inertness = (f `eqCanRewriteF` f) && f_can_rewrite_ki rhs_ki
-        kick_out_for_completeness = is_new_lhs_ki rhs_ki
 
     is_new_lhs_ki = case ko_spec of
       KOAfterUnify vs -> is_kivar_ki_for vs

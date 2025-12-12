@@ -162,8 +162,8 @@ tcValArg (EValArgQL { eaql_wanted = wanted
            , text "exp_arg_ty:" <+> ppr exp_arg_ty
            , text "args:" <+> ppr inst_args ]
 
-  (wrap, arg') <- tcScalingUsage (panic "tcValArg Mult")
-                  $ tcSkolemize GenSigCtxt exp_arg_ty $ \ exp_arg_rho -> do
+  (wrap, arg') <- {-tcScalingUsage (panic "tcValArg Mult")
+                  $ -}tcSkolemize GenSigCtxt exp_arg_ty $ \ exp_arg_rho -> do
                     emitConstraints wanted
                     tcEmitBindingUsage head_ue
                     unless arg_influences_enclosing_call

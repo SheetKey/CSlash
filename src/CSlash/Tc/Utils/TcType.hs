@@ -317,6 +317,30 @@ any_rewritable_ki kv_pred = go_mono emptyVarSet
 anyRewritableKiVar :: (TcKiVar -> Bool) -> AnyMonoKind -> Bool
 anyRewritableKiVar = any_rewritable_ki
 
+any_rewritable_ty :: (TcTyVar AnyKiVar -> Bool) -> AnyType -> Bool
+{-# INLINE any_rewritable_ty #-}
+any_rewritable_ty tv_pred = go emptyVarSet
+  where
+    go_tv bvs tv | tv `elemVarSet` bvs = False
+                 | otherwise = handleAnyTv (const False) tv_pred tv
+
+    go :: MkVarSet (AnyTyVar AnyKiVar) -> AnyType -> Bool
+    go bvs (TyConApp _ tys) = go_tc bvs tys
+    go bvs (TyVarTy tv) = go_tv bvs tv
+    go bvs (AppTy fun arg) = go bvs fun || go bvs arg
+    go bvs (FunTy _ arg res) = go bvs arg || go bvs res
+    go bvs (ForAllTy tv ty) = go (bvs `extendVarSet` binderVar tv) ty
+    go bvs (TyLamTy tv ty) = go (bvs `extendVarSet` tv) ty
+    go bvs (BigTyLamTy _ ty) = go bvs ty
+    go bvs (CastTy ty _) = go bvs ty
+    go _ (KindCoercion _) = False
+    go _ (Embed _) = False
+
+    go_tc bvs tys = any (go bvs) tys
+
+anyRewritableTyVar :: (TcTyVar AnyKiVar -> Bool) -> AnyType -> Bool
+anyRewritableTyVar = any_rewritable_ty
+
 {- *********************************************************************
 *                                                                      *
                 Predicates

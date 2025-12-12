@@ -779,7 +779,10 @@ deriving instance IsTyVar tv kv => Outputable (Id tv kv)
     
 instance IsTyVar tv kv => VarHasType (Id tv kv) tv kv where
   varType (Id (Id' { _varType = ty })) = ty
-  varType other = pprPanic "Bad Id" (ppr other)
+  varType other = pprPanic "varType Bad Id" (ppr other)
+
+  setVarType (Id id@Id'{}) ty = Id id { _varType = ty }
+  setVarType other _ = pprPanic "setVarType Bad Id" (ppr other)
 
 instance FromId (Var tv kv) tv kv where
   fromId (Id v) = v

@@ -147,7 +147,18 @@ stopWithStage ev s = Stage $ stopWith ev s
 ********************************************************************* -}
 
 kickOutRewritableTy :: TyKickOutSpec -> CtFlavor -> TcS ()
-kickOutRewritableTy = panic "kickOutRewritableTy"
+kickOutRewritableTy ki_spec new_f = do
+  ics <- getInertTyCans
+  let (kicked_out, ics') = kickOutRewritableLHSTy ki_spec new_f ics
+      n_kicked = lengthBag kicked_out
+  setInertTyCans ics'
+
+  unless (isEmptyBag kicked_out) $ do
+    emitTyWork kicked_out
+    csTraceTcS $ hang (text "Kick out")
+                      2 (vcat [ text "n-kicked =" <+> int n_kicked
+                              , text "kicked_out =" <+> ppr kicked_out
+                              , text "Residual inerts =" <+> ppr ics' ])
 
 kickOutRewritable :: KiKickOutSpec -> CtFlavor -> TcS ()
 kickOutRewritable ko_spec new_f = do
@@ -1078,7 +1089,7 @@ wrapTyUnifierX ev do_unifications = do
     ty_defer_ref <- TcM.newTcRef emptyBag
     ki_unified_ref <- TcM.newTcRef []
     ty_unified_ref <- TcM.newTcRef []
-    rewriters <- panic "TcM.zonkTyRewriterSet (ctTyEvRewriters ev)"
+    rewriters <- TcM.zonkTyRewriterSet (ctTyEvRewriters ev)
     let env = UE { u_loc = ctEvLoc ev
                  , u_ki_rewriters = emptyKiRewriterSet
                  , u_ki_defer = ki_defer_ref

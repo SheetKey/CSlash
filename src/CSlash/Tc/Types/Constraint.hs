@@ -1049,8 +1049,14 @@ emptyKiRewriterSet = KiRewriterSet emptyUniqSet
 emptyTyRewriterSet :: TyRewriterSet
 emptyTyRewriterSet = TyRewriterSet emptyUniqSet
 
+unitTyRewriterSet :: RWTyCoHole -> TyRewriterSet
+unitTyRewriterSet = coerce (unitUniqSet @RWTyCoHole)
+
 unitKiRewriterSet :: RWKiCoHole -> KiRewriterSet
 unitKiRewriterSet = coerce (unitUniqSet @RWKiCoHole)
+
+unionTyRewriterSet :: TyRewriterSet -> TyRewriterSet -> TyRewriterSet
+unionTyRewriterSet = coerce (unionUniqSets @RWTyCoHole)
 
 unionKiRewriterSet :: KiRewriterSet -> KiRewriterSet -> KiRewriterSet
 unionKiRewriterSet = coerce (unionUniqSets @RWKiCoHole)

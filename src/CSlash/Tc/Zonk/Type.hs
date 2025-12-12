@@ -643,8 +643,25 @@ zonkPats = traverse zonkPat
 *                                                                      *
 ********************************************************************* -}
 
+unpackTyCoercionHole_maybe :: TypeCoercionHole tv kv -> TcM (Maybe AnyTypeCoercion)
+unpackTyCoercionHole_maybe (TypeCoercionHole { tch_ref = ref }) = readTcRef ref
+
 unpackKiCoercionHole_maybe :: KindCoercionHole kv -> TcM (Maybe AnyKindCoercion)
 unpackKiCoercionHole_maybe (KindCoercionHole { kch_ref = ref }) = readTcRef ref
+
+zonkTyRewriterSet :: TyRewriterSet -> TcM TyRewriterSet
+zonkTyRewriterSet (TyRewriterSet set)
+  = nonDetStrictFoldUniqSet go (return emptyTyRewriterSet) set
+  where
+    go hole m_acc = unionTyRewriterSet <$> check_hole hole <*> m_acc
+
+    check_hole hole = do
+      m_co <- unpackTyCoercionHole_maybe hole
+      case m_co of
+        Nothing -> return $ unitTyRewriterSet hole
+        Just co -> panic "unUCHM (check_co co)"
+
+    check_co = panic "check_co"
 
 zonkRewriterSet :: KiRewriterSet -> TcM KiRewriterSet
 zonkRewriterSet (KiRewriterSet set) = nonDetStrictFoldUniqSet go (return emptyKiRewriterSet) set
