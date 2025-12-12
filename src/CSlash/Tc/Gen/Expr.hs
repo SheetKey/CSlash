@@ -142,6 +142,10 @@ tcExpr e@(CsLam x matches) res_ty = do
   (wrap, matches') <- tcLambdaMatches e matches [] res_ty
   return $ mkCsWrap wrap $ CsLam x matches'
 
+tcExpr e@(CsTyLam x matches) res_ty = do
+  (wrap, matches') <- tcLambdaMatches e matches [] res_ty -- the match group should be empty now
+  return $ mkCsWrap wrap $ CsTyLam x matches'
+
 tcExpr (CsIf x pred b1 b2) res_ty = do
   pred' <- tcCheckMonoExpr pred $ mkAppTy (asAnyTyKi boolTy) (Embed $ BIKi UKd)
   (u1, b1') <- tcCollectingUsage $ tcMonoExpr b1 res_ty
