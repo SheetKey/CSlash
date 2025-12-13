@@ -143,8 +143,16 @@ tcExpr e@(CsLam x matches) res_ty = do
   return $ mkCsWrap wrap $ CsLam x matches'
 
 tcExpr e@(CsTyLam x matches) res_ty = do
-  (wrap, matches') <- tcLambdaMatches e matches [] res_ty -- the match group should be empty now
-  return $ mkCsWrap wrap $ CsTyLam x matches'
+ -- Either: 1. generate some patterns here to pass instead of the empty list
+  -- 2. in tcMatchPats we need to check for 'TyVarPat' or 'InvisPat' when the pattern is 'ExpFunPatTy Infer {..}'
+  -- 3. Error on this (in line with what GHC does right now: only allows ty pats in lambdas when there is a full sig to be pushed down)
+  -- 2 seems more appealing: we just will the infered type with an 'Embed monoKi'
+  -- 1,2 problems: what to do about the kind variables we have to introduce?? There's nothing to skolemize.
+  -- 3 makes sense: Its silly to write '(/\a -> M) T'. Writing 'M' alone is the same. So, the only reason to support this is uniformity, not a compelling reason
+  --        Even sillier: '(/\{a} -> M)'. The 'a' is inferred! so no reason to write this.
+  -- Punch-line: If you write '(/\a -> blah) T args', whatever 'T' is was already in scope, so however T is used in the body can just be inferred or explicit.
+  -- TODO: Check what error GHC throws for bad at pattern and where it is caught
+  panic "tcExpr CsTyLam: not allowed in this place"
 
 tcExpr (CsIf x pred b1 b2) res_ty = do
   pred' <- tcCheckMonoExpr pred $ mkAppTy (asAnyTyKi boolTy) (Embed $ BIKi UKd)
