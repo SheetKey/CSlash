@@ -780,7 +780,7 @@ reportEqErr :: SolverReportErrCtxt -> ErrorItem -> AnyMonoKind -> AnyMonoKind ->
 reportEqErr ctxt item ki1 ki2 = do
   kv_info <- case getKiVar_maybe ki2 of
                Nothing -> return Nothing
-               Just kv2 -> Just <$> extraKiVarEqInfo (panic "kv2, Nothing") ki1
+               Just kv2 -> Just <$> extraKiVarEqInfo (kv2, Nothing) ki1
   return $ Mismatch { mismatchMsg = mismatch
                     , mismatchKiVarInfo = kv_info
                     , mismatchAmbiguityInfo = [] }
