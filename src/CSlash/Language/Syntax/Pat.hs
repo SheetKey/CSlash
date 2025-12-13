@@ -47,6 +47,7 @@ type family XConPatTyArg p
 
 isInvisArgPat :: Pat p -> Bool
 isInvisArgPat ImpPat {} = True
+isInvisArgPat TyVarPat {} = True
 isInvisArgPat _ = False
 
 isVisArgPat :: Pat p -> Bool

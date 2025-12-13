@@ -72,7 +72,11 @@ tcMatchPats
 tcMatchPats match_ctxt pats pat_tys thing_inside
   = assertPpr (count isVisibleExpPatType pat_tys == count (isVisArgPat . unLoc) pats)
               (ppr pats $$ ppr pat_tys)
-    $ do err_ctxt <- getErrCtxt
+    $ do traceTc "tcMatchPats"
+           $ vcat [ text "match_ctxt =" <+> ppr match_ctxt
+                  , text "pats =" <+> ppr pats
+                  , text "pat_tys =" <+> ppr pat_tys ]
+         err_ctxt <- getErrCtxt
          let loop_init :: [LPat Rn] -> [ExpPatType] -> TcM ([LPat Tc], a)
              -- deal with ExpForAllPatKis which should only appear at the start
              loop_init all_pats (ExpForAllPatKi kv : pat_tys)
@@ -193,6 +197,8 @@ tc_pat pat_ty penv ps_pat thing_inside = case ps_pat of
     pat_ty <- readExpType pat_ty
     return (mkCsWrapPat (wrap <.> mult_wrap) (VarPat x (L l id)) pat_ty, res)
 
+  TyVarPat x (L l name) -> panic "tc_pat: TyVarPat"
+
   ParPat x pat -> do
     (pat', res) <- tc_lpat pat_ty penv pat thing_inside
     return (ParPat x pat', res)
@@ -209,7 +215,7 @@ tc_pat pat_ty penv ps_pat thing_inside = case ps_pat of
     pat_ty <- readExpType pat_ty
     return (mkCsWrapPat wrap (SigPat inner_ty pat' sig_ty) pat_ty, res)
 
-  _ -> panic "tc_pat unfinished"
+  other -> pprPanic "tc_pat unfinished" (ppr other)
 
 tc_forall_lpat :: AnyTyVar AnyKiVar -> Checker (LPat Rn) (LPat Tc)
 tc_forall_lpat tv penv (L span pat) thing_inside = setSrcSpanA span $ do
