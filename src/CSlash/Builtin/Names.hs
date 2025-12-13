@@ -150,6 +150,12 @@ falseDataConKey = mkWiredInDataConUnique 4
 trueDataConKey :: Unique
 trueDataConKey = mkWiredInDataConUnique 14
 
+mkIoDataConKey :: Unique
+mkIoDataConKey = mkWiredInDataConUnique 16
+
+mkIoResDataConKey :: Unique
+mkIoResDataConKey = mkWiredInDataConUnique 17
+
 {- *********************************************************************
 *                                                                      *
       Uniques for wired-in Ids

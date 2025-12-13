@@ -122,6 +122,8 @@ cslBuiltInExports
 builtInTyCons :: [TyCon (TyVar KiVar) KiVar]
 builtInTyCons
   = ioTyCon
+  : primIoTyCon
+  : ioResTyCon
   : boolTyCon
   : unitTyCon
   : soloTyCon

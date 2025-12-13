@@ -34,7 +34,7 @@ import Control.DeepSeq
 data Type tv kv
   = TyVarTy tv
   | AppTy (Type tv kv) (Type tv kv) -- The first arg must be an 'AppTy' or a 'TyVarTy' or a 'TyLam'
-  | TyLamTy tv (Type tv kv)
+  | TyLamTy tv (Type tv kv) -- Used for TySyns, NOT in the types of DataCons (only Foralls)
   | BigTyLamTy kv (Type tv kv)
   | TyConApp (TyCon tv kv) [Type tv kv]
   | ForAllTy {-# UNPACK #-} !(ForAllBinder tv) (Type tv kv)

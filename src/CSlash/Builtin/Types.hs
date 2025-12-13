@@ -421,3 +421,184 @@ falseDataCon = pcDataCon falseDataConName boolTyCon 0
 
 trueDataCon :: PDataCon
 trueDataCon = pcDataCon trueDataConName boolTyCon 0
+
+{- *********************************************************************
+*                                                                      *
+              IO
+*                                                                      *
+********************************************************************* -}
+
+{-
+The 'IORes' tycon has kind
+type IORes : ∀ k. k -> ○
+
+The 'MkIORes' datacon has type
+data MkIORes : /\k k2 -> ∀ {kco : k2 <= k}. ∀ {a : k}. a -★> RealWorld# -k2> (IORes {k} a : ○)
+
+The 'MkIORes' data can be thought of as the function
+data MkIORes
+  = /\{k} {k2} -> /\{kco : (k2 <= k)} -> /\{a : k} -> \a -> \(x : RealWorld#) -> (a, x)
+-}
+ioResTyConName :: Name
+ioResTyConName
+  = mkWiredInTyConName UserSyntax cSLASH_BUILTIN
+    (fsLit "IORes") ioResTyConKey ioResTyCon
+
+mkIoResDataConName :: Name
+mkIoResDataConName
+  = mkWiredInDataConName UserSyntax cSLASH_BUILTIN
+    (fsLit "MkIORes") mkIoResDataConKey mkIoResDataCon
+
+ioResTyCon :: PTyCon
+ioResTyCon
+  = mkAlgTyCon ioResTyConName kind arity (mkDataTyConRhs [mkIoResDataCon]) VanillaAlgTyCon
+  where
+    arity = 1
+
+    kva = case mkTemplateKindVars 1 of
+            [k1] -> k1
+            _ -> panic "unreachable"
+    kind = ForAllKi kva $
+           Mono $ FunKi FKF_K_K (KiVarKi kva) (BIKi LKd)
+
+mkIoResDataCon :: PDataCon
+mkIoResDataCon = data_con
+  where
+    tag_map = mkTyConTagMap ioResTyCon
+    data_con = mkDataCon mkIoResDataConName
+                         False
+                         ioResTyCon
+                         (lookupNameEnv_NF tag_map mkIoResDataConName)
+                         (mkDataConId name data_con)
+                         dc_ty
+                         2
+    name = mkDataConName data_con mkIoResDataConKey
+    dc_ty = let kva = case mkTemplateKindVars 1 of
+                        [k1] -> k1
+                        _ -> panic "unreachable"
+                kvf = case mkTemplateFunKindVars 1 of
+                        [k1] -> k1
+                        _ -> panic "unreachable"
+
+                ka = KiVarKi kva
+                kf = KiVarKi kvf
+
+                va = case mkTemplateTyVars [ka] of
+                       [a] -> a
+                       _ -> panic "unreachable"
+                a = TyVarTy va
+
+                pred = KiPredApp LTEQKi kf ka
+                kco = case mkTemplateKiCoVars [pred] of
+                        [kco] -> kco
+                        _ -> panic "unreachable"
+
+                dc_type = BigTyLamTy kva $
+                          BigTyLamTy kvf $
+                          ForAllTy (Bndr kco Specified) $
+                          ForAllTy (Bndr va Specified) $
+                          FunTy (BIKi UKd) a $ 
+                          FunTy kf (mkTyConTy realWorldTyCon) $
+                          mkTyConApp ioResTyCon [ Embed ka, a ]
+            in dc_type
+
+{-
+The 'PrimIO' type synonym is defined as
+type PrimIO : ∀ k kf. k -> kf
+type PrimIO = /\ k kf -> \ (a : k) -> RealWorld# -kf> IORes {k} a
+-}
+
+primIoTyConName :: Name
+primIoTyConName
+  = mkWiredInTyConName UserSyntax cSLASH_BUILTIN
+    (fsLit "PrimIO") primIoTyConKey primIoTyCon
+
+primIoTyCon :: PTyCon
+primIoTyCon = buildSynTyCon primIoTyConName kind 1 rhs
+  where
+    kva = case mkTemplateKindVars 1 of
+            [k1] -> k1
+            _ -> panic "unreachable"
+    kvf = case mkTemplateFunKindVars 1 of
+            [k] -> k
+            _ -> panic "unreachable"
+
+    tva = case mkTemplateTyVars [mkKiVarKi kva] of
+            [tv] -> tv
+            _ -> panic "unreachable"
+
+    kind = typeKind rhs
+
+    rhs = BigTyLamTy kva $
+          BigTyLamTy kvf $
+          TyLamTy tva $
+          FunTy (KiVarKi kvf)
+                (mkTyConTy realWorldTyCon)
+                (mkTyConApp ioResTyCon [ Embed (KiVarKi kva), TyVarTy tva ])
+
+{-
+The 'IO' tycon has kind
+type IO : ∀ k kf. k -> kf
+where 'kf' is the kind of the function 'RealWorld -kf> IORes a' and 'a : k'
+
+The 'MkIO' datacon has type
+data MkIO : /\k kf -> ∀ {a : k}. PrimIO {k} {kf} a -> IO {k} {kf} a
+
+The 'MkIO' datacon can be thought of as the function
+data MkIO = /\ k kf -> /\ {a : k} -> \ (fn : PrimIO {k} {kf} a) -> fn
+-}
+
+ioTyConName :: Name
+ioTyConName
+  = mkWiredInTyConName UserSyntax cSLASH_BUILTIN
+    (fsLit "IO") ioTyConKey ioTyCon
+
+mkIoDataConName :: Name
+mkIoDataConName
+  = mkWiredInDataConName UserSyntax cSLASH_BUILTIN
+    (fsLit "MkIO") mkIoDataConKey mkIoDataCon
+
+ioTyCon :: PTyCon
+ioTyCon
+  = mkAlgTyCon ioTyConName kind arity (mkDataTyConRhs [mkIoDataCon]) VanillaAlgTyCon
+  where
+    arity = 1
+
+    (kva, kvb) = case mkTemplateKindVars 2 of
+                   [k1, k2] -> (k1, k2)
+                   _ -> panic "unreachable"
+
+    kind = ForAllKi kva $
+           ForAllKi kvb $
+           Mono $ FunKi FKF_K_K (KiVarKi kva) (KiVarKi kvb)
+
+mkIoDataCon :: PDataCon
+mkIoDataCon = data_con
+  where
+    tag_map = mkTyConTagMap ioTyCon
+    data_con = mkDataCon mkIoDataConName
+                         False
+                         ioTyCon
+                         (lookupNameEnv_NF tag_map mkIoDataConName)
+                         (mkDataConId name data_con)
+                         dc_ty
+                         2
+    name = mkDataConName data_con mkIoDataConKey
+    dc_ty = let (kva, kvb) = case mkTemplateKindVars 2 of
+                               [k1, k2] -> (k1, k2)
+                               _ -> panic "unreachable"
+                ka = KiVarKi kva
+                kb = KiVarKi kvb
+
+                va = case mkTemplateTyVars [ka] of
+                       [a] -> a
+                       _ -> panic "unreachable"
+                a = TyVarTy va
+
+                dc_type = BigTyLamTy kva $
+                          BigTyLamTy kvb $
+                          ForAllTy (Bndr va Specified) $
+                          FunTy (BIKi UKd)
+                                (mkTyConApp primIoTyCon [Embed ka, Embed kb, a])
+                                (mkTyConApp ioTyCon [Embed ka, Embed kb, a])
+            in dc_type

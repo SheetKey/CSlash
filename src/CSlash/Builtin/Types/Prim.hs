@@ -226,71 +226,8 @@ eqTyCon = mkPrimTyCon eqTyConName kind 2
 *                                                                      *
 ********************************************************************* -}
 
-{- TODY*********
-'realWorld' should stay a prim: it should not have any data constructors.
-
-The remaining IO types should be moved to BuiltIn.Types since they all have data cons.
--}
-
 realWorldTyConName :: Name
 realWorldTyConName = mkPrimTc (fsLit "RealWorld#") realWorldTyConKey realWorldTyCon
 
 realWorldTyCon :: PTyCon
 realWorldTyCon = mkPrimTyCon realWorldTyConName (Mono (BIKi LKd)) 0
-
-ioResTyConName :: Name
-ioResTyConName = mkPrimTc (fsLit "IORes") ioResTyConKey ioResTyCon
-
-ioResTyCon :: PTyCon
-ioResTyCon = mkPrimTyCon ioResTyConName kind 1
-  where
-    kva = case mkTemplateKindVars 1 of
-            [k1] -> k1
-            _ -> panic "unreachable"
-
-    -- This is essentially a '(a : k, World# : LKd) : LKd'
-    kind = ForAllKi kva $
-           Mono $
-           FunKi FKF_K_K (KiVarKi kva) (BIKi LKd)
-
-primIoTyConName :: Name
-primIoTyConName = mkPrimTc (fsLit "PrimIO") primIoTyConKey primIoTyCon
-
-primIoTyCon :: PTyCon
-primIoTyCon = buildSynTyCon primIoTyConName kind 1 rhs
-  where
-    kva = case mkTemplateKindVars 1 of
-            [k1] -> k1
-            _ -> panic "unreachable"
-    kvf = case mkTemplateFunKindVars 1 of
-            [k] -> k
-            _ -> panic "unreachable"
-
-    tva = case mkTemplateTyVars [mkKiVarKi kva] of
-            [tv] -> tv
-            _ -> panic "unreachable"
-
-    kind = typeKind rhs
-
-    -- /\kva kvf -> \a : kva -> (World# : LKd) -kvf> (IORes kva a : LKd)
-    -- Values of this type are kvf functions from linear World#
-    -- to linear World# paired with a kva value.
-    rhs = BigTyLamTy kva $
-          BigTyLamTy kvf $
-          TyLamTy tva $
-          FunTy (KiVarKi kvf)
-                (mkTyConTy realWorldTyCon)
-                (mkTyConApp ioResTyCon [ Embed (KiVarKi kva), TyVarTy tva ])
-
-ioTyConName :: Name
-ioTyConName = mkPrimTc (fsLit "IO") ioTyConKey ioTyCon
-
-ioTyCon :: PTyCon
-ioTyCon = mkPrimTyCon ioTyConName kind 1
-  where
-    (kva, kvb) = case mkTemplateKindVars 2 of
-            [k1, k2] -> (k1, k2)
-            _ -> panic "unreachable"
-
-    kind = ForAllKi kva $ ForAllKi kvb $ Mono $
-           FunKi FKF_K_K (KiVarKi kva) (KiVarKi kvb)
