@@ -615,9 +615,11 @@ canTyEqHardFailure
   -> TcS (StopOrContinueTy (Either IrredTyCt a))
 canTyEqHardFailure ev ty1 ty2 = do
   traceTcS "canTyEqHardFailure" (ppr ty1 $$ ppr ty2)
-  (redn1, ty_rewriters1, _) <- rewriteTyForErrors ev ty1
-  (redn2, ty_rewriters2, _) <- rewriteTyForErrors ev ty2
-  traceTcS "canTyEqHardFailure ************************* DISCARDING ki_rewriters" empty
+  (redn1, ty_rewriters1, ki_rewriters1) <- rewriteTyForErrors ev ty1
+  (redn2, ty_rewriters2, ki_rewriters2) <- rewriteTyForErrors ev ty2
+  traceTcS "canTyEqHardFailure ************************* DISCARDING ki_rewriters"
+    $ vcat [ text "ki_rewriters1 =" <+> ppr ki_rewriters1
+           , text "ki_rewriters2 =" <+> ppr ki_rewriters2 ]
   new_ev <- rewriteTyEqEvidence (ty_rewriters1 S.<> ty_rewriters2) ev NotSwapped redn1 redn2
   finishCanWithIrredTy ShapeMismatchReason new_ev
 

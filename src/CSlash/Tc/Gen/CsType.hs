@@ -214,7 +214,7 @@ tc_cs_type rn_ty@(CsQualTy { cst_ctxt = ctxt, cst_body = body_ty }) exp_kind
        (coVars, coVarKis) <- tcLCsContext ctxt
        traceTc "tc_cs_type CsQualTy"
          $ vcat [ ppr rn_ty, ppr coVars ]
-       (ty', body_ki) <- checkKiConstraints InferKindSkol coVars
+       (ty', body_ki) <- checkKiConstraints InferKindSkol [] coVars
                          $ tc_infer_lcs_type body_ty
        let final_ty = mkTyLamTys (toAnyTyVar <$> coVars) ty'
            final_ki = mkInvisFunKis coVarKis body_ki
@@ -1148,7 +1148,7 @@ tc_type_in_pat ctxt cs_ty ns ctxt_kind = addSigCtxt ctxt cs_ty $ do
   ty <- liftZonkM $ zonkTcType ty
   checkValidType ctxt ty
 
-  traceTc "tc_type_in_pat" (ppr kv_prs)
+  traceTc "tc_type_in_pat" (ppr kv_prs $$ ppr ty)
   return ty
   where
     new_implicit_kv name = do
