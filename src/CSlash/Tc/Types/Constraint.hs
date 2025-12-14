@@ -770,6 +770,8 @@ checkSkolInfoAnon :: SkolemInfoAnon -> SkolemInfoAnon -> Bool
 checkSkolInfoAnon sk1 sk2 = go sk1 sk2
   where
     go (SigSkol c1 t1 s1) (SigSkol c2 t2 s2) = c1 == c2 && t1 `tcEqType` t2 && s1 == s2
+    go (SigSkolKi c1 t1 s1) (SigSkolKi c2 t2 s2) = c1 == c2 && t1 `tcEqType` t2 && s1 == s2
+    go (SigSkol c1 t1 _) (SigSkolKi c2 t2 _) = c1 == c2 && t1 `tcEqType` t2
     go (SigTypeSkol cx1) (SigTypeSkol cx2) = cx1 == cx2
     go (ForAllSkol _) (ForAllSkol _) = True
     go (TyLamTySkol ids1) (TyLamTySkol ids2)

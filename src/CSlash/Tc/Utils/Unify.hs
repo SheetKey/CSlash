@@ -121,8 +121,9 @@ tcSkolemizeGeneral ctxt top_ty expected_ty thing_inside
            ; skol_info <- mkSkolemInfo sig_skol 
            ; skol_info_ki <- mkSkolemInfo sig_skol_ki }
        let skol_kvs = map snd kv_prs
+           skol_tvs = map snd tv_prs
        traceTc "tcSkolemizeGeneral" (pprUserTypeCtxt ctxt <+> ppr skol_kvs <+> ppr tv_prs)
-       result <- checkKiConstraints sig_skol skol_kvs []
+       result <- checkTyKiConstraints sig_skol skol_kvs skol_tvs []
                  $ thing_inside kv_prs tv_prs rho_ty
        return (wrap, result)
 
@@ -163,7 +164,27 @@ tcSkolemize ctxt expected_ty thing_inside
   = tcSkolemizeGeneral ctxt expected_ty expected_ty $ \_ _ rho_ty ->
     thing_inside rho_ty
 
-checkTyConstraints :: SkolemInfoAnon -> [TcTyVar AnyKiVar] -> TcM result -> TcM (result)
+checkTyKiConstraints
+  :: SkolemInfoAnon
+  -> [AnyKiVar]
+  -> [AnyTyVar AnyKiVar]
+  -> [KiCoVar AnyKiVar]
+  -> TcM result
+  -> TcM result
+checkTyKiConstraints skol_info skol_kvs skol_tvs given thing_inside = do
+  ty_implication_needed <- implicationNeeded skol_info skol_tvs
+  ki_implication_needed <- kiImplicationNeeded skol_info skol_kvs given
+  if ty_implication_needed || ki_implication_needed
+    then do (tclvl, wanted, result) <- pushLevelAndCaptureConstraints thing_inside
+            (kiImplics, tyImplics)
+              <- buildTyKiImplicationFor tclvl skol_info skol_kvs skol_tvs given wanted
+            traceTc "checkTyKiConstraints" (ppr tclvl $$ ppr skol_kvs $$ ppr skol_tvs)
+            emitKiImplications kiImplics
+            emitTyImplications tyImplics
+            return result
+    else thing_inside
+
+checkTyConstraints :: SkolemInfoAnon -> [AnyTyVar AnyKiVar] -> TcM result -> TcM (result)
 checkTyConstraints skol_info skol_tvs thing_inside = do
   implication_needed <- implicationNeeded skol_info skol_tvs
   if implication_needed
@@ -178,7 +199,6 @@ checkKiConstraints
   :: SkolemInfoAnon -> [AnyKiVar] -> [KiCoVar AnyKiVar] -> TcM result -> TcM result
 checkKiConstraints skol_info skol_kvs given thing_inside = do
   implication_needed <- kiImplicationNeeded skol_info skol_kvs given
-  traceTc "checkKiConstraints implication_needed" (ppr implication_needed)
   if implication_needed
     then do (tclvl, wanted, result) <- pushLevelAndCaptureConstraints thing_inside
             wanted <- case onlyWantedKiConstraints_maybe wanted of
@@ -256,7 +276,7 @@ buildTvImplication skol_info skol_vs tclvl wanted
       checkTyImplicationInvariants implic'
       return implic'
 
-implicationNeeded :: SkolemInfoAnon -> [TcTyVar AnyKiVar] -> TcM Bool
+implicationNeeded :: SkolemInfoAnon -> [AnyTyVar AnyKiVar] -> TcM Bool
 implicationNeeded skol_info skol_tvs
   | null skol_tvs
   , not (alwaysBuildImplication skol_info)
@@ -288,6 +308,47 @@ kiImplicationNeeded skol_info skol_kvs given
 alwaysBuildImplication :: SkolemInfoAnon -> Bool
 alwaysBuildImplication _ = False
 
+buildTyKiImplicationFor
+  :: TcLevel
+  -> SkolemInfoAnon
+  -> [AnyKiVar]
+  -> [AnyTyVar AnyKiVar]
+  -> [KiCoVar AnyKiVar]
+  -> WantedTyConstraints
+  -> TcM (Bag KiImplication, Bag TyImplication)
+buildTyKiImplicationFor tclvl skol_info skol_kvs skol_tvs given wanted
+  | isEmptyWC wanted && null given
+  = return (emptyBag, emptyBag)
+  | Just tc_skol_kvs <- traverse toTcKiVar_maybe skol_kvs
+  , Just tc_skol_tvs <- traverse toTcTyVar_maybe skol_tvs
+  = assertPpr (all (isSkolemVar <||> isTcVarVar) tc_skol_kvs) (ppr tc_skol_kvs) $
+    assertPpr (all (isSkolemVar <||> isTcVarVar) tc_skol_tvs) (ppr tc_skol_tvs) $
+    do kco_binds_var <- newTcKiCoBinds
+       tco_binds_var <- newTcTyCoBinds
+       kiImplic <- newImplication
+       tyImplic <- newImplication
+       let (kiWanted, tyWanted) = case wanted of
+                                    WTC s t k -> (k, WTC s t emptyWC)
+           kiImplic' = kiImplic { kic_tclvl = tclvl
+                                , kic_skols = tc_skol_kvs
+                                , kic_given = given
+                                , kic_wanted = kiWanted
+                                , kic_binds = kco_binds_var
+                                , kic_info = skol_info }
+           tyImplic' = tyImplic { tic_tclvl = tclvl
+                                , tic_skols = tc_skol_tvs
+                                , tic_given = []
+                                , tic_wanted = tyWanted
+                                , tic_binds = tco_binds_var
+                                , tic_info = skol_info }
+       checkKiImplicationInvariants kiImplic'
+       checkTyImplicationInvariants tyImplic'
+
+       return (unitBag kiImplic', unitBag tyImplic')
+
+  | otherwise
+  = pprPanic "buildTyKiImplicationFor" (ppr skol_kvs $$ ppr skol_tvs)
+
 buildKiImplicationFor
   :: TcLevel
   -> SkolemInfoAnon
@@ -316,23 +377,25 @@ buildKiImplicationFor tclvl skol_info skol_kvs given wanted
 buildTyImplicationFor
   :: TcLevel
   -> SkolemInfoAnon
-  -> [TcTyVar AnyKiVar]
+  -> [AnyTyVar AnyKiVar]
   -> WantedTyConstraints
   -> TcM (Bag TyImplication)
 buildTyImplicationFor tclvl skol_info skol_tvs wanted
   | isEmptyWC wanted
   = return emptyBag
-  | otherwise
+  | Just tc_skol_tvs <- traverse toTcTyVar_maybe skol_tvs
   = do binds_var <- newTcTyCoBinds
        implic <- newImplication
        let implic' = implic { tic_tclvl = tclvl
-                            , tic_skols = skol_tvs
+                            , tic_skols = tc_skol_tvs
                             , tic_given = []
                             , tic_wanted = wanted
                             , tic_binds = binds_var
                             , tic_info = skol_info }
        checkTyImplicationInvariants implic'
        return (unitBag implic')
+  | otherwise
+  = pprPanic "buildTyImplicationFor" (ppr skol_tvs)
 
 matchExpectedFunTys
   :: forall a
@@ -361,8 +424,8 @@ matchExpectedFunTys herald ctx arity (Check top_ty) thing_inside
         || (n_req > 0 && isForAllTy ty)
       = do rec { (n_req', wrap_gen, tv_nms, tcbndrs, inner_ty)
                    <- skolemizeRequired skol_info n_req ty
-               ; let sig_skol = SigSkol ctx top_ty (tv_nms `zip` map toAnyTyVar skol_tvs)
-                     skol_tvs = binderVars tcbndrs
+               ; let sig_skol = SigSkol ctx top_ty (tv_nms `zip` skol_tvs)
+                     skol_tvs = toAnyTyVar <$> binderVars tcbndrs
                      bndrs = (mapVarBinder toAnyTyVar) <$> tcbndrs
                ; skol_info <- mkSkolemInfo sig_skol }
            (wrap_res, result) <- checkTyConstraints (getSkolemInfo skol_info) skol_tvs
