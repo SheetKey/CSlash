@@ -23,7 +23,7 @@ import CSlash.Tc.Zonk.TcType
 import CSlash.Core.Type
 import CSlash.Core.Type.Rep
 import CSlash.Core.Type.Compare (tcEqType)
-import CSlash.Core.Type.Ppr (debugPprType)
+import CSlash.Core.Type.Ppr (debugPprType, pprSigmaType)
 import CSlash.Core.Type.FVs( isInjectiveInType )
 import CSlash.Core.TyCon
 -- import GHC.Core.Coercion
@@ -425,7 +425,21 @@ new_check_arg_ty_ki _ = do
 
 mkFunTysMsg
   :: ExpectedFunTyOrigin -> (VisArity, AnyType) -> AnyTidyEnv -> ZonkM (AnyTidyEnv, SDoc)
-mkFunTysMsg herald (n_vis_args_in_call, fun_ty) env = panic "mkFunTysMsg"
+mkFunTysMsg herald (n_vis_args_in_call, fun_ty) env = do
+  (env', fun_ty) <- zonkTidyTcType env fun_ty
+  let (pi_ty_bndrs, _) = splitPiTys fun_ty
+      n_fun_args = count isVisiblePiTyBinder pi_ty_bndrs
+      msg | n_vis_args_in_call <= n_fun_args
+          = text "In the result of a function call"
+          | otherwise
+          = hang (full_herald <> comma)
+            2 (sep [ text "but its type" <+> quotes (pprSigmaType fun_ty)
+                   , if n_fun_args == 0 then text "has none"
+                     else text "has only" <+> speakN n_fun_args ])
+  return (env', msg)
+  where
+    full_herald = pprExpectedFunTyHerald herald
+                  <+> speakNOf n_vis_args_in_call (text "visible argument")
 
 {- *********************************************************************
 *                                                                      *

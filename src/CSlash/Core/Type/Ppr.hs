@@ -31,6 +31,9 @@ pprPrecTypeX env prec ty
                     then debug_ppr_ty prec ty
                     else panic "pprPrecIfaceType prec (tidyToIfaceTypeStyX env ty sty)"
 
+pprSigmaType :: IsTyVar tv kv => Type tv kv -> SDoc
+pprSigmaType ty = text "pprSigmaType not implemented" <+> pprType ty
+
 pprTyVars :: VarHasKind tv kv => [tv] -> SDoc
 pprTyVars tvs = sep (map pprTyVar tvs)
 

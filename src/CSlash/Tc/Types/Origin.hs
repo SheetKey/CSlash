@@ -155,6 +155,11 @@ data TypedThing
   | CsExprRnThing (CsExpr Rn)
   | CsExprTcThing (CsExpr Tc)
 
+instance Outputable TypedThing where
+  ppr (NameThing name) = ppr name
+  ppr (CsExprRnThing expr) = ppr expr
+  ppr (CsExprTcThing expr) = ppr expr
+
 data KindedThing
   = CsTypeRnThing (CsType Rn)
   | KiNameThing Name
@@ -302,6 +307,14 @@ data ExpectedFunTyOrigin
   = forall (p :: Pass). Outputable (CsExpr (CsPass p))
     => ExpectedFunTyArg !TypedThing !(CsExpr (CsPass p))
   | ExpectedFunTyLam !(CsExpr Rn)
+
+pprExpectedFunTyHerald :: ExpectedFunTyOrigin -> SDoc
+pprExpectedFunTyHerald (ExpectedFunTyArg fun _)
+  = sep [ text "The function" <+> quotes (ppr fun)
+        , text "is applied to" ]
+pprExpectedFunTyHerald (ExpectedFunTyLam expr)
+  = sep [ text "The lambda expression" <+> quotes (pprSetDepth (PartWay 1) (ppr expr))
+        , text "has" ]
 
 {- *******************************************************************
 *                                                                    *

@@ -80,6 +80,10 @@ module CSlash.Types.Var
     {-* PiKiBinder *-}
   , PiKiBinder(..)
   , namedPiKiBinder_maybe
+
+    {-* PiTyBinder *-}
+  , PiTyBinder(..)
+  , isVisiblePiTyBinder, isInvisiblePiTyBinder
   ) where
 
 import Prelude hiding ((<>))
@@ -940,3 +944,19 @@ instance Outputable kv => Outputable (PiKiBinder kv) where
 namedPiKiBinder_maybe :: PiKiBinder kv -> Maybe kv
 namedPiKiBinder_maybe (Named kv) = Just kv
 namedPiKiBinder_maybe _ = Nothing
+
+data PiTyBinder tv kv
+  = NamedTy (ForAllBinder tv)
+  | AnonTy (Type tv kv)
+  -- deriving Data
+
+instance IsTyVar tv kv => Outputable (PiTyBinder tv kv) where
+  ppr (AnonTy ty) = ppr ty
+  ppr (NamedTy v) = ppr v
+
+isInvisiblePiTyBinder :: PiTyBinder tv kv -> Bool
+isInvisiblePiTyBinder (NamedTy (Bndr _ vis)) = isInvisibleForAllFlag vis
+isInvisiblePiTyBinder (AnonTy _) = True
+
+isVisiblePiTyBinder :: PiTyBinder tv kv -> Bool
+isVisiblePiTyBinder = not . isInvisiblePiTyBinder
