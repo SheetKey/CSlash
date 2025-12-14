@@ -140,7 +140,7 @@ tcValArg (EValArg { ea_ctxt = ctxt
 
     exp_arg_ty <- liftZonkM $ zonkTcType arg_ty
 
-    arg' <- tcScalingUsage (panic "tcValArg Mult") $ tcPolyExpr arg (mkCheckExpType exp_arg_ty)
+    arg' <- {-tcScalingUsage (panic "tcValArg Mult") $-} tcPolyExpr arg (mkCheckExpType exp_arg_ty)
 
     return (EValArg { ea_ctxt = ctxt
                     , ea_arg = L arg_loc arg'
