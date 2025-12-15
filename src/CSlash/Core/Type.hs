@@ -73,17 +73,20 @@ rewriterView (TyConApp tc tys)
   | isTypeSynonymTyCon tc
   , isForgetfulSynTyCon tc
   = expandSynTyConApp_maybe tc tys
+rewriterView ty@(AppTy{}) = expandTyLamApp_maybe ty (not . isForgetfulTy)
 rewriterView _ = Nothing
 {-# INLINE rewriterView #-}
 
 coreView :: IsTyVar tv kv => Type tv kv -> Maybe (Type tv kv)
 coreView (TyConApp tc tys) = expandSynTyConApp_maybe tc tys
+coreView ty@(AppTy{}) = expandTyLamApp_maybe ty (const True)
 coreView _ = Nothing
 {-# INLINE coreView #-}
 
 coreFullView :: IsTyVar tv kv => Type tv kv -> Type tv kv
 coreFullView ty@(TyConApp tc _)
   | isTypeSynonymTyCon tc = core_full_view ty
+coreFullView ty@(AppTy{}) = core_full_view ty
 coreFullView ty = ty
 {-# INLINE coreFullView #-}
 
@@ -92,11 +95,30 @@ core_full_view ty
   | Just ty' <- coreView ty = core_full_view ty'
   | otherwise = ty
 
+expandTyLamApp_maybe :: IsTyVar tv kv => Type tv kv -> (Type tv kv -> Bool) -> Maybe (Type tv kv)
+expandTyLamApp_maybe ty pred = case split ty [] of
+  (fn, args)
+    | let arity = tyFunArity fn
+    , args `saturates` arity
+    , pred fn
+      -> Just $! (expand_syn fn args)
+  _ -> Nothing
+  where
+    split (AppTy ty arg) args = split ty (arg:args)
+    split ty args = (ty, args)
+
+tyFunArity :: Type tv kv -> Arity
+tyFunArity = go 0
+  where
+    go i (TyLamTy _ ty) = go (i + 1) ty
+    go i (BigTyLamTy _ ty) = go (i + 1) ty
+    go i _ = i
+
 expandSynTyConApp_maybe :: IsTyVar tv kv => TyCon tv kv -> [Type tv kv] -> Maybe (Type tv kv)
 expandSynTyConApp_maybe tc arg_tys
   | Just rhs <- synTyConDefn_maybe tc
   , arg_tys `saturates` tyConArity tc
-  = Just $! (expand_syn rhs arg_tys)
+  = Just $! (expand_syn (asGenericTyKi rhs) arg_tys)
   | otherwise
   = Nothing
 
@@ -105,10 +127,10 @@ saturates _ 0 = True
 saturates [] _ = False
 saturates (_:tys) n = assert (n >= 0) $ saturates tys (n-1)
 
-expand_syn :: IsTyVar tv kv => Type (TyVar KiVar) KiVar -> [Type tv kv] -> Type tv kv
+expand_syn :: IsTyVar tv kv => Type tv kv -> [Type tv kv] -> Type tv kv
 expand_syn rhs arg_tys
-  | null arg_tys = asGenericTyKi rhs
-  | otherwise = go (asGenericTyKi rhs) empty_subst arg_tys
+  | null arg_tys = rhs
+  | otherwise = go rhs empty_subst arg_tys
   where
     empty_subst = mkEmptyTvSubst in_scope
     in_scope = bimap mkInScopeSet mkInScopeSet $ case shallowVarsOfTypes arg_tys of
