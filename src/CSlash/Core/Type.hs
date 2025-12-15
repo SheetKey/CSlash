@@ -709,3 +709,22 @@ setCoHoleType h t = setTyCoHoleCoVar h (setVarType (tyCoHoleCoVar h) t)
 setTyCoHoleCoVar
   :: IsTyVar tv kv => TypeCoercionHole tv kv -> TyCoVar tv kv -> TypeCoercionHole tv kv
 setTyCoHoleCoVar h cv = h { tch_co_var = cv }
+
+castCoercionKind2
+  :: IsTyVar tv kv
+  => TypeCoercion tv kv
+  -> Type tv kv -> Type tv kv
+  -> KindCoercion kv -> KindCoercion kv
+  -> TypeCoercion tv kv 
+castCoercionKind2 g t1 t2 h1 h2
+  = mkCoherenceRightCo t2 h2 (mkCoherenceLeftCo t1 h1 g)
+
+castCoercionKind1
+  :: IsTyVar tv kv
+  => TypeCoercion tv kv -> Type tv kv -> Type tv kv -> KindCoercion kv -> TypeCoercion tv kv
+castCoercionKind1 g t1 t2 h
+  = case g of
+      TyRefl {} -> mkReflTyCo (mkCastTy t2 h)
+      GRefl _ kco -> mkGReflCo (mkCastTy t1 h) (mkSymKiCo h `mkTransKiCo` kco `mkTransKiCo` h)
+      _ -> castCoercionKind2 g t1 t2 h h
+

@@ -129,8 +129,8 @@ mkCoherenceRightMRedn (TyReduction co1 ty2) kco
 {-# INLINE mkCoherenceRightMRedn #-}
 
 mkCastRedn1 :: AnyType -> AnyKindCoercion -> TyReduction -> TyReduction
-mkCastRedn1 ty kco (TyReduction co xi)
-  = panic "mkCastRedn1"
+mkCastRedn1 ty cast_kco (TyReduction co xi)
+  = mkTyReduction (castCoercionKind1 co ty xi cast_kco) (mkCastTy xi cast_kco)
 {-# INLINE mkCastRedn1 #-}
 
 mkFunKiRedn :: FunKiFlag -> KiReduction -> KiReduction -> KiReduction
