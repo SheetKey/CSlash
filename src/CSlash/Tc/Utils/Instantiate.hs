@@ -132,7 +132,7 @@ topInstantiate orig sigma
   | (kvs, body1) <- tcSplitBigLamKiVars sigma
   , (tvs, body2) <- tcSplitForAllInvisTyVars body1
   , not (null kvs && null tvs)
-  = do (_, _, wrap1, body3) <- instantiateSigma orig kvs tvs body1 sigma
+  = do (_, _, wrap1, body3) <- instantiateSigma orig kvs tvs body2 sigma
        (wrap2, body4) <- topInstantiate orig body3
        return (wrap2 <.> wrap1, body4)
   | otherwise
