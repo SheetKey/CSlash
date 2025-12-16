@@ -42,6 +42,9 @@ emptyTvSubstEnv = emptyVarEnv
 emptyTvSubst :: TvSubst tv kv
 emptyTvSubst = TvSubst emptyInScopeSet emptyVarEnv emptyKvSubst
 
+liftKvSubst :: TvSubst tv kv -> (KvSubst kv -> KvSubst kv) -> TvSubst tv kv
+liftKvSubst (TvSubst is tv kv) f = TvSubst is tv (f kv)
+
 mkEmptyTvSubst :: (InScopeSet tv, InScopeSet kv) -> TvSubst tv kv
 mkEmptyTvSubst (in_scope, k_in_scope) = TvSubst in_scope emptyVarEnv (mkEmptyKvSubst k_in_scope)
 

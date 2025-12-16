@@ -137,8 +137,12 @@ expand_syn rhs arg_tys
                                                    (tv, _, kv) -> (tv, kv)
 
     go (TyLamTy _ _) _ [] = pprPanic "expand_syn" (ppr rhs $$ ppr arg_tys)
+    go (BigTyLamTy _ _) _ [] = pprPanic "expand_syn" (ppr rhs $$ ppr arg_tys)
     go ty subst [] = substTy subst ty
     go (TyLamTy tv ty) subst (arg:args) = go ty (extendTvSubst subst tv arg) args
+    go (BigTyLamTy kv ty) subst (arg:args)
+      | Embed ki <- arg = go ty (liftKvSubst subst (\s -> extendKvSubst s kv ki)) args
+      | otherwise = pprPanic "expand_syn" (ppr rhs $$ ppr arg_tys)
     go ty subst args = mkAppTys (substTy subst ty) args
 
 {- *********************************************************************
