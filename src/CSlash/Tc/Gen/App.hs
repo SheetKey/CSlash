@@ -61,7 +61,8 @@ tcApp rn_expr exp_res_ty = do
     $ vcat [ text "rn_expr:" <+> ppr rn_expr
            , text "rn_fun:" <+> ppr rn_fun
            , text "fun_ctxt:" <+> ppr fun_ctxt
-           , text "rn_args:" <+> ppr rn_args ]
+           , text "rn_args:" <+> ppr rn_args
+           , text "exp_res_ty:" <+> ppr exp_res_ty ]
 
   (tc_fun, fun_sigma) <- tcInferAppHead fun
   let tc_head = (tc_fun, fun_ctxt)
@@ -77,6 +78,8 @@ tcApp rn_expr exp_res_ty = do
 
   app_res_rho <- liftZonkM $ zonkTcType app_res_rho
 
+  traceTc "tcApp:checkResultTy"
+    $ vcat [ text "zonked app_res_rho:" <+> ppr app_res_rho ]
   res_wrap <- checkResultTy rn_expr tc_head inst_args app_res_rho exp_res_ty
 
   finishApp tc_head tc_args app_res_rho res_wrap
@@ -170,6 +173,7 @@ tcValArg (EValArgQL { eaql_wanted = wanted
                       $ qlUnify app_res_rho exp_arg_rho
                     tc_args <- tcValArgs inst_args
                     app_res_rho <- liftZonkM $ zonkTcType app_res_rho
+                    traceTc "tcValArg:checkResultTy" empty
                     res_wrap <- checkResultTy rn_expr tc_head inst_args app_res_rho
                                               (mkCheckExpType exp_arg_rho)
                     finishApp tc_head tc_args app_res_rho res_wrap
@@ -243,6 +247,7 @@ tcInstFun (tc_fun, fun_ctxt) fun_sigma rn_args = do
       , not (null kvs && null tvs)
       = do (_, _, wrap, fun_rho) <- addHeadCtxt fun_ctxt
                                  $ instantiateSigma fun_orig kvs tvs body2 fun_ty
+           traceTc "go1 instantiateSigma" (ppr fun_rho)
            go pos (addArgWrap wrap acc) fun_rho args
 
     go1 _ acc fun_ty [] = do
@@ -281,10 +286,12 @@ tcInstFun (tc_fun, fun_ctxt) fun_sigma rn_args = do
            go pos acc' fun_ty' args
 
     go1 pos acc fun_ty (EValArg { ea_arg = arg, ea_ctxt = ctxt } : rest_args) = do
+      traceTc "go1 last" (ppr fun_ty $$ ppr arg $$ ppr rest_args)
       let herald = case fun_ctxt of
                      VACall{} -> ExpectedFunTyArg (CsExprTcThing tc_fun) (unLoc arg)
       (wrap, arg_ty, res_ty) <- matchActualFunTy herald (Just $ CsExprTcThing tc_fun)
                                                  (n_val_args, fun_sigma) fun_ty
+      traceTc "go1 matchActualFunTy" (ppr arg_ty $$ ppr res_ty)
       arg' <- quickLookArg ctxt arg arg_ty
       let acc' = arg' : addArgWrap wrap acc
       go (pos + 1) acc' res_ty rest_args
@@ -495,6 +502,8 @@ qlUnify ty1 ty2 = do
       = do go t1a t2a
            go t1b t2b
 
+    go (Embed mki1) (Embed mki2) = go_mono_ki mki1 mki2
+
     go _ _ = return ()
 
     go_kappa kappa ty2 = assertPpr (isMetaVar kappa) (ppr kappa) $ do
@@ -519,5 +528,43 @@ qlUnify ty1 ty2 = do
            traceTc "qlUnify:update"
              $ ppr kappa <+> text ":=" <+> ppr ty2
            liftZonkM $ writeMetaTyVar kappa ty2'
+      | otherwise
+      = return ()
+
+    go_mono_ki :: AnyMonoKind -> AnyMonoKind -> TcM ()
+    go_mono_ki (KiVarKi kv) ki2
+      | Just mkv <- toTcKiVar_maybe kv
+      , isMetaVar mkv
+      = go_ki_kappa mkv ki2
+    go_mono_ki ki1 (KiVarKi kv)
+      | Just mkv <- toTcKiVar_maybe kv
+      , isMetaVar mkv
+      = go_ki_kappa mkv ki1
+    go_mono_ki (BIKi k1) (BIKi k2)
+      | k1 == k2
+      = return ()
+    go_mono_ki (FunKi {}) (FunKi {}) = panic "qlUnify:go_mono_ki:FunKi"
+    go_mono_ki _ _ = return ()
+
+    go_ki_kappa kappa ki2 = assertPpr (isMetaVar kappa) (ppr kappa) $ do
+      info <- readMetaKiVar kappa
+      case info of
+        Indirect ki1 -> go_mono_ki ki1 ki2
+        Flexi -> do ki2 <- liftZonkM $ zonkTcMonoKind ki2
+                    go_ki_flexi kappa ki2
+
+    go_ki_flexi mkappa (KiVarKi kv2)
+      | let kappa = toAnyKiVar mkappa
+      , lhsKiPriority kv2 > lhsKiPriority kappa
+      , Just mkv2 <- toTcKiVar_maybe kv2
+      , isMetaVar mkv2
+      = go_ki_flexi1 mkv2 (KiVarKi kappa)
+    go_ki_flexi kappa ki2 = go_ki_flexi1 kappa ki2
+
+    go_ki_flexi1 kappa ki2
+      | simpleUnifyCheckKind kappa ki2
+      = do traceTc "qlUnify:update:ki"
+             $ ppr kappa <+> text ":=" <+> ppr ki2
+           liftZonkM $ writeMetaKiVar kappa ki2
       | otherwise
       = return ()
