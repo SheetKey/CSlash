@@ -533,12 +533,23 @@ zonkTidyOrigin env (GivenOrigin skol_info) = do
   let skol_info2 = tidySkolemInfoAnon env skol_info1
   return (env, GivenOrigin skol_info2)
 
+zonkTidyOrigin env orig@(TypeEqOrigin { uo_actual = act, uo_expected = exp }) = do
+  (env1, act') <- zonkTidyTcType env act
+  (env2, exp') <- zonkTidyTcType env1 exp
+  return (env2, orig { uo_actual = act', uo_expected = exp' })
+
+zonkTidyOrigin env (KindEqOrigin t1 t2 orig) = do
+  (env1, t1') <- zonkTidyTcType env t1
+  (env2, t2') <- zonkTidyTcType env1 t2
+  (env3, orig') <- zonkTidyOrigin env2 orig
+  return (env2, KindEqOrigin t1' t2' orig')
+
 zonkTidyOrigin env orig@(KindCoOrigin { kco_actual = act, kco_expected = exp }) = do
   (env1, act') <- zonkTidyTcMonoKind env act
   (env2, exp') <- zonkTidyTcMonoKind env1 exp
   return (env2, orig { kco_actual = act', kco_expected = exp' })
 
-zonkTidyOrigin env orig = panic "return (env, orig)"
+zonkTidyOrigin env orig = return (env, orig)
 
 tidyTyCt :: AnyTidyEnv -> TyCt -> TyCt
 tidyTyCt env = updTyCtEvidence (tidyTyCtEvidence env)
