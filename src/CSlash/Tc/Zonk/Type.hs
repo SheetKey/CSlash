@@ -163,7 +163,7 @@ zonkTyVarOcc = handleAnyTv f_any f_tc
 
 extendMetaTvEnv :: TcTyVar AnyKiVar -> Type (TyVar KiVar) KiVar -> ZonkTcM ()
 extendMetaTvEnv tv ty = ZonkT $ \ (ZonkEnv { ze_meta_tv_env = mtv_env_ref }) ->
-  updTcRef mtv_env_ref (\env -> panic "extendVarEnv env tv ty")
+  updTcRef mtv_env_ref (\env -> extendVarEnv env tv ty)
 
 lookupMetaTv :: TcTyVar AnyKiVar -> ZonkTcM (Maybe (Type (TyVar KiVar) KiVar))
 lookupMetaTv tv = ZonkT $ \ (ZonkEnv { ze_meta_tv_env = mtv_env_ref }) -> do
