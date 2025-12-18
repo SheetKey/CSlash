@@ -428,8 +428,8 @@ getIOType :: TcM AnyType
 getIOType = do
   ioTyCon <- asAnyTyKi <$> tcLookupTyCon ioTyConName
   unitTyCon <- asAnyTyKi <$> tcLookupTyCon unitTyConName
-  return $ mkTyConApp ioTyCon [ Embed (BIKi UKd), Embed (BIKi UKd)
-                              , mkTyConApp unitTyCon [ Embed (BIKi UKd) ]
+  return $ mkTyConApp ioTyCon [ Embed (BIKi LKd), Embed (BIKi UKd)
+                              , mkTyConApp unitTyCon [ Embed (BIKi LKd) ]
                               ]
 
 setMainCtxt :: Name -> AnyType -> TcM a -> TcM a
