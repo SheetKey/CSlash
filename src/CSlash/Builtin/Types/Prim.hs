@@ -89,7 +89,7 @@ mkTemplateKindVarsRes i
 
 mkTemplateFunKindVars :: Int -> [KiVar]
 mkTemplateFunKindVars i
-  = [ mkKiVar (mk_kv_name u ('k' : 'f' : show u))
+  = [ mkKiVar (mk_fkv_name u ('k' : 'f' : show u))
     | u <- [0..(i-1)]
     ]
 
@@ -118,10 +118,16 @@ mkTemplateTyConKind arity
   = let res_kind = KiVarKi $ mkKiVar (mk_kv_name arity ('k' : show arity))
     in mkTemplateTyConKindFromRes arity res_kind
 
+-- TODO: do KiCoVars need their own version of 'mkAlphaKiVarUnique'/'mkFunKiVarUnique'?
 mk_kv_name :: Int -> String -> Name
-mk_kv_name u s = mkInternalName (mkAlphaTyVarUnique u)
+mk_kv_name u s = mkInternalName (mkAlphaKiVarUnique u)
                                 (mkKiVarOccFS (mkFastString s))
                                 noSrcSpan
+
+mk_fkv_name :: Int -> String -> Name
+mk_fkv_name u s = mkInternalName (mkFunKiVarUnique u)
+                                 (mkKiVarOccFS (mkFastString s))
+                                 noSrcSpan
 
 mk_tv_name :: Int -> String -> Name
 mk_tv_name u s = mkInternalName (mkAlphaTyVarUnique u)

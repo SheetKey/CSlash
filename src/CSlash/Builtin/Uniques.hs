@@ -103,6 +103,12 @@ getTupleDataConName n =
 mkAlphaTyVarUnique :: Int -> Unique
 mkAlphaTyVarUnique i = mkUniqueInt '1' i
 
+mkAlphaKiVarUnique :: Int -> Unique
+mkAlphaKiVarUnique i = mkUniqueInt '1' i
+
+mkFunKiVarUnique :: Int -> Unique
+mkFunKiVarUnique i = mkUniqueInt '2' i
+
 -- mkPreludeMiscIdUnique
 mkWiredInMiscIdUnique :: Int -> Unique
 mkWiredInMiscIdUnique i = mkUniqueInt '0' i
