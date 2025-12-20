@@ -646,7 +646,8 @@ tcSubMult origin w_actual w_expected
         | submult w_actual w_expected
           -> return idCsWrapper
         | otherwise
-          -> do kco <- panic "unifyKindAndEmit origin GTEQKi w_actual w_expected"
+          -> do kco <- unifyKindAndEmit origin LTEQKi w_expected (BIKi w_actual) -- Flipped:
+                       -- to aviod needing a 'GTEQKi', (since want w_actual >= w_expected)
                 if isReflKiCo kco
                   then return idCsWrapper
                   else return $ WpMultCoercion kco
