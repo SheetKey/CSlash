@@ -342,6 +342,20 @@ newOpenFlexiTyVar = do
   kind <- newOpenTypeKind
   newFlexiTyVar kind
 
+newMetaTyKiVars :: ([KiVar], [TyVar KiVar]) -> TcM (AnyTvSubst, [AnyKiVar], [AnyTyVar AnyKiVar])
+newMetaTyKiVars (kvs, tvs)
+  = newMetaTyKiVarsX emptyTvSubst (toAnyKiVar <$> kvs) (asAnyKi . toAnyTyVar <$> tvs)
+
+newMetaTyKiVarsX
+  :: AnyTvSubst
+  -> [AnyKiVar]
+  -> [AnyTyVar AnyKiVar]
+  -> TcM (AnyTvSubst, [AnyKiVar], [AnyTyVar AnyKiVar])
+newMetaTyKiVarsX (TvSubst is tvset kvsubst) kvs tvs = do
+  (kvsubst', kvs) <- mapAccumLM newMetaKiVarX kvsubst kvs
+  (tvsubst', tvs) <- mapAccumLM newMetaTyVarX (TvSubst is tvset kvsubst') tvs
+  return (tvsubst', kvs, tvs)
+
 newMetaTyVarX :: AnyTvSubst -> AnyTyVar AnyKiVar -> TcM (AnyTvSubst, AnyTyVar AnyKiVar)
 newMetaTyVarX = new_meta_tv_x TauVar
 
