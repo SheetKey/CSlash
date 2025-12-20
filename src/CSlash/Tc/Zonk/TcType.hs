@@ -345,7 +345,7 @@ checkKiCoercionHole kcv kco
        return
          $ assertPpr (ok kcv_ki)
          (text "Bad kind coercion hole"
-          <+> ppr kcv <> colon <+> vcat [ ppr k1, ppr k2, ppr kcv_ki ])
+          <+> ppr kcv <> colon <+> vcat [ ppr k1, ppr kc, ppr k2, ppr kcv_ki ])
          kco
   | otherwise
   = return kco
@@ -354,9 +354,15 @@ checkKiCoercionHole kcv kco
     ok kcv_ki | KiCoPred kcv_kc kcv_k1 kcv_k2 <- classifyPredKind kcv_ki
               = k1 `eqMonoKind` kcv_k1
                 && k2 `eqMonoKind` kcv_k2
-                && kc == kcv_kc
+                && kcv_kc `ok_con` kc
               | otherwise
               = False
+
+    ok_con act filler
+      | act == filler = True
+    ok_con LTEQKi EQKi = True -- We can fill a 'LTEQKi' with and 'EQKi' or 'LTKi'
+    ok_con LTEQKi LTKi = True
+    ok_con _ _ = False
 
 {- *********************************************************************
 *                                                                      *
