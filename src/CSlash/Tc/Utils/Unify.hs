@@ -506,6 +506,51 @@ mkFunTysMsg herald (n_vis_args_in_call, fun_ty) env = do
 
 {- *********************************************************************
 *                                                                      *
+                Other matchExpected functions
+*                                                                      *
+********************************************************************* -}
+
+matchExpectedTyConApp
+  :: TyCon (TyVar KiVar) KiVar
+  -> AnyRhoType
+  -> TcM (AnyTypeCoercion, [AnySigmaType])
+matchExpectedTyConApp exp_tc orig_ty
+  = assertPpr (isAlgTyCon tc) (ppr tc) $
+    go orig_ty
+  where
+    tc = asAnyTyKi exp_tc
+
+    go ty
+      | Just ty' <- coreView ty
+      = go ty'
+
+    go ty@(TyConApp tycon args)
+      | tc == tycon
+      = return (mkReflTyCo ty, args)
+
+    go (TyVarTy tv)
+      | Just tctv <- toTcTyVar_maybe tv
+      , isMetaVar tctv
+      = do cts <- readMetaTyVar tctv
+           case cts of
+             Indirect ty -> go ty
+             Flexi -> defer
+
+    go _ = defer
+
+    defer = do
+      (_, arg_kvs, arg_tvs) <- newMetaTyKiVars (tyConTyKiVars exp_tc)
+      traceTc "matchExpectedTyConApp"
+        $ (ppr exp_tc $$ ppr (tyConTyKiVars exp_tc) $$ ppr arg_kvs $$ ppr arg_tvs)
+      let kargs = mkKiVarKis arg_kvs
+          targs = mkTyVarTys arg_tvs
+          args = (Embed <$> kargs) ++ targs
+          tc_template = mkTyConApp tc args
+      co <- unifyType Nothing tc_template orig_ty
+      return (co, args)
+
+{- *********************************************************************
+*                                                                      *
                 fillInferResult
 *                                                                      *
 ********************************************************************* -}
