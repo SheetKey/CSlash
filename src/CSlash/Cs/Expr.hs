@@ -197,6 +197,10 @@ type instance XMissing Rn = NoExtField
 type instance XMissing Tc = NoExtField -- should be Scaled Type
 type instance XMissing Zk = NoExtField -- should be Scaled Type
 
+tupArgPresent :: CsTupArg (CsPass p) -> Bool
+tupArgPresent (Present {}) = True
+tupArgPresent (Missing {}) = False
+
 {- *********************************************************************
 *                                                                      *
             XXExpr: the extension constructor of HsExpr
