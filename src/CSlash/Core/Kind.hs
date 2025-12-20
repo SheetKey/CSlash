@@ -703,10 +703,10 @@ foldMonoKiCo (MKiCoFolder { mkcf_kivar = kivar
     go_cos env (c:cs) = go_co env c `mappend` go_cos env cs
 
     go_co env (Refl ki) = go_ki env ki
-    go_co env BI_U_A = panic "go_co BI_U_A"
-    go_co env BI_A_L = panic "go_co BI_A_L"
-    go_co env (BI_U_LTEQ _) = panic "go_co BI_U_LTEQ"
-    go_co env (BI_LTEQ_L _) = panic "go_co BI_LTEQ_L"
+    go_co env BI_U_A = mempty
+    go_co env BI_A_L = mempty
+    go_co env (BI_U_LTEQ ki) = go_ki env ki
+    go_co env (BI_LTEQ_L ki) = go_ki env ki
     go_co env (LiftEq co) = go_co env co
     go_co env (LiftLT co) = go_co env co
     go_co env (HoleCo hole) = cohole env hole
