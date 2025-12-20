@@ -22,7 +22,7 @@ import CSlash.Parser.Annotation
 import CSlash.Tc.Types.Evidence
 
 import CSlash.Core.DataCon
-import CSlash.Core.Type ( Type )
+import CSlash.Core.Type ( Type, TypeCoercion )
 
 import CSlash.Types.Id
 import CSlash.Types.Name
@@ -183,6 +183,9 @@ csTypeToCsSigType lty@(L loc ty) =
 mkCsWrap :: AnyCsWrapper -> CsExpr Tc -> CsExpr Tc
 mkCsWrap co_fn e | isIdCsWrapper co_fn = e
 mkCsWrap co_fn e = XExpr (WrapExpr co_fn e)
+
+mkCsWrapTyCo :: TypeCoercion (AnyTyVar AnyKiVar) AnyKiVar -> CsExpr Tc -> CsExpr Tc
+mkCsWrapTyCo co e = mkCsWrap (mkWpCast co) e
 
 mkCsWrapPat :: AnyCsWrapper -> Pat Tc -> Type (AnyTyVar AnyKiVar) AnyKiVar -> Pat Tc
 mkCsWrapPat co_fn p ty | isIdCsWrapper co_fn = p
