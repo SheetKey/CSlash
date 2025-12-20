@@ -61,6 +61,9 @@ import qualified Data.List.NonEmpty as NE
 *                                                                      *
 ********************************************************************* -}
 
+tcCheckPolyExpr :: LCsExpr Rn -> AnySigmaType -> TcM (LCsExpr Tc)
+tcCheckPolyExpr expr res_ty = tcPolyLExpr expr (mkCheckExpType res_ty)
+
 tcPolyLExpr :: LCsExpr Rn -> ExpSigmaType -> TcM (LCsExpr Tc)
 tcPolyLExpr (L loc expr) res_ty =
   setSrcSpanA loc
@@ -154,6 +157,17 @@ tcExpr e@(CsTyLam x matches) res_ty = do
   -- TODO: Check what error GHC throws for bad at pattern and where it is caught
   panic "tcExpr CsTyLam: not allowed in this place"
 
+tcExpr expr@(ExplicitTuple x tup_args) res_ty
+  | all tupArgPresent tup_args
+  = do let arity = length tup_args
+           tup_tc = tupleTyCon arity
+       res_ty <- expTypeToType res_ty
+       (coi, arg_tys) <- matchExpectedTyConApp tup_tc res_ty
+       tup_args1 <- tcCheckExplicitTuple tup_args (drop ((arity * 2) + 1) arg_tys)
+       return $ mkCsWrapTyCo coi (ExplicitTuple x tup_args1)
+  | otherwise
+  = panic "tcExpr ExplicitTuple section"
+
 tcExpr (CsIf x pred b1 b2) res_ty = do
   pred' <- tcCheckMonoExpr pred $ mkAppTy (asAnyTyKi boolTy) (Embed $ BIKi UKd)
   (u1, b1') <- tcCollectingUsage $ tcMonoExpr b1 res_ty
@@ -162,3 +176,19 @@ tcExpr (CsIf x pred b1 b2) res_ty = do
   return (CsIf x pred' b1' b2')
 
 tcExpr e res_ty = panic "tcExpr other"
+
+tcCheckExplicitTuple
+  :: [CsTupArg Rn]
+  -> [AnySigmaType]
+  -> TcM [CsTupArg Tc]
+tcCheckExplicitTuple args tys = do
+  massertPpr (equalLength args tys) (ppr tys)
+  checkTupSize (length args)
+  zipWith3M go [1,2..] args tys
+  where
+    go :: Int -> CsTupArg Rn -> AnyType -> TcM (CsTupArg Tc)
+    go  i (Missing {}) arg_ty = pprPanic "tcCheckExplicitTuple: tuple sections not handled here"
+                                (ppr i $$ ppr arg_ty)
+    go i (Present x expr) arg_ty = do
+      expr' <- tcCheckPolyExpr expr arg_ty
+      return $ Present x expr'
