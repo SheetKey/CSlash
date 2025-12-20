@@ -43,6 +43,15 @@ import Numeric (showInt)
 import Data.Char (ord, isDigit)
 import Control.Applicative ((<|>))
 
+-- Should be in TyCon module but would require importing BuiltIn.Prim (module loop)
+tyConTyKiVars :: TyCon (TyVar KiVar) KiVar -> ([KiVar], [TyVar KiVar])
+tyConTyKiVars tc =
+  let tc_kind = tyConKind tc
+      (kvs, mki) = splitForAllKiVars tc_kind
+      (kis, _) = splitMonoFunKis mki
+      tvs = mkTemplateTyVars kis
+  in (kvs, tvs)
+
 {- *********************************************************************
 *                                                                      *
             Wired in type constructors
