@@ -354,15 +354,9 @@ checkKiCoercionHole kcv kco
     ok kcv_ki | KiCoPred kcv_kc kcv_k1 kcv_k2 <- classifyPredKind kcv_ki
               = k1 `eqMonoKind` kcv_k1
                 && k2 `eqMonoKind` kcv_k2
-                && kcv_kc `ok_con` kc
+                && kcv_kc == kc
               | otherwise
               = False
-
-    ok_con act filler
-      | act == filler = True
-    ok_con LTEQKi EQKi = True -- We can fill a 'LTEQKi' with and 'EQKi' or 'LTKi'
-    ok_con LTEQKi LTKi = True
-    ok_con _ _ = False
 
 {- *********************************************************************
 *                                                                      *

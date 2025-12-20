@@ -973,6 +973,11 @@ instance CtEv CtKiEvidence where
 ctKiEvPred :: CtKiEvidence -> AnyPredKind
 ctKiEvPred = ctkev_pred
 
+ctKiEvRel :: CtKiEvidence -> KiPredCon
+ctKiEvRel ev = case ctKiEvPred ev of
+  KiPredApp kc _ _ -> kc
+  _ -> pprPanic "ctKiEvRel" (ppr ev)
+
 ctTyEvPred :: CtTyEvidence -> AnyPredType
 ctTyEvPred = cttev_pred
 

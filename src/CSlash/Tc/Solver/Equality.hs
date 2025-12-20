@@ -1034,7 +1034,10 @@ canKiCoCanLHSFinish_try_unification ev swapped lhs rhs
                    
                           unifyKiVar kv final_rhs
 
-                          setKiCoBindIfWanted new_ev $ mkReflKiCo final_rhs
+                          setKiCoBindIfWanted new_ev $ case ctKiEvRel new_ev of
+                            EQKi -> mkReflKiCo final_rhs
+                            LTEQKi -> LiftEq $ mkReflKiCo final_rhs
+                            _ -> panic "canKiCoCanLHSFinish_try_unification unreachable"
 
                           kickOutAfterKiUnification [kv]
                    
