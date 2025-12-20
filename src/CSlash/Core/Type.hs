@@ -2,7 +2,7 @@
 {-# LANGUAGE BangPatterns #-}
 
 module CSlash.Core.Type
-  ( Type(..), PredType, ForAllFlag(..) -- , FunTyFlag(..)
+  ( Type(..), TypeCoercion(..), PredType, ForAllFlag(..) -- , FunTyFlag(..)
   , TyVar, AnyTyVar, AnyKiVar, TyCoVar, ForAllBinder
   , KnotTied
 
