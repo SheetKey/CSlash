@@ -180,6 +180,32 @@ subst_mono_ki subst ki = go ki
             !k2' = go k2
       in (mkKiPredApp $! pred) k1' k2'
 
+subst_kco :: IsKiVar kv => KvSubst kv -> KindCoercion kv -> KindCoercion kv
+subst_kco subst co = go co
+  where
+    go_mki = subst_mono_ki subst
+
+    go (Refl ki) = mkReflKiCo $! go_mki ki
+    go BI_U_A = BI_U_A
+    go BI_A_L = BI_A_L
+    go (BI_U_LTEQ ki) = BI_U_LTEQ $! go_mki ki
+    go (BI_LTEQ_L ki) = BI_LTEQ_L $! go_mki ki
+    go (LiftEq co) = LiftEq $! go co
+    go (LiftLT co) = LiftLT $! go co
+    go (FunCo f1 f2 c1 c2) = (mkFunKiCo2 f1 f2 $! go c1) $! go c2
+    go (KiCoVarCo kcv) = substKiCoVar subst kcv
+    go (SymCo co) = mkSymKiCo $! go co
+    go (TransCo c1 c2) = (mkTransKiCo $! go c1) $! go c2
+    go (SelCo d co) = mkSelCo d $! go co
+    go (HoleCo h) = HoleCo $! go_hole h
+
+    go_hole h@(KindCoercionHole { kch_co_var = cv })
+      = h { kch_co_var = updateVarKind go_mki cv }
+
+-- TODO: add kcv subst?
+substKiCoVar :: IsVar kv => KvSubst kv -> KiCoVar kv -> KindCoercion kv
+substKiCoVar _ = KiCoVarCo
+
 substKiVar :: IsVar kv => KvSubst kv -> kv -> MonoKind kv
 substKiVar (KvSubst _ kenv) kv
   = case lookupVarEnv kenv kv of
