@@ -89,12 +89,16 @@ runRewriteKiCtEv ev = runRewriteKi (ctEvLoc ev) (ctEvFlavor ev)
 runRewriteKi :: CtLoc -> CtFlavor -> RewriteM a -> TcS (a, KiRewriterSet)
 runRewriteKi loc flav thing_inside = do
   rewriters_ref <- newTcRef emptyKiRewriterSet
+  ty_rewriters_ref <- newTcRef emptyTyRewriterSet
   let fmode = RE { re_loc = loc
                  , re_flavor = flav
-                 , re_ty_rewriters = panic "runRewriteKi re_ty_rewriters"
+                 , re_ty_rewriters = ty_rewriters_ref
                  , re_ki_rewriters = rewriters_ref }
   res <- runRewriteM thing_inside fmode
   rewriters <- readTcRef rewriters_ref
+  ty_rewriters <- readTcRef ty_rewriters_ref
+  unless (isEmptyTyRewriterSet ty_rewriters) $
+    pprPanic "runRewriteKi ty_rewriters" (ppr ty_rewriters)
   return (res, rewriters)
 
 traceRewriteM :: String -> SDoc -> RewriteM ()
