@@ -872,6 +872,12 @@ splitMonoFunKi_maybe ki = case ki of
   FunKi f arg res -> Just (f, arg, res)
   _ -> Nothing
 
+splitMonoFunKis :: MonoKind kv -> ([MonoKind kv], MonoKind kv)
+splitMonoFunKis ki = split [] ki
+  where
+    split args (FunKi _ arg res) = split (arg : args) res
+    split args res = (reverse args, res)
+
 mkKiPredApp :: KiPredCon -> MonoKind kv -> MonoKind kv -> MonoKind kv
 mkKiPredApp = KiPredApp
 
