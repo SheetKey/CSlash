@@ -12,6 +12,7 @@ data CtLocEnv = CtLocEnv
   , ctl_loc :: !RealSrcSpan
   , ctl_bndrs :: !TcBinderStack
   , ctl_tclvl :: !TcLevel
+  , ctl_in_gen_code :: !Bool
   , ctl_rdr :: !LocalRdrEnv
   }
 

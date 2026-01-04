@@ -35,6 +35,7 @@ data TcLclEnv = TcLclEnv
 data TcLclCtxt = TcLclCtxt
   { tcl_loc :: RealSrcSpan
   , tcl_ctxt :: [ErrCtxt]
+  , tcl_in_gen_code :: Bool
   , tcl_tclvl :: TcLevel
   , tcl_bndrs :: TcBinderStack
   , tcl_rdr :: LocalRdrEnv
@@ -70,6 +71,9 @@ setLclEnvErrCtxt ctxt = modifyLclCtxt (\env -> env { tcl_ctxt = ctxt })
 
 addLclEnvErrCtxt :: ErrCtxt -> TcLclEnv -> TcLclEnv
 addLclEnvErrCtxt ctxt = modifyLclCtxt (\env -> env { tcl_ctxt = ctxt : (tcl_ctxt env) })
+
+lclEnvInGeneratedCode :: TcLclEnv -> Bool
+lclEnvInGeneratedCode = tcl_in_gen_code . tcl_lcl_ctxt
 
 getLclEnvBinderStack :: TcLclEnv -> TcBinderStack
 getLclEnvBinderStack = tcl_bndrs . tcl_lcl_ctxt

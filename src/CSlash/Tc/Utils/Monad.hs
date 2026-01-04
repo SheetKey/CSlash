@@ -166,6 +166,7 @@ initTcWithGbl cs_env gbl_env loc do_this = do
   let lcl_env = TcLclEnv
                 { tcl_lcl_ctxt = TcLclCtxt
                                  { tcl_loc = loc
+                                 , tcl_in_gen_code = False
                                  , tcl_ctxt = []
                                  , tcl_rdr = emptyLocalRdrEnv
                                  , tcl_env = emptyNameEnv
@@ -465,12 +466,16 @@ getSrcSpanM = do
 
 setSrcSpan :: SrcSpan -> TcRn a -> TcRn a
 setSrcSpan (RealSrcSpan loc _) thing_inside
-  = updLclCtxt (\env -> env { tcl_loc = loc }) thing_inside
+  = updLclCtxt (\env -> env { tcl_loc = loc, tcl_in_gen_code = False }) thing_inside
 setSrcSpan loc@(UnhelpfulSpan _) thing_inside
   | isGeneratedSrcSpan loc
-  = panic "setSrcSpan: isGeneratedSrcSpan"
+  = setInGeneratedCode thing_inside
   | otherwise
   = thing_inside
+
+setInGeneratedCode :: TcRn a -> TcRn a
+setInGeneratedCode thing_inside
+  = updLclCtxt (\env -> env { tcl_in_gen_code = True }) thing_inside
 
 setSrcSpanA :: EpAnn ann -> TcRn a -> TcRn a
 setSrcSpanA l = setSrcSpan (locA l)
@@ -608,7 +613,9 @@ pushCtxt ctxt = updLclEnv (updCtxt ctxt)
 {-# INLINE pushCtxt #-}
 
 updCtxt :: ErrCtxt -> TcLclEnv -> TcLclEnv
-updCtxt  ctxt env = addLclEnvErrCtxt ctxt env
+updCtxt  ctxt env
+  | lclEnvInGeneratedCode env = env
+  | otherwise = addLclEnvErrCtxt ctxt env
  
 popErrCtxt :: TcM a -> TcM a
 popErrCtxt thing_inside = updLclEnv (\env -> setLclEnvErrCtxt (pop $ getLclEnvErrCtxt env) env)
@@ -630,6 +637,7 @@ mkCtLocEnv lcl_env = CtLocEnv { ctl_bndrs = getLclEnvBinderStack lcl_env
                               , ctl_ctxt = getLclEnvErrCtxt lcl_env
                               , ctl_loc = getLclEnvLoc lcl_env
                               , ctl_tclvl = getLclEnvTcLevel lcl_env
+                              , ctl_in_gen_code = lclEnvInGeneratedCode lcl_env
                               , ctl_rdr = getLclEnvRdrEnv lcl_env
                               }
 
