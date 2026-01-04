@@ -87,6 +87,11 @@ data ABExport p = ABE
 -- ---------------------------------------------------------------------
 
 instance (OutputableBndrId pl, OutputableBndrId pr)
+         => Outputable (CsLocalBindsLR (CsPass pl) (CsPass pr)) where
+  ppr (CsValBinds _ bs) = ppr bs
+  ppr (EmptyLocalBinds _) = empty
+
+instance (OutputableBndrId pl, OutputableBndrId pr)
          => Outputable (CsValBindsLR (CsPass pl) (CsPass pr)) where
   ppr (ValBinds _ binds sigs)
     = pprDeclList (pprLCsBindsForUser binds sigs)
@@ -197,7 +202,6 @@ ppr_monobind (XCsBindsLR b) = case csPass @idL of
 instance OutputableBndrId p => Outputable (ABExport (CsPass p)) where
   ppr (ABE { abe_poly = gbl, abe_mono = lcl })
     = sep [ppr gbl, nest 2 (text "<=" <+> ppr lcl)]
-
 
 pprTicks :: SDoc -> SDoc -> SDoc
 pprTicks pp_no_debug pp_when_debug

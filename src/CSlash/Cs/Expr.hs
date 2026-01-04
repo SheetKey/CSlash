@@ -29,6 +29,7 @@ import CSlash.Data.FastString
 import CSlash.Cs.Extension
 import CSlash.Cs.Lit
 import CSlash.Cs.Pat
+import CSlash.Cs.Binds
 import CSlash.Parser.Annotation
 import CSlash.Types.Var (TyVar, KiVar, AnyTyVar, AnyKiVar)
 import CSlash.Types.Basic hiding (ConLike)
@@ -225,6 +226,17 @@ data XXExprZk
     { xzk_orig :: CsThingRn
     , xzk_expanded :: CsExpr Zk }
 
+instance Outputable XXExprTc where
+  ppr (WrapExpr co_fn e) = pprCsWrapper co_fn (\_ -> pprExpr e)
+  ppr (ExpandedThingTc o e)
+    = ifPprDebug (braces $ vcat [ ppr o, ppr e]) (ppr o)
+  ppr (ConLikeTc con) = pprPrefixOcc con
+
+instance Outputable XXExprZk where
+  ppr (WrapExprZk co_fn e) = pprCsWrapper co_fn (\_ -> pprExpr e)
+  ppr (ExpandedThingZk o e)
+    = ifPprDebug (braces $ vcat [ ppr o, ppr e]) (ppr o)
+
 {- *********************************************************************
 *                                                                      *
               Generating code for ExpandedThingRn
@@ -265,16 +277,23 @@ isQuietCsExpr (CsApp {}) = True
 isQuietCsExpr (OpApp {}) = True
 isQuietCsExpr _ = False
 
+pprBinds
+  :: (OutputableBndrId idL, OutputableBndrId idR)
+  => CsLocalBindsLR (CsPass idL) (CsPass idR) -> SDoc
+pprBinds b = pprDeeper (ppr b)
+
 ppr_lexpr :: (OutputableBndrId p) => LCsExpr (CsPass p) -> SDoc
 ppr_lexpr e = ppr_expr (unLoc e)
 
 ppr_expr
-  :: (OutputableBndrId p)
+  :: forall p
+   . (OutputableBndrId p)
   => CsExpr (CsPass p)
   -> SDoc
 ppr_expr (CsVar _ (L _ v)) = pprPrefixOcc v
 ppr_expr (CsUnboundVar _ uv) = pprPrefixOcc uv
 ppr_expr (CsLit _ lit) = ppr lit
+ppr_expr (CsOverLit _ lit) = ppr lit
 ppr_expr (CsLam _ matches) = pprMatches matches
 ppr_expr e@(CsApp {}) = ppr_apps e []
 ppr_expr (CsTyLam _ matches) = pprMatches matches
@@ -290,6 +309,7 @@ ppr_expr (OpApp _ e1 op e2)
       = hang (ppr op) 2 (sep [pp_e1, pp_e2])
     pp_infixly pp_op
       = hang pp_e1 2 (sep [pp_op, nest 2 pp_e2])
+ppr_expr (NegApp _ e _) = char '-' <+> pprDebugParendExpr appPrec e
 ppr_expr (CsPar _ e) = parens (ppr_lexpr e)
 ppr_expr (SectionL _ expr op)
   | Just pp_op <- ppr_infix_expr (unLoc op)
@@ -352,10 +372,25 @@ ppr_expr (CsMultiIf _ alts)
             ppr_one (h:t) = hang h 2 (sep t)
             one_alt = [ interpp'SP guards
                       , text "->" <+> pprDeeper (ppr expr) ]
+
+ppr_expr (CsLet _ binds expr@(L _ (CsLet _ _ _)))
+  = sep [ hang (text "let") 2 (hsep [pprBinds binds, text "in"])
+        , ppr_lexpr expr ]
+ppr_expr (CsLet _ binds expr)
+  = sep [ hang (text "let") 2 (pprBinds binds)
+        , hang (text "in") 2 (ppr expr) ]
+
 ppr_expr (ExprWithTySig _ expr sig)
   = hang (nest 2 (ppr_lexpr expr) <+> dcolon)
          4 (ppr sig)
-ppr_expr _ = text "ppr_expr"
+
+ppr_expr (CsEmbTy _ ty) = hsep [ text "type", ppr ty ]
+
+ppr_expr (XExpr x) = case csPass @p of
+  Tc -> ppr x
+  Zk -> ppr x
+
+-- ppr_expr _ = text "ppr_expr"
 
 ppr_infix_expr :: (OutputableBndrId p) => CsExpr (CsPass p) -> Maybe SDoc
 ppr_infix_expr (CsVar _ (L _ v)) = Just (pprInfixOcc v)
