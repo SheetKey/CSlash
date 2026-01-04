@@ -368,7 +368,21 @@ rnGRHS' ctxt rnBody (GRHS _ guards rhs) = do
 ****************************************************** -}
 
 rnSrcFixityDecl :: CsSigCtxt -> FixitySig Ps -> RnM (FixitySig Rn)
-rnSrcFixityDecl sig_ctxt = panic "rnSrcFixityDecl"
+rnSrcFixityDecl sig_ctxt = rn_decl
+  where
+    rn_decl :: FixitySig Ps -> RnM (FixitySig Rn)
+    rn_decl sig@(FixitySig ns_spec fname fixity) = do
+      names <- lookup_one ns_spec fname
+      case names of
+        [name] -> return $ FixitySig ns_spec name fixity
+        _ -> pprPanic "rnSrcFixityDecl" (ppr names)
+
+    lookup_one :: NamespaceSpecifier -> LocatedN RdrName -> RnM [LocatedN Name]
+    lookup_one ns_spec (L name_loc rdr_name) = setSrcSpanA name_loc $ do
+      names <- lookupLocalTcNames sig_ctxt what ns_spec rdr_name
+      return [ L name_loc name | (_, name) <- names ]
+
+    what = text "fixity signature"
 
 {- *********************************************************************
 *                                                                      *

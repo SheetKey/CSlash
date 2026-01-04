@@ -375,6 +375,24 @@ lookupBindGroupOcc ctxt what rdr_name also_try_tycon_ns ns_spec
                       $ map (\x -> ((unpackFS $ occNameFS $ nameOccName x), x))
                         names_in_scope
 
+lookupLocalTcNames :: CsSigCtxt -> SDoc -> NamespaceSpecifier -> RdrName -> RnM [(RdrName, Name)]
+lookupLocalTcNames ctxt what ns_spec rdr = do
+  this_mod <- getModule
+  let also_try_tycon_ns = ns_spec /= NoNamespaceSpecifier
+  nms_eithers <- fmap (guard_builtin_syntax this_mod rdr) <$>
+                  lookupBindGroupOcc ctxt what rdr also_try_tycon_ns ns_spec
+  let (errs, names) = partitionEithers (NE.toList nms_eithers)
+  when (null names) $ addErr (head errs)
+  return names
+  where
+    guard_builtin_syntax this_mod rdr (Right name)
+      | Just _ <- isBuiltInOcc_maybe (occName rdr)
+      , this_mod /= nameModule name
+      = Left $ panic "TcRnIllegalBuiltinSyntax what rdr"
+      | otherwise
+      = Right (rdr, name)
+    guard_builtin_syntax _ _ (Left err) = Left $ mkTcRnNotInScope rdr err
+
 {- *********************************************************************
 *                                                                      *
               Literal syntax desugaring
