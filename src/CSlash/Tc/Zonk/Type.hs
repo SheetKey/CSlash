@@ -523,6 +523,8 @@ zonkExpr (XExpr (ExpandedThingTc thing expr)) = do
   new_expr <- zonkExpr expr
   return $ XExpr (ExpandedThingZk thing new_expr)
 
+zonkExpr (XExpr (ConLikeTc con)) = return $ XExpr $ ConLikeZk con
+
 zonkExpr other = pprPanic "zonkExpr" (ppr other)
 
 zonkCoFn :: AnyCsWrapper -> ZonkBndrTcM ZkCsWrapper

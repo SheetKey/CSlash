@@ -225,6 +225,7 @@ data XXExprZk
   | ExpandedThingZk
     { xzk_orig :: CsThingRn
     , xzk_expanded :: CsExpr Zk }
+  | ConLikeZk (ConLike (AnyTyVar AnyKiVar) AnyKiVar) -- shouldn't be 'Any'
 
 instance Outputable XXExprTc where
   ppr (WrapExpr co_fn e) = pprCsWrapper co_fn (\_ -> pprExpr e)
@@ -236,6 +237,7 @@ instance Outputable XXExprZk where
   ppr (WrapExprZk co_fn e) = pprCsWrapper co_fn (\_ -> pprExpr e)
   ppr (ExpandedThingZk o e)
     = ifPprDebug (braces $ vcat [ ppr o, ppr e]) (ppr o)
+  ppr (ConLikeZk con) = pprPrefixOcc con
 
 {- *********************************************************************
 *                                                                      *
