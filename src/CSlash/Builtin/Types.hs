@@ -442,7 +442,7 @@ The 'IORes' tycon has kind
 type IORes : ∀ k. k -> ○
 
 The 'MkIORes' datacon has type
-data MkIORes : /\k k2 -> ∀ {kco : k2 <= k}. ∀ {a : k}. a -★> RealWorld# -k2> (IORes {k} a : ○)
+data MkIORes : /\k k2 -> ∀ {kco : k <= k2}. ∀ {a : k}. a -★> RealWorld# -k2> (IORes {k} a : ○)
 
 The 'MkIORes' data can be thought of as the function
 data MkIORes
