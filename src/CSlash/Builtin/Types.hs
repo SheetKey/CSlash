@@ -497,7 +497,7 @@ mkIoResDataCon = data_con
                        _ -> panic "unreachable"
                 a = TyVarTy va
 
-                pred = KiPredApp LTEQKi kf ka
+                pred = KiPredApp LTEQKi ka kf
                 kco = case mkTemplateKiCoVars [pred] of
                         [kco] -> kco
                         _ -> panic "unreachable"
