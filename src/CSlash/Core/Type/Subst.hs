@@ -61,6 +61,9 @@ extendTvSubst :: IsVar tv => TvSubst tv kv -> tv -> Type tv kv -> TvSubst tv kv
 extendTvSubst (TvSubst in_scope tvs ksubst) tv ty
   = TvSubst in_scope (extendVarEnv tvs tv ty) ksubst
 
+extendTvSubstList :: IsVar tv => TvSubst tv kv -> [tv] -> [Type tv kv] -> TvSubst tv kv
+extendTvSubstList subst tvs tys = foldl2 extendTvSubst subst tvs tys
+
 extendTvSubstWithClone :: IsTyVar tv kv => TvSubst tv kv -> tv -> tv -> TvSubst tv kv
 extendTvSubstWithClone (TvSubst in_scope tenv ksubst) tv tv'
   = TvSubst (extendInScopeSet in_scope tv')
