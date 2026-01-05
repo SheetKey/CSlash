@@ -175,6 +175,7 @@ commitFlexiTv tv zonked_kind = do
   flexi <- ze_flexi <$> getZonkEnv
   lift $ case flexi of
     NoFlexi -> pprPanic "NoFlexi" (ppr tv <+> colon <+> ppr zonked_kind) 
+    DefaultFlexiKi -> pprPanic "DefaultFlexiKi" (ppr tv <+> colon <+> ppr zonked_kind)
 
 zonkTyCoVarOcc
   :: TyCoVar (AnyTyVar AnyKiVar) AnyKiVar
@@ -279,6 +280,9 @@ commitFlexiKv kv = do
   flexi <- ze_flexi <$> getZonkEnv
   lift $ case flexi of
     NoFlexi -> pprPanic "NoFlexi" (ppr kv)
+    DefaultFlexiKi -> do
+      traceTc "Defaulting flexi kivar to Linear:" (ppr kv)
+      return $ BIKi LKd
 
 zonkKiCoVarOcc :: KiCoVar AnyKiVar -> ZonkTcM (KindCoercion KiVar)
 zonkKiCoVarOcc cv = do
@@ -351,7 +355,7 @@ zonkIdBndr = changeIdTypeM zonkTcTypeToTypeX
 
 zonkTopDecls :: LCsBinds Tc -> TcM (TypeEnv, LCsBinds Zk)
 zonkTopDecls binds
-  = initZonkEnv NoFlexi
+  = initZonkEnv DefaultFlexiKi
     $ runZonkBndrT (zonkRecMonoBinds binds) $ \binds' -> do
         ty_env <- zonkEnvIds <$> getZonkEnv
         return (ty_env, binds')

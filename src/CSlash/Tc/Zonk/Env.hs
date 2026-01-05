@@ -36,6 +36,7 @@ data ZonkEnv = ZonkEnv
 
 data ZonkFlexi
   = NoFlexi
+  | DefaultFlexiKi
 
 instance Outputable ZonkEnv where
   ppr (ZonkEnv { ze_tv_env = tv_env, ze_kv_env = kv_env, ze_id_env = id_env })
