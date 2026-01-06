@@ -518,6 +518,10 @@ zonkExpr (CsApp x e1 e2) = do
   new_e2 <- zonkLExpr e2
   return $ CsApp x new_e1 new_e2
 
+zonkExpr (CsLet x binds expr) = runZonkBndrT (zonkLocalBinds binds) $ \new_binds -> do
+  new_expr <- zonkLExpr expr
+  return (CsLet x new_binds new_expr)
+
 zonkExpr (XExpr (WrapExpr co_fn expr))
   = runZonkBndrT (zonkCoFn co_fn) $ \new_co_fn -> do
       new_expr <- zonkExpr expr
