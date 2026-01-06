@@ -612,7 +612,7 @@ typeMonoKind ty@(TyLamTy tv res) =
 typeMonoKind ty@(BigTyLamTy _ _) = pprPanic "typeMonoKind" (ppr ty)
 typeMonoKind ty@(Embed _) = pprPanic "typeMonoKind" (ppr ty)
 typeMonoKind (CastTy _ co) = kicoercionRKind co
-typeMonoKind co@(KindCoercion {}) = pprPanic "typeMonoKind" (ppr co)
+typeMonoKind (KindCoercion kco) = kiCoercionKind kco
 
 handle_non_mono :: Kind kv -> (Kind kv -> SDoc) -> MonoKind kv
 handle_non_mono ki doc = case ki of
