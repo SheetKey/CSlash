@@ -18,7 +18,7 @@ import CSlash.Tc.Errors.Types
 import CSlash.Tc.Utils.Instantiate
 import CSlash.Tc.Gen.App
 import CSlash.Tc.Gen.Head
--- import CSlash.Tc.Gen.Bind        ( tcLocalBinds )
+import CSlash.Tc.Gen.Bind        ( tcLocalBinds )
 import CSlash.Rename.Env         ( addUsedGRE )
 import CSlash.Tc.Utils.Env
 -- import CSlash.Tc.Gen.Arrow
@@ -167,6 +167,11 @@ tcExpr expr@(ExplicitTuple x tup_args) res_ty
        return $ mkCsWrapTyCo coi (ExplicitTuple x tup_args1)
   | otherwise
   = panic "tcExpr ExplicitTuple section"
+
+tcExpr (CsLet x binds expr) res_ty = do
+  (binds', wrapper, expr') <- tcLocalBinds binds $
+                              tcMonoExpr expr res_ty
+  return (CsLet x binds' (mkLCsWrap wrapper expr'))
 
 tcExpr (CsIf x pred b1 b2) res_ty = do
   pred' <- tcCheckMonoExpr pred $ mkAppTy (asAnyTyKi boolTy) (Embed $ BIKi UKd)
