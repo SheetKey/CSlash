@@ -2,6 +2,8 @@
 
 module CSlash.Tc.Utils.Instantiate where
 
+import {-# SOURCE #-} CSlash.Tc.Utils.Unify (unifyKind)
+
 import CSlash.Driver.Session
 import CSlash.Driver.Env
 
@@ -173,6 +175,22 @@ instantiateSigma orig kvs tvs body_ty orig_type = do
             Instantiating a call
 *                                                                      *
 ********************************************************************* -}
+
+instCallKiConstraints :: CtOrigin -> [AnyPredKind] -> TcM [AnyKindCoercion]
+instCallKiConstraints orig preds
+  | null preds
+  = return []
+  | otherwise
+  = do kcos <- mapM go preds
+       traceTc "instCallKiConstraints" (ppr kcos)
+       return kcos
+  where
+    go :: AnyPredKind -> TcM AnyKindCoercion
+    go pred
+      | KiPredApp kc k1 k2 <- pred
+      = unifyKind Nothing kc k1 k2
+      | otherwise
+      = panic "instCallKiConstraints"
 
 {- *********************************************************************
 *                                                                      *
