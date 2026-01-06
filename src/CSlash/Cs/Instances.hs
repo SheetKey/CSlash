@@ -21,11 +21,11 @@ import CSlash.Cs.Pat
 import CSlash.Cs.ImpExp
 import CSlash.Parser.Annotation
 
-instance Data (CsLocalBindsLR Ps Ps)
-instance Data (CsLocalBindsLR Ps Rn)
-instance Data (CsLocalBindsLR Rn Rn)
-instance Data (CsLocalBindsLR Tc Tc)
-instance Data (CsLocalBindsLR Zk Zk)
+deriving instance Data (CsLocalBindsLR Ps Ps)
+deriving instance Data (CsLocalBindsLR Ps Rn)
+deriving instance Data (CsLocalBindsLR Rn Rn)
+deriving instance Data (CsLocalBindsLR Tc Tc)
+deriving instance Data (CsLocalBindsLR Zk Zk)
 
 deriving instance Data (CsValBindsLR Ps Ps)
 deriving instance Data (CsValBindsLR Ps Rn)
