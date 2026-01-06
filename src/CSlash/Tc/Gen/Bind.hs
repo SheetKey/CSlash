@@ -87,7 +87,16 @@ tcTopBinds binds sigs = do
   return (tcg_env', tcl_env)
 
 tcLocalBinds :: CsLocalBinds Rn -> TcM thing -> TcM (CsLocalBinds Tc, AnyCsWrapper, thing)
-tcLocalBinds = panic "tcLocalBinds"
+
+tcLocalBinds (EmptyLocalBinds x) thing_inside = do
+  thing <- thing_inside
+  return (EmptyLocalBinds x, idCsWrapper, thing)
+
+tcLocalBinds (CsValBinds x (XValBindsLR (NValBinds binds sigs))) thing_inside = do
+  (binds', wrapper, thing) <- tcValBinds NotTopLevel binds sigs thing_inside
+  return (CsValBinds x (XValBindsLR (NValBinds binds' sigs)), wrapper, thing)
+
+tcLocalBinds (CsValBinds _ (ValBinds {})) _ = panic "tcLocalBinds"
 
 tcValBinds
   :: TopLevelFlag
