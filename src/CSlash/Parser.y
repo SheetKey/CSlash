@@ -653,8 +653,8 @@ aexp :: { ETP }
                                        mkCsAsPatPV (comb2 $1 $>) $1 (epTok $2) $3 }
   | PREFIX_MINUS aexp { ETP $ unETP $2 >>= \ $2 ->
                               mkCsNegAppPV (comb2 $1 $>) $2 [mj AnnMinus $1] }
-  | 'let' bind 'in' sig_exp { ETP $ unETP $4 >>= \ $4 ->
-                                mkCsLetPV (comb2 $1 $>) (epTok $1) (unLoc $2) (epTok $3) $4 }
+  | 'let' binds 'in' sig_exp { ETP $ unETP $4 >>= \ $4 ->
+                                 mkCsLetPV (comb2 $1 $>) (epTok $1) (unLoc $2) (epTok $3) $4 }
   | '\\' argpats '->' sig_exp { ETP $ superArgBuilderPV $
                                       unETP $2 >>= \ $2 ->
                                       unETP $4 >>= \ $4 ->
@@ -817,7 +817,7 @@ qual :: { forall b. DisambETP b => PV (LStmt Ps (LocatedA b)) }
   : bindpat '<-' sig_exp { unETP $3 >>= \ $3 ->
                        amsA' (sLL $1 $> $ mkPsBindStmt [mu AnnLarrow $2] $1 $3) }
   | sig_exp { unETP $1 >>= \ $1 -> return $ sL1a $1 $ mkBodyStmt $1 }
-  | 'let' bind { amsA' (sLL $1 $> $ mkLetStmt [mj AnnLet $1] (unLoc $2)) }
+  | 'let' binds { amsA' (sLL $1 $> $ mkLetStmt [mj AnnLet $1] (unLoc $2)) }
 
 -----------------------------------------------------------------------------
 -- Guards
@@ -901,16 +901,40 @@ gdpat :: { forall b. DisambETP b => PV (LGRHS Ps (LocatedA b)) }
 -----------------------------------------------------------------------------
 -- Let bind
 
-decllistone :: { Located (AnnList, Located (OrdList (LCsDecl Ps))) }
-  : open decl close { let d = sL1 $2 ([], unitOL $2)  
-                     in L (gl d) ( AnnList (Just $ glR d) Nothing Nothing (fst $ unLoc d) []
-                                  , sL1 d $ snd $ unLoc d ) }
+decls :: { Located ([AddEpAnn], OrdList (LCsDecl Ps)) }
+  : decls ';' decl {% if isNilOL (snd $ unLoc $1)
+                      then return (sLL $1 $> ( (fst $ unLoc $1) ++ (msemiA $2)
+                                             , unitOL $3 ))
+                      else case (snd $ unLoc $1) of
+                             SnocOL hs t -> do
+                               t' <- addTrailingSemiA t (gl $2)
+                               let { this = unitOL $3
+                                   ; rest = snocOL hs t'
+                                   ; these = rest `appOL` this }
+                               return ( rest `seq` this `seq` these `seq`
+                                        ( sLL $1 $> (fst $ unLoc $1, these ))) }
+  | decls ';' {% if isNilOL (snd $ unLoc $1)
+                 then return (sLZ $1 $> ( (fst $ unLoc $1) ++ (msemiA $2)
+                                        , snd $ unLoc $1 ))
+                 else case (snd $ unLoc $1) of
+                        SnocOL hs t -> do
+                          t' <- addTrailingSemiA t (gl $2)
+                          return (sLZ $1 $> (fst $ unLoc $1, snocOL hs t')) }
+  | decl { sL1 $1 ([], unitOL $1) }
+  | {- empty -} { noLoc ([], nilOL) }
 
-bind :: { Located (CsLocalBinds Ps) }
-  : decllistone {% do { val_bind <- cvBindGroup (unLoc $ snd $ unLoc $1)
-                      ; !cs <- getCommentsFor (gl $1)
-                      ; return (sL1 $1 $ CsValBinds (fixValbindsAnn $ EpAnn
-                                 (glR $1) (fst $ unLoc $1) cs) val_bind) } }
+decllist :: { Located (AnnList, Located (OrdList (LCsDecl Ps))) }
+  : open decls close { L (gl $2) ( AnnList (Just $ glR $2) Nothing Nothing (fst $ unLoc $2) []
+                                 , sL1 $2 $ snd $ unLoc $2 ) }
+  -- { let d = sL1 $2 ([], unitOL $2)  
+  --                      in L (gl d) ( AnnList (Just $ glR d) Nothing Nothing (fst $ unLoc d) []
+  --                                  , sL1 d $ snd $ unLoc d ) }
+
+binds :: { Located (CsLocalBinds Ps) }
+  : decllist {% do { val_bind <- cvBindGroup (unLoc $ snd $ unLoc $1)
+                   ; !cs <- getCommentsFor (gl $1)
+                   ; return (sL1 $1 $ CsValBinds (fixValbindsAnn $ EpAnn
+                              (glR $1) (fst $ unLoc $1) cs) val_bind) } }
 
 bindpat :: { LPat Ps }
   : sig_exp {% (checkPattern <=< runPV) (unETP $1) }
@@ -1210,6 +1234,11 @@ glR !la = EpaSpan (getHasLoc la)
 
 glEE :: (HasLoc a, HasLoc b) => a -> b -> Anchor
 glEE !x !y = spanAsAnchor $ comb2 x y
+
+glEEz :: (HasLoc a, HasLoc b) => a -> b -> Anchor
+glEEz !x !y = if isZeroWidthSpan (getHasLoc y)
+              then spanAsAnchor (getHasLoc x)
+              else spanAsAnchor $ comb2 x y
 
 glRM :: Located a -> Maybe Anchor
 glRM (L !l _) = Just $ spanAsAnchor l
