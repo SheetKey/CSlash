@@ -180,6 +180,9 @@ csTypeToCsSigType lty@(L loc ty) =
 *                                                                      *
 ********************************************************************* -}
 
+mkLCsWrap :: AnyCsWrapper -> LCsExpr Tc -> LCsExpr Tc
+mkLCsWrap co_fn (L loc e) = L loc (mkCsWrap co_fn e)
+
 mkCsWrap :: AnyCsWrapper -> CsExpr Tc -> CsExpr Tc
 mkCsWrap co_fn e | isIdCsWrapper co_fn = e
 mkCsWrap co_fn e = XExpr (WrapExpr co_fn e)
