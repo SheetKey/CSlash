@@ -355,7 +355,7 @@ zonkIdBndr = changeIdTypeM zonkTcTypeToTypeX
 
 zonkTopDecls :: LCsBinds Tc -> TcM (TypeEnv, LCsBinds Zk)
 zonkTopDecls binds
-  = initZonkEnv DefaultFlexiKi
+  = initZonkEnv NoFlexi
     $ runZonkBndrT (zonkRecMonoBinds binds) $ \binds' -> do
         ty_env <- zonkEnvIds <$> getZonkEnv
         return (ty_env, binds')
