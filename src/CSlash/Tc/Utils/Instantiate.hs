@@ -140,6 +140,10 @@ topInstantiate orig sigma
   | otherwise
   = return (idCsWrapper, sigma)
 
+-- TODO: Some of the 'tvs' are actually kicovars!
+-- For now we deal with that here.
+-- In the future (when tyvars and kicovars are distinct types),
+-- this must accept a 'tvs' arg and a 'kcvs' arg.
 instantiateSigma
   :: CtOrigin
   -> [AnyKiVar]
@@ -147,20 +151,28 @@ instantiateSigma
   -> AnySigmaType
   -> AnySigmaType -- the type before splitting of kvs and tvs (for finding in_scope)
   -> TcM ([AnyKiVar], [AnyTyVar AnyKiVar], AnyCsWrapper, AnySigmaType)
-instantiateSigma orig kvs tvs body_ty orig_type = do
+instantiateSigma orig kvs kcvs_tvs body_ty orig_type = do
+  let (kcvs, tvs) = span isKiCoVar kcvs_tvs
+      preds = varKind <$> kcvs
   (kv_subst, inst_kvs) <- mapAccumLM newMetaKiVarX empty_kv_subst kvs
-  (subst, inst_tvs) <- mapAccumLM newMetaTyVarX (mk_empty_tv_subst kv_subst) tvs
+  let inst_preds = substMonoKis kv_subst preds
+  kcos <- instCallKiConstraints orig inst_preds
+  let tv_subst1 = extendTvSubstList (mk_empty_tv_subst kv_subst)  kcvs (KindCoercion <$> kcos)
+  (subst, inst_tvs) <- mapAccumLM newMetaTyVarX tv_subst1 tvs
+  traceTc "instantiateSigma" (ppr subst)
   let inst_body = substTy subst body_ty
       inst_kv_kis = mkKiVarKis inst_kvs
       inst_tv_tys = mkTyVarTys inst_tvs
-      wrap = mkWpTyApps inst_tv_tys <.> mkWpKiApps inst_kv_kis
+  let wrap = mkWpTyApps inst_tv_tys <.> mkWpKiCoApps kcos <.> mkWpKiApps inst_kv_kis
   traceTc "Instantiating"
     $ vcat [ text "origin" <+> pprCtOrigin orig
            , text "kvs" <+> ppr kvs
+           , text "kcvs" <+> ppr kcvs
            , text "tvs" <+> ppr tvs
            , text "type" <+> debugPprType body_ty
            , text "orig_type" <+> debugPprType orig_type
            , text "with" <+> vcat (map debugPprMonoKind inst_kv_kis
+                                   ++ map ppr kcos
                                    ++ map debugPprType inst_tv_tys) ]
   return (inst_kvs, inst_tvs, wrap, inst_body)
   where
