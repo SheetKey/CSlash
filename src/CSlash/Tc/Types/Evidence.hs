@@ -73,6 +73,7 @@ data CsWrapper tv kv
   | WpKiLam kv            -- "             " 'TcKiVar'          "                     "
   | WpTyApp (Type tv kv)
   | WpKiApp (MonoKind kv)
+  | WpKiCoApp (KindCoercion kv)
   | WpMultCoercion (KindCoercion kv)
   deriving Data.Data
 
@@ -108,6 +109,9 @@ mkWpTyApps tys = mk_co_app_fn WpTyApp tys
 
 mkWpKiApps :: [MonoKind kv] -> CsWrapper tv kv
 mkWpKiApps kis = mk_co_app_fn WpKiApp kis
+
+mkWpKiCoApps :: [KindCoercion kv] -> CsWrapper tv kv
+mkWpKiCoApps args = mk_co_app_fn WpKiCoApp args
 
 mkWpTyLams :: [tv] -> CsWrapper tv kv
 mkWpTyLams tvs = mk_lam_fn WpTyLam tvs
