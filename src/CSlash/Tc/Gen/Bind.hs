@@ -105,7 +105,7 @@ tcValBinds
   -> TcM thing
   -> TcM ([(RecFlag, LCsBinds Tc)], AnyCsWrapper, thing)
 tcValBinds top_lvl binds sigs thing_inside = do
-  (poly_ids, sig_fn) <- tcTySigs sigs
+  (poly_ids, sig_fn) <- tcTySigs top_lvl sigs
 
   tcExtendSigIds top_lvl poly_ids $ 
     tcBindGroups top_lvl sig_fn binds thing_inside

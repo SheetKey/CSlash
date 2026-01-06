@@ -46,7 +46,7 @@ import CSlash.Data.Maybe( orElse, whenIsJust )
 
 import Data.Maybe( mapMaybe )
 import qualified Data.List.NonEmpty as NE
-import Control.Monad( unless )
+import Control.Monad( unless, when )
 
 {- *********************************************************************
 *                                                                      *
@@ -54,27 +54,28 @@ import Control.Monad( unless )
 *                                                                      *
 ********************************************************************* -}
 
-tcTySigs :: [LSig Rn] -> TcM ([TcId], TcSigFun)
-tcTySigs cs_sigs = checkNoErrs $ do
-  ty_sigs <- mapAndReportM tcTySig cs_sigs
+tcTySigs :: TopLevelFlag -> [LSig Rn] -> TcM ([TcId], TcSigFun)
+tcTySigs top_level cs_sigs = checkNoErrs $ do
+  ty_sigs <- mapAndReportM (tcTySig top_level) cs_sigs
 
   let poly_ids = completeSigPolyId <$> ty_sigs
       env = mkNameEnv [(tcSigInfoName sig, sig) | sig <- ty_sigs]
 
   return (poly_ids, lookupNameEnv env)
 
-tcTySig :: LSig Rn -> TcM TcSigInfo
-tcTySig (L loc (TypeSig _ (L _ name) sig_ty)) = setSrcSpanA loc $ do
-  sig <- tcUserTypeSig (locA loc) sig_ty (Just name)
+tcTySig :: TopLevelFlag -> LSig Rn -> TcM TcSigInfo
+tcTySig top_level (L loc (TypeSig _ (L _ name) sig_ty)) = setSrcSpanA loc $ do
+  sig <- tcUserTypeSig top_level (locA loc) sig_ty (Just name)
   return $ TcIdSig sig
 
-tcTySig _ = panic "tcTySig"
+tcTySig _ _ = panic "tcTySig"
 
-tcUserTypeSig :: SrcSpan -> LCsSigType Rn -> Maybe Name -> TcM TcCompleteSig
-tcUserTypeSig loc cs_sig_ty mb_name = do
+tcUserTypeSig :: TopLevelFlag -> SrcSpan -> LCsSigType Rn -> Maybe Name -> TcM TcCompleteSig
+tcUserTypeSig top_level loc cs_sig_ty mb_name = do
   sigma_ty <- tcCsSigType ctxt_no_rrc cs_sig_ty
   traceTc "tcuser" (ppr sigma_ty)
-  massertPpr ((snd $ splitForAllKiVars $ typeKind sigma_ty) `eqMonoKind` (BIKi UKd))
+  when (isTopLevel top_level) $
+    massertPpr ((snd $ splitForAllKiVars $ typeKind sigma_ty) `eqMonoKind` (BIKi UKd))
     $ vcat [ text "tcUserTypeSig bad kind"
            , ppr sigma_ty ]
     

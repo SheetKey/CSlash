@@ -256,7 +256,7 @@ addHeadCtxt fun_ctxt@(VACall{}) thing_inside
 
 tcExprWithSig :: LCsExpr Rn -> LCsSigType (NoTc Rn) -> TcM (CsExpr Tc, AnySigmaType)
 tcExprWithSig expr cs_ty = do
-  sig_info <- checkNoErrs $ tcUserTypeSig loc cs_ty Nothing
+  sig_info <- checkNoErrs $ tcUserTypeSig NotTopLevel loc cs_ty Nothing
   (expr', poly_ty) <- tcExprSig expr sig_info
   return (ExprWithTySig noExtField expr' cs_ty, poly_ty)
   where
