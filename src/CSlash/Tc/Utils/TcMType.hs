@@ -1,3 +1,5 @@
+{-# LANGUAGE TupleSections #-}
+
 module CSlash.Tc.Utils.TcMType where
 
 import CSlash.Cs
@@ -25,6 +27,7 @@ import CSlash.Core.Type.Ppr
 import CSlash.Core.Type.Ppr
 import CSlash.Core.Type.Subst
 import CSlash.Core.Kind
+import CSlash.Core.Kind.FVs
 import CSlash.Core.Kind.Subst
 import CSlash.Core.TyCon
 -- import GHC.Core.Coercion
@@ -533,6 +536,83 @@ newMetaKiVarKiAtLevel tc_lvl = do
 *                                                                      *
 ********************************************************************* -}
 
+candidateQTyKiVarsOfTypes :: [AnyType] -> TcM (DTcKiVarSet, DTcTyVarSet)
+candidateQTyKiVarsOfTypes tys = do
+  cur_lvl <- getTcLevel
+  foldlM (\acc ty -> collect_cand_qtkvs ty cur_lvl (emptyVarSet, emptyVarSet) acc ty)
+         (emptyDVarSet, emptyDVarSet) tys
+
+collect_cand_qtkvs
+  :: AnyType
+  -> TcLevel
+  -> (AnyKiVarSet, AnyTyVarSet AnyKiVar)
+  -> (DTcKiVarSet, DTcTyVarSet)
+  -> AnyType
+  -> TcM (DTcKiVarSet, DTcTyVarSet)
+collect_cand_qtkvs orig_ty cur_lvl (boundkvs, boundtvs) dvs ty = go dvs ty
+  where
+    is_bound_kv kv = kv `elemVarSet` boundkvs
+    is_bound_tv tv = tv `elemVarSet` boundtvs
+
+    go :: (DTcKiVarSet, DTcTyVarSet) -> AnyType -> TcM (DTcKiVarSet, DTcTyVarSet)
+    go dv (AppTy t1 t2) = foldlM go dv [t1, t2]
+    go dv (TyConApp _ tys) = foldlM go dv tys
+    go (dkv, dtv) (FunTy ki arg res) = do
+      dkv1 <- collect_cand_qkvs (Mono ki) cur_lvl boundkvs dkv (Mono ki)
+      foldlM go (dkv1, dtv) [arg, res]
+    go dv (TyVarTy tv)
+      | is_bound_tv tv = return dv
+      | otherwise = do m_contents <- handleAnyTv (const (return Nothing))
+                                     isFilledMetaTyVar_maybe tv
+                       case m_contents of
+                         Just ind_ty -> go dv ind_ty
+                         Nothing -> go_tv dv tv
+    go (dkv, dtv) (ForAllTy (Bndr tv _) ty) = do
+      dkv1 <- collect_cand_qkvs (Mono $ varKind tv) cur_lvl boundkvs dkv (Mono $ varKind tv)
+      collect_cand_qtkvs orig_ty cur_lvl (boundkvs, boundtvs `extendVarSet` tv) (dkv1, dtv) ty
+
+    go (dkv, dtv) (TyLamTy tv ty) = do
+      dkv1 <- collect_cand_qkvs (Mono $ varKind tv) cur_lvl boundkvs dkv (Mono $ varKind tv)
+      collect_cand_qtkvs orig_ty cur_lvl (boundkvs, boundtvs `extendVarSet` tv) (dkv1, dtv) ty
+
+    go dv (BigTyLamTy kv ty) = 
+      collect_cand_qtkvs orig_ty cur_lvl (boundkvs `extendVarSet` kv, boundtvs) dv ty
+
+    go dv (CastTy ty co) = do
+      (dkv1, dtv1) <- go dv ty
+      dkv2 <- collect_cand_qkvs_co co cur_lvl (boundtvs, boundkvs) dkv1 co
+      return (dkv2, dtv1)
+
+    go (dkv, dtv) (Embed ki) = do
+      dkv1 <- collect_cand_qkvs (Mono ki) cur_lvl boundkvs dkv (Mono ki)
+      return (dkv1, dtv)
+
+    go (dkv, dtv) (KindCoercion co) = do
+      dkv1 <- collect_cand_qkvs_co co cur_lvl (boundtvs, boundkvs) dkv co
+      return (dkv1, dtv)
+
+    go _ other = pprPanic "collect_cand_qkvs_ty" (ppr other)
+
+    go_tv :: (DTcKiVarSet, DTcTyVarSet) -> AnyTyVar AnyKiVar -> TcM (DTcKiVarSet, DTcTyVarSet)
+    go_tv dv@(dkv, dtv) tv
+      | cur_lvl `deeperThanOrSame` handleAnyTv (const topTcLevel) varLevel tv
+      = return dv
+      | handleAnyTv (const False) (\tv -> case tcVarDetails tv of
+          SkolemVar _ lvl -> lvl `strictlyDeeperThan` pushTcLevel cur_lvl
+          _ -> False) tv
+      = return dv
+      | handleAnyTv (const False) (\tv -> tv `elemDVarSet` dtv) tv
+      = return dv
+      | otherwise
+      = do tv_kind <- liftZonkM $ zonkTcMonoKind (varKind tv)
+           let tv_kind_vars = varsOfMonoKind tv_kind
+           if intersectsVarSet boundkvs tv_kind_vars
+             then pprPanic "Naughty quantifier"
+                  $ vcat [ ppr tv <+> colon <+> ppr tv_kind
+                         , ppr boundkvs, ppr tv_kind_vars ]
+             else do dkv1 <- collect_cand_qkvs (Mono tv_kind) cur_lvl boundkvs dkv (Mono tv_kind)
+                     return (dkv1, dtv)
+
 candidateQKiVarsOfType :: AnyType -> TcM DTcKiVarSet
 candidateQKiVarsOfType ty = do
   cur_lvl <- getTcLevel
@@ -553,7 +633,7 @@ collect_cand_qkvs_ty orig_ty cur_lvl (boundtvs, boundkvs) dvs ty = go dvs ty
     go dv (AppTy t1 t2) = foldlM go dv [t1, t2]
     go dv (TyConApp _ tys) = foldlM go dv tys
     go dv (FunTy ki arg res) = do
-      dv1 <- collect_cand_qkvs (Mono ki) cur_lvl boundkvs dvs (Mono ki)
+      dv1 <- collect_cand_qkvs (Mono ki) cur_lvl boundkvs dv (Mono ki)
       foldlM go dv1 [arg, res]
     go dv (TyVarTy tv)
       | is_bound tv = return dv
@@ -579,7 +659,7 @@ collect_cand_qkvs_ty orig_ty cur_lvl (boundtvs, boundkvs) dvs ty = go dvs ty
 
     go dv (Embed ki) = collect_cand_qkvs (Mono ki) cur_lvl boundkvs dv (Mono ki)
 
-    go dv (KindCoercion co) = collect_cand_qkvs_co co cur_lvl (boundtvs, boundkvs) dvs co
+    go dv (KindCoercion co) = collect_cand_qkvs_co co cur_lvl (boundtvs, boundkvs) dv co
 
     go _ other = pprPanic "collect_cand_qkvs_ty" (ppr other)
 
@@ -743,7 +823,7 @@ zonkAndSkolemize skol_info var
   = assertPpr (isImmutableVar var) (ppr var)
     $ return var
 
-skolemizeQuantifiedTyVar :: SkolemInfo -> (TcTyVar TcKiVar) -> ZonkM (TcTyVar TcKiVar)
+skolemizeQuantifiedTyVar :: SkolemInfo -> (TcTyVar AnyKiVar) -> ZonkM (TcTyVar AnyKiVar)
 skolemizeQuantifiedTyVar skol_info tv
   = case tcVarDetails tv of
       MetaVar {} -> panic "skolemizeUnboundMetaTyVar skol_info tv"
