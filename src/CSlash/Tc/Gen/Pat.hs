@@ -174,6 +174,11 @@ tcPatBndr _ bndr_name pat_ty = do
   traceTc "tcPatBndr(not let)" (ppr bndr_name $$ ppr pat_ty)
   return (idCsWrapper, mkLocalIdOrTyCoVar bndr_name pat_ty)
 
+newLetBndr :: Name -> AnyType -> TcM TcId
+newLetBndr name ty = do
+  mono_name <- cloneLocalName name
+  return $ mkLocalId mono_name ty
+
 {- *********************************************************************
 *                                                                      *
                 The main worker functions
