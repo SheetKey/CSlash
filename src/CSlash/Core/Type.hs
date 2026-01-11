@@ -14,6 +14,10 @@ module CSlash.Core.Type
 
   , mkTyCoVarCo, mkTyHoleCo
 
+  , mkBigLamTys
+
+  , mkInvisForAllTys
+
   , isReflTyCo, mkSymTyCo
 
   , binderVar, binderVars
