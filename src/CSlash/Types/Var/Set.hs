@@ -101,6 +101,8 @@ type DKiVarSet = MkDVarSet KiVar
 type DTcKiVarSet = MkDVarSet TcKiVar
 type DAnyKiVarSet = MkDVarSet AnyKiVar
 
+type DTcTyVarSet = MkDVarSet (TcTyVar AnyKiVar)
+
 emptyDVarSet :: UniqDSet a
 emptyDVarSet = emptyUniqDSet
 
