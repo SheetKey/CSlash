@@ -777,6 +777,14 @@ failWithTc err_msg = addErrTc err_msg >> failM
 no_err_info :: ErrInfo
 no_err_info = ErrInfo Outputable.empty Outputable.empty
 
+addDiagnosticTcM :: (AnyTidyEnv, TcRnMessage) -> TcM ()
+addDiagnosticTcM (env0, msg) = do
+  ctxt <- getErrCtxt
+  extra <- mkErrInfo env0 ctxt
+  let err_info = ErrInfo extra Outputable.empty
+      detailed_msg = mkDetailedMessage err_info msg
+  add_diagnostic detailed_msg
+
 addTcRnDiagnostic :: TcRnMessage -> TcM ()
 addTcRnDiagnostic msg = do
   loc <- getSrcSpanM
