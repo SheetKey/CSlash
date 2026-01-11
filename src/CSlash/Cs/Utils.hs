@@ -223,6 +223,9 @@ collectCsValBinders
   -> [IdP (CsPass idL)]
 collectCsValBinders flag = collect_cs_val_binders False flag
 
+collectCsBindBinders :: CollectPass p => CollectFlag p -> CsBindLR p idR -> [IdP p]
+collectCsBindBinders flag b = collect_bind False flag b []
+
 collectCsBindsBinders :: CollectPass p => CollectFlag p -> LCsBindsLR p idR -> [IdP p]
 collectCsBindsBinders flag binds = collect_binds False flag binds []
 
