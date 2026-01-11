@@ -73,16 +73,30 @@ type family XTCVarBindCs pL pR where
 -- ---------------------------------------------------------------------
 
 data AbsBinds p = AbsBinds
-  { abs_tvs :: [TyVar KiVar]
+  { abs_kvs :: [KiVarP p]
+  , abs_tvs :: [TyVarP p]
   , abs_exports :: [ABExport p]
   , abs_binds :: LCsBinds p
   , abs_sig :: Bool
   }
 
+type family TyVarP p where
+  TyVarP Tc = TcTyVar AnyKiVar
+  TyVarP Zk = TyVar KiVar
+
+type family KiVarP p where
+  KiVarP Tc = TcKiVar
+  KiVarP Zk = KiVar
+
 data ABExport p = ABE
   { abe_poly :: IdP p
   , abe_mono :: IdP p
+  , abe_wrap :: CsWrapperP p
   }
+
+type family CsWrapperP p where
+  CsWrapperP Tc = AnyCsWrapper
+  CsWrapperP Zk = ZkCsWrapper
 
 -- ---------------------------------------------------------------------
 
