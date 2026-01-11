@@ -295,7 +295,8 @@ ppr_app_arg :: PprPrec -> (IfaceType, ForAllFlag) -> SDoc
 ppr_app_arg ctx_prec (t, argf) =
   case argf of
     Required -> ppr_ty ctx_prec t
-    Specified -> ppr_ty appPrec t
+    Specified -> ppr_ty ctx_prec t
+    Inferred -> braces (ppr_ty_nested t)
 
 pprIfaceForAll :: [IfaceForAllBndr] -> SDoc
 pprIfaceForAll [] = empty
@@ -308,6 +309,8 @@ pprIfaceForAllBndr bndr =
     Bndr (IfaceTvBndr tv) Required ->
       pprIfaceTvBndr tv suppress_sig (UseBndrParens True)
     Bndr (IfaceTvBndr tv) Specified ->
+      braces $ pprIfaceTvBndr tv suppress_sig (UseBndrParens False)
+    Bndr (IfaceTvBndr tv) Inferred ->
       braces $ pprIfaceTvBndr tv suppress_sig (UseBndrParens False)
     Bndr (IfaceIdBndr _) _ -> panic "pprIfaceForAllBndr"
   where
