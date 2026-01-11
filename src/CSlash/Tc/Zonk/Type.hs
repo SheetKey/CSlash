@@ -389,8 +389,10 @@ zonk_bind bind@(FunBind { fun_id = L loc var
                         , fun_ext = (co_fn, ticks) }) = do
   new_var <- zonkIdBndr var
   runZonkBndrT (zonkCoFn co_fn) $ \new_co_fn -> do
-
-    panic "zonk_bind unfinished"
+    new_body <- zonkLExpr body
+    return $ bind { fun_id = L loc new_var
+                  , fun_body = new_body
+                  , fun_ext = (new_co_fn, ticks) }
 
 zonk_bind bind@(TyFunBind {}) = panic "zonk_bind TyFunBind"
 
@@ -406,7 +408,8 @@ zonk_bind (XCsBindsLR (AbsBinds { abs_tvs = tyvars
     $ \_ -> do new_val_binds <- mapM zonk_val_bind val_binds
                new_exports <- mapM zonk_export exports
                return (new_val_binds, new_exports)
-  return $ XCsBindsLR $ AbsBinds { abs_tvs = tyvars
+  return $ XCsBindsLR $ AbsBinds { abs_tvs = panic "tyvars"
+                                 , abs_kvs = panic "kivars"
                                  , abs_exports = new_exports
                                  , abs_binds = new_val_bind
                                  , abs_sig = has_sig }
@@ -426,10 +429,12 @@ zonk_bind (XCsBindsLR (AbsBinds { abs_tvs = tyvars
       = zonk_lbind lbind
 
     zonk_export :: ABExport Tc -> ZonkTcM (ABExport Zk)
-    zonk_export (ABE { abe_poly = poly_id, abe_mono = mono_id }) = do
+    zonk_export (ABE { abe_poly = poly_id, abe_mono = mono_id, abe_wrap = wrap }) = do
       new_poly_id <- zonkIdBndr poly_id
+      new_wrap <- don'tBind $ zonkCoFn wrap
       new_mono_id <- zonkIdOcc mono_id
-      return $ ABE { abe_poly = new_poly_id
+      return $ ABE { abe_wrap = new_wrap
+                   , abe_poly = new_poly_id
                    , abe_mono = new_mono_id }
 
 {- *********************************************************************
