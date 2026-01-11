@@ -186,6 +186,9 @@ instance Diagnostic TcRnMessage where
         locations = text "Bound at:" <+> vcat (map ppr (sortBy leftmost_smallest (NE.toList locs)))
     TcRnTyThingUsedWrong sort thing name -> mkSimpleDecorated $
       pprTyThingUsedWrong sort thing name
+    TcRnPolymorphicBinderMissingSig n ty -> mkSimpleDecorated $
+      sep [ text "Polymorphic local binding with no type signature:"
+          , nest 2 $ pprPrefixName n <+> colon <+> ppr ty ]
     TcRnArityMismatch thing thing_arity nb_args -> mkSimpleDecorated $
       hsep [ text "The" <+> what, quotes (ppr $ getName thing)
            , text "should have"
@@ -238,6 +241,7 @@ instance Diagnostic TcRnMessage where
     TcRnSimplifierTooManyIterations{} -> ErrorWithoutFlag
     TcRnBindingNameConflict{} -> ErrorWithoutFlag
     TcRnTyThingUsedWrong{} -> ErrorWithoutFlag
+    TcRnPolymorphicBinderMissingSig{} -> WarningWithFlag Opt_WarnMissingLocalSignatures
     TcRnArityMismatch{} -> ErrorWithoutFlag
     TcRnMissingMain{} -> ErrorWithoutFlag
 
@@ -276,6 +280,7 @@ instance Diagnostic TcRnMessage where
     TcRnSimplifierTooManyIterations{} -> [SuggestIncreasedSimplifierIterations]
     TcRnBindingNameConflict{} -> noHints
     TcRnTyThingUsedWrong{} -> noHints
+    TcRnPolymorphicBinderMissingSig{} -> noHints
     TcRnArityMismatch{} -> noHints
     TcRnMissingMain{} -> noHints
 

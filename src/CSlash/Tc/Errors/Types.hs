@@ -100,6 +100,7 @@ data TcRnMessage where
   TcRnSimplifierTooManyIterations :: KiCts -> !IntWithInf -> WantedKiConstraints -> TcRnMessage
   TcRnBindingNameConflict :: !RdrName -> !(NE.NonEmpty SrcSpan) -> TcRnMessage
   TcRnTyThingUsedWrong :: !WrongThingSort -> !TcTyKiThing -> !Name -> TcRnMessage
+  TcRnPolymorphicBinderMissingSig :: Name -> AnyType -> TcRnMessage
   TcRnArityMismatch :: !(TyThing (AnyTyVar AnyKiVar) AnyKiVar) -> !Arity -> !Arity -> TcRnMessage
   TcRnMissingMain :: !Bool -> !Module -> !OccName -> TcRnMessage
   deriving Generic
