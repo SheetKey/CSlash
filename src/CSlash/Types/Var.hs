@@ -1,3 +1,4 @@
+{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE TypeFamilyDependencies #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -66,12 +67,15 @@ module CSlash.Types.Var
   , changeIdTypeM
 
     {-* ForAllFlag *-}
-  , ForAllFlag(..)
+  , ForAllFlag(Optional, Required, Specified, Inferred)
+  , Specificity(..)
   , isVisibleForAllFlag, isInvisibleForAllFlag
   , eqForAllVis
+  , mkForAllBinder, mkForAllBinders
+  , varSpecToBinder, varSpecToBinders
   
     {-* VarBndr *-}
-  , VarBndr(..), ForAllBinder, TyVarBinder
+  , VarBndr(..), ForAllBinder, InvisBinder, TyVarBinder
   , binderVar, binderVars
   , binderFlag, binderFlags
   , mkVarBinder, mkVarBinders
@@ -848,35 +852,53 @@ isLocalId _ = False
 ********************************************************************* -}
 
 data ForAllFlag
-  = Specified -- type application is optional at call sight
+  = Optional !Specificity -- type application is optional at call sight
   | Required  -- type application is required at call sight
   deriving (Eq, Ord, Data)
 
+data Specificity = InferredSpec | SpecifiedSpec
+  deriving (Eq, Ord, Data)
+
+pattern Inferred, Specified :: ForAllFlag
+pattern Inferred = Optional InferredSpec
+pattern Specified = Optional SpecifiedSpec
+
+{-# COMPLETE Required, Specified, Inferred #-}
+
+mkForAllBinder :: vis -> v -> VarBndr v vis
+mkForAllBinder vis var = Bndr var vis
+
+mkForAllBinders :: vis -> [v] -> [VarBndr v vis]
+mkForAllBinders vis = map (mkForAllBinder vis)
+
 eqForAllVis :: ForAllFlag -> ForAllFlag -> Bool
 eqForAllVis Required Required = True
-eqForAllVis Specified Specified = True
+eqForAllVis (Optional _) (Optional _) = True
 eqForAllVis _ _ = False
 
 isVisibleForAllFlag :: ForAllFlag -> Bool
 isVisibleForAllFlag af = not (isInvisibleForAllFlag af)
 
 isInvisibleForAllFlag :: ForAllFlag -> Bool
-isInvisibleForAllFlag Specified = True
+isInvisibleForAllFlag Optional{} = True
 isInvisibleForAllFlag Required = False
 
 instance Outputable ForAllFlag where
   ppr Required  = text "[req]"
   ppr Specified = text "[spec]"
+  ppr Inferred = text "[infrd]"
 
 instance Binary ForAllFlag where
   put_ bh Required  = putByte bh 0
   put_ bh Specified = putByte bh 1
+  put_ bh Inferred = putByte bh 2
 
   get bh = do
     h <- getByte bh
     case h of
       0 -> return Required
-      _ -> return Specified
+      1 -> return Specified
+      _ -> return Inferred
 
 {- *********************************************************************
 *                                                                      *
@@ -888,6 +910,7 @@ data VarBndr var argf = Bndr var argf
   deriving Data
 
 type ForAllBinder var = VarBndr var ForAllFlag
+type InvisBinder var = VarBndr var Specificity
 
 type TyVarBinder = VarBndr (TyVar KiVar) ForAllFlag
 
@@ -912,9 +935,16 @@ mkVarBinders argf = map (mkVarBinder argf)
 mapVarBinder :: (v -> v') -> VarBndr v argf -> VarBndr v' argf
 mapVarBinder f (Bndr v a) = Bndr (f v) a
 
+varSpecToBinders :: [VarBndr a Specificity] -> [VarBndr a ForAllFlag]
+varSpecToBinders = map varSpecToBinder
+
+varSpecToBinder :: VarBndr a Specificity -> VarBndr a ForAllFlag
+varSpecToBinder (Bndr v vis) = Bndr v (Optional vis)
+
 instance Outputable v => Outputable (VarBndr v ForAllFlag) where
-  ppr (Bndr v Required) = ppr v
+  ppr (Bndr v Required) = braces (ppr v)
   ppr (Bndr v Specified) = braces (ppr v)
+  ppr (Bndr v Inferred) = braces (ppr v)
 
 instance (Binary v, Binary f) => Binary (VarBndr v f) where
   put_ bh (Bndr v f) = do
