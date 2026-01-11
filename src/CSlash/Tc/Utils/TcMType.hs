@@ -805,6 +805,7 @@ quantifyKiVars skol_info kvs
   = do traceTc "quantifyKiVars {"
          $ vcat [ text "kvs =" <+> ppr kvs ]
 
+       -- Note: we choose NOT to default kivars here (even though we (probably) could)
        final_qkvs <- liftZonkM $ mapM zonk_quant (dVarSetElems kvs)
 
        traceTc "quantifyKiVars }"
@@ -850,7 +851,9 @@ defaultKiVar kv
   --      _ <- promoteMetaKiVarTo lvl kv
   --      return True
   | otherwise
-  = return False
+  = do traceTc "Defaulting a Kind var to Unrestricted" (ppr kv)
+       liftZonkM $ writeMetaKiVar kv (BIKi UKd)
+       return True
 
 defaultKiVars :: DTcKiVarSet -> TcM [TcKiVar]
 defaultKiVars dvs = do
