@@ -193,6 +193,7 @@ data CtOrigin -- DOUBLE CHECK PATTERN MATCHES IF YOU ADD 'AmbiguityCheckOrigin' 
   | PatOrigin
   | UsageEnvironmentOf Name
   | IfThenElseOrigin
+  | ImpedanceMatching (Id (AnyTyVar AnyKiVar) AnyKiVar)
   | Shouldn'tHappenOrigin String
 
 isVisibleOrigin :: CtOrigin -> Bool
