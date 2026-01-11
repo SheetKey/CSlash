@@ -94,6 +94,10 @@ newtype ZonkBndrT m a = ZonkBndrT { runZonkBndrT' :: forall r. (a -> ZonkT m r) 
 noBinders :: Monad m => ZonkT m a -> ZonkBndrT m a
 noBinders z = coerce $ toCodensity z
 
+don'tBind :: Monad m => ZonkBndrT m a -> ZonkT m a
+don'tBind (ZonkBndrT k) = fromCodensity (Codensity k)
+{-# INLINE don'tBind #-}
+
 {-# INLINABLE initZonkEnv #-}
 initZonkEnv :: MonadIO m => ZonkFlexi -> ZonkT m b -> m b
 initZonkEnv flexi thing_inside = do
