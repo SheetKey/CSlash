@@ -73,6 +73,7 @@ debug_ppr_ty prec t
           , ppr body ]
   where
     ppr_bndr (Bndr tv Specified) = braces (ppr tv)
+    ppr_bndr (Bndr tv Inferred) = braces (ppr tv)
     ppr_bndr (Bndr tv Required) = ppr tv
 
 debug_ppr_ty _ ForAllTy{} = panic "debug_ppr_ty ForAllTy"
