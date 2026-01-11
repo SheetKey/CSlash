@@ -39,6 +39,9 @@ extendVarSet = addOneToUniqSet
 extendVarSetList :: Uniquable a => UniqSet a -> [a] -> UniqSet a
 extendVarSetList = addListToUniqSet
 
+intersectVarSet :: UniqSet a -> UniqSet a -> UniqSet a
+intersectVarSet = intersectUniqSets
+
 elemVarSet :: Uniquable a => a -> UniqSet a -> Bool
 elemVarSet = elementOfUniqSet
 
@@ -53,6 +56,9 @@ isEmptyVarSet = isEmptyUniqSet
 
 mkVarSet :: Uniquable a => [a] -> UniqSet a
 mkVarSet = mkUniqSet
+
+intersectsVarSet :: UniqSet a -> UniqSet a -> Bool
+intersectsVarSet s1 s2 = not (s1 `disjointVarSet` s2)
 
 disjointVarSet :: UniqSet a -> UniqSet a -> Bool
 disjointVarSet s1 s2 = disjointUFM (getUniqSet s1) (getUniqSet s2)
