@@ -443,6 +443,22 @@ ambigKvsOfKi ki = filterAnyTcKiVar isAmbiguousVar kvs
 
 {- *********************************************************************
 *                                                                      *
+          Tau, sigma, rho
+*                                                                      *
+********************************************************************* -}
+
+mkInfSigmaTy :: HasDebugCallStack => [TcKiVar] -> [TcTyVar AnyKiVar] -> AnyType -> AnyType
+mkInfSigmaTy kivars tyvars ty
+  = mkSigmaTy (toAnyKiVar <$> kivars) (mkForAllBinders Inferred (toAnyTyVar <$> tyvars)) ty
+
+mkSigmaTy
+  :: HasDebugCallStack => [AnyKiVar] -> [ForAllBinder (AnyTyVar AnyKiVar)] -> AnyType -> AnyType
+mkSigmaTy kivars tybndrs tau = mkBigLamTys kivars $
+                               mkForAllTys tybndrs $
+                               tau
+
+{- *********************************************************************
+*                                                                      *
           Expanding and splitting kinds
 *                                                                      *
 ********************************************************************* -}
