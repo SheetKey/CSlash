@@ -690,6 +690,32 @@ collect_cand_qkvs_co orig_co cur_lvl (boundtvs, boundkvs) = go_co
 *                                                                      *
 ********************************************************************* -}
 
+quantifyTyKiVars
+  :: SkolemInfo
+  -> (DTcKiVarSet, DTcTyVarSet)
+  -> TcM ([TcKiVar], [TcTyVar AnyKiVar])
+quantifyTyKiVars skol_info (dkvs, dtvs)
+  | isEmptyDVarSet dtvs
+  = do traceTc "quantifyTyKiVars has no tyvars to quantify" empty
+       (, []) <$> quantifyKiVars skol_info dkvs
+  | otherwise
+  = do traceTc "quantifyTyKiVars {"
+         $ vcat [ text "dtvs =" <+> ppr dtvs ]
+       final_qkvs <- quantifyKiVars skol_info dkvs
+
+       -- We can't default tyvars here (in GHC, the defaulting of tvs is really for non-dep kivars)
+       final_qtvs <- liftZonkM $ mapM zonk_quant (dVarSetElems dtvs)
+
+       traceTc "quantifyTyKiVars }"
+         $ vcat [ text "final_qtvs:" <+> pprTyVars final_qtvs ]
+
+       let co_vars = filter isKiCoVar final_qtvs
+       massertPpr (null co_vars) (ppr co_vars)
+
+       return (final_qkvs, final_qtvs)
+  where
+    zonk_quant tv = skolemizeQuantifiedTyVar skol_info tv
+
 quantifyKiVars :: SkolemInfo -> DTcKiVarSet -> TcM [TcKiVar]
 quantifyKiVars skol_info kvs
   | isEmptyDVarSet kvs
