@@ -347,6 +347,9 @@ newUnique = do
   let tag = env_ut env
   liftIO $! uniqFromTag tag
 
+cloneLocalName :: Name -> TcM Name
+cloneLocalName name = newNameAt (nameOccName name) (nameSrcSpan name)
+
 newNameAt :: OccName -> SrcSpan -> TcM Name
 newNameAt occ span = do
   uniq <- newUnique
