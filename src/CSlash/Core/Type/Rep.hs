@@ -292,6 +292,9 @@ mkFunTys args fun_kis res_ty =
 mkForAllTys :: [ForAllBinder tv] -> Type tv kv -> Type tv kv
 mkForAllTys tyvars ty = foldr ForAllTy ty tyvars
 
+mkInvisForAllTys :: [InvisBinder tv] -> Type tv kv -> Type tv kv
+mkInvisForAllTys tyvars = mkForAllTys (varSpecToBinders tyvars)
+
 mkFunTy :: HasDebugCallStack => MonoKind kv -> Type tv kv -> Type tv kv -> Type tv kv
 mkFunTy = FunTy
 
