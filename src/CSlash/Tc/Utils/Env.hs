@@ -215,6 +215,13 @@ tcExtendNameKiVarEnv binds thing_inside
 isTypeClosedLetBndr :: TcId -> Bool
 isTypeClosedLetBndr = noFreeVarsOfType . varType
 
+tcExtendRecIds :: [(Name, TcId)] -> TcM a -> TcM a
+tcExtendRecIds pairs thing_inside
+  = tc_extend_local_env NotTopLevel
+    [ (name, ATcId { tct_id = let_id, tct_info  = NonClosedLet emptyNameSet False })
+    | (name, let_id) <- pairs ]
+    thing_inside
+
 tcExtendSigIds :: TopLevelFlag -> [TcId] -> TcM a -> TcM a
 tcExtendSigIds top_lvl sig_ids thing_inside
   = tc_extend_local_env top_lvl
