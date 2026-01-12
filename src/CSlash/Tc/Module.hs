@@ -428,8 +428,11 @@ getIOType :: TcM AnyType
 getIOType = do
   ioTyCon <- asAnyTyKi <$> tcLookupTyCon ioTyConName
   unitTyCon <- asAnyTyKi <$> tcLookupTyCon unitTyConName
-  return $ mkTyConApp ioTyCon [ Embed (BIKi LKd), Embed (BIKi UKd)
-                              , mkTyConApp unitTyCon [ Embed (BIKi LKd) ]
+  -- Note: The kind of unit could be anything? (Perhaps Linear doesn't make sense?)
+  -- If its changed, then we need to handle errors that will occur in tcSubSigmaType
+  -- These can be fixed by adding the ability for unifyType to pass a KiPred to unifyKind
+  return $ mkTyConApp ioTyCon [ Embed (BIKi UKd), Embed (BIKi UKd)
+                              , mkTyConApp unitTyCon [ Embed (BIKi UKd) ]
                               ]
 
 setMainCtxt :: Name -> AnyType -> TcM a -> TcM a

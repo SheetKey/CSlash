@@ -805,11 +805,12 @@ quantifyKiVars skol_info kvs
   = do traceTc "quantifyKiVars {"
          $ vcat [ text "kvs =" <+> ppr kvs ]
 
-       -- Note: we choose NOT to default kivars here (even though we (probably) could)
-       final_qkvs <- liftZonkM $ mapM zonk_quant (dVarSetElems kvs)
+       undefaulted <- defaultKiVars kvs
+       final_qkvs <- liftZonkM $ mapM zonk_quant undefaulted
 
        traceTc "quantifyKiVars }"
-         $ vcat [ text "final_qkvs =" <+> (sep $ map ppr final_qkvs) ]
+         $ vcat [ text "undefaulted =" <+> (sep $ map ppr undefaulted)
+                , text "final_qkvs =" <+> (sep $ map ppr final_qkvs) ]
 
        return final_qkvs
   where
