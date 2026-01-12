@@ -180,6 +180,11 @@ tcExpr (CsIf x pred b1 b2) res_ty = do
   tcEmitBindingUsage (supUE u1 u2)
   return (CsIf x pred' b1' b2')
 
+tcExpr (CsMultiIf _ alts) res_ty = do
+  alts' <- tcGRHSList MultiIfAlt tcBody alts res_ty
+  res_ty <- readExpType res_ty
+  return (CsMultiIf res_ty alts')
+
 tcExpr e res_ty = panic "tcExpr other"
 
 tcCheckExplicitTuple
