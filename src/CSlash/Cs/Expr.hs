@@ -146,8 +146,8 @@ type instance XIf Zk = NoExtField
 
 type instance XMultiIf Ps = [AddEpAnn]
 type instance XMultiIf Rn = NoExtField
-type instance XMultiIf Tc = NoExtField -- should be Type
-type instance XMultiIf Zk = NoExtField -- should be Type
+type instance XMultiIf Tc = AnyType
+type instance XMultiIf Zk = Type (TyVar KiVar) KiVar
 
 type instance XLet Ps = (EpToken "let", EpToken "in")
 type instance XLet Rn = NoExtField
