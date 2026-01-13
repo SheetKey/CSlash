@@ -283,7 +283,7 @@ tcRnSrcDecls export_ies decls = do
       tcg_env' = let TcGblEnv {..} = tcg_env
                  in TcGblEnv { tcg_binds =  binds' ++ binds_mf, .. }
 
-  panic "setGlobalTypeEnv tcg_env' final_type_env"
+  setGlobalTypeEnv tcg_env' final_type_env
 
 zonkTcGblEnv :: TcGblEnv Tc -> TcM (TypeEnv, LCsBinds Zk)
 zonkTcGblEnv tcg_env@(TcGblEnv { tcg_binds = binds })
