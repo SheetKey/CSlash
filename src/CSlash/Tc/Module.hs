@@ -18,7 +18,7 @@ import CSlash.Tc.Errors.Types
 -- import GHC.Tc.Gen.Match
 import CSlash.Tc.Utils.Unify( checkTyConstraints, tcSubTypeSigma )
 import CSlash.Tc.Zonk.Type
--- import GHC.Tc.Gen.Expr
+import CSlash.Tc.Gen.Expr
 -- import GHC.Tc.Gen.App( tcInferSigma )
 import CSlash.Tc.Utils.Monad
 import CSlash.Tc.Gen.Export
@@ -377,7 +377,7 @@ checkMainType tcg_env = do
               [main_gre] -> do let main_name = greName main_gre
                                    ctxt = FunSigCtxt main_name NoRRC
                                main_id <- tcLookupId main_name
-                               io_ty <- getIOType
+                               (io_ty, _) <- getIOType
                                let main_ty = varType main_id
                                    eq_orig = TypeEqOrigin { uo_actual = main_ty
                                                           , uo_expected = io_ty
@@ -422,18 +422,31 @@ getMainOcc dflags = case mainFunIs dflags of
                       Nothing -> mkVarOccFS (fsLit "main")
 
 generateMainBinding :: TcGblEnv Tc -> Name -> TcM (TcGblEnv Tc)
-generateMainBinding tcg_env main_name = panic "generateMainBinding"
+generateMainBinding tcg_env main_name = do
+  traceTc "checkMain found" (ppr main_name)
+  (io_ty, res_ty) <- getIOType
+  let loc = getSrcSpan main_name
+      main_expr_rn = L (noAnnSrcSpan loc) (CsVar noExtField (L (noAnnSrcSpan loc) main_name))
+  main_expr <- setMainCtxt main_name io_ty $
+               tcCheckMonoExpr main_expr_rn io_ty
 
-getIOType :: TcM AnyType
+  traceTc "generateMainBinding TODO!!!!" empty
+  return (tcg_env { tcg_main = Just main_name
+                  , tcg_dus = tcg_dus tcg_env
+                              `plusDU` usesOnly (unitFV main_name) })
+
+getIOType :: TcM (AnyType, AnyType)
 getIOType = do
   ioTyCon <- asAnyTyKi <$> tcLookupTyCon ioTyConName
   unitTyCon <- asAnyTyKi <$> tcLookupTyCon unitTyConName
   -- Note: The kind of unit could be anything? (Perhaps Linear doesn't make sense?)
   -- If its changed, then we need to handle errors that will occur in tcSubSigmaType
   -- These can be fixed by adding the ability for unifyType to pass a KiPred to unifyKind
-  return $ mkTyConApp ioTyCon [ Embed (BIKi UKd), Embed (BIKi UKd)
-                              , mkTyConApp unitTyCon [ Embed (BIKi UKd) ]
+  let unit = mkTyConApp unitTyCon [Embed (BIKi UKd)]
+  return ( mkTyConApp ioTyCon [ Embed (BIKi UKd), Embed (BIKi UKd)
+                              , unit
                               ]
+         , unit )
 
 setMainCtxt :: Name -> AnyType -> TcM a -> TcM a
 setMainCtxt main_name io_ty thing_inside
