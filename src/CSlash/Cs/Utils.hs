@@ -360,8 +360,9 @@ instance IsPass p => CollectPass (CsPass p) where
       Ps -> dataConCantHappen ext
       Rn -> dataConCantHappen ext
       Tc -> case ext of
-        AbsBinds { abs_exports = dbinds } -> panic "(map abe_poly dbinds ++)"
-      Zk -> panic "collectXXCsBindsLR Zk"
+        AbsBinds { abs_exports = dbinds } -> (map abe_poly dbinds ++)
+      Zk -> case ext of
+        AbsBinds { abs_exports = dbinds} -> (map abe_poly dbinds ++)
 
 csTyForeignBinders :: [TypeGroup Rn] -> [Name]
 csTyForeignBinders type_decls = panic "csTyForeignBinders"
