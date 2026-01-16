@@ -132,6 +132,9 @@ unzip = \xs -> (fmap fst xs, fmap snd xs)
 *                                                                      *
 ********************************************************************* -}
 
+warnUnusedTopBinds :: [GlobalRdrElt] -> ZkM ()
+warnUnusedTopBinds gres = whenWOptM Opt_WarnUnusedTopBinds $ warnUnusedGREs gres
+
 warnUnusedLocalBinds :: [Name] -> FreeVars -> RnM ()
 warnUnusedLocalBinds = check_unused UnusedNameLocalBind
 
@@ -142,16 +145,29 @@ check_unused :: UnusedNameProv -> [Name] -> FreeVars -> RnM ()
 check_unused prov bound_names used_names
   = warnUnused prov (filterOut (`elemNameSet` used_names) bound_names)
 
+warnUnusedGREs :: [GlobalRdrElt] -> ZkM ()
+warnUnusedGREs gres = mapM_ warnUnusedGRE gres
+
 warnUnused :: UnusedNameProv -> [Name] -> RnM ()
 warnUnused prov names = mapM_ (\nm -> warnUnused1 prov nm (nameOccName nm)) names
 
-warnUnused1 :: UnusedNameProv -> Name -> OccName -> RnM ()
+warnUnused1 :: UnusedNameProv -> Name -> OccName -> TcRnZk p ()
 warnUnused1 prov child child_occ
   = when (reportable child child_occ) $
     warn_unused_name prov (nameSrcSpan child) child_occ
 
-warn_unused_name :: UnusedNameProv -> SrcSpan -> OccName -> RnM ()
+warn_unused_name :: UnusedNameProv -> SrcSpan -> OccName -> TcRnZk p ()
 warn_unused_name prov span child_occ = addDiagnosticAt span (TcRnUnusedName child_occ prov)
+
+warnUnusedGRE :: GlobalRdrElt -> ZkM ()
+warnUnusedGRE gre@(GRE { gre_lcl = lcl, gre_imp = is })
+  | lcl = warnUnused1 UnusedNameTopDecl nm occ
+  | otherwise = when (reportable nm occ) (mapM_ warn is)
+  where
+    occ = greOccName gre
+    nm = greName gre
+    warn spec = warn_unused_name (UnusedNameImported (importSpecModule spec)) span occ
+      where span = importSpecLoc spec
 
 reportable :: Name -> OccName -> Bool
 reportable child child_occ
