@@ -4,9 +4,13 @@
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
-module CSlash.Unit.Types where
+module CSlash.Unit.Types
+  ( module CSlash.Unit.Types
+  ) where
 
 import Prelude hiding ((<>))
+
+import GHC.Unit.Types () -- instance Data ModuleName
 
 import CSlash.Language.Syntax.Module.Name
 
@@ -32,11 +36,6 @@ data GenModule unit = Module
   , moduleName :: !ModuleName
   }
   deriving (Eq, Ord, Data, Functor)
-
-instance Data ModuleName where
-  toConstr _ = abstractConstr "ModuleName"
-  gunfold _ _ = error "gunfold"
-  dataTypeOf _ = mkNoRepType "ModuleName"
 
 type Module = GenModule Unit
 
