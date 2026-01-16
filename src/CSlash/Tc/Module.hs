@@ -5,6 +5,8 @@
 
 module CSlash.Tc.Module where
 
+import Prelude hiding ((<>))
+
 import CSlash.Driver.Env
 -- import GHC.Driver.Plugins
 import CSlash.Driver.DynFlags
@@ -70,6 +72,7 @@ import CSlash.Core.TyCon
 import CSlash.Core.DataCon
 import CSlash.Core.Type.Rep
 import CSlash.Core.Type
+import CSlash.Core.Type.Tidy
 import CSlash.Core.Kind
 -- import GHC.Core.Class
 -- import GHC.Core.Coercion.Axiom
@@ -96,7 +99,7 @@ import CSlash.Types.Name.Reader
 import CSlash.Types.Fixity.Env
 import CSlash.Types.Id as Id
 import CSlash.Types.Id.Info( IdDetails(..) )
-import CSlash.Types.Var (asAnyTyKi)
+import CSlash.Types.Var (asAnyTyKi, idDetails)
 import CSlash.Types.Var.Env
 import CSlash.Types.TypeEnv
 import CSlash.Types.Unique.FM
@@ -113,7 +116,7 @@ import CSlash.Types.PkgQual
 
 import CSlash.Unit.External
 import CSlash.Unit.Types
-import CSlash.Unit.State
+import CSlash.Unit.State hiding (comparing)
 import CSlash.Unit.Home
 import CSlash.Unit.Module
 import CSlash.Unit.Module.Warnings
@@ -478,4 +481,74 @@ rnDump rn = dumpOptTcRn Opt_D_dump_rn "Renamer" FormatCSlash (ppr rn)
 
 tcDump :: TcGblEnv Zk -> ZkM ()
 tcDump env = do
-  panic "tcDump"
+  unit_state <- cs_units <$> getTopEnv
+  logger <- getLogger
+
+  when (logHasDumpFlag logger Opt_D_dump_types || logHasDumpFlag logger Opt_D_dump_tc) $
+    dumpTcRn True Opt_D_dump_types
+    "" FormatText (pprWithUnitState unit_state short_dump)
+
+  dumpOptTcRn Opt_D_dump_tc "Typechecker" FormatCSlash full_dump
+
+  dumpOptTcRn Opt_D_dump_tc_ast "Typechecker AST" FormatCSlash ast_dump
+
+  where
+    short_dump = pprTcGblEnv env
+    full_dump = pprLCsBinds (tcg_binds env)
+    ast_dump = showAstData NoBlankSrcSpan NoBlankEpAnnotations (tcg_binds env)
+
+pprTcGblEnv :: TcGblEnv Zk -> SDoc
+pprTcGblEnv (TcGblEnv { tcg_type_env = type_env
+                      , tcg_imports = imports })
+  = getPprDebug $ \debug ->
+    vcat [ ppr_types debug type_env
+         , ppr_tycons debug type_env
+         , ppr_datacons debug type_env
+         , text "Dependent modules:" <+>
+           (ppr . sort . installedModuleEnvElts $ imp_direct_dep_mods imports)
+         , text "Dependent packages:" <+>
+           ppr (S.toList $ imp_dep_direct_pkgs imports) ]
+
+ppr_types :: Bool -> TypeEnv -> SDoc
+ppr_types debug type_env
+  = ppr_things "TYPE SIGNATURES" ppr_sig (sortBy (comparing getOccName) ids)
+  where
+    ids = [id | id <- typeEnvIds type_env, want_sig id]
+    want_sig id
+      | debug = True
+      | otherwise = hasTopUserName id && case idDetails id of
+                                           VanillaId -> True
+                                           _ -> False
+
+    ppr_sig id = hang (pprPrefixOcc id <+> colon) 2 (ppr (tidyTopType (varType id)))
+
+ppr_tycons :: Bool -> TypeEnv -> SDoc
+ppr_tycons debug type_env
+  = vcat [ ppr_things "TYPE CONSTRUCTORS" ppr_tc tycons ]
+  where
+    tycons = sortBy (comparing getOccName) $
+             [ tycon | tycon <- typeEnvTyCons type_env
+                     , want_tycon tycon ]
+    want_tycon tycon | debug = True
+                     | otherwise = isExternalName (tyConName tycon)
+
+    ppr_tc tc = vcat [ hang (ppr (tyConFlavor tc) <+> pprPrefixOcc (tyConName tc)
+                             <> braces (ppr (tyConArity tc)) <+> colon)
+                       2 (ppr (tidyTopKind (tyConKind tc))) ]
+
+ppr_datacons :: Bool -> TypeEnv -> SDoc
+ppr_datacons debug type_env
+  = ppr_things "DATA CONSTRUCTORS" ppr_dc wanted_dcs
+  where
+    ppr_dc dc = ppr dc <+> colon <+> ppr (dataConType dc)
+    all_dcs = typeEnvDataCons type_env
+    wanted_dcs = all_dcs
+    
+ppr_things :: String -> (a -> SDoc) -> [a] -> SDoc
+ppr_things herald ppr_one things
+  | null things = empty
+  | otherwise = text herald $$ nest 2 (vcat (map ppr_one things))
+
+hasTopUserName :: NamedThing x => x -> Bool
+hasTopUserName x = isExternalName name && not (isDerivedOccName (nameOccName name))
+  where name = getName x
