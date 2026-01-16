@@ -21,6 +21,7 @@ import CSlash.Tc.Types.Origin
 import CSlash.Tc.Types.Evidence
 -- import CSlash.Rename.Env ( irrefutableConLikeTc )
 
+import CSlash.Core.Type
 import CSlash.Core.Kind
 import CSlash.Core.UsageEnv
 import CSlash.Core.TyCon
@@ -49,7 +50,7 @@ import Data.Maybe (mapMaybe)
 *                                                                      *
             tcLambdaMatches, tcCaseMatches
 *                                                                      *
-********************************************************************* -}
+********************************************************************* -}  
 
 tcLambdaMatches
   :: CsExpr Rn
@@ -235,9 +236,10 @@ tcStmtsAndThen ctxt stmt_chk (L loc stmt : stmts) res_ty thing_inside = do
 
 tcGuardStmt :: TcExprStmtChecker
 tcGuardStmt _ (BodyStmt _ guard) res_ty thing_inside = do
-  guard' <- tcScalingUsage Many $ tcCheckMonoExpr guard (asAnyTyKi boolTy)
+  let bool = mkAppTy (asAnyTyKi boolTy) (Embed $ BIKi UKd)
+  guard' <- tcScalingUsage Many $ tcCheckMonoExpr guard bool
   thing <- thing_inside res_ty
-  return (BodyStmt (asAnyTyKi boolTy) guard', thing)
+  return (BodyStmt bool guard', thing)
 
 tcGuardStmt ctxt (BindStmt _ pat rhs) res_ty thing_inside = do
   (rhs', rhs_ty) <- tcScalingUsage Many $ tcInferRhoNC rhs
