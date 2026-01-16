@@ -399,17 +399,19 @@ zonk_bind bind@(TyFunBind {}) = panic "zonk_bind TyFunBind"
 zonk_bind bind@(TCVarBind {}) = panic "zonk_bind TCVarBind"
 
 zonk_bind (XCsBindsLR (AbsBinds { abs_tvs = tyvars
+                                , abs_kvs = kivars
                                 , abs_exports = exports
                                 , abs_binds = val_binds
                                 , abs_sig = has_sig }))
-  = assertPpr (null tyvars) (text "zonk_bind/AbsBinds has nonempty tyvars") $ do
+  = assertPpr (null tyvars) (text "zonk_bind/AbsBinds has nonempty tyvars") $
+    assertPpr (null kivars) (text "zonk_bind/AbsBinds has nonempty kivars") $ do
   (new_val_bind, new_exports) <- mfix $ \ ~(new_val_binds, _) ->
     runZonkBndrT (extendIdZonkEnvRec $ collectCsBindsBinders CollNoDictBinders new_val_binds)
     $ \_ -> do new_val_binds <- mapM zonk_val_bind val_binds
                new_exports <- mapM zonk_export exports
                return (new_val_binds, new_exports)
-  return $ XCsBindsLR $ AbsBinds { abs_tvs = panic "tyvars"
-                                 , abs_kvs = panic "kivars"
+  return $ XCsBindsLR $ AbsBinds { abs_tvs = []
+                                 , abs_kvs = []
                                  , abs_exports = new_exports
                                  , abs_binds = new_val_bind
                                  , abs_sig = has_sig }
