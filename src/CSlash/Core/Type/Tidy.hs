@@ -168,6 +168,9 @@ tidyKind :: ToTcKiVarMaybe kv => MkTidyEnv tv kv -> Kind kv -> Kind kv
 tidyKind env (Mono mki) = Mono $ tidyMonoKind env mki
 tidyKind env ki@(ForAllKi {}) = tidyForAllKind env ki
 
+tidyTopKind :: ToTcKiVarMaybe kv => Kind kv -> Kind kv
+tidyTopKind ki = tidyKind emptyTidyEnv ki
+
 tidyForAllKind :: ToTcKiVarMaybe kv => MkTidyEnv tv kv -> Kind kv -> Kind kv
 tidyForAllKind env ki = (mkForAllKis' $! kvs') $! tidyMonoKind body_env body_ki
   where
@@ -209,6 +212,11 @@ tidyOpenType
   :: (IsTyVar tv kv, ToTcTyVarMaybe tv kv, ToTcKiVarMaybe kv)
   => MkTidyEnv tv kv -> Type tv kv -> Type tv kv
 tidyOpenType env ty = snd (tidyOpenTypeX env ty)
+
+tidyTopType
+  :: (IsTyVar tv kv, ToTcTyVarMaybe tv kv, ToTcKiVarMaybe kv)
+  => Type tv kv -> Type tv kv
+tidyTopType ty = tidyType emptyTidyEnv ty
 
 tidyOpenMonoKinds
   :: ToTcKiVarMaybe kv => MkTidyEnv tv kv -> [MonoKind kv] -> (MkTidyEnv tv kv, [MonoKind kv])
