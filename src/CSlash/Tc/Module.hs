@@ -469,6 +469,15 @@ type RenamedStuff =
         , Maybe (XRec Rn ModuleName)
         )
 
+getRenamedStuff :: TcGblEnv Zk -> RenamedStuff
+getRenamedStuff tc_result
+  = fmap (\decls -> ( decls
+                    , tcg_rn_imports tc_result
+                    , tcg_rn_exports tc_result
+                    , tcg_hdr_info tc_result ))
+    (tcg_rn_decls tc_result)
+
+
 {- *********************************************************************
 *                                                                      *
                 Debugging output
