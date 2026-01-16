@@ -19,7 +19,7 @@ import CSlash.Data.FastString
 import CSlash.Types.Avail
 import CSlash.Types.Basic
 import CSlash.Types.GREInfo
-import CSlash.Types.SrcLoc
+import CSlash.Types.SrcLoc as SrcLoc
 import CSlash.Types.Unique
 import CSlash.Types.Unique.FM
 import CSlash.Types.Unique.Set
@@ -690,6 +690,19 @@ data ImpItemSpec
     , is_iloc :: !SrcSpan
     }
   deriving (Eq, Data)
+
+bestImport :: NE.NonEmpty ImportSpec -> ImportSpec
+bestImport iss = NE.head $ NE.sortBy best iss
+  where
+    best (ImpSpec { is_item = item1, is_decl = d1 }) (ImpSpec { is_item = item2, is_decl = d2 })
+      = (is_qual d1 `compare` is_qual d2)
+        S.<> best_item item1 item2
+        S.<> SrcLoc.leftmost_smallest (is_dloc d1) (is_dloc d2)
+
+    best_item ImpAll ImpAll = EQ
+    best_item ImpAll (ImpSome{}) = LT
+    best_item (ImpSome{}) ImpAll = GT
+    best_item (ImpSome { is_explicit = e1 }) (ImpSome { is_explicit = e2 }) = e1 `compare` e2
 
 unQualSpecOK :: ImportSpec -> Bool
 unQualSpecOK is = not (is_qual (is_decl is))
