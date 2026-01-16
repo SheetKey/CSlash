@@ -32,7 +32,7 @@ type ZkId = Id (TyVar KiVar) KiVar
 idName :: Id tv kv -> Name
 idName = Var.varName
 
-mkGlobalId :: IdDetails tv kv -> Name -> Type tv kv -> IdInfo -> Id tv kv
+mkGlobalId :: IdDetails -> Name -> Type tv kv -> IdInfo -> Id tv kv
 mkGlobalId = Var.mkGlobalVar
 
 mkLocalId :: Name -> Type tv kv -> Id tv kv
@@ -67,7 +67,7 @@ idKind = typeKind . Var.varType
 *                                                                      *
 ********************************************************************* -}
 
-isDataConId_maybe :: Var.IsTyVar tv kv => Id tv kv -> Maybe (DataCon tv kv)
+isDataConId_maybe :: Var.IsTyVar tv kv => Id tv kv -> Maybe (DataCon (TyVar KiVar) KiVar)
 isDataConId_maybe id = case Var.idDetails id of
                          DataConId con -> Just con
                          _ -> Nothing

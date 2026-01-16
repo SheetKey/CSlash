@@ -147,7 +147,7 @@ data Var tv kv
     , _realUnique :: {-# UNPACK #-} !Unique
     , _varType :: Type tv kv
     , _idScope :: IdScope
-    , _id_details :: IdDetails tv kv
+    , _id_details :: IdDetails
     , _id_info :: IdInfo
     }
 
@@ -455,7 +455,7 @@ instance AsGenericKi AnyTyVar where
 
 instance AsAnyTy Id where
   asAnyTyKi (Id (Id' {..})) = Id $ Id'
-    { _varType = asAnyTyKi _varType, _id_details = asAnyTyKi _id_details, .. }
+    { _varType = asAnyTyKi _varType, .. }
   asAnyTyKi _ = panic "AsAnyTy Id"
 
 instance AsAnyKi TyVar where
@@ -801,15 +801,15 @@ instance IsTyVar tv kv => VarHasType (Id tv kv) tv kv where
 instance FromId (Var tv kv) tv kv where
   fromId (Id v) = v
 
-mkGlobalVar :: IdDetails tv kv -> Name -> Type tv kv -> IdInfo -> Id tv kv
+mkGlobalVar :: IdDetails -> Name -> Type tv kv -> IdInfo -> Id tv kv
 mkGlobalVar details name ty info
   = mk_id name ty GlobalId details info
 
-mkLocalVar :: IdDetails tv kv -> Name -> Type tv kv -> IdInfo -> Id tv kv
+mkLocalVar :: IdDetails -> Name -> Type tv kv -> IdInfo -> Id tv kv
 mkLocalVar details name ty info
   = mk_id name ty (LocalId NotExported) details info
 
-mk_id :: Name -> Type tv kv -> IdScope -> IdDetails tv kv -> IdInfo -> Id tv kv
+mk_id :: Name -> Type tv kv -> IdScope -> IdDetails -> IdInfo -> Id tv kv
 mk_id name ty scope details info
   = Id $ Id' { _varName = name
              , _realUnique = nameUnique name
@@ -822,7 +822,7 @@ idInfo :: IsTyVar tv kv => Id tv kv -> IdInfo
 idInfo (Id (Id' { _id_info = info })) = info
 idInfo other = pprPanic "idInfo" (ppr other)
 
-idDetails :: IsTyVar tv kv => Id tv kv -> IdDetails tv kv
+idDetails :: IsTyVar tv kv => Id tv kv -> IdDetails
 idDetails (Id (Id' { _id_details = details })) = details
 idDetails other = pprPanic "idDetails" (ppr other)
 
@@ -844,7 +844,7 @@ updateIdTypeM _ _ = panic "updateIdTypeM"
 changeIdTypeM :: Monad m => (Type tv kv -> m (Type tv' kv')) -> Id tv kv -> m (Id tv' kv')
 changeIdTypeM f (Id (Id' { _varType = ty, .. })) = do
   !ty' <- f ty
-  return $ Id $ Id' { _varType = ty', _id_details = panic "changeIdTypeM/idDetails", .. }
+  return $ Id $ Id' { _varType = ty', .. }
 changeIdTypeM _ _ = panic "changeIdTypeM"
 
 isLocalId :: Id tv kv -> Bool

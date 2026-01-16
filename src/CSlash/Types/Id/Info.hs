@@ -4,8 +4,6 @@ module CSlash.Types.Id.Info where
 
 import Prelude hiding ((<>))
 
-import {-# SOURCE #-} CSlash.Types.Var (AsAnyTy(..))
-
 import CSlash.Core
 import CSlash.Core.Type
 import CSlash.Core.Kind
@@ -21,24 +19,17 @@ import Data.Data ( Data )
 import Data.Word
 import Data.Bits
 
-data IdDetails tv kv
+data IdDetails 
   = VanillaId
-  | DataConId (DataCon tv kv)
+  | DataConId (DataCon (TyVar KiVar) KiVar)
   | TickBoxOpId TickBoxOp
   | JoinId JoinArity
   | TyCoVarId
 
-instance Outputable (IdDetails tv kv) where
+instance Outputable IdDetails where
   ppr = pprIdDetails
 
-instance AsAnyTy IdDetails where
-  asAnyTyKi VanillaId = VanillaId
-  asAnyTyKi (DataConId dc) = DataConId $ asAnyTyKi dc
-  asAnyTyKi (TickBoxOpId t) = TickBoxOpId t
-  asAnyTyKi (JoinId j) = JoinId j
-  asAnyTyKi TyCoVarId = TyCoVarId
-
-pprIdDetails :: IdDetails tv kv -> SDoc
+pprIdDetails :: IdDetails -> SDoc
 pprIdDetails VanillaId = empty
 pprIdDetails other = brackets (pp other)
   where
