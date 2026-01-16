@@ -497,6 +497,9 @@ isKiCoVar = isKiCoVarKind . varKind
 mkLocalKiCoVar :: Name -> PredKind AnyKiVar -> KiCoVar AnyKiVar
 mkLocalKiCoVar name ki = assert (isKiCoVarKind ki) $ mkTyVar name ki
 
+instance IsVar kv => ToTcTyVarMaybe (TyVar kv) kv where
+  toTcTyVar_maybe _ = Nothing
+
 instance ToAnyTyVar (TyVar kv) kv where
   toAnyTyVar (TyVar tv) = AnyTyVar tv
 
@@ -669,6 +672,9 @@ handleAnyTv _ _ other = pprPanic "handleAnyTv" (ppr other)
 newtype KiVar = KiVar (Var Void Void)
   deriving ( Outputable, NamedThing, Uniquable, Eq, Ord, Data, HasOccName
            , VarHasName, VarHasUnique)
+
+instance ToTcKiVarMaybe KiVar where
+  toTcKiVar_maybe _ = Nothing
 
 instance ToAnyKiVar KiVar where
   toAnyKiVar (KiVar kv) = AnyKiVar kv
