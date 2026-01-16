@@ -165,6 +165,9 @@ ieWrappedLName (IETyName _ n) = n
 ieWrappedName :: IEWrappedName (CsPass p) -> IdP (CsPass p)
 ieWrappedName = unLoc . ieWrappedLName
 
+lieWrappedName :: LIEWrappedName (CsPass p) -> IdP (CsPass p)
+lieWrappedName (L _ n) = ieWrappedName n
+
 replaceWrappedName :: IEWrappedName Ps -> IdP Rn -> IEWrappedName Rn
 replaceWrappedName (IEName x (L l _)) n = IEName x (L l n)
 replaceWrappedName (IETyName r (L l _)) n = IETyName r (L l n)
