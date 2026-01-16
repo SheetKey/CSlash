@@ -82,6 +82,7 @@ data TcRnMessage where
   TcRnBindingOfExistingName :: RdrName -> TcRnMessage
   TcRnQualifiedBinder :: !RdrName -> TcRnMessage
   TcRnMultipleFixityDecls :: SrcSpan -> RdrName -> TcRnMessage
+  TcRnUnusedImport :: !(ImportDecl Rn) -> !UnusedImportReason -> TcRnMessage
   TcRnDuplicateDecls :: !OccName -> !(NE.NonEmpty Name) -> TcRnMessage
   TcRnUnusedName :: !OccName -> !UnusedNameProv -> TcRnMessage
   TcRnModMissingRealSrcSpan :: Module -> TcRnMessage
@@ -100,6 +101,7 @@ data TcRnMessage where
   TcRnSimplifierTooManyIterations :: KiCts -> !IntWithInf -> WantedKiConstraints -> TcRnMessage
   TcRnBindingNameConflict :: !RdrName -> !(NE.NonEmpty SrcSpan) -> TcRnMessage
   TcRnTyThingUsedWrong :: !WrongThingSort -> !TcTyKiThing -> !Name -> TcRnMessage
+  TcRnMissingSignature :: MissingSignature -> Exported -> TcRnMessage
   TcRnPolymorphicBinderMissingSig :: Name -> AnyType -> TcRnMessage
   TcRnArityMismatch :: !(TyThing (AnyTyVar AnyKiVar) AnyKiVar) -> !Arity -> !Arity -> TcRnMessage
   TcRnMissingMain :: !Bool -> !Module -> !OccName -> TcRnMessage
@@ -141,6 +143,16 @@ data SolverReportErrCtxt = CEC
 
 getUserGivens :: SolverReportErrCtxt -> [KiImplication]
 getUserGivens (CEC { cec_kencl = implics }) = getUserGivensFromImplics implics
+
+data MissingSignature
+  = MissingTopLevelBindingSig Name (Type (TyVar KiVar) KiVar)
+
+data Exported = IsNotExported | IsExported
+  deriving Eq
+
+instance Outputable Exported where
+  ppr IsNotExported = text "IsNotExported"
+  ppr IsExported = text "IsExported"
 
 ----------------------------------------------------------------------------
 --
@@ -399,9 +411,18 @@ data ImportLookupReason where
   ImportLookupAmbiguous :: !RdrName -> ![GlobalRdrElt] -> ImportLookupReason
   deriving Generic
 
+data UnusedImportName where
+  UnusedImportNameRegular :: !Name -> UnusedImportName
+
+data UnusedImportReason where
+  UnusedImportNone :: UnusedImportReason
+  UnusedImportSome :: ![UnusedImportName] -> UnusedImportReason
+  deriving Generic
+
 data UnusedNameProv
   = UnusedNameTopDecl
   | UnusedNameImported !ModuleName
   | UnusedNameTypePattern
   | UnusedNameMatch
   | UnusedNameLocalBind
+

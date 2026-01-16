@@ -30,6 +30,7 @@ import CSlash.Core.Type.Rep (Type(..))
 -- import GHC.Core.PatSyn ( patSynName, pprPatSynType )
 import CSlash.Core.Predicate
 import CSlash.Core.Type
+import CSlash.Core.Type.Ppr
 import CSlash.Core.Type.Tidy
 import CSlash.Core.Kind
 import CSlash.Core.Kind.FVs
@@ -158,6 +159,7 @@ instance Diagnostic TcRnMessage where
       formatExportItemError (text "module" <+> ppr mod) "is missing an export list"
     TcRnImportLookup reason -> mkSimpleDecorated $
       pprImportLookup reason
+    TcRnUnusedImport decl reason -> mkSimpleDecorated $ pprUnusedImport decl reason
     TcRnNotInScope err name imp_errs _ -> mkSimpleDecorated $
       pprScopeError name err $$ vcat (map ppr imp_errs)
     TcRnMatchesHaveDiffNumArgs argsContext (MatchArgMatches match1 bad_matches)
@@ -186,6 +188,11 @@ instance Diagnostic TcRnMessage where
         locations = text "Bound at:" <+> vcat (map ppr (sortBy leftmost_smallest (NE.toList locs)))
     TcRnTyThingUsedWrong sort thing name -> mkSimpleDecorated $
       pprTyThingUsedWrong sort thing name
+    TcRnMissingSignature what _ -> mkSimpleDecorated $
+      case what of
+        MissingTopLevelBindingSig name ty ->
+          hang (text "Top-level binding with no type signature:")
+          2 (pprPrefixName name <+> colon <+> pprSigmaType ty)
     TcRnPolymorphicBinderMissingSig n ty -> mkSimpleDecorated $
       sep [ text "Polymorphic local binding with no type signature:"
           , nest 2 $ pprPrefixName n <+> colon <+> ppr ty ]
@@ -235,12 +242,15 @@ instance Diagnostic TcRnMessage where
     TcRnMissingImportList{} -> WarningWithFlag Opt_WarnMissingImportList
     TcRnMissingExportList{} -> WarningWithFlag Opt_WarnMissingExportList
     TcRnImportLookup{} -> ErrorWithoutFlag
+    TcRnUnusedImport{} -> WarningWithFlag Opt_WarnUnusedImports
     TcRnNotInScope{} -> ErrorWithoutFlag
     TcRnMatchesHaveDiffNumArgs{} -> ErrorWithoutFlag
     TcRnShadowedName{} -> WarningWithFlag Opt_WarnNameShadowing
     TcRnSimplifierTooManyIterations{} -> ErrorWithoutFlag
     TcRnBindingNameConflict{} -> ErrorWithoutFlag
     TcRnTyThingUsedWrong{} -> ErrorWithoutFlag
+    TcRnMissingSignature what exported
+      -> WarningWithFlags $ missingSignatureWarningFlags what exported
     TcRnPolymorphicBinderMissingSig{} -> WarningWithFlag Opt_WarnMissingLocalSignatures
     TcRnArityMismatch{} -> ErrorWithoutFlag
     TcRnMissingMain{} -> ErrorWithoutFlag
@@ -274,12 +284,14 @@ instance Diagnostic TcRnMessage where
                                          ImportDataCon (Just mod_name) par]
            BadImportNotExportedSubordinates{} -> noHints
     TcRnImportLookup{} -> noHints
+    TcRnUnusedImport{} -> noHints
     TcRnNotInScope err _ _ hints -> scopeErrorHints err ++ hints
     TcRnMatchesHaveDiffNumArgs{} -> noHints
     TcRnShadowedName{} -> noHints
     TcRnSimplifierTooManyIterations{} -> [SuggestIncreasedSimplifierIterations]
     TcRnBindingNameConflict{} -> noHints
     TcRnTyThingUsedWrong{} -> noHints
+    TcRnMissingSignature{} -> noHints
     TcRnPolymorphicBinderMissingSig{} -> noHints
     TcRnArityMismatch{} -> noHints
     TcRnMissingMain{} -> noHints
@@ -304,6 +316,11 @@ formatExportItemError :: SDoc -> String -> SDoc
 formatExportItemError exportedThing reason = hsep [ text "The export item"
                                                   , quotes exportedThing
                                                   , text reason ]
+
+missingSignatureWarningFlags :: MissingSignature -> Exported -> NonEmpty WarningFlag
+missingSignatureWarningFlags (MissingTopLevelBindingSig {}) exported
+  = Opt_WarnMissingSignatures :|
+    [ Opt_WarnMissingExportedSignatures | IsExported == exported ]
 
 {- *********************************************************************
 *                                                                      *
@@ -743,6 +760,20 @@ pprWrongThingSort = text . \case
 
 pprImportLookup :: ImportLookupReason -> SDoc
 pprImportLookup _ = panic "pprImportLookup"
+
+pprUnusedImport :: ImportDecl Rn -> UnusedImportReason -> SDoc
+pprUnusedImport decl = \case
+  UnusedImportNone -> vcat [ pp_herald <+> quotes pp_mod <+> text "is redundant" ]
+  UnusedImportSome sort_unused ->
+    sep [ pp_herald <+> quotes (pprWithCommas pp_unused sort_unused)
+        , text "from module" <+> quotes pp_mod <+> text "is redundant" ]
+  where
+    pp_mod = ppr (unLoc (ideclName decl))
+    pp_herald = text "The" <+> pp_qual <+> text "import of"
+    pp_qual | isImportDeclQualified (ideclQualified decl) = text "qualified"
+            | otherwise = empty
+    pp_unused = \case
+      UnusedImportNameRegular n -> pprNameUnqualified n
 
 pprUnusedName :: OccName -> UnusedNameProv -> SDoc
 pprUnusedName name reason =

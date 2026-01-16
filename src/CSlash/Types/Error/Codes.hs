@@ -282,6 +282,7 @@ type family CsDiagnosticCode c = n | n -> c where
   CsDiagnosticCode "TcRnSimplifierTooManyIterations"               = 95822
   CsDiagnosticCode "TcRnBindingNameConflict"                       = 10498
   CsDiagnosticCode "TcRnTyThingUsedWrong"                          = 10969
+  CsDiagnosticCode "TcRnMissingSignature"                          = 38417
   CsDiagnosticCode "TcRnPolymorphicBinderMissingSig"               = 64414
   CsDiagnosticCode "TcRnArityMismatch"                             = 27346
 
@@ -299,6 +300,10 @@ type family CsDiagnosticCode c = n | n -> c where
   CsDiagnosticCode "ImportLookupQualified"                         = 48795
   CsDiagnosticCode "ImportLookupIllegal"                           = 14752
   CsDiagnosticCode "ImportLookupAmbiguous"                         = 92057
+
+  -- TcRnUnusedImport/UnusedImportReason
+  CsDiagnosticCode "UnusedImportNone"                              = 66111
+  CsDiagnosticCode "UnusedImportSome"                              = 38856
 
   -- Interface errors
   CsDiagnosticCode "Can'tFindNameInInterface"                      = 83249
@@ -382,6 +387,7 @@ type family ConRecursInto con where
   ConRecursInto "TcRnDodgyImports"         = 'Just DodgyImportsReason
   ConRecursInto "DodgyImportsHiding"       = 'Just ImportLookupReason
   ConRecursInto "TcRnImportLookup"         = 'Just ImportLookupReason
+  ConRecursInto "TcRnUnusedImport"         = 'Just UnusedImportReason
   ConRecursInto "TcRnNotInScope"           = 'Just NotInScopeError
 
   
