@@ -205,6 +205,11 @@ tidyOpenTypeX env ty = (env1, tidyType inner_env ty)
     (env1, free_tkvs') = tidyFreeTyKiVarsX env free_tkvs
     inner_env = trimTidyEnvTyKi env1 free_tkvs'
 
+tidyOpenType
+  :: (IsTyVar tv kv, ToTcTyVarMaybe tv kv, ToTcKiVarMaybe kv)
+  => MkTidyEnv tv kv -> Type tv kv -> Type tv kv
+tidyOpenType env ty = snd (tidyOpenTypeX env ty)
+
 tidyOpenMonoKinds
   :: ToTcKiVarMaybe kv => MkTidyEnv tv kv -> [MonoKind kv] -> (MkTidyEnv tv kv, [MonoKind kv])
 tidyOpenMonoKinds env kis = (env', tidyMonoKinds (trimmed_occ_env, tenv, var_env) kis)
