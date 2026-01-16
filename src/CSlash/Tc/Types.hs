@@ -112,6 +112,8 @@ type TcM = TcRn
 
 type ZkM = TcRnIf (TcGblEnv Zk) TcLclEnv
 
+type TcRnZk p = TcRnIf (TcGblEnv p) TcLclEnv
+
 data Env gbl lcl = Env
   { env_top :: !CsEnv
   , env_ut :: {-# UNPACK #-} !Char
