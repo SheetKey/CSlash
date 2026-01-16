@@ -29,3 +29,15 @@ extendTypeEnv env thing = extendNameEnv env (getName thing) thing
 
 extendTypeEnvList :: TypeEnv -> [TyThing (TyVar KiVar) KiVar] -> TypeEnv
 extendTypeEnvList env things = foldl' extendTypeEnv env things
+
+typeEnvElts :: TypeEnv -> [TyThing (TyVar KiVar) KiVar]
+typeEnvElts env = nonDetNameEnvElts env
+
+typeEnvIds :: TypeEnv -> [Id (TyVar KiVar) KiVar]
+typeEnvIds env = [id | AnId id <- typeEnvElts env]
+
+typeEnvTyCons :: TypeEnv -> [TyCon (TyVar KiVar) KiVar]
+typeEnvTyCons env = [tc | ATyCon tc <- typeEnvElts env]
+
+typeEnvDataCons :: TypeEnv -> [DataCon (TyVar KiVar) KiVar]
+typeEnvDataCons env = [dc | AConLike (RealDataCon dc) <- typeEnvElts env]
