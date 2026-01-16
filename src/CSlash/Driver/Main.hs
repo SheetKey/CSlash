@@ -352,7 +352,18 @@ checkBidirectionFormatChars start_loc sb
 -- If the renamed source has been kept, extract it. Dump it if requested.
 
 extract_renamed_stuff :: ModSummary -> TcGblEnv Zk -> Cs RenamedStuff
-extract_renamed_stuff mod_summary tc_result = panic "extrace-renamed-stuff"
+extract_renamed_stuff mod_summary tc_result = do
+  let rn_info = getRenamedStuff tc_result
+
+  dflags <- getDynFlags
+  logger <- getLogger
+  liftIO $ putDumpFileMaybe logger Opt_D_dump_rn_ast "Renamer"
+             FormatCSlash (showAstData NoBlankSrcSpan NoBlankEpAnnotations rn_info)
+
+  when (gopt Opt_WriteHie dflags) $ do
+    panic "hie file not supported yet"
+
+  return rn_info
 
 -- -----------------------------------------------------------------------------
 -- Rename and typecheck a module
