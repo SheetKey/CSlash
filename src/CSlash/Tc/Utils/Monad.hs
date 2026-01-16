@@ -289,6 +289,12 @@ whenDOptM flag thing_inside = do
   when b thing_inside
 {-# INLINE whenDOptM #-}
 
+whenGOptM :: GeneralFlag -> TcRnIf gbl lcl () -> TcRnIf gbl lcl ()
+whenGOptM flag thing_inside = do
+  b <- goptM flag
+  when b thing_inside
+{-# INLINE whenGOptM #-}
+
 whenWOptM :: WarningFlag -> TcRnIf gbl lcl () -> TcRnIf gbl lcl ()
 whenWOptM flag thing_inside = do
   b <- woptM flag
@@ -366,22 +372,22 @@ newSysName occ = do
 *                                                                      *
 ********************************************************************* -}
 
-traceTc :: String -> SDoc -> TcRn ()
-traceTc herald doc = labelledTraceOptTcRn Opt_D_dump_tc_trace herald doc
+traceTc :: String -> SDoc -> TcRnZk p ()
+traceTc herald doc = labelledTraceOptTcRnZk Opt_D_dump_tc_trace herald doc
 {-# INLINE traceTc #-}
 
-traceRn :: String -> SDoc -> TcRn ()
-traceRn herald doc = labelledTraceOptTcRn Opt_D_dump_rn_trace herald doc
+traceRn :: String -> SDoc -> TcRnZk p ()
+traceRn herald doc = labelledTraceOptTcRnZk Opt_D_dump_rn_trace herald doc
 {-# INLINE traceRn #-}
 
-labelledTraceOptTcRn :: DumpFlag -> String -> SDoc -> TcRn ()
-labelledTraceOptTcRn flag herald doc = traceOptTcRn flag (formatTraceMsg herald doc)
-{-# INLINE labelledTraceOptTcRn #-}
+labelledTraceOptTcRnZk :: DumpFlag -> String -> SDoc -> TcRnZk p ()
+labelledTraceOptTcRnZk flag herald doc = traceOptTcRn flag (formatTraceMsg herald doc)
+{-# INLINE labelledTraceOptTcRnZk #-}
 
 formatTraceMsg :: String -> SDoc -> SDoc
 formatTraceMsg herald doc = hang (text herald) 2 doc
 
-traceOptTcRn :: DumpFlag -> SDoc -> TcRn ()
+traceOptTcRn :: DumpFlag -> SDoc -> TcRnZk p ()
 traceOptTcRn flag doc =
   whenDOptM flag $
     dumpTcRn False flag "" FormatText doc
@@ -392,7 +398,7 @@ dumpOptTcRn flag title fmt doc =
   whenDOptM flag $ dumpTcRn False flag title fmt doc
 {-# INLINE dumpOptTcRn #-}
 
-dumpTcRn :: Bool -> DumpFlag -> String -> DumpFormat -> SDoc -> TcRn ()
+dumpTcRn :: Bool -> DumpFlag -> String -> DumpFormat -> SDoc -> TcRnZk p ()
 dumpTcRn useUserStyle flag title fmt doc = do
   logger <- getLogger
   name_ppr_ctx <- getNamePprCtx
@@ -402,7 +408,7 @@ dumpTcRn useUserStyle flag title fmt doc = do
               else mkDumpStyle name_ppr_ctx
   liftIO $ logDumpFile logger sty flag title fmt real_doc
 
-wrapDocLoc :: SDoc -> TcRn SDoc
+wrapDocLoc :: SDoc -> TcRnIf gbl TcLclEnv SDoc
 wrapDocLoc doc = do
   logger <- getLogger
   if logHasDumpFlag logger Opt_D_ppr_debug
@@ -410,7 +416,7 @@ wrapDocLoc doc = do
             return $ mkLocMessage MCOutput loc doc
     else return doc
 
-getNamePprCtx :: TcRn NamePprCtx
+getNamePprCtx :: TcRnZk p NamePprCtx
 getNamePprCtx = do
   rdr_env <- getGlobalRdrEnv
   cs_env <- getTopEnv
@@ -431,7 +437,7 @@ traceOptIf flag doc = whenDOptM flag $ do
 *                                                                      *
 ********************************************************************* -}
 
-getGlobalRdrEnv :: TcRn GlobalRdrEnv
+getGlobalRdrEnv :: TcRnIf (TcGblEnv p) lcl GlobalRdrEnv
 getGlobalRdrEnv = do
   env <- getGblEnv
   return (tcg_rdr_env env)
@@ -462,7 +468,7 @@ extendFixityEnv new_bit
 *                                                                      *
 ********************************************************************* -}
 
-getSrcSpanM :: TcRn SrcSpan
+getSrcSpanM :: TcRnIf gbl TcLclEnv SrcSpan
 getSrcSpanM = do
   env <- getLclEnv
   return $ RealSrcSpan (getLclEnvLoc env) Strict.Nothing
@@ -505,7 +511,7 @@ wrapLocSndMA fn (L loc a) = setSrcSpanA loc $ do
 setErrsVar :: TcRef (Messages TcRnMessage) -> TcRn a -> TcRn a
 setErrsVar v = updLclEnv $ \env -> env { tcl_errs = v }
 
-getErrsVar :: TcRn (TcRef (Messages TcRnMessage))
+getErrsVar :: TcRnZk p (TcRef (Messages TcRnMessage))
 getErrsVar = do
   env <- getLclEnv
   return (tcl_errs env)
@@ -553,13 +559,13 @@ add_long_err_at loc msg = mk_long_err_at loc msg >>= reportDiagnostic
       unit_state <- cs_units <$> getTopEnv
       return $ mkErrorMsgEnvelope loc name_ppr_ctx $ TcRnMessageWithInfo unit_state msg
 
-mkTcRnMessage :: SrcSpan -> TcRnMessage -> TcRn (MsgEnvelope TcRnMessage)
+mkTcRnMessage :: SrcSpan -> TcRnMessage -> TcRnZk p (MsgEnvelope TcRnMessage)
 mkTcRnMessage loc msg = do
   name_ppr_ctx <- getNamePprCtx
   diag_opts <- initDiagOpts <$> getDynFlags
   return $ mkMsgEnvelope diag_opts loc name_ppr_ctx msg
 
-reportDiagnostic :: MsgEnvelope TcRnMessage -> TcRn ()
+reportDiagnostic :: MsgEnvelope TcRnMessage -> TcRnZk p ()
 reportDiagnostic msg = do
   traceTc "Adding diagnostic:" (pprLocMsgEnvelopeDefault msg)
   errs_var <- getErrsVar
@@ -793,7 +799,7 @@ addTcRnDiagnostic msg = do
 addDiagnostic :: TcRnMessage -> TcRn ()
 addDiagnostic msg = add_diagnostic (mkDetailedMessage no_err_info msg)
 
-addDiagnosticAt :: SrcSpan -> TcRnMessage -> TcRn ()
+addDiagnosticAt :: SrcSpan -> TcRnMessage -> TcRnZk p ()
 addDiagnosticAt loc msg = do
   unit_state <- cs_units <$> getTopEnv
   let detailed_msg = mkDetailedMessage no_err_info msg
@@ -920,7 +926,7 @@ pushTcLevelM thing_inside = do
   res <- updLclEnv (setLclEnvTcLevel tclvl') thing_inside
   return (tclvl', res)
 
-getTcLevel :: TcM TcLevel
+getTcLevel :: TcRnZk p TcLevel
 getTcLevel = do
   env <- getLclEnv
   return $! getLclEnvTcLevel env 
@@ -994,7 +1000,7 @@ initIfaceLcl mod loc_doc thing_inside =
 
 --------------------------------------------------------------------------------
 
-liftZonkM :: ZonkM a -> TcM a
+liftZonkM :: ZonkM a -> TcRnZk p a
 liftZonkM (ZonkM f) = do
   logger <- getLogger
   name_ppr_ctx <- getNamePprCtx
