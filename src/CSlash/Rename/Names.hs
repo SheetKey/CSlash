@@ -7,14 +7,14 @@ import CSlash.Driver.Ppr
 
 import CSlash.Rename.Env
 import CSlash.Rename.Fixity
--- import GHC.Rename.Utils ( warnUnusedTopBinds )
+import CSlash.Rename.Utils ( warnUnusedTopBinds )
 import CSlash.Rename.Unbound as Unbound
 
 import CSlash.Tc.Errors.Types
 -- import GHC.Tc.Utils.Env
 import CSlash.Tc.Utils.Monad
 import CSlash.Tc.Types.LclEnv
--- import GHC.Tc.Zonk.TcType ( tcInitTidyEnv )
+import CSlash.Tc.Zonk.TcType ( tcInitTidyEnv )
 
 import CSlash.Cs
 import CSlash.Iface.Load   ( loadSrcInterface )
@@ -22,6 +22,7 @@ import CSlash.Iface.Syntax ( fromIfaceWarnings )
 import CSlash.Builtin.Names
 -- import CSlash.Parser.PostProcess ( setRdrNameSpace )
 import CSlash.Core.Type
+import CSlash.Core.Type.Tidy
 -- import GHC.Core.PatSyn
 import CSlash.Core.TyCon ( TyCon, tyConName )
 -- import qualified GHC.LanguageExtensions as LangExt
@@ -32,7 +33,7 @@ import CSlash.Utils.Panic
 
 import CSlash.Types.Fixity.Env
 -- import GHC.Types.SafeHaskell
-import CSlash.Types.Name
+import CSlash.Types.Name hiding (varName)
 import CSlash.Types.Name.Env
 import CSlash.Types.Name.Set
 import CSlash.Types.Name.Reader
@@ -44,11 +45,12 @@ import CSlash.Types.SrcLoc as SrcLoc
 import CSlash.Types.Basic  ( TopLevelFlag(..) )
 import CSlash.Types.SourceText
 import CSlash.Types.Id
+import CSlash.Types.Var
 import CSlash.Types.PcInfo
 import CSlash.Types.PkgQual
 import CSlash.Types.GREInfo (ConInfo(..), GREInfo(..))
 
-import CSlash.Unit
+import CSlash.Unit hiding (comparing)
 import CSlash.Unit.Module.Warnings
 import CSlash.Unit.Module.ModIface
 import CSlash.Unit.Module.Imported
@@ -504,6 +506,17 @@ gresFromIE decl_spec (L loc ie, gres) = map set_gre_imp gres
     set_gre_imp gre@(GRE { gre_name = nm })
       = gre { gre_imp = unitBag $ prov_fn nm }
 
+mkChildEnv :: [GlobalRdrElt] -> NameEnv [GlobalRdrElt]
+mkChildEnv gres = foldr add emptyNameEnv gres
+  where
+    add gre env = case greParent gre of
+      ParentIs p -> extendNameEnv_Acc (:) Utils.singleton env p gre
+      NoParent -> env
+
+findChildren :: NameEnv [a] -> Name -> [a]
+findChildren env n = lookupNameEnv env n `orElse` []
+
+
 {- *********************************************************************
 *                                                                      *
             Unused names
@@ -512,21 +525,145 @@ gresFromIE decl_spec (L loc ie, gres) = map set_gre_imp gres
 
 reportUnusedNames :: TcGblEnv Zk -> CsSource -> ZkM ()
 reportUnusedNames gbl_env cs_src = do
-  panic "reportUnusedNames"
+  keep <- readTcRef (tcg_keep gbl_env)
+  traceRn "RUN" (ppr (tcg_dus gbl_env))
+  warnUnusedImportDecls gbl_env cs_src
+  warnUnusedTopBinds $ unused_locals keep
+  warnMissingSignatures gbl_env
+  where
+    used_names keep = findUses (tcg_dus gbl_env) emptyNameSet `unionNameSet` keep
+
+    defined_names = globalRdrEnvElts (tcg_rdr_env gbl_env)
+
+    kids_env = mkChildEnv defined_names
+
+    gre_is_used used_names gre0 = name `elemNameSet` used_names
+                                  || any (\gre -> greName gre `elemNameSet` used_names)
+                                         (findChildren kids_env name)
+      where
+        name = greName gre0
+
+    unused_locals keep
+      = let (_, defined_but_not_used) = partition (gre_is_used (used_names keep)) defined_names
+        in filter is_unused_local defined_but_not_used
+
+    is_unused_local gre = isLocalGRE gre && isExternalName (greName gre)
 
 {- *********************************************************************
 *                                                                      *
             Missing signatures
 *                                                                      *
 ********************************************************************* -}
+ 
+warnMissingSignatures :: TcGblEnv Zk -> ZkM ()
+warnMissingSignatures gbl_env = do
+  let exports = availsToNameSet (tcg_exports gbl_env)
+      sig_ns = tcg_sigs gbl_env
 
+      binds = collectCsBindsBinders CollNoDictBinders $ tcg_binds gbl_env
 
+      not_generated name = name `elemNameSet` sig_ns
+
+      add_binding_warn :: ZkId -> ZkM ()
+      add_binding_warn id = when (not_generated name) $ do
+        env <- liftZonkM $ tcInitTidyEnv
+        let ty = tidyOpenType env (panic "varType id")
+            missing = panic "MissingTopLevelBindingSig name ty"
+            diag = TcRnMissingSignature missing exported
+        addDiagnosticAt (getSrcSpan name) diag
+        where
+          name = varName id
+          exported = if name `elemNameSet` exports then IsExported else IsNotExported
+
+  mapM_ add_binding_warn binds
 
 {- *********************************************************************
 *                                                                      *
             Unused imports
 *                                                                      *
 ********************************************************************* -}
+
+type ImportDeclUsage = (LImportDecl Rn, [GlobalRdrElt], [Name])
+
+warnUnusedImportDecls :: TcGblEnv Zk -> CsSource -> ZkM ()
+warnUnusedImportDecls gbl_env cs_src = do
+  uses <- readMutVar (tcg_used_gres gbl_env)
+  let user_imports = filterOut (ideclImplicit . ideclExt . unLoc) (tcg_rn_imports gbl_env)
+
+      rdr_env = tcg_rdr_env gbl_env
+
+      usage = findImportUsage user_imports uses
+
+  traceRn "warnUnusedImportDecls"
+    $ vcat [ text "Uses:" <+> ppr uses
+           , text "Import usage" <+> ppr usage ]
+
+  mapM_ (warnUnusedImport rdr_env) usage
+
+  whenGOptM Opt_D_dump_minimal_imports
+    $ panic "printMinimalImports cs_src usage"
+
+findImportUsage :: [LImportDecl Rn] -> [GlobalRdrElt] -> [ImportDeclUsage]
+findImportUsage imports used_gres = map unused_decl imports
+  where
+    import_usage = mkImportMap used_gres
+
+    unused_decl decl@(L loc (ImportDecl { ideclImportList = imps }))
+      = (decl, used_gres, nameSetElemsStable unused_imps)
+      where
+        used_gres = lookupSrcLoc (srcSpanEnd $ locA loc) import_usage
+                    `orElse` []
+
+        used_name = mkNameSet (map greName used_gres)
+        used_parents = mkNameSet (mapMaybe greParent_maybe used_gres)
+
+        unused_imps = case imps of
+          Just (Exactly, L _ imp_ies) -> foldr (add_unused . unLoc) emptyNameSet imp_ies
+          _ -> emptyNameSet
+
+        add_unused (IEVar _ n) acc = add_unused_name (lieWrappedName n) acc
+        add_unused (IEModuleContents{}) acc = acc
+
+        add_unused_name n acc
+          | n `elemNameSet` used_name = acc
+          | otherwise = acc `extendNameSet` n
+
+type ImportMap = Map RealSrcLoc [GlobalRdrElt]
+
+mkImportMap :: [GlobalRdrElt] -> ImportMap
+mkImportMap gres = foldr add_one Map.empty gres
+  where
+    add_one gre@(GRE { gre_imp = imp_specs }) imp_map
+      = case srcSpanEnd (is_dloc (is_decl best_imp_spec)) of
+          RealSrcLoc decl_loc _ -> Map.insertWith add decl_loc [gre] imp_map
+          UnhelpfulLoc _ -> imp_map
+          where
+            best_imp_spec = case bagToList imp_specs of
+                              [] -> pprPanic "mkImportPat: GRE with no ImportSpecs" (ppr gre)
+                              is:iss -> bestImport (is NE.:| iss)
+            add _ gres = gre : gres
+
+warnUnusedImport :: GlobalRdrEnv -> ImportDeclUsage -> TcRnZk p ()
+warnUnusedImport rdr_env (L loc decl, used, unused)
+  | Just (Exactly, L _ []) <- ideclImportList decl
+  = return ()
+
+  | null used
+  = addDiagnosticAt (locA loc) (TcRnUnusedImport decl UnusedImportNone)
+
+  | null unused
+  = return ()
+
+  | Just (_, L _ imports) <- ideclImportList decl
+  , length unused == 1
+  , Just (L loc _) <- find (\(L _ ie) -> ((ieName ie) :: Name) `elem` unused) imports
+  = addDiagnosticAt (locA loc) (TcRnUnusedImport decl (UnusedImportSome sort_unused))
+
+  | otherwise
+  = addDiagnosticAt (locA loc) (TcRnUnusedImport decl (UnusedImportSome sort_unused))
+
+  where
+    sort_unused = UnusedImportNameRegular <$> sortBy (comparing nameOccName) unused
 
 {- *********************************************************************
 *                                                                      *
