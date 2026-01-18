@@ -106,6 +106,7 @@ library
                     , CSlash.Cs.Utils
 
                     , CSlash.CsToCore
+                    , CSlash.CsToCore.Binds
 
                     , CSlash.Data.Bag
                     , CSlash.Data.Bool
