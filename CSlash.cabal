@@ -105,6 +105,8 @@ library
                     , CSlash.Cs.Type
                     , CSlash.Cs.Utils
 
+                    , CSlash.CsToCore
+
                     , CSlash.Data.Bag
                     , CSlash.Data.Bool
                     , CSlash.Data.EnumSet
