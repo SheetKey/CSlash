@@ -107,7 +107,9 @@ library
 
                     , CSlash.CsToCore
                     , CSlash.CsToCore.Binds
+                    , CSlash.CsToCore.Errors.Types
                     , CSlash.CsToCore.Expr
+                    , CSlash.CsToCore.Types
 
                     , CSlash.Data.Bag
                     , CSlash.Data.Bool
