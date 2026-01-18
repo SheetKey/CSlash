@@ -9,7 +9,7 @@ import CSlash.Driver.Errors.Types
   ( CsMessage, CsMessageOpts (..), PsMessage, DriverMessage, DriverMessageOpts (..) )
 import CSlash.Driver.Errors.Ppr ()
 import CSlash.Tc.Errors.Types
--- import GHC.HsToCore.Errors.Types
+import CSlash.CsToCore.Errors.Types
 import CSlash.Types.Error
 import CSlash.Iface.Errors.Types
 
@@ -29,6 +29,7 @@ initPrintConfig :: DynFlags -> DiagnosticOpts CsMessage
 initPrintConfig dflags =
   CsMessageOpts { psMessageOpts = initPsMessageOpts dflags
                 , tcMessageOpts = initTcMessageOpts dflags
+                , dsMessageOpts = initDsMessageOpts dflags
                 , driverMessageOpts = initDriverMessageOpts dflags
                 }
 
@@ -39,6 +40,9 @@ initTcMessageOpts :: DynFlags -> DiagnosticOpts TcRnMessage
 initTcMessageOpts dflags = TcRnMessageOpts
   { tcOptsShowContext = gopt Opt_ShowErrorContext dflags
   , tcOptsIfaceOpts = initIfaceMessageOpts dflags }
+
+initDsMessageOpts :: DynFlags -> DiagnosticOpts DsMessage
+initDsMessageOpts _ = NoDiagnosticOpts
 
 initIfaceMessageOpts :: DynFlags -> DiagnosticOpts IfaceMessage
 initIfaceMessageOpts dflags = IfaceMessageOpts

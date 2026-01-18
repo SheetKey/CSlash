@@ -107,8 +107,8 @@ library
 
                     , CSlash.CsToCore
                     , CSlash.CsToCore.Binds
+                    , CSlash.CsToCore.Errors.Ppr
                     , CSlash.CsToCore.Errors.Types
-                    , CSlash.CsToCore.Errors.Types.Ppr
                     , CSlash.CsToCore.Expr
                     , CSlash.CsToCore.Monad
                     , CSlash.CsToCore.Types

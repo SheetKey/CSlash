@@ -26,7 +26,7 @@ import CSlash.Cs.Extension ( Rn )
 import CSlash.Iface.Errors.Types
 import CSlash.Driver.Errors.Types   ( DriverMessage, CsMessageOpts, DriverMessageOpts )
 import CSlash.Parser.Errors.Types   ( PsMessage, PsHeaderMessage )
--- import GHC.HsToCore.Errors.Types ( DsMessage )
+import CSlash.CsToCore.Errors.Types ( DsMessage )
 import CSlash.Tc.Errors.Types
 import CSlash.Unit.Module.Warnings ( WarningTxt )
 import CSlash.Utils.Panic.Plain
@@ -354,7 +354,7 @@ type family ConRecursInto con where
   ConRecursInto "CsDriverMessage"         = 'Just DriverMessage
   ConRecursInto "CsPsMessage"             = 'Just PsMessage
   ConRecursInto "CsTcRnMessage"           = 'Just TcRnMessage
-  -- ConRecursInto "GhcDsMessage"             = 'Just DsMessage
+  ConRecursInto "CsDsMessage"             = 'Just DsMessage
   ConRecursInto "CsUnknownMessage"        = 'Just (UnknownDiagnostic CsMessageOpts)
 
   ----------------------------------
@@ -403,6 +403,10 @@ type family ConRecursInto con where
   ConRecursInto "CannotUnifyKiVariable"    = 'Just CannotUnifyKiVariableReason
 
   ConRecursInto "Mismatch"                 = 'Just MismatchMsg
+
+  ----------------------------------
+  -- Constructors of DsMessage
+  ConRecursInto "DsUnknownMessage"         = 'Just (UnknownDiagnostic NoDiagnosticOpts)
 
   ----------------------------------
   -- Constructors of ImportLookupBad

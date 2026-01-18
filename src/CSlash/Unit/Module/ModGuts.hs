@@ -33,6 +33,21 @@ import CSlash.Types.Var (TyVar, KiVar)
 
 import Data.Set (Set)
 
+data ModGuts = ModGuts
+  { mg_module :: !Module
+  , mg_cs_src :: CsSource
+  , mg_loc :: SrcSpan
+  , mg_exports :: ![AvailInfo]
+  , mg_deps :: !Dependencies
+  , mg_usage :: ![Usage]
+  , mg_rdr_env :: !GlobalRdrEnv
+  , mg_fix_env :: !FixityEnv
+  , mg_tcs :: ![TyCon (TyVar KiVar) KiVar]
+  , mg_binds :: !CoreProgram
+  , mg_complete_matches :: CompleteMatches
+  , mg_pc_info :: !PcInfo
+  }
+
 data CgGuts = CgGuts
   { cg_module :: !Module
   , cg_tycons :: [TyCon (TyVar KiVar) KiVar]

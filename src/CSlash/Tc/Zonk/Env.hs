@@ -7,7 +7,8 @@ module CSlash.Tc.Zonk.Env where
 
 import CSlash.Core.Type.Rep ( Type )
 import CSlash.Core.Kind ( Kind, MonoKind )
-import CSlash.Types.Var ( TcTyVar, TyVar, AnyTyVar, TcKiVar, KiVar, AnyKiVar )
+import CSlash.Types.Var
+  ( TcTyVar, TyVar, AnyTyVar, TcKiVar, KiVar, AnyKiVar, ZkId )
 
 import CSlash.Types.Var ( Id )
 import CSlash.Types.Var.Env

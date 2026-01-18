@@ -51,7 +51,7 @@ import CSlash.Cs
 import CSlash.Cs.Dump
 import CSlash.Cs.Stats         ( ppSourceStats )
 
--- import GHC.HsToCore
+import CSlash.CsToCore
 
 -- import GHC.StgToByteCode    ( byteCodeGen )
 -- import GHC.StgToJS          ( stgToJS )
@@ -405,6 +405,13 @@ tcRnModule' sum save_rn_syntax mod = do
 
   return tcg_res
 
+csDesugar' :: ModLocation -> TcGblEnv Zk -> Cs ModGuts
+csDesugar' mod_location tc_result = do
+  cs_env <- getCsEnv
+  ioMsgMaybe $ hoistDsMessage $
+    {-# SCC "deSugar" #-}
+    deSugar cs_env mod_location tc_result
+
 {- *********************************************************************
 *                                                                      *
                 The main compiler pipeline
@@ -503,6 +510,18 @@ csDesugarAndSimplify
   -> Maybe Fingerprint
   -> Cs CsBackendAction
 csDesugarAndSimplify summary (FrontendTypecheck tc_result) tc_warnings mb_old_hash = do
+  cs_env <- getCsEnv
+  dflags <- getDynFlags
+  logger <- getLogger
+  let bcknd = backend dflags
+      cs_src = ms_cs_src summary
+      diag_opts = initDiagOpts dflags
+      print_config = initPrintConfig dflags
+
+  mb_desugar <- if ms_mod summary /= cSLASH_BUILTIN && cs_src == CsSrcFile
+                then Just <$> csDesugar' (ms_location summary) tc_result
+                else pure Nothing
+
   panic "csDesugarAndSimplify"
 
 --------------------------------------------------------------

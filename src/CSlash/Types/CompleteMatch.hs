@@ -21,3 +21,4 @@ instance Outputable CompleteMatch where
     Just ty -> ppr cls <> text "@" <> parens (ppr ty)
 
 type CompleteMatches = [CompleteMatch]
+type DsCompleteMatches = CompleteMatches

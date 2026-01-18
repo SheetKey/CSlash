@@ -1,5 +1,5 @@
 module CSlash.Types.Id
-  ( Id, Var.varType
+  ( Id, ZkId, AnyId, Var.varType
 
   , module CSlash.Types.Id
   ) where
@@ -7,7 +7,7 @@ module CSlash.Types.Id
 import CSlash.Types.Id.Info
 import CSlash.Types.Basic
 
-import CSlash.Types.Var (Id)
+import CSlash.Types.Var (Id, ZkId, AnyId)
 import qualified CSlash.Types.Var as Var
 
 import CSlash.Core.Type
@@ -25,9 +25,6 @@ import CSlash.Data.FastString
 import CSlash.Utils.Misc
 import CSlash.Utils.Outputable
 import CSlash.Utils.Panic
-
-type AnyId = Id (AnyTyVar AnyKiVar) AnyKiVar
-type ZkId = Id (TyVar KiVar) KiVar
 
 idName :: Id tv kv -> Name
 idName = Var.varName

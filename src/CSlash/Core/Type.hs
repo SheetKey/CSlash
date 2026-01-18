@@ -72,6 +72,9 @@ import Control.Monad ((>=>))
 *                                                                      *
 ********************************************************************* -}
 
+type ZkType = Type (TyVar KiVar) KiVar
+type ZkTypeCoercion = TypeCoercion (TyVar KiVar) KiVar
+
 rewriterView :: IsTyVar tv kv => Type tv kv -> Maybe (Type tv kv)
 rewriterView (TyConApp tc tys)
   | isTypeSynonymTyCon tc

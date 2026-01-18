@@ -29,12 +29,14 @@ import Data.Word
 ********************************************************************* -}
 
 data Expr b
-  = Var (Id () ())
+  = Var ZkId
   | Lit Literal
   | App (Expr b) (Arg b)
   | Lam b (Expr b) -- can bind term, type, or kind vars
   | Let (Bind b) (Expr b)
-  | Case (Expr b) b (Type () ()) [Alt b]
+  | Case (Expr b) b ZkType [Alt b]
+  | Type ZkType
+  | Coercion ZkTypeCoercion
   deriving Data
 
 type Arg b = Expr b
@@ -121,8 +123,17 @@ hasSomeUnfolding _ = True
 
 type CoreProgram = [CoreBind]
 
-type CoreBndr = Id (TyVar KiVar) KiVar
+type CoreBndr = ZkId
 
 type CoreExpr = Expr CoreBndr
 
 type CoreBind = Bind CoreBndr
+  
+{- *********************************************************************
+*                                                                      *
+            Core-constructing functions with checking
+*                                                                      *
+********************************************************************* -}
+
+varToCoreExpr :: CoreBndr -> Expr b
+varToCoreExpr v = panic "varToCoreExpr"

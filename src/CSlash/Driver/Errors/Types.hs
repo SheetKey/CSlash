@@ -11,6 +11,7 @@ module CSlash.Driver.Errors.Types
   , WarningMessages
   , ErrorMessages
   , hoistTcRnMessage
+  , hoistDsMessage
   ) where
 
 import Data.Bifunctor
@@ -23,7 +24,7 @@ import CSlash.Unit.Module
 import CSlash.Unit.State
 
 import CSlash.Parser.Errors.Types ( PsMessage(PsHeaderMessage) )
--- import GHC.HsToCore.Errors.Types ( DsMessage )
+import CSlash.CsToCore.Errors.Types ( DsMessage )
 import CSlash.Cs.Extension          (Tc)
 
 -- import Language.Haskell.Syntax.Decls (RuleDecl)
@@ -41,6 +42,7 @@ type ErrorMessages = Messages CsMessage
 data CsMessage where
   CsPsMessage :: PsMessage -> CsMessage
   CsTcRnMessage :: TcRnMessage -> CsMessage
+  CsDsMessage :: DsMessage -> CsMessage
   CsDriverMessage :: DriverMessage -> CsMessage
   CsUnknownMessage :: (UnknownDiagnostic (DiagnosticOpts CsMessage)) -> CsMessage
   deriving Generic
@@ -48,11 +50,15 @@ data CsMessage where
 data CsMessageOpts = CsMessageOpts
   { psMessageOpts :: DiagnosticOpts PsMessage
   , tcMessageOpts :: DiagnosticOpts TcRnMessage
+  , dsMessageOpts :: DiagnosticOpts DsMessage
   , driverMessageOpts :: DiagnosticOpts DriverMessage
   }
 
 hoistTcRnMessage :: Monad m => m (Messages TcRnMessage, a) -> m (Messages CsMessage, a)
 hoistTcRnMessage = fmap (first (fmap CsTcRnMessage))
+
+hoistDsMessage :: Monad m => m (Messages DsMessage, a) -> m (Messages CsMessage, a)
+hoistDsMessage = fmap (first (fmap CsDsMessage))
   
 type DriverMessages = Messages DriverMessage
 

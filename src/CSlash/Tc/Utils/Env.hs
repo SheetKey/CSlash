@@ -62,7 +62,7 @@ import CSlash.Types.Name hiding (varName)
 import CSlash.Types.Name.Set
 import CSlash.Types.Name.Env
 import CSlash.Types.Id
-import CSlash.Types.Var (AnyTyVar, KiVar, AnyKiVar, asAnyTyKi, varType, varName)
+import CSlash.Types.Var (AnyTyVar, KiVar, AnyKiVar, AnyId, asAnyTyKi, varType, varName)
 -- import CSlash.Types.Id.Info ( RecSelParent(..) )
 import CSlash.Types.Name.Reader
 import CSlash.Types.TyThing

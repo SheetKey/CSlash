@@ -59,7 +59,7 @@ module CSlash.Types.Var
   , filterAnyTcKiVar, filterTcKiVar
 
     {-* Id *-}
-  , Id, TyCoVar
+  , Id, ZkId, AnyId, TyCoVar
   , mkGlobalVar, mkLocalVar
   , idInfo, idDetails
   , isGlobalId, isExportedId, isLocalId
@@ -786,6 +786,9 @@ filterTcKiVar (x:xs)
 newtype Id tv kv = Id (Var tv kv)
   deriving ( NamedThing, Uniquable, Eq, Ord, Data, HasOccName
            , VarHasName, VarHasUnique)
+
+type AnyId = Id (AnyTyVar AnyKiVar) AnyKiVar
+type ZkId = Id (TyVar KiVar) KiVar
 
 type TyCoVar = Id
 

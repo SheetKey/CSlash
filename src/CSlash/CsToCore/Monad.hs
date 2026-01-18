@@ -10,8 +10,8 @@ import CSlash.Driver.Config.Diagnostic
 
 import CSlash.Cs
 
-import CSlash.HsToCore.Types
-import CSlash.HsToCore.Errors.Types
+import CSlash.CsToCore.Types
+import CSlash.CsToCore.Errors.Types
 -- import GHC.HsToCore.Pmc.Solver.Types (Nablas, initNablas)
 
 import CSlash.Core
@@ -53,7 +53,7 @@ import CSlash.Types.Error
 import CSlash.Types.CompleteMatch
 import CSlash.Types.Unique.DSet
 
-import CSlash.Tc.Utils.Env (lookupGlobal)
+-- import CSlash.Tc.Utils.Env (lookupGlobal)
 
 import CSlash.Utils.Error
 import CSlash.Utils.Outputable
