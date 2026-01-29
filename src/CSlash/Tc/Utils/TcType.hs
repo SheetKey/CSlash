@@ -1,23 +1,20 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module CSlash.Tc.Utils.TcType
-  ( module CSlash.Tc.Utils.TcType
-  , TcTyVar, TcKiVar
-  , AnyTypeCoercion, AnyTypeCoercionHole
-  ) where
+module CSlash.Tc.Utils.TcType where
 
 import Prelude hiding ((<>))
+
+import CSlash.Cs.Pass
 
 import CSlash.Core.Type
 import CSlash.Core.Type.Compare
 import CSlash.Core.Type.Rep
 import CSlash.Core.Type.FVs
-import CSlash.Core.Type.Subst
+import CSlash.Core.Subst
 import CSlash.Core.Kind
 import CSlash.Core.Kind.Compare
 import CSlash.Core.Kind.FVs
-import CSlash.Core.Kind.Subst
 import CSlash.Types.Var
 import CSlash.Types.Var.Set
 import CSlash.Core.TyCon
@@ -46,42 +43,9 @@ import Data.IORef (IORef)
 *                                                                      *
 ********************************************************************* -}
 
-type AnyType = Type (AnyTyVar AnyKiVar) AnyKiVar
-type TcType = Type (TcTyVar AnyKiVar) AnyKiVar
-
-type AnyTypeCoercion = TypeCoercion (AnyTyVar AnyKiVar) AnyKiVar
-type AnyTypeCoercionHole = TypeCoercionHole (AnyTyVar AnyKiVar) AnyKiVar
-
-type AnyTvSubst = TvSubst (AnyTyVar AnyKiVar) AnyKiVar
-type AnyKvSubst = KvSubst AnyKiVar
-
-type AnyRhoType = AnyType
-type AnyTauType = AnyType
-type AnySigmaType = AnyType
-
-type AnyTyVarBinder = VarBndr (AnyTyVar AnyKiVar) ForAllFlag
-type TcTyVarBinder = VarBndr (TcTyVar AnyKiVar) ForAllFlag
-
-type MonoAnyTyCon = AnyTyCon
-type PolyAnyTyCon = AnyTyCon
-type MonoTcTyCon = TcTyCon
-type PolyTcTyCon = TcTyCon
-
-type AnyPredType = AnyType
-
-type AnyKind = Kind AnyKiVar
-type AnyMonoKind = MonoKind AnyKiVar
-type AnyPredKind = PredKind AnyKiVar
-
-type TcKind = Kind TcKiVar
-type TcMonoKind = MonoKind TcKiVar
-type TcPredKind = PredKind TcKiVar
-
-type TcKindCoercion = KindCoercion TcKiVar
-type AnyKindCoercion = KindCoercion AnyKiVar
-
-type TcKindCoercionHole = KindCoercionHole TcKiVar
-type AnyKindCoercionHole = KindCoercionHole AnyKiVar
+type TauType = Type
+type RhoType = Type
+type SigmaType = Type
 
 {- *********************************************************************
 *                                                                      *
@@ -90,13 +54,13 @@ type AnyKindCoercionHole = KindCoercionHole AnyKiVar
 ********************************************************************* -}
 
 data ExpType
-  = Check AnyType
+  = Check (Type Tc)
   | Infer !InferResult
 
 data InferResult = IR
   { ir_uniq :: Unique
   , ir_lvl :: TcLevel
-  , ir_ref :: IORef (Maybe AnyType) }
+  , ir_ref :: IORef (Maybe (Type Tc)) }
 
 type ExpSigmaType = ExpType
 type ExpRhoType = ExpType
@@ -109,21 +73,21 @@ instance Outputable InferResult where
   ppr (IR { ir_uniq = u, ir_lvl = lvl })
     = text "Infer" <> braces (ppr u <> comma <> ppr lvl)
 
-mkCheckExpType :: AnyType -> ExpType
+mkCheckExpType :: Type Tc -> ExpType
 mkCheckExpType = Check
 
 data ExpPatType
   = ExpFunPatTy ExpSigmaType
-  | ExpForAllPatTy (ForAllBinder (AnyTyVar AnyKiVar))
-  | ExpForAllPatKi AnyKiVar
+  | ExpForAllPatTy (ForAllBinder TcTyVar)
+  | ExpForAllPatKi TcKiVar
 
-mkCheckExpFunPatTy :: AnyType -> ExpPatType
+mkCheckExpFunPatTy :: Type Tc -> ExpPatType
 mkCheckExpFunPatTy = ExpFunPatTy . mkCheckExpType
 
-mkInvisExpPatType :: AnyTyVar AnyKiVar -> ExpPatType
+mkInvisExpPatType :: TcTyVar -> ExpPatType
 mkInvisExpPatType tv = ExpForAllPatTy (Bndr tv Specified)
 
-mkInvisExpPatKind :: AnyKiVar -> ExpPatType
+mkInvisExpPatKind :: TcKiVar -> ExpPatType
 mkInvisExpPatKind kv = ExpForAllPatKi kv
 
 isVisibleExpPatType :: ExpPatType -> Bool
@@ -240,91 +204,54 @@ varLevel v = case tcVarDetails v of
   MetaVar { mv_tclvl = tc_lvl } -> tc_lvl
   SkolemVar _ tc_lvl -> tc_lvl
 
--- tcTyVarLevel :: TcTyVar -> TcLevel
--- tcTyVarLevel tv = case tcTyVarDetails tv of
---   MetaTv { mtv_tclvl = tv_lvl } -> tv_lvl
---   SkolemTv _ tv_lvl -> tv_lvl
-
--- tcKiVarLevel :: TcKiVar -> TcLevel
--- tcKiVarLevel kv = case tcKiVarDetails kv of
---   MetaKv { mkv_tclvl = kv_lvl } -> kv_lvl
---   SkolemKv _ kv_lvl -> kv_lvl
-
-anyTypeLevel :: AnyType -> TcLevel
-anyTypeLevel ty = tenv_lvl `maxTcLevel` kenv_lvl
-  where
-    (tenv, kenv) = varsOfTypeDSet ty
-    tenv_lvl = nonDetStrictFoldDVarSet (handleAnyTv
-                                        (const $ \lvl -> lvl `maxTcLevel` topTcLevel)
-                                        add) topTcLevel tenv
-    kenv_lvl = nonDetStrictFoldDVarSet (handleAnyKv
-                                        (const $ \lvl -> lvl `maxTcLevel` topTcLevel)
-                                        add) topTcLevel kenv
-
-    add :: TcVar v => v -> TcLevel -> TcLevel
-    add v lvl = lvl `maxTcLevel` varLevel v
-
 -- not counting kinds since issues happened otherwise. Is this correct?
-tcTypeLevel :: AnyType -> TcLevel
+tcTypeLevel :: Type Tc -> TcLevel
 tcTypeLevel ty = tenv_lvl -- `maxTcLevel` kenv_lvl
   where
     (tenv, kenv) = varsOfTypeDSet ty
-    tenv_lvl = nonDetStrictFoldDVarSet addt topTcLevel tenv
-    kenv_lvl = nonDetStrictFoldDVarSet addk topTcLevel kenv
+    tenv_lvl = nonDetStrictFoldDVarSet add topTcLevel tenv
+    kenv_lvl = nonDetStrictFoldDVarSet add topTcLevel kenv
 
     add :: TcVar v => v -> TcLevel -> TcLevel
     add v lvl = lvl `maxTcLevel` varLevel v
 
-    addt :: AnyTyVar AnyKiVar -> TcLevel -> TcLevel
-    addt = handleAnyTv (\_ lvl -> lvl) add
-
-    addk :: AnyKiVar -> TcLevel -> TcLevel
-    addk = handleAnyKv (\_ lvl -> lvl) add
-
-anyMonoKindLevel :: AnyMonoKind -> TcLevel
-anyMonoKindLevel ki = nonDetStrictFoldDVarSet add topTcLevel (varsOfMonoKindDSet ki)
-  where
-    add = handleAnyKv (const $ \lvl -> lvl `maxTcLevel` topTcLevel) addTc
-    addTc v lvl = lvl `maxTcLevel` varLevel v
-
-tcMonoKindLevel :: TcMonoKind -> TcLevel
+tcMonoKindLevel :: MonoKind Tc -> TcLevel
 tcMonoKindLevel ki = nonDetStrictFoldDVarSet add topTcLevel (varsOfMonoKindDSet ki)
   where
     add v lvl = lvl `maxTcLevel` varLevel v
 
-tcKindLevel :: AnyKind -> TcLevel
+tcKindLevel :: Kind Tc -> TcLevel
 tcKindLevel ki = nonDetStrictFoldDVarSet add topTcLevel (varsOfKindDSet ki)
   where
-    add = handleAnyKv (const $ \lvl -> lvl `maxTcLevel` topTcLevel) addTc
-    addTc v lvl = lvl `maxTcLevel` varLevel v
+    add v lvl = lvl `maxTcLevel` varLevel v
 
 {-# INLINE any_rewritable_ki #-}
-any_rewritable_ki :: (TcKiVar -> Bool) -> AnyMonoKind -> Bool
+any_rewritable_ki :: (KiVar Tc -> Bool) -> MonoKind Tc -> Bool
 any_rewritable_ki kv_pred = go_mono emptyVarSet
   where
-    go_mono :: MkVarSet AnyKiVar -> AnyMonoKind -> Bool
+    go_mono :: KiVarSet Tc -> MonoKind Tc -> Bool
     go_mono bvs (KiPredApp pred k1 k2) = go_pred bvs pred k1 k2
     go_mono bvs (KiVarKi kv) = go_kv bvs kv
     go_mono bvs (BIKi {}) = False
     go_mono bvs (FunKi _ arg res) = go_mono bvs arg || go_mono bvs res
 
     go_kv bvs kv | kv `elemVarSet` bvs = False
-                 | otherwise = handleAnyKv (const False) kv_pred kv
+                 | otherwise = kv_pred kv
 
-    go_pred :: MkVarSet AnyKiVar -> KiPredCon -> AnyMonoKind -> AnyMonoKind -> Bool
+    go_pred :: KiVarSet Tc -> KiPredCon -> MonoKind Tc -> MonoKind Tc -> Bool
     go_pred bvs _ ki1 ki2 = go_mono bvs ki1 || go_mono bvs ki2
 
-anyRewritableKiVar :: (TcKiVar -> Bool) -> AnyMonoKind -> Bool
+anyRewritableKiVar :: (KiVar Tc -> Bool) -> MonoKind Tc -> Bool
 anyRewritableKiVar = any_rewritable_ki
 
-any_rewritable_ty :: (TcTyVar AnyKiVar -> Bool) -> AnyType -> Bool
+any_rewritable_ty :: (TyVar Tc -> Bool) -> Type Tc -> Bool
 {-# INLINE any_rewritable_ty #-}
 any_rewritable_ty tv_pred = go emptyVarSet
   where
     go_tv bvs tv | tv `elemVarSet` bvs = False
-                 | otherwise = handleAnyTv (const False) tv_pred tv
+                 | otherwise = tv_pred tv
 
-    go :: MkVarSet (AnyTyVar AnyKiVar) -> AnyType -> Bool
+    go :: TyVarSet Tc -> Type Tc -> Bool
     go bvs (TyConApp _ tys) = go_tc bvs tys
     go bvs (TyVarTy tv) = go_tv bvs tv
     go bvs (AppTy fun arg) = go bvs fun || go bvs arg
@@ -338,7 +265,7 @@ any_rewritable_ty tv_pred = go emptyVarSet
 
     go_tc bvs tys = any (go bvs) tys
 
-anyRewritableTyVar :: (TcTyVar AnyKiVar -> Bool) -> AnyType -> Bool
+anyRewritableTyVar :: (TyVar Tc -> Bool) -> Type Tc -> Bool
 anyRewritableTyVar = any_rewritable_ty
 
 {- *********************************************************************
@@ -433,11 +360,11 @@ isFlexi :: MetaDetails tk -> Bool
 isFlexi Flexi = True
 isFlexi _ = False
 
-mkVarNamePairs :: IsVar kv => [kv] -> [(Name, kv)]
+mkVarNamePairs :: IsVar v => [v] -> [(Name, v)]
 mkVarNamePairs kvs = [(varName kv, kv) | kv <- kvs ]
 
-ambigKvsOfKi :: AnyMonoKind -> [TcKiVar]
-ambigKvsOfKi ki = filterAnyTcKiVar isAmbiguousVar kvs
+ambigKvsOfKi :: MonoKind Tc -> [KiVar Tc]
+ambigKvsOfKi ki = filter isAmbiguousVar kvs
   where
     kvs = varsOfMonoKindList ki
 
@@ -447,12 +374,12 @@ ambigKvsOfKi ki = filterAnyTcKiVar isAmbiguousVar kvs
 *                                                                      *
 ********************************************************************* -}
 
-mkInfSigmaTy :: HasDebugCallStack => [TcKiVar] -> [TcTyVar AnyKiVar] -> AnyType -> AnyType
+mkInfSigmaTy :: HasDebugCallStack => [TcKiVar] -> [TcTyVar] -> Type Tc -> Type Tc
 mkInfSigmaTy kivars tyvars ty
-  = mkSigmaTy (toAnyKiVar <$> kivars) (mkForAllBinders Inferred (toAnyTyVar <$> tyvars)) ty
+  = mkSigmaTy (TcKiVar <$> kivars) (mkForAllBinders Inferred (TcTyVar <$> tyvars)) ty
 
 mkSigmaTy
-  :: HasDebugCallStack => [AnyKiVar] -> [ForAllBinder (AnyTyVar AnyKiVar)] -> AnyType -> AnyType
+  :: HasDebugCallStack => [KiVar Tc] -> [ForAllBinder (TyVar Tc)] -> Type Tc -> Type Tc
 mkSigmaTy kivars tybndrs tau = mkBigLamTys kivars $
                                mkForAllTys tybndrs $
                                tau
@@ -466,19 +393,19 @@ mkSigmaTy kivars tybndrs tau = mkBigLamTys kivars $
 -- tcSplitFunKi_maybe :: Kind -> Maybe (FunKiFlag, MonoKind, MonoKind)
 -- tcSplitFunKi_maybe = splitFunKi_maybe
 
-tcSplitMonoFunKi_maybe :: AnyMonoKind -> Maybe (FunKiFlag, AnyMonoKind, AnyMonoKind)
+tcSplitMonoFunKi_maybe :: MonoKind p -> Maybe (FunKiFlag, MonoKind p, MonoKind p)
 tcSplitMonoFunKi_maybe = splitMonoFunKi_maybe
 
-tcSplitForAllKi_maybe :: AnyKind -> Maybe (AnyKiVar, AnyKind)
+tcSplitForAllKi_maybe :: Kind p -> Maybe (KiVar p, Kind p)
 tcSplitForAllKi_maybe = splitForAllKi_maybe
 
 tcSplitPiKi_maybe
-  :: AnyKind -> Maybe (Either (AnyKiVar, AnyKind) (FunKiFlag, AnyMonoKind, AnyMonoKind))
+  :: Kind Tc -> Maybe (Either (KiVar Tc, Kind Tc) (FunKiFlag, MonoKind Tc, MonoKind Tc))
 tcSplitPiKi_maybe ki = ski
   where
     ski = splitPiKi_maybe ki
 
-isVisiblePiKiBndr :: Either (AnyKiVar, AnyKind) (FunKiFlag, AnyMonoKind, AnyMonoKind) -> Bool
+isVisiblePiKiBndr :: Either (KiVar Tc, Kind Tc) (FunKiFlag, MonoKind Tc, MonoKind Tc) -> Bool
 isVisiblePiKiBndr (Left {}) = False
 isVisiblePiKiBndr (Right (FKF_C_K, _, _)) = False
 isVisiblePiKiBndr (Right (FKF_K_K, _, _)) = True
@@ -489,13 +416,13 @@ isVisiblePiKiBndr (Right (FKF_K_K, _, _)) = True
 *                                                                      *
 ********************************************************************* -}
 
-tyCoVarPred :: TyCoVar (AnyTyVar AnyKiVar) AnyKiVar -> AnyPredType
+tyCoVarPred :: TyCoVar Tc -> PredType Tc
 tyCoVarPred = varType
 
-mkMinimalBy_Ty :: forall a. (a -> AnyPredType) -> [a] -> [a]
+mkMinimalBy_Ty :: forall a. (a -> PredType Tc) -> [a] -> [a]
 mkMinimalBy_Ty get_pred xs = go preds_with_eqs []
   where
-    preds_with_eqs :: [(AnyPredType, [AnyPredType], a)]
+    preds_with_eqs :: [(PredType Tc, [PredType Tc], a)]
     preds_with_eqs = [ (pred, pred : eq_extras pred, x)
                      | x <- xs
                      , let pred = get_pred x ]
@@ -504,7 +431,7 @@ mkMinimalBy_Ty get_pred xs = go preds_with_eqs []
                        TyEqPred t1 t2 -> [mkTyEqPred t2 t1]
                        _ -> []
 
-    go :: [(AnyPredType, [AnyPredType], a)] -> [(AnyPredType, [AnyPredType], a)] -> [a]
+    go :: [(PredType Tc, [PredType Tc], a)] -> [(PredType Tc, [PredType Tc], a)] -> [a]
     go [] min_preds = reverse (map thdOf3 min_preds)
     go (work_item@(p, _, _) : work_list) min_preds
       | TyEqPred t1 t2 <- classifyPredType p
@@ -517,7 +444,7 @@ mkMinimalBy_Ty get_pred xs = go preds_with_eqs []
       | otherwise
       = go work_list (work_item : min_preds)
 
-    in_cloud :: AnyPredType -> [(AnyPredType, [AnyPredType], a)] -> Bool
+    in_cloud :: PredType Tc -> [(PredType Tc, [PredType Tc], a)] -> Bool
     in_cloud p ps = or [ p `tcEqType` p' | (_, eqs, _) <- ps, p' <- eqs ]
 
 {- *********************************************************************
@@ -526,18 +453,18 @@ mkMinimalBy_Ty get_pred xs = go preds_with_eqs []
 *                                                                      *
 ********************************************************************* -}
 
-isKiVarKcPred :: AnyPredKind -> Bool
+isKiVarKcPred :: PredKind Tc -> Bool
 isKiVarKcPred ki = case getPredKis_maybe ki of
   Just (_, k1, k2) -> all isKiVarKi [k1,k2]
   _ -> False
 
-kiCoVarPred :: KiCoVar AnyKiVar -> AnyPredKind
+kiCoVarPred :: KiCoVar Tc -> PredKind Tc
 kiCoVarPred = varKind
 
-mkMinimalBy_Ki :: forall a. (a -> AnyPredKind) -> [a] -> [a]
+mkMinimalBy_Ki :: forall a. (a -> PredKind Tc) -> [a] -> [a]
 mkMinimalBy_Ki get_pred xs = go preds_with_cox []
   where
-    preds_with_cox :: [(AnyPredKind, [AnyPredKind], a)]
+    preds_with_cox :: [(PredKind Tc, [PredKind Tc], a)]
     preds_with_cox = [ (pred, pred : co_extras pred, x)
                      | x <- xs
                      , let pred = get_pred x ]
@@ -549,7 +476,7 @@ mkMinimalBy_Ki get_pred xs = go preds_with_cox []
                        KiCoPred LTKi k1 k2 -> [ mkKiCoPred LTEQKi k1 k2 ]
                        _ -> []
  
-    go :: [(AnyPredKind, [AnyPredKind], a)] -> [(AnyPredKind, [AnyPredKind], a)] -> [a]
+    go :: [(PredKind Tc, [PredKind Tc], a)] -> [(PredKind Tc, [PredKind Tc], a)] -> [a]
     go [] min_preds = reverse (map thdOf3 min_preds)
     go (work_item@(p, _, _) : work_list) min_preds
       | KiCoPred kc k1 k2 <- classifyPredKind p
@@ -560,7 +487,7 @@ mkMinimalBy_Ki get_pred xs = go preds_with_cox []
       | otherwise
       = go work_list (work_item : min_preds)
 
-    in_cloud :: AnyPredKind -> [(AnyPredKind, [AnyPredKind], a)] -> Bool
+    in_cloud :: PredKind Tc -> [(PredKind Tc, [PredKind Tc], a)] -> Bool
     in_cloud p ps = or [ p `tcEqMonoKind` p' | (_, coxs, _) <- ps, p' <- coxs ]
 
 {- *********************************************************************
@@ -569,22 +496,22 @@ mkMinimalBy_Ki get_pred xs = go preds_with_cox []
 *                                                                      *
 ********************************************************************* -}
 
-tcSplitBigLamKiVars :: AnyType -> ([AnyKiVar], AnyType)
+tcSplitBigLamKiVars :: Type Tc -> ([KiVar Tc], Type Tc)
 tcSplitBigLamKiVars ty = split ty ty []
   where
     split _ (BigTyLamTy kv ty) kvs = split ty ty (kv:kvs)
     split orig_ty ty kvs | Just ty' <- coreView ty = split orig_ty ty' kvs
     split orig_ty _ kvs = (reverse kvs, orig_ty)
 
-tcSplitForAllTyVarBinder_maybe :: AnyType -> Maybe (AnyTyVarBinder, AnyType)
+tcSplitForAllTyVarBinder_maybe :: Type Tc -> Maybe (ForAllBinder (TyVar Tc), Type Tc)
 tcSplitForAllTyVarBinder_maybe ty | Just ty' <- coreView ty = tcSplitForAllTyVarBinder_maybe ty'
 tcSplitForAllTyVarBinder_maybe (ForAllTy tv ty) = Just (tv, ty)
 tcSplitForAllTyVarBinder_maybe _ = Nothing
 
-tcSplitForAllInvisTyVars :: AnyType -> ([AnyTyVar AnyKiVar], AnyType)
+tcSplitForAllInvisTyVars :: Type Tc -> ([TyVar Tc], Type Tc)
 tcSplitForAllInvisTyVars = tcSplitSomeForAllTyVars isInvisibleForAllFlag
 
-tcSplitSomeForAllTyVars :: (ForAllFlag -> Bool) -> AnyType -> ([AnyTyVar AnyKiVar], AnyType)
+tcSplitSomeForAllTyVars :: (ForAllFlag -> Bool) -> Type Tc -> ([TyVar Tc], Type Tc)
 tcSplitSomeForAllTyVars argf_pred ty = split ty ty []
   where
     split _ (ForAllTy (Bndr tv argf) ty) tvs
@@ -592,23 +519,22 @@ tcSplitSomeForAllTyVars argf_pred ty = split ty ty []
     split orig_ty ty tvs | Just ty' <- coreView ty = split orig_ty ty' tvs
     split orig_ty _ tvs = (reverse tvs, orig_ty)
 
-tcSplitForAllInvisBinders :: IsTyVar tv kv => Type tv kv -> ([tv], Type tv kv)
+tcSplitForAllInvisBinders :: Type p -> ([TyVar p], Type p)
 tcSplitForAllInvisBinders = splitForAllInvisTyBinders
 
-tcSplitForAllTyVarBinders :: IsTyVar tv kv => Type tv kv -> ([ForAllBinder tv], Type tv kv)
+tcSplitForAllTyVarBinders :: Type p -> ([ForAllBinder (TyVar p)], Type p)
 tcSplitForAllTyVarBinders ty = sty
   where sty = splitForAllForAllTyBinders ty
 
-tcSplitTyLamTyVarBinders :: IsTyVar tv kv => Type tv kv -> ([tv], Type tv kv)
+tcSplitTyLamTyVarBinders :: Type p -> ([TyVar p], Type p)
 tcSplitTyLamTyVarBinders ty = sty
   where sty = splitTyLamTyBinders ty
 
-tcSplitBigLamTyVarBinders :: IsTyVar tv kv => Type tv kv -> ([kv], Type tv kv)
+tcSplitBigLamTyVarBinders :: Type p -> ([KiVar p], Type p)
 tcSplitBigLamTyVarBinders ty = sty
   where sty = splitBigLamTyBinders ty
 
-tcSplitForAllTyVarsReqTVBindersN
-  :: IsTyVar tv kv => Arity -> Type tv kv -> (Arity, [ForAllBinder tv], Type tv kv)
+tcSplitForAllTyVarsReqTVBindersN :: Arity -> Type p -> (Arity, [ForAllBinder (TyVar p)], Type p)
 tcSplitForAllTyVarsReqTVBindersN n_req ty = split n_req ty ty []
   where
     split n_req _orig_ty (ForAllTy b@(Bndr _ argf) ty) bs
@@ -617,12 +543,12 @@ tcSplitForAllTyVarsReqTVBindersN n_req ty = split n_req ty ty []
     split n_req orig_ty ty bs | Just ty' <- coreView ty = split n_req orig_ty ty' bs
     split n_req orig_ty _ bs = (n_req, reverse bs, orig_ty)
 
-tcSplitSigma :: IsTyVar tv kv => Type tv kv -> ([kv], [tv], Type tv kv)
+tcSplitSigma :: Type p -> ([KiVar p], [TyVar p], Type p)
 tcSplitSigma ty = case tcSplitBigLamTyVarBinders ty of
                     (kvs, ty') -> case tcSplitForAllInvisBinders ty' of
                                     (tvs, tau) -> (kvs, tvs, tau)
 
-tcSplitNestedSigmaTys :: IsTyVar tv kv => Type tv kv -> ([kv], [tv], Type tv kv)
+tcSplitNestedSigmaTys :: Type p -> ([KiVar p], [TyVar p], Type p)
 tcSplitNestedSigmaTys ty
   | (arg_tys, fun_kis, body_ty) <- tcSplitFunTys ty
   , (kvs1, tvs1, rho1) <- tcSplitSigma body_ty
@@ -631,19 +557,19 @@ tcSplitNestedSigmaTys ty
     in (kvs1 ++ kvs2, tvs1 ++ tvs2, mkFunTys arg_tys fun_kis rho2)
   | otherwise = ([], [], ty)
 
-tcSplitFunTys :: IsTyVar tv kv => Type tv kv -> ([Type tv kv], [MonoKind kv], Type tv kv)
+tcSplitFunTys :: Type p -> ([Type p], [MonoKind p], Type p)
 tcSplitFunTys ty = case tcSplitFunTy_maybe ty of
                      Nothing -> ([], [], ty)
                      Just (arg, ki, res) -> (arg:args, ki:kis, res')
                        where (args, kis, res') = tcSplitFunTys res
 
-tcSplitFunTy_maybe :: IsTyVar tv kv => Type tv kv -> Maybe (Type tv kv, MonoKind kv, Type tv kv)
+tcSplitFunTy_maybe :: Type p -> Maybe (Type p, MonoKind p, Type p)
 tcSplitFunTy_maybe ty
   | Just ty' <- coreView ty = tcSplitFunTy_maybe ty'
 tcSplitFunTy_maybe (FunTy ki arg res) = Just (arg, ki, res)
 tcSplitFunTy_maybe _ = Nothing
 
-tcSplitAppTy_maybe :: IsTyVar tv kv => Type tv kv -> Maybe (Type tv kv, Type tv kv)
+tcSplitAppTy_maybe :: Type p -> Maybe (Type p, Type p)
 tcSplitAppTy_maybe ty | Just ty' <- coreView ty = tcSplitAppTy_maybe ty'
 tcSplitAppTy_maybe ty = tcSplitAppTyNoView_maybe ty
 
@@ -653,20 +579,20 @@ tcSplitAppTy_maybe ty = tcSplitAppTyNoView_maybe ty
 *                                                                      *
 ********************************************************************* -}
 
-isSigmaTy :: IsTyVar tv kv => Type tv kv -> Bool
+isSigmaTy :: Type p -> Bool
 isSigmaTy (ForAllTy (Bndr _ af) _) = isInvisibleForAllFlag af
 isSigmaTy (TyLamTy {}) = panic "isSigmaTy TyLamTy"
 isSigmaTy (BigTyLamTy {}) = True
 isSigmaTy ty | Just ty' <- coreView ty = isSigmaTy ty'
 isSigmaTy _ = False
 
-isRhoTy :: IsTyVar tv kv => Type tv kv -> Bool
+isRhoTy :: Type p -> Bool
 isRhoTy ty = not (isSigmaTy ty)
 
-isRigidTy :: Type tv kv -> Bool
+isRigidTy :: Type p -> Bool
 isRigidTy = panic "isRigidTy"
 
-isRigidKi :: MonoKind kv -> Bool
+isRigidKi :: MonoKind p -> Bool
 isRigidKi ki = case ki of
   KiPredApp {} -> True
   BIKi {} -> True
@@ -679,17 +605,23 @@ isRigidKi ki = case ki of
 *                                                                      *
 ********************************************************************* -}
 
-tyConVisibilities :: AnyTyCon -> [Bool]
-tyConVisibilities tc = map (const False) fa_kvs ++ map (const False) invis_args ++ repeat True
-  where
-    (fa_kvs, monoki) = splitForAllKiVars (tyConKind tc)
-    (invis_args, _) = splitInvisFunKis monoki
+tyConVisibilities :: TyCon Tc -> [Bool]
+tyConVisibilities tc = case tyConDetails tc of
+  TcTyCon { tcTyConKind = kind } ->
+    let (fa_kvs, monoki) = splitForAllKiVars kind
+        (invis_args, _) = splitInvisFunKis monoki
+    in map (const False) fa_kvs ++ map (const False) invis_args ++ repeat True
+  other ->
+    let kind = tyConKind other
+        (fa_kvs, monoki) = splitForAllKiVars kind
+        (invis_args, _) = splitInvisFunKis monoki
+    in map (const False) fa_kvs ++ map (const False) invis_args ++ repeat True
 
-isNextTyConArgVisible :: AnyTyCon -> [AnyType] -> Bool
+isNextTyConArgVisible :: TyCon Tc -> [Type Tc] -> Bool
 isNextTyConArgVisible tc tys
   = tyConVisibilities tc `getNth` length tys
 
-isNextArgVisible :: AnyType -> Bool
+isNextArgVisible :: Type Tc -> Bool
 isNextArgVisible ty
   | Just bndr <- tcSplitPiKi_maybe (typeKind ty) = isVisiblePiKiBndr bndr
   | otherwise = True

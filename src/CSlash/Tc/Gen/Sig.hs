@@ -28,8 +28,8 @@ import CSlash.Core.Kind
 import CSlash.Core.Kind.Compare (eqMonoKind)
 -- import CSlash.Core.Type.Rep( mkNakedFunTy )
 
-import CSlash.Types.Var ( TyVar, varKind, binderVars )
-import CSlash.Types.Id  ( Id, idName, mkLocalId )
+import CSlash.Types.Var ( TyVar, varKind, varName, binderVars )
+import CSlash.Types.Var.Id  ( Id, mkLocalId )
 import CSlash.Types.Basic
 import CSlash.Types.Name
 import CSlash.Types.Name.Env
@@ -54,7 +54,7 @@ import Control.Monad( unless, when )
 *                                                                      *
 ********************************************************************* -}
 
-tcTySigs :: TopLevelFlag -> [LSig Rn] -> TcM ([TcId], TcSigFun)
+tcTySigs :: TopLevelFlag -> [LSig Rn] -> TcM ([Id Tc], TcSigFun)
 tcTySigs top_level cs_sigs = checkNoErrs $ do
   ty_sigs <- mapAndReportM (tcTySig top_level) cs_sigs
 

@@ -9,6 +9,8 @@ module CSlash.Tc.Utils.Monad
   , module CSlash.Data.IOEnv
   ) where
 
+import CSlash.Cs.Pass
+
 import CSlash.Builtin.Names
 
 import CSlash.Tc.Errors.Types
@@ -56,9 +58,9 @@ import CSlash.Types.Fixity.Env
 import CSlash.Types.Name.Reader
 import CSlash.Types.Name
 -- import GHC.Types.SafeHaskell
-import CSlash.Types.Id
+import CSlash.Types.Var.Id
 import CSlash.Types.TypeEnv
-import CSlash.Types.Var (TyCoVar, KiCoVar, AnyTyVar, AnyKiVar)
+import CSlash.Types.Var (TyCoVar, KiCoVar, TyVar, KiVar)
 import CSlash.Types.Var.Set
 import CSlash.Types.Var.Env
 import CSlash.Types.SrcLoc
@@ -609,11 +611,11 @@ addErrCtxt :: SDoc -> TcM a -> TcM a
 addErrCtxt msg = addErrCtxtM (\env -> return (env, msg))
 {-# INLINE addErrCtxt #-}
 
-addErrCtxtM :: (AnyTidyEnv -> ZonkM (AnyTidyEnv, SDoc)) -> TcM a -> TcM a
+addErrCtxtM :: (TidyEnv Tc -> ZonkM (TidyEnv Tc, SDoc)) -> TcM a -> TcM a
 addErrCtxtM ctxt = pushCtxt (False, ctxt)
 {-# INLINE addErrCtxtM #-}
 
-addLandmarkErrCtxtM :: (AnyTidyEnv -> ZonkM (AnyTidyEnv, SDoc)) -> TcM a -> TcM a
+addLandmarkErrCtxtM :: (TidyEnv Tc -> ZonkM (TidyEnv Tc, SDoc)) -> TcM a -> TcM a
 addLandmarkErrCtxtM ctxt = pushCtxt (True, ctxt)
 {-# INLINE addLandmarkErrCtxtM #-}
 
@@ -771,7 +773,7 @@ addErrTc err_msg = do
   env0 <- liftZonkM tcInitTidyEnv
   addErrTcM (env0, err_msg)
 
-addErrTcM :: (AnyTidyEnv, TcRnMessage) -> TcM ()
+addErrTcM :: (TidyEnv Tc, TcRnMessage) -> TcM ()
 addErrTcM (tidy_env, err_msg) = do
   ctxt <- getErrCtxt
   loc <- getSrcSpanM
@@ -783,7 +785,7 @@ failWithTc err_msg = addErrTc err_msg >> failM
 no_err_info :: ErrInfo
 no_err_info = ErrInfo Outputable.empty Outputable.empty
 
-addDiagnosticTcM :: (AnyTidyEnv, TcRnMessage) -> TcM ()
+addDiagnosticTcM :: (TidyEnv Tc, TcRnMessage) -> TcM ()
 addDiagnosticTcM (env0, msg) = do
   ctxt <- getErrCtxt
   extra <- mkErrInfo env0 ctxt
@@ -811,15 +813,15 @@ add_diagnostic msg = do
   unit_state <- cs_units <$> getTopEnv
   mkTcRnMessage loc (TcRnMessageWithInfo unit_state msg) >>= reportDiagnostic
 
-add_err_tcm :: AnyTidyEnv -> TcRnMessage -> SrcSpan -> [ErrCtxt] -> TcM ()
+add_err_tcm :: TidyEnv Tc -> TcRnMessage -> SrcSpan -> [ErrCtxt] -> TcM ()
 add_err_tcm tidy_env msg loc ctxt = do
   err_info <- mkErrInfo tidy_env ctxt
   add_long_err_at loc (mkDetailedMessage (ErrInfo err_info Outputable.empty) msg)
 
-mkErrInfo :: AnyTidyEnv -> [ErrCtxt] -> TcM SDoc
+mkErrInfo :: TidyEnv Tc -> [ErrCtxt] -> TcM SDoc
 mkErrInfo env ctxts = go False 0 env ctxts
   where
-    go :: Bool -> Int -> AnyTidyEnv -> [ErrCtxt] -> TcM SDoc
+    go :: Bool -> Int -> TidyEnv Tc -> [ErrCtxt] -> TcM SDoc
     go _ _ _ [] = return empty
     go dbg n env ((is_landmark, ctxt) : ctxts)
       | is_landmark || n < mAX_CONTEXTS
@@ -855,10 +857,10 @@ newTcTyCoBinds = do
   return $ TyCoBindsVar { tcbv_tcvs = tcvs_ref
                         , tcbv_uniq = uniq }
 
-getTcKiCoVars :: KiCoBindsVar -> TcM (MkVarSet (KiCoVar AnyKiVar))
+getTcKiCoVars :: KiCoBindsVar -> TcM (KiCoVarSet Tc)
 getTcKiCoVars co_binds_var = readTcRef (kcbv_kcvs co_binds_var)
 
-getTcTyCoVars :: TyCoBindsVar -> TcM (MkVarSet (TyCoVar (AnyTyVar AnyKiVar) AnyKiVar))
+getTcTyCoVars :: TyCoBindsVar -> TcM (TyCoVarSet Tc)
 getTcTyCoVars co_binds_var = readTcRef (tcbv_tcvs co_binds_var)
 
 getConstraintVar :: TcM (TcRef WantedTyConstraints)

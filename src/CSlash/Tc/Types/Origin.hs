@@ -12,14 +12,15 @@ import CSlash.Tc.Utils.TcType
 import CSlash.Cs
 
 import CSlash.Core.TyCon
+import CSlash.Core.Type
 import CSlash.Core.Kind
 
-import CSlash.Types.Id
+import CSlash.Types.Var.Id
 import CSlash.Types.Name
 import CSlash.Types.Name.Reader
 import CSlash.Types.Basic
 import CSlash.Types.SrcLoc
-import CSlash.Types.Var (AnyTyVar, AnyKiVar)
+import CSlash.Types.Var (TyVar, TcTyVar, KiVar, TcKiVar)
 
 import CSlash.Data.FastString
 
@@ -91,14 +92,14 @@ isSigMaybe _ = Nothing
 data SkolemInfo = SkolemInfo Unique SkolemInfoAnon
 
 data SkolemInfoAnon
-  = SigSkol UserTypeCtxt AnyType [(Name, AnyTyVar AnyKiVar)]
-  | SigSkolKi UserTypeCtxt AnyType [(Name, AnyKiVar)]
+  = SigSkol UserTypeCtxt (Type Tc) [(Name, TcTyVar)]
+  | SigSkolKi UserTypeCtxt (Type Tc) [(Name, TcKiVar)]
   | SigTypeSkol UserTypeCtxt
   | ForAllSkol TyVarBndrs
   | TyLamTySkol [Name]
-  | InferSkol [(Name, AnyType)]
+  | InferSkol [(Name, Type Tc)]
   | InferKindSkol
-  | UnifyForAllSkol AnyType
+  | UnifyForAllSkol (Type Tc)
   | TyConSkol TyConFlavor Name
   | UnkSkol CallStack
 
@@ -137,7 +138,7 @@ pprSkolInfo (TyConSkol flav name) = text "the" <+> ppr flav
                                     <+> text "declaration for" <+> quotes (ppr name)
 pprSkolInfo (UnkSkol cs) = text "UnkSkol (please report this as a bug)" $$ prettyCallStackDoc cs
 
-pprSigSkolInfo :: UserTypeCtxt -> AnyType -> SDoc
+pprSigSkolInfo :: UserTypeCtxt -> Type Tc -> SDoc
 pprSigSkolInfo ctxt ty = case ctxt of
   FunSigCtxt f _ -> vcat [ text "the type signature for:"
                          , nest 2 (pprPrefixOcc f <+> colon <+> ppr ty) ]
@@ -163,7 +164,7 @@ instance Outputable TypedThing where
 data KindedThing
   = CsTypeRnThing (CsType Rn)
   | KiNameThing Name
-  | TypeThing AnyType
+  | TypeThing (Type Tc)
 
 data TyVarBndrs = CsTyVarBndrsRn [CsTyVarBndr Rn]
 
@@ -173,14 +174,14 @@ instance Outputable TyVarBndrs where
 data CtOrigin -- DOUBLE CHECK PATTERN MATCHES IF YOU ADD 'AmbiguityCheckOrigin' OR 'CycleBreakerOrigin'
   = GivenOrigin SkolemInfoAnon
   | OccurrenceOf Name
-  | TypeEqOrigin { uo_actual :: AnyType
-                 , uo_expected :: AnyType
+  | TypeEqOrigin { uo_actual :: Type Tc
+                 , uo_expected :: Type Tc
                  , uo_thing :: Maybe TypedThing
                  , uo_visible :: Bool
                  }
-  | KindEqOrigin AnyType AnyType CtOrigin
-  | KindCoOrigin { kco_actual :: AnyMonoKind
-                 , kco_expected :: AnyMonoKind
+  | KindEqOrigin (Type Tc) (Type Tc) CtOrigin
+  | KindCoOrigin { kco_actual :: MonoKind Tc
+                 , kco_expected :: MonoKind Tc
                  , kco_pred :: KiPredCon
                  , kco_thing :: Maybe KindedThing
                  , kco_visible :: Bool
@@ -193,7 +194,7 @@ data CtOrigin -- DOUBLE CHECK PATTERN MATCHES IF YOU ADD 'AmbiguityCheckOrigin' 
   | PatOrigin
   | UsageEnvironmentOf Name
   | IfThenElseOrigin
-  | ImpedanceMatching (Id (AnyTyVar AnyKiVar) AnyKiVar)
+  | ImpedanceMatching (Id Tc)
   | Shouldn'tHappenOrigin String
 
 isVisibleOrigin :: CtOrigin -> Bool

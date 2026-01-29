@@ -34,7 +34,7 @@ import CSlash.Tc.Gen.Pat
 import CSlash.Tc.Utils.TcMType
 -- import GHC.Tc.Instance.Family( tcGetFamInstEnvs )
 import CSlash.Tc.Utils.TcType
-import CSlash.Tc.Validity (checkValidType)
+import CSlash.Tc.Validity (checkValidTcType)
 import CSlash.Tc.Zonk.TcType
 -- import GHC.Core.Reduction ( Reduction(..) )
 -- import GHC.Core.Multiplicity
@@ -53,10 +53,10 @@ import CSlash.Builtin.Types.Prim
 import CSlash.Unit.Module
 
 import CSlash.Types.SourceText
-import CSlash.Types.Id
+import CSlash.Types.Var.Id
 import CSlash.Types.Var as Var
 import CSlash.Types.Var.Set
-import CSlash.Types.Var.Env( MkTidyEnv, TyVarEnv, AnyTidyEnv, {-mkVarEnv,-} lookupVarEnv )
+import CSlash.Types.Var.Env( TidyEnv, {-mkVarEnv,-} lookupVarEnv )
 import CSlash.Types.Name hiding (varName)
 import CSlash.Types.Name.Set
 import CSlash.Types.Name.Env
@@ -91,7 +91,7 @@ tcTopBinds binds sigs = do
 
   return (tcg_env', tcl_env)
 
-tcLocalBinds :: CsLocalBinds Rn -> TcM thing -> TcM (CsLocalBinds Tc, AnyCsWrapper, thing)
+tcLocalBinds :: CsLocalBinds Rn -> TcM thing -> TcM (CsLocalBinds Tc, CsWrapper Tc, thing)
 
 tcLocalBinds (EmptyLocalBinds x) thing_inside = do
   thing <- thing_inside
@@ -108,7 +108,7 @@ tcValBinds
   -> [(RecFlag, LCsBinds Rn)]
   -> [LSig Rn]
   -> TcM thing
-  -> TcM ([(RecFlag, LCsBinds Tc)], AnyCsWrapper, thing)
+  -> TcM ([(RecFlag, LCsBinds Tc)], CsWrapper Tc, thing)
 tcValBinds top_lvl binds sigs thing_inside = do
   (poly_ids, sig_fn) <- tcTySigs top_lvl sigs
 
@@ -120,7 +120,7 @@ tcBindGroups
   -> TcSigFun
   -> [(RecFlag, LCsBinds Rn)]
   -> TcM thing
-  -> TcM ([(RecFlag, LCsBinds Tc)], AnyCsWrapper, thing)
+  -> TcM ([(RecFlag, LCsBinds Tc)], CsWrapper Tc, thing)
 tcBindGroups _ _ [] thing_inside = do
   thing <- thing_inside
   return ([], idCsWrapper, thing)
@@ -139,7 +139,7 @@ tc_group
   -> (RecFlag, LCsBinds Rn)
   -> IsGroupClosed
   -> TcM thing
-  -> TcM ([(RecFlag, LCsBinds Tc)], AnyCsWrapper, thing)
+  -> TcM ([(RecFlag, LCsBinds Tc)], CsWrapper Tc, thing)
 
 tc_group top_lvl sig_fn (NonRecursive, binds) closed thing_inside = do
   let bind = case binds of
@@ -163,7 +163,7 @@ tc_group @thing top_lvl sig_fn (Recursive, binds) closed thing_inside = do
     sccs :: [SCC (LCsBind Rn)]
     sccs = stronglyConnCompFromEdgedVerticesUniq (mkEdges sig_fn binds)
 
-    go :: [SCC (LCsBind Rn)] -> TcM (LCsBinds Tc, AnyCsWrapper, thing)
+    go :: [SCC (LCsBind Rn)] -> TcM (LCsBinds Tc, CsWrapper Tc, thing)
     go (scc:sccs) = do
       (binds1, ids1) <- tc_scc scc
       ((binds2, inner_wrapper, thing), outer_wrapper)
@@ -184,7 +184,7 @@ tc_single
   -> LCsBind Rn
   -> IsGroupClosed
   -> TcM thing
-  -> TcM (LCsBinds Tc, AnyCsWrapper, thing)
+  -> TcM (LCsBinds Tc, CsWrapper Tc, thing)
 tc_single top_lvl sig_fn lbind@(L _ FunBind{}) closed thing_inside = do
   (binds1, ids) <- tcPolyBinds top_lvl sig_fn NonRecursive NonRecursive closed [lbind]
   (thing, wrapper) <- tcExtendLetEnv top_lvl sig_fn closed ids thing_inside
@@ -216,14 +216,14 @@ tcFunBind
   -> LCsExpr Rn
   -> [ExpPatType] -- all invis
   -> ExpRhoType
-  -> TcM (AnyCsWrapper, LCsExpr Tc)
+  -> TcM (CsWrapper Tc, LCsExpr Tc)
 tcFunBind ctxt fun_name (L loc body) invis_pat_tys exp_ty =
   assertPpr (not (any isVisibleExpPatType invis_pat_tys))
             (text "tcFunBind" <+> ppr fun_name <+> ppr invis_pat_tys)
   $ do traceTc "tcFunBind 1"
         $ vcat [ pprUserTypeCtxt ctxt, ppr fun_name, ppr invis_pat_tys, ppr exp_ty ]
 
-       let tc_body  :: CsExpr Rn -> TcM (AnyCsWrapper, CsExpr Tc)
+       let tc_body  :: CsExpr Rn -> TcM (CsWrapper Tc, CsExpr Tc)
              -- tc_body (CsPar x (L loc e)) = setSrcSpanA loc $ do
              --   e' <- tc_body e
              --   return (CsPar x (L loc e'))
@@ -248,7 +248,7 @@ tcPolyBinds
   -> RecFlag
   -> IsGroupClosed
   -> [LCsBind Rn]
-  -> TcM (LCsBinds Tc, [TcId])
+  -> TcM (LCsBinds Tc, [Id Tc])
 tcPolyBinds top_lvl sig_fn rec_group rec_tc closed bind_list
   = setSrcSpan loc $ recoverM (recoveryCode binder_names sig_fn) $ do
   traceTc "------------------------------------------------" empty
@@ -271,7 +271,7 @@ tcPolyBinds top_lvl sig_fn rec_group rec_tc closed bind_list
     binder_names = collectCsBindListBinders CollNoDictBinders bind_list
     loc = foldr1 combineSrcSpans (map (locA . getLoc) bind_list)
 
-recoveryCode :: [Name] -> TcSigFun -> TcM (LCsBinds Tc, [TcId])
+recoveryCode :: [Name] -> TcSigFun -> TcM (LCsBinds Tc, [Id Tc])
 recoveryCode binder_names sig_fn = do
   traceTc "tcBindsWithSigs: error recovery" (ppr binder_names)
   let poly_ids = map mk_dummy binder_names
@@ -283,7 +283,7 @@ recoveryCode binder_names sig_fn = do
       | otherwise
       = mkLocalId name forall_a_a
 
-forall_a_a :: AnyType
+forall_a_a :: Type Tc
 forall_a_a = panic "forall_a_a"
 
 {- *********************************************************************
@@ -292,7 +292,7 @@ forall_a_a = panic "forall_a_a"
 *                                                                      *
 ********************************************************************* -}
 
-tcPolyNoGen :: RecFlag -> TcSigFun -> [LCsBind Rn] -> TcM (LCsBinds Tc, [TcId])
+tcPolyNoGen :: RecFlag -> TcSigFun -> [LCsBind Rn] -> TcM (LCsBinds Tc, [Id Tc])
 tcPolyNoGen = panic "tcPolyNoGen"
 
 {- *********************************************************************
@@ -301,7 +301,7 @@ tcPolyNoGen = panic "tcPolyNoGen"
 *                                                                      *
 ********************************************************************* -}
 
-tcPolyCheck :: TcCompleteSig -> LCsBind Rn -> TcM (LCsBinds Tc, [TcId])
+tcPolyCheck :: TcCompleteSig -> LCsBind Rn -> TcM (LCsBinds Tc, [Id Tc])
 tcPolyCheck sig@(CSig { sig_bndr = poly_id, sig_ctxt = ctxt })
             (L bind_loc (FunBind { fun_id = L nm_loc name, fun_body = body }))
   = do
@@ -345,7 +345,7 @@ tcPolyCheck _ _ = panic "tcPolyCheck"
 *                                                                      *
 ********************************************************************* -}
 
-tcPolyInfer :: RecFlag -> TcSigFun -> [LCsBind Rn] -> TcM (LCsBinds Tc, [TcId])
+tcPolyInfer :: RecFlag -> TcSigFun -> [LCsBind Rn] -> TcM (LCsBinds Tc, [Id Tc])
 tcPolyInfer rec_tc tc_sig_fn bind_list = do
   (tclvl, wanted, (binds', mono_infos))
     <- pushLevelAndCaptureConstraints $
@@ -387,7 +387,7 @@ tcPolyInfer rec_tc tc_sig_fn bind_list = do
 mkExport
   :: WantedTyConstraints
   -> Bool
-  -> [TcKiVar] -> [TcTyVar AnyKiVar]
+  -> [TcKiVar] -> [TcTyVar]
   -> MonoBindInfo
   -> TcM (ABExport Tc)
 mkExport residual insoluble qkvs qtvs (MBI { mbi_poly_name = poly_name, mbi_mono_id = mono_id })
@@ -416,14 +416,14 @@ mkExport residual insoluble qkvs qtvs (MBI { mbi_poly_name = poly_name, mbi_mono
 mkInferredPolyId
   :: WantedTyConstraints
   -> Bool
-  -> [TcKiVar] -> [TcTyVar AnyKiVar]
+  -> [TcKiVar] -> [TcTyVar]
   -> Name
-  -> AnyType
-  -> TcM TcId
+  -> Type Tc
+  -> TcM (Id Tc)
 mkInferredPolyId residual insoluble qkvs qtvs poly_name mono_ty = checkNoErrs $ do
   (kibinders, tybinders) <- chooseInferredQuantifiers residual (varsOfType mono_ty) qkvs qtvs 
-  let inferred_poly_ty = mkBigLamTys kibinders $
-                         mkInvisForAllTys tybinders
+  let inferred_poly_ty = mkBigLamTys (TcKiVar <$> kibinders) $
+                         mkInvisForAllTys (mapVarBinder TcTyVar <$> tybinders)
                          mono_ty
   traceTc "mkInferredPolyId"
     $ vcat [ ppr poly_name, ppr qkvs, ppr qtvs
@@ -432,41 +432,41 @@ mkInferredPolyId residual insoluble qkvs qtvs poly_name mono_ty = checkNoErrs $ 
 
   unless insoluble $
     addErrCtxtM (mk_inf_msg poly_name inferred_poly_ty) $ 
-      checkValidType (InfSigCtxt poly_name) inferred_poly_ty
+      checkValidTcType (InfSigCtxt poly_name) inferred_poly_ty
 
   return $ mkLocalId poly_name inferred_poly_ty
 
-chooseInferredQuantifiers
+chooseInferredQuantifiers -- should change for kicovars TODO
   :: WantedTyConstraints
-  -> (MkVarSet (AnyTyVar AnyKiVar), MkVarSet (KiCoVar AnyKiVar), MkVarSet AnyKiVar)
-  -> [TcKiVar] -> [TcTyVar AnyKiVar]
-  -> TcM ([AnyKiVar], [InvisBinder (AnyTyVar AnyKiVar)])
+  -> (TyVarSet Tc, KiCoVarSet Tc, KiVarSet Tc)
+  -> [TcKiVar] -> [TcTyVar]
+  -> TcM ([TcKiVar], [InvisBinder TcTyVar])
 chooseInferredQuantifiers _ (tau_tvs, tau_kcvs, tau_kvs) qkvs qtvs = return
-  ( [ kv
+  ( [ tckv
     | tckv <- qkvs
-    , let kv = toAnyKiVar tckv
+    , let kv = TcKiVar tckv
     , kv `elemVarSet` tau_kvs
     ]
-  , [ mkVarBinder InferredSpec tv
+  , [ mkVarBinder InferredSpec tctv
     | tctv <- qtvs
-    , let tv = toAnyTyVar tctv
-    , tv `elemVarSet` (tau_tvs `unionVarSet` (toAnyTyVar `mapVarSet` tau_kcvs))
+    , let tv = TcTyVar tctv
+    , tv `elemVarSet` tau_tvs
     ]
   )
 
-mk_inf_msg :: Name -> AnyType -> AnyTidyEnv -> ZonkM (AnyTidyEnv, SDoc)
+mk_inf_msg :: Name -> Type Tc -> TidyEnv Tc -> ZonkM (TidyEnv Tc, SDoc)
 mk_inf_msg poly_name poly_ty tidy_env = do
   (tidy_env1, poly_ty) <- zonkTidyTcType tidy_env poly_ty
   let msg = vcat [ text "When checking the inferred type"
                  , nest 2 $ ppr poly_name <+> colon <+> ppr poly_ty ]
   return (tidy_env1, msg)
 
-localSigWarn :: TcId -> TcM ()
+localSigWarn :: Id Tc -> TcM ()
 localSigWarn id
   | not (isSigmaTy (varType id)) = return ()
   | otherwise = warnMissingSignatures id
 
-warnMissingSignatures :: TcId -> TcM ()
+warnMissingSignatures :: Id Tc -> TcM ()
 warnMissingSignatures id = do
   env0 <- liftZonkM $ tcInitTidyEnv
   let (env1, tidy_ty) = tidyOpenTypeX env0 (varType id)
@@ -481,7 +481,7 @@ warnMissingSignatures id = do
 
 data MonoBindInfo = MBI
   { mbi_poly_name :: Name
-  , mbi_mono_id :: TcId
+  , mbi_mono_id :: Id Tc
   }
 
 tcMonoBinds
@@ -525,7 +525,7 @@ tcLhs sig_fn (FunBind { fun_id = L nm_loc name, fun_body = body })
   | Just _ <- sig_fn name
   = pprPanic "tcLhs name has sig" (ppr name)
   | otherwise
-  = do mono_ty <- asAnyTyKi <$> newOpenFlexiTyVarTy
+  = do mono_ty <- newOpenFlexiTyVarTy
        mono_id <- newLetBndr name mono_ty
        let mono_info = MBI { mbi_poly_name = name
                            , mbi_mono_id = mono_id }

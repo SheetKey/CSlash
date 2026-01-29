@@ -1,6 +1,11 @@
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeAbstractions #-}
+{-# LANGUAGE ExplicitForAll #-}
 {-# LANGUAGE BangPatterns #-}
 
 module CSlash.Tc.Solver.Rewrite where
+
+import CSlash.Cs.Pass
 
 import CSlash.Core.Type.Ppr ( pprTyVar )
 import CSlash.Tc.Types ( TcGblEnv(), RewriteEnv(..) )
@@ -138,21 +143,21 @@ recordKiRewriter other = pprPanic "recordKiRewriter" (ppr other)
 *                                                                      *
 ********************************************************************* -}
 
-rewriteTy :: CtTyEvidence -> AnyType -> TcS (TyReduction, TyRewriterSet, KiRewriterSet)
+rewriteTy :: CtTyEvidence -> Type Tc -> TcS (TyReduction, TyRewriterSet, KiRewriterSet)
 rewriteTy ev ty = do
   traceTcS "rewrite {" (ppr ty)
   result@(redn, _, _) <- runRewriteTyCtEv ev (rewrite_one_ty ty)
   traceTcS "rewrite }" (ppr $ reductionReducedType redn)
   return result
 
-rewriteKi :: CtKiEvidence -> AnyMonoKind -> TcS (KiReduction, KiRewriterSet)
+rewriteKi :: CtKiEvidence -> MonoKind Tc -> TcS (KiReduction, KiRewriterSet)
 rewriteKi ev ki = do
   traceTcS "rewriteKi {" (ppr ki)
   result@(redn, _) <- runRewriteKiCtEv ev (rewrite_one_ki ki)
   traceTcS "rewriteKi }" (ppr $ reductionReducedKind redn)
   return result
 
-rewriteTyForErrors :: CtTyEvidence -> AnyType -> TcS (TyReduction, TyRewriterSet, KiRewriterSet)
+rewriteTyForErrors :: CtTyEvidence -> Type Tc -> TcS (TyReduction, TyRewriterSet, KiRewriterSet)
 rewriteTyForErrors ev ty = do
   traceTcS "rewriteTyForErrors {" (ppr ty)
   result@(redn, ty_rewriters, ki_rewriters)
@@ -160,7 +165,7 @@ rewriteTyForErrors ev ty = do
   traceTcS "rewriteTyForErrors }" (ppr $ reductionReducedType redn)
   return result
 
-rewriteKiForErrors :: CtKiEvidence -> AnyMonoKind -> TcS (KiReduction, KiRewriterSet)
+rewriteKiForErrors :: CtKiEvidence -> MonoKind Tc -> TcS (KiReduction, KiRewriterSet)
 rewriteKiForErrors ev ki = do
   traceTcS "rewriteKiForErrors {" (ppr ki)
   result@(redn, rewriters) <- runRewriteKi (ctEvLoc ev) (ctEvFlavor ev) (rewrite_one_ki ki)
@@ -173,7 +178,7 @@ rewriteKiForErrors ev ki = do
 *                                                                      *
 ********************************************************************* -}
 
-rewrite_one_ty :: AnyType -> RewriteM TyReduction
+rewrite_one_ty :: Type Tc -> RewriteM TyReduction
 
 rewrite_one_ty ty
   | Just ty' <- rewriterView ty
@@ -223,16 +228,16 @@ rewrite_one_ty (Embed mki) = do
 
 rewrite_one_ty other = pprPanic "rewrite_one_ty other" (ppr other)
 
-rewrite_kco :: AnyKindCoercion -> RewriteM AnyKindCoercion
+rewrite_kco :: KindCoercion Tc -> RewriteM (KindCoercion Tc)
 rewrite_kco co = liftTcS $ zonkKiCo co
 
-rewrite_app_tys :: AnyType -> [AnyType] -> RewriteM TyReduction
+rewrite_app_tys :: Type Tc -> [Type Tc] -> RewriteM TyReduction
 rewrite_app_tys (AppTy ty1 ty2) tys = rewrite_app_tys ty1 (ty2:tys)
 rewrite_app_tys fun_ty arg_tys = do
   redn <- rewrite_one_ty fun_ty
   rewrite_app_ty_args redn arg_tys
 
-rewrite_app_ty_args :: TyReduction -> [AnyType] -> RewriteM TyReduction
+rewrite_app_ty_args :: TyReduction -> [Type Tc] -> RewriteM TyReduction
 rewrite_app_ty_args redn [] = return redn
 rewrite_app_ty_args fun_redn@(TyReduction fun_co fun_xi) arg_tys = do
   het_redn <- case tcSplitTyConApp_maybe fun_xi of
@@ -253,30 +258,40 @@ rewrite_app_ty_args fun_redn@(TyReduction fun_co fun_xi) arg_tys = do
 
   return $ homogeniseHetTyRedn het_redn
 
-rewrite_ty_con_app :: AnyTyCon -> [AnyType] -> RewriteM TyReduction
+rewrite_ty_con_app :: TyCon Tc -> [Type Tc] -> RewriteM TyReduction
 rewrite_ty_con_app tc tys = do
   ArgsReductions redns kind_co <- rewrite_args_tc tc tys
   let tyconapp_redn = mkHetTyReduction (mkTyConAppRedn tc redns) kind_co
   return $ homogeniseHetTyRedn tyconapp_redn
 
-rewrite_vector :: AnyKind -> [AnyType] -> RewriteM ArgsReductions
-rewrite_vector ki tys = 
+{-# INLINE rewrite_args_tc #-}
+rewrite_args_tc :: TyCon Tc -> [Type Tc] -> RewriteM ArgsReductions
+rewrite_args_tc tc = case tyConDetails tc of
+  TcTyCon { tcTyConKind = ki } -> rewrite_vector ki
+  other -> rewrite_vector (tyConKind other)
+
+rewrite_vector :: forall p p'. HasPass p p' => Kind p -> [Type Tc] -> RewriteM ArgsReductions
+rewrite_vector @_ @p' ki tys = 
   rewrite_args bndrs any_named_bndrs inner_ki fvs tys
   where
     (bndrs, inner_ki, any_named_bndrs) = split_pi_kis' ki
-    fvs = varsOfKind ki
-
-{-# INLINE rewrite_args_tc #-}
-rewrite_args_tc :: AnyTyCon -> [AnyType] -> RewriteM ArgsReductions
-rewrite_args_tc tc = rewrite_vector (tyConKind tc)
+    fvs :: KiVarSet Tc
+    fvs = case csPass @p' of
+            Tc -> varsOfKind ki
+            Zk -> assertPpr (isEmptyVarSet (varsOfKind ki))
+                            (vcat [ text "rewrite_vector 'TyCon Zk'"
+                                  , text "kind has free vars"
+                                  , ppr ki, ppr tys ])
+                  emptyVarSet
+            _ -> panic "shouldn't happen"
 
 {-# INLINE rewrite_args #-}
 rewrite_args
-  :: [PiKiBinder AnyKiVar]
+  :: [PiKiBinder p]
   -> Bool
-  -> AnyMonoKind
-  -> AnyKiVarSet
-  -> [AnyType]
+  -> MonoKind p
+  -> KiVarSet Tc
+  -> [Type Tc]
   -> RewriteM ArgsReductions
 rewrite_args orig_binders any_named_bndrs orig_inner_ki orig_fvs orig_tys
   = if any_named_bndrs
@@ -284,10 +299,10 @@ rewrite_args orig_binders any_named_bndrs orig_inner_ki orig_fvs orig_tys
     else rewrite_args_fast orig_tys
 
 {-# INLINE rewrite_args_fast #-}
-rewrite_args_fast :: [AnyType] -> RewriteM ArgsReductions
+rewrite_args_fast :: [Type Tc] -> RewriteM ArgsReductions
 rewrite_args_fast orig_tys = fmap finish (iterate orig_tys)
   where
-    iterate :: [AnyType] -> RewriteM TyReductions
+    iterate :: [Type Tc] -> RewriteM TyReductions
     iterate (ty : tys) = do
       TyReduction co xi <- rewrite_one_ty ty
       TyReductions cos xis <- iterate tys
@@ -300,17 +315,16 @@ rewrite_args_fast orig_tys = fmap finish (iterate orig_tys)
 
 {-# INLINE rewrite_args_slow #-}
 rewrite_args_slow
-  :: [PiKiBinder AnyKiVar]
-  -> AnyMonoKind
-  -> AnyKiVarSet
-  -> [AnyType]
+  :: [PiKiBinder p]
+  -> MonoKind p
+  -> KiVarSet Tc
+  -> [Type Tc]
   -> RewriteM ArgsReductions
 rewrite_args_slow binders inner_ki fvs tys = do
   rewritten_args <- mapM rewrite_one_ty tys
   return $ simplifyArgsWorker binders inner_ki fvs rewritten_args
-  where
-
-rewrite_one_ki :: AnyMonoKind -> RewriteM KiReduction
+  
+rewrite_one_ki :: MonoKind Tc -> RewriteM KiReduction
 
 rewrite_one_ki (KiVarKi kv) = rewriteKiVar kv
 
@@ -352,7 +366,7 @@ data RewriteVResult redn
  
 type RewriteTvResult = RewriteVResult TyReduction
 
-rewriteTyVar :: AnyTyVar AnyKiVar  -> RewriteM TyReduction
+rewriteTyVar :: TyVar Tc  -> RewriteM TyReduction
 rewriteTyVar tv = do
   mb_yes <- rewrite_tyvar1 tv
   case mb_yes of
@@ -362,9 +376,9 @@ rewriteTyVar tv = do
       let ty' = mkTyVarTy tv'
       return $ mkReflRednTy ty'
 
-rewrite_tyvar1 :: AnyTyVar AnyKiVar -> RewriteM RewriteTvResult
+rewrite_tyvar1 :: TyVar Tc -> RewriteM RewriteTvResult
 rewrite_tyvar1 tv = do
-  mb_ty <- liftTcS $ handleAnyTv (const (return Nothing)) isFilledMetaTyVar_maybe tv
+  mb_ty <- liftTcS $ isFilledMetaTyVar_maybe tv
   case mb_ty of
     Just ty -> do traceRewriteM "Following filled tyvar"
                     (ppr tv <+> equals <+> ppr ty)
@@ -374,7 +388,7 @@ rewrite_tyvar1 tv = do
                   f <- getFlavor
                   rewrite_tyvar2 tv f
 
-rewrite_tyvar2 :: AnyTyVar AnyKiVar -> CtFlavor -> RewriteM RewriteTvResult
+rewrite_tyvar2 :: TyVar Tc -> CtFlavor -> RewriteM RewriteTvResult
 rewrite_tyvar2 tv f = do
   ieqs <- liftTcS $ getInertTyEqs
   case lookupDVarEnv ieqs tv of
@@ -403,16 +417,16 @@ rewrite_tyvar2 tv f = do
 
 type RewriteKvResult = RewriteVResult KiReduction
  
-rewriteKiVar :: AnyKiVar -> RewriteM KiReduction
+rewriteKiVar :: KiVar Tc -> RewriteM KiReduction
 rewriteKiVar kv = do
   mb_yes <- rewrite_kivar1 kv
   case mb_yes of
     RVRFollowed redn -> rewrite_reduction redn
     RVRNotFollowed -> return $ mkReflRednKi $ mkKiVarKi kv
 
-rewrite_kivar1 :: AnyKiVar -> RewriteM RewriteKvResult
+rewrite_kivar1 :: KiVar Tc -> RewriteM RewriteKvResult
 rewrite_kivar1 kv = do
-  mb_ki <- liftTcS $ handleAnyKv (const (return Nothing)) isFilledMetaKiVar_maybe kv
+  mb_ki <- liftTcS $ isFilledMetaKiVar_maybe kv
   case mb_ki of
     Just ki -> do
       traceRewriteM "Following filled kivar"
@@ -423,7 +437,7 @@ rewrite_kivar1 kv = do
       f <- getFlavor
       rewrite_kivar2 kv f
 
-rewrite_kivar2 :: AnyKiVar -> CtFlavor -> RewriteM RewriteKvResult
+rewrite_kivar2 :: KiVar Tc -> CtFlavor -> RewriteM RewriteKvResult
 rewrite_kivar2 kv f = do
   ieqs <- liftTcS $ getInertKiCos
   case lookupDVarEnv ieqs kv of
@@ -447,7 +461,7 @@ rewrite_kivar2 kv f = do
 --------------------------------------
 -- Utilities
 
-split_pi_kis' :: AnyKind -> ([PiKiBinder AnyKiVar], AnyMonoKind, Bool)
+split_pi_kis' :: Kind p -> ([PiKiBinder p], MonoKind p, Bool)
 split_pi_kis' ki = split ki
   where
     split (ForAllKi b res) = let !(bs, ki, _) = split res

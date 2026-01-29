@@ -4,6 +4,8 @@ module CSlash.Tc.Solver where
 
 import Prelude hiding ((<>))
 
+import CSlash.Cs.Pass
+
 import CSlash.Data.Bag
 -- import GHC.Core.Class
 import CSlash.Core
@@ -14,7 +16,7 @@ import CSlash.Data.FastString
 import CSlash.Data.List.SetOps
 import CSlash.Types.Name
 import CSlash.Types.Unique.Set
-import CSlash.Types.Id
+import CSlash.Types.Var.Id
 import CSlash.Utils.Outputable
 import CSlash.Builtin.Utils
 import CSlash.Builtin.Names
@@ -129,7 +131,7 @@ simplifyAndEmitFlatConstraints wanted = do
                   implic <- buildKvImplication unkSkolAnon [] (pushTcLevel tclvl) wanted
                   emitKiImplication implic
                   failM
-    Just simples -> do _ <- promoteAnyKiVarSet (varsOfKiCts simples)
+    Just simples -> do _ <- promoteKiVarSet (varsOfKiCts simples)
                        traceTc "emitFlatConstraints }"
                          $ vcat [ text "simples:" <+> ppr simples ]
                        emitKiSimples simples
@@ -137,7 +139,7 @@ simplifyAndEmitFlatConstraints wanted = do
 floatKindEqualities :: WantedKiConstraints -> Maybe (Bag KiCt)
 floatKindEqualities wc = float_wc emptyVarSet wc
   where
-    float_wc :: AnyKiVarSet -> WantedKiConstraints -> Maybe (Bag KiCt)
+    float_wc :: KiVarSet Tc -> WantedKiConstraints -> Maybe (Bag KiCt)
     float_wc trapping_kvs (WKC { wkc_simple = simples, wkc_impl = implics })
       | all is_floatable simples
       = do inner_simples <- flatMapBagM (float_implic trapping_kvs) implics
@@ -149,7 +151,7 @@ floatKindEqualities wc = float_wc emptyVarSet wc
           | insolubleCt ct = False
           | otherwise = varsOfKiCt ct `disjointVarSet` trapping_kvs
 
-    float_implic :: AnyKiVarSet -> KiImplication -> Maybe (Bag KiCt)
+    float_implic :: KiVarSet Tc -> KiImplication -> Maybe (Bag KiCt)
     float_implic trapping_kvs (KiImplic { kic_wanted = wanted
                                         , kic_given_kicos = given_kicos
                                         , kic_skols = skols
@@ -157,7 +159,7 @@ floatKindEqualities wc = float_wc emptyVarSet wc
       | isInsolubleStatus status
       = Nothing
       | otherwise
-      = do simples <- float_wc (trapping_kvs `extendVarSetList` (toAnyKiVar <$> skols)) wanted
+      = do simples <- float_wc (trapping_kvs `extendVarSetList` (TcKiVar <$> skols)) wanted
            when (not (isEmptyBag simples) && given_kicos == MaybeGivenKiCos) $ Nothing
            return simples
 
@@ -272,9 +274,9 @@ instance Outputable InferMode where
 simplifyInfer
   :: TcLevel
   -> InferMode
-  -> [(Name, AnyTauType)]
+  -> [(Name, TauType Tc)]
   -> WantedTyConstraints
-  -> TcM ([TcKiVar], [TcTyVar AnyKiVar], Bool)
+  -> TcM ([TcKiVar], [TcTyVar], Bool)
 simplifyInfer rhs_tclvl infer_mode name_taus wanteds
   | isEmptyWC wanteds
   = do dep_vars <- candidateQTyKiVarsOfTypes (map snd name_taus)
@@ -680,9 +682,9 @@ setTyImplicationStatus implic@(TyImplic { tic_status = old_status
 
 findUnnecessaryKiGivens
   :: SkolemInfoAnon
-  -> MkVarSet (KiCoVar AnyKiVar)
-  -> [KiCoVar AnyKiVar]
-  -> [KiCoVar AnyKiVar]
+  -> KiCoVarSet Tc
+  -> [KiCoVar Tc]
+  -> [KiCoVar Tc]
 findUnnecessaryKiGivens info need_inner givens
   | not (warnRedundantGivens info)
   = []
@@ -693,7 +695,7 @@ findUnnecessaryKiGivens info need_inner givens
   where
     unused_givens = filterOut is_used givens
 
-    is_used :: KiCoVar AnyKiVar -> Bool
+    is_used :: KiCoVar Tc -> Bool
     is_used given = given `elemVarSet` need_inner
 
     minimal_givens = mkMinimalBy_Ki kiCoVarPred givens
@@ -703,9 +705,9 @@ findUnnecessaryKiGivens info need_inner givens
 
 findUnnecessaryTyGivens
   :: SkolemInfoAnon
-  -> MkVarSet (TyCoVar (AnyTyVar AnyKiVar) AnyKiVar)
-  -> [TyCoVar (AnyTyVar AnyKiVar) AnyKiVar]
-  -> [TyCoVar (AnyTyVar AnyKiVar) AnyKiVar]
+  -> TyCoVarSet Tc
+  -> [TyCoVar Tc]
+  -> [TyCoVar Tc]
 findUnnecessaryTyGivens info need_inner givens
   | not (warnRedundantGivens info)
   = []
@@ -716,7 +718,7 @@ findUnnecessaryTyGivens info need_inner givens
   where
     unused_givens = filterOut is_used givens
 
-    is_used :: TyCoVar (AnyTyVar AnyKiVar) AnyKiVar -> Bool
+    is_used :: TyCoVar Tc -> Bool
     is_used given = given `elemVarSet` need_inner
 
     minimal_givens = mkMinimalBy_Ty tyCoVarPred givens

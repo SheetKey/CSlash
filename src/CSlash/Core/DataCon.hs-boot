@@ -1,23 +1,27 @@
+{-# LANGUAGE RoleAnnotations #-}
+
 module CSlash.Core.DataCon where
 
-import {-# SOURCE #-} CSlash.Types.Var (Id, AsAnyTy)
+import CSlash.Cs.Pass
+
+import {-# SOURCE #-} CSlash.Types.Var.Id (Id)
 import {-# SOURCE #-} CSlash.Types.Name (Name, NamedThing)
 import CSlash.Types.Unique (Uniquable)
 import CSlash.Utils.Outputable (Outputable, OutputableBndr)
 import {-# SOURCE #-} CSlash.Core.Type.Rep (Type)
 import CSlash.Types.Basic (Arity)
 
-data DataCon tv kv
+type role DataCon phantom
+data DataCon p
 
-dataConName :: DataCon tv kv -> Name
-dataConId :: DataCon tv kv -> Id tv kv
+dataConName :: DataCon p -> Name
+dataConId :: DataCon p -> Id Zk
 
-instance Eq (DataCon tv kv)
-instance Uniquable (DataCon tv kv)
-instance NamedThing (DataCon tv kv)
-instance Outputable (DataCon tv kv)
-instance OutputableBndr (DataCon tv kv)
-instance AsAnyTy DataCon
+instance Eq (DataCon p)
+instance Uniquable (DataCon p)
+instance NamedThing (DataCon p)
+instance Outputable (DataCon p)
+instance OutputableBndr (DataCon p)
 
-dataConFullSig :: DataCon tv kv -> Type tv kv
-dataConArity :: DataCon tv kv -> Arity
+dataConFullSig :: DataCon p -> Type Zk
+dataConArity :: DataCon p -> Arity

@@ -6,6 +6,8 @@ module CSlash.Tc.Types.Evidence where
 
 import Prelude hiding ((<>))
 
+import CSlash.Cs.Pass
+
 import CSlash.Types.Unique.DFM
 import CSlash.Types.Unique.FM
 import CSlash.Types.Var
@@ -46,11 +48,11 @@ import CSlash.Types.Unique.Set
 
 import qualified Data.Semigroup as S
 
-maybeSymTyCo :: SwapFlag -> TypeCoercion tv kv -> TypeCoercion tv kv
+maybeSymTyCo :: SwapFlag -> TypeCoercion p -> TypeCoercion p
 maybeSymTyCo IsSwapped co = mkSymTyCo co
 maybeSymTyCo NotSwapped co = co
 
-maybeSymKiCo :: SwapFlag -> KindCoercion kv -> KindCoercion kv
+maybeSymKiCo :: SwapFlag -> KindCoercion p -> KindCoercion p
 maybeSymKiCo IsSwapped co = mkSymKiCo co
 maybeSymKiCo NotSwapped co = co
 
@@ -60,69 +62,64 @@ maybeSymKiCo NotSwapped co = co
 *                                                                      *
 ********************************************************************* -}
 
-type AnyCsWrapper = CsWrapper (AnyTyVar AnyKiVar) AnyKiVar
-type ZkCsWrapper = CsWrapper (TyVar KiVar) KiVar
-
-data CsWrapper tv kv
+data CsWrapper p
   = WpHole
-  | WpCompose (CsWrapper tv kv) (CsWrapper tv kv)
-  | WpFun (CsWrapper tv kv) (MonoKind kv) (Type tv kv)
+  | WpCompose (CsWrapper p) (CsWrapper p)
+  | WpFun (CsWrapper p) (MonoKind p) (Type p)
     -- given 'A -> B', the wrapper is on 'B' and the type is 'A', and the kind is the fun kind
-  | WpCast (TypeCoercion tv kv)
-  | WpTyLam tv            -- can probably be 'TcTyVar AnyKiVar' (these should be skols)
-  | WpKiLam kv            -- "             " 'TcKiVar'          "                     "
-  | WpTyApp (Type tv kv)
-  | WpKiApp (MonoKind kv)
-  | WpKiCoApp (KindCoercion kv)
-  | WpMultCoercion (KindCoercion kv)
+  | WpCast (TypeCoercion p)
+  | WpTyLam (TyVar p)            -- can probably be 'TcTyVar AnyKiVar' (these should be skols)
+  | WpKiLam (KiVar p)            -- "             " 'TcKiVar'          "                     "
+  | WpTyApp (Type p)
+  | WpKiApp (MonoKind p)
+  | WpKiCoApp (KindCoercion p)
+  | WpMultCoercion (KindCoercion p)
   deriving Data.Data
 
-(<.>) :: CsWrapper tv kv -> CsWrapper tv kv -> CsWrapper tv kv
+(<.>) :: CsWrapper p -> CsWrapper p -> CsWrapper p
 WpHole <.> c = c
 c <.> WpHole = c
 c1 <.> c2 = c1 `WpCompose` c2
 
-mkWpFun :: IsTyVar tv kv => CsWrapper tv kv -> MonoKind kv -> Type tv kv -> CsWrapper tv kv
+mkWpFun :: CsWrapper p -> MonoKind p -> Type p -> CsWrapper p
 mkWpFun WpHole _ _ = WpHole
 mkWpFun (WpCast res_co) fun_ki arg_ty = WpCast (mk_wp_fun_co fun_ki (mkReflTyCo arg_ty) res_co)
 mkWpFun co fun_ki arg_ty = WpFun co fun_ki arg_ty
 
-mk_wp_fun_co
-  :: IsTyVar tv kv
-  => MonoKind kv -> TypeCoercion tv kv -> TypeCoercion tv kv -> TypeCoercion tv kv
+mk_wp_fun_co :: MonoKind p -> TypeCoercion p -> TypeCoercion p -> TypeCoercion p
 mk_wp_fun_co fun_ki arg_co res_co = mkTyFunCo (mkReflKiCo fun_ki) arg_co res_co
 
-mkWpCast :: TypeCoercion tv kv -> CsWrapper tv kv
+mkWpCast :: TypeCoercion p -> CsWrapper p
 mkWpCast co
   | isReflTyCo co = WpHole
   | otherwise = WpCast co
 
-idCsWrapper :: CsWrapper tv kv
+idCsWrapper :: CsWrapper p
 idCsWrapper = WpHole
 
-isIdCsWrapper :: CsWrapper tv kv -> Bool
+isIdCsWrapper :: CsWrapper p -> Bool
 isIdCsWrapper WpHole = True
 isIdCsWrapper _ = False
 
-mkWpTyApps :: [Type tv kv] -> CsWrapper tv kv
+mkWpTyApps :: [Type p] -> CsWrapper p
 mkWpTyApps tys = mk_co_app_fn WpTyApp tys
 
-mkWpKiApps :: [MonoKind kv] -> CsWrapper tv kv
+mkWpKiApps :: [MonoKind p] -> CsWrapper p
 mkWpKiApps kis = mk_co_app_fn WpKiApp kis
 
-mkWpKiCoApps :: [KindCoercion kv] -> CsWrapper tv kv
+mkWpKiCoApps :: [KindCoercion p] -> CsWrapper p
 mkWpKiCoApps args = mk_co_app_fn WpKiCoApp args
 
-mkWpTyLams :: [tv] -> CsWrapper tv kv
+mkWpTyLams :: [TyVar p] -> CsWrapper p
 mkWpTyLams tvs = mk_lam_fn WpTyLam tvs
 
-mkWpKiLams :: [kv] -> CsWrapper tv kv
+mkWpKiLams :: [KiVar p] -> CsWrapper p
 mkWpKiLams kvs = mk_lam_fn WpKiLam kvs
 
-mk_lam_fn :: (a -> CsWrapper tv kv) -> [a] -> CsWrapper tv kv
+mk_lam_fn :: (a -> CsWrapper p) -> [a] -> CsWrapper p
 mk_lam_fn f as = foldr (\x wrap -> f x <.> wrap) WpHole as
 
-mk_co_app_fn :: (a -> CsWrapper tv kv) -> [a] -> CsWrapper tv kv
+mk_co_app_fn :: (a -> CsWrapper p) -> [a] -> CsWrapper p
 mk_co_app_fn f as = foldr (\x wrap -> wrap <.> f x) WpHole as
 
 {- *********************************************************************
@@ -134,13 +131,13 @@ mk_co_app_fn f as = foldr (\x wrap -> wrap <.> f x) WpHole as
 data KiCoBindsVar
   = KiCoBindsVar
     { kcbv_uniq :: Unique
-    , kcbv_kcvs :: IORef (MkVarSet (KiCoVar AnyKiVar))
+    , kcbv_kcvs :: IORef (KiCoVarSet Tc)
     }
 
 data TyCoBindsVar
   = TyCoBindsVar
     { tcbv_uniq :: Unique
-    , tcbv_tcvs :: IORef (MkVarSet (TyCoVar (AnyTyVar AnyKiVar) AnyKiVar))
+    , tcbv_tcvs :: IORef (TyCoVarSet Tc)
     }
 
 {- *********************************************************************
@@ -161,10 +158,10 @@ data TyCoBindsVar
 *                                                                      *
 ********************************************************************* -}
 
-instance IsTyVar tv kv => Outputable (CsWrapper tv kv) where
+instance Outputable (CsWrapper p) where
   ppr co_fn = pprCsWrapper co_fn (no_parens (text "<>"))
 
-pprCsWrapper :: IsTyVar tv kv => CsWrapper tv kv -> (Bool -> SDoc) -> SDoc
+pprCsWrapper :: CsWrapper p -> (Bool -> SDoc) -> SDoc
 pprCsWrapper wrap pp_thing_inside =
   sdocOption sdocPrintTypecheckerElaboration $ \case
   True -> help pp_thing_inside wrap False

@@ -13,7 +13,7 @@ import CSlash.Cs
 import CSlash.Types.Basic (Activation)
 import CSlash.Types.Error
 -- import GHC.Types.ForeignCall
-import CSlash.Types.Id
+import CSlash.Types.Var.Id
 import CSlash.Types.Name (Name)
 
 import GHC.Generics (Generic)

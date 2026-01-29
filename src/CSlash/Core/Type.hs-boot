@@ -3,22 +3,21 @@ module CSlash.Core.Type where
 import {-# SOURCE #-} CSlash.Core.TyCon
 import {-# SOURCE #-} CSlash.Core.Type.Rep (Type)
 import {-# SOURCE #-} CSlash.Core.Kind (Kind, KindCoercion)
-import CSlash.Types.Var (TyVar, KiVar, IsTyVar)
 import CSlash.Types.Name (Name)
 import CSlash.Types.Basic (Arity)
 import CSlash.Utils.Misc (HasDebugCallStack)
 
-rewriterView :: IsTyVar tv kv => Type tv kv -> Maybe (Type tv kv)
+rewriterView :: Type p -> Maybe (Type p)
 
-coreView :: IsTyVar tv kv => Type tv kv -> Maybe (Type tv kv)
+coreView :: Type p -> Maybe (Type p)
 
-mkAppTy :: Type tv kv -> Type tv kv -> Type tv kv
+mkAppTy :: Type p -> Type p -> Type p
 
-mkTyConApp :: TyCon tv kv -> [Type tv kv] -> Type tv kv
+mkTyConApp :: TyCon p -> [Type p] -> Type p
 
-mkCastTy :: IsTyVar tv kv => Type tv kv -> KindCoercion kv -> Type tv kv
+mkCastTy :: Type p -> KindCoercion p -> Type p
 
 buildSynTyCon
-  :: Name -> Kind KiVar -> Arity -> Type (TyVar KiVar) KiVar -> TyCon (TyVar KiVar) KiVar
+  :: Name -> Kind p -> Arity -> Type p -> TyCon p
 
-typeKind :: (HasDebugCallStack, IsTyVar tv kv) => Type tv kv -> Kind kv
+typeKind :: HasDebugCallStack => Type p -> Kind p

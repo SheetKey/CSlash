@@ -65,6 +65,7 @@ import CSlash.Builtin.Utils
 import CSlash.Cs --hiding ( FunDep(..) )
 import CSlash.Cs.Dump
 
+import CSlash.Core.Subst
 -- import GHC.Core.PatSyn
 -- import GHC.Core.Predicate ( classMethodTy )
 -- import GHC.Core.InstEnv
@@ -97,9 +98,9 @@ import CSlash.Utils.Logger
 import CSlash.Types.Error
 import CSlash.Types.Name.Reader
 import CSlash.Types.Fixity.Env
-import CSlash.Types.Id as Id
-import CSlash.Types.Id.Info( IdDetails(..) )
-import CSlash.Types.Var (asAnyTyKi, idDetails)
+import CSlash.Types.Var.Id as Id
+import CSlash.Types.Var.Id.Info( IdDetails(..) )
+import CSlash.Types.Var (varType)
 import CSlash.Types.Var.Env
 import CSlash.Types.TypeEnv
 import CSlash.Types.Unique.FM
@@ -438,20 +439,20 @@ generateMainBinding tcg_env main_name = do
                   , tcg_dus = tcg_dus tcg_env
                               `plusDU` usesOnly (unitFV main_name) })
 
-getIOType :: TcM (AnyType, AnyType)
+getIOType :: TcM (Type Tc, Type Tc)
 getIOType = do
-  ioTyCon <- asAnyTyKi <$> tcLookupTyCon ioTyConName
-  unitTyCon <- asAnyTyKi <$> tcLookupTyCon unitTyConName
+  ioTyCon <- tcLookupTyCon ioTyConName
+  unitTyCon <- tcLookupTyCon unitTyConName
   -- Note: The kind of unit could be anything? (Perhaps Linear doesn't make sense?)
   -- If its changed, then we need to handle errors that will occur in tcSubSigmaType
   -- These can be fixed by adding the ability for unifyType to pass a KiPred to unifyKind
   let unit = mkTyConApp unitTyCon [Embed (BIKi UKd)]
-  return ( mkTyConApp ioTyCon [ Embed (BIKi UKd), Embed (BIKi UKd)
-                              , unit
-                              ]
-         , unit )
+      io_type = mkTyConApp ioTyCon [ Embed (BIKi UKd), Embed (BIKi UKd)
+                                   , unit ]
+  return ( substTy emptySubst io_type
+         , substTy emptySubst unit )
 
-setMainCtxt :: Name -> AnyType -> TcM a -> TcM a
+setMainCtxt :: Name -> Type Tc -> TcM a -> TcM a
 setMainCtxt main_name io_ty thing_inside
   = setSrcSpan (getSrcSpan main_name)
     $ addErrCtxt main_ctxt
@@ -543,7 +544,7 @@ ppr_tycons debug type_env
 
     ppr_tc tc = vcat [ hang (ppr (tyConFlavor tc) <+> pprPrefixOcc (tyConName tc)
                              <> braces (ppr (tyConArity tc)) <+> colon)
-                       2 (ppr (tidyTopKind (tyConKind tc))) ]
+                       2 (ppr (tidyTopKind (tyConKind $ tyConDetails tc))) ]
 
 ppr_datacons :: Bool -> TypeEnv -> SDoc
 ppr_datacons debug type_env

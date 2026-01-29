@@ -12,12 +12,12 @@ import CSlash.Utils.Misc
 import CSlash.Utils.Panic
 import CSlash.Data.FastString
 
-data TyPred tv kv
-  = TyEqPred (Type tv kv) (Type tv kv)
-  | TyIrredPred (PredType tv kv)
-  | ForAllPred [tv] (PredType tv kv)
+data TyPred p
+  = TyEqPred (Type p) (Type p)
+  | TyIrredPred (PredType p)
+  | ForAllPred [TyVar p] (PredType p)
 
-classifyPredType :: IsTyVar tv kv => PredType tv kv -> TyPred tv kv
+classifyPredType :: PredType p -> TyPred p
 classifyPredType ev_ty = case splitTyConApp_maybe ev_ty of
   Just (tc, [_, _, ty1, ty2])
     | tc `hasKey` eqTyConKey -> TyEqPred ty1 ty2
@@ -28,42 +28,42 @@ classifyPredType ev_ty = case splitTyConApp_maybe ev_ty of
 
   _ -> TyIrredPred ev_ty
 
-isTyCoVarType :: IsTyVar tv kv => Type tv kv -> Bool
+isTyCoVarType :: Type p -> Bool
 isTyCoVarType ty = isTyEqPred ty
 
-isTyEqPred :: IsTyVar tv kv => Type tv kv -> Bool
+isTyEqPred :: Type p -> Bool
 isTyEqPred ty
   | Just tc <- tyConAppTyCon_maybe ty
   = tc `hasKey` eqTyConKey
   | otherwise
   = False
 
-getPredTys :: IsTyVar tv kv => PredType tv kv -> (Type tv kv, Type tv kv)
+getPredTys :: PredType p -> (Type p, Type p)
 getPredTys ty = case getPredTys_maybe ty of
                   Just tys -> tys
                   Nothing -> pprPanic "getPredTys" (ppr ty)
 
-getPredTys_maybe :: IsTyVar tv kv => PredType tv kv -> Maybe (Type tv kv, Type tv kv)
+getPredTys_maybe :: PredType p -> Maybe (Type p, Type p)
 getPredTys_maybe ty = case splitTyConApp_maybe ty of
                         Just (tc, [_, _, ty1, ty2]) | tc `hasKey` eqTyConKey -> Just (ty1, ty2)
                         _ -> Nothing
 
-data KiPred kv
-  = KiCoPred KiPredCon (MonoKind kv) (MonoKind kv)
-  | IrredPred (PredKind kv)
+data KiPred p
+  = KiCoPred KiPredCon (MonoKind p) (MonoKind p)
+  | IrredPred (PredKind p)
 
-classifyPredKind :: PredKind kv -> KiPred kv
+classifyPredKind :: PredKind p -> KiPred p
 classifyPredKind ev_ki = case ev_ki of
   KiPredApp pred ki1 ki2 -> KiCoPred pred ki1 ki2
   _ -> IrredPred ev_ki
 
-getPredKis :: Outputable kv => PredKind kv -> (KiPredCon, MonoKind kv, MonoKind kv)
+getPredKis :: PredKind p -> (KiPredCon, MonoKind p, MonoKind p)
 getPredKis (KiPredApp pred k1 k2) = (pred, k1, k2)
 getPredKis other = pprPanic "getPredKis" (ppr other)
 
-getPredKis_maybe :: PredKind kv -> Maybe (KiPredCon, MonoKind kv, MonoKind kv)
+getPredKis_maybe :: PredKind p -> Maybe (KiPredCon, MonoKind p, MonoKind p)
 getPredKis_maybe (KiPredApp pred k1 k2) = Just (pred, k1, k2)
 getPredKis_maybe _ = Nothing
 
-mkRelPred :: KiPredCon -> MonoKind kv -> MonoKind kv -> PredKind kv
+mkRelPred :: KiPredCon -> MonoKind p -> MonoKind p -> PredKind p
 mkRelPred = mkKiPredApp

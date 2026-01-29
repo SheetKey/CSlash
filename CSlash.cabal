@@ -69,13 +69,13 @@ library
                     , CSlash.Core.Kind
                     , CSlash.Core.Kind.Compare
                     , CSlash.Core.Kind.FVs
-                    , CSlash.Core.Kind.Subst
                     , CSlash.Core.Map.Kind
                     , CSlash.Core.Opt.CallerCC
                     , CSlash.Core.Opt.CallerCC.Types
                     , CSlash.Core.Ppr
                     , CSlash.Core.Predicate
                     , CSlash.Core.Reduction
+                    , CSlash.Core.Subst
                     , CSlash.Core.TyCon
                     , CSlash.Core.TyCon.Set
                     , CSlash.Core.Type
@@ -83,7 +83,6 @@ library
                     , CSlash.Core.Type.FVs
                     , CSlash.Core.Type.Ppr
                     , CSlash.Core.Type.Rep
-                    , CSlash.Core.Type.Subst
                     , CSlash.Core.Type.Tidy
                     , CSlash.Core.Unfold
                     , CSlash.Core.Unify
@@ -100,6 +99,7 @@ library
                     , CSlash.Cs.Instances
                     , CSlash.Cs.Kind
                     , CSlash.Cs.Lit
+                    , CSlash.Cs.Pass
                     , CSlash.Cs.Pat
                     , CSlash.Cs.Stats
                     , CSlash.Cs.Type
@@ -262,7 +262,6 @@ library
                     , CSlash.Tc.Gen.Match
                     , CSlash.Tc.Gen.Pat
                     , CSlash.Tc.Gen.Sig
-                    , CSlash.Tc.Instance.Relation
                     , CSlash.Tc.Module
                     , CSlash.Tc.Solver
                     , CSlash.Tc.Solver.Equality
@@ -306,9 +305,6 @@ library
                     , CSlash.Types.GREInfo
                     , CSlash.Types.Hint
                     , CSlash.Types.Hint.Ppr
-                    , CSlash.Types.Id
-                    , CSlash.Types.Id.Make
-                    , CSlash.Types.Id.Info
                     , CSlash.Types.Literal
                     , CSlash.Types.Name
                     , CSlash.Types.Name.Cache
@@ -337,6 +333,13 @@ library
                     , CSlash.Types.Unique.Set
                     , CSlash.Types.Unique.Supply
                     , CSlash.Types.Var
+                    , CSlash.Types.Var.Class
+                    , CSlash.Types.Var.Id
+                    , CSlash.Types.Var.Id.Make
+                    , CSlash.Types.Var.Id.Info
+                    , CSlash.Types.Var.TyVar
+                    , CSlash.Types.Var.KiVar
+                    , CSlash.Types.Var.CoVar
                     , CSlash.Types.Var.Env
                     , CSlash.Types.Var.Set
                     
@@ -431,3 +434,4 @@ library
                       -Widentities
                       -Wredundant-constraints
                       -O2
+                      -Wno-unused-imports

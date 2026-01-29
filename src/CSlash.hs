@@ -105,7 +105,7 @@ import CSlash.Core
 
 import CSlash.Data.Maybe
 
-import CSlash.Types.Id
+import CSlash.Types.Var.Id
 import CSlash.Types.Name      hiding ( varName )
 import CSlash.Types.Avail
 import CSlash.Types.SrcLoc

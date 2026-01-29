@@ -4,10 +4,6 @@
 
 module CSlash.Utils.FV where
 
-import CSlash.Types.Var
-import CSlash.Types.Var.Set
-import CSlash.Types.Unique
-
 -- type FV arg is acc = (arg -> Bool) -> is -> acc -> acc
 type FV thing
   = (FVArg thing -> Bool) -> FVInScope thing -> FVAcc thing -> FVAcc thing

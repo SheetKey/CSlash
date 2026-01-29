@@ -2,6 +2,8 @@ module CSlash.Builtin.Utils where
 
 import Prelude hiding ((<>))
 
+import CSlash.Cs.Pass
+
 import CSlash.Builtin.Uniques
 -- import GHC.Builtin.PrimOps
 -- import GHC.Builtin.PrimOps.Ids
@@ -17,11 +19,11 @@ import CSlash.Core.DataCon
 import CSlash.Core.TyCon
 
 import CSlash.Types.Avail
-import CSlash.Types.Var (TyVar, KiVar)
-import CSlash.Types.Id
-import CSlash.Types.Name
+import CSlash.Types.Var (TyVar, KiVar, varName)
+import CSlash.Types.Var.Id
+import CSlash.Types.Var.Id.Make
+import CSlash.Types.Name hiding (varName)
 import CSlash.Types.Name.Env
-import CSlash.Types.Id.Make
 import CSlash.Types.Unique.FM
 import CSlash.Types.Unique.Map
 import CSlash.Types.TyThing
@@ -54,17 +56,17 @@ knownKeyNames
     all_names =
       concat [ concatMap wired_tycon_kk_names primTyCons
              , concatMap wired_tycon_kk_names wiredInTyCons
-             , map idName wiredInIds
+             , map varName wiredInIds
              , basicKnownKeyNames
              ]
-    wired_tycon_kk_names :: TyCon (TyVar KiVar) KiVar -> [Name]
+    wired_tycon_kk_names :: TyCon Zk -> [Name]
     wired_tycon_kk_names tc = tyConName tc : implicits
       where implicits = concatMap thing_kk_names (implicitTyConThings tc)
 
-    wired_datacon_kk_names :: DataCon (TyVar KiVar) KiVar -> [Name]
+    wired_datacon_kk_names :: DataCon Zk -> [Name]
     wired_datacon_kk_names dc = [dataConName dc]
 
-    thing_kk_names :: TyThing (TyVar KiVar) KiVar -> [Name]
+    thing_kk_names :: TyThing Zk -> [Name]
     thing_kk_names (ATyCon tc) = wired_tycon_kk_names tc
     thing_kk_names (AConLike (RealDataCon dc)) = wired_datacon_kk_names dc
     thing_kk_names thing = [getName thing]
@@ -119,7 +121,7 @@ cslBuiltInExports
     | tc <- builtInTyCons
     , let n = tyConName tc ]
 
-builtInTyCons :: [TyCon (TyVar KiVar) KiVar]
+builtInTyCons :: [TyCon Zk]
 builtInTyCons
   = ioTyCon
   : primIoTyCon

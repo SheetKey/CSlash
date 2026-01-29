@@ -8,8 +8,8 @@ import CSlash.Core
 import CSlash.Types.Fixity (LexicalFixity(..))
 import CSlash.Types.Name( pprInfixName, pprPrefixName )
 import CSlash.Types.Var
-import CSlash.Types.Id
-import CSlash.Types.Id.Info
+import CSlash.Types.Var.Id
+import CSlash.Types.Var.Id.Info
 import CSlash.Core.DataCon
 import CSlash.Core.TyCon
 import CSlash.Core.Type.Ppr
@@ -25,13 +25,7 @@ pprCoreExpr = undefined
 instance OutputableBndr b => Outputable (Expr b) where
   ppr expr = pprCoreExpr expr
 
-instance IsTyVar tv kv => OutputableBndr (Var tv kv) where
-  pprBndr = undefined
-  pprInfixOcc = pprInfixName . varName
-  pprPrefixOcc = pprInfixName . varName
-  bndrIsJoin_maybe = undefined
-
-instance IsTyVar tv kv => OutputableBndr (Id tv kv) where
+instance OutputableBndr (Id p) where
   pprBndr = pprCoreBinder
   pprInfixOcc = pprInfixName . varName
   pprPrefixOcc = pprPrefixName . varName
@@ -41,14 +35,14 @@ pprOcc :: OutputableBndr a => LexicalFixity -> a -> SDoc
 pprOcc Infix = pprInfixOcc
 pprOcc Prefix = pprPrefixOcc
 
-pprCoreBinder :: IsTyVar tv kv => BindingSite -> Id tv kv -> SDoc
+pprCoreBinder :: BindingSite -> Id p -> SDoc
 pprCoreBinder LetBind binder = pprTypedLetBinder binder $$ ppIdInfo binder (idInfo binder)
 pprCoreBinder bind_site bndr = getPprDebug $ \debug -> pprTypedLamBinder bind_site debug bndr
 
-pprUntypedBinder :: IsTyVar tv kv => Id tv kv -> SDoc
+pprUntypedBinder :: Id p -> SDoc
 pprUntypedBinder binder = pprIdBndr binder
 
-pprTypedLamBinder :: IsTyVar tv kv => BindingSite -> Bool -> Id tv kv -> SDoc
+pprTypedLamBinder :: BindingSite -> Bool -> Id p -> SDoc
 pprTypedLamBinder bind_site debug_on var
   = sdocOption sdocSuppressTypeSignatures $ \suppress_sigs -> 
     if | not debug_on
@@ -74,14 +68,14 @@ pprTypedLamBinder bind_site debug_on var
     pp_unf | hasSomeUnfolding unf_info = text "Unh=" <> ppr unf_info
            | otherwise = empty
 
-pprTypedLetBinder :: IsTyVar tv kv => Id tv kv -> SDoc
+pprTypedLetBinder :: Id p -> SDoc
 pprTypedLetBinder binder
   = sdocOption sdocSuppressTypeSignatures $ \suppress_sigs ->
     if suppress_sigs
     then pprIdBndr binder
     else hang (pprIdBndr binder) 2 (colon <+> pprType (varType binder))
 
-pprIdBndr :: IsTyVar tv kv => Id tv kv -> SDoc
+pprIdBndr :: Id p -> SDoc
 pprIdBndr id = pprPrefixOcc id <+> pprIdBndrInfo (idInfo id)
 
 pprIdBndrInfo :: IdInfo -> SDoc
@@ -99,7 +93,7 @@ pprIdBndrInfo info
           , ( has_lbv, text "OS=" <> ppr lbv_info)
           ]
 
-ppIdInfo :: IsTyVar tv kv => Id tv kv -> IdInfo -> SDoc
+ppIdInfo :: Id p -> IdInfo -> SDoc
 ppIdInfo id info
   = ppUnlessOption sdocSuppressIdInfo
     $ showAttributes

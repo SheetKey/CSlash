@@ -152,7 +152,7 @@ data DynFlags = DynFlags
   , historySize :: Int
 
   , importPaths :: [FilePath]
-  , mainModuleNameIs :: ModuleName
+  , mainModuleNameIs :: ModuleName -- TODO: remove this and mainFunIs
   , mainFunIs :: Maybe String
   , reductionDepth :: IntWithInf
   , solverIterations :: IntWithInf

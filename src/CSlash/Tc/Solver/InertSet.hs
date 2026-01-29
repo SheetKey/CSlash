@@ -4,6 +4,8 @@
 
 module CSlash.Tc.Solver.InertSet where
 
+import CSlash.Cs.Pass
+
 import CSlash.Tc.Types.Constraint
 import CSlash.Tc.Types.Origin
 import CSlash.Tc.Solver.Types
@@ -21,7 +23,7 @@ import CSlash.Core.Type.FVs
 import CSlash.Core.Type.Compare
 import CSlash.Core.Kind.FVs
 import CSlash.Core.Kind
-import CSlash.Core.Kind.Subst
+import CSlash.Core.Subst
 import CSlash.Core.Kind.Compare
 import qualified CSlash.Core.Type.Rep as Rep
 -- import GHC.Core.Class( Class )
@@ -167,7 +169,7 @@ instance Outputable WorkList where
 *                                                                      *
 ********************************************************************* -}
 
-type CycleBreakerVarStack = NonEmpty (Bag (AnyTyVar AnyKiVar, AnyType))
+type CycleBreakerVarStack = NonEmpty (Bag (TyVar Tc, Type Tc))
 
 data InertKiSet = IKS
   { inert_ki_cans :: InertKiCans
@@ -233,10 +235,10 @@ data InertTyCans = ITC
   , inert_given_tyeqs :: Bool
   }
 
-type InertKiCos = MkDVarEnv AnyKiVar KiCoCtList
+type InertKiCos = DVarEnv (KiVar Tc) KiCoCtList
 type InertKiIrreds = Bag IrredKiCt
 
-type InertTyEqs = MkDVarEnv (AnyTyVar AnyKiVar) TyEqCtList
+type InertTyEqs = DVarEnv (TyVar Tc) TyEqCtList
 type InertTyIrreds = Bag IrredTyCt
 
 instance Outputable InertKiCans where
@@ -287,7 +289,7 @@ addTyEqToCans tc_lvl tyeq_ct@(TyEqCt { teq_lhs = lhs }) ics@(ITC { inert_tyeqs =
     $ case lhs of
         TyVarLHS tv -> ics { inert_tyeqs = addTyEq eqs tv tyeq_ct }
 
-addTyEq :: InertTyEqs -> AnyTyVar AnyKiVar -> TyEqCt -> InertTyEqs
+addTyEq :: InertTyEqs -> TyVar Tc -> TyEqCt -> InertTyEqs
 addTyEq old_eqs tv ct
   = extendDVarEnv_C add_eq old_eqs tv [ct]
   where
@@ -299,7 +301,7 @@ addKiCoToCans tc_lvl kico_ct@(KiCoCt { kc_lhs = lhs }) ics@(IKC { inert_kicos = 
     $ case lhs of
         KiVarLHS kv -> ics { inert_kicos = addKiCo kicos kv kico_ct }
 
-addKiCo :: InertKiCos -> AnyKiVar -> KiCoCt -> InertKiCos
+addKiCo :: InertKiCos -> KiVar Tc -> KiCoCt -> InertKiCos
 addKiCo old_kicos v ct
   = extendDVarEnv_C add_kico old_kicos v [ct]
   where
@@ -311,13 +313,13 @@ foldKiCos k kicos z = foldDVarEnv (\cts z -> foldr k z cts) z kicos
 foldTyEqs :: (TyEqCt -> b -> b) -> InertTyEqs -> b -> b
 foldTyEqs k eqs z = foldDVarEnv (\cts z -> foldr k z cts) z eqs
 
-findTyEqs :: InertTyCans -> AnyTyVar AnyKiVar -> [TyEqCt]
+findTyEqs :: InertTyCans -> TyVar Tc -> [TyEqCt]
 findTyEqs icans tv = concat @Maybe (lookupDVarEnv (inert_tyeqs icans) tv)
 
 findTyEq :: InertTyCans -> CanTyEqLHS -> [TyEqCt]
 findTyEq icans (TyVarLHS tv) = findTyEqs icans tv
 
-findKiCos :: InertKiCans -> AnyKiVar -> [KiCoCt]
+findKiCos :: InertKiCans -> KiVar Tc -> [KiCoCt]
 findKiCos icans kv = concat @Maybe (lookupDVarEnv (inert_kicos icans) kv)
 
 findKiCo :: InertKiCans -> CanKiCoLHS -> [KiCoCt]
@@ -514,11 +516,11 @@ updGivenKiCos tclvl ct inerts@(IKC { inert_given_kico_lvl = kc_lvl })
                        , inert_given_kicos = True }
 
 data KiKickOutSpec
-  = KOAfterUnify (MkVarSet TcKiVar)
+  = KOAfterUnify (VarSet TcKiVar)
   | KOAfterAdding CanKiCoLHS
 
 data TyKickOutSpec
-  = TKOAfterUnify (MkVarSet (TcTyVar AnyKiVar))
+  = TKOAfterUnify (VarSet TcTyVar)
   | TKOAfterAdding CanTyEqLHS
 
 kickOutRewritableLHSTy :: TyKickOutSpec -> CtFlavor -> InertTyCans -> (TyCts, InertTyCans)
@@ -536,13 +538,18 @@ kickOutRewritableLHSTy ko_spec new_f ics@(ITC { inert_tyeqs = tv_eqs
     (tv_eqs_out, tv_eqs_in) = partitionInertTyEqs kick_out_eq tv_eqs
     (irs_out, irs_in) = partitionBag kick_out_irred irreds
 
+    
+    f_tv_can_rewrite_ty :: Bool -> (TyVar Tc -> Bool) -> Type Tc -> Bool
     f_tv_can_rewrite_ty look check_tv ty = anyRewritableTyVar can_rewrite ty
       where
         can_rewrite tv = look && check_tv tv
 
+    f_can_rewrite_ty :: Bool -> Type Tc -> Bool
     f_can_rewrite_ty look = case ko_spec of
-      TKOAfterUnify tvs -> f_tv_can_rewrite_ty look (`elemVarSet` tvs)
-      TKOAfterAdding (TyVarLHS tv) -> f_tv_can_rewrite_ty look ((== tv) . toAnyTyVar)
+      TKOAfterUnify tvs -> f_tv_can_rewrite_ty look (\tv -> case toTcTyVar_maybe tv of
+                                                              Just tv -> tv `elemVarSet` tvs
+                                                              Nothing -> False)
+      TKOAfterAdding (TyVarLHS tv) -> f_tv_can_rewrite_ty look (== tv)
 
     f_may_rewrite f = new_f `eqCanRewriteF` f
 
@@ -595,16 +602,18 @@ kickOutRewritableLHSKi ko_spec new_f ics@(IKC { inert_kicos = kv_kicos
     (kv_kicos_out, kv_kicos_in) = partitionInertKiCos kick_out_kico kv_kicos
     (irs_out, irs_in) = partitionBag kick_out_irred irreds
 
-    f_kv_can_rewrite_ki :: Bool -> (TcKiVar -> Bool) -> AnyMonoKind -> Bool
+    f_kv_can_rewrite_ki :: Bool -> (KiVar Tc -> Bool) -> MonoKind Tc -> Bool
     f_kv_can_rewrite_ki look check_kv ki
       = anyRewritableKiVar can_rewrite ki
       where
         can_rewrite kv = look && check_kv kv
 
-    f_can_rewrite_ki :: Bool -> AnyMonoKind -> Bool
+    f_can_rewrite_ki :: Bool -> MonoKind Tc -> Bool
     f_can_rewrite_ki look = case ko_spec of
-      KOAfterUnify kvs -> f_kv_can_rewrite_ki look (`elemVarSet` kvs)
-      KOAfterAdding (KiVarLHS kv) -> f_kv_can_rewrite_ki look ((== kv) . toAnyKiVar)
+      KOAfterUnify kvs -> f_kv_can_rewrite_ki look (\kv -> case toTcKiVar_maybe kv of
+                                                             Just kv -> kv `elemVarSet` kvs
+                                                             Nothing -> False)
+      KOAfterAdding (KiVarLHS kv) -> f_kv_can_rewrite_ki look (== kv)
 
     f_may_rewrite f = new_f `eqCanRewriteF` f
 
@@ -645,16 +654,16 @@ kickOutRewritableLHSKi ko_spec new_f ics@(IKC { inert_kicos = kv_kicos
 ********************************************************************* -}
 
 mentionsOuterVar :: TcLevel -> CtKiEvidence -> Bool
-mentionsOuterVar tclvl ev = anyFreeVarsOfMonoKind (isOuterKiVar tclvl) $ ctKiEvPred ev
+mentionsOuterVar tclvl ev = anyFreeVarsOfMonoKind (isOuterVar tclvl) $ ctKiEvPred ev
 
-isOuterKiVar :: TcLevel -> AnyKiVar -> Bool
-isOuterKiVar tclvl kv
- = assertPpr (not (handleAnyKv (const False) (isTouchableMetaVar tclvl) kv))
-   (ppr kv <+> ppr tclvl)
-   $ tclvl `strictlyDeeperThan` (handleAnyKv (const topTcLevel) varLevel kv)
+isOuterVar :: TcVar v => TcLevel -> v -> Bool
+isOuterVar tclvl v
+ = assertPpr (not (isTouchableMetaVar tclvl v))
+   (ppr v <+> ppr tclvl)
+   $ tclvl `strictlyDeeperThan` (varLevel v)
 
 mightEqualLater
-  :: InertKiSet -> AnyPredKind -> CtLoc -> AnyPredKind -> CtLoc -> Maybe (KvSubst AnyKiVar)
+  :: InertKiSet -> PredKind Tc -> CtLoc -> PredKind Tc -> CtLoc -> Maybe (Subst Tc Tc)
 mightEqualLater inert_set given_pred given_loc wanted_pred wanted_loc
   = case tcUnifyKisFG bind_fun [given_pred] [wanted_pred] of
       Unifiable subst -> pprTrace "mightEqualLater 1" (ppr subst) $ Just subst
@@ -677,13 +686,13 @@ mightEqualLater inert_set given_pred given_loc wanted_pred wanted_loc
       | otherwise
       = Apart
 
-    can_unify :: TcKiVar -> MetaInfo -> AnyMonoKind -> Bool
+    can_unify :: TcKiVar -> MetaInfo -> MonoKind Tc -> Bool
     can_unify _ VarVar rhs_ki
       | Just rhs_kv <- getKiVar_maybe rhs_ki
-      = handleAnyKv (const True) (\rhs_kv -> case tcVarDetails rhs_kv of
-                                     MetaVar { mv_info = VarVar } -> True
-                                     MetaVar {} -> False
-                                     SkolemVar {} -> True ) rhs_kv
+      = case tcVarDetails rhs_kv of
+          MetaVar { mv_info = VarVar } -> True
+          MetaVar {} -> False
+          SkolemVar {} -> True
       | otherwise
       = False
     can_unify _ _ _ = False

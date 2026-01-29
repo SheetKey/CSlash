@@ -1,11 +1,13 @@
 module CSlash.Linker.Types where
 
+import CSlash.Cs.Pass           ( Zk )
+
 import CSlash.Unit              ( UnitId, Module )
 -- import GHC.ByteCode.Types    ( ItblEnv, AddrEnv, CompiledByteCode )
 import CSlash.Utils.Fingerprint ( Fingerprint )
 -- import GHCi.RemoteTypes      ( ForeignHValue )
 
-import CSlash.Types.Var         ( Id, TyVar, KiVar )
+import CSlash.Types.Var         ( Id )
 import CSlash.Types.Name.Env    ( NameEnv, emptyNameEnv, extendNameEnvList, filterNameEnv )
 import CSlash.Types.Name        ( Name )
 
@@ -49,7 +51,7 @@ instance Outputable Unlinked where
   ppr (DotA path) = text "DotA" <+> text path
   ppr (DotSO path) = text "DotSO" <+> text path
 
-data SptEntry = SptEntry (Id (TyVar KiVar) KiVar) Fingerprint
+data SptEntry = SptEntry (Id Zk) Fingerprint
 
 isObjectLinkable :: Linkable -> Bool
 isObjectLinkable l = not (null unlinked) && all isObject unlinked

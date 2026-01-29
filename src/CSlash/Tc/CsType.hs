@@ -53,8 +53,8 @@ import CSlash.Core.DataCon
 -- import GHC.Core.Unify
 
 import CSlash.Types.Error
-import CSlash.Types.Id
-import CSlash.Types.Id.Make
+import CSlash.Types.Var.Id
+import CSlash.Types.Var.Id.Make
 import CSlash.Types.Var
 import CSlash.Types.Var.Env
 import CSlash.Types.Var.Set
@@ -132,7 +132,7 @@ tcTyGroup (TypeGroup { group_typeds = typeds, group_kisigs = kisigs }) = do
   let gbl_env' = gbl_env { tcg_ksigs = tcg_ksigs gbl_env `unionNameSet` kindless }
   return gbl_env'
 
-tcTyDs :: [LCsBind Rn] -> TcM ([TyCon (TyVar KiVar) KiVar], NameSet)
+tcTyDs :: [LCsBind Rn] -> TcM ([TyCon Zk], NameSet)
 tcTyDs typeds = do
   (tc_tycons, kindless) <- checkNoErrs $ kcTyGroup typeds
 
@@ -149,26 +149,26 @@ tcTyDs typeds = do
     return (tycons, kindless)
   where
     ppr_tc_tycon tc = parens (sep [ ppr (tyConName tc) <> comma
-                                  , ppr (tyConKind tc)
+                                  , pprTyConKind tc
                                   , ppr (isTcTyCon tc) ])
 
-zipRecTys :: [AnyTyCon] -> [TyCon (TyVar KiVar) KiVar] -> [(Name, TyThing (TyVar KiVar) KiVar)]
+zipRecTys :: [TyCon Tc] -> [TyCon Zk] -> [(Name, TyThing Zk)]
 zipRecTys tc_tycons rec_tycons
   = [ (name, ATyCon (get name)) | tc_tycon <- tc_tycons, let name = getName tc_tycon ]
   where
     add_one_tc
-      :: TyCon (TyVar KiVar) KiVar
-      -> NameEnv (TyCon (TyVar KiVar) KiVar)
-      -> NameEnv (TyCon (TyVar KiVar) KiVar)
+      :: TyCon Zk
+      -> NameEnv (TyCon Zk)
+      -> NameEnv (TyCon Zk)
     add_one_tc tc env = extendNameEnv env (tyConName tc) tc
 
     add_tc
-      :: TyCon (TyVar KiVar) KiVar
-      -> NameEnv (TyCon (TyVar KiVar) KiVar)
-      -> NameEnv (TyCon (TyVar KiVar) KiVar)
+      :: TyCon Zk
+      -> NameEnv (TyCon Zk)
+      -> NameEnv (TyCon Zk)
     add_tc tc env = add_one_tc tc env --foldr add_one_tc env (tc : tyConATs tc)
 
-    rec_tc_env :: NameEnv (TyCon (TyVar KiVar) KiVar)
+    rec_tc_env :: NameEnv (TyCon Zk)
     rec_tc_env = foldr add_tc emptyNameEnv rec_tycons
 
     get name = case lookupNameEnv rec_tc_env name of
@@ -181,7 +181,7 @@ zipRecTys tc_tycons rec_tycons
 *                                                                      *
 ********************************************************************* -}
 
-kcTyGroup :: [LCsBind Rn] -> TcM ([PolyAnyTyCon], NameSet)
+kcTyGroup :: [LCsBind Rn] -> TcM ([PolyTyCon Tc], NameSet)
 kcTyGroup kindless_decls = do
   mod <- getModule
   traceTc "---- kcTyGroup ---- {" (text "module" <+> ppr mod $$ vcat (map ppr kindless_decls))
@@ -205,11 +205,11 @@ kcTyGroup kindless_decls = do
   return (poly_tcs, kindless_names)
   where
     ppr_tc_kinds tcs = vcat (map pp_tc tcs)
-    pp_tc tc = ppr (tyConName tc) <+> colon <+> ppr (tyConKind tc)
+    pp_tc tc = ppr (tyConName tc) <+> colon <+> pprTyConKind tc
 
 type ScopedPairs = [(Name, TcKiVar)]
 
-generalizeTyDecl :: NameEnv MonoAnyTyCon -> LCsBind Rn -> TcM [PolyAnyTyCon]
+generalizeTyDecl :: NameEnv (MonoTyCon Tc) -> LCsBind Rn -> TcM [PolyTyCon Tc]
 generalizeTyDecl inferred_tc_env (L _ decl) = do
   let names_in_this_decl = [tydName decl]
 
@@ -221,7 +221,7 @@ generalizeTyDecl inferred_tc_env (L _ decl) = do
 
   mapAndReportM generalizeTcTyCon swizzled_infos
   where
-    skolemize_tc_tycon :: Name -> ZonkM (AnyTyCon, SkolemInfo, ScopedPairs)
+    skolemize_tc_tycon :: Name -> ZonkM (TyCon Tc, SkolemInfo, ScopedPairs)
     skolemize_tc_tycon tc_name = do
       let tc = lookupNameEnv_NF inferred_tc_env tc_name
       skol_info <- mkSkolemInfo (TyConSkol (tyConFlavor tc) tc_name)
@@ -229,16 +229,18 @@ generalizeTyDecl inferred_tc_env (L _ decl) = do
       return (tc, skol_info, scoped_pairs)
 
     zonk_tc_tycon
-      :: (AnyTyCon, SkolemInfo, ScopedPairs)
-      -> ZonkM (AnyTyCon, SkolemInfo, ScopedPairs, AnyKind)
+      :: (TyCon Tc, SkolemInfo, ScopedPairs)
+      -> ZonkM (TyCon Tc, SkolemInfo, ScopedPairs, Kind Tc)
     zonk_tc_tycon (tc, skol_info, scoped_pairs) = do
       scoped_pairs <- mapSndM zonkTcKiVarToTcKiVar scoped_pairs
-      full_kind <- zonkTcKind (tyConKind tc)
+      full_kind <- zonkTcKind $ case tyConDetails tc of
+                                  TcTyCon { tcTyConKind = ki } -> ki
+                                  _ -> pprPanic "zonk_tc_tycon" (ppr tc)
       return (tc, skol_info, scoped_pairs, full_kind)
 
 swizzleTcTyConBndrs
-  :: [(AnyTyCon, SkolemInfo, ScopedPairs, AnyKind)]
-  -> TcM [(AnyTyCon, SkolemInfo, ScopedPairs, AnyKind)]
+  :: [(TyCon Tc, SkolemInfo, ScopedPairs, Kind Tc)]
+  -> TcM [(TyCon Tc, SkolemInfo, ScopedPairs, Kind Tc)]
 swizzleTcTyConBndrs tc_infos 
   | all no_swizzle swizzle_pairs
   = do traceTc "Skipping swizzleTcTyConBndrs for" (ppr_infos tc_infos)
@@ -299,7 +301,7 @@ swizzleTcTyConBndrs tc_infos
 
     swizzle_ki ki = trace "swizzle_ki NOT implemented" ki
 
-generalizeTcTyCon :: (MonoAnyTyCon, SkolemInfo, ScopedPairs, AnyKind) -> TcM PolyAnyTyCon
+generalizeTcTyCon :: (MonoTyCon Tc, SkolemInfo, ScopedPairs, Kind Tc) -> TcM (PolyTyCon Tc)
 generalizeTcTyCon (tc, skol_info, scoped_prs, tc_full_kind)
   = setSrcSpan (getSrcSpan tc) $ addTyConCtxt tc $ do
       let spec_kvs = map snd scoped_prs -- kvs that appear in user code (specified by user)
@@ -327,7 +329,7 @@ generalizeTcTyCon (tc, skol_info, scoped_prs, tc_full_kind)
                , text "tc_full_kind =" <+> ppr tc_full_kind ]
 
       let all_tckvs = inferred ++ spec_kvs
-          full_kind = mkForAllKis (toAnyKiVar <$> all_tckvs) tc_full_kind
+          full_kind = mkForAllKis (TcKiVar <$> all_tckvs) tc_full_kind
 
       let tycon = mkTcTyCon (tyConName tc)
                             (full_kind)
@@ -343,10 +345,10 @@ generalizeTcTyCon (tc, skol_info, scoped_prs, tc_full_kind)
 
       return tycon
 
-tcExtendKindEnvWithTyCons :: [AnyTyCon] -> TcM a -> TcM a
+tcExtendKindEnvWithTyCons :: [TyCon Tc] -> TcM a -> TcM a
 tcExtendKindEnvWithTyCons tcs = tcExtendKindEnvList [ (tyConName tc, ATcTyCon tc) | tc <- tcs ]
 
-inferInitialKinds :: [LCsBind Rn] -> TcM [MonoAnyTyCon]
+inferInitialKinds :: [LCsBind Rn] -> TcM [MonoTyCon Tc]
 inferInitialKinds decls = do
   traceTc "inferInitialKinds {" $ ppr (map (tydName . unLoc) decls)
   tcs <- mapM infer_initial_kind decls
@@ -355,7 +357,7 @@ inferInitialKinds decls = do
   where
     infer_initial_kind = addLocM (getInitialKind InitialKindInfer)
 
-getInitialKind :: InitialKindStrategy -> CsBind Rn -> TcM AnyTyCon
+getInitialKind :: InitialKindStrategy -> CsBind Rn -> TcM (TyCon Tc)
 getInitialKind strategy (TyFunBind { tyfun_id = L _ name
                                    , tyfun_body = rhs
                                    , tyfun_ext = (kv_names, _) }) = do
@@ -369,7 +371,7 @@ getInitialKind strategy (TyFunBind { tyfun_id = L _ name
                          | not (null (unLoc ctxt)) -> do
                              arg_kinds <- newMetaKindVars (length (unLoc ctxt))
                              res_kind <- newMetaKindVar
-                             return $ TheMonoKind $ asAnyKi $ mkInvisFunKis_nc arg_kinds res_kind
+                             return $ TheMonoKind $ mkInvisFunKis_nc arg_kinds res_kind
                        _ -> return AnyMonoKind
         -- csTyFunResAndFullKinds ctxt rhs
   return tc
@@ -445,10 +447,12 @@ kcLTyDecl (L loc decl) = setSrcSpanA loc $ do
     $ kcTyDecl decl tycon
   traceTc "kcTyDecl done }" (ppr tc_name)
 
-kcTyDecl :: CsBind Rn -> MonoAnyTyCon -> TcM ()
+kcTyDecl :: CsBind Rn -> MonoTyCon Tc -> TcM ()
 kcTyDecl (TyFunBind { tyfun_body = rhs }) tycon
-  = tcExtendNameKiVarEnv (mapSnd toAnyKiVar (tcTyConScopedKiVars tycon)) $ 
-    let kind = tyConKind tycon
+  = tcExtendNameKiVarEnv (tcTyConScopedKiVars tycon) $ 
+    let kind = case tyConDetails tycon of
+                 TcTyCon { tcTyConKind = ki } -> ki
+                 _ -> pprPanic "kcTyDecl" (ppr tycon)
     in case kind of
          Mono kind -> discardResult $ tcCheckLCsType rhs (TheMonoKind kind)
          other -> pprPanic "kcTyDecl" (ppr kind)
@@ -460,7 +464,7 @@ kcTyDecl _ _ = panic "kcTyDecl/unreachable"
 *                                                                      *
 ********************************************************************* -}
 
-tcTyDecl :: LCsBind Rn -> TcM (TyCon (TyVar KiVar) KiVar)
+tcTyDecl :: LCsBind Rn -> TcM (TyCon Zk)
 tcTyDecl (L loc bind)
   | Just thing <- wiredInNameTyThing_maybe (tydName bind)
   = case thing of
@@ -473,7 +477,7 @@ tcTyDecl (L loc bind)
       traceTc "---- tcTyDecl ---- }" (ppr tc)
       return tc
 
-tcTyDecl1 :: CsBind Rn -> TcM (TyCon (TyVar KiVar) KiVar)
+tcTyDecl1 :: CsBind Rn -> TcM (TyCon Zk)
 tcTyDecl1 (TyFunBind { tyfun_id = L _ tc_name, tyfun_body = rhs })
   = tcTyFunRhs tc_name rhs
 
@@ -485,7 +489,7 @@ tcTyDecl1 other = pprPanic "tcTyDecl1" (ppr other)
 *                                                                      *
 ********************************************************************* -}
 
-tcTyFunRhs :: Name -> LCsType Rn -> TcM (TyCon (TyVar KiVar) KiVar)
+tcTyFunRhs :: Name -> LCsType Rn -> TcM (TyCon Zk)
 tcTyFunRhs tc_name cs_ty = bindTyConKiVars tc_name
                            $ \ tc_ki_bndrs rhs_kind arity -> do
   env <- getLclEnv
@@ -524,7 +528,7 @@ tcTyFunRhs tc_name cs_ty = bindTyConKiVars tc_name
 *                                                                      *
 ********************************************************************* -}
 
-checkValidTyCon :: TyCon (TyVar KiVar) KiVar -> TcM (TyCon (TyVar KiVar) KiVar)
+checkValidTyCon :: TyCon Zk -> TcM (TyCon Zk)
 checkValidTyCon tc = setSrcSpan (getSrcSpan tc)
                      $ addTyConCtxt tc
                      $ recoverM recovery $ do
@@ -539,7 +543,7 @@ checkValidTyCon tc = setSrcSpan (getSrcSpan tc)
 
     mk_fake_tc = makeRecoveryTyCon
 
-checkValidTyCon' :: TyCon (TyVar KiVar) KiVar -> TcM ()
+checkValidTyCon' :: TyCon Zk -> TcM ()
 checkValidTyCon' tc
   | isPrimTyCon tc
   = return ()
@@ -568,7 +572,7 @@ tcMkDeclCtxt decl = hsep [ text "In the", pprTyDeclFlavor decl
 tcAddDeclCtxt :: CsBind Rn -> TcM a -> TcM a
 tcAddDeclCtxt decl thing_inside = addErrCtxt (tcMkDeclCtxt decl) thing_inside
 
-addTyConCtxt :: TyCon tv kv -> TcM a -> TcM a
+addTyConCtxt :: TyCon p -> TcM a -> TcM a
 addTyConCtxt tc = addTyConFlavCtxt name flav
   where
     name = getName tc

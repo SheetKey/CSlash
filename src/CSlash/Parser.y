@@ -1034,7 +1034,7 @@ a_qconsym :: { LocatedN RdrName }
 syscon :: { LocatedN RdrName }
   : sysdcon { L (getLoc $1) $ nameRdrName (dataConName (unLoc $1)) }
 
-sysdcon :: { LocatedN (DataCon (TyVar KiVar) KiVar) }
+sysdcon :: { LocatedN (DataCon Zk) }
   : '(' commas ')' {% amsr (sLL $1 $> $ tupleDataCon (snd $2 + 1))
                            (NameAnnCommas NameParens (glAA $1)
                               (map srcSpan2e (fst $2)) (glAA $3) []) }

@@ -2,6 +2,8 @@
 
 module CSlash.Tc.Solver.Equality (solveKiCoercion, solveTyEquality) where
 
+import CSlash.Cs.Pass
+
 import CSlash.Tc.Solver.Irred( solveIrredTy, solveIrredKi )
 -- import GHC.Tc.Solver.Dict( matchLocalInst, chooseInstance )
 import CSlash.Tc.Solver.Rewrite
@@ -20,11 +22,10 @@ import qualified CSlash.Tc.Utils.Monad as TcM
 import CSlash.Core.Type
 import CSlash.Core.Type.Compare
 import CSlash.Core.Type.FVs
-import CSlash.Core.Type.Subst
+import CSlash.Core.Subst
 import CSlash.Core.Kind
 import CSlash.Core.Kind.Compare
 import CSlash.Core.Predicate
-import CSlash.Core.Kind.Subst
 -- import GHC.Core.Class
 import CSlash.Core.DataCon ( dataConName )
 import CSlash.Core.TyCon
@@ -67,7 +68,7 @@ import Data.Void( Void )
 *                                                                      *
 ********************************************************************* -}
 
-solveTyEquality :: CtTyEvidence -> AnyType -> AnyType -> TySolverStage Void
+solveTyEquality :: CtTyEvidence -> Type Tc -> Type Tc -> TySolverStage Void
 solveTyEquality ev ty1 ty2 = do
   Pair ty1' ty2' <- zonkEqTypes ev ty1 ty2
   mb_canon <- canonicalizeTyEquality ev ty1' ty2'
@@ -85,7 +86,7 @@ updInertTyEqs eq_ct = do
   tc_lvl <- getTcLevel
   updInertTyCans (addTyEqToCans tc_lvl eq_ct)
 
-solveKiCoercion :: CtKiEvidence -> KiPredCon -> AnyMonoKind -> AnyMonoKind -> KiSolverStage Void
+solveKiCoercion :: CtKiEvidence -> KiPredCon -> MonoKind Tc -> MonoKind Tc -> KiSolverStage Void
 solveKiCoercion ev rel ki1 ki2 = do
   Pair ki1' ki2' <- if rel /= LTKi
                     then zonkEqKinds ev ki1 ki2
@@ -115,14 +116,14 @@ updInertKiCos kico_ct = do
 *                                                                      *
 ********************************************************************* -}
 
-zonkEqTypes :: CtTyEvidence -> AnyType -> AnyType -> TySolverStage (Pair AnyType)
+zonkEqTypes :: CtTyEvidence -> Type Tc -> Type Tc -> TySolverStage (Pair (Type Tc))
 zonkEqTypes ev ty1 ty2 = Stage $ do
   res <- go ty1 ty2
   case res of
     Left pair -> continueWith pair
     Right ty -> canTyEqReflexive ev ty
   where
-    go :: AnyType -> AnyType -> TcS (Either (Pair AnyType) AnyType)
+    go :: Type Tc -> Type Tc -> TcS (Either (Pair (Type Tc)) (Type Tc))
     go (TyVarTy tv1) (TyVarTy tv2) = tyvar_tyvar tv1 tv2
     go (TyVarTy tv1) ty2 = tyvar NotSwapped tv1 ty2
     go ty1 (TyVarTy tv2) = tyvar IsSwapped tv2 ty1
@@ -154,9 +155,9 @@ zonkEqTypes ev ty1 ty2 = Stage $ do
 
     bale_out ty1 ty2 = return $ Left (Pair ty1 ty2)
 
-    tyvar :: SwapFlag -> AnyTyVar AnyKiVar -> AnyType -> TcS (Either (Pair AnyType) AnyType)
-    tyvar swapped tv ty = case handleAnyTv (const Nothing) (Just . tcVarDetails) tv of
-      Just (MetaVar { mv_ref = ref }) -> do
+    tyvar :: SwapFlag -> TyVar Tc -> Type Tc -> TcS (Either (Pair (Type Tc)) (Type Tc))
+    tyvar swapped tv ty = case tcVarDetails tv of
+      MetaVar { mv_ref = ref } -> do
         cts <- readTcRef ref
         case cts of
           Flexi -> give_up
@@ -166,6 +167,7 @@ zonkEqTypes ev ty1 ty2 = Stage $ do
       where
         give_up = return $ Left $ unSwap swapped Pair (mkTyVarTy tv) ty
 
+    tyvar_tyvar :: TyVar Tc -> TyVar Tc -> TcS (Either (Pair (Type Tc)) (Type Tc))
     tyvar_tyvar tv1 tv2
       | tv1 == tv2 = return (Right (mkTyVarTy tv1))
       | otherwise = do (ty1', progress1) <- quick_zonk tv1
@@ -177,8 +179,9 @@ zonkEqTypes ev ty1 ty2 = Stage $ do
     trace_indirect tv ty = traceTcS "Following filled tyvar (zonk_eq_types)"
                            (ppr tv <+> equals <+> ppr ty)
 
-    quick_zonk tv = case handleAnyTv (const Nothing) (Just . tcVarDetails) tv of
-      Just (MetaVar { mv_ref = ref }) -> do
+    quick_zonk :: TyVar Tc -> TcS (Type Tc, Bool)
+    quick_zonk tv = case tcVarDetails tv of
+      MetaVar { mv_ref = ref } -> do
         cts <- readTcRef ref
         case cts of
           Flexi -> return (TyVarTy tv, False)
@@ -186,14 +189,14 @@ zonkEqTypes ev ty1 ty2 = Stage $ do
                              return (ty', True)
       _ -> return (TyVarTy tv, False)
 
-    tycon :: AnyTyCon -> [AnyType] -> [AnyType] -> TcS (Either (Pair AnyType) AnyType)
+    tycon :: TyCon Tc -> [Type Tc] -> [Type Tc] -> TcS (Either (Pair (Type Tc)) (Type Tc))
     tycon tc tys1 tys2 = do
       results <- zipWithM go tys1 tys2
       return $ case combine_results results of
         Left tys -> Left (mkTyConApp tc <$> tys)
         Right tys -> Right (mkTyConApp tc tys)
 
-    combine_results :: [Either (Pair AnyType) AnyType] -> Either (Pair [AnyType]) [AnyType]
+    combine_results :: [Either (Pair (Type Tc)) (Type Tc)] -> Either (Pair [Type Tc]) [Type Tc]
     combine_results = bimap (fmap reverse) reverse .
                       foldl' (combine_rev (:)) (Right [])
 
@@ -209,14 +212,14 @@ zonkEqTypes ev ty1 ty2 = Stage $ do
 *                                                                      *
 ********************************************************************* -}
 
-zonkEqKinds :: CtKiEvidence -> AnyMonoKind -> AnyMonoKind -> KiSolverStage (Pair AnyMonoKind)
+zonkEqKinds :: CtKiEvidence -> MonoKind Tc -> MonoKind Tc -> KiSolverStage (Pair (MonoKind Tc))
 zonkEqKinds ev ki1 ki2 = Stage $ do
   res <- go_mono ki1 ki2
   case res of
     Left pair -> continueWith pair
     Right ki -> canKiCoReflexive ev ki
   where
-    go_mono :: AnyMonoKind -> AnyMonoKind -> TcS (Either (Pair AnyMonoKind) AnyMonoKind)
+    go_mono :: MonoKind Tc -> MonoKind Tc -> TcS (Either (Pair (MonoKind Tc)) (MonoKind Tc))
     go_mono (KiVarKi kv1) (KiVarKi kv2) = kivar_kivar kv1 kv2
     go_mono (KiVarKi kv1) ki2 = kivar NotSwapped kv1 ki2
     go_mono ki1 (KiVarKi kv2) = kivar IsSwapped kv2 ki1
@@ -234,9 +237,13 @@ zonkEqKinds ev ki1 ki2 = Stage $ do
 
     bale_out ki1 ki2 = return $ Left (Pair ki1 ki2)
 
-    kivar :: SwapFlag -> AnyKiVar -> AnyMonoKind -> TcS (Either (Pair AnyMonoKind) AnyMonoKind)
-    kivar swapped kv ki = case handleAnyKv (const Nothing) (Just . tcVarDetails) kv of
-      Just (MetaVar { mv_ref = ref }) -> do
+    kivar
+      :: SwapFlag
+      -> KiVar Tc
+      -> MonoKind Tc
+      -> TcS (Either (Pair (MonoKind Tc)) (MonoKind Tc))
+    kivar swapped kv ki = case tcVarDetails kv of
+      MetaVar { mv_ref = ref } -> do
         cts <- readTcRef ref
         case cts of
           Flexi -> give_up
@@ -259,8 +266,9 @@ zonkEqKinds ev ki1 ki2 = Stage $ do
       = traceTcS "Following filled kivar (zonkEqKinds)"
                  (ppr kv <+> equals <+> ppr ki)
 
-    quick_zonk kv = case handleAnyKv (const Nothing) (Just . tcVarDetails) kv of
-      Just (MetaVar { mv_ref = ref }) -> do
+    quick_zonk :: KiVar Tc -> TcS (MonoKind Tc, Bool)
+    quick_zonk kv = case tcVarDetails kv of
+      MetaVar { mv_ref = ref } -> do
         cts <- readTcRef ref
         case cts of
           Flexi -> return (KiVarKi kv, False)
@@ -268,8 +276,8 @@ zonkEqKinds ev ki1 ki2 = Stage $ do
                              return (ki', True)
       _ -> return (KiVarKi kv, False)
 
-    combine_results :: [Either (Pair AnyMonoKind) AnyMonoKind]
-                    -> Either (Pair [AnyMonoKind]) [AnyMonoKind]
+    combine_results :: [Either (Pair (MonoKind Tc)) (MonoKind Tc)]
+                    -> Either (Pair [MonoKind Tc]) [MonoKind Tc]
     combine_results = bimap (fmap reverse) reverse .
                       foldl' (combine_rev (:)) (Right [])
                       
@@ -287,8 +295,8 @@ zonkEqKinds ev ki1 ki2 = Stage $ do
 
 canonicalizeTyEquality
   :: CtTyEvidence
-  -> AnyType
-  -> AnyType
+  -> Type Tc
+  -> Type Tc
   -> TySolverStage (Either IrredTyCt TyEqCt)
 canonicalizeTyEquality ev ty1 ty2 = Stage $ do
   traceTcS "canonicalizeTyEquality"
@@ -301,8 +309,8 @@ can_ty_eq_nc
   :: Bool
   -> GlobalRdrEnv
   -> CtTyEvidence
-  -> AnyType -> AnyType
-  -> AnyType -> AnyType
+  -> Type Tc -> Type Tc
+  -> Type Tc -> Type Tc
   -> TcS (StopOrContinueTy (Either IrredTyCt TyEqCt))
 
 can_ty_eq_nc _ _ ev ty1@(TyConApp tc1 []) _ (TyConApp tc2 []) _
@@ -380,8 +388,8 @@ can_ty_eq_nc True _ ev _ ps_ty1 _ ps_ty2 = do
 
 can_ty_eq_nc_forall
   :: CtTyEvidence
-  -> AnyType
-  -> AnyType
+  -> Type Tc
+  -> Type Tc
   -> TcS (StopOrContinueTy (Either IrredTyCt TyEqCt))
 
 can_ty_eq_nc_forall ev s1 s2
@@ -397,10 +405,8 @@ can_ty_eq_nc_forall ev s1 s2
                           , ppr flags1, ppr flags2 ]
                  canTyEqHardFailure ev s1 s2
          else do traceTcS "Creating implication for polytype equality" (ppr ev)
-                 let (free_tvs, free_kcvs, free_kvs) = varsOfTypes [s1, s2]
-                     empty_subst1 = mkEmptyTvSubst ( mkInScopeSet $ free_tvs `unionVarSet`
-                                                     mapVarSet toAnyTyVar free_kcvs
-                                                   , mkInScopeSet free_kvs )
+                 let empty_subst1
+                       = mkEmptySubst $ mkInScopeSets $ varsOfTypes [s1, s2]
                  skol_info <- mkSkolemInfo (UnifyForAllSkol phi1)
                  (subst1, skol_tvs) <- tcInstSkolTyVarsX skol_info empty_subst1
                                        $ binderVars bndrs1
@@ -408,21 +414,21 @@ can_ty_eq_nc_forall ev s1 s2
                  let phi1' = substTy subst1 phi1
 
                      go :: UnifyEnv
-                        -> [TcTyVar AnyKiVar]
-                        -> AnyTvSubst
-                        -> [AnyTyVarBinder]
-                        -> [AnyTyVarBinder]
-                        -> TcM.TcM AnyTypeCoercion
-                     go uenv (skol_tv:skol_tvs) subst2@(TvSubst _ _ kvsubst2)
+                        -> [TcTyVar]
+                        -> Subst Tc Tc
+                        -> [ForAllBinder (TyVar Tc)]
+                        -> [ForAllBinder (TyVar Tc)]
+                        -> TcM.TcM (TypeCoercion Tc)
+                     go uenv (skol_tv:skol_tvs) subst2
                        (bndr1:bndrs1) (bndr2:bndrs2) = do
                        let tv2 = binderVar bndr2
                            vis1 = binderFlag bndr1
                            vis2 = binderFlag bndr2
                        kco <- uKind uenv EQKi (varKind skol_tv)
-                              (substMonoKi kvsubst2 (varKind tv2))
+                              (substMonoKi subst2 (varKind tv2))
 
                        let subst2' = extendTvSubstAndInScope subst2 tv2
-                                     (mkCastTy (mkTyVarTy $ toAnyTyVar skol_tv) kco)
+                                     (mkCastTy (mkTyVarTy $ TcTyVar skol_tv) kco)
 
                        co <- go uenv skol_tvs subst2' bndrs1 bndrs2
 
@@ -434,7 +440,7 @@ can_ty_eq_nc_forall ev s1 s2
 
                      go _ _ _ _ _ = panic "can_ty_eq_nc_forall"
 
-                     init_subst2 = mkEmptyTvSubst (getTvSubstInScope subst1)
+                     init_subst2 = mkEmptySubst (getSubstInScope subst1)
 
                  (lvl, (all_co, wanteds)) <- pushLevelNoWorkList (ppr skol_info)
                                              $ panic "unifyForAllBody ev"
@@ -450,7 +456,10 @@ can_ty_eq_nc_forall ev s1 s2
          $ pprEq s1 s2
        stopWith ev "Discard given polytype equality"
   where
-    split_foralls :: AnyType -> AnyType -> ([AnyTyVarBinder], AnyType, [AnyTyVarBinder], AnyType)
+    split_foralls
+      :: Type Tc
+      -> Type Tc
+      -> ([ForAllBinder (TyVar Tc)], Type Tc, [ForAllBinder (TyVar Tc)], Type Tc)
     split_foralls  s1 s2
       | Just (bndr1, s1') <- splitForAllForAllTyBinder_maybe s1
       , Just (bndr2, s2') <- splitForAllForAllTyBinder_maybe s2
@@ -460,8 +469,8 @@ can_ty_eq_nc_forall ev s1 s2
 
 can_ty_eq_app
   :: CtTyEvidence
-  -> AnyType -> AnyType
-  -> AnyType -> AnyType
+  -> Type Tc -> Type Tc
+  -> Type Tc -> Type Tc
   -> TcS (StopOrContinueTy (Either IrredTyCt TyEqCt))
 can_ty_eq_app ev s1 t1 s2 t2
   | CtTyWanted { cttev_dest = dest } <- ev
@@ -504,8 +513,8 @@ canTyEqCast
   -> GlobalRdrEnv
   -> CtTyEvidence
   -> SwapFlag
-  -> AnyType -> AnyKindCoercion
-  -> AnyType -> AnyType
+  -> Type Tc -> KindCoercion Tc
+  -> Type Tc -> Type Tc
   -> TcS (StopOrContinueTy (Either IrredTyCt TyEqCt))
 canTyEqCast rewritten rdr_env ev swapped ty1 kco1 ty2 ps_ty2 = do
   traceTcS "Decomposing cast"
@@ -520,8 +529,8 @@ canTyEqCast rewritten rdr_env ev swapped ty1 kco1 ty2 ps_ty2 = do
 canTyConApp
   :: CtTyEvidence
   -> Bool
-  -> (AnyType, AnyTyCon, [AnyType])
-  -> (AnyType, AnyTyCon, [AnyType])
+  -> (Type Tc, TyCon Tc, [Type Tc])
+  -> (Type Tc, TyCon Tc, [Type Tc])
   -> TcS (StopOrContinueTy (Either IrredTyCt TyEqCt))
 canTyConApp ev both_generative (ty1, tc1, tys1) (ty2, tc2, tys2)
   | tc1 == tc2
@@ -542,9 +551,9 @@ canTyConApp ev both_generative (ty1, tc1, tys1) (ty2, tc2, tys2)
 
 canDecomposableTyConAppOK
   :: CtTyEvidence
-  -> AnyTyCon
-  -> (AnyType, [AnyType])
-  -> (AnyType, [AnyType])
+  -> TyCon Tc
+  -> (Type Tc, [Type Tc])
+  -> (Type Tc, [Type Tc])
   -> TcS (StopOrContinueTy a)
 canDecomposableTyConAppOK ev tc (ty1, tys1) (ty2, tys2)
   = assert (tys1 `equalLength` tys2) $ do
@@ -577,8 +586,8 @@ canDecomposableTyConAppOK ev tc (ty1, tys1) (ty2, tys2)
 
 canDecomposableFunTy
   :: CtTyEvidence
-  -> (AnyType, AnyMonoKind, AnyType, AnyType)
-  -> (AnyType, AnyMonoKind, AnyType, AnyType)
+  -> (Type Tc, MonoKind Tc, Type Tc, Type Tc)
+  -> (Type Tc, MonoKind Tc, Type Tc, Type Tc)
   -> TcS (StopOrContinueTy a)
 canDecomposableFunTy ev f1@(ty1, k1, a1, r1) f2@(ty2, k2, a2, r2) = do
   traceTcS "canDecomposableFunTy"
@@ -603,15 +612,15 @@ canDecomposableFunTy ev f1@(ty1, k1, a1, r1) f2@(ty2, k2, a2, r2) = do
 
 canTyEqSoftFailure
   :: CtTyEvidence
-  -> AnyType
-  -> AnyType
+  -> Type Tc
+  -> Type Tc
   -> TcS (StopOrContinueTy (Either IrredTyCt a))
 canTyEqSoftFailure ev ty1 ty2 = canTyEqHardFailure ev ty1 ty2
 
 canTyEqHardFailure
   :: CtTyEvidence
-  -> AnyType
-  -> AnyType
+  -> Type Tc
+  -> Type Tc
   -> TcS (StopOrContinueTy (Either IrredTyCt a))
 canTyEqHardFailure ev ty1 ty2 = do
   traceTcS "canTyEqHardFailure" (ppr ty1 $$ ppr ty2)
@@ -627,9 +636,9 @@ canTyEqCanLHS
   :: CtTyEvidence
   -> SwapFlag
   -> CanTyEqLHS
-  -> AnyType
-  -> AnyType
-  -> AnyType
+  -> Type Tc
+  -> Type Tc
+  -> Type Tc
   -> TcS (StopOrContinueTy (Either IrredTyCt TyEqCt))
 canTyEqCanLHS ev swapped lhs1 ps_xi1 xi2 ps_xi2
   | k1 `tcEqMonoKind` k2
@@ -643,8 +652,8 @@ canTyEqCanLHS ev swapped lhs1 ps_xi1 xi2 ps_xi2
 canTyEqCanLHSHetero
   :: CtTyEvidence
   -> SwapFlag
-  -> CanTyEqLHS -> AnyType -> AnyMonoKind
-  -> AnyType -> AnyType -> AnyMonoKind
+  -> CanTyEqLHS -> Type Tc -> MonoKind Tc
+  -> Type Tc -> Type Tc -> MonoKind Tc
   -> TcS (StopOrContinueTy (Either IrredTyCt TyEqCt))
 canTyEqCanLHSHetero ev swapped lhs1 ps_xi1 ki1 xi2 ps_xi2 ki2 = do
   (kind_co, rewriters, unif_happened) <- mk_kind_eq
@@ -667,7 +676,7 @@ canTyEqCanLHSHetero ev swapped lhs1 ps_xi1 ki1 xi2 ps_xi2 ki2 = do
   where
     xi1 = canTyEqLHSType lhs1
 
-    mk_kind_eq :: TcS (AnyKindCoercion, KiRewriterSet, Bool)
+    mk_kind_eq :: TcS (KindCoercion Tc, KiRewriterSet, Bool)
     mk_kind_eq = case ev of
       CtTyGiven {} -> do
         let pred_ki = unSwap swapped (mkKiCoPred EQKi) ki1 ki2
@@ -687,8 +696,8 @@ canTyEqCanLHSHetero ev swapped lhs1 ps_xi1 ki1 xi2 ps_xi2 ki2 = do
 canTyEqCanLHSHomo
   :: CtTyEvidence
   -> SwapFlag
-  -> CanTyEqLHS -> AnyType
-  -> AnyType -> AnyType
+  -> CanTyEqLHS -> Type Tc
+  -> Type Tc -> Type Tc
   -> TcS (StopOrContinueTy (Either IrredTyCt TyEqCt))
 canTyEqCanLHSHomo ev swapped lhs1 ps_xi1 xi2 ps_xi2
   | (xi2', mkco) <- split_cast_ty xi2
@@ -703,9 +712,9 @@ canTyEqCanLHSHomo ev swapped lhs1 ps_xi1 xi2 ps_xi2
 canTyEqCanLHS2
   :: CtTyEvidence
   -> SwapFlag
-  -> CanTyEqLHS -> AnyType
-  -> CanTyEqLHS -> AnyType
-  -> Maybe AnyKindCoercion
+  -> CanTyEqLHS -> Type Tc
+  -> CanTyEqLHS -> Type Tc
+  -> Maybe (KindCoercion Tc)
   -> TcS (StopOrContinueTy (Either IrredTyCt TyEqCt))
 canTyEqCanLHS2 ev swapped lhs1 ps_xi1 lhs2 ps_xi2 mkco
   | lhs1 `eqCanTyEqLHS` lhs2
@@ -734,7 +743,7 @@ canTyEqCanLHSFinish
   :: CtTyEvidence
   -> SwapFlag
   -> CanTyEqLHS
-  -> AnyType
+  -> Type Tc
   -> TcS (StopOrContinueTy (Either IrredTyCt TyEqCt))
 canTyEqCanLHSFinish ev swapped lhs rhs = do
   traceTcS "canTyEqCanLHSFinish"
@@ -751,7 +760,7 @@ canTyEqCanLHSFinish_try_unification
   :: CtTyEvidence
   -> SwapFlag
   -> CanTyEqLHS
-  -> AnyType
+  -> Type Tc
   -> TcS (StopOrContinueTy (Either IrredTyCt TyEqCt))
 canTyEqCanLHSFinish_try_unification ev swapped lhs rhs
   | isWanted ev
@@ -768,7 +777,7 @@ canTyEqCanLHSFinish_try_unification ev swapped lhs rhs
                        | otherwise
                          -> tryIrredTyInstead reason ev swapped lhs rhs
                      PuOK _ rhs_redn ->
-                       do let tv_ty = mkTyVarTy $ toAnyTyVar tv
+                       do let tv_ty = mkTyVarTy $ TcTyVar tv
                           new_ev <- if isReflTyCo (reductionTypeCoercion rhs_redn)
                                     then return ev
                                     else rewriteTyEqEvidence emptyTyRewriterSet ev swapped
@@ -798,7 +807,7 @@ canTyEqCanLHSFinish_no_unification
   :: CtTyEvidence
   -> SwapFlag
   -> CanTyEqLHS
-  -> AnyType
+  -> Type Tc
   -> TcS (StopOrContinueTy (Either IrredTyCt TyEqCt))
 canTyEqCanLHSFinish_no_unification ev swapped lhs rhs = do
   check_result <- checkTypeEq ev lhs rhs
@@ -822,8 +831,8 @@ canTyEqCanLHSFinish_no_unification ev swapped lhs rhs = do
 canonicalizeKiCoercion
   :: CtKiEvidence
   -> KiPredCon
-  -> AnyMonoKind
-  -> AnyMonoKind
+  -> MonoKind Tc
+  -> MonoKind Tc
   -> KiSolverStage (Either IrredKiCt KiCoCt)
 canonicalizeKiCoercion ev kc ki1 ki2 = Stage $ do
   traceTcS "canonicalizeKiCoercion"
@@ -836,8 +845,8 @@ can_ki_co_nc
   -> GlobalRdrEnv
   -> CtKiEvidence
   -> KiPredCon
-  -> AnyMonoKind
-  -> AnyMonoKind
+  -> MonoKind Tc
+  -> MonoKind Tc
   -> TcS (StopOrContinueKi (Either IrredKiCt KiCoCt))
 
 can_ki_co_nc _ _ ev kc ki1@(BIKi kc1) (BIKi kc2) 
@@ -910,8 +919,8 @@ canDecomposableFunKi
   :: CtKiEvidence
   -> KiPredCon
   -> FunKiFlag
-  -> (AnyMonoKind, AnyMonoKind)
-  -> (AnyMonoKind, AnyMonoKind)
+  -> (MonoKind Tc, MonoKind Tc)
+  -> (MonoKind Tc, MonoKind Tc)
   -> TcS (StopOrContinueKi a)
 canDecomposableFunKi ev kc f f1@(a1, r1) f2@(a2, r2) = do
   massertPpr (kc == EQKi)
@@ -932,8 +941,8 @@ canDecomposableFunKi ev kc f f1@(a1, r1) f2@(a2, r2) = do
 
 canKiCoHardFailure
   :: CtKiEvidence
-  -> AnyMonoKind
-  -> AnyMonoKind
+  -> MonoKind Tc
+  -> MonoKind Tc
   -> TcS (StopOrContinueKi (Either IrredKiCt a))
 canKiCoHardFailure ev ki1 ki2 = do
   traceTcS "canKiCoHardFailure" (ppr ki1 $$ ppr ki2)
@@ -947,9 +956,9 @@ canKiCoCanLHSHomo
   -> SwapFlag
   -> KiPredCon
   -> CanKiCoLHS
-  -> AnyMonoKind
-  -> AnyMonoKind
-  -> AnyMonoKind
+  -> MonoKind Tc
+  -> MonoKind Tc
+  -> MonoKind Tc
   -> TcS (StopOrContinueKi (Either IrredKiCt KiCoCt))
 canKiCoCanLHSHomo ev swapped kc lhs1 ps_xi1 xi2 ps_xi2
   | Just lhs2 <- canKiCoLHS_maybe xi2
@@ -961,9 +970,9 @@ canKiCoCanLHS2
   :: CtKiEvidence
   -> SwapFlag
   -> CanKiCoLHS
-  -> AnyMonoKind
+  -> MonoKind Tc
   -> CanKiCoLHS
-  -> AnyMonoKind
+  -> MonoKind Tc
   -> TcS (StopOrContinueKi (Either IrredKiCt KiCoCt))
 canKiCoCanLHS2 ev swapped lhs1 ps_xi1 lhs2 ps_xi2
   | lhs1 `eqCanKiCoLHS` lhs2
@@ -990,7 +999,7 @@ canKiCoCanLHSFinish
   :: CtKiEvidence
   -> SwapFlag
   -> CanKiCoLHS
-  -> AnyMonoKind
+  -> MonoKind Tc
   -> TcS (StopOrContinueKi (Either IrredKiCt KiCoCt))
 canKiCoCanLHSFinish ev swapped lhs rhs = do
   traceTcS "canKiCoCanLHSFinish"
@@ -1005,7 +1014,7 @@ canKiCoCanLHSFinish_try_unification
   :: CtKiEvidence
   -> SwapFlag
   -> CanKiCoLHS
-  -> AnyMonoKind
+  -> MonoKind Tc
   -> TcS (StopOrContinueKi (Either IrredKiCt KiCoCt))
 canKiCoCanLHSFinish_try_unification ev swapped lhs rhs
   | isWanted ev
@@ -1022,7 +1031,7 @@ canKiCoCanLHSFinish_try_unification ev swapped lhs rhs
                        | otherwise
                          -> tryIrredKiInstead reason ev swapped lhs rhs
                      PuOK _ rhs_redn ->
-                       do let kv_ki = mkKiVarKi $ toAnyKiVar kv
+                       do let kv_ki = mkKiVarKi $ TcKiVar kv
                           new_ev <- if isReflKiCo (reductionKindCoercion rhs_redn)
                                     then return ev
                                     else rewriteKiCoEvidence emptyKiRewriterSet
@@ -1053,7 +1062,7 @@ canKiCoCanLHSFinish_no_unification
   :: CtKiEvidence
   -> SwapFlag
   -> CanKiCoLHS
-  -> AnyMonoKind
+  -> MonoKind Tc
   -> TcS (StopOrContinueKi (Either IrredKiCt KiCoCt))
 canKiCoCanLHSFinish_no_unification ev swapped lhs rhs = do
   check_result <- checkKindEq ev lhs rhs
@@ -1072,7 +1081,7 @@ tryIrredTyInstead
   -> CtTyEvidence
   -> SwapFlag
   -> CanTyEqLHS
-  -> AnyType
+  -> Type Tc
   -> TcS (StopOrContinueTy (Either IrredTyCt a))
 tryIrredTyInstead reason ev swapped lhs rhs = do
   traceTcS "cantMakeCanonical" (ppr reason $$ ppr lhs $$ ppr rhs)
@@ -1086,7 +1095,7 @@ tryIrredKiInstead
   -> CtKiEvidence
   -> SwapFlag
   -> CanKiCoLHS
-  -> AnyMonoKind
+  -> MonoKind Tc
   -> TcS (StopOrContinueKi (Either IrredKiCt a))
 tryIrredKiInstead reason ev swapped lhs rhs = do
   traceTcS "cantMakeCaconical" (ppr reason $$ ppr lhs $$ ppr rhs)
@@ -1106,17 +1115,17 @@ finishCanWithIrredTy reason ev = do
   when (isInsolubleReason reason) tryEarlyAbortTcS
   continueWith $ Left $ IrredTyCt { itr_ev = ev, itr_reason = reason }
 
-canTyEqReflexive :: CtTyEvidence -> AnyType -> TcS (StopOrContinueTy a)
+canTyEqReflexive :: CtTyEvidence -> Type Tc -> TcS (StopOrContinueTy a)
 canTyEqReflexive ev ty = do
   setTyCoBindIfWanted ev $ mkReflTyCo ty
   stopWith ev "Solved by reflexivity"
 
-canKiCoReflexive :: CtKiEvidence -> AnyMonoKind -> TcS (StopOrContinueKi a)
+canKiCoReflexive :: CtKiEvidence -> MonoKind Tc -> TcS (StopOrContinueKi a)
 canKiCoReflexive ev ki = do
   setKiCoBindIfWanted ev $ mkReflKiCo ki
   stopWith ev "Solved by reflexivity"
 
-canKiCoLiftReflexive :: CtKiEvidence -> AnyMonoKind -> TcS (StopOrContinueKi a)
+canKiCoLiftReflexive :: CtKiEvidence -> MonoKind Tc -> TcS (StopOrContinueKi a)
 canKiCoLiftReflexive ev ki = do
   setKiCoBindIfWanted ev $ LiftEq $ mkReflKiCo ki
   stopWith ev "Solved by lifting reflexivity"
@@ -1141,7 +1150,7 @@ canKiCoLiftLT ev kc1 kc2 = do
   setKiCoBindIfWanted ev $ LiftLT co
   stopWith ev "Solved by lifting built-in"
  
-canKiCoBILTEQ :: CtKiEvidence -> AnyMonoKind -> AnyMonoKind -> TcS (StopOrContinueKi a)
+canKiCoBILTEQ :: CtKiEvidence -> MonoKind Tc -> MonoKind Tc -> TcS (StopOrContinueKi a)
 canKiCoBILTEQ ev k1 k2 = do
   let co = case (k1, k2) of
              (BIKi UKd, _) -> BI_U_LTEQ k2
@@ -1319,7 +1328,7 @@ tryQCsTyEqCt :: TyEqCt -> TySolverStage ()
 tryQCsTyEqCt work_item@(TyEqCt { teq_lhs = lhs, teq_rhs = rhs })
   = lookup_ty_eq_in_qcis (CTyEqCan work_item) (canTyEqLHSType lhs) rhs
 
-lookup_ty_eq_in_qcis :: TyCt -> AnyType -> AnyType -> TySolverStage ()
+lookup_ty_eq_in_qcis :: TyCt -> Type Tc -> Type Tc -> TySolverStage ()
 lookup_ty_eq_in_qcis _ _ _ = Stage $ continueWith ()
 
 tryQCsIrredKiCoCt :: IrredKiCt -> KiSolverStage ()
@@ -1333,6 +1342,6 @@ tryQCsKiCoCt :: KiCoCt -> KiSolverStage ()
 tryQCsKiCoCt work_item@(KiCoCt { kc_lhs = lhs, kc_rhs = rhs })
   = lookup_ki_co_in_qcis (CKiCoCan work_item) (canKiCoLHSKind lhs) rhs
 
-lookup_ki_co_in_qcis :: KiCt -> AnyMonoKind -> AnyMonoKind -> KiSolverStage ()
+lookup_ki_co_in_qcis :: KiCt -> MonoKind Tc -> MonoKind Tc -> KiSolverStage ()
 lookup_ki_co_in_qcis work_ct lhs rhs = Stage $ do
   continueWith ()

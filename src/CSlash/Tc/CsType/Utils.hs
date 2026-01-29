@@ -42,8 +42,8 @@ import CSlash.Types.SourceText
 import CSlash.Types.Name
 import CSlash.Types.Name.Env
 import CSlash.Types.Name.Reader ( mkRdrUnqual )
-import CSlash.Types.Id
-import CSlash.Types.Id.Info
+import CSlash.Types.Var.Id
+import CSlash.Types.Var.Id.Info
 import CSlash.Types.Var
 import CSlash.Types.Var.Env
 import CSlash.Types.Var.Set
@@ -76,7 +76,7 @@ instance Monad SynCycleM where
 failSynCycleM :: SrcSpan -> TySynCycleTyCons -> SynCycleM ()
 failSynCycleM loc seen_tcs = SynCycleM $ \_ -> Left (loc, seen_tcs)
 
-checkTyConIsAcyclic :: TyCon (TyVar KiVar) KiVar -> SynCycleM () -> SynCycleM ()
+checkTyConIsAcyclic :: TyCon Zk -> SynCycleM () -> SynCycleM ()
 checkTyConIsAcyclic tc m = SynCycleM $ \s ->
   if tc `elemTyConSet` s
   then Right ((), s)
@@ -84,18 +84,18 @@ checkTyConIsAcyclic tc m = SynCycleM $ \s ->
          Right ((), s') -> Right ((), extendTyConSet s' tc)
          Left err -> Left err
 
-checkSynCycles :: Unit -> [TyCon (TyVar KiVar) KiVar] -> [LCsBind Rn] -> TcM ()
+checkSynCycles :: Unit -> [TyCon Zk] -> [LCsBind Rn] -> TcM ()
 checkSynCycles this_uid tcs tyds 
   = case runSynCycleM (mapM_ (go emptyTyConSet []) tcs) emptyTyConSet of
       Left (loc, err) -> setSrcSpan loc $ failWithTc (TcRnTypeSynonymCycle err)
       Right _ -> return ()
     where
-      go :: TyConSet -> [TyCon (TyVar KiVar) KiVar] -> TyCon (TyVar KiVar) KiVar -> SynCycleM ()
+      go :: TyConSet -> [TyCon Zk] -> TyCon Zk -> SynCycleM ()
       go so_far seen_tcs tc = checkTyConIsAcyclic tc $ go' so_far seen_tcs tc
 
       lcl_decls = mkNameEnv (zip (map tyConName tcs) tyds)
 
-      go' :: TyConSet -> [TyCon (TyVar KiVar) KiVar] -> TyCon (TyVar KiVar) KiVar -> SynCycleM ()
+      go' :: TyConSet -> [TyCon Zk] -> TyCon Zk -> SynCycleM ()
       go' so_far seen_tcs tc
         | tc `elemTyConSet` so_far
         = failSynCycleM (getSrcSpan (head seen_tcs)) (lookup_decl <$> seen_tcs)
@@ -111,10 +111,10 @@ checkSynCycles this_uid tcs tyds
                              Just decl -> Right decl
                              Nothing -> Left tc
 
-      go_ty :: TyConSet -> [TyCon (TyVar KiVar) KiVar] -> Type (TyVar KiVar) KiVar -> SynCycleM ()
+      go_ty :: TyConSet -> [TyCon Zk] -> Type Zk -> SynCycleM ()
       go_ty so_far seen_tcs ty = mapM_ (go so_far seen_tcs) (synonymTyConsOfType ty)
 
-synonymTyConsOfType :: IsTyVar tv kv => Type tv kv -> [TyCon tv kv]
+synonymTyConsOfType :: Type p -> [TyCon p]
 synonymTyConsOfType ty = nonDetNameEnvElts (go ty)
   where
     --go :: Type -> NameEnv TyCon
@@ -141,7 +141,7 @@ synonymTyConsOfType ty = nonDetNameEnvElts (go ty)
 *                                                                      *
 ********************************************************************* -}
 
-addTyConsToGblEnv :: [TyCon (TyVar KiVar) KiVar] -> TcM (TcGblEnv Tc)
+addTyConsToGblEnv :: [TyCon Zk] -> TcM (TcGblEnv Tc)
 addTyConsToGblEnv tys = assertPpr (all isTypeSynonymTyCon tys) (ppr tys) -- temporary
                         $ tcExtendTyConEnv tys
                         --  $ tcExtendGlobalEnvImplicit implicit_things

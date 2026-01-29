@@ -36,7 +36,7 @@ import CSlash.Tc.Errors.Types
 
 -- import GHC.Core.Reduction ( Reduction(..) )
 import CSlash.Core.Type
-import CSlash.Core.TyCon  ( TyCon, AnyTyCon )
+import CSlash.Core.TyCon  ( TyCon )
 -- import GHC.Core.PatSyn ( PatSyn )
 -- import GHC.Core.Lint   ( lintAxioms )
 -- import GHC.Core.InstEnv
@@ -161,8 +161,8 @@ data IfLclEnv = IfLclEnv
   , if_loc :: SDoc
   , if_nsubst :: Maybe NameShape
   , if_implicits_env :: Maybe TypeEnv
-  , if_tv_env :: FastStringEnv (TyVar KiVar)
-  , if_id_env :: FastStringEnv (Id (TyVar KiVar) KiVar)
+  , if_tv_env :: FastStringEnv (TyVar Zk)
+  , if_id_env :: FastStringEnv (Id Zk)
   }
 
 {- *********************************************************************
@@ -177,7 +177,7 @@ data TcGblEnv p = TcGblEnv
   { tcg_mod :: Module
   , tcg_src :: CsSource
   , tcg_rdr_env :: GlobalRdrEnv
-  , tcg_default :: Maybe [AnyType] -- remove this
+  , tcg_default :: Maybe [Type Tc] -- remove this
   , tcg_fix_env :: FixityEnv
   , tcg_type_env :: TypeEnv
   , tcg_type_env_var :: KnotVars (IORef TypeEnv)
@@ -191,10 +191,10 @@ data TcGblEnv p = TcGblEnv
   , tcg_rn_exports :: Maybe [(LIE Rn, Avails)]
   , tcg_rn_imports :: [LImportDecl Rn]
   , tcg_rn_decls :: Maybe (CsGroup Rn)
-  , tcg_tr_module :: Maybe (Id (AnyTyVar AnyKiVar) AnyKiVar)
+  , tcg_tr_module :: Maybe (Id Tc)
   , tcg_binds :: LCsBinds p
   , tcg_sigs :: NameSet
-  , tcg_tcs :: [TyCon (TyVar KiVar) KiVar]
+  , tcg_tcs :: [TyCon Zk]
   , tcg_ksigs :: NameSet
   , tcg_hdr_info :: Maybe (XRec Rn ModuleName)
   , tcg_pc :: !AnyPcUsage

@@ -1,5 +1,7 @@
 module CSlash.IfaceToCore where
 
+import CSlash.Cs.Pass
+
 import CSlash.Iface.Syntax ( IfaceDecl{-, IfaceDefault, IfaceClsInst, IfaceFamInst, IfaceRule
                            , IfaceAnnotation-}, IfaceCompleteMatch )
 import CSlash.Types.TyThing   ( TyThing )
@@ -18,4 +20,4 @@ import CSlash.Types.Var (TyVar, KiVar)
 import Data.List.NonEmpty ( NonEmpty )
 
 tcIfaceCompleteMatches :: [IfaceCompleteMatch] -> IfL CompleteMatches
-tcIfaceDecls :: Bool -> [(Fingerprint, IfaceDecl)] -> IfL [(Name, TyThing (TyVar KiVar) KiVar)]
+tcIfaceDecls :: Bool -> [(Fingerprint, IfaceDecl)] -> IfL [(Name, TyThing Zk)]

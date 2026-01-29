@@ -2,24 +2,24 @@ module CSlash.Tc.Types.BasicTypes where
 
 import Prelude hiding ((<>))
 
-import CSlash.Types.Id
+import CSlash.Cs.Pass
+
+import CSlash.Types.Var.Id
 import CSlash.Types.Basic
 import CSlash.Types.Var
 import CSlash.Types.SrcLoc
-import CSlash.Types.Name
+import CSlash.Types.Name hiding (varName)
 import CSlash.Types.TyThing
 import CSlash.Types.Name.Env
 import CSlash.Types.Name.Set
 import CSlash.Tc.Types.Origin
 import CSlash.Tc.Utils.TcType
 
-import CSlash.Cs.Extension ( Rn )
-
 import CSlash.Language.Syntax.Type ( LCsSigType )
 
 -- import GHC.Tc.Errors.Types.PromotionErr (PromotionErr, peCategory)
 
-import CSlash.Core.TyCon  ( TyCon, AnyTyCon, tyConKind )
+import CSlash.Core.TyCon  ( TyCon, pprTyConKind )
 import CSlash.Utils.Outputable
 import CSlash.Utils.Misc
 
@@ -29,13 +29,11 @@ import CSlash.Utils.Misc
 
 type TcBinderStack = [TcBinder]
 
-type TcId = Id (AnyTyVar AnyKiVar) AnyKiVar
-
 data TcBinder
-  = TcIdBndr TcId TopLevelFlag
+  = TcIdBndr (Id Tc) TopLevelFlag
   | TcIdBndr_ExpType Name ExpType TopLevelFlag
-  | TcTvBndr Name (AnyTyVar AnyKiVar)
-  | TcKvBndr Name AnyKiVar
+  | TcTvBndr Name TcTyVar
+  | TcKvBndr Name TcKiVar
 
 instance Outputable TcBinder where
   ppr (TcIdBndr id top_lvl) = ppr id <> brackets (ppr top_lvl)
@@ -44,7 +42,7 @@ instance Outputable TcBinder where
   ppr (TcKvBndr name kv) = ppr name <+> ppr kv
 
 instance HasOccName TcBinder where
-  occName (TcIdBndr id _) = occName (idName id)
+  occName (TcIdBndr id _) = occName (varName id)
   occName (TcIdBndr_ExpType name _ _) = occName name
   occName (TcTvBndr name _) = occName name
   occName (TcKvBndr name _) = occName name
@@ -60,7 +58,7 @@ type TcSigFun = Name -> Maybe TcSigInfo
 data TcSigInfo = TcIdSig TcCompleteSig
 
 data TcCompleteSig = CSig
-  { sig_bndr :: TcId
+  { sig_bndr :: Id Tc
   , sig_ctxt :: UserTypeCtxt
   , sig_loc :: SrcSpan
   }
@@ -72,9 +70,9 @@ hasCompleteSig sig_fn name
       _ -> False
 
 tcSigInfoName :: TcSigInfo -> Name
-tcSigInfoName (TcIdSig sig) = idName (sig_bndr sig)
+tcSigInfoName (TcIdSig sig) = varName (sig_bndr sig)
 
-completeSigPolyId :: TcSigInfo -> TcId
+completeSigPolyId :: TcSigInfo -> Id Tc
 completeSigPolyId (TcIdSig sig) = sig_bndr sig
 
 instance Outputable TcCompleteSig where
@@ -87,16 +85,16 @@ instance Outputable TcCompleteSig where
 ********************************************************************* -}
 
 data TcTyKiThing
-  = AGlobal (TyThing (AnyTyVar AnyKiVar) AnyKiVar)
+  = AGlobal (TyThing Tc)
   | ATcId
-    { tct_id :: TcId
+    { tct_id :: Id Tc
     , tct_info :: IdBindingInfo
     }
-  | ATyVar Name (AnyTyVar AnyKiVar)
-  | AKiVar Name AnyKiVar -- should make a new type 'TcKiThing'
-  | ATcTyCon AnyTyCon
+  | ATyVar Name (TyVar Tc)
+  | AKiVar Name (KiVar Tc) -- should make a new type 'TcKiThing'
+  | ATcTyCon (TyCon Tc)
 
-tcTyThingTyCon_maybe :: TcTyKiThing -> Maybe AnyTyCon
+tcTyThingTyCon_maybe :: TcTyKiThing -> Maybe (TyCon Tc)
 tcTyThingTyCon_maybe (AGlobal (ATyCon tc)) = Just tc
 tcTyThingTyCon_maybe (ATcTyCon tc_tc) = Just tc_tc
 tcTyThingTyCon_maybe _ = Nothing
@@ -111,7 +109,7 @@ instance Outputable TcTyKiThing where
   ppr (ATyVar n tv) = text "Type variable" <+> quotes (ppr n) <+> equals <+> ppr tv
                       <+> colon <+> ppr (varKind tv)
   ppr (AKiVar n kv) = text "Kind variable" <+> quotes (ppr n) <+> equals <+> ppr kv
-  ppr (ATcTyCon tc) = text "ATcTyCon" <+> ppr tc <+> colon <+> ppr (tyConKind tc)
+  ppr (ATcTyCon tc) = text "ATcTyCon" <+> ppr tc <+> colon <+> pprTyConKind tc
 
 data IdBindingInfo
   = NotLetBound

@@ -34,23 +34,23 @@ import qualified Data.Semigroup as S
 *                                                                      *
 ********************************************************************* -}
 
-tcEqType :: (HasDebugCallStack, IsTyVar tv kv) => Type tv kv -> Type tv kv -> Bool
+tcEqType :: HasDebugCallStack => Type p -> Type p -> Bool
 tcEqType = eqType
  
-initRnEnv :: IsTyVar tv kv => Type tv kv -> Type tv kv -> RnEnv2 tv
+initRnEnv :: Type p -> Type p -> RnEnv2 (TyVar p)
 initRnEnv ta tb = mkRnEnv2 $ mkInScopeSet all_vs
   where
     (tvs1, cvs1, _) = varsOfType ta
     (tvs2, cvs2, _) = varsOfType tb
-    all_vs = tvs1 `unionVarSet` mapVarSet toGenericTyVar cvs1 `unionVarSet`
-             tvs2 `unionVarSet` mapVarSet toGenericTyVar cvs2
+    all_vs = panic "tvs1 `unionVarSet` mapVarSet toGenericTyVar cvs1 `unionVarSet`"
+             --tvs2 `unionVarSet` mapVarSet toGenericTyVar cvs2
 
-eqType :: (HasCallStack, IsTyVar tv kv) => Type tv kv -> Type tv kv -> Bool
+eqType :: HasCallStack => Type p -> Type p -> Bool
 eqType ta tb = fullEq eq_type_expand ta tb
 
 data SynFlag = ExpandSynonyms | KeepSynonyms
 
-eq_type_expand :: IsTyVar tv kv => Type tv kv -> Type tv kv -> Bool
+eq_type_expand :: Type p -> Type p -> Bool
 eq_type_expand = inline_generic_eq_type_x ExpandSynonyms Nothing
 
 {-# RULES
@@ -58,13 +58,11 @@ eq_type_expand = inline_generic_eq_type_x ExpandSynonyms Nothing
           = eq_type_expand
 #-}
 
-generic_eq_type_x
-  :: IsTyVar tv kv => SynFlag -> Maybe (RnEnv2 tv) -> Type tv kv -> Type tv kv -> Bool
+generic_eq_type_x :: SynFlag -> Maybe (RnEnv2 (TyVar p)) -> Type p -> Type p -> Bool
 {-# NOINLINE generic_eq_type_x #-}
 generic_eq_type_x = inline_generic_eq_type_x
 
-inline_generic_eq_type_x
-  :: IsTyVar tv kv => SynFlag -> Maybe (RnEnv2 tv) -> Type tv kv -> Type tv kv -> Bool
+inline_generic_eq_type_x :: SynFlag -> Maybe (RnEnv2 (TyVar p)) -> Type p -> Type p -> Bool
 {-# INLINE inline_generic_eq_type_x #-}
 inline_generic_eq_type_x syn_flag mb_env
   = \t1 t2 -> t1 `seq` t2 `seq`
@@ -122,9 +120,8 @@ inline_generic_eq_type_x syn_flag mb_env
          _ -> False
 
 fullEq
-  :: IsTyVar tv kv
-  => (Type tv kv -> Type tv kv -> Bool)
-  -> Type tv kv -> Type tv kv -> Bool
+  :: (Type p -> Type p -> Bool)
+  -> Type p -> Type p -> Bool
 {-# INLINE fullEq #-}
 fullEq eq ty1 ty2 = case eq ty1 ty2 of
                       False -> False
@@ -133,7 +130,7 @@ fullEq eq ty1 ty2 = case eq ty1 ty2 of
                            | otherwise
                              -> True
 
-hasCasts :: Type tv kv -> Bool
+hasCasts :: Type p -> Bool
 hasCasts (CastTy {}) = True
 hasCasts (KindCoercion {}) = True
 hasCasts (AppTy t1 t2) = hasCasts t1 || hasCasts t2

@@ -3,8 +3,9 @@ module CSlash.Builtin.Uniques where
 import {-# SOURCE #-} CSlash.Builtin.Types
 import {-# SOURCE #-} CSlash.Core.TyCon
 import {-# SOURCE #-} CSlash.Core.DataCon
-import {-# SOURCE #-} CSlash.Types.Id
-import {-# SOURCE #-} CSlash.Types.Name
+import CSlash.Types.Var.Id ()
+import {-# SOURCE #-} CSlash.Types.Var.Class (varName)
+import {-# SOURCE #-} CSlash.Types.Name hiding (varName)
 import CSlash.Types.Basic
 import CSlash.Types.Unique
 
@@ -97,7 +98,7 @@ getTupleDataConName :: Int -> Name
 getTupleDataConName n =
   case n `divMod` 3 of
     (arity, 0) -> dataConName $ tupleDataCon arity
-    (arity, 1) -> idName $ dataConId $ tupleDataCon arity
+    (arity, 1) -> varName $ dataConId $ tupleDataCon arity
     _ -> panic "getTupleDataConName"
 
 mkAlphaTyVarUnique :: Int -> Unique

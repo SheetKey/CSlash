@@ -2,15 +2,17 @@
 
 module CSlash.Core.UsageEnv where
 
-import Data.Foldable
+import CSlash.Cs.Pass
 
 import CSlash.Core.Kind
 import CSlash.Types.Var
-import CSlash.Types.Id
+import CSlash.Types.Var.Id
 import CSlash.Types.Name
 import CSlash.Types.Name.Env
 import CSlash.Utils.Outputable
 import CSlash.Utils.Panic
+
+import Data.Foldable
 
 import qualified Data.Data as Data
 
@@ -44,7 +46,7 @@ supUsage _ One = One
 supUsage _ _ = Zero
 
 -- Takes the kind of a binder and gives the usage to scale the RHS of the binding
-bindingKindUsage :: IsVar kv => MonoKind kv -> Usage
+bindingKindUsage :: MonoKind p -> Usage
 bindingKindUsage ki = case splitInvisFunKis ki of
   (_, FunKi{}) -> pprPanic "bindingKindUsage" (ppr ki)
   (_, KiPredApp{}) -> pprPanic "bindingKindUsage" (ppr ki)
@@ -55,7 +57,7 @@ bindingKindUsage ki = case splitInvisFunKis ki of
 
 data UsageEnv = UsageEnv !(NameEnv Usage)
 
-singleUsageUE :: AnyId -> UsageEnv
+singleUsageUE :: Id Tc -> UsageEnv
 singleUsageUE x | isExternalName n = emptyUE
                 | otherwise = UsageEnv (unitNameEnv n One)
   where n = getName x

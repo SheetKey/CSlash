@@ -1,24 +1,29 @@
+{-# LANGUAGE RoleAnnotations #-}
+
 module CSlash.Core.Kind where
 
 import CSlash.Utils.Outputable 
-import {-# SOURCE #-} CSlash.Types.Var (AsGenericKi, AsAnyKi)
 import Data.Data (Data)
 
-data Kind kv
+type role Kind nominal
+data Kind p
+
+type role MonoKind nominal
 data MonoKind kv
+
+type role KindCoercion nominal
 data KindCoercion kv
+
 type PredKind = MonoKind
+
 data FunKiFlag
 
-instance Outputable kv => Outputable (Kind kv)
-instance Outputable kv => Outputable (MonoKind kv)
-instance AsGenericKi Kind 
-instance AsGenericKi MonoKind 
-instance AsAnyKi MonoKind
-instance (Data kv) => Data (MonoKind kv)
+instance Outputable (Kind p)
+instance Outputable (MonoKind p)
+instance Data p => Data (MonoKind p)
 instance Data FunKiFlag
 instance Outputable FunKiFlag
 
-pprKind :: Outputable kv => Kind kv -> SDoc
+pprKind :: Kind p -> SDoc
 
-isKiCoVarKind :: MonoKind kv -> Bool
+isKiCoVarKind :: MonoKind p -> Bool

@@ -36,7 +36,7 @@ import CSlash.Utils.Panic
 import CSlash.Utils.Misc
 
 import CSlash.Types.Name
-import CSlash.Types.Id
+import CSlash.Types.Var.Id
 import CSlash.Types.Var
 import CSlash.Types.SrcLoc
 import CSlash.Types.Basic( VisArity, isDoExpansionGenerated )
@@ -57,7 +57,7 @@ tcLambdaMatches
   -> MatchGroup Rn (LCsExpr Rn)
   -> [ExpPatType]
   -> ExpSigmaType
-  -> TcM (AnyCsWrapper, MatchGroup Tc (LCsExpr Tc))
+  -> TcM (CsWrapper Tc, MatchGroup Tc (LCsExpr Tc))
 tcLambdaMatches e matches invis_pat_tys res_ty = do
   arity <- checkArgCounts matches
 
@@ -109,7 +109,7 @@ tcMatches tc_body pat_tys rhs_ty (MG { mg_alts = L l matches, mg_ext = origin })
        rhs_ty <- readExpType rhs_ty
        traceTc "tcMatches" (ppr matches' $$ ppr pat_tys $$ ppr rhs_ty)
        return $ MG { mg_alts = L l matches'
-                   , mg_ext = MatchGroupTc pat_tys rhs_ty origin }
+                   , mg_ext = MatchGroup pat_tys rhs_ty origin }
   where
     filter_out_forall_pat_tys :: [ExpPatType] -> [ExpSigmaType]
     filter_out_forall_pat_tys = mapMaybe match_fun_pat_ty
@@ -236,7 +236,7 @@ tcStmtsAndThen ctxt stmt_chk (L loc stmt : stmts) res_ty thing_inside = do
 
 tcGuardStmt :: TcExprStmtChecker
 tcGuardStmt _ (BodyStmt _ guard) res_ty thing_inside = do
-  let bool = mkAppTy (asAnyTyKi boolTy) (Embed $ BIKi UKd)
+  let bool = mkAppTy boolTy (Embed $ BIKi UKd)
   guard' <- tcScalingUsage Many $ tcCheckMonoExpr guard bool
   thing <- thing_inside res_ty
   return (BodyStmt bool guard', thing)

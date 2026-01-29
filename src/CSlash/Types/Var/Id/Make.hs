@@ -1,4 +1,6 @@
-module CSlash.Types.Id.Make where
+module CSlash.Types.Var.Id.Make where
+
+import CSlash.Cs.Pass
 
 import CSlash.Builtin.Types.Prim
 import CSlash.Builtin.Types
@@ -16,8 +18,8 @@ import CSlash.Types.RepType (countFunRepArgs)
 import CSlash.Types.Name.Set
 import CSlash.Types.Name
 import CSlash.Types.Name.Env
-import CSlash.Types.Id
-import CSlash.Types.Id.Info
+import CSlash.Types.Var.Id
+import CSlash.Types.Var.Id.Info
 import CSlash.Types.Basic hiding ( SuccessFlag(..) )
 import CSlash.Types.Var (VarBndr(Bndr), varName)
 
@@ -36,19 +38,19 @@ import CSlash.Data.FastString
 *                                                                      *
 ********************************************************************* -}
 
-wiredInIds :: [Id (TyVar KiVar) KiVar]
+wiredInIds :: [Id p]
 wiredInIds
   = magicIds
   ++ csPrimIds
   ++ errorIds
 
-magicIds :: [Id (TyVar KiVar) KiVar]
+magicIds :: [Id p]
 magicIds = []
 
-csPrimIds :: [Id (TyVar KiVar) KiVar]
+csPrimIds :: [Id p]
 csPrimIds = []
 
-errorIds :: [Id (TyVar KiVar) KiVar]
+errorIds :: [Id p]
 errorIds = []
 
 {- *********************************************************************
@@ -58,7 +60,7 @@ errorIds = []
 ********************************************************************* -}
 
 -- needs to change if I add newtypes
-mkDataConId :: Name -> DataCon (TyVar KiVar) KiVar -> Id (TyVar KiVar) KiVar
+mkDataConId :: Name -> DataCon Zk -> Id Zk
 mkDataConId wkr_name data_con
   = mkGlobalId (DataConId data_con) wkr_name wkr_ty alg_wkr_info
   where

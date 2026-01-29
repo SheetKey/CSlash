@@ -84,15 +84,15 @@ tcApp rn_expr exp_res_ty = do
 
   finishApp tc_head tc_args app_res_rho res_wrap
 
-quickLookResultType :: AnyRhoType -> ExpRhoType -> TcM () 
+quickLookResultType :: RhoType Tc -> ExpRhoType -> TcM () 
 quickLookResultType app_res_rho (Check exp_rho) = qlUnify app_res_rho exp_rho
 quickLookResultType _ _ = return ()
 
 finishApp
   :: (CsExpr Tc, AppCtxt)
   -> [CsExprArg 'TcpTc]
-  -> AnyRhoType
-  -> AnyCsWrapper
+  -> RhoType Tc
+  -> CsWrapper Tc
   -> TcM (CsExpr Tc)
 finishApp tc_head@(tc_fun, _) tc_args app_res_rho res_wrap = do
   let res_expr = rebuildCsApps tc_head tc_args
@@ -102,9 +102,9 @@ checkResultTy
   :: CsExpr Rn
   -> (CsExpr Tc, AppCtxt)
   -> [CsExprArg p]
-  -> AnyRhoType
+  -> RhoType Tc
   -> ExpRhoType
-  -> TcM AnyCsWrapper
+  -> TcM (CsWrapper Tc)
 checkResultTy _ _ _ app_res_rho (Infer inf_res) = do
   co <- fillInferResult app_res_rho inf_res
   return $ mkWpCast co
@@ -192,9 +192,9 @@ tcValArg (EValArgQL { eaql_wanted = wanted
 
 tcInstFun
   :: (CsExpr Tc, AppCtxt)
-  -> AnySigmaType
+  -> SigmaType Tc
   -> [CsExprArg 'TcpRn]
-  -> TcM ([CsExprArg 'TcpInst], AnySigmaType)
+  -> TcM ([CsExprArg 'TcpInst], SigmaType Tc)
 tcInstFun (tc_fun, fun_ctxt) fun_sigma rn_args = do
   traceTc "tcInstFun"
     $ vcat [ text "tc_fun" <+> ppr tc_fun
@@ -219,9 +219,9 @@ tcInstFun (tc_fun, fun_ctxt) fun_sigma rn_args = do
 
     go :: Int
        -> [CsExprArg 'TcpInst]
-       -> AnySigmaType
+       -> SigmaType Tc
        -> [CsExprArg 'TcpRn]
-       -> TcM ([CsExprArg 'TcpInst], AnySigmaType)
+       -> TcM ([CsExprArg 'TcpInst], SigmaType Tc)
     go pos acc fun_ty args
       | Just kappa <- getTcTyVar_maybe fun_ty
       , isQLInstVar kappa
@@ -234,9 +234,9 @@ tcInstFun (tc_fun, fun_ctxt) fun_sigma rn_args = do
 
     go1 :: Int
        -> [CsExprArg 'TcpInst]
-       -> AnySigmaType
+       -> SigmaType Tc
        -> [CsExprArg 'TcpRn]
-       -> TcM ([CsExprArg 'TcpInst], AnySigmaType)
+       -> TcM ([CsExprArg 'TcpInst], SigmaType Tc)
     go1 pos acc fun_ty (arg : rest_args)
       | fun_is_out_of_scope, looks_like_type_arg arg
       = go pos acc fun_ty rest_args
@@ -272,9 +272,9 @@ tcInstFun (tc_fun, fun_ctxt) fun_sigma rn_args = do
     go1 pos acc fun_ty args@(EValArg {} : _)
       | Just kappa <- getTcTyVar_maybe fun_ty
       , isQLInstVar kappa
-      = do arg_tys <- mapM (const $ asAnyTyKi <$> newOpenFlexiTyVarTy) (leadingValArgs args)
-           fun_kis <- mapM (const $ asAnyKi <$> newFlexiKiVarKi) (leadingValArgs args)
-           res_ty <- asAnyTyKi <$> newOpenFlexiTyVarTy
+      = do arg_tys <- mapM (const newOpenFlexiTyVarTy) (leadingValArgs args)
+           fun_kis <- mapM (const newFlexiKiVarKi) (leadingValArgs args)
+           res_ty <- newOpenFlexiTyVarTy
            let fun_ty' = mkFunTys arg_tys fun_kis res_ty
 
            kind_co <- unifyKind Nothing EQKi (head fun_kis) (varKind kappa)
@@ -312,10 +312,10 @@ addArgCtxt ctxt (L arg_loc arg) thing_inside =
 *                                                                      *
 ********************************************************************* -}
 
-tcVTA :: AnyType -> LCsType Rn -> TcM (AnyType, AnyType)
+tcVTA :: Type Tc -> LCsType Rn -> TcM (Type Tc, Type Tc)
 tcVTA = panic "tcVTA"
 
-tcVDQ :: (AnyTyVarBinder, AnyType) -> LCsExpr Rn -> TcM (AnyType, AnyType)
+tcVDQ :: (ForAllBinder (TyVar Tc), Type Tc) -> LCsExpr Rn -> TcM (Type Tc, Type Tc)
 tcVDQ = panic "tcVDQ"
 
 {- *********************************************************************
@@ -324,7 +324,7 @@ tcVDQ = panic "tcVDQ"
 *                                                                      *
 ********************************************************************* -}
 
-quickLookArg :: AppCtxt -> LCsExpr Rn -> AnySigmaType -> TcM (CsExprArg 'TcpInst)
+quickLookArg :: AppCtxt -> LCsExpr Rn -> SigmaType Tc -> TcM (CsExprArg 'TcpInst)
 quickLookArg ctxt larg orig_arg_ty = do
   is_rho <- tcIsDeepRho orig_arg_ty
   traceTc "qla" (ppr orig_arg_ty $$ ppr is_rho)
@@ -332,12 +332,12 @@ quickLookArg ctxt larg orig_arg_ty = do
     then skipQuickLook ctxt larg orig_arg_ty
     else quickLookArg1 ctxt larg orig_arg_ty
 
-skipQuickLook :: AppCtxt -> LCsExpr Rn -> AnyRhoType -> TcM (CsExprArg 'TcpInst)
+skipQuickLook :: AppCtxt -> LCsExpr Rn -> RhoType Tc -> TcM (CsExprArg 'TcpInst)
 skipQuickLook ctxt larg arg_ty = return $ EValArg { ea_ctxt = ctxt
                                                   , ea_arg = larg
                                                   , ea_arg_ty = arg_ty }
 
-tcIsDeepRho :: AnyType -> TcM Bool
+tcIsDeepRho :: Type Tc -> TcM Bool
 tcIsDeepRho ty = go ty
   where
     go ty
@@ -350,13 +350,13 @@ tcIsDeepRho ty = go ty
              Flexi -> return True
       | otherwise = return True
 
-isGuardedTy :: AnyType -> Bool
+isGuardedTy :: Type Tc -> Bool
 isGuardedTy ty
   | Just (tc, _) <- tcSplitTyConApp_maybe ty = isGenerativeTyCon tc
   | Just {} <- tcSplitAppTy_maybe ty = True
   | otherwise = False
 
-quickLookArg1 :: AppCtxt -> LCsExpr Rn -> AnyRhoType -> TcM (CsExprArg 'TcpInst)
+quickLookArg1 :: AppCtxt -> LCsExpr Rn -> RhoType Tc -> TcM (CsExprArg 'TcpInst)
 quickLookArg1 ctxt larg@(L _ arg) orig_arg_rho = addArgCtxt ctxt larg $ do
   ((rn_fun, fun_ctxt), rn_args) <- splitCsApps arg
   (fun_ue, mb_fun_ty) <- tcCollectingUsage $ tcInferAppHead_maybe rn_fun
@@ -402,7 +402,7 @@ quickLookArg1 ctxt larg@(L _ arg) orig_arg_rho = addArgCtxt ctxt larg $ do
 *                                                                      *
 ********************************************************************* -}
 
-anyFreeKappa :: AnyType -> TcM Bool
+anyFreeKappa :: Type Tc -> TcM Bool
 anyFreeKappa ty = unTcMBool (foldQLInstVars go_tv ty)
   where
     go_tv tv = TCMB $ do info <- readMetaTyVar tv
@@ -421,13 +421,13 @@ instance Semigroup TcMBool where
 instance Monoid TcMBool where
   mempty = TCMB $ return False
 
-foldQLInstVars :: forall a. Monoid a => (TcTyVar AnyKiVar -> a) -> AnyType -> a
+foldQLInstVars :: forall a. Monoid a => (TcTyVar -> a) -> Type Tc -> a
 {-# INLINE foldQLInstVars #-}
 foldQLInstVars check_tv ty = do_ty ty
   where
     (do_ty, _, _, _) = foldTyCo folder ()
 
-    folder :: TyCoFolder (AnyTyVar AnyKiVar) AnyKiVar () () () a
+    folder :: TyCoFolder Tc () () () a
     folder = TyCoFolder { tcf_view = noView
                         , tcf_tyvar = do_tv
                         , tcf_covar = mempty
@@ -443,7 +443,7 @@ foldQLInstVars check_tv ty = do_ty ty
                         }
     do_hole _ hole = do_ty (tyCoVarPred (tyCoHoleCoVar hole))
 
-    do_tv :: () -> AnyTyVar AnyKiVar -> a
+    do_tv :: () -> TyVar Tc -> a
     do_tv _ tv | Just tctv <- toTcTyVar_maybe tv
                , isQLInstVar tctv = check_tv tctv
                | otherwise = mempty
@@ -454,12 +454,12 @@ foldQLInstVars check_tv ty = do_ty ty
 *                                                                      *
 ********************************************************************* -}
 
-qlUnify :: AnyType -> AnyType -> TcM ()
+qlUnify :: Type Tc -> Type Tc -> TcM ()
 qlUnify ty1 ty2 = do
   traceTc "qlUnify" (ppr ty1 $$ ppr ty2)
   go ty1 ty2
   where
-    go :: AnyType -> AnyType -> TcM ()
+    go :: Type Tc -> Type Tc -> TcM ()
 
     go (TyVarTy tv) ty2
       | Just mtv <- toTcTyVar_maybe tv
@@ -514,7 +514,7 @@ qlUnify ty1 ty2 = do
                     go_flexi kappa ty2
 
     go_flexi mkappa (TyVarTy tv2)
-      | let kappa = toAnyTyVar mkappa
+      | let kappa = TcTyVar mkappa
       , lhsTyPriority tv2 > lhsTyPriority kappa
       , Just mtv2 <- toTcTyVar_maybe tv2
       , isMetaVar mtv2
@@ -531,7 +531,7 @@ qlUnify ty1 ty2 = do
       | otherwise
       = return ()
 
-    go_mono_ki :: AnyMonoKind -> AnyMonoKind -> TcM ()
+    go_mono_ki :: MonoKind Tc -> MonoKind Tc -> TcM ()
     go_mono_ki (KiVarKi kv) ki2
       | Just mkv <- toTcKiVar_maybe kv
       , isMetaVar mkv
@@ -554,7 +554,7 @@ qlUnify ty1 ty2 = do
                     go_ki_flexi kappa ki2
 
     go_ki_flexi mkappa (KiVarKi kv2)
-      | let kappa = toAnyKiVar mkappa
+      | let kappa = TcKiVar mkappa
       , lhsKiPriority kv2 > lhsKiPriority kappa
       , Just mkv2 <- toTcKiVar_maybe kv2
       , isMetaVar mkv2

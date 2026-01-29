@@ -38,7 +38,7 @@ import CSlash.Unit.Module.ModGuts
 
 import CSlash.Types.Name.Reader
 import CSlash.Types.SourceFile
-import CSlash.Types.Id
+import CSlash.Types.Var.Id
 -- import CSlash.Types.Var (EvId)
 import CSlash.Types.SrcLoc
 import CSlash.Types.TypeEnv

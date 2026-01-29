@@ -3,6 +3,8 @@
 
 module CSlash.Core.Type.Tidy where
 
+import CSlash.Cs.Pass
+
 import CSlash.Data.FastString
 
 import CSlash.Core.Type.Rep
@@ -26,9 +28,7 @@ import Data.List (mapAccumL)
 *                                                                      *
 ********************************************************************* -}
 
-tidyTyVarBndr
-  :: (VarHasKind tv kv, ToTcTyVarMaybe tv kv, ToTcKiVarMaybe kv)
-  => MkTidyEnv tv kv -> tv -> (MkTidyEnv tv kv, tv)
+tidyTyVarBndr :: HasPass p p' => TidyEnv p -> TyVar p -> (TidyEnv p, TyVar p)
 tidyTyVarBndr env@(occ_env, tsubst, ksubst) var
   = case tidyOccName occ_env (getHelpfulOccNameTy var) of
       (occ_env', occ') -> ((occ_env', tsubst', ksubst), var')
@@ -38,15 +38,13 @@ tidyTyVarBndr env@(occ_env, tsubst, ksubst) var
           name' = tidyNameOcc name occ'
           name = varName var
 
-tidyTyVarBndrs
-  :: (VarHasKind tv kv, ToTcTyVarMaybe tv kv, ToTcKiVarMaybe kv)
-  => MkTidyEnv tv kv -> [tv] -> (MkTidyEnv tv kv, [tv])
+tidyTyVarBndrs :: HasPass p p' => TidyEnv p -> [TyVar p] -> (TidyEnv p, [TyVar p])
 tidyTyVarBndrs env tvs = mapAccumL tidyTyVarBndr (avoidNameClashesTy tvs env) tvs
 
-tidyKiVarBndrs :: ToTcKiVarMaybe kv => MkTidyEnv tv kv -> [kv] -> (MkTidyEnv tv kv, [kv])
+tidyKiVarBndrs :: HasPass p p' => TidyEnv p -> [KiVar p] -> (TidyEnv p, [KiVar p])
 tidyKiVarBndrs tidy_env vs = mapAccumL tidyKiVarBndr (avoidNameClashesKi vs tidy_env) vs
 
-tidyKiVarBndr :: ToTcKiVarMaybe kv => MkTidyEnv tv kv -> kv -> (MkTidyEnv tv kv, kv)
+tidyKiVarBndr :: HasPass p p' => TidyEnv p -> KiVar p -> (TidyEnv p, KiVar p)
 tidyKiVarBndr tidy_env@(occ_env, tsubst, subst) var
   = case tidyOccName occ_env (getHelpfulOccNameKi var) of
       (occ_env', occ') -> ((occ_env', tsubst, subst'), var')
@@ -56,17 +54,17 @@ tidyKiVarBndr tidy_env@(occ_env, tsubst, subst) var
           name' = tidyNameOcc name occ'
           name = varName var
 
-avoidNameClashesKi :: ToTcKiVarMaybe kv => [kv] -> MkTidyEnv tv kv -> MkTidyEnv tv kv
+avoidNameClashesKi :: HasPass p p' => [KiVar p] -> TidyEnv p -> TidyEnv p
 avoidNameClashesKi vs (occ_env, tsubst, ksubst)
   = (avoidClashesOccEnv occ_env occs, tsubst, ksubst)
   where occs = map getHelpfulOccNameKi vs
 
-avoidNameClashesTy :: (ToTcTyVarMaybe tv kv) => [tv] -> MkTidyEnv tv kv -> MkTidyEnv tv kv
+avoidNameClashesTy :: HasPass p p' => [TyVar p] -> TidyEnv p -> TidyEnv p
 avoidNameClashesTy vs (occ_env, tsubst, ksubst)
   = (avoidClashesOccEnv occ_env occs, tsubst, ksubst)
   where occs = map getHelpfulOccNameTy vs
 
-getHelpfulOccNameTy :: (ToTcTyVarMaybe tv kv) => tv -> OccName
+getHelpfulOccNameTy :: HasPass p p' => TyVar p -> OccName
 getHelpfulOccNameTy tv
   | isSystemName name
   , Just _ <- toTcTyVar_maybe tv
@@ -77,7 +75,7 @@ getHelpfulOccNameTy tv
     name = varName tv
     occ = getOccName name
 
-getHelpfulOccNameKi :: ToTcKiVarMaybe kv => kv -> OccName
+getHelpfulOccNameKi :: KiVar p -> OccName
 getHelpfulOccNameKi v
   | isSystemName name
   , Just _ <- toTcKiVar_maybe v
@@ -114,128 +112,117 @@ getHelpfulOccNameKi v
 -- tidyBigLamTyBinders tidy_env kvbs
 --   = mapAccumL tidyBigLamTyBinder (avoidNameClashes kvbs tidy_env) kvbs
 
-tidyFreeTyKiVars
-  :: (VarHasKind tv kv, ToTcTyVarMaybe tv kv, ToTcKiVarMaybe kv)
-  => MkTidyEnv tv kv -> ([tv], [kv]) -> MkTidyEnv tv kv
+tidyFreeTyKiVars :: HasPass p p' => TidyEnv p -> ([TyVar p], [KiVar p]) -> TidyEnv p
 tidyFreeTyKiVars env (tvs, kvs) = tidyFreeTyVars (tidyFreeKiVars env kvs) tvs
 
-tidyFreeTyKiVarsX
-  :: (VarHasKind tv kv, ToTcTyVarMaybe tv kv, ToTcKiVarMaybe kv)
-  => MkTidyEnv tv kv -> ([tv], [kv]) -> (MkTidyEnv tv kv, ([tv], [kv]))
+tidyFreeTyKiVarsX :: HasPass p p' => TidyEnv p -> ([TyVar p], [KiVar p]) -> (TidyEnv p, ([TyVar p], [KiVar p]))
 tidyFreeTyKiVarsX env (tvs, kvs)
   = let (env1, kvs') = tidyOpenKiVars env kvs
         (env2, tvs') = tidyFreeTyVarsX env1 tvs
     in (env2, (tvs', kvs'))
 
-tidyFreeTyVars
-  :: (VarHasKind tv kv, ToTcTyVarMaybe tv kv, ToTcKiVarMaybe kv)
-  => MkTidyEnv tv kv -> [tv] -> MkTidyEnv tv kv
+tidyFreeTyVars :: HasPass p p' => TidyEnv p -> [TyVar p] -> TidyEnv p
 tidyFreeTyVars tidy_env tyvars = fst (tidyFreeTyVarsX tidy_env tyvars)
 
-tidyFreeTyVarsX
-  :: (VarHasKind tv kv, ToTcTyVarMaybe tv kv, ToTcKiVarMaybe kv)
-  => MkTidyEnv tv kv -> [tv] -> (MkTidyEnv tv kv, [tv])
+tidyFreeTyVarsX :: HasPass p p' => TidyEnv p -> [TyVar p] -> (TidyEnv p, [TyVar p])
 tidyFreeTyVarsX env tyvars = mapAccumL tidyFreeTyVarX env tyvars
 
-tidyFreeTyVarX
-  :: (VarHasKind tv kv, ToTcTyVarMaybe tv kv, ToTcKiVarMaybe kv)
-  => MkTidyEnv tv kv -> tv -> (MkTidyEnv tv kv, tv)
+tidyFreeTyVarX :: HasPass p p' => TidyEnv p -> TyVar p -> (TidyEnv p, TyVar p)
 tidyFreeTyVarX env@(_, subst, _) tv = case lookupVarEnv subst tv of
                                         Just tyvar' -> (env, tyvar')
                                         Nothing -> tidyTyVarBndr env tv
 
-tidyFreeKiVars :: ToTcKiVarMaybe kv => MkTidyEnv tv kv -> [kv] -> MkTidyEnv tv kv
+tidyTcTyVarOcc :: TidyEnv Tc -> TcTyVar -> TcTyVar
+tidyTcTyVarOcc env@(_, subst, _) tv = case lookupVarEnv subst (TcTyVar tv) of
+  Just tv -> case tv of
+               TcTyVar tctv -> tctv
+               _ -> pprPanic "tidyTcTyVarOcc" (ppr env $$ ppr tv)
+  Nothing -> updateVarKind (tidyMonoKind env) tv
+
+tidyFreeKiVars :: HasPass p p' => TidyEnv p -> [KiVar p] -> TidyEnv p
 tidyFreeKiVars tidy_env vars = fst (tidyOpenKiVars tidy_env vars)
 
 -- rename this func
-tidyOpenKiVars :: ToTcKiVarMaybe kv => MkTidyEnv tv kv -> [kv] -> (MkTidyEnv tv kv, [kv])
+tidyOpenKiVars :: HasPass p p' => TidyEnv p -> [KiVar p] -> (TidyEnv p, [KiVar p])
 tidyOpenKiVars env vars = mapAccumL tidyOpenKiVar env vars
 
-tidyOpenKiVar :: ToTcKiVarMaybe kv => MkTidyEnv tv kv -> kv -> (MkTidyEnv tv kv, kv)
+tidyOpenKiVar :: HasPass p p' => TidyEnv p -> KiVar p -> (TidyEnv p, KiVar p)
 tidyOpenKiVar env@(_, _, subst) var = case lookupVarEnv subst var of
   Just var' -> (env, var')
   Nothing -> tidyKiVarBndr env var
 
-tidyKiVarOcc :: ToTcKiVarMaybe kv => MkTidyEnv tv kv -> kv -> kv
+tidyKiVarOcc :: HasPass p p' => TidyEnv p -> KiVar p -> KiVar p
 tidyKiVarOcc env@(_, _, subst) v = case lookupVarEnv subst v of
                                   Nothing -> v
                                   Just v' -> v'
 
-tidyType :: MkTidyEnv tv kv -> Type tv kv -> Type tv kv
+tidyType :: HasPass p p' => TidyEnv p -> Type p -> Type p
 tidyType _ ty = warnPprTrace True "tidyType" (text "NOT TIDYING THE TYPE") ty
 
-tidyKind :: ToTcKiVarMaybe kv => MkTidyEnv tv kv -> Kind kv -> Kind kv
+tidyKind :: HasPass p p' => TidyEnv p -> Kind p -> Kind p
 tidyKind env (Mono mki) = Mono $ tidyMonoKind env mki
 tidyKind env ki@(ForAllKi {}) = tidyForAllKind env ki
 
-tidyTopKind :: ToTcKiVarMaybe kv => Kind kv -> Kind kv
+tidyTopKind :: HasPass p p' => Kind p -> Kind p
 tidyTopKind ki = tidyKind emptyTidyEnv ki
 
-tidyForAllKind :: ToTcKiVarMaybe kv => MkTidyEnv tv kv -> Kind kv -> Kind kv
+tidyForAllKind :: HasPass p p' => TidyEnv p -> Kind p -> Kind p
 tidyForAllKind env ki = (mkForAllKis' $! kvs') $! tidyMonoKind body_env body_ki
   where
     (kvs, body_ki) = splitForAllKiVars' ki
     (body_env, kvs') = tidyKiVarBndrs env kvs
 
-mkForAllKis' :: [kv] -> MonoKind kv -> Kind kv
+mkForAllKis' :: HasPass p p' => [KiVar p] -> MonoKind p -> Kind p
 mkForAllKis' kvs ki = foldr strictMkForAllKi (Mono ki) kvs
   where
     strictMkForAllKi kv ki = (ForAllKi $! kv) $! ki
 
-splitForAllKiVars' :: Kind kv -> ([kv], MonoKind kv)
+splitForAllKiVars' :: HasPass p p' => Kind p -> ([KiVar p], MonoKind p)
 splitForAllKiVars' ki = go ki []
   where
     go (ForAllKi kv ki) kvs = go ki (kv : kvs)
     go (Mono ki) kvs = (reverse kvs, ki)
 
-tidyAvoiding :: [OccName] -> (MkTidyEnv tv kv -> a -> MkTidyEnv tv kv) -> a -> MkTidyEnv tv kv
+tidyAvoiding :: HasPass p p' => [OccName] -> (TidyEnv p -> a -> TidyEnv p) -> a -> TidyEnv p
 tidyAvoiding bound_var_avoids do_tidy thing
   = (occs' `delTidyOccEnvList` bound_var_avoids, tvars', kvars')
   where
     (occs', tvars', kvars') = do_tidy init_tidy_env thing
     init_tidy_env = mkEmptyTidyEnv (initTidyOccEnv bound_var_avoids)
 
-trimTidyEnvTyKi :: IsTyVar tv kv => MkTidyEnv tv kv -> ([tv], [kv]) -> MkTidyEnv tv kv
+trimTidyEnvTyKi :: HasPass p p' => TidyEnv p -> ([TyVar p], [KiVar p]) -> TidyEnv p
 trimTidyEnvTyKi (occ_env, tsubst, ksubst) (tvs, kvs)
   = (trimTidyOccEnv occ_env (map getOccName tvs ++ map getOccName kvs), tsubst, ksubst)
 
-tidyOpenTypeX
-  :: (IsTyVar tv kv, ToTcTyVarMaybe tv kv, ToTcKiVarMaybe kv)
-  => MkTidyEnv tv kv -> Type tv kv -> (MkTidyEnv tv kv, Type tv kv)
+tidyOpenTypeX :: HasPass p p' => TidyEnv p -> Type p -> (TidyEnv p, Type p)
 tidyOpenTypeX env ty = (env1, tidyType inner_env ty)
   where
     free_tkvs = varsOfTypeList ty
     (env1, free_tkvs') = tidyFreeTyKiVarsX env free_tkvs
     inner_env = trimTidyEnvTyKi env1 free_tkvs'
 
-tidyOpenType
-  :: (IsTyVar tv kv, ToTcTyVarMaybe tv kv, ToTcKiVarMaybe kv)
-  => MkTidyEnv tv kv -> Type tv kv -> Type tv kv
+tidyOpenType :: HasPass p p' => TidyEnv p -> Type p -> Type p
 tidyOpenType env ty = snd (tidyOpenTypeX env ty)
 
-tidyTopType
-  :: (IsTyVar tv kv, ToTcTyVarMaybe tv kv, ToTcKiVarMaybe kv)
-  => Type tv kv -> Type tv kv
+tidyTopType :: HasPass p p' => Type p -> Type p
 tidyTopType ty = tidyType emptyTidyEnv ty
 
-tidyOpenMonoKinds
-  :: ToTcKiVarMaybe kv => MkTidyEnv tv kv -> [MonoKind kv] -> (MkTidyEnv tv kv, [MonoKind kv])
+tidyOpenMonoKinds :: HasPass p p' => TidyEnv p -> [MonoKind p] -> (TidyEnv p, [MonoKind p])
 tidyOpenMonoKinds env kis = (env', tidyMonoKinds (trimmed_occ_env, tenv, var_env) kis)
   where
     (env'@(_, tenv, var_env), kvs') = tidyOpenKiVars env
                                 $ varsOfMonoKindsList kis
     trimmed_occ_env = initTidyOccEnv (map getOccName kvs')
 
-tidyOpenMonoKind
-  :: ToTcKiVarMaybe kv => MkTidyEnv tv kv -> MonoKind kv -> (MkTidyEnv tv kv, MonoKind kv)
+tidyOpenMonoKind :: HasPass p p' => TidyEnv p -> MonoKind p -> (TidyEnv p, MonoKind p)
 tidyOpenMonoKind env ki = case tidyOpenMonoKinds env [ki] of
                             (env', [ki']) -> (env', ki')
                             _ -> panic "tidyOpenMonoKind"
 
-tidyMonoKinds :: ToTcKiVarMaybe kv => MkTidyEnv tv kv -> [MonoKind kv] -> [MonoKind kv]
+tidyMonoKinds :: HasPass p p' => TidyEnv p -> [MonoKind p] -> [MonoKind p]
 tidyMonoKinds env kis = strictMap (tidyMonoKind env) kis
 
-tidyMonoKind :: ToTcKiVarMaybe kv => MkTidyEnv tv kv -> MonoKind kv -> MonoKind kv
+tidyMonoKind :: HasPass p p' => TidyEnv p -> MonoKind p -> MonoKind p
 tidyMonoKind env (KiVarKi kv) = KiVarKi $! tidyKiVarOcc env kv
 tidyMonoKind _ kc@(BIKi _) = kc
 tidyMonoKind env (KiPredApp pred k1 k2) = let !k1' = tidyMonoKind env k1

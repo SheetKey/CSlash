@@ -2,6 +2,8 @@
 
 module CSlash.Iface.Errors.Types where
 
+import CSlash.Cs.Pass
+
 import CSlash.Types.Name (Name)
 import CSlash.Types.TyThing (TyThing)
 import CSlash.Unit.Types (Module, InstalledModule, UnitId, Unit)
@@ -23,7 +25,7 @@ data InterfaceLookingFor
 
 data IfaceMessage
   = Can'tFindInterface MissingInterfaceError InterfaceLookingFor
-  | Can'tFindNameInInterface Name [TyThing (TyVar KiVar) KiVar]
+  | Can'tFindNameInInterface Name [TyThing Zk]
   | CircularImport !Module
   deriving Generic
 

@@ -32,7 +32,7 @@ import CSlash.Driver.Backend
 import CSlash.Driver.DynFlags
 -- import GHC.Driver.Plugins
 
-import CSlash.Types.Id
+import CSlash.Types.Var.Id
 import CSlash.Types.Fixity.Env
 -- import GHC.Types.SafeHaskell
 -- import GHC.Types.Annotations

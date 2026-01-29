@@ -1,7 +1,10 @@
+{-# LANGUAGE RoleAnnotations #-}
+
 module CSlash.Core.TyCon where
 
 import {-# SOURCE #-} CSlash.Types.Name
 
-data TyCon tv kv
+type role TyCon nominal
+data TyCon p
 
-tyConName :: TyCon tv kv -> Name
+tyConName :: TyCon p -> Name

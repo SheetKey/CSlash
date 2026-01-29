@@ -12,7 +12,7 @@ import Prelude hiding ((<>))
 
 import {-# SOURCE #-} CSlash.Tc.Gen.Expr( tcExpr, tcPolyLExprSig )
 
-import CSlash.Cs
+import CSlash.Cs as Cs
 -- import CSlash.Cs.Syn.Type
 
 import CSlash.Tc.Gen.CsType
@@ -32,6 +32,7 @@ import CSlash.Tc.Utils.TcType as TcType
 import CSlash.Tc.Types.Evidence
 import CSlash.Tc.Zonk.TcType
 
+import CSlash.Core.Subst
 import CSlash.Core.UsageEnv      ( singleUsageUE, UsageEnv )
 import CSlash.Core.ConLike( ConLike(..) )
 import CSlash.Core.DataCon
@@ -39,9 +40,9 @@ import CSlash.Core.TyCon
 import CSlash.Core.Type.Rep
 import CSlash.Core.Type
 
-import CSlash.Types.Id
+import CSlash.Types.Var.Id
 import CSlash.Types.Var
-import CSlash.Types.Id.Info
+import CSlash.Types.Var.Id.Info
 import CSlash.Types.Name
 import CSlash.Types.Name.Reader
 import CSlash.Types.SrcLoc
@@ -76,14 +77,14 @@ data CsExprArg (p :: TcPass) where
              , ea_arg :: LCsExpr (CsPass (XPass p)) }
           -> CsExprArg p
   EValArgQL :: { eaql_ctxt :: AppCtxt
-               , eaql_arg_ty :: AnySigmaType
+               , eaql_arg_ty :: SigmaType Tc
                , eaql_larg :: LCsExpr Rn
                , eaql_tc_fun :: (CsExpr Tc, AppCtxt)
                , eaql_fun_ue :: UsageEnv
                , eaql_args :: [CsExprArg 'TcpInst]
                , eaql_wanted :: WantedTyConstraints
                , eaql_encl :: Bool
-               , eaql_res_rho :: AnyRhoType }
+               , eaql_res_rho :: RhoType Tc }
             -> CsExprArg 'TcpInst
   ETypeArg :: { ea_ctxt :: AppCtxt
               , ea_loc :: SrcSpanAnnA
@@ -93,17 +94,17 @@ data CsExprArg (p :: TcPass) where
   EWrap :: EWrap -> CsExprArg p
 
 type family XEVAType (p :: TcPass) where
-  XEVAType 'TcpInst = AnySigmaType
+  XEVAType 'TcpInst = SigmaType Tc
   XEVAType _ = NoExtField
 
 type family XETAType (p :: TcPass) where
   XETAType 'TcpRn = NoExtField
-  XETAType _ = AnyType
+  XETAType _ = Type Tc
 
 data EWrap
   = EPar AppCtxt
   | EExpand CsThingRn
-  | ECsWrap AnyCsWrapper
+  | ECsWrap (CsWrapper Tc)
 
 data AppCtxt
   = VACall (CsExpr Rn) Int SrcSpan
@@ -150,7 +151,7 @@ mkETypeArg ctxt cs_ty l = ETypeArg { ea_ctxt = ctxt
                                    , ea_cs_ty = cs_ty
                                    , ea_ty_arg = noExtField }
  
-addArgWrap :: AnyCsWrapper -> [CsExprArg p] -> [CsExprArg p]
+addArgWrap :: CsWrapper Tc -> [CsExprArg p] -> [CsExprArg p]
 addArgWrap wrap args
   | isIdCsWrapper wrap = args
   | otherwise = EWrap (ECsWrap wrap) : args
@@ -221,14 +222,14 @@ isValArg _ = False
 *                                                                      *
 ********************************************************************* -}
 
-tcInferAppHead :: (CsExpr Rn, AppCtxt) -> TcM (CsExpr Tc, AnySigmaType)
+tcInferAppHead :: (CsExpr Rn, AppCtxt) -> TcM (CsExpr Tc, SigmaType Tc)
 tcInferAppHead (fun, ctxt) = addHeadCtxt ctxt $ do
   mb_tc_fun <- tcInferAppHead_maybe fun
   case mb_tc_fun of
     Just (fun', fun_sigma) -> return (fun', fun_sigma)
     Nothing -> tcInfer (tcExpr fun)
 
-tcInferAppHead_maybe :: CsExpr Rn -> TcM (Maybe (CsExpr Tc, AnySigmaType))
+tcInferAppHead_maybe :: CsExpr Rn -> TcM (Maybe (CsExpr Tc, SigmaType Tc))
 tcInferAppHead_maybe fun = case fun of
   CsVar _ (L _ nm) -> Just <$> tcInferId nm
   ExprWithTySig _ e cs_ty -> Just <$> tcExprWithSig e cs_ty
@@ -254,7 +255,7 @@ addHeadCtxt fun_ctxt@(VACall{}) thing_inside
 *                                                                      *
 ********************************************************************* -}
 
-tcExprWithSig :: LCsExpr Rn -> LCsSigType (NoTc Rn) -> TcM (CsExpr Tc, AnySigmaType)
+tcExprWithSig :: LCsExpr Rn -> LCsSigType (NoTc Rn) -> TcM (CsExpr Tc, SigmaType Tc)
 tcExprWithSig expr cs_ty = do
   sig_info <- checkNoErrs $ tcUserTypeSig NotTopLevel loc cs_ty Nothing
   (expr', poly_ty) <- tcExprSig expr sig_info
@@ -262,7 +263,7 @@ tcExprWithSig expr cs_ty = do
   where
     loc = getLocA cs_ty
 
-tcExprSig :: LCsExpr Rn -> TcCompleteSig -> TcM (LCsExpr Tc, AnySigmaType)
+tcExprSig :: LCsExpr Rn -> TcCompleteSig -> TcM (LCsExpr Tc, SigmaType Tc)
 tcExprSig expr sig = do
   expr' <- tcPolyLExprSig expr sig
   return (expr', varType (sig_bndr sig))
@@ -273,7 +274,7 @@ tcExprSig expr sig = do
 *                                                                      *
 ********************************************************************* -}
 
-tcInferOverLit :: CsOverLit Rn -> TcM (CsExpr Tc, AnySigmaType)
+tcInferOverLit :: CsOverLit Rn -> TcM (CsExpr Tc, SigmaType Tc)
 tcInferOverLit lit@(OverLit { ol_val = val
                             , ol_ext = OverLitRn { ol_from_fun = L loc from_name } })
   = panic "tcInferOverLit"
@@ -284,7 +285,7 @@ tcInferOverLit lit@(OverLit { ol_val = val
 *                                                                      *
 ********************************************************************* -}
 
-tcInferId :: Name -> TcM (CsExpr Tc, AnySigmaType)
+tcInferId :: Name -> TcM (CsExpr Tc, SigmaType Tc)
 tcInferId id_name
   | id_name `hasKey` assertIdKey
   = panic "tcInferId assert"
@@ -293,7 +294,7 @@ tcInferId id_name
        traceTc "tcInferId" (ppr id_name <+> colon <+> ppr ty)
        return (expr, ty)
 
-tc_infer_id :: Name -> TcM (CsExpr Tc, AnySigmaType)
+tc_infer_id :: Name -> TcM (CsExpr Tc, SigmaType Tc)
 tc_infer_id id_name = do
   thing <- tcLookup id_name
   case thing of
@@ -301,7 +302,7 @@ tc_infer_id id_name = do
       check_local_id id
       return_id id
     AGlobal (AnId id) -> return_id id
-    AGlobal (AConLike (RealDataCon con)) -> tcInferDataCon con
+    AGlobal (AConLike (RealDataCon con)) -> mapSnd (substTy emptySubst) (tcInferDataCon con)
     AGlobal (AConLike PatSynCon) -> panic "tc_infer_id impossible"
     (tcTyThingTyCon_maybe -> Just tc) -> panic "failIllegalTyCon WL_Anything (tyConName tc)"
     ATyVar name _ -> panic "failIllegalTyVal name"
@@ -310,11 +311,11 @@ tc_infer_id id_name = do
   where
     return_id id = return (CsVar noExtField (noLocA id), varType id)
 
-check_local_id :: AnyId -> TcM ()
+check_local_id :: Id Tc -> TcM ()
 check_local_id id = tcEmitBindingUsage $ singleUsageUE id
 
-tcInferDataCon :: AnyDataCon -> TcM (CsExpr Tc, AnySigmaType)
-tcInferDataCon con = return ( XExpr (ConLikeTc (RealDataCon con))
+tcInferDataCon :: DataCon Tc -> TcM (CsExpr Tc, SigmaType Zk)
+tcInferDataCon con = return ( XExpr (Cs.ConLike (RealDataCon con))
                             , dataConType con )
 
 {- *********************************************************************
@@ -323,9 +324,9 @@ tcInferDataCon con = return ( XExpr (ConLikeTc (RealDataCon con))
 *                                                                      *
 ********************************************************************* -}
 
-addFunResCtxt :: CsExpr Tc -> [CsExprArg p] -> AnyType -> ExpRhoType -> TcM a -> TcM a
+addFunResCtxt :: CsExpr Tc -> [CsExprArg p] -> Type Tc -> ExpRhoType -> TcM a -> TcM a
 addFunResCtxt fun args fun_res_ty env_ty thing_inside = do
-  env_tv <- asAnyTyKi <$> newOpenFlexiTyVarTy
+  env_tv <- newOpenFlexiTyVarTy
   dumping <- doptM Opt_D_dump_tc_trace
   addLandmarkErrCtxtM (\env -> (env, ) <$> mk_msg dumping env_tv) thing_inside
   where

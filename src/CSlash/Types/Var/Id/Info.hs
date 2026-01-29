@@ -1,15 +1,17 @@
 {-# LANGUAGE BinaryLiterals #-}
 
-module CSlash.Types.Id.Info where
+module CSlash.Types.Var.Id.Info where
 
 import Prelude hiding ((<>))
 
-import CSlash.Core
-import CSlash.Core.Type
-import CSlash.Core.Kind
+import CSlash.Cs.Pass
+
+import {-# SOURCE #-} CSlash.Core
+-- import CSlash.Core.Type
+-- import CSlash.Core.Kind
 import CSlash.Types.Name
 import CSlash.Types.Basic
-import CSlash.Core.DataCon
+import {-# SOURCE #-} CSlash.Core.DataCon
 import CSlash.Unit.Module
 
 import CSlash.Utils.Outputable
@@ -21,10 +23,9 @@ import Data.Bits
 
 data IdDetails 
   = VanillaId
-  | DataConId (DataCon (TyVar KiVar) KiVar)
+  | DataConId (DataCon Zk)
   | TickBoxOpId TickBoxOp
   | JoinId JoinArity
-  | TyCoVarId
 
 instance Outputable IdDetails where
   ppr = pprIdDetails
@@ -36,7 +37,6 @@ pprIdDetails other = brackets (pp other)
     pp VanillaId = panic "pprIdDetails"
     pp (DataConId _) = text "DataCon"
     pp (TickBoxOpId _) = text "TickBoxOp"
-    pp TyCoVarId = text "CoVarId"
     pp (JoinId arity) = text "JoinId" <> parens (int arity)
 
 data IdInfo = IdInfo
@@ -227,7 +227,7 @@ data LambdaFormInfo
     !Bool
     !ArgDescr
   | LFCon
-    !(DataCon (TyVar KiVar) KiVar)
+    !(DataCon Zk)
   | LFUnknown
     !Bool
 

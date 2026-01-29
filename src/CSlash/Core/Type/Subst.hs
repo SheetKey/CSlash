@@ -11,7 +11,7 @@ import {-# SOURCE #-} CSlash.Core ( CoreExpr )
 import CSlash.Core.Type.Rep
 import CSlash.Core.Type.FVs
 import CSlash.Core.Kind
-import CSlash.Core.Kind.Subst
+import CSlash.Core.Subst
 import CSlash.Core.Kind.FVs
 
 import CSlash.Types.Var
@@ -32,55 +32,55 @@ import CSlash.Utils.Panic
 *                                                                       *
 ********************************************************************** -}
 
-data TvSubst tv kv = TvSubst (InScopeSet tv) (TvSubstEnv tv kv) (KvSubst kv)
+data TvSubst p = TvSubst (InScopeSet (TyVar p)) (TvSubstEnv p) (KvSubst p)
 
-type TvSubstEnv tv kv = MkVarEnv tv (Type tv kv)
+type TvSubstEnv p = VarEnv (TyVar p) (Type p)
 
-emptyTvSubstEnv :: TvSubstEnv tv kv
+emptyTvSubstEnv :: TvSubstEnv p
 emptyTvSubstEnv = emptyVarEnv
 
-emptyTvSubst :: TvSubst tv kv
+emptyTvSubst :: TvSubst p
 emptyTvSubst = TvSubst emptyInScopeSet emptyVarEnv emptyKvSubst
 
-liftKvSubst :: TvSubst tv kv -> (KvSubst kv -> KvSubst kv) -> TvSubst tv kv
+liftKvSubst :: TvSubst p -> (KvSubst p -> KvSubst p) -> TvSubst p
 liftKvSubst (TvSubst is tv kv) f = TvSubst is tv (f kv)
 
-mkEmptyTvSubst :: (InScopeSet tv, InScopeSet kv) -> TvSubst tv kv
+mkEmptyTvSubst :: (InScopeSet (TyVar p), InScopeSet (KiVar p)) -> TvSubst p
 mkEmptyTvSubst (in_scope, k_in_scope) = TvSubst in_scope emptyVarEnv (mkEmptyKvSubst k_in_scope)
 
-mkTvSubstFromKvs :: InScopeSet tv -> KvSubst kv -> TvSubst tv kv
+mkTvSubstFromKvs :: InScopeSet (TyVar p) -> KvSubst p -> TvSubst p
 mkTvSubstFromKvs is kv = TvSubst is emptyVarEnv kv
 
-isEmptyTvSubst :: TvSubst tv kv -> Bool
+isEmptyTvSubst :: TvSubst p -> Bool
 isEmptyTvSubst (TvSubst _ tv_env kv_subst) = isEmptyVarEnv tv_env && isEmptyKvSubst kv_subst
 
-getTvSubstInScope :: TvSubst tv kv -> (InScopeSet tv, InScopeSet kv)
+getTvSubstInScope :: TvSubst p -> (InScopeSet (TyVar p), InScopeSet (KiVar p))
 getTvSubstInScope (TvSubst tis _ (KvSubst kis _)) = (tis, kis)
 
-extendTvSubst :: IsVar tv => TvSubst tv kv -> tv -> Type tv kv -> TvSubst tv kv
+extendTvSubst :: TvSubst p -> TyVar p -> Type p -> TvSubst p
 extendTvSubst (TvSubst in_scope tvs ksubst) tv ty
   = TvSubst in_scope (extendVarEnv tvs tv ty) ksubst
 
-extendTvSubstList :: IsVar tv => TvSubst tv kv -> [tv] -> [Type tv kv] -> TvSubst tv kv
+extendTvSubstList :: TvSubst p -> [TyVar p] -> [Type p] -> TvSubst p
 extendTvSubstList subst tvs tys = foldl2 extendTvSubst subst tvs tys
 
-extendTvSubstWithClone :: IsTyVar tv kv => TvSubst tv kv -> tv -> tv -> TvSubst tv kv
+extendTvSubstWithClone :: TvSubst p -> TyVar p -> TyVar p -> TvSubst p
 extendTvSubstWithClone (TvSubst in_scope tenv ksubst) tv tv'
   = TvSubst (extendInScopeSet in_scope tv')
             (extendVarEnv tenv tv (mkTyVarTy tv'))
             ksubst
 
 extendTvSubstAndInScope
-  :: IsTyVar tv kv => TvSubst tv kv -> tv -> Type tv kv -> TvSubst tv kv
+  :: TvSubst p -> TyVar p -> Type p -> TvSubst p
 extendTvSubstAndInScope (TvSubst tis tenv (KvSubst kis kenv)) tv ty
   = TvSubst (tis `extendInScopeSetSet` tyvars)
             (extendVarEnv tenv tv ty)
             (KvSubst (kis `extendInScopeSetSet` kivars) kenv)
   where
     (tvs, kcvs, kivars) = varsOfType ty
-    tyvars = tvs `unionVarSet` mapVarSet toGenericTyVar kcvs
+    tyvars = tvs `unionVarSet` panic "mapVarSet toGenericTyVar kcvs"
 
-instance IsTyVar tv kv => Outputable (TvSubst tv kv) where
+instance Outputable (TvSubst p) where
   ppr (TvSubst in_scope tvs ksubst)
       =  text "<InScope =" <+> in_scope_doc
       $$ text " TvSubst   =" <+> ppr tvs
@@ -95,7 +95,7 @@ instance IsTyVar tv kv => Outputable (TvSubst tv kv) where
 *                                                                       *
 ********************************************************************** -}
 
-isValidTvSubst :: VarHasKind tv kv => TvSubst tv kv -> Bool
+isValidTvSubst :: TvSubst p -> Bool
 isValidTvSubst (TvSubst in_scope tenv ksubst@(KvSubst k_in_scope _)) =
   (tenvFVs `varSetInScope` in_scope) &&
   (kenvFVs `varSetInScope` k_in_scope) &&
@@ -104,8 +104,8 @@ isValidTvSubst (TvSubst in_scope tenv ksubst@(KvSubst k_in_scope _)) =
     (tenvFVs, kcvenvFVs, kenvFVs) = shallowVarsOfTyVarEnv tenv
 
 checkValidTvSubst
-  :: (HasDebugCallStack, IsTyVar tv kv)
-  => TvSubst tv kv -> [Type tv kv] -> a -> a
+  :: HasDebugCallStack
+  => TvSubst p -> [Type p] -> a -> a
 checkValidTvSubst subst@(TvSubst in_scope tenv ksubst@(KvSubst k_in_scope kenv)) tys a
   = assertPpr (isValidTvSubst subst)
               (text "in_scope" <+> ppr in_scope $$
@@ -134,21 +134,19 @@ checkValidTvSubst subst@(TvSubst in_scope tenv ksubst@(KvSubst k_in_scope kenv))
     tysKFVsInScope = needInScopeKi `varSetInScope` k_in_scope
 
 substTy
-  :: (HasDebugCallStack, IsTyVar tv kv)
-  => TvSubst tv kv -> Type tv kv -> Type tv kv
+  :: HasDebugCallStack
+  => TvSubst p -> Type p -> Type p
 substTy subst ty
   | isEmptyTvSubst subst = ty
   | otherwise = checkValidTvSubst subst [ty] $
                 subst_ty subst ty
 
-substTyUnchecked :: IsTyVar tv kv => TvSubst tv kv -> Type tv kv -> Type tv kv
+substTyUnchecked :: TvSubst p -> Type p -> Type p
 substTyUnchecked subst ty
   | isEmptyTvSubst subst = ty
   | otherwise = subst_ty subst ty
 
-subst_ty
-  :: IsTyVar tv kv
-  => TvSubst tv kv -> Type tv kv -> Type tv kv
+subst_ty :: TvSubst p -> Type p -> Type p
 subst_ty subst@(TvSubst is tenv ksubst) ty = go ty
   where
     go (TyVarTy tv) = substTyVar subst tv
@@ -174,19 +172,18 @@ subst_ty subst@(TvSubst is tenv ksubst) ty = go ty
     go (CastTy ty co) = (mkCastTy $! (go ty)) $! co
     go co@(KindCoercion kco) = KindCoercion $! subst_kco ksubst kco
 
-substTyVar :: (IsVar tv) => TvSubst tv kv -> tv -> Type tv kv
+substTyVar :: TvSubst p -> TyVar p -> Type p
 substTyVar (TvSubst _ tenv _) tv
   = case lookupVarEnv tenv tv of
       Just ty -> ty
       Nothing -> TyVarTy tv
 
-substTyVarBndrUnchecked :: IsTyVar tv kv => TvSubst tv kv -> tv -> (TvSubst tv kv, tv)
+substTyVarBndrUnchecked :: TvSubst p -> TyVar p -> (TvSubst p, TyVar p)
 substTyVarBndrUnchecked = substTyVarBndrUsing substMonoKi
 
 substTyVarBndrUsing
-  :: IsTyVar tv kv
-  => (KvSubst kv -> MonoKind kv -> MonoKind kv)
-  -> TvSubst tv kv -> tv -> (TvSubst tv kv, tv)
+  :: (KvSubst p -> MonoKind p -> MonoKind p)
+  -> TvSubst p -> TyVar p -> (TvSubst p, TyVar p)
 substTyVarBndrUsing subst_fn subst@(TvSubst in_scope tenv ksubst) old_var
   = assertPpr _no_capture (pprTyVar old_var $$ pprTyVar new_var $$ ppr subst) $
     (TvSubst (in_scope `extendInScopeSet` new_var) new_env ksubst, new_var)

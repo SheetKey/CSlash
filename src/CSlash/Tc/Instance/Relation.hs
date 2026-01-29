@@ -24,7 +24,7 @@ import CSlash.Builtin.Names
 import CSlash.Types.Name.Reader
 import CSlash.Types.Name   ( Name )
 import CSlash.Types.Var.Env ( VarEnv )
-import CSlash.Types.Id
+-- import CSlash.Types.Id
 import CSlash.Types.Var
 
 import CSlash.Core.Predicate
@@ -45,7 +45,7 @@ import CSlash.Unit.Module.Warnings
 
 import CSlash.Cs.Extension
 
-import CSlash.Types.Id.Info
+-- import CSlash.Types.Id.Info
 import CSlash.Tc.Errors.Types
 import Control.Monad
 

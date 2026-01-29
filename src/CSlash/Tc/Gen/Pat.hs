@@ -15,7 +15,7 @@ import CSlash.Tc.Errors.Types
 -- import GHC.Tc.Gen.Sig( TcPragEnv, lookupPragEnv, addInlinePrags )
 import CSlash.Tc.Utils.Monad
 import CSlash.Tc.Utils.Instantiate
-import CSlash.Types.Id
+import CSlash.Types.Var.Id
 import CSlash.Types.Var
 import CSlash.Types.Name
 import CSlash.Types.Name.Reader
@@ -137,7 +137,7 @@ tcCheckPat_O
   :: CsMatchContextRn
   -> CtOrigin
   -> LPat Rn
-  -> AnySigmaType
+  -> SigmaType Tc
   -> TcM a
   -> TcM (LPat Tc, a)
 tcCheckPat_O ctxt orig pat pat_ty thing_inside
@@ -166,15 +166,15 @@ data PatCtxt
 *                                                                      *
 ********************************************************************* -}
 
-tcPatBndr :: PatEnv -> Name -> ExpSigmaType -> TcM (AnyCsWrapper, TcId)
+tcPatBndr :: PatEnv -> Name -> ExpSigmaType -> TcM (CsWrapper Tc, Id Tc)
 tcPatBndr penv@(PE { pe_ctxt = LetPat }) bndr_name exp_pat_ty = panic "tcPatBndr let"
 
 tcPatBndr _ bndr_name pat_ty = do
   pat_ty <- expTypeToType pat_ty
   traceTc "tcPatBndr(not let)" (ppr bndr_name $$ ppr pat_ty)
-  return (idCsWrapper, mkLocalIdOrTyCoVar bndr_name pat_ty)
+  return (idCsWrapper, mkLocalId bndr_name pat_ty)
 
-newLetBndr :: Name -> AnyType -> TcM TcId
+newLetBndr :: Name -> Type Tc -> TcM (Id Tc)
 newLetBndr name ty = do
   mono_name <- cloneLocalName name
   return $ mkLocalId mono_name ty
@@ -222,12 +222,12 @@ tc_pat pat_ty penv ps_pat thing_inside = case ps_pat of
 
   other -> pprPanic "tc_pat unfinished" (ppr other)
 
-tc_forall_lpat :: AnyTyVar AnyKiVar -> Checker (LPat Rn) (LPat Tc)
+tc_forall_lpat :: TcTyVar -> Checker (LPat Rn) (LPat Tc)
 tc_forall_lpat tv penv (L span pat) thing_inside = setSrcSpanA span $ do
   (pat', res) <- maybeWrapPatCtxt pat (tc_forall_pat tv penv pat) thing_inside
   return (L span pat', res)
 
-tc_forall_pat :: AnyTyVar AnyKiVar -> Checker (Pat Rn) (Pat Tc)
+tc_forall_pat :: TcTyVar -> Checker (Pat Rn) (Pat Tc)
 
 tc_forall_pat tv penv (ParPat x lpat) thing_inside = do
   (lpat', res) <- tc_forall_lpat tv penv lpat thing_inside
@@ -273,10 +273,10 @@ pat_to_type (KdSigPat _ pat sig_ki) = do
 
 pat_to_type pat = lift $ failWith $ panic "TcRnIllformedTypePattern pat"
 
-tc_ty_pat :: CsTyPat Rn -> AnyTyVar AnyKiVar -> TcM r -> TcM (AnyType, r)
+tc_ty_pat :: CsTyPat Rn -> TcTyVar -> TcM r -> TcM (Type Tc, r)
 tc_ty_pat tp tv thing_inside = do
   (sig_ibs, sig_kibs, arg_ty) <- tcCsTyPat tp (varKind tv)
-  _ <- unifyType Nothing arg_ty (mkTyVarTy tv)
+  _ <- unifyType Nothing arg_ty (mkTyVarTy $ TcTyVar tv)
   result <- tcExtendNameKiVarEnv sig_kibs
             $ tcExtendNameTyVarEnv sig_ibs
             $ thing_inside
@@ -288,7 +288,7 @@ tc_ty_pat tp tv thing_inside = do
 *                                                                      *
 ********************************************************************* -}
 
-tcPatSig :: CsPatSigType Rn -> ExpSigmaType -> TcM (AnyType, AnyCsWrapper)
+tcPatSig :: CsPatSigType Rn -> ExpSigmaType -> TcM (Type Tc, CsWrapper Tc)
 tcPatSig sig res_ty = do
   sig_ty <- tcCsPatSigType PatSigCtxt sig AnyMonoKind
 

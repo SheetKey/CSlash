@@ -1,10 +1,9 @@
 module CSlash.Types.Var.Set where
 
 import CSlash.Types.Var
-  ( Var
-  , TyVar, TcTyVar, AnyTyVar
-  , KiVar, TcKiVar, AnyKiVar
-  , KiCoVar, Id )
+  ( TyVar, TcTyVar, TyCoVar
+  , KiVar, TcKiVar, KiCoVar
+  , Id )
 import CSlash.Types.Unique
 import CSlash.Types.Name ( Name )
 import CSlash.Types.Unique.Set
@@ -13,19 +12,19 @@ import CSlash.Types.Unique.FM ( disjointUFM, pluralUFM, pprUFM )
 import CSlash.Types.Unique.DFM ( disjointUDFM, udfmToUfm, anyUDFM, allUDFM )
 import CSlash.Utils.Outputable (SDoc)
 
-type MkVarSet = UniqSet
+type VarSet = UniqSet
 
-type VarSet tv kv = MkVarSet (Var tv kv)
+type IdSet p = VarSet (Id p)
 
-type IdSet tv kv = MkVarSet (Id tv kv)
+type TyVarSet p = VarSet (TyVar p)
+type TcTyVarSet = VarSet TcTyVar
 
-type TyVarSet kv = MkVarSet (TyVar kv)
-type TcTyVarSet kv = MkVarSet (TcTyVar kv)
-type AnyTyVarSet kv = MkVarSet (AnyTyVar kv)
+type KiVarSet p = VarSet (KiVar p)
+type TcKiVarSet = VarSet TcKiVar
 
-type KiVarSet = MkVarSet KiVar
-type TcKiVarSet = MkVarSet TcKiVar
-type AnyKiVarSet = MkVarSet AnyKiVar
+type TyCoVarSet p = VarSet (TyCoVar p)
+
+type KiCoVarSet p = VarSet (KiCoVar p)
 
 emptyVarSet :: UniqSet a
 emptyVarSet = emptyUniqSet
@@ -93,15 +92,13 @@ transCloVarSet fn seeds = go seeds seeds
 pprVarSet :: UniqSet a -> ([a] -> SDoc) -> SDoc
 pprVarSet = pprUFM . getUniqSet
 
-type MkDVarSet = UniqDSet
+type DVarSet = UniqDSet
 
-type DVarSet tv kv = MkDVarSet (Var tv kv)
+type DKiVarSet p = DVarSet (KiVar p)
+type DTcKiVarSet = DVarSet TcKiVar
 
-type DKiVarSet = MkDVarSet KiVar
-type DTcKiVarSet = MkDVarSet TcKiVar
-type DAnyKiVarSet = MkDVarSet AnyKiVar
-
-type DTcTyVarSet = MkDVarSet (TcTyVar AnyKiVar)
+type DTyVarSet p = DVarSet (TyVar p)
+type DTcTyVarSet = DVarSet TcTyVar
 
 emptyDVarSet :: UniqDSet a
 emptyDVarSet = emptyUniqDSet

@@ -6,6 +6,8 @@ module CSlash.Iface.Errors.Ppr where
 
 import Prelude hiding ((<>))
 
+import CSlash.Cs.Pass
+
 import CSlash.Types.Error
 import CSlash.Types.Hint.Ppr () 
 import CSlash.Types.Error.Codes
@@ -244,7 +246,7 @@ homeModError mod location = text "attempting to use module " <> quotes (ppr mod)
         Nothing -> empty)
   <+> text "which is not loaded"
 
-missingDeclInInterface :: Name -> [TyThing (TyVar KiVar) KiVar] -> SDoc
+missingDeclInInterface :: Name -> [TyThing Zk] -> SDoc
 missingDeclInInterface name things =
   whenPprDebug (found_things $$ empty) $$
   hang (text "Can't find interface-file declaration for"

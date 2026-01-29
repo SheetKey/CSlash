@@ -31,7 +31,7 @@ data OverLitRn = OverLitRn
 
 data OverLitTc = OverLitTc
   { ol_witness :: CsExpr Tc
-  , ol_type :: Type () ()
+  , ol_type :: Type Tc
   }
 
 type instance XOverLit Ps = NoExtField

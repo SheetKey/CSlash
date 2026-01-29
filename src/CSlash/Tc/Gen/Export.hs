@@ -33,8 +33,8 @@ import CSlash.Types.Name.Env
 import CSlash.Types.Name.Set
 import CSlash.Types.Avail
 import CSlash.Types.SourceFile
-import CSlash.Types.Id
-import CSlash.Types.Id.Info
+import CSlash.Types.Var.Id
+import CSlash.Types.Var.Id.Info
 import CSlash.Types.Name.Reader
 
 import Control.Arrow ( first )

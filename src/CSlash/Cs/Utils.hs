@@ -24,7 +24,7 @@ import CSlash.Tc.Types.Evidence
 import CSlash.Core.DataCon
 import CSlash.Core.Type ( Type, TypeCoercion )
 
-import CSlash.Types.Id
+import CSlash.Types.Var.Id
 import CSlash.Types.Name
 import CSlash.Types.Name.Set hiding ( unitFV )
 import CSlash.Types.Name.Env
@@ -180,17 +180,17 @@ csTypeToCsSigType lty@(L loc ty) =
 *                                                                      *
 ********************************************************************* -}
 
-mkLCsWrap :: AnyCsWrapper -> LCsExpr Tc -> LCsExpr Tc
+mkLCsWrap :: CsWrapper Tc -> LCsExpr Tc -> LCsExpr Tc
 mkLCsWrap co_fn (L loc e) = L loc (mkCsWrap co_fn e)
 
-mkCsWrap :: AnyCsWrapper -> CsExpr Tc -> CsExpr Tc
+mkCsWrap :: CsWrapper Tc -> CsExpr Tc -> CsExpr Tc
 mkCsWrap co_fn e | isIdCsWrapper co_fn = e
 mkCsWrap co_fn e = XExpr (WrapExpr co_fn e)
 
-mkCsWrapTyCo :: TypeCoercion (AnyTyVar AnyKiVar) AnyKiVar -> CsExpr Tc -> CsExpr Tc
+mkCsWrapTyCo :: TypeCoercion Tc -> CsExpr Tc -> CsExpr Tc
 mkCsWrapTyCo co e = mkCsWrap (mkWpCast co) e
 
-mkCsWrapPat :: AnyCsWrapper -> Pat Tc -> Type (AnyTyVar AnyKiVar) AnyKiVar -> Pat Tc
+mkCsWrapPat :: CsWrapper Tc -> Pat Tc -> Type Tc -> Pat Tc
 mkCsWrapPat co_fn p ty | isIdCsWrapper co_fn = p
                        | otherwise = XPat $ CoPat co_fn p ty
 

@@ -7,6 +7,8 @@ module CSlash.Types.Demand where
 
 import Prelude hiding ((<>))
 
+import CSlash.Cs.Pass
+
 import CSlash.Types.Var
 import CSlash.Types.Var.Env
 import CSlash.Types.Unique.FM
@@ -180,7 +182,7 @@ defaultFvDmd Diverges = botDmd
 ********************************************************************* -}
 
 data DmdEnv = DE
-  { de_fvs :: !(MkVarEnv (Id (TyVar KiVar) KiVar) Demand)
+  { de_fvs :: !(VarEnv (Id Zk) Demand)
   , de_div :: !Divergence
   }
 

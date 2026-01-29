@@ -5,6 +5,8 @@ module CSlash.Tc.Utils.Env
   , module CSlash.Tc.Utils.Env
   ) where
 
+import CSlash.Cs.Pass
+
 import CSlash.Driver.Env
 import CSlash.Driver.Env.KnotVars
 import CSlash.Driver.DynFlags
@@ -25,7 +27,7 @@ import CSlash.Tc.Utils.TcType
 import {-# SOURCE #-} CSlash.Tc.Utils.TcMType ( tcCheckUsage )
 import CSlash.Tc.Types.LclEnv
 import CSlash.Tc.Types.BasicTypes
-import CSlash.Tc.Types.Evidence (AnyCsWrapper, idCsWrapper, (<.>))
+import CSlash.Tc.Types.Evidence (CsWrapper, idCsWrapper, (<.>))
 
 -- import GHC.Core.InstEnv
 import CSlash.Core.DataCon ( DataCon, dataConTyCon{-, flSelector-} )
@@ -61,8 +63,8 @@ import CSlash.Types.SourceFile
 import CSlash.Types.Name hiding (varName)
 import CSlash.Types.Name.Set
 import CSlash.Types.Name.Env
-import CSlash.Types.Id
-import CSlash.Types.Var (AnyTyVar, KiVar, AnyKiVar, AnyId, asAnyTyKi, varType, varName)
+import CSlash.Types.Var.Id
+import CSlash.Types.Var
 -- import CSlash.Types.Id.Info ( RecSelParent(..) )
 import CSlash.Types.Name.Reader
 import CSlash.Types.TyThing
@@ -109,12 +111,12 @@ tcLookupGlobalOnly name = do
              Just thing -> thing
              Nothing -> pprPanic "tcLookupGlobalOnly" (ppr name)
 
-tcLookupTyCon :: Name -> TcM (TyCon (TyVar KiVar) KiVar)
+tcLookupTyCon :: Name -> TcM (TyCon Zk)
 tcLookupTyCon name = do
   thing <- tcLookupGlobal name
   case thing of
     ATyCon tc -> return tc
-    _ -> wrongThingErr WrongThingTyCon (AGlobal $ asAnyTyKi thing) name
+    _ -> wrongThingErr WrongThingTyCon (AGlobal $ panic "thing") name
 
 {- *********************************************************************
 *                                                                      *
@@ -136,7 +138,7 @@ tcExtendGlobalEnvImplicit things thing_inside = do
   tcg_env' <- setGlobalTypeEnv tcg_env ge'
   setGblEnv tcg_env' thing_inside
 
-tcExtendTyConEnv :: [TyCon (TyVar KiVar) KiVar] -> TcM r -> TcM r
+tcExtendTyConEnv :: [TyCon Zk] -> TcM r -> TcM r
 tcExtendTyConEnv tycons thing_inside = do
   env <- getGblEnv
   let env' = env { tcg_tcs = tycons ++ tcg_tcs env }
@@ -160,24 +162,24 @@ tcLookup name = do
   local_env <- getLclTyKiEnv
   case lookupNameEnv local_env name of
     Just thing -> return thing
-    Nothing -> (AGlobal . asAnyTyKi) <$> tcLookupGlobal name
+    Nothing -> (AGlobal . panic "asAnyTyKi") <$> tcLookupGlobal name
 
-tcLookupId :: Name -> TcM AnyId
+tcLookupId :: Name -> TcM (Id Tc)
 tcLookupId name = do
   thing <- tcLookupIdMaybe name
   case thing of
     Just id -> return id
     _ -> pprPanic "tcLookupId" (ppr name)
 
-tcLookupIdMaybe :: Name -> TcM (Maybe AnyId)
+tcLookupIdMaybe :: Name -> TcM (Maybe (Id Tc))
 tcLookupIdMaybe name = do
   thing <- tcLookup name
   case thing of
-    ATcId { tct_id = id } -> return $ Just $ asAnyTyKi id
-    AGlobal (AnId id) -> return $ Just $ asAnyTyKi id
+    ATcId { tct_id = id } -> return $ Just $ panic "asAnyTyKi id"
+    AGlobal (AnId id) -> return $ Just $ panic "asAnyTyKi id"
     _ -> return Nothing
 
-tcLookupTcTyCon :: HasDebugCallStack => Name -> TcM AnyTyCon
+tcLookupTcTyCon :: HasDebugCallStack => Name -> TcM (TyCon Tc)
 tcLookupTcTyCon name = do
   thing <- tcLookup name
   case thing of
@@ -191,41 +193,41 @@ tcExtendKindEnvList things thing_inside = do
   where
     upd_env env = env { tcl_env = extendNameEnvList (tcl_env env) things }
 
-tcExtendKiVarEnv :: [AnyKiVar] -> TcM r -> TcM r
+tcExtendKiVarEnv :: [TcKiVar] -> TcM r -> TcM r
 tcExtendKiVarEnv kvs thing_inside = tcExtendNameKiVarEnv (mkVarNamePairs kvs) thing_inside
 
-tcExtendNameTyVarEnv :: [(Name, AnyTyVar AnyKiVar)] -> TcM r -> TcM r
+tcExtendNameTyVarEnv :: [(Name, TcTyVar)] -> TcM r -> TcM r
 tcExtendNameTyVarEnv binds thing_inside
   = tc_extend_local_env NotTopLevel names
     $ tcExtendBinderStack tv_binds
     $ thing_inside
   where
     tv_binds = [TcTvBndr name tv | (name, tv) <- binds]
-    names = [(name, ATyVar name tv) | (name, tv) <- binds]
+    names = [(name, ATyVar name (TcTyVar tv)) | (name, tv) <- binds]
 
-tcExtendNameKiVarEnv :: [(Name, AnyKiVar)] -> TcM r -> TcM r
+tcExtendNameKiVarEnv :: [(Name, TcKiVar)] -> TcM r -> TcM r
 tcExtendNameKiVarEnv binds thing_inside
   = tc_extend_local_env NotTopLevel names
     $ tcExtendBinderStack kv_binds
     $ thing_inside
   where
     kv_binds = [TcKvBndr name kv | (name, kv) <- binds]
-    names = [(name, AKiVar name kv) | (name, kv) <- binds]
+    names = [(name, AKiVar name (TcKiVar kv)) | (name, kv) <- binds]
 
-isTypeClosedLetBndr :: TcId -> Bool
+isTypeClosedLetBndr :: Id Tc -> Bool
 isTypeClosedLetBndr = noFreeVarsOfType . varType
 
-tcExtendRecIds :: [(Name, TcId)] -> TcM a -> TcM a
+tcExtendRecIds :: [(Name, Id Tc)] -> TcM a -> TcM a
 tcExtendRecIds pairs thing_inside
   = tc_extend_local_env NotTopLevel
     [ (name, ATcId { tct_id = let_id, tct_info  = NonClosedLet emptyNameSet False })
     | (name, let_id) <- pairs ]
     thing_inside
 
-tcExtendSigIds :: TopLevelFlag -> [TcId] -> TcM a -> TcM a
+tcExtendSigIds :: TopLevelFlag -> [Id Tc] -> TcM a -> TcM a
 tcExtendSigIds top_lvl sig_ids thing_inside
   = tc_extend_local_env top_lvl
-    [ (idName id, ATcId id info)
+    [ (varName id, ATcId id info)
     | id <- sig_ids
     , let closed = isTypeClosedLetBndr id
           info = NonClosedLet emptyNameSet closed ]
@@ -235,9 +237,9 @@ tcExtendLetEnv
   :: TopLevelFlag
   -> TcSigFun
   -> IsGroupClosed
-  -> [TcId]
+  -> [Id Tc]
   -> TcM a
-  -> TcM (a, AnyCsWrapper)
+  -> TcM (a, CsWrapper Tc)
 tcExtendLetEnv top_lvl sig_fn (IsGroupClosed fvs fv_type_closed) ids thing_inside
   = tcExtendBinderStack [TcIdBndr id top_lvl | id <- ids]
     $ tc_extend_local_env top_lvl
@@ -254,15 +256,15 @@ tcExtendLetEnv top_lvl sig_fn (IsGroupClosed fvs fv_type_closed) ids thing_insid
         type_closed = isTypeClosedLetBndr id
                       && (fv_type_closed || hasCompleteSig sig_fn name)
 
-    check_usage :: TcId -> TcM (a, AnyCsWrapper) -> TcM (a, AnyCsWrapper)
+    check_usage :: Id Tc -> TcM (a, CsWrapper Tc) -> TcM (a, CsWrapper Tc)
     check_usage id thing_inside = do
       ((res, inner_wrap), outer_wrap) <- tcCheckUsage (varName id) (idKind id) thing_inside
       return (res, outer_wrap <.> inner_wrap)
 
-tcExtendIdEnv1 :: Name -> TcId -> TcM a -> TcM a
+tcExtendIdEnv1 :: Name -> Id Tc -> TcM a -> TcM a
 tcExtendIdEnv1 name id thing_inside = tcExtendIdEnv2 [(name, id)] thing_inside
 
-tcExtendIdEnv2 :: [(Name, TcId)] -> TcM a -> TcM a
+tcExtendIdEnv2 :: [(Name, Id Tc)] -> TcM a -> TcM a
 tcExtendIdEnv2 names_w_ids thing_inside
   = tcExtendBinderStack [ TcIdBndr mono_id NotTopLevel
                         | (_, mono_id) <- names_w_ids ]

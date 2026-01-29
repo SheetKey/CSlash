@@ -1,17 +1,17 @@
+{-# LANGUAGE RankNTypes #-}
+
 module CSlash.Builtin.Types.Prim where
 
 import {-# SOURCE #-} CSlash.Types.TyThing (mkATyCon)
 import {-# SOURCE #-} CSlash.Core.Type (buildSynTyCon, mkTyConApp, typeKind)
+
+import CSlash.Cs.Pass
 
 import CSlash.Core.TyCon
 import CSlash.Core.Type.Rep
 import CSlash.Core.Kind
 
 import CSlash.Types.Var
-  ( TyVarBinder, TyVar, KiVar
-  , binderVar, binderVars
-  , mkTyVar, mkKiVar
-  , mkVarBinder, mkVarBinders )
 import CSlash.Types.Name
 import CSlash.Types.SrcLoc
 import CSlash.Types.Unique
@@ -32,18 +32,12 @@ import Data.Char
 *                                                                      *
 ********************************************************************* -}
 
-type PTyCon = TyCon PTyVar KiVar
-type PMonoKind = MonoKind KiVar
-type PType = Type PTyVar KiVar
-type PKind = Kind KiVar
-type PTyVar = TyVar KiVar
-
-mkPrimTc :: FastString -> Unique -> PTyCon -> Name
+mkPrimTc :: FastString -> Unique -> (forall p. TyCon p) -> Name
 mkPrimTc = mkGenPrimTc UserSyntax
 
-mkGenPrimTc :: BuiltInSyntax -> FastString -> Unique -> PTyCon -> Name
+mkGenPrimTc :: BuiltInSyntax -> FastString -> Unique -> (forall p. TyCon p) -> Name
 mkGenPrimTc built_in_syntax occ key tycon
-  = mkWiredInName cSLASH_BUILTIN
+  =  mkWiredInName cSLASH_BUILTIN
                   (mkTcOccFS occ)
                   key
                   (mkATyCon tycon)
@@ -55,13 +49,13 @@ mkGenPrimTc built_in_syntax occ key tycon
 *                                                                      *
 ********************************************************************* -}
 
-primTyCons :: [PTyCon]
+primTyCons :: [TyCon p]
 primTyCons = unexposedPrimTyCons ++ exposedPrimTyCons
 
-unexposedPrimTyCons :: [PTyCon]
+unexposedPrimTyCons :: [TyCon p]
 unexposedPrimTyCons = [ eqTyCon ]
 
-exposedPrimTyCons :: [PTyCon]
+exposedPrimTyCons :: [TyCon p]
 exposedPrimTyCons
   = [ fUNTyCon ]
 
@@ -71,23 +65,23 @@ exposedPrimTyCons
 *                                                                      *
 ********************************************************************* -}
 
-mkTemplateKindVar :: KiVar
+mkTemplateKindVar :: KiVar p
 mkTemplateKindVar = mkKiVar $ mk_kv_name 0 "k"
 
-mkTemplateKindVars :: Int -> [KiVar]
+mkTemplateKindVars :: Int -> [KiVar p]
 mkTemplateKindVars i
   = [ mkKiVar (mk_kv_name u ('k' : show u))
     | u <- [0..(i-1)]
     ]
 
-mkTemplateKindVarsRes :: Int -> ([KiVar], KiVar)
+mkTemplateKindVarsRes :: Int -> ([KiVar p], KiVar p)
 mkTemplateKindVarsRes i
   = ( [ mkKiVar (mk_kv_name u ('k' : show u))
       | u <- [0..(i-1)]
       ]
     , mkKiVar (mk_kv_name i ('k' : show i)) )
 
-mkTemplateFunKindVars :: Int -> [KiVar]
+mkTemplateFunKindVars :: Int -> [KiVar p]
 mkTemplateFunKindVars i
   = [ mkKiVar (mk_fkv_name u ('k' : 'f' : show u))
     | u <- [0..(i-1)]
@@ -100,7 +94,7 @@ mkTemplateFunKindVars i
 --         tc_kind = foldr (FunKd FKF_K_K) res_kind kinds
 --     in tc_kind
 
-mkTemplateTyConKindFromRes :: Int -> PMonoKind -> PKind
+mkTemplateTyConKindFromRes :: Int -> MonoKind p -> Kind p
 mkTemplateTyConKindFromRes arity res_kind
   = let kind_vars = mkTemplateKindVars arity
         kinds = KiVarKi <$> kind_vars
@@ -113,7 +107,7 @@ mkTemplateTyConKindFromRes arity res_kind
         q_full_kind = foldr ForAllKi (Mono full_kind) (kind_vars ++ res_kind_var)
     in pprTrace "mkTemplateTyConKindFromRes" (ppr q_full_kind) q_full_kind
 
-mkTemplateTyConKind :: Int -> PKind
+mkTemplateTyConKind :: Int -> Kind p
 mkTemplateTyConKind arity
   = let res_kind = KiVarKi $ mkKiVar (mk_kv_name arity ('k' : show arity))
     in mkTemplateTyConKindFromRes arity res_kind
@@ -134,7 +128,7 @@ mk_tv_name u s = mkInternalName (mkAlphaTyVarUnique u)
                                 (mkTyVarOccFS (mkFastString s))
                                 noSrcSpan
 
-mkTemplateTyVarsFrom :: Int -> [PMonoKind] -> [PTyVar]
+mkTemplateTyVarsFrom :: Int -> [MonoKind p] -> [TyVar p]
 mkTemplateTyVarsFrom i kinds
   = [ mkTyVar name kind
     | (kind, index) <- zip kinds [0..(i-1)]
@@ -144,18 +138,18 @@ mkTemplateTyVarsFrom i kinds
           name = mk_tv_name (index + i + 1) name_str
     ]
 
-mkTemplateTyVars :: [PMonoKind] -> [PTyVar]
+mkTemplateTyVars :: [MonoKind p] -> [TyVar p]
 mkTemplateTyVars kinds = mkTemplateTyVarsFrom (length kinds) kinds
 
-mkTemplateKiCoVarsFrom :: Int -> [PMonoKind] -> [PTyVar]
+mkTemplateKiCoVarsFrom :: Int -> [MonoKind p] -> [KiCoVar p]
 mkTemplateKiCoVarsFrom i kinds
-  = [ mkTyVar name kind
+  = [ mkCoVar name kind
     | (kind, index) <- zip kinds [0..(i-1)]
     , let name_str = "kco" ++ show index
           name = mk_kv_name (index + i + 1) name_str
     ]
 
-mkTemplateKiCoVars :: [PMonoKind] -> [PTyVar]
+mkTemplateKiCoVars :: [MonoKind p] -> [KiCoVar p]
 mkTemplateKiCoVars kinds = mkTemplateKiCoVarsFrom (length kinds) kinds
 
 -- mkTemplateTyConBindersFrom :: Int -> [Kind] -> [TyConBinder]
@@ -184,21 +178,21 @@ mkTemplateKiCoVars kinds = mkTemplateKiCoVarsFrom (length kinds) kinds
 fUNTyConName :: Name
 fUNTyConName = mkPrimTc (fsLit "FUN") fUNTyConKey fUNTyCon
 
-fUNTyCon :: PTyCon
+fUNTyCon :: TyCon p
 fUNTyCon = mkPrimTyCon fUNTyConName tc_kind 2
   where
     tc_kind = mkTemplateTyConKind 2
 
-unrestrictedFUNTyCon :: PTyCon
+unrestrictedFUNTyCon :: TyCon p
 unrestrictedFUNTyCon = _mkFUNTyCon (BIKi UKd)
 
-affineFUNTyCon :: PTyCon
+affineFUNTyCon :: TyCon p
 affineFUNTyCon = _mkFUNTyCon (BIKi AKd)
 
-linearFUNTyCon :: PTyCon
+linearFUNTyCon :: TyCon p
 linearFUNTyCon = _mkFUNTyCon (BIKi LKd)
 
-_mkFUNTyCon :: PMonoKind -> PTyCon
+_mkFUNTyCon :: MonoKind Zk -> TyCon p
 _mkFUNTyCon res_kind = mkPrimTyCon fUNTyConName tc_kind 2
   where
     tc_kind = mkTemplateTyConKindFromRes 2 res_kind
@@ -212,7 +206,7 @@ _mkFUNTyCon res_kind = mkPrimTyCon fUNTyConName tc_kind 2
 eqTyConName :: Name
 eqTyConName = mkPrimTc (fsLit "~") eqTyConKey eqTyCon
 
-eqTyCon :: PTyCon
+eqTyCon :: TyCon p
 eqTyCon = mkPrimTyCon eqTyConName kind 2
   where
     (k1, k2) = case mkTemplateKindVars 2 of
@@ -235,5 +229,5 @@ eqTyCon = mkPrimTyCon eqTyConName kind 2
 realWorldTyConName :: Name
 realWorldTyConName = mkPrimTc (fsLit "RealWorld#") realWorldTyConKey realWorldTyCon
 
-realWorldTyCon :: PTyCon
+realWorldTyCon :: TyCon p
 realWorldTyCon = mkPrimTyCon realWorldTyConName (Mono (BIKi LKd)) 0

@@ -44,7 +44,7 @@ import CSlash.Types.SourceFile
 import CSlash.Types.SrcLoc as SrcLoc
 import CSlash.Types.Basic  ( TopLevelFlag(..) )
 import CSlash.Types.SourceText
-import CSlash.Types.Id
+import CSlash.Types.Var.Id
 import CSlash.Types.Var
 import CSlash.Types.PcInfo
 import CSlash.Types.PkgQual
@@ -564,7 +564,7 @@ warnMissingSignatures gbl_env = do
 
       not_generated name = name `elemNameSet` sig_ns
 
-      add_binding_warn :: ZkId -> ZkM ()
+      add_binding_warn :: Id Zk -> ZkM ()
       add_binding_warn id = when (not_generated name) $ do
         env <- liftZonkM $ tcInitTidyEnv
         let ty = tidyOpenType env (panic "varType id")

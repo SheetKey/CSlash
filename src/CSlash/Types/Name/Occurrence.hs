@@ -12,7 +12,7 @@ module CSlash.Types.Name.Occurrence
 
 import Prelude hiding ((<>))
 
-import CSlash.Builtin.Uniques
+import {-# SOURCE #-} CSlash.Builtin.Uniques
 import CSlash.Data.FastString
 import CSlash.Data.FastString.Env
 import CSlash.Types.Unique

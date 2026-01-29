@@ -1,5 +1,7 @@
 module CSlash.IfaceToCore where
 
+import CSlash.Cs.Pass
+
 import CSlash.Driver.Env
 import CSlash.Driver.Session
 -- import GHC.Driver.Config.Core.Lint ( initLintConfig )
@@ -77,9 +79,9 @@ import CSlash.Types.Var as Var
 import CSlash.Types.Var.Set
 import CSlash.Types.Name
 import CSlash.Types.Name.Env
-import CSlash.Types.Id
-import CSlash.Types.Id.Make
-import CSlash.Types.Id.Info
+import CSlash.Types.Var.Id
+import CSlash.Types.Var.Id.Make
+import CSlash.Types.Var.Id.Info
 import CSlash.Types.Tickish
 import CSlash.Types.TyThing
 import CSlash.Types.Error
@@ -122,7 +124,7 @@ import CSlash.Language.Syntax.Extension (NoExtField (NoExtField))
 --                               , ifBinders = binders, ifResKind = res_kind }) = do
 --   panic "tc_iface_decl IfaceSynonym"
 
-tcIfaceDecls :: Bool -> [(Fingerprint, IfaceDecl)] -> IfL [(Name, TyThing (Var.TyVar Var.KiVar) Var.KiVar)]
+tcIfaceDecls :: Bool -> [(Fingerprint, IfaceDecl)] -> IfL [(Name, TyThing Zk)]
 
 -- remove empty case later later:
 tcIfaceDecls _ [] = return []

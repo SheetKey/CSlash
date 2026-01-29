@@ -1,13 +1,16 @@
 module CSlash.Tc.Utils.Unify where
 
-import CSlash.Core.Kind (BuiltInKi, KiPredCon)
-import CSlash.Tc.Utils.TcType (AnyTauType, AnyKind, AnyMonoKind, AnyTypeCoercion, AnyKindCoercion)
-import CSlash.Tc.Types.Evidence (AnyCsWrapper)
+import CSlash.Cs.Pass
+
+import CSlash.Core.Type.Rep (TypeCoercion)
+import CSlash.Core.Kind (BuiltInKi, KiPredCon, Kind, MonoKind, KindCoercion)
+import CSlash.Tc.Utils.TcType (TauType)
+import CSlash.Tc.Types.Evidence (CsWrapper)
 import CSlash.Tc.Types (TcM)
 import CSlash.Tc.Types.Origin (CtOrigin, KindedThing)
 
-tcSubMult :: CtOrigin -> BuiltInKi -> AnyKind -> TcM AnyCsWrapper
+tcSubMult :: CtOrigin -> BuiltInKi -> Kind Tc -> TcM (CsWrapper Tc)
 
-unifyInvisibleType :: AnyTauType -> AnyTauType -> TcM AnyTypeCoercion
+unifyInvisibleType :: TauType Tc -> TauType Tc -> TcM (TypeCoercion Tc)
 
-unifyKind :: Maybe KindedThing -> KiPredCon -> AnyMonoKind -> AnyMonoKind -> TcM AnyKindCoercion
+unifyKind :: Maybe KindedThing -> KiPredCon -> MonoKind Tc -> MonoKind Tc -> TcM (KindCoercion Tc)

@@ -21,7 +21,7 @@ import CSlash.Utils.Outputable
 *                                                                      *
 ********************************************************************* -}
 
-newtype InScopeSet a = InScope (MkVarSet a)
+newtype InScopeSet a = InScope (VarSet a)
 
 instance (NamedThing a, Outputable a) => Outputable (InScopeSet a) where
   ppr (InScope s) = text "InScope" <+>
@@ -30,10 +30,10 @@ instance (NamedThing a, Outputable a) => Outputable (InScopeSet a) where
 emptyInScopeSet :: InScopeSet a
 emptyInScopeSet = InScope emptyVarSet
 
-getInScopeVars :: InScopeSet a -> MkVarSet a
+getInScopeVars :: InScopeSet a -> VarSet a
 getInScopeVars (InScope vs) = vs
 
-mkInScopeSet :: MkVarSet a -> InScopeSet a
+mkInScopeSet :: VarSet a -> InScopeSet a
 mkInScopeSet in_scope = InScope in_scope
 
 extendInScopeSet :: Uniquable a => InScopeSet a -> a -> InScopeSet a
@@ -44,7 +44,7 @@ extendInScopeSetList :: Uniquable a => InScopeSet a -> [a] -> InScopeSet a
 extendInScopeSetList (InScope in_scope) vs
    = InScope $ foldl' extendVarSet in_scope vs
 
-extendInScopeSetSet :: InScopeSet a -> MkVarSet a -> InScopeSet a
+extendInScopeSetSet :: InScopeSet a -> VarSet a -> InScopeSet a
 extendInScopeSetSet (InScope is) vs = InScope (is `unionVarSet`  vs)
 
 elemInScopeSet :: Uniquable a => a -> InScopeSet a -> Bool
@@ -53,12 +53,12 @@ elemInScopeSet v (InScope in_scope) = v `elemVarSet` in_scope
 lookupInScope :: Uniquable a => InScopeSet a -> a -> Maybe a
 lookupInScope (InScope in_scope) v = lookupVarSet in_scope v
 
-uniqAway :: VarHasUnique a => InScopeSet a -> a -> a
+uniqAway :: IsVar a => InScopeSet a -> a -> a
 uniqAway in_scope var
   | var `elemInScopeSet` in_scope = uniqAway' in_scope var
   | otherwise = var
 
-uniqAway' :: VarHasUnique a => InScopeSet a -> a -> a
+uniqAway' :: IsVar a => InScopeSet a -> a -> a
 uniqAway' in_scope var
   = setVarUnique var (unsafeGetFreshLocalUnique in_scope)
 
@@ -78,8 +78,8 @@ unsafeGetFreshLocalUnique (InScope set)
 ********************************************************************* -}
 
 data RnEnv2 v = RV2
-  { envL :: MkVarEnv v v
-  , envR :: MkVarEnv v v
+  { envL :: VarEnv v v
+  , envR :: VarEnv v v
   , in_scope :: InScopeSet v
   }
 
@@ -99,19 +99,19 @@ rnInScope x env = x `elemInScopeSet` in_scope env
 rnInScopeSet :: RnEnv2 v -> InScopeSet v
 rnInScopeSet = in_scope
 
-rnEnvL :: RnEnv2 v -> MkVarEnv v v
+rnEnvL :: RnEnv2 v -> VarEnv v v
 rnEnvL = envL
 
-rnEnvR :: RnEnv2 v -> MkVarEnv v v
+rnEnvR :: RnEnv2 v -> VarEnv v v
 rnEnvR = envR
 
-rnBndrs2 :: VarHasUnique v => RnEnv2 v -> [v] -> [v] -> RnEnv2 v
+rnBndrs2 :: IsVar v => RnEnv2 v -> [v] -> [v] -> RnEnv2 v
 rnBndrs2 env bsL bsR = foldl2 rnBndr2 env bsL bsR
 
-rnBndr2 :: VarHasUnique v => RnEnv2 v -> v -> v -> RnEnv2 v
+rnBndr2 :: IsVar v => RnEnv2 v -> v -> v -> RnEnv2 v
 rnBndr2 env bL bR = fst $ rnBndr2_var env bL bR
 
-rnBndr2_var :: VarHasUnique v => RnEnv2 v -> v -> v -> (RnEnv2 v, v)
+rnBndr2_var :: IsVar v => RnEnv2 v -> v -> v -> (RnEnv2 v, v)
 rnBndr2_var (RV2 { envL = envL, envR = envR, in_scope = in_scope }) bL bR
   = ( RV2 { envL = extendVarEnv envL bL new_b
           , envR = extendVarEnv envR bR new_b
@@ -122,7 +122,7 @@ rnBndr2_var (RV2 { envL = envL, envR = envR, in_scope = in_scope }) bL bR
           | not (bL `elemInScopeSet` in_scope) = bR `setVarUnique` varUnique bL
           | otherwise                          = uniqAway' in_scope bR
 
-rnBndrL :: VarHasUnique v => RnEnv2 v -> v -> (RnEnv2 v, v)
+rnBndrL :: IsVar v => RnEnv2 v -> v -> (RnEnv2 v, v)
 rnBndrL (RV2 { envL = envL, envR = envR, in_scope = in_scope }) bL
   = ( RV2 { envL     = extendVarEnv envL bL new_b
           , envR     = envR
@@ -131,7 +131,7 @@ rnBndrL (RV2 { envL = envL, envR = envR, in_scope = in_scope }) bL
   where
     new_b = uniqAway in_scope bL
 
-rnBndrR :: VarHasUnique v => RnEnv2 v -> v -> (RnEnv2 v, v)
+rnBndrR :: IsVar v => RnEnv2 v -> v -> (RnEnv2 v, v)
 rnBndrR (RV2 { envL = envL, envR = envR, in_scope = in_scope }) bR
   = ( RV2 { envR     = extendVarEnv envR bR new_b
           , envL     = envL
@@ -140,7 +140,7 @@ rnBndrR (RV2 { envL = envL, envR = envR, in_scope = in_scope }) bR
   where
     new_b = uniqAway in_scope bR
 
-rnEtaL :: VarHasUnique v => RnEnv2 v -> v -> (RnEnv2 v, v)
+rnEtaL :: IsVar v => RnEnv2 v -> v -> (RnEnv2 v, v)
 rnEtaL (RV2 { envL = envL, envR = envR, in_scope = in_scope }) bL
   = ( RV2 { envL     = extendVarEnv envL bL new_b
           , envR     = extendVarEnv envR new_b new_b
@@ -149,7 +149,7 @@ rnEtaL (RV2 { envL = envL, envR = envR, in_scope = in_scope }) bL
   where
     new_b = uniqAway in_scope bL
 
-rnEtaR :: VarHasUnique v => RnEnv2 v -> v -> (RnEnv2 v, v)
+rnEtaR :: IsVar v => RnEnv2 v -> v -> (RnEnv2 v, v)
 rnEtaR (RV2 { envL = envL, envR = envR, in_scope = in_scope }) bR
   = ( RV2 { envL     = extendVarEnv envL new_b new_b
           , envR     = extendVarEnv envR bR new_b
@@ -192,7 +192,7 @@ inRnEnvL (RV2 { envL = env }) v = v `elemVarEnv` env
 inRnEnvR :: Uniquable v => RnEnv2 v -> v -> Bool
 inRnEnvR (RV2 { envR = env }) v = v `elemVarEnv` env
 
-anyInRnEnvR :: Uniquable v => RnEnv2 v -> MkVarSet v -> Bool
+anyInRnEnvR :: Uniquable v => RnEnv2 v -> VarSet v -> Bool
 anyInRnEnvR (RV2 { envR = env }) vs
   | isEmptyVarEnv env = False
   | otherwise         = anyVarSet (`elemVarEnv` env) vs
@@ -216,16 +216,14 @@ rnSwap (RV2 { envL = envL, envR = envR, in_scope = in_scope })
 *                                                                      *
 ********************************************************************* -}
 
-type AnyTidyEnv = MkTidyEnv (AnyTyVar AnyKiVar) AnyKiVar
+type TidyEnv p = ( TidyOccEnv
+                 , VarEnv (TyVar p) (TyVar p)
+                 , VarEnv (KiVar p) (KiVar p) )
 
-type MkTidyEnv tv kv = ( TidyOccEnv
-                       , MkVarEnv tv tv
-                       , MkVarEnv kv kv )
-
-emptyTidyEnv :: MkTidyEnv tv kv
+emptyTidyEnv :: TidyEnv p
 emptyTidyEnv = (emptyTidyOccEnv, emptyVarEnv, emptyVarEnv)
 
-mkEmptyTidyEnv :: TidyOccEnv -> MkTidyEnv tv kv
+mkEmptyTidyEnv :: TidyOccEnv -> TidyEnv p
 mkEmptyTidyEnv occ_env = (occ_env, emptyVarEnv, emptyVarEnv)
 
 {- *********************************************************************
@@ -234,51 +232,43 @@ mkEmptyTidyEnv occ_env = (occ_env, emptyVarEnv, emptyVarEnv)
 *                                                                      *
 ********************************************************************* -}
 
-type MkVarEnv var elt = UniqFM var elt
+type VarEnv var elt = UniqFM var elt
 
-type VarEnv elt = UniqFM Var elt
-
-type IdEnv elt = UniqFM Id elt
-
-type TyVarEnv elt = UniqFM Var elt
-
-type KiVarEnv elt = UniqFM Var elt
-
-mkVarEnv :: Uniquable var => [(var, a)] -> MkVarEnv var a
+mkVarEnv :: Uniquable var => [(var, a)] -> VarEnv var a
 mkVarEnv = listToUFM
 
-mapVarEnv :: (a -> b) -> MkVarEnv var a -> MkVarEnv var b
+mapVarEnv :: (a -> b) -> VarEnv var a -> VarEnv var b
 mapVarEnv = mapUFM
 
-emptyVarEnv :: MkVarEnv var a
+emptyVarEnv :: VarEnv var a
 emptyVarEnv = emptyUFM
 
-delVarEnvList :: Uniquable var => MkVarEnv var a -> [var] -> MkVarEnv var a
+delVarEnvList :: Uniquable var => VarEnv var a -> [var] -> VarEnv var a
 delVarEnvList = delListFromUFM
 
-isEmptyVarEnv :: MkVarEnv v a -> Bool
+isEmptyVarEnv :: VarEnv v a -> Bool
 isEmptyVarEnv = isNullUFM
 
-elemVarEnv :: Uniquable v => v -> MkVarEnv v a -> Bool
+elemVarEnv :: Uniquable v => v -> VarEnv v a -> Bool
 elemVarEnv = elemUFM
 
-varSetInScope :: MkVarSet v -> InScopeSet v -> Bool
+varSetInScope :: VarSet v -> InScopeSet v -> Bool
 varSetInScope vars (InScope s1) = vars `subVarSet` s1
 
-extendVarEnv :: Uniquable v => MkVarEnv v a -> v -> a -> MkVarEnv v a
+extendVarEnv :: Uniquable v => VarEnv v a -> v -> a -> VarEnv v a
 extendVarEnv = addToUFM
 
-extendVarEnvList :: Uniquable v => MkVarEnv v a -> [(v, a)] -> MkVarEnv v a
+extendVarEnvList :: Uniquable v => VarEnv v a -> [(v, a)] -> VarEnv v a
 extendVarEnvList = addListToUFM
 
-delVarEnv :: Uniquable v => MkVarEnv v a -> v -> MkVarEnv v a
+delVarEnv :: Uniquable v => VarEnv v a -> v -> VarEnv v a
 delVarEnv = delFromUFM
 
-lookupVarEnv :: Uniquable v => MkVarEnv v a -> v -> Maybe a
+lookupVarEnv :: Uniquable v => VarEnv v a -> v -> Maybe a
 {-# INLINE lookupVarEnv #-}
 lookupVarEnv = lookupUFM
 
-lookupVarEnv_Directly :: MkVarEnv v a -> Unique -> Maybe a
+lookupVarEnv_Directly :: VarEnv v a -> Unique -> Maybe a
 lookupVarEnv_Directly = lookupUFM_Directly
 
 {- *********************************************************************
@@ -287,76 +277,76 @@ lookupVarEnv_Directly = lookupUFM_Directly
 *                                                                      *
 ********************************************************************* -}
 
-type MkDVarEnv var elt = UniqDFM var elt
+type DVarEnv var elt = UniqDFM var elt
 
-emptyDVarEnv :: MkDVarEnv v a
+emptyDVarEnv :: DVarEnv v a
 emptyDVarEnv = emptyUDFM
 
-dVarEnvElts :: MkDVarEnv v a -> [a]
+dVarEnvElts :: DVarEnv v a -> [a]
 dVarEnvElts = eltsUDFM
 
-mkDVarEnv :: Uniquable v => [(v, a)] -> MkDVarEnv v a
+mkDVarEnv :: Uniquable v => [(v, a)] -> DVarEnv v a
 mkDVarEnv = listToUDFM
 
-extendDVarEnv :: Uniquable v => MkDVarEnv v a -> v -> a -> MkDVarEnv v a
+extendDVarEnv :: Uniquable v => DVarEnv v a -> v -> a -> DVarEnv v a
 extendDVarEnv = addToUDFM
 
-minusDVarEnv :: MkDVarEnv v a -> MkDVarEnv v a' -> MkDVarEnv v a
+minusDVarEnv :: DVarEnv v a -> DVarEnv v a' -> DVarEnv v a
 minusDVarEnv = minusUDFM
 
-lookupDVarEnv :: Uniquable v => MkDVarEnv v a -> v -> Maybe a
+lookupDVarEnv :: Uniquable v => DVarEnv v a -> v -> Maybe a
 lookupDVarEnv = lookupUDFM
 
-foldDVarEnv :: (a -> b -> b) -> b -> MkDVarEnv v a -> b
+foldDVarEnv :: (a -> b -> b) -> b -> DVarEnv v a -> b
 foldDVarEnv = foldUDFM
 
-nonDetStrictFoldDVarEnv :: (a -> b -> b) -> b -> MkDVarEnv v a -> b
+nonDetStrictFoldDVarEnv :: (a -> b -> b) -> b -> DVarEnv v a -> b
 nonDetStrictFoldDVarEnv = nonDetStrictFoldUDFM
 
-mapDVarEnv :: (a -> b) -> MkDVarEnv v a -> MkDVarEnv v b
+mapDVarEnv :: (a -> b) -> DVarEnv v a -> DVarEnv v b
 mapDVarEnv = mapUDFM
 
-filterDVarEnv :: (a -> Bool) -> MkDVarEnv v a -> MkDVarEnv v a
+filterDVarEnv :: (a -> Bool) -> DVarEnv v a -> DVarEnv v a
 filterDVarEnv = filterUDFM
 
-alterDVarEnv :: Uniquable v => (Maybe a -> Maybe a) -> MkDVarEnv v a -> v -> MkDVarEnv v a
+alterDVarEnv :: Uniquable v => (Maybe a -> Maybe a) -> DVarEnv v a -> v -> DVarEnv v a
 alterDVarEnv = alterUDFM
 
-plusDVarEnv :: MkDVarEnv v a -> MkDVarEnv v a -> MkDVarEnv v a
+plusDVarEnv :: DVarEnv v a -> DVarEnv v a -> DVarEnv v a
 plusDVarEnv = plusUDFM
 
-plusDVarEnv_C :: (a -> a -> a) -> MkDVarEnv v a -> MkDVarEnv v a -> MkDVarEnv v a
+plusDVarEnv_C :: (a -> a -> a) -> DVarEnv v a -> DVarEnv v a -> DVarEnv v a
 plusDVarEnv_C = plusUDFM_C
 
-unitDVarEnv :: Uniquable v => v -> a -> MkDVarEnv v a
+unitDVarEnv :: Uniquable v => v -> a -> DVarEnv v a
 unitDVarEnv = unitUDFM
 
-delDVarEnv :: Uniquable v => MkDVarEnv v a -> v -> MkDVarEnv v a
+delDVarEnv :: Uniquable v => DVarEnv v a -> v -> DVarEnv v a
 delDVarEnv = delFromUDFM
 
-delDVarEnvList :: Uniquable v => MkDVarEnv v a -> [v] -> MkDVarEnv v a
+delDVarEnvList :: Uniquable v => DVarEnv v a -> [v] -> DVarEnv v a
 delDVarEnvList = delListFromUDFM
 
-isEmptyDVarEnv :: MkDVarEnv v a -> Bool
+isEmptyDVarEnv :: DVarEnv v a -> Bool
 isEmptyDVarEnv = isNullUDFM
 
-elemDVarEnv :: Uniquable v => v -> MkDVarEnv v a -> Bool
+elemDVarEnv :: Uniquable v => v -> DVarEnv v a -> Bool
 elemDVarEnv = elemUDFM
 
-extendDVarEnv_C :: Uniquable v => (a -> a -> a) -> MkDVarEnv v a -> v -> a -> MkDVarEnv v a
+extendDVarEnv_C :: Uniquable v => (a -> a -> a) -> DVarEnv v a -> v -> a -> DVarEnv v a
 extendDVarEnv_C = addToUDFM_C
 
-modifyDVarEnv :: Uniquable v => (a -> a) -> MkDVarEnv v a -> v -> MkDVarEnv v a
+modifyDVarEnv :: Uniquable v => (a -> a) -> DVarEnv v a -> v -> DVarEnv v a
 modifyDVarEnv mangle_fn env key
   = case (lookupDVarEnv env key) of
       Nothing -> env
       Just xx -> extendDVarEnv env key (mangle_fn xx)
 
-partitionDVarEnv :: (a -> Bool) -> MkDVarEnv v a -> (MkDVarEnv v a, MkDVarEnv v a)
+partitionDVarEnv :: (a -> Bool) -> DVarEnv v a -> (DVarEnv v a, DVarEnv v a)
 partitionDVarEnv = partitionUDFM
 
-extendDVarEnvList :: Uniquable v => MkDVarEnv v a -> [(v, a)] -> MkDVarEnv v a
+extendDVarEnvList :: Uniquable v => DVarEnv v a -> [(v, a)] -> DVarEnv v a
 extendDVarEnvList = addListToUDFM
 
-anyDVarEnv :: (a -> Bool) -> MkDVarEnv v a -> Bool
+anyDVarEnv :: (a -> Bool) -> DVarEnv v a -> Bool
 anyDVarEnv = anyUDFM

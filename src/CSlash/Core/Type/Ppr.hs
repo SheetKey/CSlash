@@ -14,16 +14,16 @@ import CSlash.Utils.Misc
 import CSlash.Utils.Panic
 import CSlash.Types.Basic
 
-pprType :: IsTyVar tv kv => Type tv kv -> SDoc
+pprType :: Type p -> SDoc
 pprType = pprPrecType topPrec
 
-pprParendType :: IsTyVar tv kv => Type tv kv -> SDoc
+pprParendType :: Type p -> SDoc
 pprParendType = pprPrecType appPrec
 
-pprPrecType :: IsTyVar tv kv => PprPrec -> Type tv kv -> SDoc
+pprPrecType :: PprPrec -> Type p -> SDoc
 pprPrecType = pprPrecTypeX emptyTidyEnv
 
-pprPrecTypeX :: IsTyVar tv kv => MkTidyEnv tv kv -> PprPrec -> Type tv kv -> SDoc
+pprPrecTypeX :: TidyEnv p -> PprPrec -> Type p -> SDoc
 pprPrecTypeX env prec ty
   = getPprStyle $ \ sty ->
     getPprDebug $ \ debug ->
@@ -31,21 +31,24 @@ pprPrecTypeX env prec ty
                     then debug_ppr_ty prec ty
                     else panic "pprPrecIfaceType prec (tidyToIfaceTypeStyX env ty sty)"
 
-pprSigmaType :: IsTyVar tv kv => Type tv kv -> SDoc
+pprSigmaType :: Type p -> SDoc
 pprSigmaType ty = text "pprSigmaType not implemented" <+> pprType ty
 
-pprTyVars :: VarHasKind tv kv => [tv] -> SDoc
+pprTyVars :: [TyVar p] -> SDoc
 pprTyVars tvs = sep (map pprTyVar tvs)
+ 
+pprTcTyVars :: [TcTyVar] -> SDoc
+pprTcTyVars = pprTyVars . fmap TcTyVar
 
-pprTyVar :: VarHasKind tv kv => tv -> SDoc
+pprTyVar :: TyVar p -> SDoc
 pprTyVar tv = parens (ppr tv <+> colon <+> ppr kind)
   where
     kind = varKind tv
 
-debugPprType :: IsTyVar tv kv => Type tv kv -> SDoc
+debugPprType :: Type p -> SDoc
 debugPprType ty = debug_ppr_ty topPrec ty
 
-debug_ppr_ty :: IsTyVar tv kv => PprPrec -> Type tv kv -> SDoc
+debug_ppr_ty :: PprPrec -> Type p -> SDoc
 
 debug_ppr_ty _ (TyVarTy tv) = ppr tv
 

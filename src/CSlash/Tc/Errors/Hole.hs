@@ -17,7 +17,7 @@ import CSlash.Core.Predicate( KiPred(..), classifyPredKind )
 import CSlash.Types.Name
 import CSlash.Types.Name.Reader
 -- import CSlash.Builtin.Names ( gHC_INTERNAL_ERR, gHC_INTERNAL_UNSAFE_COERCE )
-import CSlash.Types.Id
+import CSlash.Types.Var.Id
 import CSlash.Types.Var.Set
 import CSlash.Types.Var.Env
 import CSlash.Types.TyThing

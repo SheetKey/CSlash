@@ -36,12 +36,11 @@ import CSlash.Builtin.Names
 
 import CSlash.Tc.Types.Evidence
 
-import CSlash.Types.Id
+import CSlash.Types.Var.Id
 -- import GHC.Types.Id.Make ( nospecId )
 import CSlash.Types.Name
 import CSlash.Types.Var.Set
 import CSlash.Types.Var.Env
-import CSlash.Types.Var( ZkId )
 import CSlash.Types.SrcLoc
 import CSlash.Types.Basic
 import CSlash.Types.Unique.Set( nonDetEltsUniqSet )
@@ -66,22 +65,22 @@ import Control.Monad
 *                                                                      *
 **********************************************************************-}
 
-dsTopLCsBinds :: LCsBinds Zk -> DsM (OrdList (ZkId, CoreExpr))
+dsTopLCsBinds :: LCsBinds Zk -> DsM (OrdList (Id Zk, CoreExpr))
 dsTopLCsBinds binds = do
   prs <- dsLCsBinds binds
   panic "dsTopLCsBinds"
 
-dsLCsBinds :: LCsBinds Zk -> DsM [(ZkId, CoreExpr)]
+dsLCsBinds :: LCsBinds Zk -> DsM [(Id Zk, CoreExpr)]
 dsLCsBinds binds = do
   ds_bs <- mapM dsLCsBind binds
   return $ foldr (++) [] ds_bs
 
-dsLCsBind :: LCsBind Zk -> DsM [(ZkId, CoreExpr)]
+dsLCsBind :: LCsBind Zk -> DsM [(Id Zk, CoreExpr)]
 dsLCsBind (L loc bind) = do
   dflags <- getDynFlags
   panic "putSrcSpanDs (locA loc) $ dsCsBind dflags bind"
 
-dsCsBind :: DynFlags -> CsBind Zk -> DsM [(ZkId, CoreExpr)]
+dsCsBind :: DynFlags -> CsBind Zk -> DsM [(Id Zk, CoreExpr)]
 -- dsCsBind dflags b@(FunBind { fun_id = L loc fun
 --                            , fun_body = body
 --                            , fun_ext = (co_fn, tick)

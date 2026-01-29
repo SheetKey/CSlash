@@ -5,14 +5,16 @@
 
 module CSlash.Tc.Zonk.Env where
 
+import CSlash.Cs.Pass
+
 import CSlash.Core.Type.Rep ( Type )
 import CSlash.Core.Kind ( Kind, MonoKind )
 import CSlash.Types.Var
-  ( TcTyVar, TyVar, AnyTyVar, TcKiVar, KiVar, AnyKiVar, ZkId )
+  ( TcTyVar, TyVar, TcKiVar, KiVar,  )
 
 import CSlash.Types.Var ( Id )
 import CSlash.Types.Var.Env
-import CSlash.Types.Id
+import CSlash.Types.Var.Id
 
 import CSlash.Utils.Monad.Codensity
 import CSlash.Utils.Outputable
@@ -28,11 +30,11 @@ import GHC.Exts                  ( oneShot )
 
 data ZonkEnv = ZonkEnv
   { ze_flexi :: !ZonkFlexi
-  , ze_tv_env :: MkVarEnv (TyVar KiVar) (TyVar KiVar)
-  , ze_kv_env :: MkVarEnv KiVar KiVar
-  , ze_id_env :: MkVarEnv ZkId ZkId
-  , ze_meta_tv_env :: IORef (MkVarEnv (TcTyVar AnyKiVar) (Type (TyVar KiVar) KiVar))
-  , ze_meta_kv_env :: IORef (MkVarEnv TcKiVar (MonoKind KiVar))
+  , ze_tv_env :: VarEnv (TyVar Zk) (TyVar Zk)
+  , ze_kv_env :: VarEnv (KiVar Zk) (KiVar Zk)
+  , ze_id_env :: VarEnv (Id Zk) (Id Zk)
+  , ze_meta_tv_env :: IORef (VarEnv TcTyVar (Type Zk))
+  , ze_meta_kv_env :: IORef (VarEnv TcKiVar (MonoKind Zk))
   }
 
 data ZonkFlexi
@@ -125,19 +127,19 @@ nestZonkEnv f = ZonkBndrT $ \k -> case k () of
 getZonkEnv :: Monad m => ZonkT m ZonkEnv
 getZonkEnv = ZonkT return
 
-extendIdZonkEnvRec :: [ZkId] -> ZonkBndrT m ()
+extendIdZonkEnvRec :: [Id Zk] -> ZonkBndrT m ()
 extendIdZonkEnvRec ids = nestZonkEnv $ \ze@(ZonkEnv { ze_id_env = id_env }) ->
                                          ze { ze_id_env = extendVarEnvList
                                                           id_env [(id, id) | id <- ids] }
 
-extendIdZonkEnv :: ZkId -> ZonkBndrT m ()
+extendIdZonkEnv :: Id Zk -> ZonkBndrT m ()
 extendIdZonkEnv id = nestZonkEnv $ \ze@(ZonkEnv { ze_id_env = id_env }) ->
                                      ze { ze_id_env = extendVarEnv id_env id id }
 
-extendTyZonkEnv :: TyVar KiVar -> ZonkBndrT m ()
+extendTyZonkEnv :: TyVar Zk -> ZonkBndrT m ()
 extendTyZonkEnv tv = nestZonkEnv $ \ze@(ZonkEnv { ze_tv_env = ty_env }) ->
                                      ze { ze_tv_env = extendVarEnv ty_env tv tv }
 
-extendKiZonkEnv :: KiVar -> ZonkBndrT m ()
+extendKiZonkEnv :: KiVar Zk -> ZonkBndrT m ()
 extendKiZonkEnv kv = nestZonkEnv $ \ze@(ZonkEnv { ze_kv_env = ki_env }) ->
                                      ze { ze_kv_env = extendVarEnv ki_env kv kv }

@@ -29,8 +29,8 @@ import CSlash.Tc.Utils.TcMType
 import CSlash.Tc.Zonk.TcType
 import CSlash.Tc.Types.Origin
 import CSlash.Tc.Utils.TcType as TcType
-import CSlash.Types.Id
-import CSlash.Types.Id.Info
+import CSlash.Types.Var.Id
+import CSlash.Types.Var.Id.Info
 import CSlash.Core.ConLike
 import CSlash.Core.DataCon
 import CSlash.Types.Name
@@ -61,7 +61,7 @@ import qualified Data.List.NonEmpty as NE
 *                                                                      *
 ********************************************************************* -}
 
-tcCheckPolyExpr :: LCsExpr Rn -> AnySigmaType -> TcM (LCsExpr Tc)
+tcCheckPolyExpr :: LCsExpr Rn -> SigmaType Tc -> TcM (LCsExpr Tc)
 tcCheckPolyExpr expr res_ty = tcPolyLExpr expr (mkCheckExpType res_ty)
 
 tcPolyLExpr :: LCsExpr Rn -> ExpSigmaType -> TcM (LCsExpr Tc)
@@ -81,7 +81,7 @@ tcPolyLExprSig (L loc expr) sig = setSrcSpanA loc $ do
   expr' <- tcPolyExprCheck expr (Right sig)
   return (L loc expr')
 
-tcPolyExprCheck :: CsExpr Rn -> Either AnySigmaType TcCompleteSig -> TcM (CsExpr Tc)
+tcPolyExprCheck :: CsExpr Rn -> Either (SigmaType Tc) TcCompleteSig -> TcM (CsExpr Tc)
 tcPolyExprCheck  expr res_ty = outer_skolemize res_ty $ \pat_tys rho_ty ->
   let tc_body (CsPar x (L loc e))
         = setSrcSpanA loc $ do e' <- tc_body e
@@ -95,8 +95,8 @@ tcPolyExprCheck  expr res_ty = outer_skolemize res_ty $ \pat_tys rho_ty ->
   in tc_body expr
   where
     outer_skolemize
-      :: Either AnySigmaType TcCompleteSig
-      -> ([ExpPatType] -> AnyRhoType -> TcM (CsExpr Tc))
+      :: Either (SigmaType Tc) TcCompleteSig
+      -> ([ExpPatType] -> RhoType Tc -> TcM (CsExpr Tc))
       -> TcM (CsExpr Tc)
     outer_skolemize (Left ty) thing_inside = do
       (wrap, expr') <- tcSkolemizeExpectedType ty thing_inside
@@ -111,10 +111,10 @@ tcPolyExprCheck  expr res_ty = outer_skolemize res_ty $ \pat_tys rho_ty ->
 *                                                                      *
 ********************************************************************* -}
 
-tcInferRhoNC :: LCsExpr Rn -> TcM (LCsExpr Tc, AnyRhoType)
+tcInferRhoNC :: LCsExpr Rn -> TcM (LCsExpr Tc, RhoType Tc)
 tcInferRhoNC = panic "tcInferRhoNC"
 
-tcCheckMonoExpr :: LCsExpr Rn -> AnyRhoType -> TcM (LCsExpr Tc)
+tcCheckMonoExpr :: LCsExpr Rn -> RhoType Tc -> TcM (LCsExpr Tc)
 tcCheckMonoExpr expr res_ty = tcMonoExpr expr (mkCheckExpType res_ty)
 
 tcMonoExpr :: LCsExpr Rn -> ExpRhoType -> TcM (LCsExpr Tc)
@@ -174,7 +174,7 @@ tcExpr (CsLet x binds expr) res_ty = do
   return (CsLet x binds' (mkLCsWrap wrapper expr'))
 
 tcExpr (CsIf x pred b1 b2) res_ty = do
-  pred' <- tcCheckMonoExpr pred $ mkAppTy (asAnyTyKi boolTy) (Embed $ BIKi UKd)
+  pred' <- tcCheckMonoExpr pred $ mkAppTy boolTy (Embed $ BIKi UKd)
   (u1, b1') <- tcCollectingUsage $ tcMonoExpr b1 res_ty
   (u2, b2') <- tcCollectingUsage $ tcMonoExpr b1 res_ty
   tcEmitBindingUsage (supUE u1 u2)
@@ -189,14 +189,14 @@ tcExpr e res_ty = panic "tcExpr other"
 
 tcCheckExplicitTuple
   :: [CsTupArg Rn]
-  -> [AnySigmaType]
+  -> [SigmaType Tc]
   -> TcM [CsTupArg Tc]
 tcCheckExplicitTuple args tys = do
   massertPpr (equalLength args tys) (ppr tys)
   checkTupSize (length args)
   zipWith3M go [1,2..] args tys
   where
-    go :: Int -> CsTupArg Rn -> AnyType -> TcM (CsTupArg Tc)
+    go :: Int -> CsTupArg Rn -> Type Tc -> TcM (CsTupArg Tc)
     go  i (Missing {}) arg_ty = pprPanic "tcCheckExplicitTuple: tuple sections not handled here"
                                 (ppr i $$ ppr arg_ty)
     go i (Present x expr) arg_ty = do

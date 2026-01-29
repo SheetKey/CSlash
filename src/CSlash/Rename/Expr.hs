@@ -31,7 +31,7 @@ import CSlash.Builtin.Names
 
 import CSlash.Types.Basic (TypeOrKind (TypeLevel))
 import CSlash.Types.Fixity
-import CSlash.Types.Id.Make
+import CSlash.Types.Var.Id.Make
 import CSlash.Types.Name
 import CSlash.Types.Name.Set
 import CSlash.Types.Name.Reader

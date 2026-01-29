@@ -1,4 +1,3 @@
-{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -50,6 +49,8 @@ import Prelude hiding ((<>))
 
 import {-# SOURCE #-} CSlash.Types.TyThing (TyThing, WITyThing)
 
+import CSlash.Cs.Pass
+
 import CSlash.Types.Name.Occurrence
 import CSlash.Unit.Module
 import CSlash.Unit.Home
@@ -66,7 +67,7 @@ import Data.List ( intersperse )
 import Control.DeepSeq
 import Data.Data
 import qualified Data.Semigroup as S
-import CSlash.Builtin.Uniques (isTupleTyConUnique, isSumTyConUnique)
+import {-# SOURCE #-} CSlash.Builtin.Uniques (isTupleTyConUnique, isSumTyConUnique)
 
 data Name = Name
   { n_sort :: NameSort

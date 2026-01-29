@@ -55,8 +55,8 @@ import CSlash.Utils.Misc
 import CSlash.Utils.Monad
 import CSlash.Utils.Logger
 
-import CSlash.Types.Id
-import CSlash.Types.Id.Info
+import CSlash.Types.Var.Id
+import CSlash.Types.Var.Id.Info
 -- import GHC.Types.Id.Make ( mkRepPolyIdConcreteTyVars )
 -- import GHC.Types.ForeignStubs
 import CSlash.Types.Avail

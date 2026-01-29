@@ -5,6 +5,8 @@ module CSlash.Core.Unify where
 
 import Prelude hiding ((<>))
 
+import CSlash.Cs.Pass
+
 import CSlash.Types.Var
 import CSlash.Types.Var.Env
 import CSlash.Types.Var.Set
@@ -12,7 +14,7 @@ import CSlash.Types.Name( Name, mkSysTvName, mkSystemVarName )
 import CSlash.Core.Kind
 import CSlash.Core.Kind.Compare
 import CSlash.Core.Kind.FVs
-import CSlash.Core.Kind.Subst
+import CSlash.Core.Subst
 import CSlash.Utils.FV( FV, fvVarAcc )
 import CSlash.Utils.Misc
 import CSlash.Data.Pair
@@ -28,7 +30,7 @@ import Data.List ( mapAccumL )
 import Control.Monad
 import qualified Data.Semigroup as S
 
-type BindFun = AnyKiVar -> MonoKind AnyKiVar -> BindFlag
+type BindFun = KiVar Tc -> MonoKind Tc -> BindFlag
 
 {- *********************************************************************
 *                                                                      *
@@ -36,7 +38,7 @@ type BindFun = AnyKiVar -> MonoKind AnyKiVar -> BindFlag
 *                                                                      *
 ********************************************************************* -}
 
-type UnifyResult = UnifyResultM (KvSubst AnyKiVar)
+type UnifyResult = UnifyResultM (Subst Tc Tc)
 
 data UnifyResultM a
   = Unifiable a
@@ -68,12 +70,12 @@ instance Monad UnifyResultM where
     SurelyApart -> SurelyApart
   Unifiable x >>= f = f x
 
-tcUnifyKisFG :: BindFun -> [MonoKind AnyKiVar] -> [MonoKind AnyKiVar] -> UnifyResult
+tcUnifyKisFG :: BindFun -> [MonoKind Tc] -> [MonoKind Tc] -> UnifyResult
 tcUnifyKisFG bind_fn kis1 kis2 = tc_unify_kis_fg bind_fn kis1 kis2
 
-tc_unify_kis_fg :: BindFun -> [MonoKind AnyKiVar] -> [MonoKind AnyKiVar] -> UnifyResult
+tc_unify_kis_fg :: BindFun -> [MonoKind Tc] -> [MonoKind Tc] -> UnifyResult
 tc_unify_kis_fg bind_fn kis1 kis2 = do
-  env <- tc_unify_kis bind_fn True False rn_env emptyKvSubstEnv kis1 kis2
+  env <- tc_unify_kis bind_fn True False rn_env emptyVarEnv kis1 kis2
   return $ niFixSubst in_scope env
   where
     in_scope = mkInScopeSet $ varsOfMonoKinds kis1 `unionVarSet` varsOfMonoKinds kis2
@@ -83,11 +85,11 @@ tc_unify_kis
   :: BindFun
   -> Bool
   -> Bool
-  -> RnEnv2 AnyKiVar
-  -> KvSubstEnv AnyKiVar
-  -> [MonoKind AnyKiVar]
-  -> [MonoKind AnyKiVar]
-  -> UnifyResultM (KvSubstEnv AnyKiVar)
+  -> RnEnv2 (KiVar Tc)
+  -> KvSubstEnv Tc Tc
+  -> [MonoKind Tc]
+  -> [MonoKind Tc]
+  -> UnifyResultM (KvSubstEnv Tc Tc)
 tc_unify_kis bind_fn unif inj_check rn_env kv_env kis1 kis2 = initUM kv_env $ do
   unify_kis env kis1 kis2
   getKvSubstEnv
@@ -104,7 +106,7 @@ tc_unify_kis bind_fn unif inj_check rn_env kv_env kis1 kis2 = initUM kv_env $ do
 *                                                                      *
 ********************************************************************* -}
 
-niFixSubst :: InScopeSet AnyKiVar -> KvSubstEnv AnyKiVar -> KvSubst AnyKiVar
+niFixSubst :: InScopeSet (KiVar Tc) -> KvSubstEnv Tc Tc -> Subst Tc Tc
 niFixSubst in_scope kenv
   | not_fixpoint = niFixSubst in_scope (mapVarEnv (substMonoKi subst) kenv)
   | otherwise = subst
@@ -123,7 +125,7 @@ niFixSubst in_scope kenv
 
     add_free_kv subst kv = extendKvSubst subst kv (mkKiVarKi kv)
 
-niSubstKvSet :: KvSubstEnv AnyKiVar -> MkVarSet AnyKiVar -> MkVarSet AnyKiVar
+niSubstKvSet :: KvSubstEnv Tc Tc -> KiVarSet Tc -> KiVarSet Tc
 niSubstKvSet subst kvs = nonDetStrictFoldUniqSet (unionVarSet . get) emptyVarSet kvs
   where
     get kv
@@ -138,7 +140,7 @@ niSubstKvSet subst kvs = nonDetStrictFoldUniqSet (unionVarSet . get) emptyVarSet
 *                                                                      *
 ********************************************************************* -}
 
-unify_ki :: UMEnv -> MonoKind AnyKiVar -> MonoKind AnyKiVar -> UM ()
+unify_ki :: UMEnv -> MonoKind Tc -> MonoKind Tc -> UM ()
 
 unify_ki _ (BIKi k1) (BIKi k2)
   | k1 == k2
@@ -160,7 +162,7 @@ unify_ki env ki1 ki2
 
 unify_ki _ _ _ = surelyApart
 
-unify_kis :: UMEnv -> [MonoKind AnyKiVar] -> [MonoKind AnyKiVar] -> UM ()
+unify_kis :: UMEnv -> [MonoKind Tc] -> [MonoKind Tc] -> UM ()
 unify_kis env orig_xs orig_ys = go orig_xs orig_ys
   where
     go [] [] = return ()
@@ -169,7 +171,7 @@ unify_kis env orig_xs orig_ys = go orig_xs orig_ys
       go xs ys
     go _ _ = surelyApart
 
-uVar :: UMEnv -> AnyKiVar -> MonoKind AnyKiVar -> UM ()
+uVar :: UMEnv -> KiVar Tc -> MonoKind Tc -> UM ()
 uVar env kv1 ki = do
   let kv1' = umRnOccL env kv1
   subst <- getKvSubstEnv
@@ -180,7 +182,7 @@ uVar env kv1 ki = do
                -> unless (ki' `tcEqMonoKind` ki) $ surelyApart
     Nothing -> uUnrefined env kv1' ki 
 
-uUnrefined :: UMEnv -> AnyKiVar -> MonoKind AnyKiVar -> UM ()
+uUnrefined :: UMEnv -> KiVar Tc -> MonoKind Tc -> UM ()
 uUnrefined env kv1 ki2
   | KiVarKi kv2 <- ki2
   = do let kv2' = umRnOccR env kv2
@@ -203,7 +205,7 @@ uUnrefined env kv1 ki2 = case kvBindFlag env kv1 ki2 of
   Apart -> surelyApart
   BindMe -> bindKv env kv1 ki2
 
-bindKv :: UMEnv -> AnyKiVar -> MonoKind AnyKiVar -> UM ()
+bindKv :: UMEnv -> KiVar Tc -> MonoKind Tc -> UM ()
 bindKv env kv1 ki2 = do
   let free_kvs2 = varsOfMonoKind ki2
   checkRnEnv env free_kvs2
@@ -212,7 +214,7 @@ bindKv env kv1 ki2 = do
     then maybeApart MARInfinite
     else extendKvEnv kv1 ki2
 
-occursCheck :: UMEnv -> AnyKiVar -> MkVarSet AnyKiVar -> UM Bool
+occursCheck :: UMEnv -> KiVar Tc -> KiVarSet Tc -> UM Bool
 occursCheck env kv free_kvs
   | um_unif env
   = do subst <- getKvSubstEnv
@@ -240,12 +242,12 @@ data BindFlag
 data UMEnv = UMEnv
   { um_unif :: Bool
   , um_inj_tf :: Bool
-  , um_rn_env :: RnEnv2 AnyKiVar
-  , um_skols :: MkVarSet AnyKiVar
+  , um_rn_env :: RnEnv2 (KiVar Tc)
+  , um_skols :: KiVarSet Tc
   , um_bind_fun :: BindFun
   }
 
-data UMState = UMState { um_kv_env :: KvSubstEnv AnyKiVar }
+data UMState = UMState { um_kv_env :: KvSubstEnv Tc Tc }
 
 newtype UM a = UM' { unUM :: UMState -> UnifyResultM (UMState, a) }
 
@@ -270,7 +272,7 @@ instance Monad UM where
 instance MonadFail UM where
   fail _ = UM (\_ -> SurelyApart)
 
-initUM :: KvSubstEnv AnyKiVar -> UM a -> UnifyResultM a
+initUM :: KvSubstEnv Tc Tc -> UM a -> UnifyResultM a
 initUM subst_env um = case unUM um state of
   Unifiable (_, subst) -> Unifiable subst
   MaybeApart r (_, subst) -> MaybeApart r subst
@@ -278,19 +280,19 @@ initUM subst_env um = case unUM um state of
   where
     state = UMState { um_kv_env = subst_env }
 
-kvBindFlag :: UMEnv -> AnyKiVar -> MonoKind AnyKiVar -> BindFlag
+kvBindFlag :: UMEnv -> KiVar Tc -> MonoKind Tc -> BindFlag
 kvBindFlag  env kv rhs
   | kv `elemVarSet` um_skols env = Apart
   | otherwise = um_bind_fun env kv rhs
 
-getKvSubstEnv :: UM (KvSubstEnv AnyKiVar)
+getKvSubstEnv :: UM (KvSubstEnv Tc Tc)
 getKvSubstEnv = UM $ \state -> Unifiable (state, um_kv_env state)
 
-extendKvEnv :: AnyKiVar -> MonoKind AnyKiVar -> UM ()
+extendKvEnv :: KiVar Tc -> MonoKind Tc -> UM ()
 extendKvEnv kv ki = UM $ \state ->
   Unifiable (state { um_kv_env = extendVarEnv (um_kv_env state) kv ki }, ())
 
-checkRnEnv :: UMEnv -> MkVarSet AnyKiVar -> UM ()
+checkRnEnv :: UMEnv -> KiVarSet Tc -> UM ()
 checkRnEnv env varset
   | isEmptyVarSet skol_vars = return ()
   | varset `disjointVarSet` skol_vars = return ()
@@ -298,10 +300,10 @@ checkRnEnv env varset
   where
     skol_vars = um_skols env
 
-umRnOccL :: UMEnv -> AnyKiVar -> AnyKiVar
+umRnOccL :: UMEnv -> KiVar Tc -> KiVar Tc
 umRnOccL env v = rnOccL (um_rn_env env) v
 
-umRnOccR :: UMEnv -> AnyKiVar -> AnyKiVar
+umRnOccR :: UMEnv -> KiVar Tc -> KiVar Tc
 umRnOccR env v = rnOccR (um_rn_env env) v
 
 umSwapRn :: UMEnv -> UMEnv

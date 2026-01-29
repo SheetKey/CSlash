@@ -42,7 +42,7 @@ data ModGuts = ModGuts
   , mg_usage :: ![Usage]
   , mg_rdr_env :: !GlobalRdrEnv
   , mg_fix_env :: !FixityEnv
-  , mg_tcs :: ![TyCon (TyVar KiVar) KiVar]
+  , mg_tcs :: ![TyCon Zk]
   , mg_binds :: !CoreProgram
   , mg_complete_matches :: CompleteMatches
   , mg_pc_info :: !PcInfo
@@ -50,7 +50,7 @@ data ModGuts = ModGuts
 
 data CgGuts = CgGuts
   { cg_module :: !Module
-  , cg_tycons :: [TyCon (TyVar KiVar) KiVar]
+  , cg_tycons :: [TyCon Zk]
   , cg_binds :: CoreProgram
   --, cg_ccs :: [CostCentre]
   --, cg_foreign :: !ForeignStubs

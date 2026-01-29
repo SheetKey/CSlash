@@ -45,8 +45,6 @@ import CSlash.Types.Name
 import CSlash.Types.Var.Env
 import CSlash.Types.Var.Set
 import CSlash.Types.Var
-  ( VarBndr(..), AnyTyVar, AnyKiVar, IsTyVar(..), asAnyTyKi
-  , mkTyVar, varName, asAnyKi, toAnyTyVar, toAnyKiVar )
 import CSlash.Types.SourceFile
 import CSlash.Types.SrcLoc
 import CSlash.Types.TyThing ( TyThing(..) )
@@ -74,10 +72,10 @@ import Data.Bifunctor (bimap)
 *                                                                      *
 ********************************************************************* -}
 
-checkValidKind :: UserTypeCtxt -> AnyKind -> TcM ()
+checkValidKind :: UserTypeCtxt -> Kind Tc -> TcM ()
 checkValidKind _ctxt ki = traceTc "checkValidKind" (ppr ki)
 
-checkValidMonoKind :: UserTypeCtxt -> AnyMonoKind -> TcM ()
+checkValidMonoKind :: UserTypeCtxt -> MonoKind Tc -> TcM ()
 checkValidMonoKind _ctxt ki = traceTc "checkValidKind" (ppr ki)
 
 {- *********************************************************************
@@ -86,10 +84,10 @@ checkValidMonoKind _ctxt ki = traceTc "checkValidKind" (ppr ki)
 *                                                                      *
 *********************************************************************_-}
 
-checkAmbiguity :: UserTypeCtxt -> Type (AnyTyVar AnyKiVar) AnyKiVar -> TcM ()
+checkAmbiguity :: UserTypeCtxt -> Type p -> TcM ()
 checkAmbiguity ctxt ty = traceTc "Ambiguity check NOT IMPLEMENTED" empty
 
-checkUserTypeError :: UserTypeCtxt -> Type (AnyTyVar AnyKiVar) AnyKiVar -> TcM ()
+checkUserTypeError :: UserTypeCtxt -> Type p -> TcM ()
 checkUserTypeError ctxt ty
   | TySynCtxt  {} <- ctxt
   = return ()
@@ -102,10 +100,9 @@ checkUserTypeError ctxt ty
 *                                                                      *
 ********************************************************************* -}
 
-checkValidType :: IsTyVar tv kv => UserTypeCtxt -> Type tv kv -> TcM ()
-checkValidType ctxt _ty = do
-  let ty = asAnyTyKi _ty
-  traceTc "checkValidType" (ppr ty <+> colon <+> ppr (typeKind ty))
+checkValidTcType :: UserTypeCtxt -> Type Tc -> TcM ()
+checkValidTcType ctxt ty = do
+  traceTc "checkValidTcType" (ppr ty <+> colon <+> ppr (typeKind ty))
   env <- liftZonkM $ tcInitOpenTidyEnv $ varsOfTypeList ty
   let ve = ValidityEnv { ve_tidy_env = env
                        , ve_ctxt = ctxt }
@@ -117,24 +114,39 @@ checkValidType ctxt _ty = do
 
   checkAmbiguity ctxt ty
 
+  traceTc "checkValidTcType done" (ppr ty <+> colon <+> ppr (typeKind ty))
+
+checkValidType :: UserTypeCtxt -> Type Zk -> TcM ()
+checkValidType ctxt ty = do
+  traceTc "checkValidType" (ppr ty <+> colon <+> ppr (typeKind ty))
+  let env = tidyFreeTyKiVars emptyTidyEnv (varsOfTypeList ty)
+  let ve = ValidityEnv { ve_tidy_env = env
+                       , ve_ctxt = ctxt }
+  checkNoErrs $ do
+    check_type ve ty
+    checkUserTypeError ctxt ty
+    traceTc "done ct" (ppr ty)
+
+  checkAmbiguity ctxt ty
+
   traceTc "checkValidType done" (ppr ty <+> colon <+> ppr (typeKind ty))
 
 -- used for checking if the rhs returns a constraint
-checkTySynRhs :: UserTypeCtxt -> Type (TyVar KiVar) KiVar -> TcM ()
+checkTySynRhs :: UserTypeCtxt -> Type Zk -> TcM ()
 checkTySynRhs ctxt ty = return ()
   
-data ValidityEnv = ValidityEnv
-  { ve_tidy_env :: AnyTidyEnv
+data ValidityEnv p = ValidityEnv
+  { ve_tidy_env :: TidyEnv p
   , ve_ctxt :: UserTypeCtxt }
 
-instance Outputable ValidityEnv where
+instance Outputable (ValidityEnv p) where
   ppr (ValidityEnv { ve_tidy_env = env
                    , ve_ctxt = ctxt })
     = hang (text "ValidityEnv")
            2 (vcat [ text "ve_tidy_env" <+> ppr env
                    , text "ve_ctxt" <+> pprUserTypeCtxt ctxt ])
 
-check_type :: ValidityEnv -> Type (AnyTyVar AnyKiVar) AnyKiVar -> TcM ()
+check_type :: ValidityEnv p -> Type p -> TcM ()
 
 check_type _ (TyVarTy _) = return ()
 
@@ -186,10 +198,10 @@ check_type _ ty@(BigTyLamTy {}) = pprPanic "check_type/BTL2" (ppr ty)
 check_type _ other = pprPanic "check_type/O" (ppr other)
 
 check_syn_tc_app
-  :: ValidityEnv
-  -> AnyType
-  -> TyCon (AnyTyVar AnyKiVar) AnyKiVar
-  -> [AnyType]
+  :: ValidityEnv p
+  -> Type p
+  -> TyCon p
+  -> [Type p]
   -> TcM ()
 check_syn_tc_app (ve@ValidityEnv { ve_ctxt = ctxt }) ty tc tys
   | tys `lengthAtLeast` tc_arity
@@ -209,12 +221,12 @@ check_syn_tc_app (ve@ValidityEnv { ve_ctxt = ctxt }) ty tc tys
 
 -- NOT for type synonyms. We always expand type synonyms (Like LiberalTypeSynonyms extension)
 -- so we do not EVER check the args of a type synonym
-check_arg_type :: ValidityEnv -> AnyType -> TcM ()
+check_arg_type :: ValidityEnv p -> Type p -> TcM ()
 check_arg_type _ (KindCoercion {}) = return ()
 check_arg_type ve@(ValidityEnv { ve_ctxt = ctxt }) ty = check_type ve ty
 
-tyConArityErr :: AnyTyCon -> [AnyType] -> TcRnMessage
-tyConArityErr tc tks = TcRnArityMismatch (ATyCon tc) tc_type_arity tc_type_args
+tyConArityErr :: TyCon p -> [Type p] -> TcRnMessage
+tyConArityErr tc tks = panic "TcRnArityMismatch (ATyCon tc) tc_type_arity tc_type_args"
   where
     tc_type_arity = tyConArity tc
     tc_type_args = length tks

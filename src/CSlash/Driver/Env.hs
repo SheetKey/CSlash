@@ -6,6 +6,8 @@ module CSlash.Driver.Env
   , module CSlash.Driver.Env
   ) where
 
+import CSlash.Cs.Pass
+
 import CSlash.Driver.DynFlags
 import CSlash.Driver.Errors ( printOrThrowDiagnostics )
 import CSlash.Driver.Errors.Types ( CsMessage )
@@ -102,13 +104,13 @@ csUpdateLoggerFlags :: CsEnv -> CsEnv
 csUpdateLoggerFlags h = h
   { cs_logger = setLogFlags (cs_logger h) (initLogFlags (cs_dflags h)) }
 
-lookupType :: CsEnv -> Name -> IO (Maybe (TyThing (TyVar KiVar) KiVar))
+lookupType :: CsEnv -> Name -> IO (Maybe (TyThing Zk))
 lookupType cs_env name = do
   eps <- liftIO $ csEPS cs_env
   let pte = eps_PTE eps
   return $ lookupTypeInPTE cs_env pte name
 
-lookupTypeInPTE :: CsEnv -> PackageTypeEnv -> Name -> Maybe (TyThing (TyVar KiVar) KiVar)
+lookupTypeInPTE :: CsEnv -> PackageTypeEnv -> Name -> Maybe (TyThing Zk)
 lookupTypeInPTE cs_env pte name = ty
   where
     hpt = cs_HUG cs_env

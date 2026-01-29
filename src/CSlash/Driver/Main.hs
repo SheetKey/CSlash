@@ -126,7 +126,7 @@ import CSlash.Unit.Module.Deps
 import CSlash.Unit.Module.Status
 import CSlash.Unit.Home.ModInfo
 
-import CSlash.Types.Id
+import CSlash.Types.Var.Id
 import CSlash.Types.SourceError
 -- import GHC.Types.SafeHaskell
 -- import GHC.Types.ForeignStubs

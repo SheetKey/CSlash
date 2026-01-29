@@ -27,7 +27,7 @@ import CSlash.Types.Name
 import CSlash.Types.SrcLoc
 import CSlash.Types.Name.Set
 import CSlash.Types.Error
-import CSlash.Types.Id.Make
+import CSlash.Types.Var.Id.Make
 
 import CSlash.Utils.Misc
 import CSlash.Types.Fixity ( compareFixity, negateFixity

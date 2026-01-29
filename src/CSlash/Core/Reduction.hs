@@ -1,16 +1,20 @@
+{-# LANGUAGE ExplicitForAll #-}
+{-# LANGUAGE TypeAbstractions #-}
 {-# LANGUAGE BangPatterns #-}
 
 module CSlash.Core.Reduction where
 
+import CSlash.Cs.Pass
+
 -- import GHC.Core.Class      ( Class(classTyCon) )
 -- import GHC.Core.Coercion
 -- import GHC.Core.Predicate  ( mkClassPred )
-import CSlash.Core.TyCon ( TyCon, AnyTyCon )
+import CSlash.Core.TyCon ( TyCon )
 import CSlash.Core.Type
 import CSlash.Core.Type.Rep
 import CSlash.Core.Kind
-import CSlash.Core.Kind.Subst
 import CSlash.Core.Kind.FVs
+import CSlash.Core.Subst
 
 import CSlash.Data.Pair ( Pair(Pair) )
 import CSlash.Data.List.Infinite ( Infinite (..) )
@@ -18,13 +22,12 @@ import qualified CSlash.Data.List.Infinite as Inf
 
 import CSlash.Types.Var ( VarBndr(..), PiKiBinder(..), setVarKind )
 import CSlash.Types.Var.Env
-import CSlash.Types.Var.Set ( TyVarSet, AnyKiVarSet )
-import CSlash.Tc.Utils.TcType
-  (AnyMonoKind, AnyKindCoercion, AnyType, AnyKvSubst, AnyTypeCoercion)
+import CSlash.Types.Var.Set ( TyVarSet, KiVarSet )
 
 import CSlash.Utils.Misc ( HasDebugCallStack, equalLength )
 import CSlash.Utils.Outputable
 import CSlash.Utils.Panic
+import CSlash.Utils.Trace
 
 {- *********************************************************************
 *                                                                      *
@@ -33,27 +36,27 @@ import CSlash.Utils.Panic
 ********************************************************************* -}
 
 data KiReduction = KiReduction
-  { reductionKindCoercion :: AnyKindCoercion 
-  , reductionReducedKind :: !AnyMonoKind }
+  { reductionKindCoercion :: KindCoercion Tc
+  , reductionReducedKind :: !(MonoKind Tc) }
 
 data TyReduction = TyReduction
-  { reductionTypeCoercion :: AnyTypeCoercion
-  , reductionReducedType :: !AnyType }
+  { reductionTypeCoercion :: TypeCoercion Tc
+  , reductionReducedType :: !(Type Tc) }
 
 embedKiRedn :: KiReduction -> TyReduction
 embedKiRedn (KiReduction kco mki) = mkTyReduction (LiftKCo kco) (Embed mki)
 
-mkTyReduction :: AnyTypeCoercion -> AnyType -> TyReduction
+mkTyReduction :: TypeCoercion Tc -> Type Tc -> TyReduction
 mkTyReduction co ty = TyReduction co ty
 {-# INLINE mkTyReduction #-}
 
-mkKiReduction :: AnyKindCoercion -> AnyMonoKind -> KiReduction
+mkKiReduction :: KindCoercion Tc -> MonoKind Tc -> KiReduction
 mkKiReduction co ki = KiReduction co ki
 {-# INLINE mkKiReduction #-}
 
-data HetTyReduction = HetTyReduction TyReduction (Maybe AnyKindCoercion)
+data HetTyReduction = HetTyReduction TyReduction (Maybe (KindCoercion Tc))
 
-mkHetTyReduction :: TyReduction -> Maybe AnyKindCoercion -> HetTyReduction
+mkHetTyReduction :: TyReduction -> Maybe (KindCoercion Tc) -> HetTyReduction
 mkHetTyReduction = HetTyReduction
 {-# INLINE mkHetTyReduction #-}
 
@@ -75,60 +78,60 @@ instance Outputable KiReduction where
     , text "reductionReducedKind:" <+> ppr (reductionReducedKind redn)
     , text "reductionKindCoercion:" <+> ppr (reductionKindCoercion redn) ]
 
-reductionOriginalKind :: KiReduction -> AnyMonoKind
+reductionOriginalKind :: KiReduction -> MonoKind Tc
 reductionOriginalKind = kicoercionLKind . reductionKindCoercion
 {-# INLINE reductionOriginalKind #-}
 
-reductionOriginalType :: TyReduction -> AnyType
+reductionOriginalType :: TyReduction -> Type Tc
 reductionOriginalType = tycoercionLType . reductionTypeCoercion
 {-# INLINE reductionOriginalType #-}
 
-mkTransRedn :: AnyKindCoercion -> KiReduction -> KiReduction
+mkTransRedn :: KindCoercion Tc -> KiReduction -> KiReduction
 mkTransRedn co1 redn@(KiReduction co2 _) = redn { reductionKindCoercion = co1 `mkTransKiCo` co2 }
 {-# INLINE mkTransRedn #-}
 
-mkTransTyRedn :: AnyTypeCoercion -> TyReduction -> TyReduction
+mkTransTyRedn :: TypeCoercion Tc -> TyReduction -> TyReduction
 mkTransTyRedn co1 redn@(TyReduction co2 _)
   = redn { reductionTypeCoercion = co1 `mkTyTransCo` co2 }
 {-# INLINE mkTransTyRedn #-}
 
-mkReflRednKi :: AnyMonoKind -> KiReduction
+mkReflRednKi :: MonoKind Tc -> KiReduction
 mkReflRednKi ki = mkKiReduction (mkReflKiCo ki) ki
 
-mkReflRednTy :: AnyType -> TyReduction
+mkReflRednTy :: Type Tc -> TyReduction
 mkReflRednTy ty = mkTyReduction (mkReflTyCo ty) ty
 
-mkGReflLeftRednTy :: AnyType -> AnyKindCoercion -> TyReduction
+mkGReflLeftRednTy :: Type Tc -> KindCoercion Tc -> TyReduction
 mkGReflLeftRednTy ty kco
   = mkTyReduction (mkGReflLeftCo ty kco) ty
 {-# INLINE mkGReflLeftRednTy #-}
 
-mkGReflLeftMRednTy :: AnyType -> Maybe AnyKindCoercion -> TyReduction
+mkGReflLeftMRednTy :: Type Tc -> Maybe (KindCoercion Tc) -> TyReduction
 mkGReflLeftMRednTy ty mkco
   = mkTyReduction (mkGReflLeftMCo ty mkco) ty
 {-# INLINE mkGReflLeftMRednTy #-}
 
-mkGReflRightRednTy :: AnyType -> AnyKindCoercion -> TyReduction 
+mkGReflRightRednTy :: Type Tc -> KindCoercion Tc -> TyReduction 
 mkGReflRightRednTy ty kco
   = mkTyReduction (mkGReflRightCo ty kco) (mkCastTy ty kco)
 {-# INLINE mkGReflRightRednTy #-}
 
-mkGReflRightMRednTy :: AnyType -> Maybe AnyKindCoercion -> TyReduction
+mkGReflRightMRednTy :: Type Tc -> Maybe (KindCoercion Tc) -> TyReduction
 mkGReflRightMRednTy ty mkco
   = mkTyReduction (mkGReflRightMCo ty mkco) (mkCastTyMCo ty mkco)
 {-# INLINE mkGReflRightMRednTy #-}
 
-mkCoherenceRightRedn :: TyReduction -> AnyKindCoercion -> TyReduction
+mkCoherenceRightRedn :: TyReduction -> KindCoercion Tc -> TyReduction
 mkCoherenceRightRedn (TyReduction co1 ty2) kco
   = mkTyReduction (mkCoherenceRightCo ty2 kco co1) (mkCastTy ty2 kco)
 {-# INLINE mkCoherenceRightRedn #-}
 
-mkCoherenceRightMRedn :: TyReduction -> Maybe AnyKindCoercion -> TyReduction
+mkCoherenceRightMRedn :: TyReduction -> Maybe (KindCoercion Tc) -> TyReduction
 mkCoherenceRightMRedn (TyReduction co1 ty2) kco
   = mkTyReduction (mkCoherenceRightMCo ty2 kco co1) (mkCastTyMCo ty2 kco)
 {-# INLINE mkCoherenceRightMRedn #-}
 
-mkCastRedn1 :: AnyType -> AnyKindCoercion -> TyReduction -> TyReduction
+mkCastRedn1 :: Type Tc -> KindCoercion Tc -> TyReduction -> TyReduction
 mkCastRedn1 ty cast_kco (TyReduction co xi)
   = mkTyReduction (castCoercionKind1 co ty xi cast_kco) (mkCastTy xi cast_kco)
 {-# INLINE mkCastRedn1 #-}
@@ -148,20 +151,20 @@ mkFunTyRedn (KiReduction kco ki) (TyReduction arg_co arg_ty) (TyReduction res_co
   = mkTyReduction (mkTyFunCo kco arg_co res_co) (mkFunTy ki arg_ty res_ty)
 {-# INLINE mkFunTyRedn #-}
 
-mkHomoForAllRedn :: [ForAllBinder (AnyTyVar AnyKiVar)] -> TyReduction -> TyReduction
+mkHomoForAllRedn :: [ForAllBinder (TyVar Tc)] -> TyReduction -> TyReduction
 mkHomoForAllRedn bndrs (TyReduction co ty) = pprPanic "mkHomoForAllRedn" (ppr bndrs $$ ppr co $$ ppr ty)
 {-# INLINE mkHomoForAllRedn #-}
 
-mkReflKiCoRedn :: AnyKindCoercion -> TyReduction
+mkReflKiCoRedn :: KindCoercion Tc -> TyReduction
 mkReflKiCoRedn kco = mkTyReduction (mkReflTyCo kco_ty) kco_ty
   where
     kco_ty = KindCoercion kco
 {-# INLINE mkReflKiCoRedn #-}
 
-data TyReductions = TyReductions [AnyTypeCoercion] [AnyType]
-data KiReductions = KiReductions [AnyKindCoercion] [AnyMonoKind]
+data TyReductions = TyReductions [TypeCoercion Tc] [Type Tc]
+data KiReductions = KiReductions [KindCoercion Tc] [MonoKind Tc]
 
-mkTyReductions :: [AnyTypeCoercion] -> [AnyType] -> TyReductions
+mkTyReductions :: [TypeCoercion Tc] -> [Type Tc] -> TyReductions
 mkTyReductions cos tys = TyReductions cos tys
 {-# INLINE mkTyReductions #-}
 
@@ -170,7 +173,7 @@ mkAppRedns (TyReduction co ty) (TyReductions cos tys)
   = mkTyReduction (mkAppCos co cos) (mkAppTys ty tys)
 {-# INLINE mkAppRedns #-}
 
-mkTyConAppRedn :: AnyTyCon -> TyReductions -> TyReduction
+mkTyConAppRedn :: TyCon Tc -> TyReductions -> TyReduction
 mkTyConAppRedn tc (TyReductions cos tys)
   = mkTyReduction (mkTyConAppCo tc cos) (mkTyConApp tc tys)
 {-# INLINE mkTyConAppRedn #-}
@@ -188,27 +191,27 @@ unzipRedns = foldr accRedn (TyReductions [] [])
 *                                                                      *
 ********************************************************************* -}
 
-data LiftingContext = LC AnyKvSubst LiftCoEnv
+data LiftingContext p = LC (Subst p Tc) (LiftCoEnv p)
 
-instance Outputable LiftingContext where
+instance Outputable (LiftingContext p) where
   ppr (LC _ env) = hang (text "LiftingContext:") 2 (ppr env)
 
-type LiftCoEnv = MkVarEnv AnyKiVar AnyKindCoercion
+type LiftCoEnv p = VarEnv (KiVar p) (KindCoercion Tc)
 
-emptyLiftingContext :: InScopeSet AnyKiVar -> LiftingContext
+emptyLiftingContext :: InScopeSet (KiVar Tc) -> LiftingContext p
 emptyLiftingContext is = LC (mkEmptyKvSubst is) emptyVarEnv
 
-liftCoSubst :: HasDebugCallStack => LiftingContext -> AnyMonoKind -> AnyKindCoercion
+liftCoSubst :: HasDebugCallStack => LiftingContext p -> MonoKind p -> KindCoercion Tc
 {-# INLINE liftCoSubst #-}
 liftCoSubst lc@(LC subst env) ki
   | isEmptyVarEnv env = mkReflKiCo (substMonoKi subst ki)
   | otherwise = ki_co_subst lc ki
 
 extendLiftingContext
-  :: LiftingContext
-  -> AnyKiVar
-  -> AnyKindCoercion
-  -> LiftingContext
+  :: LiftingContext p
+  -> KiVar p
+  -> KindCoercion Tc
+  -> LiftingContext p
 extendLiftingContext  (LC subst env) kv kco
   | Just ki <- isReflKiCo_maybe kco
   = LC (extendKvSubst subst kv ki) env
@@ -216,27 +219,27 @@ extendLiftingContext  (LC subst env) kv kco
   = LC subst (extendVarEnv env kv kco)
 
 extendLiftingContextAndInScope
-  :: LiftingContext
-  -> AnyKiVar
-  -> AnyKindCoercion
-  -> LiftingContext
+  :: LiftingContext p
+  -> KiVar p
+  -> KindCoercion Tc
+  -> LiftingContext p
 extendLiftingContextAndInScope (LC subst env) kv kco
   = extendLiftingContext
     (LC (extendKvSubstInScopeSet subst (snd $ varsOfKindCoercion kco)) env) kv kco
 
-zapLiftingContext :: LiftingContext -> LiftingContext
-zapLiftingContext (LC subst _) = LC (zapKvSubst subst) emptyVarEnv
+zapLiftingContext :: LiftingContext p -> LiftingContext p
+zapLiftingContext (LC subst _) = LC (zapSubst subst) emptyVarEnv
 
-ki_co_subst :: LiftingContext -> AnyMonoKind -> AnyKindCoercion
-ki_co_subst !lc ki = go ki
+ki_co_subst :: forall p. LiftingContext p -> MonoKind p -> KindCoercion Tc
+ki_co_subst @p !lc ki = go ki
   where
-    go :: AnyMonoKind -> AnyKindCoercion
+    go :: MonoKind p -> KindCoercion Tc
     go (KiVarKi kv) = liftKiCoSubstKiVar lc kv
     go (FunKi af k1 k2) = mkFunKiCo af (go k1) (go k2)
     go (BIKi bi) = mkReflKiCo $ BIKi bi
     go other = pprPanic "ki_co_subst" (ppr other)
 
-liftKiCoSubstKiVar :: LiftingContext -> AnyKiVar -> AnyKindCoercion
+liftKiCoSubstKiVar :: LiftingContext p -> KiVar p -> KindCoercion Tc
 liftKiCoSubstKiVar (LC subst env) kv
   | Just co_arg <- lookupVarEnv env kv
   = co_arg
@@ -244,7 +247,7 @@ liftKiCoSubstKiVar (LC subst env) kv
   = mkReflKiCo (substKiVar subst kv)
 
 data ArgsReductions
-  = ArgsReductions {-# UNPACK #-} !TyReductions !(Maybe AnyKindCoercion)
+  = ArgsReductions {-# UNPACK #-} !TyReductions !(Maybe (KindCoercion Tc))
 
 {-
 This is kind of a mess:
@@ -266,20 +269,20 @@ whose kind is always 'MonoKind', making all this easier.
 -}
 {-# INLINE simplifyArgsWorker #-}
 simplifyArgsWorker
-  :: HasDebugCallStack
-  => [PiKiBinder AnyKiVar]
-  -> AnyMonoKind
-  -> AnyKiVarSet
+  :: forall p. HasDebugCallStack
+  => [PiKiBinder p]
+  -> MonoKind p
+  -> KiVarSet Tc
   -> [TyReduction]
   -> ArgsReductions
-simplifyArgsWorker orig_ki_binders orig_inner_ki orig_fvs orig_simplified_args
+simplifyArgsWorker @p orig_ki_binders orig_inner_ki orig_fvs orig_simplified_args
   = go orig_lc orig_ki_binders orig_inner_ki orig_simplified_args
   where
     orig_lc = emptyLiftingContext $ mkInScopeSet orig_fvs
 
-    go :: LiftingContext
-       -> [PiKiBinder AnyKiVar]
-       -> AnyMonoKind
+    go :: LiftingContext p
+       -> [PiKiBinder p]
+       -> MonoKind p
        -> [TyReduction]
        -> ArgsReductions
     go !lc binders inner_ki [] = ArgsReductions (mkTyReductions [] []) kind_co
@@ -311,7 +314,7 @@ simplifyArgsWorker orig_ki_binders orig_inner_ki orig_fvs orig_simplified_args
 
     go lc [] inner_ki arg_redns
       = let kco1 = liftCoSubst lc inner_ki
-            kco1_kind = kiCoercionParts kco1
+            kco1_kind@(_, Pair rewritten_kind _) = kiCoercionParts kco1
             unrewritten_tys = map reductionOriginalType arg_redns
             (arg_cos, res_co) = decomposePiCos kco1 kco1_kind unrewritten_tys
             casted_args
@@ -319,11 +322,19 @@ simplifyArgsWorker orig_ki_binders orig_inner_ki orig_fvs orig_simplified_args
                 $ zipWith mkCoherenceRightRedn arg_redns arg_cos
 
             zapped_lc = zapLiftingContext lc
-            (_, Pair rewritten_kind _) = kco1_kind
             (bndrs, new_inner) = splitMonoPiKis rewritten_kind
 
-            ArgsReductions redns_out res_co_out = go zapped_lc bndrs new_inner casted_args
-        in ArgsReductions redns_out (res_co `mkTransMKiCoR` res_co_out)
+            -- The bellow doesn't work b/c bndrs and new_inner are phase 'Tc', since they
+            -- result from 'liftCoSubst' above.
+            -- Calling 'simplifyArgsWorker' again is the same as calling 'go' with the
+            -- zapped lifting context.
+            -- May be slightly less efficient, but should be correct.
+            -- This case should be very rare anyway.
+            -- ArgsReductions redns_out res_co_out = go zapped_lc bndrs new_inner casted_args
+            ArgsReductions redns_out res_co_out
+              = simplifyArgsWorker bndrs new_inner orig_fvs casted_args
+        in pprTrace "simplifyArgsWorker rare branch" (ppr inner_ki $$ ppr arg_redns $$ ppr lc) $
+           ArgsReductions redns_out (res_co `mkTransMKiCoR` res_co_out)
 
     unsafeToKiCo (LiftKCo kco) = kco
     unsafeToKiCo other = pprPanic "unsageToKiCo" (ppr other)

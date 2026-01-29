@@ -1,5 +1,7 @@
 module CSlash.Builtin.Types where
 
+import CSlash.Cs.Pass
+
 import {-# SOURCE #-} CSlash.Core.TyCon (TyCon)
 import {-# SOURCE #-} CSlash.Core.Type.Rep (Type)
 import {-# SOURCE #-} CSlash.Core.Kind (Kind)
@@ -12,8 +14,8 @@ import {-# SOURCE #-} CSlash.Types.Var (TyVar, KiVar)
 tupleTyConName :: Arity -> Name
 tupleDataConName :: Arity -> Name
 
-tupleDataCon :: Arity -> DataCon (TyVar KiVar) KiVar
-tupleTyCon :: Arity -> TyCon (TyVar KiVar) KiVar
+tupleDataCon :: Arity -> DataCon Zk
+tupleTyCon :: Arity -> TyCon p
 
-sumDataCon :: ConTag -> Arity -> DataCon (TyVar KiVar) KiVar
-sumTyCon :: Arity -> TyCon (TyVar KiVar) KiVar
+sumDataCon :: ConTag -> Arity -> DataCon Zk
+sumTyCon :: Arity -> TyCon p

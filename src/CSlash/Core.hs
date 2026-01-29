@@ -2,6 +2,7 @@
 
 module CSlash.Core where
 
+import CSlash.Cs.Pass
 import CSlash.Types.Var
 import CSlash.Core.Type
 import CSlash.Types.Name
@@ -29,14 +30,14 @@ import Data.Word
 ********************************************************************* -}
 
 data Expr b
-  = Var ZkId
+  = Var (Id Zk)
   | Lit Literal
   | App (Expr b) (Arg b)
   | Lam b (Expr b) -- can bind term, type, or kind vars
   | Let (Bind b) (Expr b)
-  | Case (Expr b) b ZkType [Alt b]
-  | Type ZkType
-  | Coercion ZkTypeCoercion
+  | Case (Expr b) b (Type Zk) [Alt b]
+  | Type (Type Zk)
+  | Coercion (TypeCoercion Zk)
   deriving Data
 
 type Arg b = Expr b
@@ -45,7 +46,7 @@ data Alt b = Alt AltCon [b] (Expr b)
   deriving (Data)
 
 data AltCon
-  = DataAlt (DataCon () ())
+  = DataAlt (DataCon Zk)
   | LitAlt Literal
   | DEFAULT
   deriving (Eq, Data)
@@ -123,7 +124,7 @@ hasSomeUnfolding _ = True
 
 type CoreProgram = [CoreBind]
 
-type CoreBndr = ZkId
+type CoreBndr = Id Zk
 
 type CoreExpr = Expr CoreBndr
 

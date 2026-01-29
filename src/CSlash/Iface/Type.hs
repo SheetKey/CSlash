@@ -6,6 +6,8 @@ module CSlash.Iface.Type where
 
 import Prelude hiding ((<>))
 
+import CSlash.Cs.Pass
+
 import {-# SOURCE #-} CSlash.Builtin.Types
   ( tupleTyConName
   , tupleDataConName
@@ -73,7 +75,7 @@ data IfaceKdRel
 ********************************************************************** -}
 
 data IfaceType
-  = IfaceFreeTyVar (TyVar KiVar)
+  = IfaceFreeTyVar (TyVar Zk)
   | IfaceTyVar IfLclName
   | IfaceAppTy IfaceType IfaceAppArgs
   | IfaceFunTy IfaceKind IfaceType IfaceType

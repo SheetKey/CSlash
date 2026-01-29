@@ -1,11 +1,15 @@
+{-# LANGUAGE RoleAnnotations #-}
+
 module CSlash.Types.TyThing where
 
 import {-# SOURCE #-} CSlash.Core.TyCon
-import {-# SOURCE #-} CSlash.Types.Var
+import {-# SOURCE #-} CSlash.Types.Var.Id
+import CSlash.Cs.Pass
 
-data TyThing tv kv
-type WITyThing = TyThing (TyVar KiVar) KiVar
+type role TyThing nominal
+data TyThing p
+type WITyThing = TyThing Zk
 
-mkATyCon :: TyCon tv kv -> TyThing tv kv
+mkATyCon :: TyCon p -> TyThing p
 
-mkAnId :: Id tv kv -> TyThing tv kv
+mkAnId :: Id p -> TyThing p

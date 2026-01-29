@@ -23,7 +23,6 @@ import CSlash.Language.Syntax.Extension
 import CSlash.Core.Type.Rep (Type)
 import CSlash.Core.ConLike
 import CSlash.Tc.Types.Evidence
-import CSlash.Tc.Utils.TcType (AnyType)
 
 import CSlash.Data.FastString
 import CSlash.Cs.Extension
@@ -31,7 +30,7 @@ import CSlash.Cs.Lit
 import CSlash.Cs.Pat
 import CSlash.Cs.Binds
 import CSlash.Parser.Annotation
-import CSlash.Types.Var (TyVar, KiVar, AnyTyVar, AnyKiVar)
+import CSlash.Types.Var (TyVar, KiVar)
 import CSlash.Types.Basic hiding (ConLike)
 import CSlash.Types.SrcLoc
 import CSlash.Types.Fixity
@@ -146,8 +145,8 @@ type instance XIf Zk = NoExtField
 
 type instance XMultiIf Ps = [AddEpAnn]
 type instance XMultiIf Rn = NoExtField
-type instance XMultiIf Tc = AnyType
-type instance XMultiIf Zk = Type (TyVar KiVar) KiVar
+type instance XMultiIf Tc = Type Tc
+type instance XMultiIf Zk = Type Zk
 
 type instance XLet Ps = (EpToken "let", EpToken "in")
 type instance XLet Rn = NoExtField
@@ -161,8 +160,8 @@ type instance XExprWithTySig Zk = NoExtField
 
 type instance XEmbTy Ps = [AddEpAnn]
 type instance XEmbTy Rn = NoExtField
-type instance XEmbTy Tc = AnyType
-type instance XEmbTy Zk = Type (TyVar KiVar) KiVar
+type instance XEmbTy Tc = Type Tc
+type instance XEmbTy Zk = Type Zk
 
 type instance Anno [LocatedA ((StmtLR (CsPass pl) (CsPass pr) (LocatedA (body (CsPass pr)))))]
   = SrcSpanAnnL
@@ -210,34 +209,21 @@ tupArgPresent (Missing {}) = False
 
 type instance XXExpr Ps = DataConCantHappen
 type instance XXExpr Rn = DataConCantHappen
-type instance XXExpr Tc = XXExprTc
-type instance XXExpr Zk = XXExprZk
+type instance XXExpr Tc = XXExprP Tc
+type instance XXExpr Zk = XXExprP Zk
 
-data XXExprTc
-  = WrapExpr AnyCsWrapper (CsExpr Tc)
-  | ExpandedThingTc
+data XXExprP p
+  = WrapExpr (CsWrapper p) (CsExpr p)
+  | ExpandedThing
     { xtc_orig :: CsThingRn
-    , xtc_expanded :: CsExpr Tc }
-  | ConLikeTc (ConLike (AnyTyVar AnyKiVar) AnyKiVar)
+    , xtc_expanded :: CsExpr p }
+  | ConLike (ConLike p)
 
-data XXExprZk
-  = WrapExprZk ZkCsWrapper (CsExpr Zk)
-  | ExpandedThingZk
-    { xzk_orig :: CsThingRn
-    , xzk_expanded :: CsExpr Zk }
-  | ConLikeZk (ConLike (AnyTyVar AnyKiVar) AnyKiVar) -- shouldn't be 'Any'
-
-instance Outputable XXExprTc where
+instance OutputableBndrId p => Outputable (XXExprP (CsPass p)) where
   ppr (WrapExpr co_fn e) = pprCsWrapper co_fn (\_ -> pprExpr e)
-  ppr (ExpandedThingTc o e)
+  ppr (ExpandedThing o e)
     = ifPprDebug (braces $ vcat [ ppr o, ppr e]) (ppr o)
-  ppr (ConLikeTc con) = pprPrefixOcc con
-
-instance Outputable XXExprZk where
-  ppr (WrapExprZk co_fn e) = pprCsWrapper co_fn (\_ -> pprExpr e)
-  ppr (ExpandedThingZk o e)
-    = ifPprDebug (braces $ vcat [ ppr o, ppr e]) (ppr o)
-  ppr (ConLikeZk con) = pprPrefixOcc con
+  ppr (ConLike con) = pprPrefixOcc con
 
 {- *********************************************************************
 *                                                                      *
@@ -255,7 +241,7 @@ instance Outputable CsThingRn where
       ppr_builder prefix x = ifPprDebug (braces (text prefix <+> parens (ppr x))) (ppr x)
 
 mkExpandedExprTc :: CsExpr Rn -> CsExpr Tc -> CsExpr Tc
-mkExpandedExprTc oExpr eExpr = XExpr (ExpandedThingTc (OrigExpr oExpr) eExpr)
+mkExpandedExprTc oExpr eExpr = XExpr (ExpandedThing (OrigExpr oExpr) eExpr)
 
 {- *********************************************************************
 *                                                                      *
@@ -454,12 +440,12 @@ csExprNeedsParens prec = go
     go (CsEmbTy{}) = prec > topPrec
     go (XExpr x) = case csPass @p of
                      Tc -> go_x_tc x
-                     Zk -> panic "csExprNeedsParens Zk"
+                     Zk -> go_x_tc x
 
-    go_x_tc :: XXExprTc -> Bool
+    go_x_tc :: forall p'. IsPass p' => XXExprP (CsPass p') -> Bool
     go_x_tc (WrapExpr _ e) = csExprNeedsParens prec e
-    go_x_tc (ExpandedThingTc thing _) = csExpandedNeedsParens thing
-    go_x_tc (ConLikeTc {}) = False
+    go_x_tc (ExpandedThing thing _) = csExpandedNeedsParens thing
+    go_x_tc (ConLike {}) = False
 
     csExpandedNeedsParens (OrigExpr e) = csExprNeedsParens prec e
 
@@ -484,20 +470,13 @@ isAtomicCsExpr _ = False
 
 type instance XMG Ps b = Origin
 type instance XMG Rn b = Origin
-type instance XMG Tc b = MatchGroupTc
-type instance XMG Zk b = MatchGroupZk
+type instance XMG Tc b = MatchGroupP Tc
+type instance XMG Zk b = MatchGroupP Zk
 
-data MatchGroupTc = MatchGroupTc
-  { mg_arg_tys :: [AnyType]
-  , mg_res_ty :: AnyType
+data MatchGroupP p = MatchGroup
+  { mg_arg_tys :: [Type p]
+  , mg_res_ty :: Type p
   , mg_origin :: Origin
-  }
-  deriving Data
-
-data MatchGroupZk = MatchGroupZk
-  { zkmg_arg_tys :: [Type (TyVar KiVar) KiVar]
-  , zkmg_res_ty :: Type (TyVar KiVar) KiVar
-  , zkmg_origin :: Origin
   }
   deriving Data
 
@@ -581,8 +560,8 @@ type instance XBindStmt (CsPass _) Zk b = NoExtField
 
 type instance XBodyStmt (CsPass _) Ps b = NoExtField
 type instance XBodyStmt (CsPass _) Rn b = NoExtField
-type instance XBodyStmt (CsPass _) Tc b = AnyType
-type instance XBodyStmt (CsPass _) Zk b = Type (TyVar KiVar) KiVar
+type instance XBodyStmt (CsPass _) Tc b = Type Tc
+type instance XBodyStmt (CsPass _) Zk b = Type Zk
 
 type instance XLetStmt (CsPass _) (CsPass _) b = [AddEpAnn]
 

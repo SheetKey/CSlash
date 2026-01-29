@@ -1,3 +1,4 @@
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE DeriveDataTypeable #-}
@@ -6,7 +7,12 @@ module CSlash.Core.Type.Rep where
 
 import {-# SOURCE #-} CSlash.Core.Type.Ppr (pprType)
 
-import CSlash.Types.Var
+import CSlash.Cs.Pass
+
+import CSlash.Types.Var.TyVar
+import CSlash.Types.Var.KiVar
+import CSlash.Types.Var.CoVar
+import CSlash.Types.Var.Class
 import CSlash.Types.Var.Set
 import CSlash.Core.TyCon
 import CSlash.Core.Kind
@@ -31,64 +37,27 @@ import Control.DeepSeq
 *                                                                       *
 ********************************************************************** -}
 
-data Type tv kv
-  = TyVarTy tv
-  | AppTy (Type tv kv) (Type tv kv) -- The first arg must be an 'AppTy' or a 'TyVarTy' or a 'TyLam'
-  | TyLamTy tv (Type tv kv) -- Used for TySyns, NOT in the types of DataCons (only Foralls)
-  | BigTyLamTy kv (Type tv kv)
-  | TyConApp (TyCon tv kv) [Type tv kv]
-  | ForAllTy {-# UNPACK #-} !(ForAllBinder tv) (Type tv kv)
+data Type p
+  = TyVarTy (TyVar p)
+  | AppTy (Type p) (Type p) -- The first arg must be an 'AppTy' or a 'TyVarTy' or a 'TyLam'
+  | TyLamTy (TyVar p) (Type p) -- Used for TySyns, NOT in the types of DataCons (only Foralls)
+  | BigTyLamTy (KiVar p) (Type p)
+  | TyConApp (TyCon p) [Type p]
+  | ForAllTy {-# UNPACK #-} !(ForAllBinder (TyVar p)) (Type p)
   | FunTy
-    { ft_kind :: MonoKind kv
-    , ft_arg :: Type tv kv
-    , ft_res :: Type tv kv
+    { ft_kind :: MonoKind p
+    , ft_arg :: Type p
+    , ft_res :: Type p
     }
-  | CastTy (Type tv kv) (KindCoercion kv)
-  | Embed (MonoKind kv) -- for application to a 'BigTyLamTy
-  | KindCoercion (KindCoercion kv) -- embed a kind coercion (evidence stuff)
+  | CastTy (Type p) (KindCoercion p)
+  | Embed (MonoKind p) -- for application to a 'BigTyLamTy
+  | KindCoercion (KindCoercion p) -- embed a kind coercion (evidence stuff)
   deriving Data.Data
 
 type PredType = Type
 
-instance IsTyVar tv kv => Outputable (Type tv kv) where
+instance Outputable (Type p) where
   ppr = pprType
-
-instance AsGenericTy Type where
-  asGenericTyKi (TyVarTy tv) = TyVarTy $ toGenericTyVar $ asGenericKi tv
-  asGenericTyKi (AppTy t1 t2) = AppTy (asGenericTyKi t1) (asGenericTyKi t2)
-  asGenericTyKi (TyLamTy tv ty) = TyLamTy (toGenericTyVar $ asGenericKi tv) (asGenericTyKi ty)
-  asGenericTyKi (BigTyLamTy kv ty) = BigTyLamTy (toGenericKiVar kv) (asGenericTyKi ty)
-  asGenericTyKi (TyConApp tc tys) = TyConApp (asGenericTyKi tc) (asGenericTyKi <$> tys)
-  asGenericTyKi (ForAllTy (Bndr tv af) ty)
-    = ForAllTy (Bndr (toGenericTyVar $ asGenericKi tv) af) (asGenericTyKi ty)
-  asGenericTyKi (FunTy k a r) = FunTy (asGenericKi k) (asGenericTyKi a) (asGenericTyKi r)
-  asGenericTyKi (CastTy ty co) = CastTy (asGenericTyKi ty) (asGenericKi co)
-  asGenericTyKi (Embed ki) = Embed (asGenericKi ki)
-  asGenericTyKi (KindCoercion co) = KindCoercion (asGenericKi co)
-
-instance AsAnyTy Type where
-  asAnyTy (TyVarTy tv) = TyVarTy (toAnyTyVar tv)
-  asAnyTy (AppTy t1 t2) = AppTy (asAnyTy t1) (asAnyTy t2)
-  asAnyTy (TyLamTy tv ty) = TyLamTy (toAnyTyVar tv) (asAnyTy ty)
-  asAnyTy (BigTyLamTy kv ty) = BigTyLamTy kv (asAnyTy ty)
-  asAnyTy (TyConApp tc tys) = TyConApp (asAnyTy tc) (asAnyTy <$> tys)
-  asAnyTy (ForAllTy (Bndr tv af) ty) = ForAllTy (Bndr (toAnyTyVar tv) af) (asAnyTy ty)
-  asAnyTy (FunTy k a r) = FunTy k (asAnyTy a) (asAnyTy r)
-  asAnyTy (CastTy ty co) = CastTy (asAnyTy ty) co
-  asAnyTy (Embed ki) = Embed ki
-  asAnyTy (KindCoercion co) = KindCoercion co
-
-  asAnyTyKi (TyVarTy tv) = TyVarTy (asAnyKi $ toAnyTyVar tv)
-  asAnyTyKi (AppTy t1 t2) = AppTy (asAnyTyKi t1) (asAnyTyKi t2)
-  asAnyTyKi (TyLamTy tv ty) = TyLamTy (asAnyKi $ toAnyTyVar tv) (asAnyTyKi ty)
-  asAnyTyKi (BigTyLamTy kv ty) = BigTyLamTy (toAnyKiVar kv) (asAnyTyKi ty)
-  asAnyTyKi (TyConApp tc tys) = TyConApp (asAnyTyKi tc) (asAnyTyKi <$> tys)
-  asAnyTyKi (ForAllTy (Bndr tv af) ty)
-    = ForAllTy (Bndr (asAnyKi $ toAnyTyVar tv) af) (asAnyTyKi ty)
-  asAnyTyKi (FunTy k a r) = FunTy (asAnyKi k) (asAnyTyKi a) (asAnyTyKi r)
-  asAnyTyKi (CastTy ty co) = CastTy (asAnyTyKi ty) (asAnyKi co)
-  asAnyTyKi (Embed ki) = Embed (asAnyKi ki)
-  asAnyTyKi (KindCoercion co) = KindCoercion (asAnyKi co)
 
 type KnotTied ty = ty
 
@@ -98,71 +67,73 @@ type KnotTied ty = ty
 *                                                                       *
 ********************************************************************** -}
 
-data TypeCoercion tv kv
-  = TyRefl (Type tv kv)
-  | GRefl (Type tv kv) (KindCoercion kv)
-  | TyConAppCo (TyCon tv kv) [TypeCoercion tv kv]
-  | AppCo (TypeCoercion tv kv) (TypeCoercion tv kv)
-  | TyFunCo
-    { tfco_ki :: (KindCoercion kv)
-    , tfco_arg :: (TypeCoercion tv kv)
-    , tfco_res :: (TypeCoercion tv kv)
-    }
-  | TyCoVarCo (TyCoVar tv kv)
-  | LiftKCo (KindCoercion kv)
-  | TySymCo (TypeCoercion tv kv)
-  | TyTransCo (TypeCoercion tv kv) (TypeCoercion tv kv)
-  | LRCo LeftOrRight (TypeCoercion tv kv)
-  | TyHoleCo (TypeCoercionHole tv kv)
-  deriving Data.Data
+data TypeCoercion p where
+  TyRefl :: Type p -> TypeCoercion p
+  GRefl :: Type p -> KindCoercion p -> TypeCoercion p
+  TyConAppCo :: TyCon p -> [TypeCoercion p] -> TypeCoercion p
+  AppCo :: TypeCoercion p -> TypeCoercion p -> TypeCoercion p
+  TyFunCo
+    :: { tfco_ki :: KindCoercion p
+       , tfco_arg :: TypeCoercion p
+       , tfco_res :: TypeCoercion p
+       }
+    -> TypeCoercion p
+  TyCoVarCo :: TyCoVar p -> TypeCoercion p
+  LiftKCo :: KindCoercion p -> TypeCoercion p
+  TySymCo :: TypeCoercion p -> TypeCoercion p
+  TyTransCo :: TypeCoercion p -> TypeCoercion p -> TypeCoercion p
+  LRCo :: LeftOrRight -> TypeCoercion p -> TypeCoercion p
+  TyHoleCo :: TypeCoercionHole -> TypeCoercion Tc
 
-data TypeCoercionHole tv kv = TypeCoercionHole
-  { tch_co_var :: TyCoVar tv kv
-  , tch_ref :: IORef (Maybe (TypeCoercion (AnyTyVar AnyKiVar) AnyKiVar))
+instance Data.Typeable p => Data.Data (TypeCoercion p)
+
+data TypeCoercionHole = TypeCoercionHole
+  { tch_co_var :: TyCoVar Tc
+  , tch_ref :: IORef (Maybe (TypeCoercion Tc))
   }
 
-instance (Data.Typeable tv, Data.Typeable kv) => Data.Data (TypeCoercionHole tv kv)
+instance Data.Data TypeCoercionHole
 
-instance Outputable (TypeCoercion tv kv) where
+instance Outputable (TypeCoercion p) where
   ppr = const $ text "[TyCo]"
 
-instance Outputable (TypeCoercionHole tv kv) where
+instance Outputable TypeCoercionHole where
   ppr = const $ text "[TyCoHole]"
 
-instance Uniquable (TypeCoercionHole tv kv) where
+instance Uniquable TypeCoercionHole where
   getUnique (TypeCoercionHole { tch_co_var = cv }) = getUnique cv
 
-liftKCo :: KindCoercion kv -> TypeCoercion tv kv
+liftKCo :: KindCoercion p -> TypeCoercion p
 liftKCo = LiftKCo
 
-mkReflTyCo :: Type tv kv -> TypeCoercion tv kv
+mkReflTyCo :: Type p -> TypeCoercion p
 mkReflTyCo (Embed ki) = LiftKCo (mkReflKiCo ki)
 mkReflTyCo ty = TyRefl ty
 
-mkTyCoVarCo :: TyCoVar tv kv -> TypeCoercion tv kv
+mkTyCoVarCo :: TyCoVar p -> TypeCoercion p
 mkTyCoVarCo = TyCoVarCo
 
-mkTyHoleCo :: TypeCoercionHole tv kv -> TypeCoercion tv kv
+mkTyHoleCo :: TypeCoercionHole -> TypeCoercion Tc
 mkTyHoleCo = TyHoleCo
 
-mkGReflCo :: Type tv kv -> KindCoercion kv -> TypeCoercion tv kv
+mkGReflCo :: Type p -> KindCoercion p -> TypeCoercion p
 mkGReflCo ty kco
   | isReflKiCo kco = TyRefl ty
   | otherwise = GRefl ty kco
 
-mkGReflRightCo :: Type tv kv -> KindCoercion kv -> TypeCoercion tv kv 
+mkGReflRightCo :: Type p -> KindCoercion p -> TypeCoercion p 
 mkGReflRightCo ty kco
   | isReflKiCo kco = mkReflTyCo ty
   | otherwise = mkGReflCo ty kco
 
-mkGReflLeftCo :: Type tv kv -> KindCoercion kv -> TypeCoercion tv kv
+mkGReflLeftCo :: Type p -> KindCoercion p -> TypeCoercion p
 mkGReflLeftCo ty kco
   | isReflKiCo kco = mkReflTyCo ty
   | otherwise = mkSymTyCo $ mkGReflCo ty kco
 
 ty_con_app_fun_maybe
   :: (HasDebugCallStack, Outputable a)
-  => TyCon tv kv
+  => TyCon p
   -> [a]
   -> Maybe (a, a, a, a, a)
 ty_con_app_fun_maybe tc args
@@ -178,13 +149,13 @@ ty_con_app_fun_maybe tc args
       | otherwise
       = Nothing
     
-mkSymTyCo :: TypeCoercion tv kv -> TypeCoercion tv kv
+mkSymTyCo :: TypeCoercion p -> TypeCoercion p
 mkSymTyCo co | isReflTyCo co = co
 mkSymTyCo (TySymCo co) = co
 mkSymTyCo (LiftKCo kco) = LiftKCo $ mkSymKiCo kco
 mkSymTyCo co = TySymCo co
 
-mkTyTransCo :: TypeCoercion tv kv -> TypeCoercion tv kv -> TypeCoercion tv kv
+mkTyTransCo :: TypeCoercion p -> TypeCoercion p -> TypeCoercion p
 mkTyTransCo co1 co2
   | LiftKCo kco1 <- co1
   = case co2 of
@@ -202,39 +173,39 @@ mkTyTransCo co1 co2
 
 -- Given 'ty : k1', 'kco : k1 ~ k2', 'co : ty ~ ty2',
 -- produces 'co' : (ty |> kco) ~ ty2'
-mkCoherenceLeftCo :: Type tv kv -> KindCoercion kv -> TypeCoercion tv kv -> TypeCoercion tv kv
+mkCoherenceLeftCo :: Type p -> KindCoercion p -> TypeCoercion p -> TypeCoercion p
 mkCoherenceLeftCo ty kco co
   | isReflKiCo kco = co
   | otherwise = (mkSymTyCo $ mkGReflCo ty kco) `mkTyTransCo` co
 
-mkCoherenceRightCo :: Type tv kv -> KindCoercion kv -> TypeCoercion tv kv -> TypeCoercion tv kv
+mkCoherenceRightCo :: Type p -> KindCoercion p -> TypeCoercion p -> TypeCoercion p
 mkCoherenceRightCo ty kco co
   | isReflKiCo kco = co
   | otherwise = co `mkTyTransCo` mkGReflCo ty kco
 
-mkGReflLeftMCo :: Type tv kv -> Maybe (KindCoercion kv) -> TypeCoercion tv kv
+mkGReflLeftMCo :: Type p -> Maybe (KindCoercion p) -> TypeCoercion p
 mkGReflLeftMCo ty Nothing = mkReflTyCo ty
 mkGReflLeftMCo ty (Just kco) = mkGReflLeftCo ty kco
 
-mkGReflRightMCo :: Type tv kv -> Maybe (KindCoercion kv) -> TypeCoercion tv kv
+mkGReflRightMCo :: Type p -> Maybe (KindCoercion p) -> TypeCoercion p
 mkGReflRightMCo ty Nothing = mkReflTyCo ty
 mkGReflRightMCo ty (Just kco) = mkGReflRightCo ty kco
 
 mkCoherenceRightMCo
-  :: Type tv kv -> Maybe (KindCoercion kv) -> TypeCoercion tv kv -> TypeCoercion tv kv
+  :: Type p -> Maybe (KindCoercion p) -> TypeCoercion p -> TypeCoercion p
 mkCoherenceRightMCo _ Nothing co2 = co2
 mkCoherenceRightMCo ty (Just kco) co2 = mkCoherenceRightCo ty kco co2
 
-tyCoHoleCoVar :: TypeCoercionHole tv kv -> TyCoVar tv kv
+tyCoHoleCoVar :: TypeCoercionHole -> TyCoVar Tc
 tyCoHoleCoVar = tch_co_var
 
-isReflTyCo :: TypeCoercion tv kv -> Bool
+isReflTyCo :: TypeCoercion p -> Bool
 isReflTyCo (TyRefl {}) = True
 isReflTyCo (GRefl _ kco) = isReflKiCo kco
 isReflTyCo (LiftKCo kco) = isReflKiCo kco
 isReflTyCo _ = False
 
-isReflTyCo_maybe :: IsTyVar tv kv => TypeCoercion tv kv -> Maybe (Type tv kv)
+isReflTyCo_maybe :: TypeCoercion p -> Maybe (Type p)
 isReflTyCo_maybe (TyRefl ty) = Just ty
 isReflTyCo_maybe (GRefl ty kco)
   | isReflKiCo kco = pprPanic "isReflTyCo_maybe/GRefl" (ppr ty <+> text "|>" <+> ppr kco)
@@ -249,10 +220,10 @@ isReflTyCo_maybe _ = Nothing
 *                                                                       *
 ********************************************************************** -}
 
-instance (Uniquable tv, Uniquable kv) => HasFVs (Type tv kv) where
-  type FVInScope (Type tv kv) = (MkVarSet tv, MkVarSet kv)
-  type FVAcc (Type tv kv) = ([tv], MkVarSet tv, [kv], MkVarSet kv)
-  type FVArg (Type tv kv) = Either tv kv
+instance HasFVs (Type p) where
+  type FVInScope (Type p) = (TyVarSet p, KiVarSet p)
+  type FVAcc (Type p) = ([TyVar p], TyVarSet p, [KiVar p], KiVarSet p)
+  type FVArg (Type p) = Either (TyVar p) (KiVar p)
 
   fvElemAcc (Left tv) (_, haveSet, _, _) = tv `elemVarSet` haveSet
   fvElemAcc (Right kv) (_, _, _, haveSet) = kv `elemVarSet` haveSet
@@ -275,42 +246,42 @@ instance (Uniquable tv, Uniquable kv) => HasFVs (Type tv kv) where
 *                                                                       *
 ********************************************************************** -}
 
-mkTyVarTy :: tv -> Type tv kv
+mkTyVarTy :: TyVar p -> Type p
 mkTyVarTy v = TyVarTy v
 
-mkTyVarTys :: [tv] -> [Type tv kv]
+mkTyVarTys :: [TyVar p] -> [Type p]
 mkTyVarTys = map mkTyVarTy
 
-mkNakedTyConTy :: TyCon tv kv -> Type tv kv
+mkNakedTyConTy :: TyCon p -> Type p
 mkNakedTyConTy tycon = TyConApp tycon []
 
-mkFunTys :: [Type tv kv] -> [MonoKind kv] -> Type tv kv -> Type tv kv
+mkFunTys :: [Type p] -> [MonoKind p] -> Type p -> Type p
 mkFunTys args fun_kis res_ty =
   assert (args `equalLength` fun_kis)
   $ foldr (uncurry mkFunTy) res_ty (zip fun_kis args)
 
-mkForAllTys :: [ForAllBinder tv] -> Type tv kv -> Type tv kv
+mkForAllTys :: [ForAllBinder (TyVar p)] -> Type p -> Type p
 mkForAllTys tyvars ty = foldr ForAllTy ty tyvars
 
-mkInvisForAllTys :: [InvisBinder tv] -> Type tv kv -> Type tv kv
+mkInvisForAllTys :: [InvisBinder (TyVar p)] -> Type p -> Type p
 mkInvisForAllTys tyvars = mkForAllTys (varSpecToBinders tyvars)
 
-mkFunTy :: HasDebugCallStack => MonoKind kv -> Type tv kv -> Type tv kv -> Type tv kv
+mkFunTy :: HasDebugCallStack => MonoKind p -> Type p -> Type p -> Type p
 mkFunTy = FunTy
 
-tcMkFunTy :: MonoKind kv -> Type tv kv -> Type tv kv -> Type tv kv
+tcMkFunTy :: MonoKind p -> Type p -> Type p -> Type p
 tcMkFunTy = FunTy 
 
-mkTyLamTy :: tv -> Type tv kv -> Type tv kv
+mkTyLamTy :: TyVar p -> Type p -> Type p
 mkTyLamTy = TyLamTy
 
-mkTyLamTys :: [tv] -> Type tv kv -> Type tv kv
+mkTyLamTys :: [TyVar p] -> Type p -> Type p
 mkTyLamTys = flip (foldr mkTyLamTy)
 
-mkBigLamTy :: kv -> Type tv kv -> Type tv kv
+mkBigLamTy :: KiVar p -> Type p -> Type p
 mkBigLamTy = BigTyLamTy
 
-mkBigLamTys :: [kv] -> Type tv kv -> Type tv kv
+mkBigLamTys :: [KiVar p] -> Type p -> Type p
 mkBigLamTys = flip (foldr mkBigLamTy)
 
 {- *********************************************************************
@@ -319,26 +290,26 @@ mkBigLamTys = flip (foldr mkBigLamTy)
 *                                                                      *
 ********************************************************************* -}
 
-data TyCoFolder tv kv env env' b a  = TyCoFolder
-  { tcf_view :: Type tv kv -> Maybe (Type tv kv)
-  , tcf_tyvar :: env -> tv -> a
-  , tcf_covar :: env -> TyCoVar tv kv -> a
-  , tcf_hole :: env -> TypeCoercionHole tv kv -> a
-  , tcf_tybinder :: env -> tv -> ForAllFlag -> env
-  , tcf_tylambinder :: env -> tv -> env
-  , tcf_tylamkibinder :: env -> kv -> env
+data TyCoFolder p env env' b a  = TyCoFolder
+  { tcf_view :: Type p -> Maybe (Type p)
+  , tcf_tyvar :: env -> TyVar p -> a
+  , tcf_covar :: env -> TyCoVar p -> a
+  , tcf_hole :: env -> TypeCoercionHole -> a
+  , tcf_tybinder :: env -> TyVar p -> ForAllFlag -> env
+  , tcf_tylambinder :: env -> TyVar p -> env
+  , tcf_tylamkibinder :: env -> KiVar p -> env
   , tcf_swapEnv :: env -> env'
   , tcf_embedKiRes :: b -> a
-  , tcf_mkcf :: MKiCoFolder kv env' b
+  , tcf_mkcf :: MKiCoFolder p env' b
   }
 
 {-# INLINE foldTyCo #-}
 foldTyCo
-  :: (Monoid a, Monoid b, Outputable tv, Outputable kv, VarHasKind tv kv)
-  => TyCoFolder tv kv env env' b a
+  :: (Monoid a, Monoid b)
+  => TyCoFolder p env env' b a
   -> env
-  -> ( Type tv kv -> a, [Type tv kv] -> a
-     , TypeCoercion tv kv -> a, [TypeCoercion tv kv] -> a )
+  -> ( Type p -> a, [Type p] -> a
+     , TypeCoercion p -> a, [TypeCoercion p] -> a )
 foldTyCo (TyCoFolder { tcf_view = view
                      , tcf_tyvar = tyvar
                      , tcf_covar = covar
@@ -406,7 +377,7 @@ foldTyCo (TyCoFolder { tcf_view = view
       where go_kco = case foldMonoKiCo mkcf (tokenv env) of
                        (_, _, f, _) -> f
 
-noView :: Type tv kv -> Maybe (Type tv kv)
+noView :: Type p -> Maybe (Type p)
 noView _ = Nothing
 
 {- *********************************************************************
@@ -415,7 +386,7 @@ noView _ = Nothing
 *                                                                      *
 ********************************************************************* -}
 
-typeSize :: (IsTyVar tv kv, Outputable tv, Outputable kv) => Type tv kv -> Int
+typeSize :: Type p -> Int
 typeSize (TyVarTy {}) = 1
 typeSize (AppTy t1 t2) = typeSize t1 + typeSize t2
 typeSize (TyLamTy _ t) = 1 + typeSize t
@@ -427,5 +398,5 @@ typeSize (Embed _) = 1
 typeSize (CastTy ty _) = typeSize ty
 typeSize co@(KindCoercion _) = pprPanic "typeSize" (ppr co)
 
-typesSize :: (IsTyVar tv kv, Outputable tv, Outputable kv) => [Type tv kv] -> Int
+typesSize :: [Type p] -> Int
 typesSize tys = foldr ((+) . typeSize) 0 tys

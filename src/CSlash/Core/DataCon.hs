@@ -2,6 +2,8 @@
 
 module CSlash.Core.DataCon where
 
+import CSlash.Cs.Pass
+
 import CSlash.Language.Syntax.Basic
 import CSlash.Language.Syntax.Module.Name
 
@@ -13,7 +15,8 @@ import {-# SOURCE #-} CSlash.Types.TyThing
 import CSlash.Types.SourceText
 import CSlash.Types.Name
 import CSlash.Builtin.Names
-import CSlash.Types.Var
+import {-# SOURCE #-} CSlash.Types.Var.Id
+import CSlash.Types.Var.Class
 import CSlash.Types.Basic
 import CSlash.Data.FastString
 import CSlash.Unit.Types
@@ -49,18 +52,16 @@ import Numeric (showInt)
 -- we should have (invariant) length dcUnivTyVars <= length dcArgTys == length tyConBinders
 -- '<=' since in GADTS, some tyvars in the datacon may be instantiated.
 
-data DataCon tv kv = MkData
+data DataCon p = MkData
   { dcName :: Name
   , dcUnique :: Unique
   , dcTag :: ConTag
-  , dcId :: Id tv kv
+  , dcId :: Id Zk
   , dcArity :: Arity
-  , dcTyCon :: TyCon tv kv
-  , dcType :: Type tv kv
+  , dcTyCon :: TyCon Zk
+  , dcType :: Type Zk
   , dcInfix :: Bool
   }
-
-type AnyDataCon = DataCon (AnyTyVar AnyKiVar) AnyKiVar
 
 {- *********************************************************************
 *                                                                      *
@@ -68,30 +69,24 @@ type AnyDataCon = DataCon (AnyTyVar AnyKiVar) AnyKiVar
 *                                                                      *
 ********************************************************************* -}
 
-instance Eq (DataCon tv kv) where
+instance Eq (DataCon p) where
   a == b = getUnique a == getUnique b
   a /= b = getUnique a /= getUnique b
 
-instance Uniquable (DataCon tv kv) where
+instance Uniquable (DataCon p) where
   getUnique = dcUnique
 
-instance NamedThing (DataCon tv kv) where
+instance NamedThing (DataCon p) where
   getName = dcName
 
-instance AsAnyTy DataCon where
-  asAnyTyKi (MkData {..}) = MkData { dcId = asAnyTyKi dcId
-                                   , dcTyCon = asAnyTyKi dcTyCon
-                                   , dcType = asAnyTyKi dcType
-                                   , .. }
-
-instance Outputable (DataCon tv kv) where
+instance Outputable (DataCon p) where
   ppr con = ppr (dataConName con)
 
-instance OutputableBndr (DataCon tv kv) where
+instance OutputableBndr (DataCon p) where
   pprInfixOcc con = pprInfixName (dataConName con)
   pprPrefixOcc con = pprPrefixName (dataConName con)
 
-instance (Data.Typeable tv, Data.Typeable kv) => Data.Data (DataCon tv kv) where
+instance Data.Typeable p => Data.Data (DataCon p) where
   toConstr _   = abstractConstr "DataCon"
   gunfold _ _  = error "gunfold"
   dataTypeOf _ = mkNoRepType "DataCon"
@@ -105,12 +100,12 @@ instance (Data.Typeable tv, Data.Typeable kv) => Data.Data (DataCon tv kv) where
 mkDataCon
   :: Name
   -> Bool
-  -> KnotTied (TyCon tv kv)
+  -> KnotTied (TyCon Zk)
   -> ConTag
-  -> Id tv kv
-  -> Type tv kv
+  -> Id Zk
+  -> Type Zk
   -> Arity
-  -> DataCon tv kv
+  -> DataCon p
 mkDataCon name declared_infix tycon tag id ty arity
   = con
   where
@@ -130,7 +125,7 @@ mkDataCon name declared_infix tycon tag id ty arity
 -- have visible (only specified) type args)
 -- This SHOULD NOT be used (as is) for Pattern Synonyms if we ever add them
 -- Could change name to 'mkPcDataConTy' (them 'mkDataConTy', a more general version, would accempt arg types)
-mkDataConTy :: PTyCon -> Arity -> PType 
+mkDataConTy :: TyCon Zk -> Arity -> Type Zk
 mkDataConTy tycon arity = 
   pprTrace "mkDataConTy"
   (vcat [ ppr tycon
@@ -141,7 +136,7 @@ mkDataConTy tycon arity =
   assert (arity == length fa_kvs - 1 && arity == length arg_kis) $
   dc_type
   where
-    tc_kind = tyConKind tycon
+    tc_kind = tyConKind $ tyConDetails tycon
     (fa_kvs, tc_mono_kind) = splitForAllKiVars tc_kind
     (ki_preds, tc_tau_kind) = splitInvisFunKis tc_mono_kind
     (arg_kis, res_ki) = splitFunKis tc_tau_kind
@@ -159,37 +154,37 @@ mkDataConTy tycon arity =
     final_preds = ki_preds ++ fun_ki_preds
     kcos = mkTemplateKiCoVars final_preds
 
-    arg_ty_vars = mkTemplateTyVars arg_kis
+    arg_ty_vars = panic "mkTemplateTyVars arg_kis"
     arg_tys = TyVarTy <$> arg_ty_vars
 
     ffoldr :: (a -> b -> b) -> [a] -> b -> b
     ffoldr f l r = foldr f r l
     
     dc_type = ffoldr BigTyLamTy fa_kvs $ -- /\k1..kn ->
-              ffoldr ForAllTy ((flip Bndr Specified) <$> kcos) $ -- forall kco1..kcon.
+              ffoldr ForAllTy (panic "(flip Bndr Specified) <$> kcos") $ -- forall kco1..kcon.
               ffoldr ForAllTy ((flip Bndr Specified) <$> arg_ty_vars) $ -- forall a..b.
               ffoldr (uncurry FunTy) (zip fun_kis arg_tys) $ -- a -> .. -> b ->
               mkTyConApp tycon $ (Embed . KiVarKi <$> fa_kvs)
-                              ++ (TyVarTy <$> kcos) -- maybe should be KindCoercion (mkKiCoVarCo <$> kcos) ??
+                              ++ (panic "TyVarTy <$> kcos") -- maybe should be KindCoercion (mkKiCoVarCo <$> kcos) ??
                               ++ arg_tys
 
-dataConName :: DataCon tv kv -> Name
+dataConName :: DataCon p -> Name
 dataConName = dcName
 
-dataConTyCon :: DataCon tv kv -> TyCon tv kv
+dataConTyCon :: DataCon p -> TyCon Zk
 dataConTyCon = dcTyCon
 
-dataConType :: DataCon tv kv -> Type tv kv
+dataConType :: DataCon p -> Type Zk
 dataConType = dcType
          
-dataConArity :: DataCon tv kv -> Arity
+dataConArity :: DataCon p -> Arity
 dataConArity (MkData { dcArity = arity }) = arity
 
-dataConId :: DataCon tv kv -> Id tv kv
+dataConId :: DataCon p -> Id Zk
 dataConId dc = dcId dc
 
-dataConImplicitTyThing :: DataCon tv kv -> TyThing tv kv
+dataConImplicitTyThing :: DataCon p -> TyThing Zk
 dataConImplicitTyThing (MkData { dcId = id }) = mkAnId id
 
-dataConFullSig :: DataCon tv kv -> Type tv kv
+dataConFullSig :: DataCon p -> Type Zk
 dataConFullSig (MkData { dcType = full_ty }) = full_ty

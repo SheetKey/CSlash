@@ -1,10 +1,12 @@
 module CSlash.Core.TyCon.Set where
 
+import CSlash.Cs.Pass
+
 import CSlash.Types.Unique.Set
 import CSlash.Core.TyCon (TyCon)
 import CSlash.Types.Var (TyVar, KiVar)
 
-type TyConSet = UniqSet (TyCon (TyVar KiVar) KiVar)
+type TyConSet = UniqSet (TyCon Zk)
 
 isEmptyTyConSet :: TyConSet -> Bool
 isEmptyTyConSet    = isEmptyUniqSet
@@ -12,16 +14,16 @@ isEmptyTyConSet    = isEmptyUniqSet
 emptyTyConSet :: TyConSet
 emptyTyConSet = emptyUniqSet
 
-unitTyConSet :: TyCon (TyVar KiVar) KiVar -> TyConSet
+unitTyConSet :: TyCon Zk -> TyConSet
 unitTyConSet = unitUniqSet
 
-mkTyConSet :: [TyCon (TyVar KiVar) KiVar] -> TyConSet
+mkTyConSet :: [TyCon Zk] -> TyConSet
 mkTyConSet = mkUniqSet
 
-extendTyConSet :: TyConSet -> TyCon (TyVar KiVar) KiVar -> TyConSet
+extendTyConSet :: TyConSet -> TyCon Zk -> TyConSet
 extendTyConSet = addOneToUniqSet
 
-extendTyConSetList :: TyConSet -> [TyCon (TyVar KiVar) KiVar] -> TyConSet
+extendTyConSetList :: TyConSet -> [TyCon Zk] -> TyConSet
 extendTyConSetList = addListToUniqSet
 
 unionTyConSet :: TyConSet -> TyConSet -> TyConSet
@@ -33,19 +35,19 @@ unionTyConSets = unionManyUniqSets
 minusTyConSet :: TyConSet -> TyConSet -> TyConSet
 minusTyConSet = minusUniqSet
 
-elemTyConSet :: TyCon (TyVar KiVar) KiVar -> TyConSet -> Bool
+elemTyConSet :: TyCon Zk -> TyConSet -> Bool
 elemTyConSet = elementOfUniqSet
 
-filterTyConSet :: (TyCon (TyVar KiVar) KiVar -> Bool) -> TyConSet -> TyConSet
+filterTyConSet :: (TyCon Zk -> Bool) -> TyConSet -> TyConSet
 filterTyConSet = filterUniqSet
 
 disjointTyConSet :: TyConSet -> TyConSet -> Bool
 disjointTyConSet = disjointUniqSets
 
-delFromTyConSet :: TyConSet -> TyCon (TyVar KiVar) KiVar -> TyConSet
+delFromTyConSet :: TyConSet -> TyCon Zk -> TyConSet
 delFromTyConSet = delOneFromUniqSet
 
-delListFromTyConSet :: TyConSet -> [TyCon (TyVar KiVar) KiVar] -> TyConSet
+delListFromTyConSet :: TyConSet -> [TyCon Zk] -> TyConSet
 delListFromTyConSet set ns = foldl' delFromTyConSet set ns
 
 intersectTyConSet :: TyConSet -> TyConSet -> TyConSet
@@ -54,8 +56,8 @@ intersectTyConSet = intersectUniqSets
 intersectsTyConSet :: TyConSet -> TyConSet -> Bool
 intersectsTyConSet s1 s2 = not (isEmptyTyConSet (s1 `intersectTyConSet` s2))
 
-nameSetAny :: (TyCon (TyVar KiVar) KiVar -> Bool) -> TyConSet -> Bool
+nameSetAny :: (TyCon Zk -> Bool) -> TyConSet -> Bool
 nameSetAny = uniqSetAny
 
-nameSetAll :: (TyCon (TyVar KiVar) KiVar -> Bool) -> TyConSet -> Bool
+nameSetAll :: (TyCon Zk -> Bool) -> TyConSet -> Bool
 nameSetAll = uniqSetAll

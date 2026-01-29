@@ -1,14 +1,15 @@
 module CSlash.Tc.Solver.Irred where
 
-import CSlash.Core.Type.Rep (mkSymTyCo)
-import CSlash.Core.Kind (mkSymKiCo)
+import CSlash.Cs.Pass
+
+import CSlash.Core.Type.Rep (TypeCoercion, mkSymTyCo)
+import CSlash.Core.Kind (KindCoercion, mkSymKiCo)
 
 import CSlash.Tc.Types.Constraint
 import CSlash.Tc.Solver.InertSet
 -- import GHC.Tc.Solver.Dict( matchLocalInst, chooseInstance )
 import CSlash.Tc.Solver.Monad
 import CSlash.Tc.Types.Evidence
-import CSlash.Tc.Utils.TcType (AnyTypeCoercion, AnyKindCoercion)
 
 -- import GHC.Core.Coercion
 
@@ -90,7 +91,7 @@ try_inert_irred_tys inerts irred_w@(IrredTyCt { itr_ev = ev_w, itr_reason = reas
   | otherwise
   = continueWith ()
   where
-    swap_me :: SwapFlag -> CtTyEvidence -> AnyTypeCoercion
+    swap_me :: SwapFlag -> CtTyEvidence -> TypeCoercion Tc
     swap_me swap ev
       = case swap of
           NotSwapped -> ctEvTyCoercion ev
@@ -118,7 +119,7 @@ try_inert_irred_kis inerts irred_w@(IrredKiCt { ikr_ev = ev_w, ikr_reason = reas
   | otherwise
   = continueWith ()
   where
-    swap_me :: SwapFlag -> CtKiEvidence -> AnyKindCoercion
+    swap_me :: SwapFlag -> CtKiEvidence -> KindCoercion Tc
     swap_me swap ev
       = case swap of
           NotSwapped -> ctEvKiCoercion ev

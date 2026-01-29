@@ -28,9 +28,9 @@ import CSlash.Core
 
 import CSlash.Driver.Session
 -- import GHC.Types.CostCentre
-import CSlash.Types.Id
-import CSlash.Types.Id.Info
-import CSlash.Types.Id.Make
+import CSlash.Types.Var.Id
+import CSlash.Types.Var.Id.Info
+import CSlash.Types.Var.Id.Make
 import CSlash.Unit.Module
 import CSlash.Core.ConLike
 import CSlash.Core.DataCon
@@ -75,5 +75,5 @@ dsExpr other = pprPanic "dsExpr" (ppr other)
 *                                                                      *
 ********************************************************************* -}
 
-dsCsVar :: ZkId -> DsM CoreExpr
+dsCsVar :: Id Zk -> DsM CoreExpr
 dsCsVar var = return (varToCoreExpr var)
