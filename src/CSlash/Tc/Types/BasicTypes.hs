@@ -19,7 +19,7 @@ import CSlash.Language.Syntax.Type ( LCsSigType )
 
 -- import GHC.Tc.Errors.Types.PromotionErr (PromotionErr, peCategory)
 
-import CSlash.Core.TyCon  ( TyCon, pprTyConKind )
+import CSlash.Core.TyCon  ( TyCon, pprTyConKind, fromZkTyCon )
 import CSlash.Utils.Outputable
 import CSlash.Utils.Misc
 
@@ -85,7 +85,7 @@ instance Outputable TcCompleteSig where
 ********************************************************************* -}
 
 data TcTyKiThing
-  = AGlobal (TyThing Tc)
+  = AGlobal (TyThing Zk)
   | ATcId
     { tct_id :: Id Tc
     , tct_info :: IdBindingInfo
@@ -95,7 +95,7 @@ data TcTyKiThing
   | ATcTyCon (TyCon Tc)
 
 tcTyThingTyCon_maybe :: TcTyKiThing -> Maybe (TyCon Tc)
-tcTyThingTyCon_maybe (AGlobal (ATyCon tc)) = Just tc
+tcTyThingTyCon_maybe (AGlobal (ATyCon tc)) = Just $ fromZkTyCon tc
 tcTyThingTyCon_maybe (ATcTyCon tc_tc) = Just tc_tc
 tcTyThingTyCon_maybe _ = Nothing
 

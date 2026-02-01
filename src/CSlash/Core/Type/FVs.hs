@@ -52,6 +52,9 @@ runCoVars f = appEndo f (emptyVarSet, emptyVarSet)
 *                                                                      *
 ********************************************************************* -}
 
+varsOfTyVarEnv :: VarEnv (TyVar p') (Type p) -> (TyVarSet p, KiCoVarSet p, KiVarSet p)
+varsOfTyVarEnv tys = varsOfTypes (nonDetEltsUFM tys)
+
 varsOfType :: Type p -> (TyVarSet p, KiCoVarSet p, KiVarSet p)
 varsOfType ty = runTyKiVars (deep_ty ty)
 
@@ -78,6 +81,7 @@ deepTvFolder = TyCoFolder { tcf_view = noView
                           , tcf_covar = panic "deepTvFolder do_covar"
                           , tcf_hole = panic "deepTvFolder do_hole"
                           , tcf_tybinder = do_bndr
+                          , tcf_kcobinder = do_bndr_kco
                           , tcf_tylambinder = do_tylambndr
                           , tcf_tylamkibinder = do_kilambndr
                           , tcf_swapEnv = \(_, kcv, kv) -> (kcv, kv)
@@ -97,6 +101,8 @@ deepTvFolder = TyCoFolder { tcf_view = noView
           -- (deep_mki starts with emptyVarSet as in_scope set)
     do_bndr (tis, kcvis, kis) tv _
       = (extendVarSet tis tv, kcvis, kis)
+    do_bndr_kco (tis, kcvis, kis) kcv
+      = (tis, extendVarSet kcvis kcv, kis)
     do_tylambndr (tis, kcvis, kis) tv
       = (extendVarSet tis tv, kcvis, kis)
     do_kilambndr (tis, kcvis, kis) kv = (tis, kcvis, extendVarSet kis kv)
@@ -132,6 +138,7 @@ shallowTvFolder = TyCoFolder { tcf_view = noView
                              , tcf_covar = panic "shallowTvFolder do_covar"
                              , tcf_hole = panic "shallowTvFolder do_hole"
                              , tcf_tybinder = do_bndr
+                             , tcf_kcobinder = do_bndr_kco
                              , tcf_tylambinder = do_tylambndr
                              , tcf_tylamkibinder = do_kilambndr
                              , tcf_swapEnv = \(_, kcv, kv) -> (kcv, kv)
@@ -148,6 +155,8 @@ shallowTvFolder = TyCoFolder { tcf_view = noView
           | otherwise = (tacc `extendVarSet` v, kcvacc, kacc)
     do_bndr (tis, kcvis, kis) tv _
       = (extendVarSet tis tv, kcvis, kis)
+    do_bndr_kco (tis, kcvis, kis) kcv
+      = (tis, extendVarSet kcvis kcv, kis)
     do_tylambndr (tis, kcvis, kis) tv
       = (extendVarSet tis tv, kcvis, kis)
     do_kilambndr (tis, kcvis, kis) kv = (tis, kcvis, extendVarSet kis kv)
@@ -195,6 +204,7 @@ deepCoVarFolder = TyCoFolder { tcf_view = noView
                              , tcf_covar = do_covar
                              , tcf_hole = do_hole
                              , tcf_tybinder = do_bndr
+                             , tcf_kcobinder = do_bndr_kco
                              , tcf_tylambinder = do_tylambinder
                              , tcf_tylamkibinder = do_kilambinder
                              , tcf_swapEnv = \(_, kcv) -> kcv
@@ -213,10 +223,10 @@ deepCoVarFolder = TyCoFolder { tcf_view = noView
                                | otherwise = appEndo (deep_cv_ty (varType v))
                                              $ (tacc `extendVarSet` v, kacc)
 
-    do_bndr is@(tis, kis) v _
-      = is
-    do_tylambinder is@(tis, kis) v
-      = is
+    do_bndr is _ _ = is
+    do_bndr_kco (tis, kis) kcv
+      = (tis, extendVarSet kis kcv)
+    do_tylambinder is _ = is
     do_kilambinder is _ = is
 
     do_hole is hole = panic "do_covar is (tyCoHoleCoVar hole)"
@@ -235,18 +245,18 @@ deepCoVarFolder = TyCoFolder { tcf_view = noView
 type TyFV p = FV (Type p)
 
 liftKiFV :: KiFV p -> TyFV p
-liftKiFV kfv f (tis, kis) (taccl, taccs, kaccl, kaccs)
-  = case kfv (f . Right) kis (kaccl, kaccs) of
-      (kaccl, kaccs) -> (taccl, taccs, kaccl, kaccs)
+liftKiFV kfv f (_, _, kis) (taccl, taccs, kcaccl, kcaccs, kaccl, kaccs)
+  = case kfv (f . In3) kis (kaccl, kaccs) of
+      (kaccl, kaccs) -> (taccl, taccs, kcaccl, kcaccs, kaccl, kaccs)
 
 fvsOfType :: Type p -> TyFV p
 
-fvsOfType (TyVarTy v) f (bound_vars, bks) acc@(acc_list, acc_set, kl, ks)
-  | not (f (Left v)) = acc
+fvsOfType (TyVarTy v) f (bound_vars, bkcs, bks) acc@(acc_list, acc_set, kcl, kcs, kl, ks)
+  | not (f (In1 v)) = acc
   | v `elemVarSet` bound_vars = acc
   | v `elemVarSet` acc_set = acc
-  | otherwise = liftKiFV (fvsOfMonoKind (varKind v)) f (bound_vars, bks)
-                (v:acc_list, extendVarSet acc_set v, kl, ks)
+  | otherwise = liftKiFV (fvsOfMonoKind (varKind v)) f (bound_vars, bkcs, bks)
+                (v:acc_list, extendVarSet acc_set v, kcl, kcs, kl, ks)
 
 fvsOfType (TyConApp _ tys) f bound_vars acc = fvsOfTypes tys f bound_vars acc
 
@@ -260,11 +270,14 @@ fvsOfType (FunTy k arg res) f bound_vars acc
 fvsOfType (ForAllTy bndr ty) f bound_vars acc
   = fvsBndr bndr (fvsOfType ty) f bound_vars acc
 
+fvsOfType (ForAllKiCo kcv ty) f bound_vars acc
+  = fvsKiCoVarBndr kcv (fvsOfType ty) f bound_vars acc
+
 fvsOfType (TyLamTy v ty) f bound_vars acc
   = fvsVarBndr v (fvsOfType ty) f bound_vars acc
 
 fvsOfType (BigTyLamTy kv ty) f bound_vars acc
-  = delFV (Right kv) (fvsOfType ty) f bound_vars acc
+  = delFV (In3 kv) (fvsOfType ty) f bound_vars acc
 
 fvsOfType (CastTy ty kco) f bound_vars acc
   = (fvsOfType ty `unionFV` fvsOfKiCo kco) f bound_vars acc
@@ -310,34 +323,40 @@ fvsVarBndrs :: [TyVar p] -> TyFV p -> TyFV p
 fvsVarBndrs vars fvs = foldr fvsVarBndr fvs vars
 
 fvsVarBndr :: TyVar p -> TyFV p -> TyFV p
-fvsVarBndr var fvs = liftKiFV (fvsOfMonoKind (varKind var)) `unionFV` delFV (Left var) fvs
+fvsVarBndr var fvs = liftKiFV (fvsOfMonoKind (varKind var)) `unionFV` delFV (In1 var) fvs
+
+fvsKiCoVarBndr :: KiCoVar p -> TyFV p -> TyFV p
+fvsKiCoVarBndr var fvs = liftKiFV (fvsOfMonoKind (varKind var)) `unionFV` delFV (In2 var) fvs
 
 fvsKiVarBndrs :: [KiVar p] -> TyFV p -> TyFV p
 fvsKiVarBndrs vars fvs = foldr fvsKiVarBndr fvs vars
 
 fvsKiVarBndr :: KiVar p -> TyFV p -> TyFV p
-fvsKiVarBndr var fvs = delFV (Right var) fvs
+fvsKiVarBndr var fvs = delFV (In3 var) fvs
 
 fvsOfTypes :: [Type p] -> TyFV p
 fvsOfTypes [] fv_cand in_scope acc = emptyFV fv_cand in_scope acc
 fvsOfTypes (ty:tys) fv_cand in_scope acc
   = (fvsOfType ty `unionFV` fvsOfTypes tys) fv_cand in_scope acc
 
-varsOfTypeDSet :: Type p -> (DTyVarSet p, DKiVarSet p)
+varsOfTypeDSet :: Type p -> (DTyVarSet p, DKiCoVarSet p, DKiVarSet p)
 varsOfTypeDSet ty = case fvVarAcc (fvsOfType ty) of
-  (tvs, _, kvs, _) -> (mkDVarSet tvs, mkDVarSet kvs)
+  (tvs, _, kcvs, _, kvs, _) -> (mkDVarSet tvs, mkDVarSet kcvs, mkDVarSet kvs)
 
-varsOfTypeList :: Type p -> ([TyVar p], [KiVar p])
+varsOfTypeList :: Type p -> ([TyVar p], [KiCoVar p], [KiVar p])
 varsOfTypeList ty = case fvVarAcc (fvsOfType ty) of
-  (tvs, _, kvs, _) -> (tvs, kvs)
+  (tvs, _, kcvs, _, kvs, _) -> (tvs, kcvs, kvs)
 
-varsOfTypesList :: [Type p] -> ([TyVar p], [KiVar p])
+varsOfTypesList :: [Type p] -> ([TyVar p], [KiCoVar p], [KiVar p])
 varsOfTypesList tys = case fvVarAcc (fvsOfTypes tys) of
-  (tvs, _, kvs, _) -> (tvs, kvs)
+  (tvs, _, kcvs, _, kvs, _) -> (tvs, kcvs, kvs)
 
-typeSomeFreeVars :: (Either (TyVar p) (KiVar p) -> Bool) -> Type p -> (TyVarSet p, KiVarSet p)
+typeSomeFreeVars
+  :: (E3 (TyVar p) (KiCoVar p) (KiVar p) -> Bool)
+  -> Type p
+  -> (TyVarSet p, KiCoVarSet p, KiVarSet p)
 typeSomeFreeVars fv_cand ty = case fvVarAcc (filterFV fv_cand $ fvsOfType ty) of
-  (_, tvs, _, kvs) -> (tvs, kvs)
+  (_, tvs, _, kcvs, _, kvs) -> (tvs, kcvs, kvs)
 
 {- *********************************************************************
 *                                                                      *
@@ -354,6 +373,7 @@ isInjectiveInType tv ty = go ty
     go (FunTy _ ty1 ty2) = go ty1 || go ty2
     go (TyConApp tc tys) = go_tc tc tys
     go (ForAllTy (Bndr tv' _) ty) = tv /= tv' && go ty
+    go (ForAllKiCo _ ty) = go ty
     go (CastTy ty _) = go ty
     go KindCoercion{} = False
     go Embed{} = False
@@ -380,6 +400,7 @@ afvFolder f_tv f_kcv f_kv = TyCoFolder { tcf_view = noView
                                        , tcf_covar = panic "afvFolder do_covar"
                                        , tcf_hole = panic "do_hole"
                                        , tcf_tybinder = do_bndr
+                                       , tcf_kcobinder = do_bndr_kco
                                        , tcf_tylambinder = do_tylambndr
                                        , tcf_tylamkibinder = do_kilambndr
                                        , tcf_swapEnv = \(_, kcv, kv) -> (kcv, kv)
@@ -389,6 +410,8 @@ afvFolder f_tv f_kcv f_kv = TyCoFolder { tcf_view = noView
     do_tyvar (is, _, _) tv = Any (not (tv `elemVarSet` is) && f_tv tv)
     do_bndr (is, kcvs, kvs) tv _
       = (is `extendVarSet` tv, kcvs, kvs)
+    do_bndr_kco (is, kcvs, kvs) kcv
+      = (is, kcvs `extendVarSet` kcv, kvs)
     do_tylambndr (is, kcvs, kvs) tv
       = (is `extendVarSet` tv, kcvs, kvs)
     do_kilambndr (tv, kcv, is) kv = (tv, kcv, is `extendVarSet` kv)

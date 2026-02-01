@@ -113,8 +113,7 @@ niFixSubst in_scope kenv
   where
     range_fvs = fvsOfMonoKinds (nonDetEltsUFM kenv)
 
-    range_kvs = case fvVarAcc range_fvs of
-                  (kvs, _) -> kvs
+    range_kvs = fst $ fvVarAcc range_fvs 
 
     not_fixpoint = any in_domain range_kvs
     in_domain kv = kv `elemVarEnv` kenv

@@ -681,9 +681,9 @@ tidySigSkol env cx ty tv_prs = SigSkol cx (tidy_ty env ty) tv_prs'
     tidy_ty env ty = tidyType env ty
 
     tidy_tv_bndr :: TidyEnv Tc -> TyVar Tc -> (TidyEnv Tc, TyVar Tc)
-    tidy_tv_bndr env@(occ_env, subst, ksubst) tv
+    tidy_tv_bndr env@(occ_env, subst, kcsubst, ksubst) tv
       | Just tv' <- lookupNameEnv inst_env (varName tv)
-      = ((occ_env, extendVarEnv subst tv (TcTyVar tv'), ksubst), TcTyVar tv')
+      = ((occ_env, extendVarEnv subst tv (TcTyVar tv'), kcsubst, ksubst), TcTyVar tv')
       | otherwise
       = tidyTyVarBndr env tv
 

@@ -1,5 +1,7 @@
 module CSlash.Core.Type where
 
+import CSlash.Cs.Pass
+
 import {-# SOURCE #-} CSlash.Core.TyCon
 import {-# SOURCE #-} CSlash.Core.Type.Rep (Type)
 import {-# SOURCE #-} CSlash.Core.Kind (Kind, KindCoercion)
@@ -18,6 +20,6 @@ mkTyConApp :: TyCon p -> [Type p] -> Type p
 mkCastTy :: Type p -> KindCoercion p -> Type p
 
 buildSynTyCon
-  :: Name -> Kind p -> Arity -> Type p -> TyCon p
+  :: Name -> Kind Zk -> Arity -> Type Zk -> TyCon p
 
 typeKind :: HasDebugCallStack => Type p -> Kind p

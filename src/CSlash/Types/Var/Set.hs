@@ -68,11 +68,17 @@ subVarSet s1 s2 = isEmptyVarSet (s1 `minusVarSet` s2)
 lookupVarSet :: Uniquable a => UniqSet a -> a -> Maybe a
 lookupVarSet = lookupUniqSet
 
+lookupVarSet_Directly :: UniqSet a -> Unique -> Maybe a 
+lookupVarSet_Directly = lookupUniqSet_Directly
+
 anyVarSet :: (a -> Bool) -> UniqSet a -> Bool
 anyVarSet = uniqSetAny
 
 mapVarSet :: Uniquable b => (a -> b) -> UniqSet a -> UniqSet b
 mapVarSet = mapUniqSet
+
+nonDetStrictFoldVarSet :: (a -> b -> b) -> b -> UniqSet a -> b
+nonDetStrictFoldVarSet = nonDetStrictFoldUniqSet
 
 unionVarSet :: UniqSet a -> UniqSet a -> UniqSet a
 unionVarSet = unionUniqSets
@@ -99,6 +105,8 @@ type DTcKiVarSet = DVarSet TcKiVar
 
 type DTyVarSet p = DVarSet (TyVar p)
 type DTcTyVarSet = DVarSet TcTyVar
+
+type DKiCoVarSet p = DVarSet (KiCoVar p)
 
 emptyDVarSet :: UniqDSet a
 emptyDVarSet = emptyUniqDSet

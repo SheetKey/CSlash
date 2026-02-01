@@ -157,6 +157,7 @@ zonkTcTypes :: [Type Tc] -> ZonkM [Type Tc]
       , tm_covar = panic "tm_covar unused zonkTcType"
       , tm_hole = panic "tm_hole unused zonkTcType"
       , tm_tybinder = \_ tv _ k -> zonkTyVarKind tv >>= k ()
+      , tm_kicobinder = \_ kcv k -> zonkKiCoVarKind kcv >>= k ()
       , tm_tylambinder = \_ tv k -> zonkTyVarKind tv >>= k ()
       , tm_tylamkibinder = \_ kv k -> k () kv
       , tm_tycon = zonkTcTyCon
@@ -465,27 +466,27 @@ tcInitTidyEnv = do
   go emptyTidyEnv bndrs
   where
     go :: TidyEnv Tc -> TcBinderStack -> ZonkM (TidyEnv Tc)
-    go (env, tsubst, ksubst) [] = return (env, tsubst, ksubst)
-    go (env, tsubst, ksubst) (b : bs)
+    go (env, tsubst, kcsubst, ksubst) [] = return (env, tsubst, kcsubst, ksubst)
+    go (env, tsubst, kcsubst, ksubst) (b : bs)
       | TcTvBndr name tyvar <- b
       = do let (env', occ') = tidyOccName env (nameOccName name)
                name' = tidyNameOcc name occ'
                tyvar1 = setVarName tyvar name'
            tyvar2 <- zonkTcTyVarToTcTyVar tyvar1
-           go (env', extendVarEnv tsubst (TcTyVar tyvar) (TcTyVar tyvar2), ksubst) bs
+           go (env', extendVarEnv tsubst (TcTyVar tyvar) (TcTyVar tyvar2), kcsubst, ksubst) bs
       | TcKvBndr name kivar <- b
       = do let (env', occ') = tidyOccName env (nameOccName name)
                name' = tidyNameOcc name occ'
                kivar1 = setVarName kivar name'
            kivar2 <- zonkTcKiVarToTcKiVar kivar1
-           go (env', tsubst, extendVarEnv ksubst (TcKiVar kivar) (TcKiVar kivar2)) bs
+           go (env', tsubst, kcsubst, extendVarEnv ksubst (TcKiVar kivar) (TcKiVar kivar2)) bs
       | otherwise
-      = go (env, tsubst, ksubst) bs
+      = go (env, tsubst, kcsubst, ksubst) bs
 
-tcInitOpenTidyEnv :: ([TyVar Tc], [KiVar Tc]) -> ZonkM (TidyEnv Tc)
+tcInitOpenTidyEnv :: ([TyVar Tc], [KiCoVar Tc], [KiVar Tc]) -> ZonkM (TidyEnv Tc)
 tcInitOpenTidyEnv vs = do
   env1 <- tcInitTidyEnv
-  let env2 = tidyFreeTyKiVars env1 vs
+  let env2 = tidyFreeVars env1 vs
   return env2
 
 zonkTidyTcType :: TidyEnv Tc -> Type Tc -> ZonkM (TidyEnv Tc, Type Tc)

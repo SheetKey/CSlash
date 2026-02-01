@@ -80,7 +80,7 @@ topSkolemize
   -> TcM (CsWrapper Tc, [(Name, TcKiVar)], [(Name, TcTyVar)], RhoType Tc)
 topSkolemize skolem_info_ki skolem_info ty = go init_subst idCsWrapper [] [] ty
   where
-    init_subst = mkEmptySubst $ mkInScopeSets $ varsOfType ty
+    init_subst = mkEmptySubst (varsOfType ty) (emptyVarSet, emptyVarSet, emptyVarSet)
 
     go subst wrap kv_prs tv_prs ty
       | (kvs, tvs, inner_ty) <- tcSplitSigma ty
@@ -110,7 +110,7 @@ skolemizeRequired
 skolemizeRequired skolem_info n_req sigma
   = go n_req init_subst idCsWrapper [] [] sigma
   where
-    init_subst = mkEmptySubst $ mkInScopeSets $ varsOfType sigma
+    init_subst = mkEmptySubst (varsOfType sigma) (emptyVarSet, emptyVarSet, emptyVarSet)
 
     go n_req subst wrap acc_nms acc_bndrs ty
       | (n_req', bndrs, inner_ty) <- tcSplitForAllTyVarsReqTVBindersN n_req ty
@@ -172,7 +172,7 @@ instantiateSigma orig kvs tvs body_ty orig_type = do
                                    ++ map debugPprType inst_tv_tys) ]
   return (inst_kvs, inst_tvs, wrap, inst_body)
   where
-    empty_subst = mkEmptySubst $ mkInScopeSets $ varsOfType orig_type
+    empty_subst = mkEmptySubst (varsOfType orig_type) (emptyVarSet, emptyVarSet, emptyVarSet)
 
 {- *********************************************************************
 *                                                                      *

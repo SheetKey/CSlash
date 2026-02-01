@@ -162,7 +162,7 @@ tcLookup name = do
   local_env <- getLclTyKiEnv
   case lookupNameEnv local_env name of
     Just thing -> return thing
-    Nothing -> (AGlobal . panic "asAnyTyKi") <$> tcLookupGlobal name
+    Nothing -> AGlobal <$> tcLookupGlobal name
 
 tcLookupId :: Name -> TcM (Id Tc)
 tcLookupId name = do
@@ -175,8 +175,8 @@ tcLookupIdMaybe :: Name -> TcM (Maybe (Id Tc))
 tcLookupIdMaybe name = do
   thing <- tcLookup name
   case thing of
-    ATcId { tct_id = id } -> return $ Just $ panic "asAnyTyKi id"
-    AGlobal (AnId id) -> return $ Just $ panic "asAnyTyKi id"
+    ATcId { tct_id = id } -> return $ Just id
+    AGlobal (AnId id) -> return $ Just $ fromZkId id
     _ -> return Nothing
 
 tcLookupTcTyCon :: HasDebugCallStack => Name -> TcM (TyCon Tc)

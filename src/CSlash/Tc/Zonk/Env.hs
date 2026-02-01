@@ -10,7 +10,7 @@ import CSlash.Cs.Pass
 import CSlash.Core.Type.Rep ( Type )
 import CSlash.Core.Kind ( Kind, MonoKind )
 import CSlash.Types.Var
-  ( TcTyVar, TyVar, TcKiVar, KiVar,  )
+  ( TcTyVar, TyVar, TcKiVar, KiVar, KiCoVar  )
 
 import CSlash.Types.Var ( Id )
 import CSlash.Types.Var.Env
@@ -31,6 +31,7 @@ import GHC.Exts                  ( oneShot )
 data ZonkEnv = ZonkEnv
   { ze_flexi :: !ZonkFlexi
   , ze_tv_env :: VarEnv (TyVar Zk) (TyVar Zk)
+  , ze_kcv_env :: VarEnv (KiCoVar Zk) (KiCoVar Zk)
   , ze_kv_env :: VarEnv (KiVar Zk) (KiVar Zk)
   , ze_id_env :: VarEnv (Id Zk) (Id Zk)
   , ze_meta_tv_env :: IORef (VarEnv TcTyVar (Type Zk))
@@ -42,8 +43,9 @@ data ZonkFlexi
   | DefaultFlexiKi
 
 instance Outputable ZonkEnv where
-  ppr (ZonkEnv { ze_tv_env = tv_env, ze_kv_env = kv_env, ze_id_env = id_env })
+  ppr (ZonkEnv { ze_tv_env = tv_env, ze_kcv_env = kcv_env, ze_kv_env = kv_env, ze_id_env = id_env })
     = text "ZE" <+> braces (vcat [ text "ze_tv_env =" <+> ppr tv_env
+                                 , text "ze_kcv_env =" <+> ppr kcv_env
                                  , text "ze_kv_env =" <+> ppr kv_env
                                  , text "ze_id_env =" <+> ppr id_env ])
 
@@ -108,6 +110,7 @@ initZonkEnv flexi thing_inside = do
   mkv_env_ref <- liftIO $ newIORef emptyVarEnv
   let ze = ZonkEnv { ze_flexi = flexi
                    , ze_tv_env = emptyVarEnv
+                   , ze_kcv_env = emptyVarEnv
                    , ze_kv_env = emptyVarEnv
                    , ze_id_env = emptyVarEnv
                    , ze_meta_tv_env = mtv_env_ref 
@@ -139,6 +142,10 @@ extendIdZonkEnv id = nestZonkEnv $ \ze@(ZonkEnv { ze_id_env = id_env }) ->
 extendTyZonkEnv :: TyVar Zk -> ZonkBndrT m ()
 extendTyZonkEnv tv = nestZonkEnv $ \ze@(ZonkEnv { ze_tv_env = ty_env }) ->
                                      ze { ze_tv_env = extendVarEnv ty_env tv tv }
+
+extendKiCoZonkEnv :: KiCoVar Zk -> ZonkBndrT m ()
+extendKiCoZonkEnv kcv = nestZonkEnv $ \ze@(ZonkEnv { ze_kcv_env = kcv_env }) ->
+                                        ze { ze_kcv_env = extendVarEnv kcv_env kcv kcv }
 
 extendKiZonkEnv :: KiVar Zk -> ZonkBndrT m ()
 extendKiZonkEnv kv = nestZonkEnv $ \ze@(ZonkEnv { ze_kv_env = ki_env }) ->

@@ -53,6 +53,9 @@ elemInScopeSet v (InScope in_scope) = v `elemVarSet` in_scope
 lookupInScope :: Uniquable a => InScopeSet a -> a -> Maybe a
 lookupInScope (InScope in_scope) v = lookupVarSet in_scope v
 
+lookupInScope_Directly :: InScopeSet a -> Unique -> Maybe a 
+lookupInScope_Directly (InScope in_scope) u = lookupUniqSet_Directly in_scope u
+
 uniqAway :: IsVar a => InScopeSet a -> a -> a
 uniqAway in_scope var
   | var `elemInScopeSet` in_scope = uniqAway' in_scope var
@@ -218,13 +221,14 @@ rnSwap (RV2 { envL = envL, envR = envR, in_scope = in_scope })
 
 type TidyEnv p = ( TidyOccEnv
                  , VarEnv (TyVar p) (TyVar p)
+                 , VarEnv (KiCoVar p) (KiCoVar p)
                  , VarEnv (KiVar p) (KiVar p) )
 
 emptyTidyEnv :: TidyEnv p
-emptyTidyEnv = (emptyTidyOccEnv, emptyVarEnv, emptyVarEnv)
+emptyTidyEnv = (emptyTidyOccEnv, emptyVarEnv, emptyVarEnv, emptyVarEnv)
 
 mkEmptyTidyEnv :: TidyOccEnv -> TidyEnv p
-mkEmptyTidyEnv occ_env = (occ_env, emptyVarEnv, emptyVarEnv)
+mkEmptyTidyEnv occ_env = (occ_env, emptyVarEnv, emptyVarEnv, emptyVarEnv)
 
 {- *********************************************************************
 *                                                                      *

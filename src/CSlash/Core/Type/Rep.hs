@@ -44,6 +44,7 @@ data Type p
   | BigTyLamTy (KiVar p) (Type p)
   | TyConApp (TyCon p) [Type p]
   | ForAllTy {-# UNPACK #-} !(ForAllBinder (TyVar p)) (Type p)
+  | ForAllKiCo {-# UNPACK #-} !(KiCoVar p) (Type p)
   | FunTy
     { ft_kind :: MonoKind p
     , ft_arg :: Type p
@@ -220,25 +221,34 @@ isReflTyCo_maybe _ = Nothing
 *                                                                       *
 ********************************************************************** -}
 
+data E3 a b c = In1 a | In2 b | In3 c
+
 instance HasFVs (Type p) where
-  type FVInScope (Type p) = (TyVarSet p, KiVarSet p)
-  type FVAcc (Type p) = ([TyVar p], TyVarSet p, [KiVar p], KiVarSet p)
-  type FVArg (Type p) = Either (TyVar p) (KiVar p)
+  type FVInScope (Type p) = (TyVarSet p, KiCoVarSet p, KiVarSet p)
+  type FVAcc (Type p) = ([TyVar p], TyVarSet p, [KiCoVar p], KiCoVarSet p, [KiVar p], KiVarSet p)
+  type FVArg (Type p) = E3 (TyVar p) (KiCoVar p) (KiVar p)
 
-  fvElemAcc (Left tv) (_, haveSet, _, _) = tv `elemVarSet` haveSet
-  fvElemAcc (Right kv) (_, _, _, haveSet) = kv `elemVarSet` haveSet
+  fvElemAcc (In1 tv) (_, haveSet, _, _, _, _) = tv `elemVarSet` haveSet
+  fvElemAcc (In2 kcv) (_, _, _, haveSet, _, _) = kcv `elemVarSet` haveSet
+  fvElemAcc (In3 kv) (_, _, _, _, _, haveSet) = kv `elemVarSet` haveSet
 
-  fvElemIS (Left tv) (in_scope, _) = tv `elemVarSet` in_scope
-  fvElemIS (Right kv) (_, in_scope) = kv `elemVarSet` in_scope
+  fvElemIS (In1 tv) (in_scope, _, _) = tv `elemVarSet` in_scope
+  fvElemIS (In2 kcv) (_, in_scope, _) = kcv `elemVarSet` in_scope
+  fvElemIS (In3 kv) (_, _, in_scope) = kv `elemVarSet` in_scope
 
-  fvExtendAcc (Left tv) (have, haveSet, ks, kset) = (tv:have, extendVarSet haveSet tv, ks, kset)
-  fvExtendAcc (Right kv) (ts, tset, have, haveSet) = (ts, tset, kv:have, extendVarSet haveSet kv)
+  fvExtendAcc (In1 tv) (have, haveSet, kcs, kcset, ks, kset)
+    = (tv:have, extendVarSet haveSet tv, kcs, kcset, ks, kset)
+  fvExtendAcc (In2 kcv) (ts, tset, have, haveSet, ks, kset)
+    = (ts, tset, kcv:have, extendVarSet haveSet kcv, ks, kset)
+  fvExtendAcc (In3 kv) (ts, tset, kcs, kcset, have, haveSet)
+    = (ts, tset, kcs, kcset, kv:have, extendVarSet haveSet kv)
 
-  fvExtendIS (Left tv) (in_scope, ks) = (extendVarSet in_scope tv, ks)
-  fvExtendIS (Right kv) (ts, in_scope) = (ts, extendVarSet in_scope kv)
+  fvExtendIS (In1 tv) (in_scope, kcs, ks) = (extendVarSet in_scope tv, kcs, ks)
+  fvExtendIS (In2 kcv) (ts, in_scope, ks) = (ts, extendVarSet in_scope kcv, ks)
+  fvExtendIS (In3 kv) (ts, kcs, in_scope) = (ts, kcs, extendVarSet in_scope kv)
 
-  fvEmptyAcc = ([], emptyVarSet, [], emptyVarSet)
-  fvEmptyIS = (emptyVarSet, emptyVarSet)
+  fvEmptyAcc = ([], emptyVarSet, [], emptyVarSet, [], emptyVarSet)
+  fvEmptyIS = (emptyVarSet, emptyVarSet, emptyVarSet)
 
 {- **********************************************************************
 *                                                                       *
@@ -296,6 +306,7 @@ data TyCoFolder p env env' b a  = TyCoFolder
   , tcf_covar :: env -> TyCoVar p -> a
   , tcf_hole :: env -> TypeCoercionHole -> a
   , tcf_tybinder :: env -> TyVar p -> ForAllFlag -> env
+  , tcf_kcobinder :: env -> KiCoVar p -> env
   , tcf_tylambinder :: env -> TyVar p -> env
   , tcf_tylamkibinder :: env -> KiVar p -> env
   , tcf_swapEnv :: env -> env'
@@ -315,6 +326,7 @@ foldTyCo (TyCoFolder { tcf_view = view
                      , tcf_covar = covar
                      , tcf_hole = cohole
                      , tcf_tybinder = tybinder
+                     , tcf_kcobinder = kcobinder
                      , tcf_tylambinder = tylambinder
                      , tcf_tylamkibinder = tylamkibinder
                      , tcf_swapEnv = tokenv
@@ -342,6 +354,11 @@ foldTyCo (TyCoFolder { tcf_view = view
         in embedRes (go_mki (varKind tv)) `mappend` go_ty env' inner
       where go_mki = case foldMonoKiCo mkcf (tokenv env) of
                        (f, _, _, _) -> f
+    go_ty env (ForAllKiCo kcv inner)
+      = let !env' = kcobinder env kcv
+        in embedRes (go_mki (varKind kcv)) `mappend` go_ty env' inner
+      where go_mki = case foldMonoKiCo mkcf (tokenv env) of
+              (f, _, _, _) -> f
     go_ty env (Embed mki) = embedRes $ go_mki mki
       where go_mki = case foldMonoKiCo mkcf (tokenv env) of
                        (f, _, _, _) -> f
@@ -393,6 +410,7 @@ typeSize (TyLamTy _ t) = 1 + typeSize t
 typeSize (BigTyLamTy _ t) = 1 + typeSize t
 typeSize (TyConApp _ ts) = 1 + typesSize ts
 typeSize (ForAllTy (Bndr tv _) t) = panic "kindSize (varKind tv) + typeSize t"
+typeSize (ForAllKiCo kcv t) = panic "typeSize ForAllKiCo"
 typeSize (FunTy _ t1 t2) = typeSize t1 + typeSize t2
 typeSize (Embed _) = 1
 typeSize (CastTy ty _) = typeSize ty

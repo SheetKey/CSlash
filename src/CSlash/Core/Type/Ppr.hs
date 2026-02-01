@@ -82,6 +82,15 @@ debug_ppr_ty prec t
 debug_ppr_ty _ ForAllTy{} = panic "debug_ppr_ty ForAllTy"
 
 debug_ppr_ty prec t
+  | (bndrs, body) <- splitForAllKiCoVars t
+  , not (null bndrs)
+  = maybeParen prec funPrec
+    $ sep [ forAllLit <+> (braces $ fsep (map ppr bndrs)) <> dot
+          , ppr body ]
+
+debug_ppr_ty _ ForAllKiCo{} = panic "debug_ppr_ty ForAllKiCo"
+
+debug_ppr_ty prec t
   | (bndrs, body) <- splitTyLamTyBinders t
   , not (null bndrs)
   = maybeParen prec funPrec

@@ -537,7 +537,7 @@ matchExpectedTyConApp exp_tc orig_ty
       let kargs = mkKiVarKis $ TcKiVar <$> arg_kvs
           targs = mkTyVarTys $ TcTyVar <$> arg_tvs
           args = (Embed <$> kargs) ++ targs
-          tc_template = mkTyConApp (toTcTyCon exp_tc) args
+          tc_template = mkTyConApp (fromZkTyCon exp_tc) args
       co <- unifyType Nothing tc_template orig_ty
       return (co, args)
 

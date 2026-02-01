@@ -433,6 +433,7 @@ foldQLInstVars check_tv ty = do_ty ty
                         , tcf_covar = mempty
                         , tcf_hole = do_hole
                         , tcf_tybinder = \_ _ _ -> ()
+                        , tcf_kcobinder = \_ _ -> ()
                         , tcf_tylambinder = \_ _ -> ()
                         , tcf_tylamkibinder = \_ _ -> ()
                         , tcf_swapEnv = \_ -> ()

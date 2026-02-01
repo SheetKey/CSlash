@@ -143,8 +143,8 @@ data TyConDetails p where
     , tcTyConKind :: Kind Tc -- TODO this could be Either (MonoKind Tc) (Kind Tc), remove tctc_is_poly
     } -> TyConDetails Tc
 
-toTcTyCon :: TyCon Zk -> TyCon Tc
-toTcTyCon TyCon { tyConDetails = details, .. } = case details of
+fromZkTyCon :: TyCon Zk -> TyCon p
+fromZkTyCon TyCon { tyConDetails = details, .. } = case details of
   AlgTyCon {..} -> let tc = TyCon { tyConNullaryTy = mkNakedTyConTy tc
                                   , tyConDetails = AlgTyCon {..}
                                   , .. }
@@ -157,6 +157,23 @@ toTcTyCon TyCon { tyConDetails = details, .. } = case details of
                                    , tyConDetails = PrimTyCon {..}
                                    , .. }
                     in tc
+
+toTcTyCon :: TyCon p -> TyCon Tc
+toTcTyCon tycon@(TyCon { tyConDetails = details, .. }) = case details of
+  TcTyCon {} -> tycon
+  AlgTyCon {..} -> let tc = TyCon { tyConNullaryTy = mkNakedTyConTy tc
+                                  , tyConDetails = AlgTyCon {..}
+                                  , .. }
+                   in tc
+  SynonymTyCon {..} -> let tc = TyCon { tyConNullaryTy = mkNakedTyConTy tc
+                                      , tyConDetails = SynonymTyCon {..}
+                                      , .. }
+                       in tc
+  PrimTyCon {..} -> let tc = TyCon { tyConNullaryTy = mkNakedTyConTy tc
+                                   , tyConDetails = PrimTyCon {..}
+                                   , .. }
+                    in tc
+  
 
 -- instance AsAnyTy TyConDetails where
 --   asAnyTy AlgTyCon { algTcRhs = rhs, .. } = AlgTyCon { algTcRhs = asAnyTy rhs, .. }

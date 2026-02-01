@@ -161,7 +161,7 @@ mkDataConTy tycon arity =
     ffoldr f l r = foldr f r l
     
     dc_type = ffoldr BigTyLamTy fa_kvs $ -- /\k1..kn ->
-              ffoldr ForAllTy (panic "(flip Bndr Specified) <$> kcos") $ -- forall kco1..kcon.
+              ffoldr ForAllKiCo kcos $ -- forall kco1..kcon.
               ffoldr ForAllTy ((flip Bndr Specified) <$> arg_ty_vars) $ -- forall a..b.
               ffoldr (uncurry FunTy) (zip fun_kis arg_tys) $ -- a -> .. -> b ->
               mkTyConApp tycon $ (Embed . KiVarKi <$> fa_kvs)

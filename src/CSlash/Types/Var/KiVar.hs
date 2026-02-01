@@ -1,3 +1,4 @@
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeAbstractions #-}
 {-# LANGUAGE TypeApplications #-}
@@ -8,8 +9,10 @@
 
 module CSlash.Types.Var.KiVar where
 
+import Prelude hiding ((<>))
+
 import {-# SOURCE #-} CSlash.Core.Kind (MonoKind, FunKiFlag)
-import {-# SOURCE #-} CSlash.Tc.Utils.TcType (TcVarDetails, pprTcVarDetails)
+import {-# SOURCE #-} CSlash.Tc.Utils.TcType (TcVarDetails, pprTcVarDetails, vanillaSkolemVarUnk)
 
 import CSlash.Cs.Pass
 
@@ -39,11 +42,18 @@ data TcKiVar = TcKiVar'
   }
 
 instance IsVar (KiVar p) where
-  varName = kv_name
+  varName (TcKiVar kv) = tc_kv_name kv
+  varName kv = kv_name kv
+  setVarName (TcKiVar kv) name = TcKiVar (kv { tc_kv_name = name })
   setVarName kv name = kv { kv_name = name }
 
-  varUnique = kv_real_unique
+  varUnique (TcKiVar kv) = tc_kv_real_unique kv
+  varUnique kv = kv_real_unique kv
+  setVarUnique (TcKiVar kv) u = TcKiVar (kv { tc_kv_real_unique = u })
   setVarUnique kv unique = kv { kv_real_unique = unique }
+
+  isTcVar TcKiVar {} = True
+  isTcVar _ = False
 
 instance IsVar TcKiVar where
   varName = tc_kv_name
@@ -52,22 +62,47 @@ instance IsVar TcKiVar where
   varUnique = tc_kv_real_unique
   setVarUnique kv unique = kv { tc_kv_real_unique = unique }
 
+  isTcVar _ = True
+
 instance TcVar (KiVar Tc) where
   type TcDetailsThing (KiVar Tc) = MonoKind Tc
+
+  tcVarDetails (TcKiVar kv) = tcVarDetails kv
+  tcVarDetails _ = vanillaSkolemVarUnk
 
 instance TcVar TcKiVar where
   type TcDetailsThing TcKiVar = MonoKind Tc
 
+  tcVarDetails = tc_kv_details
+
 class TcKiVarMaybe v where
   toTcKiVar_maybe :: v -> Maybe TcKiVar
 
-instance TcKiVarMaybe (KiVar p)
+instance TcKiVarMaybe (KiVar p) where
+  toTcKiVar_maybe (TcKiVar v) = Just v
+  toTcKiVar_maybe _ = Nothing
 
-instance TcKiVarMaybe TcKiVar
+instance TcKiVarMaybe TcKiVar where
+  toTcKiVar_maybe = Just
 
-instance Outputable (KiVar p)
+instance Outputable (KiVar p) where
+  ppr (TcKiVar kv) = ppr kv
+  ppr KiVar {..} = docWithStyle ppr_code ppr_normal
+    where
+      ppr_code = ppr kv_name
+      ppr_normal sty = getPprDebug $ \debug ->
+        let ppr_var | debug = brackets $ text "kv"
+                    | otherwise = empty
+        in ppr kv_name <> ppr_var
 
-instance Outputable TcKiVar
+instance Outputable TcKiVar where
+  ppr TcKiVar' {..} = docWithStyle ppr_code ppr_normal
+    where
+      ppr_code = ppr tc_kv_name
+      ppr_normal sty = getPprDebug $ \debug ->
+        let ppr_var | dumpStyle sty || debug = brackets (pprTcVarDetails tc_kv_details)
+                    | otherwise = empty
+        in  ppr tc_kv_name <> ppr_var
 
 instance Typeable p => Data (KiVar p) where
   toConstr _ = abstractConstr "KiVar"
@@ -99,13 +134,19 @@ instance Ord TcKiVar where
   a > b = getKey (varUnique a) > getKey (varUnique b)
   a `compare` b = varUnique a `nonDetCmpUnique` varUnique b
 
-instance NamedThing (KiVar p)
+instance NamedThing (KiVar p) where
+  getName (TcKiVar kv) = getName kv
+  getName kv = kv_name kv
 
-instance NamedThing TcKiVar
+instance NamedThing TcKiVar where
+  getName = tc_kv_name 
 
-instance Uniquable (KiVar p)
+instance Uniquable (KiVar p) where
+  getUnique (TcKiVar kv) = getUnique kv
+  getUnique kv = kv_real_unique kv
 
-instance Uniquable TcKiVar
+instance Uniquable TcKiVar where
+  getUnique = tc_kv_real_unique
 
 mkKiVar :: Name -> KiVar p
 mkKiVar name = KiVar { kv_name = name

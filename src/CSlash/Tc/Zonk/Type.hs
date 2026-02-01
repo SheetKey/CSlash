@@ -94,6 +94,16 @@ zonkTyBndrX tv = assertPpr (isImmutableVar tv) (ppr tv) res
       extendTyZonkEnv tv'
       return tv'
 
+{-# INLINE zonkKiCoBndrX #-}
+zonkKiCoBndrX :: KiCoVar Tc -> ZonkBndrTcM (KiCoVar Zk)
+zonkKiCoBndrX kcv = res
+  where
+    res = do
+      ki <- noBinders $ zonkTcMonoKindToMonoKindX (varKind kcv)
+      let kcv' = mkCoVar (varName kcv) ki
+      extendKiCoZonkEnv kcv'
+      return kcv'
+
 {-# INLINE zonkKiBndrX #-}
 zonkKiBndrX :: KiVar Tc -> ZonkBndrTcM (KiVar Zk)
 zonkKiBndrX kv = assertPpr (isImmutableVar kv) (ppr kv) res
@@ -189,6 +199,8 @@ zonk_typemapper = TyCoMapper
   , tm_hole = \env co -> runZonkT (zonkTyCoHole co) env
   , tm_tybinder = \env tv _ k -> flip runZonkT env $ runZonkBndrT (zonkTyBndrX tv)
                                  $ \tv' -> ZonkT $ \env' -> (k env' tv')
+  , tm_kicobinder = \env kcv k -> flip runZonkT env $ runZonkBndrT (zonkKiCoBndrX kcv)
+                                  $ \kcv' -> ZonkT $ \env' -> (k env' kcv')
   , tm_tylambinder = \env tv k -> flip runZonkT env $ runZonkBndrT (zonkTyBndrX tv)
                                   $ \tv' -> ZonkT $ \env' -> (k env' tv')
   , tm_tylamkibinder = \env kv k -> flip runZonkT env $ runZonkBndrT (zonkKiBndrX kv)

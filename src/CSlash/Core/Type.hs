@@ -135,13 +135,13 @@ saturates _ 0 = True
 saturates [] _ = False
 saturates (_:tys) n = assert (n >= 0) $ saturates tys (n-1)
 
+{-# NOINLINE expand_syn #-}
 expand_syn :: SubstP p p' => Type p -> [Type p'] -> Type p'
 expand_syn rhs arg_tys
   | null arg_tys = panic "closedType rhs"
   | otherwise = go rhs empty_subst arg_tys
   where
-    empty_subst = mkEmptySubst in_scopes
-    in_scopes = mkInScopeSets $ shallowVarsOfTypes arg_tys 
+    empty_subst = mkEmptySubst (noDomFVs rhs (varsOfType rhs)) (varsOfTypes arg_tys)
 
     go (TyLamTy _ _) _ [] = pprPanic "expand_syn" (ppr rhs $$ ppr arg_tys)
     go (BigTyLamTy _ _) _ [] = pprPanic "expand_syn" (ppr rhs $$ ppr arg_tys)
@@ -163,6 +163,7 @@ data TyCoMapper p p' env m = TyCoMapper
   , tm_covar :: env -> TyCoVar p -> m (TypeCoercion p')
   , tm_hole :: env -> TypeCoercionHole -> m (TypeCoercion p')
   , tm_tybinder :: forall r. env -> TyVar p -> ForAllFlag -> (env -> TyVar p' -> m r) -> m r
+  , tm_kicobinder :: forall r. env -> KiCoVar p -> (env -> KiCoVar p' -> m r) -> m r
   , tm_tylambinder :: forall r. env -> TyVar p -> (env -> TyVar p' -> m r) -> m r
   , tm_tylamkibinder :: forall r. env -> KiVar p -> (env -> KiVar p' -> m r) -> m r
   , tm_tycon :: TyCon p -> m (TyCon p')
@@ -190,6 +191,7 @@ mapTyCoX (TyCoMapper { tm_tyvar = tyvar
                      , tm_covar = covar
                      , tm_hole = cohole
                      , tm_tybinder = tybinder
+                     , tm_kicobinder = kicobinder
                      , tm_tycon = tycon
                      , tm_tylambinder = tylambinder
                      , tm_tylamkibinder = kibinder
@@ -211,15 +213,19 @@ mapTyCoX (TyCoMapper { tm_tyvar = tyvar
     go_ty !env ty@(TyConApp tc tys) = do
       tc' <- tycon tc
       mkTyConApp tc' <$> go_tys env tys
-    go_ty !env (ForAllTy (Bndr tv vis) inner) = do
+    go_ty !env (ForAllTy (Bndr tv vis) inner) = 
       tybinder env tv vis $ \env' tv' -> do
         inner' <- go_ty env' inner
         return $ ForAllTy (Bndr tv' vis) inner'
-    go_ty !env (TyLamTy tv inner) = do
+    go_ty !env (ForAllKiCo kcv inner) = 
+      kicobinder env kcv $ \env' kcv' -> do
+        inner' <- go_ty env' inner
+        return $ ForAllKiCo kcv' inner'
+    go_ty !env (TyLamTy tv inner) = 
       tylambinder env tv $ \env' tv' -> do
         inner' <- go_ty env' inner
         return $ TyLamTy tv' inner'
-    go_ty !env (BigTyLamTy kv inner) = do
+    go_ty !env (BigTyLamTy kv inner) = 
       kibinder env kv $ \env' kv' -> do
         inner' <- go_ty env' inner
         return $ BigTyLamTy kv' inner'
@@ -333,10 +339,7 @@ piResultTys ki orig_args@(arg:args)
   | otherwise
   = pprPanic "piResultTys2" (ppr ki $$ ppr orig_args)
   where
-    init_subst = mkEmptySubst $ mkInScopeSets $ (tvs, kcvs, kvs1 `unionVarSet` kvs2)
-      where
-        kvs1 = varsOfKind ki
-        (tvs, kcvs, kvs2) = varsOfTypes orig_args
+    init_subst = mkEmptySubst (emptyVarSet, emptyVarSet, varsOfKind ki) (varsOfTypes orig_args)
 
     -- go :: Subst -> Kind -> [Type] -> Kind
     go subst ki []
@@ -521,6 +524,13 @@ splitForAllTyVars ty = split ty ty []
     split orig_ty ty tvs | Just ty' <- coreView ty = split orig_ty ty' tvs
     split orig_ty _ tvs = (reverse tvs, orig_ty)
 
+splitForAllKiCoVars :: Type p -> ([KiCoVar p], Type p)
+splitForAllKiCoVars ty = split ty ty []
+  where
+    split _ (ForAllKiCo kcv ty) kcvs = split ty ty (kcv:kcvs)
+    split orig_ty ty kcvs | Just ty' <- coreView ty = split orig_ty ty' kcvs
+    split orig_ty _ kcvs = (reverse kcvs, orig_ty)
+
 isForAllTy :: Type p -> Bool
 isForAllTy ty
   | ForAllTy {} <- coreFullView ty = True
@@ -566,12 +576,12 @@ This is because we do not have recursive things the same way haskell does.
 -}
 buildSynTyCon
   :: Name
-  -> Kind p
+  -> Kind Zk
   -> Arity
-  -> Type p
+  -> Type Zk
   -> TyCon p
 buildSynTyCon name kind arity rhs
-  = panic "mkSynonymTyCon name kind arity rhs is_tau is_forgetful is_concrete"
+  = mkSynonymTyCon name kind arity rhs is_tau is_forgetful is_concrete
   where
     is_tau = isTauTy rhs
     is_concrete = uniqSetAll isConcreteTyCon rhs_tycons
@@ -587,14 +597,22 @@ buildSynTyCon name kind arity rhs
 
 typeKind :: HasDebugCallStack => Type p -> Kind p
 typeKind (BigTyLamTy kv res) = mkForAllKi kv (typeKind res)
-typeKind (TyConApp tc []) = panic "tyConKind tc"
+typeKind (TyConApp tc []) = case tyConDetails tc of
+  TcTyCon { tcTyConKind = ki } -> ki
+  other -> fromZkKind $ tyConKind other
 typeKind ty = Mono $ typeMonoKind ty
 
 typeMonoKind :: HasDebugCallStack => Type p -> MonoKind p
--- typeMonoKind (TyConApp tc tys) = handle_non_mono (piResultTys (tyConKind tc) tys)
---                                  $ \ki -> vcat [ ppr tc <+> colon <+> ppr ki
---                                                 , ppr tys ]
-typeMonoKind (TyConApp{}) = panic "typeMonoKind"  
+typeMonoKind (TyConApp tc tys)
+  = case tyConDetails tc of
+      TcTyCon { tcTyConKind = ki } ->
+        handle_non_mono (piResultTys ki tys)
+        $ \ki -> vcat [ ppr tc <+> colon <+> ppr ki, ppr tys ]
+
+      other ->
+        handle_non_mono (piResultTys (fromZkKind $ tyConKind other) tys)
+        $ \ki -> vcat [ ppr tc <+> colon <+> ppr ki, ppr tys ]
+                        
 typeMonoKind (FunTy { ft_kind = kind }) = kind
 typeMonoKind (TyVarTy tyvar) = varKind tyvar
 typeMonoKind (AppTy fun arg)
@@ -608,6 +626,10 @@ typeMonoKind ty@(ForAllTy {})
   = let (tvs, body) = splitForAllTyVars ty
         body_kind = typeMonoKind body
     in assertPpr (not (null tvs)) (ppr ty) body_kind
+typeMonoKind ty@(ForAllKiCo {})
+  = let (kcvs, body) = splitForAllKiCoVars ty
+        body_kind = typeMonoKind body
+    in assertPpr (not (null kcvs)) (ppr ty) body_kind
 typeMonoKind ty@(TyLamTy tv res) =
   let tvKind = varKind tv
       res_kind = typeMonoKind res

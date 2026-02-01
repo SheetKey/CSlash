@@ -119,7 +119,7 @@ checkValidTcType ctxt ty = do
 checkValidType :: UserTypeCtxt -> Type Zk -> TcM ()
 checkValidType ctxt ty = do
   traceTc "checkValidType" (ppr ty <+> colon <+> ppr (typeKind ty))
-  let env = tidyFreeTyKiVars emptyTidyEnv (varsOfTypeList ty)
+  let env = tidyFreeVars emptyTidyEnv (varsOfTypeList ty)
   let ve = ValidityEnv { ve_tidy_env = env
                        , ve_ctxt = ctxt }
   checkNoErrs $ do

@@ -301,7 +301,7 @@ tc_infer_id id_name = do
     ATcId { tct_id = id } -> do
       check_local_id id
       return_id id
-    AGlobal (AnId id) -> return_id id
+    AGlobal (AnId id) -> return_id $ fromZkId id
     AGlobal (AConLike (RealDataCon con)) -> mapSnd (substTy emptySubst) (tcInferDataCon con)
     AGlobal (AConLike PatSynCon) -> panic "tc_infer_id impossible"
     (tcTyThingTyCon_maybe -> Just tc) -> panic "failIllegalTyCon WL_Anything (tyConName tc)"
@@ -314,7 +314,7 @@ tc_infer_id id_name = do
 check_local_id :: Id Tc -> TcM ()
 check_local_id id = tcEmitBindingUsage $ singleUsageUE id
 
-tcInferDataCon :: DataCon Tc -> TcM (CsExpr Tc, SigmaType Zk)
+tcInferDataCon :: DataCon Zk -> TcM (CsExpr Tc, SigmaType Zk)
 tcInferDataCon con = return ( XExpr (Cs.ConLike (RealDataCon con))
                             , dataConType con )
 

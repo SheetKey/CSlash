@@ -217,7 +217,7 @@ data XXExprP p
   | ExpandedThing
     { xtc_orig :: CsThingRn
     , xtc_expanded :: CsExpr p }
-  | ConLike (ConLike p)
+  | ConLike (ConLike Zk)
 
 instance OutputableBndrId p => Outputable (XXExprP (CsPass p)) where
   ppr (WrapExpr co_fn e) = pprCsWrapper co_fn (\_ -> pprExpr e)

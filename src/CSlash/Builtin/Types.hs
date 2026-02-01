@@ -115,7 +115,7 @@ pcTyCon name cons arity
   = mkAlgTyCon name
                kind
                arity
-               (panic "mkDataTyConRhs cons")
+               (mkDataTyConRhs cons)
                VanillaAlgTyCon
   where
     kind = mkTemplateTyConKind arity
@@ -335,7 +335,7 @@ unitTyConKey :: Unique
 unitTyConKey = getUnique unitTyCon
 
 unitDataCon :: DataCon Zk
-unitDataCon = head (panic "tyConDataCons unitTyCon")
+unitDataCon = head (tyConDataCons unitTyCon)
 
 unitDataConId :: Id Zk
 unitDataConId = dataConId unitDataCon

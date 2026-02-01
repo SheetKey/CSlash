@@ -50,6 +50,9 @@ runCoVars f = appEndo f emptyVarSet
 varsOfMonoKiVarEnv :: VarEnv kva (MonoKind p) -> KiVarSet p
 varsOfMonoKiVarEnv kis = varsOfMonoKinds (nonDetEltsUFM kis)
 
+varsOfKiCoVarEnv :: VarEnv kcva (KindCoercion p) -> (KiCoVarSet p, KiVarSet p)
+varsOfKiCoVarEnv cos = varsOfKindCoercions (nonDetEltsUFM cos)
+
 varsOfKind :: Kind p -> KiVarSet p
 varsOfKind ki = case runKiCoVars (deep_ki ki) of
   (_, kvs) -> kvs
@@ -152,6 +155,18 @@ deepMKcvFolder @kv = MKiCoFolder { mkcf_kivar = do_kivar
     --   -> KindCoercionHole
     --   -> (Endo (VarSet (KiCoVar kv), VarSet kv))
     do_hole is hole = panic "do_covar is (coHoleCoVar hole)"
+
+shallowVarsOfKiCoVarEnv :: VarEnv kcva (KindCoercion p) -> (KiCoVarSet p, KiVarSet p)
+shallowVarsOfKiCoVarEnv cos = shallowVarsOfKindCoercions (nonDetEltsUFM cos)
+
+shallowVarsOfKindCoercions
+  :: [KindCoercion p] -> (KiCoVarSet p, KiVarSet p)
+shallowVarsOfKindCoercions cos = runKiCoVars (shallow_cos cos)
+
+shallow_cos
+  :: [KindCoercion p] -> Endo (KiCoVarSet p, KiVarSet p)
+shallow_cos = case foldMonoKiCo shallowMKcvFolder (emptyVarSet, emptyVarSet) of
+             (_, _, _, f) -> f
 
 shallowMKcvFolder
   :: forall p.

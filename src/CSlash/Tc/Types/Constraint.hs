@@ -834,17 +834,17 @@ varsOfKiCts cts = case fvVarAcc (fvsOfKiCts cts) of
 fvsOfKiCts :: KiCts -> KiFV Tc
 fvsOfKiCts = foldr (unionFV . fvsOfKiCt) emptyFV
 
-varsOfWTC :: WantedTyConstraints -> (TyVarSet Tc, KiVarSet Tc)
+varsOfWTC :: WantedTyConstraints -> (TyVarSet Tc, KiCoVarSet Tc, KiVarSet Tc)
 varsOfWTC wc = case fvVarAcc (fvsOfWTC wc) of
-  (_, tvs, _, kvs) -> (tvs, kvs)
+  (_, tvs, _, kcvs, _, kvs) -> (tvs, kcvs, kvs)
 
 varsOfWKC :: WantedKiConstraints -> KiVarSet Tc
 varsOfWKC wc = case fvVarAcc (fvsOfWKC wc) of
   (_, kvs) -> kvs
 
-varsOfWTCList :: WantedTyConstraints -> ([TyVar Tc], [KiVar Tc])
+varsOfWTCList :: WantedTyConstraints -> ([TyVar Tc], [KiCoVar Tc], [KiVar Tc])
 varsOfWTCList wc = case fvVarAcc (fvsOfWTC wc) of
-  (tvs, _, kvs, _) -> (tvs, kvs)
+  (tvs, _, kcvs, _, kvs, _) -> (tvs, kcvs, kvs)
 
 varsOfWKCList :: WantedKiConstraints -> [KiVar Tc]
 varsOfWKCList wc = case fvVarAcc (fvsOfWKC wc) of

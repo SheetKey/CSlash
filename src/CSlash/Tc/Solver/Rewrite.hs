@@ -270,27 +270,19 @@ rewrite_args_tc tc = case tyConDetails tc of
   TcTyCon { tcTyConKind = ki } -> rewrite_vector ki
   other -> rewrite_vector (tyConKind other)
 
-rewrite_vector :: forall p p'. HasPass p p' => Kind p -> [Type Tc] -> RewriteM ArgsReductions
-rewrite_vector @_ @p' ki tys = 
+rewrite_vector :: Kind p -> [Type Tc] -> RewriteM ArgsReductions
+rewrite_vector ki tys = 
   rewrite_args bndrs any_named_bndrs inner_ki fvs tys
   where
     (bndrs, inner_ki, any_named_bndrs) = split_pi_kis' ki
-    fvs :: KiVarSet Tc
-    fvs = case csPass @p' of
-            Tc -> varsOfKind ki
-            Zk -> assertPpr (isEmptyVarSet (varsOfKind ki))
-                            (vcat [ text "rewrite_vector 'TyCon Zk'"
-                                  , text "kind has free vars"
-                                  , ppr ki, ppr tys ])
-                  emptyVarSet
-            _ -> panic "shouldn't happen"
+    fvs = varsOfKind ki
 
 {-# INLINE rewrite_args #-}
 rewrite_args
   :: [PiKiBinder p]
   -> Bool
   -> MonoKind p
-  -> KiVarSet Tc
+  -> KiVarSet p
   -> [Type Tc]
   -> RewriteM ArgsReductions
 rewrite_args orig_binders any_named_bndrs orig_inner_ki orig_fvs orig_tys
@@ -317,7 +309,7 @@ rewrite_args_fast orig_tys = fmap finish (iterate orig_tys)
 rewrite_args_slow
   :: [PiKiBinder p]
   -> MonoKind p
-  -> KiVarSet Tc
+  -> KiVarSet p
   -> [Type Tc]
   -> RewriteM ArgsReductions
 rewrite_args_slow binders inner_ki fvs tys = do

@@ -386,7 +386,7 @@ tcInferTyApps cs_ty fun cs_args = do
 
 tcInferTyApps_nosat :: LCsType Rn -> Type Tc -> [LCsTypeArg Rn] -> TcM (Type Tc, MonoKind Tc)
 tcInferTyApps_nosat orig_cs_ty fun orig_cs_args = do
-  traceTc "tcInferTyApps {" (ppr orig_cs_ty $$ ppr orig_cs_args)
+  traceTc "tcInferTyApps {" (ppr orig_cs_ty $$ ppr orig_cs_args $$ ppr fun)
   (f_args, res_k) <- go_init 1 fun orig_cs_args
   traceTc "tcInferTyApps }" (ppr f_args <+> colon <+> ppr res_k)
   return (f_args, res_k)
@@ -396,7 +396,9 @@ tcInferTyApps_nosat orig_cs_ty fun orig_cs_args = do
                                _ -> go n fun empty_subst fun_ki all_args
       where
         fun_ki = typeKind fun
-        empty_subst = mkEmptyKvSubst $ mkInScopeSet $ varsOfKind fun_ki
+        empty_subst = mkEmptySubst
+                      (emptyVarSet, emptyVarSet, varsOfKind fun_ki)
+                      (emptyVarSet, emptyVarSet, emptyVarSet)
 
     go
       :: Int

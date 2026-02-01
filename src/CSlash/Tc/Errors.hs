@@ -146,7 +146,7 @@ report_unsolved type_errors expr_holes out_of_scope_holes tbinds_var kbinds_var 
 
        let bound_occs = boundOccNamesOfWTC wanted
            freeVars = varsOfWTCList wanted 
-           tidy_env = tidyAvoiding bound_occs tidyFreeTyKiVars freeVars
+           tidy_env = tidyAvoiding bound_occs tidyFreeVars freeVars
 
        traceTc "reportUnsolved (after zonking):"
          $ vcat [ text "Free vars:" <+> ppr freeVars

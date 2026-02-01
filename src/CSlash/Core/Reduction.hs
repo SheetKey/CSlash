@@ -1,3 +1,4 @@
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE ExplicitForAll #-}
 {-# LANGUAGE TypeAbstractions #-}
 {-# LANGUAGE BangPatterns #-}
@@ -22,7 +23,7 @@ import qualified CSlash.Data.List.Infinite as Inf
 
 import CSlash.Types.Var ( VarBndr(..), PiKiBinder(..), setVarKind )
 import CSlash.Types.Var.Env
-import CSlash.Types.Var.Set ( TyVarSet, KiVarSet )
+import CSlash.Types.Var.Set ( TyVarSet, KiVarSet, emptyVarSet )
 
 import CSlash.Utils.Misc ( HasDebugCallStack, equalLength )
 import CSlash.Utils.Outputable
@@ -198,8 +199,10 @@ instance Outputable (LiftingContext p) where
 
 type LiftCoEnv p = VarEnv (KiVar p) (KindCoercion Tc)
 
-emptyLiftingContext :: InScopeSet (KiVar Tc) -> LiftingContext p
-emptyLiftingContext is = LC (mkEmptyKvSubst is) emptyVarEnv
+emptyLiftingContext :: KiVarSet p -> LiftingContext p
+emptyLiftingContext is
+  = LC (mkEmptySubst (emptyVarSet, emptyVarSet, is) (emptyVarSet, emptyVarSet, emptyVarSet))
+       emptyVarEnv
 
 liftCoSubst :: HasDebugCallStack => LiftingContext p -> MonoKind p -> KindCoercion Tc
 {-# INLINE liftCoSubst #-}
@@ -225,7 +228,9 @@ extendLiftingContextAndInScope
   -> LiftingContext p
 extendLiftingContextAndInScope (LC subst env) kv kco
   = extendLiftingContext
-    (LC (extendKvSubstInScopeSet subst (snd $ varsOfKindCoercion kco)) env) kv kco
+    (LC (extendSubstInScopeSetsSets subst $
+          (\(kcv, kv) -> (emptyVarSet, kcv, kv)) (varsOfKindCoercion kco))
+        env) kv kco
 
 zapLiftingContext :: LiftingContext p -> LiftingContext p
 zapLiftingContext (LC subst _) = LC (zapSubst subst) emptyVarEnv
@@ -272,13 +277,13 @@ simplifyArgsWorker
   :: forall p. HasDebugCallStack
   => [PiKiBinder p]
   -> MonoKind p
-  -> KiVarSet Tc
+  -> KiVarSet p
   -> [TyReduction]
   -> ArgsReductions
 simplifyArgsWorker @p orig_ki_binders orig_inner_ki orig_fvs orig_simplified_args
   = go orig_lc orig_ki_binders orig_inner_ki orig_simplified_args
   where
-    orig_lc = emptyLiftingContext $ mkInScopeSet orig_fvs
+    orig_lc = emptyLiftingContext orig_fvs
 
     go :: LiftingContext p
        -> [PiKiBinder p]
@@ -312,29 +317,31 @@ simplifyArgsWorker @p orig_ki_binders orig_inner_ki orig_fvs orig_simplified_arg
               = go new_lc binders inner_ki arg_redns
         in ArgsReductions (TyReductions (co:cos) (xi:xis)) final_kind_co
 
-    go lc [] inner_ki arg_redns
-      = let kco1 = liftCoSubst lc inner_ki
-            kco1_kind@(_, Pair rewritten_kind _) = kiCoercionParts kco1
-            unrewritten_tys = map reductionOriginalType arg_redns
-            (arg_cos, res_co) = decomposePiCos kco1 kco1_kind unrewritten_tys
-            casted_args
-              = assertPpr (equalLength arg_redns arg_cos) (ppr arg_redns $$ ppr arg_cos)
-                $ zipWith mkCoherenceRightRedn arg_redns arg_cos
+    go lc [] inner_ki arg_redns = panic "simplifyArgsWorker last case"
+      -- POTENTIAL FIX: use zapSubst :: Subst p p' -> Subst new_p p'
+    
+      -- = let kco1 = liftCoSubst lc inner_ki
+      --       kco1_kind@(_, Pair rewritten_kind _) = kiCoercionParts kco1
+      --       unrewritten_tys = map reductionOriginalType arg_redns
+      --       (arg_cos, res_co) = decomposePiCos kco1 kco1_kind unrewritten_tys
+      --       casted_args
+      --         = assertPpr (equalLength arg_redns arg_cos) (ppr arg_redns $$ ppr arg_cos)
+      --           $ zipWith mkCoherenceRightRedn arg_redns arg_cos
 
-            zapped_lc = zapLiftingContext lc
-            (bndrs, new_inner) = splitMonoPiKis rewritten_kind
+      --       zapped_lc = zapLiftingContext lc
+      --       (bndrs, new_inner) = splitMonoPiKis rewritten_kind
 
-            -- The bellow doesn't work b/c bndrs and new_inner are phase 'Tc', since they
-            -- result from 'liftCoSubst' above.
-            -- Calling 'simplifyArgsWorker' again is the same as calling 'go' with the
-            -- zapped lifting context.
-            -- May be slightly less efficient, but should be correct.
-            -- This case should be very rare anyway.
-            -- ArgsReductions redns_out res_co_out = go zapped_lc bndrs new_inner casted_args
-            ArgsReductions redns_out res_co_out
-              = simplifyArgsWorker bndrs new_inner orig_fvs casted_args
-        in pprTrace "simplifyArgsWorker rare branch" (ppr inner_ki $$ ppr arg_redns $$ ppr lc) $
-           ArgsReductions redns_out (res_co `mkTransMKiCoR` res_co_out)
+      --       -- The bellow doesn't work b/c bndrs and new_inner are phase 'Tc', since they
+      --       -- result from 'liftCoSubst' above.
+      --       -- Calling 'simplifyArgsWorker' again is the same as calling 'go' with the
+      --       -- zapped lifting context.
+      --       -- May be slightly less efficient, but should be correct.
+      --       -- This case should be very rare anyway.
+      --       ArgsReductions redns_out res_co_out = go zapped_lc bndrs new_inner casted_args
+      --       -- ArgsReductions redns_out res_co_out
+      --       --   = simplifyArgsWorker bndrs new_inner orig_fvs casted_args
+      --   in pprTrace "simplifyArgsWorker rare branch" (ppr inner_ki $$ ppr arg_redns $$ ppr lc) $
+      --      ArgsReductions redns_out (res_co `mkTransMKiCoR` res_co_out)
 
     unsafeToKiCo (LiftKCo kco) = kco
     unsafeToKiCo other = pprPanic "unsageToKiCo" (ppr other)

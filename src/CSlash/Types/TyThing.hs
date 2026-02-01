@@ -49,15 +49,15 @@ tyThingCategory (AnId _) = "identifier"
 tyThingCategory (AConLike (RealDataCon _)) = "data constructor"
 tyThingCategory (AConLike PatSynCon) = "pattern synonym"
 
-implicitTyConThings :: TyCon p -> [TyThing p]
+implicitTyConThings :: TyCon p -> [TyThing Zk]
 implicitTyConThings tc
-  = panic "datacon_stuff"
+  = datacon_stuff
   where
-    --datacon_stuff :: [TyThing tv kv]
+    --datacon_stuff :: [TyThing Zk]
     datacon_stuff = [ty_thing | dc <- cons
                               , ty_thing <- [ AConLike (RealDataCon dc)
                                             , dataConImplicitTyThing dc] ]
-    --cons :: [DataCon]
+    --cons :: [DataCon Zk]
     cons = tyConDataCons tc
 
 tyThingGREInfo :: TyThing p -> GREInfo

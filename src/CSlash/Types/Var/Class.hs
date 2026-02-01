@@ -31,6 +31,8 @@ class (Eq v, Ord v, Outputable v, NamedThing v, Uniquable v) => IsVar v where
   varUnique :: v -> Unique
   setVarUnique :: v -> Unique -> v
 
+  isTcVar :: v -> Bool
+
 class VarHasType id where
   varType :: id p -> Type p
   setVarType :: id p -> Type p -> id p

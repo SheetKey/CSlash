@@ -2,6 +2,8 @@
 
 module CSlash.Types.Var.Id where
 
+import Prelude hiding ((<>))
+
 import {-# SOURCE #-} CSlash.Core.Type (typeKind)
 import {-# SOURCE #-} CSlash.Core.Type.Rep (Type, PredType)
 import {-# SOURCE #-} CSlash.Core.Kind (Kind, MonoKind)
@@ -18,6 +20,7 @@ import CSlash.Types.Unique
 import CSlash.Types.Basic
 
 import {-# SOURCE #-} CSlash.Core.DataCon
+import {-# SOURCE #-} CSlash.Core.Subst (fromZkType)
 
 import CSlash.Utils.Outputable
 import CSlash.Utils.Misc
@@ -49,7 +52,23 @@ instance IsVar (Id p) where
   varUnique = id_real_unique
   setVarUnique id unique = id { id_real_unique = unique }
 
-instance Outputable (Id p)
+  isTcVar _ = False
+
+instance Outputable (Id p) where
+  ppr Id {..} = docWithStyle ppr_code ppr_normal
+    where
+      ppr_code = ppr id_name
+      ppr_normal sty = getPprDebug $ \debug ->
+        let ppr_var | debug = brackets (ppr_id_scope id_scope <> pprIdDetails id_details)
+                    | otherwise = empty
+        in if debug
+           then parens (ppr id_name <+> ppr_var <+> colon <+> ppr id_type)
+           else ppr id_name <> ppr_var
+
+ppr_id_scope :: IdScope -> SDoc
+ppr_id_scope GlobalId = text "gid"
+ppr_id_scope (LocalId Exported) = text "lidx"
+ppr_id_scope (LocalId NotExported) = text "lid"
 
 instance (Typeable p) => Data (Id p) where
   toConstr _ = abstractConstr "Id"
@@ -66,11 +85,19 @@ instance Ord (Id p) where
   a > b = getKey (id_real_unique a) > getKey (id_real_unique b)
   a `compare` b = id_real_unique a `nonDetCmpUnique` id_real_unique b
 
-instance NamedThing (Id p)
+instance NamedThing (Id p) where
+  getName = id_name
 
-instance Uniquable (Id p)
+instance Uniquable (Id p) where
+  getUnique = id_real_unique
 
-instance VarHasType Id
+instance VarHasType Id where
+  varType = id_type
+  setVarType id ty = id { id_type = ty }
+  updateVarType f id@(Id { id_type = ty }) = id { id_type = f ty }
+  updateVarTypeM f id@(Id { id_type = ty }) = do
+    ty' <- f ty
+    return id { id_type = ty' }
 
 mk_id :: Name -> Type p -> IdScope -> IdDetails -> IdInfo -> Id p
 mk_id name ty scope details info = Id { id_name = name
@@ -104,10 +131,16 @@ isDeadBinder bndr = isDeadOcc (idOccInfo bndr)
 idKind :: Id p -> Kind p
 idKind = typeKind . varType
 
+changeIdType :: (Type p -> Type p') -> Id p -> Id p'
+changeIdType f (Id { id_type = ty, .. }) = Id { id_type = f ty, .. }
+
 changeIdTypeM :: Monad m => (Type p -> m (Type p')) -> Id p -> m (Id p')
 changeIdTypeM f (Id { id_type = ty, .. }) = do
   ty' <- f ty
-  return $ Id { id_type = ty', .. }
+  return $ Id { id_type = ty', .. }  
+
+fromZkId :: Id Zk -> Id p
+fromZkId = changeIdType fromZkType
 
 {- *********************************************************************
 *                                                                      *

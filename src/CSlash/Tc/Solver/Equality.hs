@@ -40,7 +40,7 @@ import CSlash.Core
 
 import CSlash.Types.Var
 import CSlash.Types.Var.Env
-import CSlash.Types.Var.Set( anyVarSet, unionVarSet, mapVarSet )
+import CSlash.Types.Var.Set( anyVarSet, unionVarSet, mapVarSet, emptyVarSet )
 import CSlash.Types.Name.Reader
 import CSlash.Types.Basic
 
@@ -405,8 +405,9 @@ can_ty_eq_nc_forall ev s1 s2
                           , ppr flags1, ppr flags2 ]
                  canTyEqHardFailure ev s1 s2
          else do traceTcS "Creating implication for polytype equality" (ppr ev)
-                 let empty_subst1
-                       = mkEmptySubst $ mkInScopeSets $ varsOfTypes [s1, s2]
+                 let empty_subst1 = mkEmptySubst
+                                    (varsOfTypes [s1, s2])
+                                    (emptyVarSet, emptyVarSet, emptyVarSet)
                  skol_info <- mkSkolemInfo (UnifyForAllSkol phi1)
                  (subst1, skol_tvs) <- tcInstSkolTyVarsX skol_info empty_subst1
                                        $ binderVars bndrs1
@@ -440,7 +441,7 @@ can_ty_eq_nc_forall ev s1 s2
 
                      go _ _ _ _ _ = panic "can_ty_eq_nc_forall"
 
-                     init_subst2 = mkEmptySubst (getSubstInScope subst1)
+                     init_subst2 = zapSubst subst1
 
                  (lvl, (all_co, wanteds)) <- pushLevelNoWorkList (ppr skol_info)
                                              $ panic "unifyForAllBody ev"

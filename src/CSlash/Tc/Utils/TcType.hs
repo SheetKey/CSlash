@@ -204,12 +204,13 @@ varLevel v = case tcVarDetails v of
   MetaVar { mv_tclvl = tc_lvl } -> tc_lvl
   SkolemVar _ tc_lvl -> tc_lvl
 
--- not counting kinds since issues happened otherwise. Is this correct?
+-- TODO: not counting kinds since issues happened otherwise. Is this correct?
 tcTypeLevel :: Type Tc -> TcLevel
 tcTypeLevel ty = tenv_lvl -- `maxTcLevel` kenv_lvl
   where
-    (tenv, kenv) = varsOfTypeDSet ty
+    (tenv, _, kenv) = varsOfTypeDSet ty
     tenv_lvl = nonDetStrictFoldDVarSet add topTcLevel tenv
+    -- kcenv_lvl = nonDetStrictFoldDVarSet add topTcLevel tenv -- not necessary! All kicovars are toplevel
     kenv_lvl = nonDetStrictFoldDVarSet add topTcLevel kenv
 
     add :: TcVar v => v -> TcLevel -> TcLevel
@@ -257,6 +258,7 @@ any_rewritable_ty tv_pred = go emptyVarSet
     go bvs (AppTy fun arg) = go bvs fun || go bvs arg
     go bvs (FunTy _ arg res) = go bvs arg || go bvs res
     go bvs (ForAllTy tv ty) = go (bvs `extendVarSet` binderVar tv) ty
+    go bvs (ForAllKiCo _ ty) = go bvs ty
     go bvs (TyLamTy tv ty) = go (bvs `extendVarSet` tv) ty
     go bvs (BigTyLamTy _ ty) = go bvs ty
     go bvs (CastTy ty _) = go bvs ty
