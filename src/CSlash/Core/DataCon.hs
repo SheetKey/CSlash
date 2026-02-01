@@ -154,7 +154,7 @@ mkDataConTy tycon arity =
     final_preds = ki_preds ++ fun_ki_preds
     kcos = mkTemplateKiCoVars final_preds
 
-    arg_ty_vars = panic "mkTemplateTyVars arg_kis"
+    arg_ty_vars = mkTemplateTyVars arg_kis
     arg_tys = TyVarTy <$> arg_ty_vars
 
     ffoldr :: (a -> b -> b) -> [a] -> b -> b
@@ -165,7 +165,7 @@ mkDataConTy tycon arity =
               ffoldr ForAllTy ((flip Bndr Specified) <$> arg_ty_vars) $ -- forall a..b.
               ffoldr (uncurry FunTy) (zip fun_kis arg_tys) $ -- a -> .. -> b ->
               mkTyConApp tycon $ (Embed . KiVarKi <$> fa_kvs)
-                              ++ (panic "TyVarTy <$> kcos") -- maybe should be KindCoercion (mkKiCoVarCo <$> kcos) ??
+                              ++ (KindCoercion . mkKiCoVarCo <$> kcos)
                               ++ arg_tys
 
 dataConName :: DataCon p -> Name

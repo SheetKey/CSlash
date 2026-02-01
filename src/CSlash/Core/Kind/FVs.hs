@@ -284,6 +284,40 @@ fvsOfMonoKinds (ki:kis) fv_cand in_scope acc
   = (fvsOfMonoKind ki `unionFV` fvsOfMonoKinds kis) fv_cand in_scope acc
 fvsOfMonoKinds [] fv_cand in_scope acc = emptyFV fv_cand in_scope acc
 
+almostDevoidKiCoVarOfKiCo :: KiCoVar p -> KindCoercion p -> Bool
+almostDevoidKiCoVarOfKiCo kcv kco = almost_devoid_kico_var_of_kico kco kcv
+
+almost_devoid_kico_var_of_kico :: KindCoercion p -> KiCoVar p  -> Bool
+almost_devoid_kico_var_of_kico (Refl {}) _ = True
+almost_devoid_kico_var_of_kico BI_U_A _ = True
+almost_devoid_kico_var_of_kico BI_A_L _ = True
+almost_devoid_kico_var_of_kico (BI_U_LTEQ {}) _ = True
+almost_devoid_kico_var_of_kico (BI_LTEQ_L {}) _ = True
+
+almost_devoid_kico_var_of_kico (LiftEq kco) kcv
+  = almost_devoid_kico_var_of_kico kco kcv
+
+almost_devoid_kico_var_of_kico (LiftLT kco) kcv
+  = almost_devoid_kico_var_of_kico kco kcv
+
+almost_devoid_kico_var_of_kico (FunCo { fco_arg = co1, fco_res = co2 }) kcv
+  = almost_devoid_kico_var_of_kico co1 kcv
+    && almost_devoid_kico_var_of_kico co2 kcv
+
+almost_devoid_kico_var_of_kico (KiCoVarCo v) kcv = v /= kcv
+
+almost_devoid_kico_var_of_kico (HoleCo h) kcv = (coHoleCoVar h) /= kcv
+
+almost_devoid_kico_var_of_kico (SymCo kco) kcv
+  = almost_devoid_kico_var_of_kico kco kcv
+
+almost_devoid_kico_var_of_kico (TransCo co1 co2) kcv
+  = almost_devoid_kico_var_of_kico co1 kcv
+    && almost_devoid_kico_var_of_kico co2 kcv
+
+almost_devoid_kico_var_of_kico (SelCo _ kco) kcv
+  = almost_devoid_kico_var_of_kico kco kcv
+
 {- *********************************************************************
 *                                                                      *
                  Any free vars

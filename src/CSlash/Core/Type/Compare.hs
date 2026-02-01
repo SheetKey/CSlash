@@ -136,4 +136,3 @@ hasCasts (KindCoercion {}) = True
 hasCasts (AppTy t1 t2) = hasCasts t1 || hasCasts t2
 hasCasts (ForAllTy _ ty) = hasCasts ty
 hasCasts _ = False
-

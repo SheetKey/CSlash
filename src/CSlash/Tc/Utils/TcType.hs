@@ -528,6 +528,10 @@ tcSplitForAllTyVarBinders :: Type p -> ([ForAllBinder (TyVar p)], Type p)
 tcSplitForAllTyVarBinders ty = sty
   where sty = splitForAllForAllTyBinders ty
 
+tcSplitForAllKiCoVars :: Type p -> ([KiCoVar p], Type p)
+tcSplitForAllKiCoVars ty = sty
+  where sty = splitForAllKiCoVars ty
+
 tcSplitTyLamTyVarBinders :: Type p -> ([TyVar p], Type p)
 tcSplitTyLamTyVarBinders ty = sty
   where sty = splitTyLamTyBinders ty

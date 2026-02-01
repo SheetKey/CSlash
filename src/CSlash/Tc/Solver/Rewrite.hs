@@ -213,6 +213,11 @@ rewrite_one_ty ty@(ForAllTy {}) = do
   redn <- rewrite_one_ty rho
   return $ mkHomoForAllRedn bndrs redn
 
+rewrite_one_ty ty@(ForAllKiCo {}) = do
+  let (bndrs, inner) = tcSplitForAllKiCoVars ty
+  redn <- rewrite_one_ty inner
+  return $ mkHomoForAllKiCoRedn bndrs redn
+
 rewrite_one_ty (CastTy ty g) = do
   redn <- rewrite_one_ty ty
   g' <- rewrite_kco g

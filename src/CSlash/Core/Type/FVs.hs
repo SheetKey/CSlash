@@ -358,6 +358,57 @@ typeSomeFreeVars
 typeSomeFreeVars fv_cand ty = case fvVarAcc (filterFV fv_cand $ fvsOfType ty) of
   (_, tvs, _, kcvs, _, kvs) -> (tvs, kcvs, kvs)
 
+almostDevoidKiCoVarOfTyCo :: KiCoVar p -> TypeCoercion p -> Bool
+almostDevoidKiCoVarOfTyCo kcv co = almost_devoid_kico_var_of_tyco co kcv
+
+almost_devoid_kico_var_of_tycos :: [TypeCoercion p] -> KiCoVar p -> Bool
+almost_devoid_kico_var_of_tycos [] _ = True
+almost_devoid_kico_var_of_tycos (co:cos) kcv
+  = almost_devoid_kico_var_of_tyco co kcv
+    && almost_devoid_kico_var_of_tycos cos kcv
+
+almost_devoid_kico_var_of_tyco :: TypeCoercion p -> KiCoVar p -> Bool
+almost_devoid_kico_var_of_tyco (TyRefl {}) _ = True
+almost_devoid_kico_var_of_tyco (GRefl {}) _ = True
+
+almost_devoid_kico_var_of_tyco (TyConAppCo _ cos) kcv = almost_devoid_kico_var_of_tycos cos kcv
+
+almost_devoid_kico_var_of_tyco (AppCo co arg) kcv
+  = almost_devoid_kico_var_of_tyco co kcv
+    && almost_devoid_kico_var_of_tyco arg kcv
+
+almost_devoid_kico_var_of_tyco
+  (ForAllCo { tfco_tv = v, tfco_tv_kind_co = kind_co, tfco_body = co }) kcv
+  = almost_devoid_kico_var_of_kico kind_co kcv
+    && almost_devoid_kico_var_of_tyco co kcv
+
+almost_devoid_kico_var_of_tyco
+  (ForAllCoCo { tfcoco_kcv = v, tfcoco_kcv_kind_co = kind_co, tfcoco_body = co }) kcv
+  = almost_devoid_kico_var_of_kico kind_co kcv
+    && (v == kcv || almost_devoid_kico_var_of_tyco co kcv)
+
+almost_devoid_kico_var_of_tyco (TyFunCo { tfco_ki = kco, tfco_arg = co1, tfco_res = co2 }) kcv
+  = almost_devoid_kico_var_of_kico kco kcv
+    && almost_devoid_kico_var_of_tyco co1 kcv
+    && almost_devoid_kico_var_of_tyco co2 kcv
+
+almost_devoid_kico_var_of_tyco (TyCoVarCo {}) _ = True
+
+almost_devoid_kico_var_of_tyco (TyHoleCo {}) _ = True
+
+almost_devoid_kico_var_of_tyco (TySymCo co) kcv
+  = almost_devoid_kico_var_of_tyco co kcv
+
+almost_devoid_kico_var_of_tyco (TyTransCo co1 co2) kcv
+  = almost_devoid_kico_var_of_tyco co1 kcv
+    && almost_devoid_kico_var_of_tyco co2 kcv
+
+almost_devoid_kico_var_of_tyco (LRCo _ co) kcv
+  = almost_devoid_kico_var_of_tyco co kcv
+
+almost_devoid_kico_var_of_tyco (LiftKCo kco) kcv
+  = almost_devoid_kico_var_of_kico kco kcv
+
 {- *********************************************************************
 *                                                                      *
             Injective free vars

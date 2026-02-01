@@ -21,7 +21,7 @@ import CSlash.Data.Pair ( Pair(Pair) )
 import CSlash.Data.List.Infinite ( Infinite (..) )
 import qualified CSlash.Data.List.Infinite as Inf
 
-import CSlash.Types.Var ( VarBndr(..), PiKiBinder(..), setVarKind )
+import CSlash.Types.Var
 import CSlash.Types.Var.Env
 import CSlash.Types.Var.Set ( TyVarSet, KiVarSet, emptyVarSet )
 
@@ -153,8 +153,14 @@ mkFunTyRedn (KiReduction kco ki) (TyReduction arg_co arg_ty) (TyReduction res_co
 {-# INLINE mkFunTyRedn #-}
 
 mkHomoForAllRedn :: [ForAllBinder (TyVar Tc)] -> TyReduction -> TyReduction
-mkHomoForAllRedn bndrs (TyReduction co ty) = pprPanic "mkHomoForAllRedn" (ppr bndrs $$ ppr co $$ ppr ty)
+mkHomoForAllRedn bndrs (TyReduction co ty)
+  = mkTyReduction (mkHomoForAllCos bndrs co) (mkForAllTys bndrs ty)
 {-# INLINE mkHomoForAllRedn #-}
+
+mkHomoForAllKiCoRedn :: [KiCoVar Tc] -> TyReduction -> TyReduction
+mkHomoForAllKiCoRedn bndrs (TyReduction co ty)
+  = mkTyReduction (mkHomoForAllCoCos bndrs co) (mkForAllKiCos bndrs ty)
+{-# INLINE mkHomoForAllKiCoRedn #-}
 
 mkReflKiCoRedn :: KindCoercion Tc -> TyReduction
 mkReflKiCoRedn kco = mkTyReduction (mkReflTyCo kco_ty) kco_ty

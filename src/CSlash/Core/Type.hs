@@ -250,6 +250,17 @@ mapTyCoX (TyCoMapper { tm_tyvar = tyvar
     go_co !env (TyConAppCo tc cos) = do
       tc' <- tycon tc
       mkTyConAppCo tc' <$> go_cos env cos
+    go_co !env (ForAllCo { tfco_tv = tv, tfco_visL = visL, tfco_visR = visR
+                         , tfco_tv_kind_co = kind_co, tfco_body = co })
+      = do kind_co' <- go_kco env kind_co
+           tybinder env tv visL $ \env' tv' -> do
+             co' <- go_co env' co
+             return $ mkForAllCo tv' visL visR kind_co' co'
+    go_co !env (ForAllCoCo { tfcoco_kcv = kcv, tfcoco_kcv_kind_co = kind_co, tfcoco_body = co })
+      = do kind_co' <- go_kco env kind_co
+           kicobinder env kcv $ \env' kcv' -> do
+             co' <- go_co env' co
+             return $ mkForAllCoCo kcv' kind_co' co'
 
 {- *********************************************************************
 *                                                                      *
@@ -454,6 +465,17 @@ ty_coercion_lr_type which orig_co = go orig_co
     go (TyFunCo kco arg res)
       = FunTy { ft_kind = pickLR which (kicoercionLKind kco, kicoercionRKind kco)
               , ft_arg = go arg, ft_res = go res }
+    go co@(ForAllCo { tfco_tv = tv1, tfco_visL = visL, tfco_visR = visR
+                    , tfco_tv_kind_co = kco, tfco_body = co1 })
+      = case which of
+          CLeft -> mkForAllTy tv1 visL (go co1)
+          CRight | isReflKiCo kco -> mkForAllTy tv1 visR (go co1)
+                 | otherwise -> pprPanic "ForAllCo" (ppr co)
+    go co@(ForAllCoCo { tfcoco_kcv = kcv1, tfcoco_kcv_kind_co = kco, tfcoco_body = co1 })
+      = case which of
+          CLeft -> mkForAllKiCo kcv1 (go co1)
+          CRight | isReflKiCo kco -> mkForAllKiCo kcv1 (go co1)
+                 | otherwise -> pprPanic "ForAllCoCo" (ppr co)
 
     go_covar cv = pickLR which (coVarLType cv, coVarRType cv)
 
@@ -476,6 +498,96 @@ mkLRTyCo lr co
   = mkReflTyCo (pickLR lr (splitAppTy ty))
   | otherwise
   = LRCo lr co
+
+{- *********************************************************************
+*                                                                      *
+        ForAllCo
+*                                                                      *
+********************************************************************* -}
+
+mkForAllCo
+  :: HasDebugCallStack
+  => TyVar p -> ForAllFlag -> ForAllFlag -> KindCoercion p -> TypeCoercion p -> TypeCoercion p
+mkForAllCo v visL visR kind_co co
+  | Just ty <- isReflTyCo_maybe co
+  , isReflKiCo kind_co
+  , visL `eqForAllVis` visR
+  = mkReflTyCo (mkForAllTy v visL ty)
+  | otherwise
+  = mkForAllCo_NoRefl v visL visR kind_co co
+
+mkHomoForAllCos :: [ForAllBinder (TyVar p)] -> TypeCoercion p -> TypeCoercion p
+mkHomoForAllCos vs orig_co
+  | Just ty <- isReflTyCo_maybe orig_co
+  = mkReflTyCo (mkForAllTys vs ty)
+  | otherwise
+  = foldr go orig_co vs
+  where
+    go (Bndr var vis) co = mkForAllCo_NoRefl var vis vis (mkReflKiCo (varKind var)) co
+
+mkForAllCo_NoRefl
+  :: TyVar p -> ForAllFlag -> ForAllFlag -> KindCoercion p -> TypeCoercion p -> TypeCoercion p
+mkForAllCo_NoRefl tv visL visR kco co
+  = assertGoodForAllCo tv visL visR kco co $
+    assertPpr (not (isReflTyCo co && isReflKiCo kco && visL == visR)) (ppr co) $
+    ForAllCo { tfco_tv = tv, tfco_visL = visL, tfco_visR = visR
+             , tfco_tv_kind_co = kco, tfco_body = co }
+
+assertGoodForAllCo
+  :: HasDebugCallStack
+  => TyVar p -> ForAllFlag -> ForAllFlag -> KindCoercion p -> TypeCoercion p -> a -> a
+assertGoodForAllCo tv visL visR kind_co co = assertPpr (tv_kind `eqMonoKind` kind_co_lkind) doc
+  where
+    tv_kind = varKind tv
+    kind_co_lkind = kicoercionLKind kind_co
+
+    doc = vcat [ text "Var:" <+> ppr tv <+> colon <+> ppr tv_kind
+               , text "Vis:" <+> ppr visL <+> ppr visR
+               , text "kind_co:" <+> ppr kind_co
+               , text "kind_co_lkind" <+> ppr kind_co_lkind
+               , text "body_co" <+> ppr co ]
+
+mkForAllCoCo
+  :: HasDebugCallStack
+  => KiCoVar p -> KindCoercion p -> TypeCoercion p -> TypeCoercion p
+mkForAllCoCo kcv kind_co co
+  | Just ty <- isReflTyCo_maybe co
+  , isReflKiCo kind_co
+  = mkReflTyCo (mkForAllKiCo kcv ty)
+  | otherwise
+  = mkForAllCoCo_NoRefl kcv kind_co co
+
+mkHomoForAllCoCos :: [KiCoVar p] -> TypeCoercion p -> TypeCoercion p
+mkHomoForAllCoCos vs orig_co
+  | Just ty <- isReflTyCo_maybe orig_co
+  = mkReflTyCo (mkForAllKiCos vs ty)
+  | otherwise
+  = foldr go orig_co vs
+  where
+    go var co = mkForAllCoCo_NoRefl var (mkReflKiCo (varKind var)) co
+
+mkForAllCoCo_NoRefl :: KiCoVar p -> KindCoercion p -> TypeCoercion p -> TypeCoercion p
+mkForAllCoCo_NoRefl kcv kind_co co
+  = assertGoodForAllCoCo kcv kind_co co $
+    assertPpr (not (isReflTyCo co && isReflKiCo kind_co)) (ppr co) $
+    ForAllCoCo { tfcoco_kcv = kcv
+               , tfcoco_kcv_kind_co = kind_co
+               , tfcoco_body = co }
+
+assertGoodForAllCoCo
+  :: HasDebugCallStack
+  => KiCoVar p -> KindCoercion p -> TypeCoercion p -> a -> a
+assertGoodForAllCoCo kcv kind_co co =
+  assertPpr (kcv_kind `eqMonoKind` kind_co_lkind) doc
+  . assertPpr (almostDevoidKiCoVarOfTyCo kcv co) doc
+  where
+    kcv_kind = varKind kcv
+    kind_co_lkind = kicoercionLKind kind_co
+
+    doc = vcat [ text "Var:" <+> ppr kcv <+> colon <+> ppr kcv_kind
+               , text "kind_co:" <+> ppr kind_co
+               , text "kind_co_lkind" <+> ppr kind_co_lkind
+               , text "body_co" <+> ppr co ]
 
 {- *********************************************************************
 *                                                                      *

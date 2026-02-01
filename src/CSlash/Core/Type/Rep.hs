@@ -16,6 +16,7 @@ import CSlash.Types.Var.Class
 import CSlash.Types.Var.Set
 import CSlash.Core.TyCon
 import CSlash.Core.Kind
+import CSlash.Core.Kind.Compare
 
 import CSlash.Builtin.Names
 
@@ -73,6 +74,18 @@ data TypeCoercion p where
   GRefl :: Type p -> KindCoercion p -> TypeCoercion p
   TyConAppCo :: TyCon p -> [TypeCoercion p] -> TypeCoercion p
   AppCo :: TypeCoercion p -> TypeCoercion p -> TypeCoercion p
+  ForAllCo
+    :: { tfco_tv :: TyVar p
+       , tfco_visL :: !ForAllFlag
+       , tfco_visR :: !ForAllFlag
+       , tfco_tv_kind_co :: KindCoercion p
+       , tfco_body :: TypeCoercion p }
+    -> TypeCoercion p
+  ForAllCoCo
+    :: { tfcoco_kcv :: KiCoVar p
+       , tfcoco_kcv_kind_co :: KindCoercion p
+       , tfcoco_body :: TypeCoercion p }
+    -> TypeCoercion p
   TyFunCo
     :: { tfco_ki :: KindCoercion p
        , tfco_arg :: TypeCoercion p
@@ -270,8 +283,19 @@ mkFunTys args fun_kis res_ty =
   assert (args `equalLength` fun_kis)
   $ foldr (uncurry mkFunTy) res_ty (zip fun_kis args)
 
+mkForAllTy :: TyVar p -> ForAllFlag -> Type p -> Type p
+mkForAllTy tv vis ty = ForAllTy (Bndr tv vis) ty
+
+mkForAllKiCo :: KiCoVar p -> Type p -> Type p
+mkForAllKiCo = ForAllKiCo
+
 mkForAllTys :: [ForAllBinder (TyVar p)] -> Type p -> Type p
 mkForAllTys tyvars ty = foldr ForAllTy ty tyvars
+
+-- TODO: this is NOT like GHC (they use fun ty for kcos when the kcv does not occur in type)
+-- This seems simpler for us without causing issues. Should double check anyways
+mkForAllKiCos :: [KiCoVar p] -> Type p -> Type p
+mkForAllKiCos bndrs ty = foldr ForAllKiCo ty bndrs
 
 mkInvisForAllTys :: [InvisBinder (TyVar p)] -> Type p -> Type p
 mkInvisForAllTys tyvars = mkForAllTys (varSpecToBinders tyvars)
@@ -393,6 +417,22 @@ foldTyCo (TyCoFolder { tcf_view = view
       = embedRes (go_kco kco) `mappend` go_co env c1 `mappend` go_co env c2
       where go_kco = case foldMonoKiCo mkcf (tokenv env) of
                        (_, _, f, _) -> f
+    go_co env (ForAllCo tv _ _ kco co)
+      = embedRes (go_kco kco)
+        `mappend` embedRes (go_mki (varKind tv))
+        `mappend` go_co env' co
+      where
+        env' = tybinder env tv Inferred
+        (go_mki, go_kco) = case foldMonoKiCo mkcf (tokenv env) of
+                             (f1, _, f2, _) -> (f1, f2)
+    go_co env (ForAllCoCo kcv kco co)
+      = embedRes (go_kco kco)
+        `mappend` embedRes (go_mki (varKind kcv))
+        `mappend` go_co env' co
+      where
+        env' = kcobinder env kcv
+        (go_mki, go_kco) = case foldMonoKiCo mkcf (tokenv env) of
+                             (f1, _, f2, _) -> (f1, f2)
 
 noView :: Type p -> Maybe (Type p)
 noView _ = Nothing

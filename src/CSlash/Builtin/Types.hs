@@ -510,7 +510,7 @@ mkIoResDataCon = data_con
 
                 dc_type = BigTyLamTy kva $
                           BigTyLamTy kvf $
-                          ForAllTy (panic "Bndr kco Specified") $
+                          ForAllKiCo kco $
                           ForAllTy (Bndr va Specified) $
                           FunTy (BIKi UKd) a $ 
                           FunTy kf (mkTyConTy realWorldTyCon) $

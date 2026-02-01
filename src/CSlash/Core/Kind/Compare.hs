@@ -6,10 +6,6 @@ module CSlash.Core.Kind.Compare where
 import CSlash.Core.Kind
 import CSlash.Core.Kind.FVs
 
-import CSlash.Core.Type.Rep
-import CSlash.Core.Type.FVs
-import CSlash.Core.TyCon
-
 import {-# SOURCE #-} CSlash.Types.Var.KiVar
 import CSlash.Types.Var.Set
 import CSlash.Types.Unique

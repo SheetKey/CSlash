@@ -33,7 +33,13 @@ type TyCoVar = CoVar Type
 
 instance VarHasType TyCoVar
 
-instance VarHasKind (KiCoVar p) p
+instance VarHasKind (KiCoVar p) p where
+  varKind = cv_thing
+  setVarKind kcv ki = kcv { cv_thing = ki }
+  updateVarKind f (CoVar {..}) = CoVar { cv_thing = f cv_thing, .. }
+  updateVarKindM f (CoVar {..}) = do
+    ki' <- f cv_thing
+    return $ CoVar { cv_thing = ki', .. }
 
 instance Outputable (thing p) => IsVar (CoVar thing p) where
   isTcVar _ = False

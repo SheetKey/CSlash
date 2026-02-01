@@ -210,7 +210,10 @@ isCsValArg (EValArg {}) = True
 isCsValArg _ = False
 
 leadingValArgs :: [CsExprArg 'TcpRn] -> [LCsExpr Rn]
-leadingValArgs = panic "leadingValArgs"
+leadingValArgs [] = []
+leadingValArgs (EValArg { ea_arg = arg } : args) = arg : leadingValArgs args
+leadingValArgs (ETypeArg {} : _) = []
+leadingValArgs (EWrap {} : args) = leadingValArgs args
 
 isValArg :: CsExprArg id -> Bool
 isValArg (EValArg {}) = True
