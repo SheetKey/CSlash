@@ -44,8 +44,8 @@ data Type p
   | TyLamTy (TyVar p) (Type p) -- Used for TySyns, NOT in the types of DataCons (only Foralls)
   | BigTyLamTy (KiVar p) (Type p)
   | TyConApp (TyCon p) [Type p]
-  | ForAllTy {-# UNPACK #-} !(ForAllBinder (TyVar p)) (Type p)
-  | ForAllKiCo {-# UNPACK #-} !(KiCoVar p) (Type p)
+  | ForAllTy !(ForAllBinder (TyVar p)) (Type p)
+  | ForAllKiCo !(KiCoVar p) (Type p)
   | FunTy
     { ft_kind :: MonoKind p
     , ft_arg :: Type p

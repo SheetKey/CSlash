@@ -44,7 +44,7 @@ import Data.Maybe (isJust)
 ********************************************************************** -}
 
 data Kind p
-  = ForAllKi {-# UNPACK #-} !(KiVar p) (Kind p)
+  = ForAllKi !(KiVar p) (Kind p)
   | Mono (MonoKind p)
   deriving Data.Data
 
