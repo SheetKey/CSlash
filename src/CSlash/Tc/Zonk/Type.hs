@@ -292,7 +292,8 @@ commitFlexiKv kv = do
     NoFlexi -> pprPanic "NoFlexi" (ppr kv)
     DefaultFlexiKi -> do
       traceTc "Defaulting flexi kivar to Unrestricted:" (ppr kv)
-      return $ BIKi UKd -- if change, change in other defaulting places too
+      return $ panic "BIKi UKd" -- if change, change in other defaulting places too
+              -- this panic will let me know to check this if it ever ends up happening
 
 zonkKiCoVarOcc :: KiCoVar Tc -> ZonkTcM (KindCoercion Zk)
 zonkKiCoVarOcc (TcCoVar tckcv) = f_tc tckcv
