@@ -352,7 +352,11 @@ data KindCoercion p where
   SelCo :: CoSel -> (KindCoercion p) -> KindCoercion p
   HoleCo :: KindCoercionHole -> KindCoercion Tc
 
-instance Data.Typeable p => Data.Data (KindCoercion p)
+instance (Data.Typeable p) => Data.Data (KindCoercion p) where
+  toConstr _ = abstractConstr "KindCoercion"
+  gunfold _ _ = error "gunfold"
+  dataTypeOf _ = mkNoRepType "KindCoercion"
+  
 
 data KindCoercionHole = KindCoercionHole
   { kch_co_var :: TcKiCoVar
@@ -373,7 +377,10 @@ instance Outputable FunSel where
   ppr SelArg = text "arg"
   ppr SelRes = text "res"
 
-instance Data.Data KindCoercionHole
+instance Data.Data KindCoercionHole where
+  toConstr _ = abstractConstr "KindCoercionHole"
+  gunfold _ _ = error "gunfold"
+  dataTypeOf _ = mkNoRepType "KindCoercionHole"
 
 coHoleCoVar :: KindCoercionHole -> TcKiCoVar 
 coHoleCoVar = kch_co_var
