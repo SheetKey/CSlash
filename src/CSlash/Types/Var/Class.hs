@@ -33,11 +33,11 @@ class (Eq v, Ord v, Outputable v, NamedThing v, Uniquable v) => IsVar v where
 
   isTcVar :: v -> Bool
 
-class VarHasType id where
-  varType :: id p -> Type p
-  setVarType :: id p -> Type p -> id p
-  updateVarType :: (Type p -> Type p) -> id p -> id p
-  updateVarTypeM :: Monad m => (Type p -> m (Type p)) -> id p -> m (id p)
+class VarHasType id p | id -> p where
+  varType :: id -> Type p
+  setVarType :: id -> Type p -> id
+  updateVarType :: (Type p -> Type p) -> id -> id
+  updateVarTypeM :: Monad m => (Type p -> m (Type p)) -> id -> m id
 
 class VarHasKind tv p | tv -> p where
   varKind :: tv -> MonoKind p

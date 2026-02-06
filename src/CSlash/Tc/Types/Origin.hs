@@ -20,7 +20,7 @@ import CSlash.Types.Name
 import CSlash.Types.Name.Reader
 import CSlash.Types.Basic
 import CSlash.Types.SrcLoc
-import CSlash.Types.Var (TyVar, TcTyVar, KiVar, TcKiVar)
+import CSlash.Types.Var (TyVar, TcTyVar, KiVar, TcKiVar, TcKiCoVar)
 
 import CSlash.Data.FastString
 
@@ -92,8 +92,7 @@ isSigMaybe _ = Nothing
 data SkolemInfo = SkolemInfo Unique SkolemInfoAnon
 
 data SkolemInfoAnon
-  = SigSkol UserTypeCtxt (Type Tc) [(Name, TcTyVar)]
-  | SigSkolKi UserTypeCtxt (Type Tc) [(Name, TcKiVar)]
+  = SigSkol UserTypeCtxt (Type Tc) [(Name, TcKiVar)] [(Name, TcKiCoVar)] [(Name, TcTyVar)] 
   | SigTypeSkol UserTypeCtxt
   | ForAllSkol TyVarBndrs
   | TyLamTySkol [Name]
@@ -124,8 +123,7 @@ instance Outputable SkolemInfoAnon where
   ppr = pprSkolInfo
 
 pprSkolInfo :: SkolemInfoAnon -> SDoc
-pprSkolInfo (SigSkol cx ty _) = pprSigSkolInfo cx ty
-pprSkolInfo (SigSkolKi cx ty _) = pprSigSkolInfo cx ty
+pprSkolInfo (SigSkol cx ty _ _ _) = pprSigSkolInfo cx ty
 pprSkolInfo (SigTypeSkol cx) = pprUserTypeCtxt cx
 pprSkolInfo (ForAllSkol tvs) = text "an explicit forall" <+> ppr tvs
 pprSkolInfo (TyLamTySkol tvs) = text "an explicit type lambda" <+> ppr tvs

@@ -459,7 +459,7 @@ setMainCtxt main_name io_ty thing_inside
     $ checkTyConstraints skol_info []
     $ thing_inside
   where
-    skol_info = SigSkol (FunSigCtxt main_name NoRRC) io_ty []
+    skol_info = SigSkol (FunSigCtxt main_name NoRRC) io_ty [] [] []
     main_ctxt = text "When checking the type of the"
                 <+> ppMainFn (nameOccName main_name)
 

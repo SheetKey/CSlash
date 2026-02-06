@@ -1,3 +1,4 @@
+{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE RecursiveDo #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -106,25 +107,29 @@ matchActualFunTy herald mb_thing err_info fun_ty
 tcSkolemizeGeneral
   :: UserTypeCtxt
   -> Type Tc -> Type Tc
-  -> ([(Name, TcKiVar)] -> [(Name, TcTyVar)] -> Type Tc -> TcM result)
+  -> ([(Name, TcKiVar)] -> [(Name, TcKiCoVar)] -> [(Name, TcTyVar)] -> Type Tc -> TcM result)
   -> TcM (CsWrapper Tc, result)
 tcSkolemizeGeneral ctxt top_ty expected_ty thing_inside
   | isRhoTy expected_ty
-  = do let sig_skol = SigSkol ctxt top_ty []
-       result <- checkKiConstraints sig_skol [] [] $ thing_inside [] [] expected_ty
+  = do let sig_skol = SigSkol ctxt top_ty [] [] []
+       result <- checkConstraints sig_skol [] [] [] $ thing_inside [] [] [] expected_ty
        return (idCsWrapper, result)
 
   | otherwise
-  = do rec { (wrap, kv_prs, tv_prs, rho_ty) <- topSkolemize skol_info_ki skol_info expected_ty
-           ; let sig_skol = SigSkol ctxt top_ty tv_prs
-                 sig_skol_ki = SigSkolKi ctxt top_ty kv_prs
-           ; skol_info <- mkSkolemInfo sig_skol 
-           ; skol_info_ki <- mkSkolemInfo sig_skol_ki }
+  = do rec { (wrap, kv_prs, kcv_prs, tv_prs, rho_ty)
+               <- topSkolemize skol_info expected_ty
+           ; let sig_skol = SigSkol ctxt top_ty kv_prs kcv_prs tv_prs
+           ; skol_info <- mkSkolemInfo sig_skol
+           }
        let skol_kvs = map snd kv_prs
+           skol_kcvs = map snd kcv_prs
            skol_tvs = map snd tv_prs
-       traceTc "tcSkolemizeGeneral" (pprUserTypeCtxt ctxt <+> ppr skol_kvs <+> ppr tv_prs)
-       result <- checkTyKiConstraints sig_skol skol_kvs skol_tvs []
-                 $ thing_inside kv_prs tv_prs rho_ty
+       traceTc "tcSkolemizeGeneral" (pprUserTypeCtxt ctxt
+                                      <+> ppr skol_kvs
+                                      <+> ppr skol_kcvs
+                                      <+> ppr tv_prs)
+       result <- checkConstraints sig_skol skol_kvs skol_kcvs skol_tvs
+                 $ thing_inside kv_prs kcv_prs tv_prs rho_ty
        return (wrap, result)
 
 tcSkolemizeCompleteSig
@@ -137,11 +142,13 @@ tcSkolemizeCompleteSig (CSig { sig_bndr = poly_id, sig_ctxt = ctxt, sig_loc = lo
   cur_loc <- getSrcSpanM
   let poly_ty = varType poly_id
   setSrcSpan loc $
-    tcSkolemizeGeneral ctxt poly_ty poly_ty $ \ kv_prs tv_prs rho_ty ->
+    tcSkolemizeGeneral ctxt poly_ty poly_ty $ \ kv_prs kcv_prs tv_prs rho_ty ->
     setSrcSpan cur_loc
     $ tcExtendNameKiVarEnv kv_prs
+    $ tcExtendNameKiCoVarEnv kcv_prs
     $ tcExtendNameTyVarEnv tv_prs
     $ thing_inside ((map (mkInvisExpPatKind . snd) kv_prs)
+                    ++ (map (mkInvisExpPatKiCo . snd) kcv_prs)
                     ++ (map (mkInvisExpPatType . snd) tv_prs))
                    rho_ty
 
@@ -150,8 +157,9 @@ tcSkolemizeExpectedType
   -> ([ExpPatType] -> RhoType Tc -> TcM result)
   -> TcM (CsWrapper Tc, result)
 tcSkolemizeExpectedType exp_ty thing_inside
-  = tcSkolemizeGeneral GenSigCtxt exp_ty exp_ty $ \kv_prs tv_prs rho_ty ->
+  = tcSkolemizeGeneral GenSigCtxt exp_ty exp_ty $ \kv_prs kcv_prs tv_prs rho_ty ->
     thing_inside ((map (mkInvisExpPatKind . snd) kv_prs)
+                  ++ (map (mkInvisExpPatKiCo . snd) kcv_prs)
                   ++ (map (mkInvisExpPatType . snd) tv_prs))
                  rho_ty
 
@@ -161,28 +169,33 @@ tcSkolemize
   -> (RhoType Tc -> TcM result)
   -> TcM (CsWrapper Tc, result)
 tcSkolemize ctxt expected_ty thing_inside
-  = tcSkolemizeGeneral ctxt expected_ty expected_ty $ \_ _ rho_ty ->
+  = tcSkolemizeGeneral ctxt expected_ty expected_ty $ \_ _ _ rho_ty ->
     thing_inside rho_ty
 
-checkTyKiConstraints
+checkConstraints
   :: SkolemInfoAnon
   -> [TcKiVar]
+  -> [TcKiCoVar] -- givens
   -> [TcTyVar]
-  -> [KiCoVar Tc]
   -> TcM result
   -> TcM result
-checkTyKiConstraints skol_info skol_kvs skol_tvs given thing_inside = do
+checkConstraints skol_info skol_kvs skol_kcvs skol_tvs thing_inside = do
   ty_implication_needed <- implicationNeeded skol_info skol_tvs
-  ki_implication_needed <- kiImplicationNeeded skol_info skol_kvs given
-  if ty_implication_needed || ki_implication_needed
-    then do (tclvl, wanted, result) <- pushLevelAndCaptureConstraints thing_inside
-            (kiImplics, tyImplics)
-              <- buildTyKiImplicationFor tclvl skol_info skol_kvs skol_tvs given wanted
-            traceTc "checkTyKiConstraints" (ppr tclvl $$ ppr skol_kvs $$ ppr skol_tvs)
-            emitKiImplications kiImplics
-            emitTyImplications tyImplics
-            return result
-    else thing_inside
+  ki_implication_needed <- kiImplicationNeeded skol_info skol_kvs skol_kcvs
+  if | ty_implication_needed && ki_implication_needed
+       -> do (tclvl, wanted, result) <- pushLevelAndCaptureConstraints thing_inside
+             (kiImplics, tyImplics)
+               <- buildTyKiImplicationFor tclvl skol_info skol_kvs skol_kcvs skol_tvs wanted
+             traceTc "checkConstraints"
+               (ppr tclvl $$ ppr skol_kvs $$ ppr skol_kcvs $$ ppr skol_tvs)
+             emitKiImplications kiImplics
+             emitTyImplications tyImplics
+             return result
+     | ki_implication_needed
+       -> panic "unfinished"
+     | ty_implication_needed
+       -> panic "unfinished"
+     | otherwise -> thing_inside
 
 checkTyConstraints :: SkolemInfoAnon -> [TcTyVar] -> TcM result -> TcM (result)
 checkTyConstraints skol_info skol_tvs thing_inside = do
@@ -196,7 +209,7 @@ checkTyConstraints skol_info skol_tvs thing_inside = do
     else thing_inside
 
 checkKiConstraints
-  :: SkolemInfoAnon -> [TcKiVar] -> [KiCoVar Tc] -> TcM result -> TcM result
+  :: SkolemInfoAnon -> [TcKiVar] -> [TcKiCoVar] -> TcM result -> TcM result
 checkKiConstraints skol_info skol_kvs given thing_inside = do
   implication_needed <- kiImplicationNeeded skol_info skol_kvs given
   if implication_needed
@@ -290,10 +303,10 @@ implicationNeeded skol_info skol_tvs
   | otherwise
   = return True
 
-kiImplicationNeeded :: SkolemInfoAnon -> [TcKiVar] -> [KiCoVar Tc] -> TcM Bool
-kiImplicationNeeded skol_info skol_kvs given
+kiImplicationNeeded :: SkolemInfoAnon -> [TcKiVar] -> [TcKiCoVar] -> TcM Bool
+kiImplicationNeeded skol_info skol_kvs skol_kcvs
   | null skol_kvs
-  , null given
+  , null skol_kcvs
   , not (alwaysBuildImplication skol_info)
   = do tc_lvl <- getTcLevel
        if not (isTopTcLevel tc_lvl)
@@ -312,15 +325,16 @@ buildTyKiImplicationFor
   :: TcLevel
   -> SkolemInfoAnon
   -> [TcKiVar]
+  -> [TcKiCoVar]
   -> [TcTyVar]
-  -> [KiCoVar Tc]
   -> WantedTyConstraints
   -> TcM (Bag KiImplication, Bag TyImplication)
-buildTyKiImplicationFor tclvl skol_info tc_skol_kvs tc_skol_tvs given wanted
-  | isEmptyWC wanted && null given
+buildTyKiImplicationFor tclvl skol_info tc_skol_kvs tc_skol_kcvs tc_skol_tvs wanted
+  | isEmptyWC wanted && null tc_skol_kcvs
   = return (emptyBag, emptyBag)
   | otherwise
   = assertPpr (all isSkolemVar tc_skol_kvs) (ppr tc_skol_kvs) $
+    assertPpr (all isSkolemVar tc_skol_kcvs) (ppr tc_skol_kcvs) $
     assertPpr (all isSkolemVar tc_skol_tvs) (ppr tc_skol_tvs) $
     do kco_binds_var <- newTcKiCoBinds
        tco_binds_var <- newTcTyCoBinds
@@ -330,7 +344,7 @@ buildTyKiImplicationFor tclvl skol_info tc_skol_kvs tc_skol_tvs given wanted
                                     WTC s t k -> (k, WTC s t emptyWC)
            kiImplic' = kiImplic { kic_tclvl = tclvl
                                 , kic_skols = tc_skol_kvs
-                                , kic_given = given
+                                , kic_given = tc_skol_kcvs
                                 , kic_wanted = kiWanted
                                 , kic_binds = kco_binds_var
                                 , kic_info = skol_info }
@@ -349,7 +363,7 @@ buildKiImplicationFor
   :: TcLevel
   -> SkolemInfoAnon
   -> [TcKiVar]
-  -> [KiCoVar Tc]
+  -> [TcKiCoVar]
   -> WantedKiConstraints
   -> TcM (Bag KiImplication)
 buildKiImplicationFor tclvl skol_info tc_skol_kvs given wanted
@@ -414,16 +428,22 @@ matchExpectedFunTys herald ctx arity (Check top_ty) thing_inside
     check n_req rev_pat_tys ty
       | isSigmaTy ty
         || (n_req > 0 && isForAllTy ty)
-      = do rec { (n_req', wrap_gen, tv_nms, bndrs, inner_ty)
+      = do rec { (n_req', wrap_gen, kv_nms, kvs, kcv_nms, kcvs, tv_nms, tvbs, inner_ty)
                    <- skolemizeRequired skol_info n_req ty
-               ; let sig_skol = SigSkol ctx top_ty (tv_nms `zip` skol_tvs)
-                     skol_tvs = binderVars bndrs
+               ; let tvs = binderVars tvbs
+                     sig_skol = SigSkol ctx top_ty
+                                        (kv_nms `zip` kvs)
+                                        (kcv_nms `zip` kcvs)
+                                        (tv_nms `zip` tvs)
                ; skol_info <- mkSkolemInfo sig_skol }
-           (wrap_res, result) <- checkTyConstraints (getSkolemInfo skol_info) skol_tvs
+           (wrap_res, result) <- checkConstraints (getSkolemInfo skol_info) kvs kcvs tvs
                                  $ check n_req'
-                                         (reverse (map ExpForAllPatTy bndrs) ++ rev_pat_tys)
+                                         (reverse (map ExpForAllPatKi kvs
+                                                   ++ map ExpForAllPatKiCo kcvs
+                                                   ++ map ExpForAllPatTy tvbs)
+                                          ++ rev_pat_tys)
                                          inner_ty
-           assertPpr (not (null bndrs)) (ppr ty)
+           assertPpr (not (null kvs && null kcvs && null tvbs)) (ppr ty)
              $ return (wrap_gen <.> wrap_res, result)
     -- Base case
     check n_req rev_pat_tys rho_ty
@@ -622,9 +642,9 @@ tc_sub_type_shallow unify inst_orig ty_actual sk_rho = do
 
 definitely_poly :: Type Tc -> Bool
 definitely_poly ty
-  | (kvs, tvs, tau) <- tcSplitSigma ty
+  | (kvs, kcvs, tvs, tau) <- tcSplitSigma ty
   , (tv:_) <- tvs
-  , tv `isInjectiveInType` tau
+  , tv `isInjectiveInType` tau -- TODO check if first kv or kcv isInjectiveInType
   = True
   | otherwise
   = False
@@ -1005,7 +1025,7 @@ uUnfilledTyVar1 env swapped tv1 ty2
     go tv2 | tv1 == tv2
            = return (mkReflTyCo (mkTyVarTy tv1))
            | swapOverTyVars False tv1 tv2
-           = do tv1 <- liftZonkM $ zonkTyVarKind tv1
+           = do tv1 <- liftZonkM $ zonkVarKind tv1
                 uUnfilledTyVar2 env (flipSwap swapped) tv2 (mkTyVarTy tv1)
            | otherwise
            = uUnfilledTyVar2 env swapped tv1 ty2

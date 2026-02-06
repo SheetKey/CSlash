@@ -612,7 +612,7 @@ usefulContext implics pred = go implics
       | implausible_info (kic_info ic) = True
       | otherwise = False
 
-    implausible_info (SigSkol (InfSigCtxt {}) _ _) = True
+    implausible_info (SigSkol (InfSigCtxt {}) _ _ _ _) = True
     implausible_info _ = False
 
 pp_givens :: [KiImplication] -> [SDoc]
@@ -622,7 +622,7 @@ pp_givens givens = case givens of
                                : map (ppr_given (text "or from:")) gs
   where
     ppr_given herald implic@(KiImplic { kic_given = gs, kic_info = skol_info })
-      = hang (herald <+> pprKiCoVarTheta (mkMinimalBy_Ki kiCoVarPred gs))
+      = hang (herald <+> pprKiCoVarTheta (mkMinimalBy_Ki varKind gs))
         2 (sep [ text "bound by" <+> ppr skol_info
                , text "at" <+> ppr (getCtLocEnvLoc (kic_env implic)) ])
 
@@ -660,14 +660,13 @@ pprArising ct_loc
 **********************************************************************-}
 
 tidySkolemInfoAnon :: TidyEnv Tc -> SkolemInfoAnon -> SkolemInfoAnon
-tidySkolemInfoAnon env (SigSkol cx ty tv_prs) = tidySigSkol env cx ty tv_prs
-tidySkolemInfoAnon env (SigSkolKi cx ki kv_prs) = panic "tidySigSkolKi env cx ki kv_prs"
+tidySkolemInfoAnon env (SigSkol cx ty kv_prs kcv_prs tv_prs) = panic "tidySigSkol env cx ty tv_prs"
 tidySkolemInfoAnon env (InferSkol ids) = InferSkol (mapSnd (tidyType env) ids)
 tidySkolemInfoAnon env (UnifyForAllSkol ty) = UnifyForAllSkol (tidyType env ty)
 tidySkolemInfoAnon _ info = info
 
 tidySigSkol :: TidyEnv Tc -> UserTypeCtxt -> Type Tc -> [(Name, TcTyVar)] -> SkolemInfoAnon
-tidySigSkol env cx ty tv_prs = SigSkol cx (tidy_ty env ty) tv_prs'
+tidySigSkol env cx ty tv_prs = panic "SigSkol cx (tidy_ty env ty) tv_prs'"
   where
     tv_prs' = mapSnd (tidyTcTyVarOcc env) tv_prs
     inst_env = mkNameEnv tv_prs'

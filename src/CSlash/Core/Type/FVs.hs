@@ -297,7 +297,7 @@ fvsOfKiCo (LiftLT co) f bound_vars acc = fvsOfKiCo co f bound_vars acc
 fvsOfKiCo (FunCo { fco_arg = co1, fco_res = co2 }) f bound_vars acc
   = (fvsOfKiCo co1 `unionFV` fvsOfKiCo co2) f bound_vars acc
 fvsOfKiCo (KiCoVarCo kcv) f bound_vars acc = fvsOfKiCoVar kcv f bound_vars acc
-fvsOfKiCo (HoleCo h) f bound_vars acc = fvsOfKiCoVar (coHoleCoVar h) f bound_vars acc
+fvsOfKiCo (HoleCo h) f bound_vars acc = fvsOfKiCoVar (TcCoVar $ coHoleCoVar h) f bound_vars acc
 fvsOfKiCo (SymCo co) f bound_vars acc = fvsOfKiCo co f bound_vars acc
 fvsOfKiCo (TransCo co1 co2) f bound_vars acc
   = (fvsOfKiCo co1 `unionFV` fvsOfKiCo co2) f bound_vars acc

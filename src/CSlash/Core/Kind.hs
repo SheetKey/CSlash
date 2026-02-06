@@ -355,7 +355,7 @@ data KindCoercion p where
 instance Data.Typeable p => Data.Data (KindCoercion p)
 
 data KindCoercionHole = KindCoercionHole
-  { kch_co_var :: KiCoVar Tc
+  { kch_co_var :: TcKiCoVar
   , kch_ref :: IORef (Maybe (KindCoercion Tc))
   }
 
@@ -375,7 +375,7 @@ instance Outputable FunSel where
 
 instance Data.Data KindCoercionHole
 
-coHoleCoVar :: KindCoercionHole -> KiCoVar Tc
+coHoleCoVar :: KindCoercionHole -> TcKiCoVar 
 coHoleCoVar = kch_co_var
 
 isReflKiCo :: KindCoercion p -> Bool
@@ -471,8 +471,11 @@ mkFunKiCo2 afl afr arg_co res_co
   = FunCo { fco_afl = afl, fco_afr = afr
           , fco_arg = arg_co, fco_res = res_co }
 
-mkKiCoVarCo :: KiCoVar kv -> KindCoercion kv
+mkKiCoVarCo :: KiCoVar p -> KindCoercion p
 mkKiCoVarCo cv = KiCoVarCo cv
+
+mkKiCoVarCos :: [KiCoVar p] -> [KindCoercion p]
+mkKiCoVarCos = map KiCoVarCo
 
 mkKiCoPred :: KiPredCon -> MonoKind kv -> MonoKind kv -> PredKind kv
 mkKiCoPred p ki1 ki2 = mkKiPredApp p ki1 ki2
@@ -558,18 +561,18 @@ instance  Outputable KindCoercionHole where
 instance Uniquable KindCoercionHole where
   getUnique (KindCoercionHole { kch_co_var = cv }) = getUnique cv
 
-kiCoVarKiPred :: (HasDebugCallStack) => KiCoVar p -> KiPredCon
+kiCoVarKiPred :: (HasDebugCallStack, Outputable cv, VarHasKind cv p) => cv -> KiPredCon
 kiCoVarKiPred cv | (kc, _, _) <- coVarKinds cv = kc
 
-coVarLKind :: (HasDebugCallStack) => KiCoVar p -> MonoKind p
+coVarLKind :: (HasDebugCallStack, Outputable cv, VarHasKind cv p) => cv -> MonoKind p
 coVarLKind cv | (_, ki1, _) <- coVarKinds cv = ki1
 
-coVarRKind :: (HasDebugCallStack) => KiCoVar p -> MonoKind p
+coVarRKind :: (HasDebugCallStack, Outputable cv, VarHasKind cv p) => cv -> MonoKind p
 coVarRKind cv | (_, _, ki2) <- coVarKinds cv = ki2
 
 coVarKinds
-  :: (HasDebugCallStack)
-  => KiCoVar p
+  :: (HasDebugCallStack, Outputable cv, VarHasKind cv p)
+  => cv
   -> (KiPredCon, MonoKind p, MonoKind p)
 coVarKinds cv
   | KiPredApp kc k1 k2 <- (varKind cv)
@@ -586,7 +589,7 @@ setCoHoleKind
   -> KindCoercionHole
 setCoHoleKind h k = setCoHoleCoVar h (setVarKind (coHoleCoVar h) k)
 
-setCoHoleCoVar :: KindCoercionHole -> KiCoVar Tc -> KindCoercionHole
+setCoHoleCoVar :: KindCoercionHole -> TcKiCoVar -> KindCoercionHole
 setCoHoleCoVar h cv = h { kch_co_var = cv }
 
 {- **********************************************************************

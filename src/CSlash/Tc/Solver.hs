@@ -562,7 +562,7 @@ setKiImplicationStatus implic@(KiImplic { kic_status = status
 
        bad_telescope <- checkBadKiTelescope implic
 
-       let warn_givens = findUnnecessaryKiGivens info need_inner givens
+       let warn_givens = findUnnecessaryKiGivens info need_inner (TcCoVar <$> givens)
 
            discard_entire_implication
              = null warn_givens
@@ -734,7 +734,7 @@ checkBadTyTelescope :: TyImplication -> TcS Bool
 checkBadTyTelescope _ = return False
 
 warnRedundantGivens :: SkolemInfoAnon -> Bool
-warnRedundantGivens (SigSkol ctxt _ _) = case ctxt of
+warnRedundantGivens (SigSkol ctxt _ _ _ _) = case ctxt of
   FunSigCtxt _ rrc -> reportRedundantConstraints rrc
   ExprSigCtxt rrc -> reportRedundantConstraints rrc
   _ -> False
@@ -774,7 +774,7 @@ neededKiCoVars implic@(KiImplic { kic_given = givens
 
   let seeds1 = foldr add_implic_seeds old_needs implics
       need_inner = seeds1 `unionVarSet` kcvs
-      need_outer = need_inner `delVarSetList` givens
+      need_outer = need_inner `delVarSetList` (TcCoVar <$> givens)
 
   traceTcS "neededKiCoVars"
     $ vcat [ text "old_needs:" <+> ppr old_needs

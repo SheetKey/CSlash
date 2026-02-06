@@ -156,9 +156,9 @@ zonkTcTypes :: [Type Tc] -> ZonkM [Type Tc]
       { tm_tyvar = const zonkTyVar
       , tm_covar = panic "tm_covar unused zonkTcType"
       , tm_hole = panic "tm_hole unused zonkTcType"
-      , tm_tybinder = \_ tv _ k -> zonkTyVarKind tv >>= k ()
-      , tm_kicobinder = \_ kcv k -> zonkKiCoVarKind kcv >>= k ()
-      , tm_tylambinder = \_ tv k -> zonkTyVarKind tv >>= k ()
+      , tm_tybinder = \_ tv _ k -> zonkVarKind tv >>= k ()
+      , tm_kicobinder = \_ kcv k -> zonkVarKind kcv >>= k ()
+      , tm_tylambinder = \_ tv k -> zonkVarKind tv >>= k ()
       , tm_tylamkibinder = \_ kv k -> k () kv
       , tm_tycon = zonkTcTyCon
       , tm_mkcm = zonkTcMonoKindMapper
@@ -173,7 +173,7 @@ zonkTcTyCon tc
 
 zonkTyVar :: TyVar Tc -> ZonkM (Type Tc)
 zonkTyVar (TcTyVar tctv) = zonkTcTyVar tctv
-zonkTyVar tv = mkTyVarTy <$> zonkTyVarKind tv
+zonkTyVar tv = mkTyVarTy <$> zonkVarKind tv
 
 zonkTcTyVar :: TcTyVar -> ZonkM (Type Tc)
 zonkTcTyVar tv = case tcVarDetails tv of
@@ -186,7 +186,7 @@ zonkTcTyVar tv = case tcVarDetails tv of
                         writeTcRef ref (Indirect zty)
                         return zty
   where
-    simple = do z_tv <- zonkTyVarKind tv
+    simple = do z_tv <- zonkVarKind tv
                 return $ mkTyVarTy $ TcTyVar z_tv
 
 zonkTcTyVarsToTcTyVars :: HasDebugCallStack => [TcTyVar] -> ZonkM [TcTyVar]
@@ -206,8 +206,8 @@ zonkTcTyVarToTcTyVar tv = do
 *                                                                      *
 ********************************************************************* -}
 
-zonkTyVarKind :: VarHasKind tv Tc => tv -> ZonkM tv
-zonkTyVarKind tv = do
+zonkVarKind :: VarHasKind tv Tc => tv -> ZonkM tv
+zonkVarKind tv = do
   kind' <- zonkTcMonoKind $ varKind tv
   return $ setVarKind tv kind'
 
@@ -237,7 +237,7 @@ zonkTcMonoKindMapper
   :: MKiCoMapper Tc Tc () ZonkM
 zonkTcMonoKindMapper = MKiCoMapper
   { mkcm_kivar = const zonkKiVar
-  , mkcm_covar = const (\cv -> mkKiCoVarCo <$> zonkKiCoVarKind cv)
+  , mkcm_covar = const (\cv -> mkKiCoVarCo <$> zonkVarKind cv)
   , mkcm_hole = hole }
   where
     hole :: () -> KindCoercionHole -> ZonkM (KindCoercion Tc)
@@ -246,7 +246,7 @@ zonkTcMonoKindMapper = MKiCoMapper
       case contents of
         Just co -> do co' <- zonkKiCo co
                       checkKiCoercionHole cv co'
-        Nothing -> do cv' <- zonkKiCoVarKind cv
+        Nothing -> do cv' <- zonkVarKind cv
                       return $ HoleCo $ hole { kch_co_var = cv' }
 
 zonkKiVarsAndFV :: KiVarSet Tc -> ZonkM (KiVarSet Tc)
@@ -282,11 +282,6 @@ zonkTcKiVarToTcKiVar kv = do
               _ -> pprPanic "zonkTcKiVarToTcKiVar" (panic "ppr kv $$ ppr ki")
   return kv'
 
-zonkKiCoVarKind :: KiCoVar Tc -> ZonkM (KiCoVar Tc)
-zonkKiCoVarKind kcv = do
-  kind' <- zonkTcMonoKind (varKind kcv)
-  return $ setVarKind kcv kind'
-
 {- *********************************************************************
 *                                                                      *
               Coercion Holes
@@ -315,7 +310,7 @@ checkTyCoercionHole cv co
              | otherwise
              = False
 
-checkKiCoercionHole :: KiCoVar Tc -> KindCoercion Tc -> ZonkM (KindCoercion Tc)
+checkKiCoercionHole :: TcKiCoVar -> KindCoercion Tc -> ZonkM (KindCoercion Tc)
 checkKiCoercionHole kcv kco
   | debugIsOn
   = do kcv_ki <- zonkTcMonoKind (varKind kcv)
@@ -346,7 +341,7 @@ zonkTyImplication implic@(TyImplic { tic_skols = skols
                                    , tic_given = given
                                    , tic_wanted = wanted
                                    , tic_info = info })
-  = do skols' <- mapM zonkTyVarKind skols
+  = do skols' <- mapM zonkVarKind skols
        given' <- mapM zonkTyCoVar given
        info' <- zonkSkolemInfoAnon info
        wanted' <- zonkWTCRec wanted
@@ -363,7 +358,7 @@ zonkImplication implic@(KiImplic { kic_skols = skols
                                , kic_given = given
                                , kic_wanted = wanted
                                , kic_info = info }) = do
-  given' <- mapM zonkKiCoVar given
+  given' <- mapM zonkVarKind given
   info' <- zonkSkolemInfoAnon info
   wanted' <- zonkWKCRec wanted
   return $ implic { kic_skols = skols
@@ -439,12 +434,9 @@ zonkSkolemInfo :: SkolemInfo -> ZonkM SkolemInfo
 zonkSkolemInfo (SkolemInfo u sk) = SkolemInfo u <$> zonkSkolemInfoAnon sk
 
 zonkSkolemInfoAnon :: SkolemInfoAnon -> ZonkM SkolemInfoAnon
-zonkSkolemInfoAnon (SigSkol cx ty tv_prs) = do
+zonkSkolemInfoAnon (SigSkol cx ty kv_prs kcv_prs tv_prs) = do
   ty' <- zonkTcType ty
-  return $ SigSkol cx ty' tv_prs
-zonkSkolemInfoAnon (SigSkolKi cx ty kv_prs) = do
-  ty' <- zonkTcType ty
-  return $ SigSkolKi cx ty' kv_prs
+  return $ SigSkol cx ty' kv_prs kcv_prs tv_prs
 zonkSkolemInfoAnon (InferSkol ntys) = do
   ntys' <- panic "mapM do_one ntys"
   return $ InferSkol ntys'

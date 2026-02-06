@@ -78,10 +78,11 @@ tcMatchPats match_ctxt pats pat_tys thing_inside
                   , text "pat_tys =" <+> ppr pat_tys ]
          err_ctxt <- getErrCtxt
          let loop_init :: [LPat Rn] -> [ExpPatType] -> TcM ([LPat Tc], a)
-             -- deal with ExpForAllPatKis which should only appear at the start
+             -- deal with ExpForAllPatKi/ExpForAllPatKiCo which should only appear at the start
              loop_init all_pats (ExpForAllPatKi kv : pat_tys)
                = loop_init all_pats pat_tys
-
+             loop_init all_pats (ExpForAllPatKiCo kcv : pat_tys)
+               = loop_init all_pats pat_tys
              loop_init all_pats pat_tys = loop all_pats pat_tys
 
              loop :: [LPat Rn] -> [ExpPatType] -> TcM ([LPat Tc], a)
@@ -114,6 +115,9 @@ tcMatchPats match_ctxt pats pat_tys thing_inside
              -- ExpForAllPatKi
              loop all_pats (ExpForAllPatKi kv : pat_tys)
                = panic "tcMatchPats/ExpForAllPatKi"
+             -- ExpForAllPatKiCo
+             loop all_pat (ExpForAllPatKiCo kcv : pat_tys)
+               = panic "tcMatchPats/ExpForAllPatKiCo"
              -- ExpFunPatTy
              loop (pat : pats) (ExpFunPatTy pat_ty : pat_tys)
                = do (p, (ps, res)) <- tc_lpat pat_ty penv pat $ loop pats pat_tys

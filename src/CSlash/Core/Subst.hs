@@ -400,7 +400,9 @@ instance {-# INCOHERENT #-} SubstP p Tc where
     TyVar {..} -> TyVar { tv_kind = ki, ..}
     TcTyVar tckv -> TcTyVar tckv { tc_tv_kind = ki }
 
-  vacuous_set_kcv_kind ki (CoVar {..}) = CoVar { cv_thing = ki, .. }
+  vacuous_set_kcv_kind ki kcv = case kcv of
+    CoVar {..} -> CoVar { cv_thing = ki, .. }
+    TcCoVar v -> TcCoVar $ v { tc_cv_thing = ki }
 
   vacuous_tycon = toTcTyCon
 
@@ -411,7 +413,9 @@ instance SubstP p p where
     TyVar {..} -> TyVar { tv_kind = ki, ..}
     TcTyVar tckv -> TcTyVar tckv { tc_tv_kind = ki }
 
-  vacuous_set_kcv_kind ki (CoVar {..}) = CoVar { cv_thing = ki, .. }
+  vacuous_set_kcv_kind ki kcv = case kcv of
+    CoVar {..} -> CoVar { cv_thing = ki, .. }
+    TcCoVar v -> TcCoVar $ v { tc_cv_thing = ki }
 
   vacuous_tycon tc = tc
 

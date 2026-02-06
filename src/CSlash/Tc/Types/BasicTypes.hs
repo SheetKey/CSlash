@@ -33,18 +33,21 @@ data TcBinder
   = TcIdBndr (Id Tc) TopLevelFlag
   | TcIdBndr_ExpType Name ExpType TopLevelFlag
   | TcTvBndr Name TcTyVar
+  | TcKCvBndr Name TcKiCoVar
   | TcKvBndr Name TcKiVar
 
 instance Outputable TcBinder where
   ppr (TcIdBndr id top_lvl) = ppr id <> brackets (ppr top_lvl)
   ppr (TcIdBndr_ExpType id _ top_lvl) = ppr id <> brackets (ppr top_lvl)
   ppr (TcTvBndr name tv) = ppr name <+> ppr tv
+  ppr (TcKCvBndr name kcv) = ppr name <+> ppr kcv
   ppr (TcKvBndr name kv) = ppr name <+> ppr kv
 
 instance HasOccName TcBinder where
   occName (TcIdBndr id _) = occName (varName id)
   occName (TcIdBndr_ExpType name _ _) = occName name
   occName (TcTvBndr name _) = occName name
+  occName (TcKCvBndr name _) = occName name
   occName (TcKvBndr name _) = occName name
 
 {- *********************************************************************
@@ -90,7 +93,8 @@ data TcTyKiThing
     { tct_id :: Id Tc
     , tct_info :: IdBindingInfo
     }
-  | ATyVar Name (TyVar Tc)
+  | ATyVar Name (TyVar Tc) -- TODO: could be TcTyVar?
+  | AKiCoVar Name (KiCoVar Tc)
   | AKiVar Name (KiVar Tc) -- should make a new type 'TcKiThing'
   | ATcTyCon (TyCon Tc)
 
@@ -108,6 +112,7 @@ instance Outputable TcTyKiThing where
                                      <+> ppr (tct_info elt))
   ppr (ATyVar n tv) = text "Type variable" <+> quotes (ppr n) <+> equals <+> ppr tv
                       <+> colon <+> ppr (varKind tv)
+  ppr (AKiCoVar n kcv) = text "Kind Coercion variable" <+> quotes (ppr n) <+> equals <+> ppr kcv
   ppr (AKiVar n kv) = text "Kind variable" <+> quotes (ppr n) <+> equals <+> ppr kv
   ppr (ATcTyCon tc) = text "ATcTyCon" <+> ppr tc <+> colon <+> pprTyConKind tc
 
@@ -134,6 +139,7 @@ pprTcTyKiThingCategory = text . capitalise . tcTyKiThingCategory
 tcTyKiThingCategory :: TcTyKiThing -> String
 tcTyKiThingCategory (AGlobal thing) = tyThingCategory thing
 tcTyKiThingCategory (ATyVar {}) = "type variable"
+tcTyKiThingCategory (AKiCoVar {}) = "kind coercion variable"
 tcTyKiThingCategory (AKiVar {}) = "kind variable"
 tcTyKiThingCategory (ATcId {}) = "local identifier"
 tcTyKiThingCategory (ATcTyCon {}) = "local tycon"

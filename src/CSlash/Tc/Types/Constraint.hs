@@ -244,10 +244,10 @@ mkNonCanonicalKi = CNonCanonicalKi
 mkNonCanonicalTy :: CtTyEvidence -> TyCt
 mkNonCanonicalTy = CNonCanonicalTy
 
-mkKiGivens :: CtLoc -> [KiCoVar Tc] -> [KiCt]
+mkKiGivens :: CtLoc -> [TcKiCoVar] -> [KiCt]
 mkKiGivens loc co_vars = map mk co_vars
   where mk co_var = mkNonCanonicalKi (CtKiGiven { ctkev_covar = co_var
-                                                , ctkev_pred = kiCoVarPred co_var
+                                                , ctkev_pred = varKind co_var
                                                 , ctkev_loc = loc })
 
 mkTyGivens :: CtLoc -> [TyCoVar Tc] -> [TyCt]
@@ -285,7 +285,7 @@ ctTyPred ct = ctTyEvPred $ ctTyEvidence ct
 ctKiPred :: KiCt -> PredKind Tc
 ctKiPred ct = ctKiEvPred $ ctKiEvidence ct
 
-ctKiCoVar :: KiCt -> KiCoVar Tc
+ctKiCoVar :: KiCt -> TcKiCoVar
 ctKiCoVar ct = ctEvKiCoVar $ ctKiEvidence ct
 
 instance Outputable KiCt where
@@ -564,7 +564,7 @@ data KiImplication
     { kic_tclvl :: TcLevel
     , kic_info :: SkolemInfoAnon
     , kic_skols :: [TcKiVar] -- as in GHC (NO KiVars or MetaKiVars, just Skolem TcKiVars)
-    , kic_given :: [KiCoVar Tc]
+    , kic_given :: [TcKiCoVar] -- all skolems
     , kic_given_kicos :: HasGivenKiCos
     , kic_warn_inaccessible :: Bool
     , kic_env :: !CtLocEnv
@@ -676,7 +676,7 @@ instance Outputable KiImplication where
              , text "Skolems =" <+> ppr skols
              , text "Given-kicos =" <+> ppr given_kicos
              , text "Status =" <+> ppr status
-             , hang (text "Given =") 2 (pprKiCoVars given)
+             , hang (text "Given =") 2 (pprTcKiCoVars given)
              , hang (text "Wanted =") 2 (ppr wanted)
              , pprSkolInfo info ] <+> rbrace)
 
@@ -771,9 +771,11 @@ check_ki_implic implic@(KiImplic { kic_tclvl = lvl, kic_info = skol_info, kic_sk
 checkSkolInfoAnon :: SkolemInfoAnon -> SkolemInfoAnon -> Bool
 checkSkolInfoAnon sk1 sk2 = go sk1 sk2
   where
-    go (SigSkol c1 t1 s1) (SigSkol c2 t2 s2) = c1 == c2 && t1 `tcEqType` t2 && s1 == s2
-    go (SigSkolKi c1 t1 s1) (SigSkolKi c2 t2 s2) = c1 == c2 && t1 `tcEqType` t2 && s1 == s2
-    go (SigSkol c1 t1 _) (SigSkolKi c2 t2 _) = c1 == c2 && t1 `tcEqType` t2
+    go (SigSkol c1 t1 kv1 kcv1 tv1) (SigSkol c2 t2 kv2 kcv2 tv2)
+      = c1 == c2 && t1 `tcEqType` t2
+        && kv1 == kv2
+        && kcv1 == kcv2
+        && tv1 == tv2
     go (SigTypeSkol cx1) (SigTypeSkol cx2) = cx1 == cx2
     go (ForAllSkol _) (ForAllSkol _) = True
     go (TyLamTySkol ids1) (TyLamTySkol ids2)
@@ -891,13 +893,19 @@ pprTyCoVars co_vars = vcat (map pprTyCoVarWithType co_vars)
 pprKiCoVars :: [KiCoVar Tc] -> SDoc
 pprKiCoVars co_vars = vcat (map pprKiCoVarWithKind co_vars)
 
-pprKiCoVarTheta :: [KiCoVar Tc] -> SDoc
-pprKiCoVarTheta co_vars = pprTheta (map kiCoVarPred co_vars)
+pprTcKiCoVars :: [TcKiCoVar] -> SDoc
+pprTcKiCoVars co_vars = vcat (map pprTcKiCoVarWithKind co_vars)
+
+pprKiCoVarTheta :: [TcKiCoVar] -> SDoc
+pprKiCoVarTheta co_vars = pprTheta (map varKind co_vars)
   where
     pprTheta t = text "pprTheta NEEDS IMPLEMENTING" <+> ppr t
 
 pprKiCoVarWithKind :: KiCoVar Tc -> SDoc
 pprKiCoVarWithKind v = ppr v <+> colon <+> ppr (kiCoVarPred v)
+
+pprTcKiCoVarWithKind :: TcKiCoVar -> SDoc
+pprTcKiCoVarWithKind v = ppr v <+> colon <+> ppr (varKind v)
 
 pprTyCoVarWithType :: TyCoVar Tc -> SDoc
 pprTyCoVarWithType v = ppr v <+> colon <+> ppr (tyCoVarPred v)
@@ -924,7 +932,7 @@ data CtTyEvidence
 data CtKiEvidence
   = CtKiGiven
     { ctkev_pred :: PredKind Tc
-    , ctkev_covar :: KiCoVar Tc
+    , ctkev_covar :: TcKiCoVar 
     , ctkev_loc :: CtLoc }
   | CtKiWanted
     { ctkev_pred :: PredKind Tc
@@ -986,7 +994,7 @@ ctTyEvRewriters _ = emptyTyRewriterSet
 
 ctEvKiCoercion :: HasDebugCallStack => CtKiEvidence -> KindCoercion Tc
 ctEvKiCoercion (CtKiGiven { ctkev_pred = pred, ctkev_covar = co_var })
-  = mkKiCoVarCo co_var
+  = mkKiCoVarCo $ TcCoVar co_var
 ctEvKiCoercion (CtKiWanted { ctkev_dest = hole })
   = mkKiHoleCo hole
 
@@ -996,7 +1004,7 @@ ctEvTyCoercion (CtTyGiven { cttev_pred = pred, cttev_covar = co_var })
 ctEvTyCoercion (CtTyWanted { cttev_dest = hole })
   = mkTyHoleCo hole
 
-ctEvKiCoVar :: CtKiEvidence -> KiCoVar Tc
+ctEvKiCoVar :: CtKiEvidence -> TcKiCoVar 
 ctEvKiCoVar (CtKiWanted { ctkev_dest = h }) = coHoleCoVar h
 ctEvKiCoVar (CtKiGiven { ctkev_covar = ev }) = ev
 

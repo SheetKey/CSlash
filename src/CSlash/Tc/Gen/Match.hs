@@ -116,6 +116,7 @@ tcMatches tc_body pat_tys rhs_ty (MG { mg_alts = L l matches, mg_ext = origin })
       where
         match_fun_pat_ty (ExpFunPatTy t) = Just t
         match_fun_pat_ty ExpForAllPatTy{} = Nothing
+        match_fun_pat_ty ExpForAllPatKiCo{} = Nothing
         match_fun_pat_ty ExpForAllPatKi{} = Nothing
 
 tcMatch

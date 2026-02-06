@@ -42,7 +42,7 @@ data Type p
   = TyVarTy (TyVar p)
   | AppTy (Type p) (Type p) -- The first arg must be an 'AppTy' or a 'TyVarTy' or a 'TyLam'
   | TyLamTy (TyVar p) (Type p) -- Used for TySyns, NOT in the types of DataCons (only Foralls)
-  | BigTyLamTy (KiVar p) (Type p)
+  | BigTyLamTy (KiVar p) (Type p) -- Could add a field for 'ForAllKi', then this would ONLY be for TySyns (maybe)
   | TyConApp (TyCon p) [Type p]
   | ForAllTy !(ForAllBinder (TyVar p)) (Type p)
   | ForAllKiCo !(KiCoVar p) (Type p)

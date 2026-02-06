@@ -243,10 +243,11 @@ tcInstFun (tc_fun, fun_ctxt) fun_sigma rn_args = do
 
     go1 pos acc fun_ty args
       | (kvs, body1) <- tcSplitBigLamKiVars fun_ty
-      , (tvs, body2) <- tcSplitSomeForAllTyVars (inst_fun args) body1
-      , not (null kvs && null tvs)
-      = do (_, _, wrap, fun_rho) <- addHeadCtxt fun_ctxt
-                                 $ instantiateSigma fun_orig kvs tvs body2 fun_ty
+      , (kcvs, body2) <- tcSplitForAllKiCoVars body1
+      , (tvs, body3) <- tcSplitSomeForAllTyVars (inst_fun args) body2
+      , not (null kvs && null kcvs && null tvs)
+      = do (_, _, _, wrap, fun_rho) <- addHeadCtxt fun_ctxt
+                                 $ instantiateSigma fun_orig kvs kcvs tvs body3 fun_ty
            traceTc "go1 instantiateSigma" (ppr fun_rho)
            go pos (addArgWrap wrap acc) fun_rho args
 

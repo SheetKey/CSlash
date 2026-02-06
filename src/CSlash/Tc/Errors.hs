@@ -309,7 +309,7 @@ reportKiImpic ctxt implic@(KiImplic { kic_skols = kvs
 
     info' = tidySkolemInfoAnon env1 info
     implic' = implic { kic_skols = kvs'
-                     , kic_given = map (tidyKiCoVar env1) given
+                     , kic_given = panic "map (tidyKiCoVar env1) given"
                      , kic_info = info' }
 
     ctxt1 = ctxt { cec_defer_type_errors = ErrorWithoutFlag
@@ -344,7 +344,7 @@ warnRedundantConstraints ctxt env info evs
   | Right redundant_evs <- evs
   , null redundant_evs
   = return ()
-  | SigSkol user_ctxt _ _ <- info
+  | SigSkol user_ctxt _ _ _ _ <- info
   = panic "report_redundant_msg True (set"
   | otherwise
   = panic "report_redundant"
@@ -608,6 +608,7 @@ zonkTidyTcLclEnvs tidy_env lcls = foldM go (tidy_env, emptyNameEnv) (concatMap c
   where
     go envs tc_bndr = case tc_bndr of
       TcTvBndr {} -> return envs
+      TcKCvBndr {} -> return envs
       TcKvBndr {} -> return envs
       TcIdBndr id _ -> go_one (varName id) (varType id) envs
       TcIdBndr_ExpType name et _ -> panic "zonkTidyTcLclEnvs TcIdBndr_ExpType" --do
@@ -1042,6 +1043,7 @@ relevant_bindings want_filtering lcl_env lcl_name_env (ct_tvs, ct_kcvs, ct_kvs) 
        rels@(RelevantBindings tybds kibds discards) (tc_bndr : tc_bndrs)
       = case tc_bndr of
           TcTvBndr {} -> discard_it -- maybe don't discard (we'd need to add a lcl_ki_name_env to zonkTidyTcLclEnvs
+          TcKCvBndr {} -> discard_it
           TcKvBndr {} -> discard_it
           TcIdBndr id top_lvl -> go2 (varName id) top_lvl
           TcIdBndr_ExpType name et top_lvl -> panic "relevant_bindings TcIdBndr_ExpType"

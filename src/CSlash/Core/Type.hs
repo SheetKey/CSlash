@@ -646,6 +646,7 @@ splitForAllKiCoVars ty = split ty ty []
 isForAllTy :: Type p -> Bool
 isForAllTy ty
   | ForAllTy {} <- coreFullView ty = True
+  | ForAllKiCo {} <- coreFullView ty = True
   | otherwise = False
 
 isTauTy :: Type p -> Bool

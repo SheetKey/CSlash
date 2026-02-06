@@ -111,13 +111,13 @@ newTyCoVar ty = do
   name <- newSysName (predTypeOccName ty)
   return $ mkCoVar name ty
 
-newKiCoVars :: [PredKind Tc] -> TcM [KiCoVar Tc]
+newKiCoVars :: [PredKind Tc] -> TcM [TcKiCoVar]
 newKiCoVars theta = mapM newKiCoVar theta
 
-newKiCoVar :: PredKind Tc -> TcRnIf gbl lcl (KiCoVar Tc)
+newKiCoVar :: PredKind Tc -> TcRnIf gbl lcl TcKiCoVar
 newKiCoVar ki = do
   name <- newSysName (predKindOccName ki)
-  return (mkCoVar name ki)
+  return (mkTcKiCoVar name ki vanillaSkolemVarUnk)
 
 -- newWanted :: CtOrigin -> Maybe TypeOrKind -> AnyPredKind -> TcM CtKiEvidence
 -- newWanted orig t_or_k predki = do
@@ -375,6 +375,34 @@ newMetaTyVarTyAtLevel tc_lvl kind = do
   details <- newTauVarDetailsAtLevel tc_lvl
   name <- newMetaTyVarName (fsLit "p")
   return $ mkTyVarTy $ TcTyVar $ mkTcTyVar name kind details
+
+{- *********************************************************************
+*                                                                      *
+        MetaKCvs
+*                                                                      *
+********************************************************************* -}
+
+newMetaKiCoVarX :: Subst p Tc -> KiCoVar p -> TcM (Subst p Tc, TcKiCoVar)
+newMetaKiCoVarX = new_meta_kcv_x TauVar
+
+new_meta_kcv_x
+  :: MetaInfo -> Subst p Tc -> KiCoVar p -> TcM (Subst p Tc, TcKiCoVar)
+new_meta_kcv_x info subst kcv = do
+  new_kcv <- cloneAnonMetaKiCoVar info kcv (substMonoKi subst (varKind kcv))
+  let subst1 = extendKCvSubstWithClone subst kcv (TcCoVar new_kcv)
+  return (subst1, new_kcv)
+
+cloneAnonMetaKiCoVar :: MetaInfo -> KiCoVar p -> MonoKind Tc -> TcM TcKiCoVar
+cloneAnonMetaKiCoVar info kcv kind = do
+  details <- newMetaDetails info
+  name <- cloneMetaKiCoVarName (varName kcv)
+  let kicovar = mkTcKiCoVar name kind details
+  traceTc "cloneAnonMetaKiCoVar" (ppr kicovar <+> colon <+> ppr (varKind kicovar))
+  return kicovar
+
+-- TODO: only need one of these, not specialized versions
+cloneMetaKiCoVarName :: Name -> TcM Name
+cloneMetaKiCoVarName name = newSysName (nameOccName name)
 
 {- *********************************************************************
 *                                                                      *
@@ -751,7 +779,7 @@ collect_cand_qkvs_co orig_co cur_lvl (boundtvs, boundkvs) = go_co
       m_co <- unpackKiCoercionHole_maybe hole
       case m_co of
         Just co -> go_co dv co
-        Nothing -> go_cv dv (coHoleCoVar hole)
+        Nothing -> go_cv dv (TcCoVar $ coHoleCoVar hole)
 
     go_co dv (KiCoVarCo cv) = go_cv dv cv
 

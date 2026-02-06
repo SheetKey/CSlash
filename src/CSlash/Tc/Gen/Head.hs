@@ -340,8 +340,8 @@ addFunResCtxt fun args fun_res_ty env_ty thing_inside = do
                 Just env_ty -> zonkTcType env_ty
                 Nothing -> do massert dumping
                               return env_tv
-      let (_, _, fun_tau) = tcSplitNestedSigmaTys fun_res'
-          (_, _, env_tau) = tcSplitNestedSigmaTys env'
+      let (_, _, _, fun_tau) = tcSplitNestedSigmaTys fun_res'
+          (_, _, _, env_tau) = tcSplitNestedSigmaTys env'
 
           (args_fun, _, res_fun) = tcSplitFunTys fun_tau
           (args_env, _, res_env) = tcSplitFunTys env_tau

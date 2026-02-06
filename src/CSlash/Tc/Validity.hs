@@ -116,6 +116,7 @@ checkValidTcType ctxt ty = do
 
   traceTc "checkValidTcType done" (ppr ty <+> colon <+> ppr (typeKind ty))
 
+-- TODO: Check that kvs and kcvs only appear at the top level!
 checkValidType :: UserTypeCtxt -> Type Zk -> TcM ()
 checkValidType ctxt ty = do
   traceTc "checkValidType" (ppr ty <+> colon <+> ppr (typeKind ty))

@@ -191,9 +191,6 @@ toTcTyVar_maybe @p v = case csPass @p of
           _ -> Nothing
   _ -> Nothing
 
-changeTvKind :: (MonoKind p -> MonoKind p') -> TyVar p -> TyVar p'
-changeTvKind f tv = panic "changeTvKind"
-
 {- **********************************************************************
 *                                                                       *
                   PiBinder

@@ -8,9 +8,9 @@ module CSlash.Tc.Zonk.Env where
 import CSlash.Cs.Pass
 
 import CSlash.Core.Type.Rep ( Type )
-import CSlash.Core.Kind ( Kind, MonoKind )
+import CSlash.Core.Kind ( Kind, MonoKind, KindCoercion )
 import CSlash.Types.Var
-  ( TcTyVar, TyVar, TcKiVar, KiVar, KiCoVar  )
+  ( TcTyVar, TyVar, TcKiVar, KiVar, KiCoVar, TcKiCoVar )
 
 import CSlash.Types.Var ( Id )
 import CSlash.Types.Var.Env
@@ -35,6 +35,7 @@ data ZonkEnv = ZonkEnv
   , ze_kv_env :: VarEnv (KiVar Zk) (KiVar Zk)
   , ze_id_env :: VarEnv (Id Zk) (Id Zk)
   , ze_meta_tv_env :: IORef (VarEnv TcTyVar (Type Zk))
+  , ze_meta_kcv_env :: IORef (VarEnv TcKiCoVar (KindCoercion Zk))
   , ze_meta_kv_env :: IORef (VarEnv TcKiVar (MonoKind Zk))
   }
 
@@ -107,6 +108,7 @@ don'tBind (ZonkBndrT k) = fromCodensity (Codensity k)
 initZonkEnv :: MonadIO m => ZonkFlexi -> ZonkT m b -> m b
 initZonkEnv flexi thing_inside = do
   mtv_env_ref <- liftIO $ newIORef emptyVarEnv
+  mkcv_env_ref <- liftIO $ newIORef emptyVarEnv
   mkv_env_ref <- liftIO $ newIORef emptyVarEnv
   let ze = ZonkEnv { ze_flexi = flexi
                    , ze_tv_env = emptyVarEnv
@@ -114,6 +116,7 @@ initZonkEnv flexi thing_inside = do
                    , ze_kv_env = emptyVarEnv
                    , ze_id_env = emptyVarEnv
                    , ze_meta_tv_env = mtv_env_ref 
+                   , ze_meta_kcv_env = mkcv_env_ref 
                    , ze_meta_kv_env = mkv_env_ref }
   runZonkT thing_inside ze
 

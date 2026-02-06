@@ -306,7 +306,7 @@ almost_devoid_kico_var_of_kico (FunCo { fco_arg = co1, fco_res = co2 }) kcv
 
 almost_devoid_kico_var_of_kico (KiCoVarCo v) kcv = v /= kcv
 
-almost_devoid_kico_var_of_kico (HoleCo h) kcv = (coHoleCoVar h) /= kcv
+almost_devoid_kico_var_of_kico (HoleCo h) kcv = TcCoVar (coHoleCoVar h) /= kcv
 
 almost_devoid_kico_var_of_kico (SymCo kco) kcv
   = almost_devoid_kico_var_of_kico kco kcv

@@ -68,13 +68,20 @@ data CsWrapper p
   | WpFun (CsWrapper p) (MonoKind p) (Type p)
     -- given 'A -> B', the wrapper is on 'B' and the type is 'A', and the kind is the fun kind
   | WpCast (TypeCoercion p)
-  | WpTyLam (TyVar p)            -- can probably be 'TcTyVar AnyKiVar' (these should be skols)
-  | WpKiLam (KiVar p)            -- "             " 'TcKiVar'          "                     "
+  | WpTyLam (TyVar p)
+  | WpKiCoLam (KiCoVar p)
+  | WpKiLam (KiVar p)
   | WpTyApp (Type p)
   | WpKiApp (MonoKind p)
   | WpKiCoApp (KindCoercion p)
   | WpMultCoercion (KindCoercion p)
   deriving Data.Data
+{- TODO: 'Wp..Lam' could have TcTyVar, TcKiCoVar, TcKiVar when p~Tc
+since these wrappers are created with freshly instantiated skolem vars (proper TcVars)
+However, this would require change to the current phase system (probably a new phase).
+Or, the CsWrapper would need a different phase. This would complicate zonking.
+Or, the CsWrapper could become a GADT (Probably would cause too much duplication).
+-}
 
 (<.>) :: CsWrapper p -> CsWrapper p -> CsWrapper p
 WpHole <.> c = c
@@ -112,6 +119,9 @@ mkWpKiCoApps args = mk_co_app_fn WpKiCoApp args
 
 mkWpTyLams :: [TyVar p] -> CsWrapper p
 mkWpTyLams tvs = mk_lam_fn WpTyLam tvs
+
+mkWpKiCoLams :: [KiCoVar p] -> CsWrapper p
+mkWpKiCoLams tvs = mk_lam_fn WpKiCoLam tvs
 
 mkWpKiLams :: [KiVar p] -> CsWrapper p
 mkWpKiLams kvs = mk_lam_fn WpKiLam kvs

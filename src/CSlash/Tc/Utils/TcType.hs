@@ -79,6 +79,7 @@ mkCheckExpType = Check
 data ExpPatType
   = ExpFunPatTy ExpSigmaType
   | ExpForAllPatTy (ForAllBinder TcTyVar)
+  | ExpForAllPatKiCo TcKiCoVar
   | ExpForAllPatKi TcKiVar
 
 mkCheckExpFunPatTy :: Type Tc -> ExpPatType
@@ -87,6 +88,9 @@ mkCheckExpFunPatTy = ExpFunPatTy . mkCheckExpType
 mkInvisExpPatType :: TcTyVar -> ExpPatType
 mkInvisExpPatType tv = ExpForAllPatTy (Bndr tv Specified)
 
+mkInvisExpPatKiCo :: TcKiCoVar -> ExpPatType
+mkInvisExpPatKiCo kcv = ExpForAllPatKiCo kcv
+
 mkInvisExpPatKind :: TcKiVar -> ExpPatType
 mkInvisExpPatKind kv = ExpForAllPatKi kv
 
@@ -94,11 +98,13 @@ isVisibleExpPatType :: ExpPatType -> Bool
 isVisibleExpPatType (ExpForAllPatTy (Bndr _ vis)) = isVisibleForAllFlag vis
 isVisibleExpPatType (ExpFunPatTy {}) = True
 isVisibleExpPatType (ExpForAllPatKi {}) = False
+isVisibleExpPatType (ExpForAllPatKiCo {}) = False
 
 instance Outputable ExpPatType where
   ppr (ExpFunPatTy t) = ppr t
   ppr (ExpForAllPatTy tv) = text "forall" <+> ppr tv
   ppr (ExpForAllPatKi kv) = text "forall" <+> ppr kv
+  ppr (ExpForAllPatKiCo kcv) = text "forall" <+> ppr kcv
 
 {- *********************************************************************
 *                                                                      *
@@ -540,28 +546,35 @@ tcSplitBigLamTyVarBinders :: Type p -> ([KiVar p], Type p)
 tcSplitBigLamTyVarBinders ty = sty
   where sty = splitBigLamTyBinders ty
 
-tcSplitForAllTyVarsReqTVBindersN :: Arity -> Type p -> (Arity, [ForAllBinder (TyVar p)], Type p)
-tcSplitForAllTyVarsReqTVBindersN n_req ty = split n_req ty ty []
-  where
-    split n_req _orig_ty (ForAllTy b@(Bndr _ argf) ty) bs
-      | isVisibleForAllFlag argf, n_req > 0 = split (n_req - 1) ty ty (b:bs)
-      | otherwise = split n_req ty ty (b:bs)
-    split n_req orig_ty ty bs | Just ty' <- coreView ty = split n_req orig_ty ty' bs
-    split n_req orig_ty _ bs = (n_req, reverse bs, orig_ty)
+tcSplitForAllTyVarsReqTVBindersN
+  :: Arity -> Type p -> (Arity, [KiVar p], [KiCoVar p], [ForAllBinder (TyVar p)], Type p)
+tcSplitForAllTyVarsReqTVBindersN n_req ty
+  = case tcSplitBigLamTyVarBinders ty of
+      (kvs, ty) ->
+        case tcSplitForAllKiCoVars ty of
+          (kcvs, ty) -> split n_req ty ty [] 
+            where
+              split n_req _orig_ty (ForAllTy b@(Bndr _ argf) ty) bs 
+                | isVisibleForAllFlag argf, n_req > 0 = split (n_req - 1) ty ty (b:bs) 
+                | isInvisibleForAllFlag argf = split n_req ty ty (b:bs) 
+              split n_req orig_ty ty bs | Just ty' <- coreView ty = split n_req orig_ty ty' bs 
+              split n_req orig_ty _ bs = (n_req, kvs, kcvs, reverse bs, orig_ty)
 
-tcSplitSigma :: Type p -> ([KiVar p], [TyVar p], Type p)
-tcSplitSigma ty = case tcSplitBigLamTyVarBinders ty of
-                    (kvs, ty') -> case tcSplitForAllInvisBinders ty' of
-                                    (tvs, tau) -> (kvs, tvs, tau)
+tcSplitSigma :: Type p -> ([KiVar p], [KiCoVar p], [TyVar p], Type p)
+tcSplitSigma ty
+  = case tcSplitBigLamTyVarBinders ty of
+      (kvs, ty') -> case tcSplitForAllKiCoVars ty' of
+                      (kcvs, ty'') -> case tcSplitForAllInvisBinders ty' of
+                                        (tvs, tau) -> (kvs, kcvs, tvs, tau)
 
-tcSplitNestedSigmaTys :: Type p -> ([KiVar p], [TyVar p], Type p)
+tcSplitNestedSigmaTys :: Type p -> ([KiVar p], [KiCoVar p], [TyVar p], Type p)
 tcSplitNestedSigmaTys ty
   | (arg_tys, fun_kis, body_ty) <- tcSplitFunTys ty
-  , (kvs1, tvs1, rho1) <- tcSplitSigma body_ty
-  , not (null kvs1 && null tvs1)
-  = let (kvs2, tvs2, rho2) = tcSplitNestedSigmaTys rho1
-    in (kvs1 ++ kvs2, tvs1 ++ tvs2, mkFunTys arg_tys fun_kis rho2)
-  | otherwise = ([], [], ty)
+  , (kvs1, kcvs1, tvs1, rho1) <- tcSplitSigma body_ty
+  , not (null kvs1 && null kcvs1 && null tvs1)
+  = let (kvs2, kcvs2, tvs2, rho2) = tcSplitNestedSigmaTys rho1
+    in (kvs1 ++ kvs2, kcvs1 ++ kcvs2, tvs1 ++ tvs2, mkFunTys arg_tys fun_kis rho2)
+  | otherwise = ([], [], [], ty)
 
 tcSplitFunTys :: Type p -> ([Type p], [MonoKind p], Type p)
 tcSplitFunTys ty = case tcSplitFunTy_maybe ty of
@@ -587,6 +600,7 @@ tcSplitAppTy_maybe ty = tcSplitAppTyNoView_maybe ty
 
 isSigmaTy :: Type p -> Bool
 isSigmaTy (ForAllTy (Bndr _ af) _) = isInvisibleForAllFlag af
+isSigmaTy (ForAllKiCo _ _) = True
 isSigmaTy (TyLamTy {}) = panic "isSigmaTy TyLamTy"
 isSigmaTy (BigTyLamTy {}) = True
 isSigmaTy ty | Just ty' <- coreView ty = isSigmaTy ty'

@@ -205,6 +205,15 @@ tcExtendNameTyVarEnv binds thing_inside
     tv_binds = [TcTvBndr name tv | (name, tv) <- binds]
     names = [(name, ATyVar name (TcTyVar tv)) | (name, tv) <- binds]
 
+tcExtendNameKiCoVarEnv :: [(Name, TcKiCoVar)] -> TcM r -> TcM r
+tcExtendNameKiCoVarEnv binds thing_inside
+  = tc_extend_local_env NotTopLevel names
+    $ tcExtendBinderStack kcv_binds
+    $ thing_inside
+  where
+    kcv_binds = [TcKCvBndr name kcv | (name, kcv) <- binds]
+    names = [(name, AKiCoVar name (TcCoVar kcv)) | (name, kcv) <- binds]
+
 tcExtendNameKiVarEnv :: [(Name, TcKiVar)] -> TcM r -> TcM r
 tcExtendNameKiVarEnv binds thing_inside
   = tc_extend_local_env NotTopLevel names

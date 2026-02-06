@@ -1201,10 +1201,10 @@ tcLCsKindSig ctxt cs_kind = do
   traceTc "tcLCsKindSig2" (ppr kind)
   return kind
 
-tcLCsContext :: LCsContext Rn -> TcM ([KiCoVar Tc], [MonoKind Tc])
+tcLCsContext :: LCsContext Rn -> TcM ([TcKiCoVar], [MonoKind Tc])
 tcLCsContext = tcCsContext . unLoc
 
-tcCsContext :: CsContext Rn -> TcM ([KiCoVar Tc], [MonoKind Tc])
+tcCsContext :: CsContext Rn -> TcM ([TcKiCoVar], [MonoKind Tc])
 tcCsContext [] = panic "tcCsContext empty"
 tcCsContext ctxt = do
   rels <- mapM tc_lcs_kdrel ctxt 

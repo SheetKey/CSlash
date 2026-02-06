@@ -1,3 +1,5 @@
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module CSlash.Types.Var.Id where
@@ -91,7 +93,7 @@ instance NamedThing (Id p) where
 instance Uniquable (Id p) where
   getUnique = id_real_unique
 
-instance VarHasType Id where
+instance VarHasType (Id p) p where
   varType = id_type
   setVarType id ty = id { id_type = ty }
   updateVarType f id@(Id { id_type = ty }) = id { id_type = f ty }

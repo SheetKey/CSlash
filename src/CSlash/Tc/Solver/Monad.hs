@@ -974,7 +974,7 @@ setKiCoBindIfWanted ev co = case ev of
 newTyCoVar :: PredType Tc -> TcS (TyCoVar Tc)
 newTyCoVar pred = wrapTcS (TcM.newTyCoVar pred)
 
-newKiCoVar :: PredKind Tc -> TcS (KiCoVar Tc)
+newKiCoVar :: PredKind Tc -> TcS TcKiCoVar
 newKiCoVar pred = wrapTcS (TcM.newKiCoVar pred)
 
 newGivenTyCoVar :: CtLoc -> PredType Tc -> TcS CtTyEvidence
