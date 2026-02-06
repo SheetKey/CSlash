@@ -595,7 +595,7 @@ zonkExpr (XExpr (ExpandedThing thing expr)) = do
   new_expr <- zonkExpr expr
   return $ XExpr (ExpandedThing thing new_expr)
 
-zonkExpr (XExpr (ConLike con)) = return $ XExpr $ panic "ConLike con"
+zonkExpr (XExpr (ConLike con)) = return $ XExpr $ ConLike con
 
 zonkExpr other = pprPanic "zonkExpr" (ppr other)
 
