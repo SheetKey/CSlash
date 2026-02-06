@@ -106,6 +106,11 @@ newWantedWithLoc loc predki = do
                     , ctkev_loc = loc
                     , ctkev_rewriters = emptyKiRewriterSet }
 
+newWanted :: CtOrigin -> PredKind Tc -> TcM CtKiEvidence
+newWanted orig pred = do
+  loc <- getCtLocM orig Nothing
+  newWantedWithLoc loc pred
+
 newTyCoVar :: PredType Tc -> TcRnIf gbl lcl (TyCoVar Tc)
 newTyCoVar ty = do
   name <- newSysName (predTypeOccName ty)
@@ -127,6 +132,17 @@ newKiCoVar ki = do
 ----------------------------------------------
 -- Emitting constraints
 ----------------------------------------------
+
+emitWantedKiEq :: CtOrigin -> PredKind Tc -> TcM (KindCoercion Tc)
+emitWantedKiEq orig pred = do
+  hole <- newKiCoercionHole pred
+  loc <- getCtLocM orig Nothing -- TODO: Just KindLevel?
+  emitKiSimple $ mkNonCanonicalKi $ CtKiWanted
+    { ctkev_pred = pred
+    , ctkev_dest = hole
+    , ctkev_loc = loc
+    , ctkev_rewriters = emptyKiRewriterSet }
+  return $ HoleCo hole    
 
 {- *********************************************************************
 *                                                                      *

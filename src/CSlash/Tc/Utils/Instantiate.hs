@@ -173,9 +173,9 @@ instantiateSigma orig kvs kcvs tvs body_ty orig_type = do
   traceTc "instantiateSigma" (ppr subst)
   let inst_body = substTy subst body_ty
       inst_kv_kis = mkKiVarKis $ TcKiVar <$> inst_kvs
-      inst_kcv_kcos = mkKiCoVarCos $ TcCoVar <$> inst_kcvs
+      inst_kcv_kis = varKind <$> inst_kcvs
       inst_tv_tys = mkTyVarTys $ TcTyVar <$> inst_tvs
-  let wrap =mkWpTyApps inst_tv_tys <.> mkWpKiCoApps inst_kcv_kcos <.> mkWpKiApps inst_kv_kis
+  wrap <- instCall orig inst_kv_kis inst_kcv_kis inst_tv_tys
   traceTc "Instantiating"
     $ vcat [ text "origin" <+> pprCtOrigin orig
            , text "kvs" <+> ppr kvs
@@ -184,7 +184,7 @@ instantiateSigma orig kvs kcvs tvs body_ty orig_type = do
            , text "type" <+> debugPprType body_ty
            , text "orig_type" <+> debugPprType orig_type
            , text "with" <+> vcat (map debugPprMonoKind inst_kv_kis
-                                   ++ map ppr inst_kcv_kcos
+                                   ++ map ppr inst_kcvs
                                    ++ map debugPprType inst_tv_tys) ]
   return (inst_kvs, inst_kcvs, inst_tvs, wrap, inst_body)
   where
@@ -196,6 +196,23 @@ instantiateSigma orig kvs kcvs tvs body_ty orig_type = do
 *                                                                      *
 ********************************************************************* -}
 
+instCall :: CtOrigin -> [MonoKind Tc] -> [PredKind Tc] -> [Type Tc] -> TcM (CsWrapper Tc)
+instCall orig kis preds tys = do
+  kco_app <- instCallConstraints orig preds
+  return (mkWpTyApps tys <.> kco_app <.> mkWpKiApps kis)
+
+instCallConstraints :: CtOrigin -> [PredKind Tc] -> TcM (CsWrapper Tc)
+instCallConstraints orig preds
+  | null preds
+  = return idCsWrapper
+  | otherwise
+  = do kcos <- mapM (emitWantedKiEq orig) preds
+       traceTc "instCallConstraints" (ppr kcos)
+       return $ mkWpKiCoApps kcos
+
+-- Used for *kind checking types*, NOT when type checking terms.
+-- That is why this returns koercions not CsWrapper.
+-- It is also ok to unify early here, rather than defer entirely to the solver.
 instCallKiConstraints :: CtOrigin -> [PredKind Tc] -> TcM [KindCoercion Tc]
 instCallKiConstraints orig preds
   | null preds
