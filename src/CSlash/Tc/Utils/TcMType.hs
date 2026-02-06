@@ -882,7 +882,7 @@ defaultKiVar kv
   --      return True
   | otherwise
   = do traceTc "Defaulting a Kind var to Unrestricted" (ppr kv)
-       liftZonkM $ writeMetaKiVar kv (BIKi UKd)
+       liftZonkM $ writeMetaKiVar kv (BIKi UKd) -- if change, change in other defaulting places too 
        return True
 
 defaultKiVars :: DTcKiVarSet -> TcM [TcKiVar]

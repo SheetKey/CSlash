@@ -291,8 +291,8 @@ commitFlexiKv kv = do
   lift $ case flexi of
     NoFlexi -> pprPanic "NoFlexi" (ppr kv)
     DefaultFlexiKi -> do
-      traceTc "Defaulting flexi kivar to Linear:" (ppr kv)
-      return $ BIKi LKd
+      traceTc "Defaulting flexi kivar to Unrestricted:" (ppr kv)
+      return $ BIKi UKd -- if change, change in other defaulting places too
 
 zonkKiCoVarOcc :: KiCoVar Tc -> ZonkTcM (KindCoercion Zk)
 zonkKiCoVarOcc (TcCoVar tckcv) = f_tc tckcv
@@ -372,7 +372,7 @@ zonk_mkindmapper = MKiCoMapper
   }
 
 zonkTcKindToKind :: Kind Tc -> TcM (Kind Zk)
-zonkTcKindToKind ki = initZonkEnv NoFlexi $ zonkTcKindToKindX ki
+zonkTcKindToKind ki = initZonkEnv DefaultFlexiKi $ zonkTcKindToKindX ki
 
 zonkTcKindToKindX :: Kind Tc -> ZonkTcM (Kind Zk)
 zonkTcKindsToKindsX :: [Kind Tc] -> ZonkTcM [Kind Zk]
@@ -411,7 +411,7 @@ zonkIdBndr = changeIdTypeM zonkTcTypeToTypeX
 
 zonkTopDecls :: LCsBinds Tc -> TcM (TypeEnv, LCsBinds Zk)
 zonkTopDecls binds
-  = initZonkEnv NoFlexi
+  = initZonkEnv DefaultFlexiKi
     $ runZonkBndrT (zonkRecMonoBinds binds) $ \binds' -> do
         ty_env <- zonkEnvIds <$> getZonkEnv
         return (ty_env, binds')
