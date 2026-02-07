@@ -24,7 +24,8 @@ import Data.Data
 *                                                                      *
 ********************************************************************* -}
 
-class (Eq v, Ord v, Outputable v, NamedThing v, Uniquable v) => IsVar v where
+-- Reduced the number of 'HasPass p pass' constraints needed
+class (Eq v, Ord v, {-Outputable v, -}NamedThing v, Uniquable v) => IsVar v where
   varName :: v -> Name
   setVarName :: v -> Name -> v
 

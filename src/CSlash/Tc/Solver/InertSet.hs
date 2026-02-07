@@ -656,7 +656,7 @@ kickOutRewritableLHSKi ko_spec new_f ics@(IKC { inert_kicos = kv_kicos
 mentionsOuterVar :: TcLevel -> CtKiEvidence -> Bool
 mentionsOuterVar tclvl ev = anyFreeVarsOfMonoKind (isOuterVar tclvl) $ ctKiEvPred ev
 
-isOuterVar :: TcVar v => TcLevel -> v -> Bool
+isOuterVar :: (Outputable v, TcVar v) => TcLevel -> v -> Bool
 isOuterVar tclvl v
  = assertPpr (not (isTouchableMetaVar tclvl v))
    (ppr v <+> ppr tclvl)

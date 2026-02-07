@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE BangPatterns #-}
@@ -38,7 +39,7 @@ import Control.DeepSeq
 *                                                                       *
 ********************************************************************** -}
 
-data Type p
+data Type p 
   = TyVarTy (TyVar p)
   | AppTy (Type p) (Type p) -- The first arg must be an 'AppTy' or a 'TyVarTy' or a 'TyLam'
   | TyLamTy (TyVar p) (Type p) -- Used for TySyns, NOT in the types of DataCons (only Foralls)
@@ -58,7 +59,7 @@ data Type p
 
 type PredType = Type
 
-instance Outputable (Type p) where
+instance IsPass p => Outputable (Type (CsPass p)) where
   ppr = pprType
 
 type KnotTied ty = ty
@@ -219,7 +220,7 @@ isReflTyCo (GRefl _ kco) = isReflKiCo kco
 isReflTyCo (LiftKCo kco) = isReflKiCo kco
 isReflTyCo _ = False
 
-isReflTyCo_maybe :: TypeCoercion p -> Maybe (Type p)
+isReflTyCo_maybe :: HasPass p pass => TypeCoercion p -> Maybe (Type p)
 isReflTyCo_maybe (TyRefl ty) = Just ty
 isReflTyCo_maybe (GRefl ty kco)
   | isReflKiCo kco = pprPanic "isReflTyCo_maybe/GRefl" (ppr ty <+> text "|>" <+> ppr kco)
@@ -443,7 +444,7 @@ noView _ = Nothing
 *                                                                      *
 ********************************************************************* -}
 
-typeSize :: Type p -> Int
+typeSize :: HasPass p pass => Type p -> Int
 typeSize (TyVarTy {}) = 1
 typeSize (AppTy t1 t2) = typeSize t1 + typeSize t2
 typeSize (TyLamTy _ t) = 1 + typeSize t
@@ -456,5 +457,5 @@ typeSize (Embed _) = 1
 typeSize (CastTy ty _) = typeSize ty
 typeSize co@(KindCoercion _) = pprPanic "typeSize" (ppr co)
 
-typesSize :: [Type p] -> Int
+typesSize :: HasPass p pass => [Type p] -> Int
 typesSize tys = foldr ((+) . typeSize) 0 tys

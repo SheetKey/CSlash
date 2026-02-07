@@ -1,5 +1,7 @@
 module CSlash.Types.RepType where
 
+import CSlash.Cs.Pass
+
 import CSlash.Types.Basic (Arity, RepArity)
 import CSlash.Types.Var
 import CSlash.Core.DataCon
@@ -14,7 +16,7 @@ import CSlash.Utils.Panic
 import Data.List.NonEmpty (NonEmpty (..))
 import Data.List (sort)
 
-unwrapType :: Type p -> Type p
+unwrapType :: HasPass p pass => Type p -> Type p
 unwrapType ty = inner_ty
   where
     inner_ty = go ty
@@ -23,7 +25,7 @@ unwrapType ty = inner_ty
     go (ForAllTy _ t) = go t
     go t = t
 
-countFunRepArgs :: Arity -> Type p -> RepArity
+countFunRepArgs :: HasPass p pass => Arity -> Type p -> RepArity
 countFunRepArgs 0 _ = 0
 countFunRepArgs n ty
   | FunTy _ _arg res <- unwrapType ty

@@ -3,6 +3,8 @@
 
 module CSlash.Core.Kind.Compare where
 
+import CSlash.Cs.Pass
+
 import CSlash.Core.Kind
 import CSlash.Core.Kind.FVs
 
@@ -25,35 +27,35 @@ import qualified Data.Semigroup as S
 *                                                                      *
 ********************************************************************* -}
 
-tcEqKind :: (HasDebugCallStack) => Kind p -> Kind p -> Bool
+tcEqKind :: (HasDebugCallStack, HasPass p p') => Kind p -> Kind p -> Bool
 tcEqKind = eqKind
 
-tcEqMonoKind :: (HasDebugCallStack) => MonoKind p -> MonoKind p -> Bool
+tcEqMonoKind :: (HasDebugCallStack, HasPass p pass) => MonoKind p -> MonoKind p -> Bool
 tcEqMonoKind = eqMonoKind
 
-initRnEnv :: Kind p -> Kind p -> RnEnv2 (KiVar p)
+initRnEnv :: HasPass p p' => Kind p -> Kind p -> RnEnv2 (KiVar p)
 initRnEnv ka kb = mkRnEnv2 $ mkInScopeSet $
                   varsOfKind ka `unionVarSet` varsOfKind kb
 
-eqKind :: (HasCallStack) => Kind p -> Kind p -> Bool
+eqKind :: (HasCallStack, HasPass p p') => Kind p -> Kind p -> Bool
 eqKind ka kb = eq_kind ka kb
 
-eqMonoKind :: (HasCallStack) => MonoKind p -> MonoKind p -> Bool
+eqMonoKind :: (HasCallStack, HasPass p pass) => MonoKind p -> MonoKind p -> Bool
 eqMonoKind ka kb = eq_mono_kind ka kb
 
-eq_kind :: Kind p -> Kind p -> Bool
+eq_kind :: HasPass p p' => Kind p -> Kind p -> Bool
 eq_kind = inline_generic_eq_kind_x Nothing
 
-eq_mono_kind :: MonoKind p -> MonoKind p -> Bool
+eq_mono_kind :: HasPass p pass => MonoKind p -> MonoKind p -> Bool
 eq_mono_kind = inline_generic_eq_mono_kind_x Nothing
 
 {-# NOINLINE generic_eq_kind_x #-}
-generic_eq_kind_x :: Maybe (RnEnv2 (KiVar p)) -> Kind p -> Kind p -> Bool
+generic_eq_kind_x :: HasPass p p' => Maybe (RnEnv2 (KiVar p)) -> Kind p -> Kind p -> Bool
 generic_eq_kind_x = inline_generic_eq_kind_x
 
 {-# INLINE inline_generic_eq_kind_x #-}
 inline_generic_eq_kind_x
-  :: Maybe (RnEnv2 (KiVar p)) -> Kind p -> Kind p -> Bool
+  :: HasPass p p' => Maybe (RnEnv2 (KiVar p)) -> Kind p -> Kind p -> Bool
 inline_generic_eq_kind_x mb_env = \k1 k2 -> k1 `seq` k2 `seq`
   let go = generic_eq_kind_x mb_env
       go_mono = generic_eq_mono_kind_x mb_env
@@ -67,12 +69,12 @@ inline_generic_eq_kind_x mb_env = \k1 k2 -> k1 `seq` k2 `seq`
 
 {-# NOINLINE generic_eq_mono_kind_x #-}
 generic_eq_mono_kind_x
-  :: Maybe (RnEnv2 (KiVar p)) -> (MonoKind p) -> (MonoKind p) -> Bool
+  :: HasPass p pass => Maybe (RnEnv2 (KiVar p)) -> (MonoKind p) -> (MonoKind p) -> Bool
 generic_eq_mono_kind_x = inline_generic_eq_mono_kind_x
 
 {-# INLINE inline_generic_eq_mono_kind_x #-}
 inline_generic_eq_mono_kind_x
-  :: Maybe (RnEnv2 (KiVar p)) -> MonoKind p -> MonoKind p -> Bool
+  :: HasPass p pass => Maybe (RnEnv2 (KiVar p)) -> MonoKind p -> MonoKind p -> Bool
 inline_generic_eq_mono_kind_x mb_env = \k1 k2 -> k1 `seq` k2 `seq`
   let go = generic_eq_mono_kind_x mb_env
   in case (k1, k2) of
@@ -105,18 +107,18 @@ inline_generic_eq_mono_kind_x mb_env = \k1 k2 -> k1 `seq` k2 `seq`
 
 -- Returns 'False' when the kinds are not comparable.
 
-tcLTEQMonoKind :: (HasDebugCallStack) => MonoKind p -> MonoKind p -> Bool
+tcLTEQMonoKind :: (HasDebugCallStack, HasPass p pass) => MonoKind p -> MonoKind p -> Bool
 tcLTEQMonoKind = lteqMonoKind
 
-lteqMonoKind :: (HasCallStack) => MonoKind p -> MonoKind p -> Bool
+lteqMonoKind :: (HasCallStack, HasPass p pass) => MonoKind p -> MonoKind p -> Bool
 lteqMonoKind ka kb = lteq_mono_kind ka kb
 
-lteq_mono_kind :: MonoKind p -> MonoKind p -> Bool
+lteq_mono_kind :: HasPass p pass => MonoKind p -> MonoKind p -> Bool
 lteq_mono_kind = inline_generic_lteq_mono_kind_x
 
 {-# INLINE inline_generic_lteq_mono_kind_x #-}
 inline_generic_lteq_mono_kind_x
-  :: MonoKind p -> MonoKind p -> Bool
+  :: HasPass p pass => MonoKind p -> MonoKind p -> Bool
 inline_generic_lteq_mono_kind_x = \k1 k2 -> k1 `seq` k2 `seq`
  case (k1, k2) of
    (BIKi k1, BIKi k2) -> k1 < k2

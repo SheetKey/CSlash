@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -88,12 +89,12 @@ WpHole <.> c = c
 c <.> WpHole = c
 c1 <.> c2 = c1 `WpCompose` c2
 
-mkWpFun :: CsWrapper p -> MonoKind p -> Type p -> CsWrapper p
+mkWpFun :: HasPass p pass => CsWrapper p -> MonoKind p -> Type p -> CsWrapper p
 mkWpFun WpHole _ _ = WpHole
 mkWpFun (WpCast res_co) fun_ki arg_ty = WpCast (mk_wp_fun_co fun_ki (mkReflTyCo arg_ty) res_co)
 mkWpFun co fun_ki arg_ty = WpFun co fun_ki arg_ty
 
-mk_wp_fun_co :: MonoKind p -> TypeCoercion p -> TypeCoercion p -> TypeCoercion p
+mk_wp_fun_co :: HasPass p pass => MonoKind p -> TypeCoercion p -> TypeCoercion p -> TypeCoercion p
 mk_wp_fun_co fun_ki arg_co res_co = mkTyFunCo (mkReflKiCo fun_ki) arg_co res_co
 
 mkWpCast :: TypeCoercion p -> CsWrapper p
@@ -168,10 +169,10 @@ data TyCoBindsVar
 *                                                                      *
 ********************************************************************* -}
 
-instance Outputable (CsWrapper p) where
+instance IsPass p => Outputable (CsWrapper (CsPass p)) where
   ppr co_fn = pprCsWrapper co_fn (no_parens (text "<>"))
 
-pprCsWrapper :: CsWrapper p -> (Bool -> SDoc) -> SDoc
+pprCsWrapper :: HasPass p pass => CsWrapper p -> (Bool -> SDoc) -> SDoc
 pprCsWrapper wrap pp_thing_inside =
   sdocOption sdocPrintTypecheckerElaboration $ \case
   True -> help pp_thing_inside wrap False

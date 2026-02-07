@@ -305,48 +305,32 @@ zonkKiCoVarOcc (TcCoVar tckcv) = f_tc tckcv
             Nothing -> panic "zonkKiCoVarOcc bad skolem"
             Just kcv' -> return $ mkKiCoVarCo kcv'
 
-          finish_meta :: KindCoercion Zk -> ZonkTcM (KindCoercion Zk)
-          finish_meta kco = do
-            extendMetaKCvEnv kcv kco
-            return kco
+          -- finish_meta :: KindCoercion Zk -> ZonkTcM (KindCoercion Zk)
+          -- finish_meta kco = do
+          --   extendMetaKCvEnv kcv kco
+          --   return kco
 
-          zonk_meta
-            :: TcRef (MetaDetails (KindCoercion Tc))
-            -> MetaDetails (KindCoercion Tc)
-            -> ZonkTcM (KindCoercion Zk)
-          zonk_meta ref Flexi = do
-            kind <- zonkTcMonoKindToMonoKindX (varKind kcv)
-            kco <- commitFlexiKCv kcv kind
-            finish_meta kco
-          zonk_meta _ (Indirect kco) = do
-            zkco <- zonkKiCoToCo kco
-            finish_meta zkco
+          -- zonk_meta
+          --   :: TcRef (MetaDetails (KindCoercion Tc))
+          --   -> MetaDetails (KindCoercion Tc)
+          --   -> ZonkTcM (KindCoercion Zk)
+          -- zonk_meta ref Flexi = do
+          --   kind <- zonkTcMonoKindToMonoKindX (varKind kcv)
+          --   kco <- commitFlexiKCv kcv kind
+          --   finish_meta kco
+          -- zonk_meta _ (Indirect kco) = do
+          --   zkco <- zonkKiCoToCo kco
+          --   finish_meta zkco
       case tcVarDetails kcv of
         SkolemVar {} -> lookup_in_env
-        MetaVar { mv_ref = ref } -> do
-          mb_kco <- lookupMetaKCv kcv
-          case mb_kco of
-            Just kco -> return kco
-            Nothing -> do mkcv_details <- readTcRef ref
-                          zonk_meta ref mkcv_details
+        MetaVar { mv_ref = ref } -> panic "MetaKiCoVar"
+          -- mb_kco <- lookupMetaKCv kcv
+          -- case mb_kco of
+          --   Just kco -> return kco
+          --   Nothing -> do mkcv_details <- readTcRef ref
+          --                 zonk_meta ref mkcv_details
 
 zonkKiCoVarOcc kcv = pprPanic "KiCoVar in the type checker" (ppr kcv)
-
-extendMetaKCvEnv :: TcKiCoVar -> KindCoercion Zk -> ZonkTcM ()
-extendMetaKCvEnv kcv kco = ZonkT $ \(ZonkEnv { ze_meta_kcv_env = env_ref }) ->
-  updTcRef env_ref (\env -> extendVarEnv env kcv kco)
-  
-lookupMetaKCv :: TcKiCoVar -> ZonkTcM (Maybe (KindCoercion Zk))
-lookupMetaKCv kcv = ZonkT $ \(ZonkEnv { ze_meta_kcv_env = env_ref }) -> do
-  env <- readTcRef env_ref
-  return $ lookupVarEnv env kcv
-
-commitFlexiKCv :: TcKiCoVar -> MonoKind Zk -> ZonkTcM (KindCoercion Zk)
-commitFlexiKCv kcv zonked_kind = do
-  flexi <- ze_flexi <$> getZonkEnv
-  lift $ case flexi of
-    NoFlexi -> pprPanic "NoFlexi" (ppr kcv <+> colon <+> ppr zonked_kind) 
-    DefaultFlexiKi -> pprPanic "DefaultFlexiKi" (ppr kcv <+> colon <+> ppr zonked_kind)
 
 zonkKiCoHole :: KindCoercionHole -> ZonkTcM (KindCoercion Zk)
 zonkKiCoHole hole@(KindCoercionHole { kch_ref = ref, kch_co_var = cv }) = do

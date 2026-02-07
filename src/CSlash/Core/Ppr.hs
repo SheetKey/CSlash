@@ -1,8 +1,11 @@
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiWayIf #-}
 
 module CSlash.Core.Ppr where
 
 import Prelude hiding ((<>))
+
+import CSlash.Cs.Pass
 
 import CSlash.Core
 import CSlash.Types.Fixity (LexicalFixity(..))
@@ -25,7 +28,7 @@ pprCoreExpr = undefined
 instance OutputableBndr b => Outputable (Expr b) where
   ppr expr = pprCoreExpr expr
 
-instance OutputableBndr (Id p) where
+instance IsPass p => OutputableBndr (Id (CsPass p)) where
   pprBndr = pprCoreBinder
   pprInfixOcc = pprInfixName . varName
   pprPrefixOcc = pprPrefixName . varName
@@ -35,14 +38,14 @@ pprOcc :: OutputableBndr a => LexicalFixity -> a -> SDoc
 pprOcc Infix = pprInfixOcc
 pprOcc Prefix = pprPrefixOcc
 
-pprCoreBinder :: BindingSite -> Id p -> SDoc
+pprCoreBinder :: HasPass p pass => BindingSite -> Id p -> SDoc
 pprCoreBinder LetBind binder = pprTypedLetBinder binder $$ ppIdInfo binder (idInfo binder)
 pprCoreBinder bind_site bndr = getPprDebug $ \debug -> pprTypedLamBinder bind_site debug bndr
 
-pprUntypedBinder :: Id p -> SDoc
+pprUntypedBinder :: HasPass p pass => Id p -> SDoc
 pprUntypedBinder binder = pprIdBndr binder
 
-pprTypedLamBinder :: BindingSite -> Bool -> Id p -> SDoc
+pprTypedLamBinder :: HasPass p pass => BindingSite -> Bool -> Id p -> SDoc
 pprTypedLamBinder bind_site debug_on var
   = sdocOption sdocSuppressTypeSignatures $ \suppress_sigs -> 
     if | not debug_on
@@ -68,14 +71,14 @@ pprTypedLamBinder bind_site debug_on var
     pp_unf | hasSomeUnfolding unf_info = text "Unh=" <> ppr unf_info
            | otherwise = empty
 
-pprTypedLetBinder :: Id p -> SDoc
+pprTypedLetBinder :: HasPass p pass => Id p -> SDoc
 pprTypedLetBinder binder
   = sdocOption sdocSuppressTypeSignatures $ \suppress_sigs ->
     if suppress_sigs
     then pprIdBndr binder
     else hang (pprIdBndr binder) 2 (colon <+> pprType (varType binder))
 
-pprIdBndr :: Id p -> SDoc
+pprIdBndr :: HasPass p pass => Id p -> SDoc
 pprIdBndr id = pprPrefixOcc id <+> pprIdBndrInfo (idInfo id)
 
 pprIdBndrInfo :: IdInfo -> SDoc

@@ -275,7 +275,7 @@ rewrite_args_tc tc = case tyConDetails tc of
   TcTyCon { tcTyConKind = ki } -> rewrite_vector ki
   other -> rewrite_vector (tyConKind other)
 
-rewrite_vector :: Kind p -> [Type Tc] -> RewriteM ArgsReductions
+rewrite_vector :: HasPass p pass => Kind p -> [Type Tc] -> RewriteM ArgsReductions
 rewrite_vector ki tys = 
   rewrite_args bndrs any_named_bndrs inner_ki fvs tys
   where

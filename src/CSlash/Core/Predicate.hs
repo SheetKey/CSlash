@@ -1,5 +1,7 @@
 module CSlash.Core.Predicate where
 
+import CSlash.Cs.Pass
+
 import CSlash.Core.Type
 import CSlash.Core.Kind
 import CSlash.Core.TyCon
@@ -17,7 +19,7 @@ data TyPred p
   | TyIrredPred (PredType p)
   | ForAllPred [TyVar p] (PredType p)
 
-classifyPredType :: PredType p -> TyPred p
+classifyPredType :: HasPass p pass => PredType p -> TyPred p
 classifyPredType ev_ty = case splitTyConApp_maybe ev_ty of
   Just (tc, [_, _, ty1, ty2])
     | tc `hasKey` eqTyConKey -> TyEqPred ty1 ty2
@@ -28,22 +30,22 @@ classifyPredType ev_ty = case splitTyConApp_maybe ev_ty of
 
   _ -> TyIrredPred ev_ty
 
-isTyCoVarType :: Type p -> Bool
+isTyCoVarType :: HasPass p pass => Type p -> Bool
 isTyCoVarType ty = isTyEqPred ty
 
-isTyEqPred :: Type p -> Bool
+isTyEqPred :: HasPass p pass => Type p -> Bool
 isTyEqPred ty
   | Just tc <- tyConAppTyCon_maybe ty
   = tc `hasKey` eqTyConKey
   | otherwise
   = False
 
-getPredTys :: PredType p -> (Type p, Type p)
+getPredTys :: HasPass p pass => PredType p -> (Type p, Type p)
 getPredTys ty = case getPredTys_maybe ty of
                   Just tys -> tys
                   Nothing -> pprPanic "getPredTys" (ppr ty)
 
-getPredTys_maybe :: PredType p -> Maybe (Type p, Type p)
+getPredTys_maybe :: HasPass p pass => PredType p -> Maybe (Type p, Type p)
 getPredTys_maybe ty = case splitTyConApp_maybe ty of
                         Just (tc, [_, _, ty1, ty2]) | tc `hasKey` eqTyConKey -> Just (ty1, ty2)
                         _ -> Nothing

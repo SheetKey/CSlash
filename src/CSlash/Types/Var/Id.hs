@@ -56,7 +56,7 @@ instance IsVar (Id p) where
 
   isTcVar _ = False
 
-instance Outputable (Id p) where
+instance IsPass p => Outputable (Id (CsPass p)) where
   ppr Id {..} = docWithStyle ppr_code ppr_normal
     where
       ppr_code = ppr id_name
@@ -130,7 +130,7 @@ idOccInfo id = occInfo (idInfo id)
 isDeadBinder :: Id p -> Bool
 isDeadBinder bndr = isDeadOcc (idOccInfo bndr)
 
-idKind :: Id p -> Kind p
+idKind :: HasPass p pass => Id p -> Kind p
 idKind = typeKind . varType
 
 changeIdType :: (Type p -> Type p') -> Id p -> Id p'
@@ -141,7 +141,7 @@ changeIdTypeM f (Id { id_type = ty, .. }) = do
   ty' <- f ty
   return $ Id { id_type = ty', .. }  
 
-fromZkId :: Id Zk -> Id p
+fromZkId :: HasPass p pass => Id Zk -> Id p
 fromZkId = changeIdType fromZkType
 
 {- *********************************************************************

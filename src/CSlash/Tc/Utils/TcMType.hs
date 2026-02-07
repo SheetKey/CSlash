@@ -85,7 +85,7 @@ newMetaKindVars n = replicateM n newMetaKindVar
 *                                                                       *
 ********************************************************************** -}
 
-predTypeOccName :: PredType p -> OccName
+predTypeOccName :: HasPass p pass => PredType p -> OccName
 predTypeOccName ty = case classifyPredType ty of
   TyEqPred {} -> mkVarOccFS (fsLit "tco")
   TyIrredPred {} -> mkVarOccFS (fsLit "tirred")
@@ -144,6 +144,15 @@ emitWantedKiEq orig pred = do
     , ctkev_rewriters = emptyKiRewriterSet }
   return $ HoleCo hole    
 
+emitWantedKiCoHole :: CtOrigin -> KindCoercionHole -> TcM ()
+emitWantedKiCoHole orig hole = do
+  loc <- getCtLocM orig Nothing -- TODO: Just KindLevel?
+  emitKiSimple $ mkNonCanonicalKi $ CtKiWanted
+    { ctkev_pred = varKind $ coHoleCoVar hole
+    , ctkev_dest = hole
+    , ctkev_loc = loc
+    , ctkev_rewriters = emptyKiRewriterSet }
+
 {- *********************************************************************
 *                                                                      *
         Coercion holes
@@ -156,6 +165,21 @@ newTyCoercionHole pred_ty = do
   traceTc "New coercion hole:" (ppr co_var <+> colon <+> ppr pred_ty)
   ref <- newMutVar Nothing
   return $ TypeCoercionHole { tch_co_var = co_var, tch_ref = ref }
+
+newKiCoercionHoleX :: Subst p Tc -> KiCoVar p -> TcM (Subst p Tc, KindCoercionHole)
+newKiCoercionHoleX subst kcv = do
+  name <- cloneKiCoVarName (varName kcv)
+  let kcv' = mkTcKiCoVar name (substMonoKi subst (varKind kcv)) vanillaSkolemVarUnk  
+  traceTc "New coercion hole X:"
+    $ vcat [ text "kcv" <+> ppr kcv <+> colon <+> ppr (varKind kcv)
+           , text "kcv'" <+> ppr kcv' <+> colon <+> ppr (varKind kcv') ]
+  ref <- newMutVar Nothing
+  let hole = KindCoercionHole { kch_co_var = kcv', kch_ref = ref }
+      subst' = extendKCvSubst subst kcv (HoleCo hole)
+  return (subst', hole)
+
+cloneKiCoVarName :: Name -> TcM Name
+cloneKiCoVarName name = newSysName (nameOccName name)
 
 newKiCoercionHole
   :: PredKind Tc -> TcM KindCoercionHole
@@ -391,34 +415,6 @@ newMetaTyVarTyAtLevel tc_lvl kind = do
   details <- newTauVarDetailsAtLevel tc_lvl
   name <- newMetaTyVarName (fsLit "p")
   return $ mkTyVarTy $ TcTyVar $ mkTcTyVar name kind details
-
-{- *********************************************************************
-*                                                                      *
-        MetaKCvs
-*                                                                      *
-********************************************************************* -}
-
-newMetaKiCoVarX :: Subst p Tc -> KiCoVar p -> TcM (Subst p Tc, TcKiCoVar)
-newMetaKiCoVarX = new_meta_kcv_x TauVar
-
-new_meta_kcv_x
-  :: MetaInfo -> Subst p Tc -> KiCoVar p -> TcM (Subst p Tc, TcKiCoVar)
-new_meta_kcv_x info subst kcv = do
-  new_kcv <- cloneAnonMetaKiCoVar info kcv (substMonoKi subst (varKind kcv))
-  let subst1 = extendKCvSubstWithClone subst kcv (TcCoVar new_kcv)
-  return (subst1, new_kcv)
-
-cloneAnonMetaKiCoVar :: MetaInfo -> KiCoVar p -> MonoKind Tc -> TcM TcKiCoVar
-cloneAnonMetaKiCoVar info kcv kind = do
-  details <- newMetaDetails info
-  name <- cloneMetaKiCoVarName (varName kcv)
-  let kicovar = mkTcKiCoVar name kind details
-  traceTc "cloneAnonMetaKiCoVar" (ppr kicovar <+> colon <+> ppr (varKind kicovar))
-  return kicovar
-
--- TODO: only need one of these, not specialized versions
-cloneMetaKiCoVarName :: Name -> TcM Name
-cloneMetaKiCoVarName name = newSysName (nameOccName name)
 
 {- *********************************************************************
 *                                                                      *

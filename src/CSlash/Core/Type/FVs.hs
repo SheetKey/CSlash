@@ -1,5 +1,9 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeAbstractions #-}
+
 module CSlash.Core.Type.FVs where
+
+import CSlash.Cs.Pass
 
 import {-# SOURCE #-} CSlash.Core.Type (coreView)
 import {-# SOURCE #-} CSlash.Core.Type
@@ -52,26 +56,27 @@ runCoVars f = appEndo f (emptyVarSet, emptyVarSet)
 *                                                                      *
 ********************************************************************* -}
 
-varsOfTyVarEnv :: VarEnv (TyVar p') (Type p) -> (TyVarSet p, KiCoVarSet p, KiVarSet p)
+varsOfTyVarEnv
+  :: HasPass p p' => VarEnv (TyVar p1) (Type p) -> (TyVarSet p, KiCoVarSet p, KiVarSet p)
 varsOfTyVarEnv tys = varsOfTypes (nonDetEltsUFM tys)
 
-varsOfType :: Type p -> (TyVarSet p, KiCoVarSet p, KiVarSet p)
+varsOfType :: HasPass p p' => Type p -> (TyVarSet p, KiCoVarSet p, KiVarSet p)
 varsOfType ty = runTyKiVars (deep_ty ty)
 
-varsOfTypes :: [Type p] -> (TyVarSet p, KiCoVarSet p, KiVarSet p)
+varsOfTypes :: HasPass p p' => [Type p] -> (TyVarSet p, KiCoVarSet p, KiVarSet p)
 varsOfTypes tys = runTyKiVars (deep_tys tys)
 
-deep_ty :: Type p -> Endo (TyVarSet p, KiCoVarSet p, KiVarSet p)
+deep_ty :: HasPass p p' => Type p -> Endo (TyVarSet p, KiCoVarSet p, KiVarSet p)
 deep_ty = case foldTyCo deepTvFolder (emptyVarSet, emptyVarSet, emptyVarSet) of
   (f, _, _, _) -> f
 
-deep_tys :: [Type p]
-  -> Endo (TyVarSet p, KiCoVarSet p, KiVarSet p)
+deep_tys :: HasPass p p' => [Type p] -> Endo (TyVarSet p, KiCoVarSet p, KiVarSet p)
 deep_tys = case foldTyCo deepTvFolder (emptyVarSet, emptyVarSet, emptyVarSet) of
   (_, f, _, _) -> f
 
 deepTvFolder
-  :: TyCoFolder p
+  :: HasPass p p'
+  => TyCoFolder p
      (TyVarSet p, KiCoVarSet p, KiVarSet p)
      (KiCoVarSet p, KiVarSet p)
      (Endo (KiCoVarSet p, KiVarSet p))
@@ -415,7 +420,7 @@ almost_devoid_kico_var_of_tyco (LiftKCo kco) kcv
 *                                                                      *
 ********************************************************************* -}
 
-isInjectiveInType :: TyVar p -> Type p -> Bool
+isInjectiveInType :: HasPass p pass => TyVar p -> Type p -> Bool
 isInjectiveInType tv ty = go ty
   where
     go ty | Just ty' <- rewriterView ty = go ty'
@@ -478,7 +483,7 @@ noFreeVarsOfType ty = not $ DM.getAny (f ty)
 *                                                                      *
 ********************************************************************* -}
 
-tyConsOfType :: Type p -> UniqSet (TyCon p)
+tyConsOfType :: HasPass p pass => Type p -> UniqSet (TyCon p)
 tyConsOfType ty = go ty
   where
     -- go :: Type -> UniqSet TyCon
@@ -493,5 +498,5 @@ tyConsOfType ty = go ty
 
     go_tc tc = unitUniqSet tc
 
-tyConsOfTypes :: [Type p] -> UniqSet (TyCon p)
+tyConsOfTypes :: HasPass p pass => [Type p] -> UniqSet (TyCon p)
 tyConsOfTypes tys = foldr (unionUniqSets . tyConsOfType) emptyUniqSet tys

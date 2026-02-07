@@ -1,7 +1,9 @@
 module CSlash.Core.Kind.Compare where
 
+import CSlash.Cs.Pass
+
 import {-# SOURCE #-} CSlash.Core.Kind (Kind, MonoKind)
 import CSlash.Utils.Misc (HasCallStack, HasDebugCallStack)
 
-tcEqKind :: (HasDebugCallStack) => Kind p -> Kind p -> Bool
-eqMonoKind :: (HasCallStack) => MonoKind p -> MonoKind p -> Bool
+tcEqKind :: (HasDebugCallStack, HasPass p p') => Kind p -> Kind p -> Bool
+eqMonoKind :: (HasCallStack, HasPass p pass) => MonoKind p -> MonoKind p -> Bool

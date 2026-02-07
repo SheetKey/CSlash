@@ -1,7 +1,10 @@
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeAbstractions #-}
 {-# LANGUAGE ExplicitForAll #-}
 
 module CSlash.Core.Kind.FVs where
+
+import CSlash.Cs.Pass
 
 import Data.Monoid as DM ( Endo(..), Any(..) )
 import CSlash.Core.Kind
@@ -47,70 +50,71 @@ runCoVars f = appEndo f emptyVarSet
    This is meaningless for kinds, which, at this time, cannot contain co_holes.
 -}
 
-varsOfMonoKiVarEnv :: VarEnv kva (MonoKind p) -> KiVarSet p
+varsOfMonoKiVarEnv :: HasPass p p' => VarEnv kva (MonoKind p) -> KiVarSet p
 varsOfMonoKiVarEnv kis = varsOfMonoKinds (nonDetEltsUFM kis)
 
-varsOfKiCoVarEnv :: VarEnv kcva (KindCoercion p) -> (KiCoVarSet p, KiVarSet p)
+varsOfKiCoVarEnv :: HasPass p p' => VarEnv kcva (KindCoercion p) -> (KiCoVarSet p, KiVarSet p)
 varsOfKiCoVarEnv cos = varsOfKindCoercions (nonDetEltsUFM cos)
 
-varsOfKind :: Kind p -> KiVarSet p
+varsOfKind :: HasPass p p' => Kind p -> KiVarSet p
 varsOfKind ki = case runKiCoVars (deep_ki ki) of
   (_, kvs) -> kvs
   -- maybe this should be 'assert (isEmptyVarSet kcvs)'
 
 varsOfKinds
-  :: [Kind p] -> KiVarSet p
+  :: HasPass p p' => [Kind p] -> KiVarSet p
 varsOfKinds kis = case runKiCoVars (deep_kis kis) of
   (_, kvs) -> kvs
 
 varsOfMonoKind
-  :: MonoKind p -> KiVarSet p
+  :: HasPass p p' => MonoKind p -> KiVarSet p
 varsOfMonoKind ki = case runKiCoVars (deep_mki ki) of
   (_, kvs) -> kvs
 
 varsOfMonoKinds
-  :: [MonoKind p] -> KiVarSet p
+  :: HasPass p p' => [MonoKind p] -> KiVarSet p
 varsOfMonoKinds kis = case runKiCoVars (deep_mkis kis) of
   (_, kvs) -> kvs
 
 varsOfKindCoercion
-  :: KindCoercion p -> (KiCoVarSet p, KiVarSet p)
+  :: HasPass p p' => KindCoercion p -> (KiCoVarSet p, KiVarSet p)
 varsOfKindCoercion co = runKiCoVars (deep_co co)
 
 varsOfKindCoercions
-  :: [KindCoercion p] -> (KiCoVarSet p, KiVarSet p)
+  :: HasPass p p' => [KindCoercion p] -> (KiCoVarSet p, KiVarSet p)
 varsOfKindCoercions cos = runKiCoVars (deep_cos cos)
 
 deep_ki
-  :: Kind p -> Endo (KiCoVarSet p, KiVarSet p)
+  :: HasPass p p' => Kind p -> Endo (KiCoVarSet p, KiVarSet p)
 deep_ki = fst $ foldKind deepKcvFolder (emptyVarSet, emptyVarSet)
 
 deep_kis
-  :: [Kind p] -> Endo (KiCoVarSet p, KiVarSet p)
+  :: HasPass p p' => [Kind p] -> Endo (KiCoVarSet p, KiVarSet p)
 deep_kis = snd $ foldKind deepKcvFolder (emptyVarSet, emptyVarSet)
 
 deep_mki
-  :: MonoKind p -> Endo (KiCoVarSet p, KiVarSet p)
+  :: HasPass p p' => MonoKind p -> Endo (KiCoVarSet p, KiVarSet p)
 deep_mki = case foldMonoKiCo deepMKcvFolder (emptyVarSet, emptyVarSet) of
              (f, _, _, _) -> f
 
 deep_mkis
-  :: [MonoKind p] -> Endo (KiCoVarSet p, KiVarSet p)
+  :: HasPass p p' => [MonoKind p] -> Endo (KiCoVarSet p, KiVarSet p)
 deep_mkis = case foldMonoKiCo deepMKcvFolder (emptyVarSet, emptyVarSet) of
               (_, f, _, _) -> f
 
 deep_co
-  :: KindCoercion p -> Endo (KiCoVarSet p, KiVarSet p)
+  :: HasPass p p' => KindCoercion p -> Endo (KiCoVarSet p, KiVarSet p)
 deep_co = case foldMonoKiCo deepMKcvFolder (emptyVarSet, emptyVarSet) of
             (_, _, f, _) -> f
 
 deep_cos
-  :: [KindCoercion p] -> Endo (KiCoVarSet p, KiVarSet p)
+  :: HasPass p p' => [KindCoercion p] -> Endo (KiCoVarSet p, KiVarSet p)
 deep_cos = case foldMonoKiCo deepMKcvFolder (emptyVarSet, emptyVarSet) of
              (_, _, _, f) -> f
 
 deepKcvFolder
-  :: KiCoFolder p
+  :: HasPass p p'
+  => KiCoFolder p
      (KiCoVarSet p, KiVarSet p)
      (Endo (KiCoVarSet p, KiVarSet p))
 deepKcvFolder = KiCoFolder { kcf_kibinder = do_bndr
@@ -119,11 +123,11 @@ deepKcvFolder = KiCoFolder { kcf_kibinder = do_bndr
     do_bndr (kcvis, is) kv = (kcvis, extendVarSet is kv)
 
 deepMKcvFolder
-  :: forall p.
-     MKiCoFolder p
+  :: forall p p'. HasPass p p'
+  => MKiCoFolder p
      (KiCoVarSet p, KiVarSet p)
      (Endo (KiCoVarSet p, KiVarSet p))
-deepMKcvFolder @kv = MKiCoFolder { mkcf_kivar = do_kivar
+deepMKcvFolder @p @p' = MKiCoFolder { mkcf_kivar = do_kivar
                                  , mkcf_covar = do_covar
                                  , mkcf_hole = do_hole }
   where
@@ -150,11 +154,13 @@ deepMKcvFolder @kv = MKiCoFolder { mkcf_kivar = do_kivar
           | otherwise = appEndo (deep_mki (varKind v))
                         $ (kcv_acc `extendVarSet` v, kv_acc)
 
-    -- do_hole
-    --   :: (VarSet (KiCoVar kv), VarSet kv)
-    --   -> KindCoercionHole
-    --   -> (Endo (VarSet (KiCoVar kv), VarSet kv))
-    do_hole is hole = panic "do_covar is (coHoleCoVar hole)"
+    do_hole
+      :: (KiCoVarSet p, KiVarSet p)
+      -> KindCoercionHole
+      -> Endo (KiCoVarSet p, KiVarSet p)
+    do_hole is hole = case csPass @p' of
+                        Tc -> do_covar is (TcCoVar $ coHoleCoVar hole)
+                        _ -> panic "unreachable"
 
 shallowVarsOfKiCoVarEnv :: VarEnv kcva (KindCoercion p) -> (KiCoVarSet p, KiVarSet p)
 shallowVarsOfKiCoVarEnv cos = shallowVarsOfKindCoercions (nonDetEltsUFM cos)

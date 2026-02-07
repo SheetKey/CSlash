@@ -165,17 +165,16 @@ instantiateSigma
   -> [TyVar Tc]
   -> SigmaType Tc
   -> SigmaType Tc-- the type before splitting of kvs, kcvs and tvs (for finding in_scope)
-  -> TcM ([TcKiVar], [TcKiCoVar], [TcTyVar], CsWrapper Tc, SigmaType Tc)
+  -> TcM ([TcKiVar], [KindCoercionHole], [TcTyVar], CsWrapper Tc, SigmaType Tc)
 instantiateSigma orig kvs kcvs tvs body_ty orig_type = do
   (subst1, inst_kvs) <- mapAccumLM newMetaKiVarX empty_subst kvs
-  (subst2, inst_kcvs) <- mapAccumLM newMetaKiCoVarX subst1 kcvs
+  (subst2, inst_holes) <- mapAccumLM newKiCoercionHoleX subst1 kcvs
   (subst, inst_tvs) <- mapAccumLM newMetaTyVarX subst2 tvs
   traceTc "instantiateSigma" (ppr subst)
   let inst_body = substTy subst body_ty
       inst_kv_kis = mkKiVarKis $ TcKiVar <$> inst_kvs
-      inst_kcv_kis = varKind <$> inst_kcvs
       inst_tv_tys = mkTyVarTys $ TcTyVar <$> inst_tvs
-  wrap <- instCall orig inst_kv_kis inst_kcv_kis inst_tv_tys
+  wrap <- instCall orig inst_kv_kis inst_holes inst_tv_tys
   traceTc "Instantiating"
     $ vcat [ text "origin" <+> pprCtOrigin orig
            , text "kvs" <+> ppr kvs
@@ -184,9 +183,9 @@ instantiateSigma orig kvs kcvs tvs body_ty orig_type = do
            , text "type" <+> debugPprType body_ty
            , text "orig_type" <+> debugPprType orig_type
            , text "with" <+> vcat (map debugPprMonoKind inst_kv_kis
-                                   ++ map ppr inst_kcvs
+                                   ++ map ppr inst_holes
                                    ++ map debugPprType inst_tv_tys) ]
-  return (inst_kvs, inst_kcvs, inst_tvs, wrap, inst_body)
+  return (inst_kvs, inst_holes, inst_tvs, wrap, inst_body)
   where
     empty_subst = mkEmptySubst (varsOfType orig_type) (emptyVarSet, emptyVarSet, emptyVarSet)
 
@@ -196,19 +195,19 @@ instantiateSigma orig kvs kcvs tvs body_ty orig_type = do
 *                                                                      *
 ********************************************************************* -}
 
-instCall :: CtOrigin -> [MonoKind Tc] -> [PredKind Tc] -> [Type Tc] -> TcM (CsWrapper Tc)
-instCall orig kis preds tys = do
-  kco_app <- instCallConstraints orig preds
+instCall :: CtOrigin -> [MonoKind Tc] -> [KindCoercionHole] -> [Type Tc] -> TcM (CsWrapper Tc)
+instCall orig kis holes tys = do
+  kco_app <- instCallConstraints orig holes
   return (mkWpTyApps tys <.> kco_app <.> mkWpKiApps kis)
 
-instCallConstraints :: CtOrigin -> [PredKind Tc] -> TcM (CsWrapper Tc)
-instCallConstraints orig preds
-  | null preds
+instCallConstraints :: CtOrigin -> [KindCoercionHole] -> TcM (CsWrapper Tc)
+instCallConstraints orig holes
+  | null holes
   = return idCsWrapper
   | otherwise
-  = do kcos <- mapM (emitWantedKiEq orig) preds
-       traceTc "instCallConstraints" (ppr kcos)
-       return $ mkWpKiCoApps kcos
+  = do mapM (emitWantedKiCoHole orig) holes
+       traceTc "instCallConstraints" (ppr holes)
+       return $ mkWpKiCoApps (HoleCo <$> holes)
 
 -- Used for *kind checking types*, NOT when type checking terms.
 -- That is why this returns koercions not CsWrapper.

@@ -343,17 +343,17 @@ isQLInstVar v = case tcVarDetails v of
 isTouchableInfo :: MetaInfo -> Bool
 isTouchableInfo _info = True
 
-metaVarRef :: TcVar v => v -> IORef (MetaDetails (TcDetailsThing v))
+metaVarRef :: (Outputable v, TcVar v) => v -> IORef (MetaDetails (TcDetailsThing v))
 metaVarRef v = case tcVarDetails v of
   MetaVar { mv_ref = ref } -> ref
   _ -> pprPanic "metaVarRef" (ppr v)
 
-metaVarInfo :: TcVar v => v -> MetaInfo
+metaVarInfo :: (Outputable v, TcVar v) => v -> MetaInfo
 metaVarInfo v = case tcVarDetails v of
   MetaVar { mv_info = info } -> info
   _ -> pprPanic "metaKiVarInfo" (ppr v)
 
-setMetaVarTcLevel :: TcVar v => v -> TcLevel -> v
+setMetaVarTcLevel :: (Outputable v, TcVar v) => v -> TcLevel -> v
 setMetaVarTcLevel v tclvl = case tcVarDetails v of
   details@(MetaVar {})
     -> setTcVarDetails v (details { mv_tclvl = tclvl })
@@ -527,27 +527,28 @@ tcSplitSomeForAllTyVars argf_pred ty = split ty ty []
     split orig_ty ty tvs | Just ty' <- coreView ty = split orig_ty ty' tvs
     split orig_ty _ tvs = (reverse tvs, orig_ty)
 
-tcSplitForAllInvisBinders :: Type p -> ([TyVar p], Type p)
+tcSplitForAllInvisBinders :: HasPass p pass => Type p -> ([TyVar p], Type p)
 tcSplitForAllInvisBinders = splitForAllInvisTyBinders
 
-tcSplitForAllTyVarBinders :: Type p -> ([ForAllBinder (TyVar p)], Type p)
+tcSplitForAllTyVarBinders :: HasPass p pass => Type p -> ([ForAllBinder (TyVar p)], Type p)
 tcSplitForAllTyVarBinders ty = sty
   where sty = splitForAllForAllTyBinders ty
 
-tcSplitForAllKiCoVars :: Type p -> ([KiCoVar p], Type p)
+tcSplitForAllKiCoVars :: HasPass p pass => Type p -> ([KiCoVar p], Type p)
 tcSplitForAllKiCoVars ty = sty
   where sty = splitForAllKiCoVars ty
 
-tcSplitTyLamTyVarBinders :: Type p -> ([TyVar p], Type p)
+tcSplitTyLamTyVarBinders :: HasPass p pass => Type p -> ([TyVar p], Type p)
 tcSplitTyLamTyVarBinders ty = sty
   where sty = splitTyLamTyBinders ty
 
-tcSplitBigLamTyVarBinders :: Type p -> ([KiVar p], Type p)
+tcSplitBigLamTyVarBinders :: HasPass p pass => Type p -> ([KiVar p], Type p)
 tcSplitBigLamTyVarBinders ty = sty
   where sty = splitBigLamTyBinders ty
 
 tcSplitForAllTyVarsReqTVBindersN
-  :: Arity -> Type p -> (Arity, [KiVar p], [KiCoVar p], [ForAllBinder (TyVar p)], Type p)
+  :: HasPass p pass
+  => Arity -> Type p -> (Arity, [KiVar p], [KiCoVar p], [ForAllBinder (TyVar p)], Type p)
 tcSplitForAllTyVarsReqTVBindersN n_req ty
   = case tcSplitBigLamTyVarBinders ty of
       (kvs, ty) ->
@@ -560,14 +561,14 @@ tcSplitForAllTyVarsReqTVBindersN n_req ty
               split n_req orig_ty ty bs | Just ty' <- coreView ty = split n_req orig_ty ty' bs 
               split n_req orig_ty _ bs = (n_req, kvs, kcvs, reverse bs, orig_ty)
 
-tcSplitSigma :: Type p -> ([KiVar p], [KiCoVar p], [TyVar p], Type p)
+tcSplitSigma :: HasPass p pass => Type p -> ([KiVar p], [KiCoVar p], [TyVar p], Type p)
 tcSplitSigma ty
   = case tcSplitBigLamTyVarBinders ty of
       (kvs, ty') -> case tcSplitForAllKiCoVars ty' of
                       (kcvs, ty'') -> case tcSplitForAllInvisBinders ty' of
                                         (tvs, tau) -> (kvs, kcvs, tvs, tau)
 
-tcSplitNestedSigmaTys :: Type p -> ([KiVar p], [KiCoVar p], [TyVar p], Type p)
+tcSplitNestedSigmaTys :: HasPass p pass => Type p -> ([KiVar p], [KiCoVar p], [TyVar p], Type p)
 tcSplitNestedSigmaTys ty
   | (arg_tys, fun_kis, body_ty) <- tcSplitFunTys ty
   , (kvs1, kcvs1, tvs1, rho1) <- tcSplitSigma body_ty
@@ -576,19 +577,19 @@ tcSplitNestedSigmaTys ty
     in (kvs1 ++ kvs2, kcvs1 ++ kcvs2, tvs1 ++ tvs2, mkFunTys arg_tys fun_kis rho2)
   | otherwise = ([], [], [], ty)
 
-tcSplitFunTys :: Type p -> ([Type p], [MonoKind p], Type p)
+tcSplitFunTys :: HasPass p pass => Type p -> ([Type p], [MonoKind p], Type p)
 tcSplitFunTys ty = case tcSplitFunTy_maybe ty of
                      Nothing -> ([], [], ty)
                      Just (arg, ki, res) -> (arg:args, ki:kis, res')
                        where (args, kis, res') = tcSplitFunTys res
 
-tcSplitFunTy_maybe :: Type p -> Maybe (Type p, MonoKind p, Type p)
+tcSplitFunTy_maybe :: HasPass p pass => Type p -> Maybe (Type p, MonoKind p, Type p)
 tcSplitFunTy_maybe ty
   | Just ty' <- coreView ty = tcSplitFunTy_maybe ty'
 tcSplitFunTy_maybe (FunTy ki arg res) = Just (arg, ki, res)
 tcSplitFunTy_maybe _ = Nothing
 
-tcSplitAppTy_maybe :: Type p -> Maybe (Type p, Type p)
+tcSplitAppTy_maybe :: HasPass p pass => Type p -> Maybe (Type p, Type p)
 tcSplitAppTy_maybe ty | Just ty' <- coreView ty = tcSplitAppTy_maybe ty'
 tcSplitAppTy_maybe ty = tcSplitAppTyNoView_maybe ty
 
@@ -598,7 +599,7 @@ tcSplitAppTy_maybe ty = tcSplitAppTyNoView_maybe ty
 *                                                                      *
 ********************************************************************* -}
 
-isSigmaTy :: Type p -> Bool
+isSigmaTy :: HasPass p pass => Type p -> Bool
 isSigmaTy (ForAllTy (Bndr _ af) _) = isInvisibleForAllFlag af
 isSigmaTy (ForAllKiCo _ _) = True
 isSigmaTy (TyLamTy {}) = panic "isSigmaTy TyLamTy"
@@ -606,7 +607,7 @@ isSigmaTy (BigTyLamTy {}) = True
 isSigmaTy ty | Just ty' <- coreView ty = isSigmaTy ty'
 isSigmaTy _ = False
 
-isRhoTy :: Type p -> Bool
+isRhoTy :: HasPass p pass => Type p -> Bool
 isRhoTy ty = not (isSigmaTy ty)
 
 isRigidTy :: Type p -> Bool

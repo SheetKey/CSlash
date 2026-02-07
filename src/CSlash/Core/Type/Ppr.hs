@@ -2,6 +2,8 @@ module CSlash.Core.Type.Ppr where
 
 import Prelude hiding ((<>))
 
+import CSlash.Cs.Pass
+
 import CSlash.Core.Type
 import CSlash.Core.Type.Rep
 import CSlash.Core.Kind
@@ -14,16 +16,16 @@ import CSlash.Utils.Misc
 import CSlash.Utils.Panic
 import CSlash.Types.Basic
 
-pprType :: Type p -> SDoc
+pprType :: HasPass p pass => Type p -> SDoc
 pprType = pprPrecType topPrec
 
-pprParendType :: Type p -> SDoc
+pprParendType :: HasPass p pass => Type p -> SDoc
 pprParendType = pprPrecType appPrec
 
-pprPrecType :: PprPrec -> Type p -> SDoc
+pprPrecType :: HasPass p pass => PprPrec -> Type p -> SDoc
 pprPrecType = pprPrecTypeX emptyTidyEnv
 
-pprPrecTypeX :: TidyEnv p -> PprPrec -> Type p -> SDoc
+pprPrecTypeX :: HasPass p pass => TidyEnv p -> PprPrec -> Type p -> SDoc
 pprPrecTypeX env prec ty
   = getPprStyle $ \ sty ->
     getPprDebug $ \ debug ->
@@ -31,7 +33,7 @@ pprPrecTypeX env prec ty
                     then debug_ppr_ty prec ty
                     else panic "pprPrecIfaceType prec (tidyToIfaceTypeStyX env ty sty)"
 
-pprSigmaType :: Type p -> SDoc
+pprSigmaType :: HasPass p pass => Type p -> SDoc
 pprSigmaType ty = text "pprSigmaType not implemented" <+> pprType ty
 
 pprTyVars :: [TyVar p] -> SDoc
@@ -45,10 +47,10 @@ pprTyVar tv = parens (ppr tv <+> colon <+> ppr kind)
   where
     kind = varKind tv
 
-debugPprType :: Type p -> SDoc
+debugPprType :: HasPass p pass => Type p -> SDoc
 debugPprType ty = debug_ppr_ty topPrec ty
 
-debug_ppr_ty :: PprPrec -> Type p -> SDoc
+debug_ppr_ty :: HasPass p pass => PprPrec -> Type p -> SDoc
 
 debug_ppr_ty _ (TyVarTy tv) = ppr tv
 

@@ -147,7 +147,7 @@ instance Outputable (ValidityEnv p) where
            2 (vcat [ text "ve_tidy_env" <+> ppr env
                    , text "ve_ctxt" <+> pprUserTypeCtxt ctxt ])
 
-check_type :: ValidityEnv p -> Type p -> TcM ()
+check_type :: HasPass p pass => ValidityEnv p -> Type p -> TcM ()
 
 check_type _ (TyVarTy _) = return ()
 
@@ -199,7 +199,8 @@ check_type _ ty@(BigTyLamTy {}) = pprPanic "check_type/BTL2" (ppr ty)
 check_type _ other = pprPanic "check_type/O" (ppr other)
 
 check_syn_tc_app
-  :: ValidityEnv p
+  :: HasPass p pass
+  => ValidityEnv p
   -> Type p
   -> TyCon p
   -> [Type p]
@@ -222,7 +223,7 @@ check_syn_tc_app (ve@ValidityEnv { ve_ctxt = ctxt }) ty tc tys
 
 -- NOT for type synonyms. We always expand type synonyms (Like LiberalTypeSynonyms extension)
 -- so we do not EVER check the args of a type synonym
-check_arg_type :: ValidityEnv p -> Type p -> TcM ()
+check_arg_type :: HasPass p pass => ValidityEnv p -> Type p -> TcM ()
 check_arg_type _ (KindCoercion {}) = return ()
 check_arg_type ve@(ValidityEnv { ve_ctxt = ctxt }) ty = check_type ve ty
 

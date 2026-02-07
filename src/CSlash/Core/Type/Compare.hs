@@ -3,6 +3,8 @@
 
 module CSlash.Core.Type.Compare where
 
+import CSlash.Cs.Pass
+
 import CSlash.Core.Type ( typeKind, coreView, tcSplitAppTyNoView_maybe, splitAppTyNoView_maybe )
 
 import CSlash.Core.Type.Rep
@@ -34,10 +36,10 @@ import qualified Data.Semigroup as S
 *                                                                      *
 ********************************************************************* -}
 
-tcEqType :: HasDebugCallStack => Type p -> Type p -> Bool
+tcEqType :: (HasDebugCallStack, HasPass p pass) => Type p -> Type p -> Bool
 tcEqType = eqType
  
-initRnEnv :: Type p -> Type p -> RnEnv2 (TyVar p)
+initRnEnv :: HasPass p pass => Type p -> Type p -> RnEnv2 (TyVar p)
 initRnEnv ta tb = mkRnEnv2 $ mkInScopeSet all_vs
   where
     (tvs1, cvs1, _) = varsOfType ta
@@ -45,12 +47,12 @@ initRnEnv ta tb = mkRnEnv2 $ mkInScopeSet all_vs
     all_vs = panic "tvs1 `unionVarSet` mapVarSet toGenericTyVar cvs1 `unionVarSet`"
              --tvs2 `unionVarSet` mapVarSet toGenericTyVar cvs2
 
-eqType :: HasCallStack => Type p -> Type p -> Bool
+eqType :: (HasCallStack, HasPass p pass) => Type p -> Type p -> Bool
 eqType ta tb = fullEq eq_type_expand ta tb
 
 data SynFlag = ExpandSynonyms | KeepSynonyms
 
-eq_type_expand :: Type p -> Type p -> Bool
+eq_type_expand :: HasPass p pass => Type p -> Type p -> Bool
 eq_type_expand = inline_generic_eq_type_x ExpandSynonyms Nothing
 
 {-# RULES
@@ -58,11 +60,13 @@ eq_type_expand = inline_generic_eq_type_x ExpandSynonyms Nothing
           = eq_type_expand
 #-}
 
-generic_eq_type_x :: SynFlag -> Maybe (RnEnv2 (TyVar p)) -> Type p -> Type p -> Bool
+generic_eq_type_x
+  :: HasPass p pass => SynFlag -> Maybe (RnEnv2 (TyVar p)) -> Type p -> Type p -> Bool
 {-# NOINLINE generic_eq_type_x #-}
 generic_eq_type_x = inline_generic_eq_type_x
 
-inline_generic_eq_type_x :: SynFlag -> Maybe (RnEnv2 (TyVar p)) -> Type p -> Type p -> Bool
+inline_generic_eq_type_x
+  :: HasPass p pass => SynFlag -> Maybe (RnEnv2 (TyVar p)) -> Type p -> Type p -> Bool
 {-# INLINE inline_generic_eq_type_x #-}
 inline_generic_eq_type_x syn_flag mb_env
   = \t1 t2 -> t1 `seq` t2 `seq`
@@ -120,7 +124,8 @@ inline_generic_eq_type_x syn_flag mb_env
          _ -> False
 
 fullEq
-  :: (Type p -> Type p -> Bool)
+  :: HasPass p pass
+  => (Type p -> Type p -> Bool)
   -> Type p -> Type p -> Bool
 {-# INLINE fullEq #-}
 fullEq eq ty1 ty2 = case eq ty1 ty2 of

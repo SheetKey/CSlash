@@ -12,7 +12,7 @@ import Prelude hiding ((<>))
 import CSlash.Cs.Pass
 
 import {-# SOURCE #-} CSlash.Core.Type.Rep (Type)
-import {-# SOURCE #-} CSlash.Core.Kind (MonoKind, KindCoercion)
+import {-# SOURCE #-} CSlash.Core.Kind (MonoKind)
 import {-# SOURCE #-} CSlash.Tc.Utils.TcType (TcVarDetails, pprTcVarDetails, vanillaSkolemVarUnk)
 
 import CSlash.Types.Var.Class
@@ -24,6 +24,7 @@ import CSlash.Utils.Misc
 import CSlash.Utils.Outputable
 
 import Data.Data
+import Data.Void
 
 data CoVar thing p where
   CoVar
@@ -40,7 +41,7 @@ data TcCoVar thing = TcCoVar'
   { tc_cv_name :: !Name
   , tc_cv_real_unique :: {-# UNPACK #-} !Unique
   , tc_cv_thing :: thing Tc
-  , tc_cv_details :: TcVarDetails (KindCoercion Tc)
+  , tc_cv_details :: TcVarDetails Void -- No MetaCoVars, use HoleCoercion instead
   } 
 
 type KiCoVar = CoVar MonoKind
@@ -115,13 +116,13 @@ instance (Typeable thing, Typeable p) => Data (CoVar thing p) where
   dataTypeOf _ = mkNoRepType "CoVar"
 
 instance TcVar (KiCoVar Tc) where
-  type TcDetailsThing (KiCoVar Tc) = KindCoercion Tc
+  type TcDetailsThing (KiCoVar Tc) = Void
 
   tcVarDetails (TcCoVar tv) = tcVarDetails tv
   tcVarDetails _ = vanillaSkolemVarUnk
 
 instance TcVar TcKiCoVar where
-  type TcDetailsThing TcKiCoVar = KindCoercion Tc
+  type TcDetailsThing TcKiCoVar = Void
 
   tcVarDetails = tc_cv_details
 
@@ -187,7 +188,7 @@ mkCoVar name thing = CoVar { cv_name = name
                            , cv_real_unique = nameUnique name
                            , cv_thing = thing }
 
-mkTcKiCoVar :: Name -> MonoKind Tc -> TcVarDetails (KindCoercion Tc) -> TcKiCoVar
+mkTcKiCoVar :: Name -> MonoKind Tc -> TcVarDetails Void -> TcKiCoVar
 mkTcKiCoVar name kind details = TcCoVar' { tc_cv_name = name
                                          , tc_cv_real_unique = nameUnique name
                                          , tc_cv_thing = kind

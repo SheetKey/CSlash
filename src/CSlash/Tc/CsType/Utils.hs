@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE DeriveFunctor #-}
 
 module CSlash.Tc.CsType.Utils where
@@ -114,7 +115,7 @@ checkSynCycles this_uid tcs tyds
       go_ty :: TyConSet -> [TyCon Zk] -> Type Zk -> SynCycleM ()
       go_ty so_far seen_tcs ty = mapM_ (go so_far seen_tcs) (synonymTyConsOfType ty)
 
-synonymTyConsOfType :: Type p -> [TyCon p]
+synonymTyConsOfType :: HasPass p pass => Type p -> [TyCon p]
 synonymTyConsOfType ty = nonDetNameEnvElts (go ty)
   where
     --go :: Type -> NameEnv TyCon

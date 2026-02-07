@@ -16,4 +16,4 @@ type PredType = Type
 
 mkNakedTyConTy :: TyCon p -> Type p
 
-instance Outputable (Type p)
+instance IsPass p => Outputable (Type (CsPass p))
