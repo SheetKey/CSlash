@@ -247,6 +247,12 @@ extendKCvSubstWithClone (Subst { kcv_in_scope = kcis, kcv_env = kcvs, .. }) kcv 
           , kcv_env = extendVarEnv kcvs kcv (mkKiCoVarCo kcv')
           , .. }
 
+extendKCvSubstWithHole :: Subst p Tc -> KiCoVar p -> KindCoercionHole -> Subst p Tc
+extendKCvSubstWithHole (Subst { kcv_in_scope = kcis, kcv_env = kcvs, .. }) kcv hole
+  = Subst { kcv_in_scope = kcis `extendInScopeSet` TcCoVar (coHoleCoVar hole)
+          , kcv_env = extendVarEnv kcvs kcv (HoleCo hole)
+          , .. }
+
 extendKvSubstWithClone :: Subst p p' -> KiVar p -> KiVar p' -> Subst p p'
 extendKvSubstWithClone (Subst { kv_in_scope = kis, kv_env = kvs, .. }) kv kv'
   = Subst { kv_in_scope = kis `extendInScopeSet` kv'

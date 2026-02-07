@@ -175,7 +175,7 @@ newKiCoercionHoleX subst kcv = do
            , text "kcv'" <+> ppr kcv' <+> colon <+> ppr (varKind kcv') ]
   ref <- newMutVar Nothing
   let hole = KindCoercionHole { kch_co_var = kcv', kch_ref = ref }
-      subst' = extendKCvSubst subst kcv (HoleCo hole)
+      subst' = extendKCvSubstWithHole subst kcv hole
   return (subst', hole)
 
 cloneKiCoVarName :: Name -> TcM Name
