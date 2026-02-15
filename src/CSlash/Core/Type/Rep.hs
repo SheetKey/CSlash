@@ -284,8 +284,9 @@ mkFunTys args fun_kis res_ty =
   assert (args `equalLength` fun_kis)
   $ foldr (uncurry mkFunTy) res_ty (zip fun_kis args)
 
-mkForAllTy :: TyVar p -> ForAllFlag -> Type p -> Type p
-mkForAllTy tv vis ty = ForAllTy (Bndr tv vis) ty
+mkForAllTy :: ForAllBinder (TyVar p) -> Type p -> Type p
+mkForAllTy = ForAllTy
+
 
 mkForAllKiCo :: KiCoVar p -> Type p -> Type p
 mkForAllKiCo = ForAllKiCo

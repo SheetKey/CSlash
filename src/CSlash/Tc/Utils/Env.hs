@@ -54,7 +54,7 @@ import CSlash.Utils.Misc ( HasDebugCallStack )
 import CSlash.Data.FastString
 import CSlash.Data.Bag
 import CSlash.Data.List.SetOps
-import CSlash.Data.Maybe( MaybeErr(..), orElse )
+import CSlash.Data.Maybe( MaybeErr(..), orElse, isNothing )
 
 import CSlash.Types.SrcLoc
 import CSlash.Types.Basic hiding( SuccessFlag(..) )
@@ -81,6 +81,41 @@ import CSlash.Types.Error
             An IO interface to looking up globals
 *                                                                      *
 ********************************************************************* -}
+
+lookupGlobal :: CsEnv -> Name -> IO (TyThing Zk)
+lookupGlobal cs_env name = do
+  mb_thing <- lookupGlobal_maybe cs_env name
+  case mb_thing of
+    Succeeded thing -> return thing
+    Failed err -> let msg = case err of
+                              Left name -> text "Could not find local name:" <+> ppr name
+                              Right err -> pprDiagnostic err
+                  in pprPanic "lookupGlobal" msg
+
+lookupGlobal_maybe :: CsEnv -> Name -> IO (MaybeErr (Either Name IfaceMessage) (TyThing Zk))
+lookupGlobal_maybe cs_env name =
+  if isNothing (nameModule_maybe name)
+  then return $ Failed $ Left name
+  else do res <- lookupImported_maybe cs_env name
+          return $ case res of
+                     Succeeded ok -> Succeeded ok
+                     Failed err -> Failed (Right err)
+
+lookupImported_maybe :: CsEnv -> Name -> IO (MaybeErr IfaceMessage (TyThing Zk))
+lookupImported_maybe cs_env name = do
+  mb_thing <- lookupType cs_env name
+  case mb_thing of
+    Just thing -> return $ Succeeded thing
+    Nothing -> importDecl_maybe cs_env name
+
+importDecl_maybe :: CsEnv -> Name -> IO (MaybeErr IfaceMessage (TyThing Zk))
+importDecl_maybe cs_env name
+  | Just thing <- wiredInNameTyThing_maybe name
+  = do when (needWiredInHomeIface thing)
+            (initIfaceLoad cs_env (loadWiredInHomeIface name))
+       return $ Succeeded thing
+  | otherwise
+  = initIfaceLoad cs_env (importDecl name)
 
 addTypecheckedBinds :: TcGblEnv p -> [LCsBinds p] -> TcGblEnv p
 addTypecheckedBinds tcg_env binds

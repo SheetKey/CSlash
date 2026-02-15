@@ -5,7 +5,7 @@ import CSlash.Cs.Pass
 import CSlash.Core.Type
 import CSlash.Core.Kind
 import CSlash.Core.TyCon
-import CSlash.Types.Var
+import CSlash.Types.Var.TyVar
 
 import CSlash.Builtin.Names
 

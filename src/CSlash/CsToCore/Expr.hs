@@ -60,20 +60,91 @@ import CSlash.Types.Error
 
 
 dsLExpr :: LCsExpr Zk -> DsM CoreExpr
-dsLExpr (L loc e) = panic "putSrcSpanDsA loc $ dsExpr e"
+dsLExpr (L loc e) = putSrcSpanDsA loc $ dsExpr e
 
 dsExpr :: CsExpr Zk -> DsM CoreExpr
 
-dsExpr (CsVar _ (L _ id)) = dsCsVar id
+dsExpr e@(CsVar {}) = dsApp e
+dsExpr e@(CsApp {}) = dsApp e
+
+dsExpr (CsPar _ e) = dsLExpr e
+dsExpr (ExprWithTySig _ e _) = dsLExpr e
+
+dsExpr (CsLit _ lit) = do panic "lit"
+
+dsExpr (CsOverLit _ lit) = do panic "overlit"
+  -- warnAboutOverflowedOverLit lit
+  -- dsOverLit lit
+
+dsExpr e@(XExpr ext_expr_tc)
+  = case ext_expr_tc of
+      WrapExpr {} -> dsApp e
+      ConLike {} -> dsApp e
+      ExpandedThing (OrigExpr{}) e -> dsExpr e
+
+-- Simpler than GHC because we always have LexicalNegation On      
+dsExpr (NegApp _ expr neg_expr) = panic "negapp"
+
+dsExpr (CsLam (_, fun_kis) mg) = do
+  (ids, body) <- matchWrapper LamAlt Nothing mg
+  massertPpr (ids `equalLength` fun_kis)
+    $ vcat [ text "dsExpr CsLam fun_kis and id binder length mismatch"
+           , text "fun_kis" <+> ppr fun_kis
+           , text "ids" <+> ppr ids
+           , text "body" <+> ppr body ]
+  return $ mkCoreLams (ids `zip` Just <$> fun_kis) body
+
+dsExpr (CsTyLam {}) = panic "CsTyLam"
 
 dsExpr other = pprPanic "dsExpr" (ppr other)
 
-
 {- *********************************************************************
 *                                                                      *
-   Desugaring Variables
+*              Desugaring applications
 *                                                                      *
 ********************************************************************* -}
 
-dsCsVar :: Id Zk -> DsM CoreExpr
-dsCsVar var = return (varToCoreExpr var)
+dsApp :: CsExpr Zk -> DsM CoreExpr
+dsApp e = ds_app e [] []
+
+ds_lapp :: LCsExpr Zk -> [LCsExpr Zk] -> [CoreExpr] -> DsM CoreExpr
+ds_lapp (L loc e) cs_args core_args
+  = putSrcSpanDsA loc $
+    ds_app e cs_args core_args
+
+ds_app :: CsExpr Zk -> [LCsExpr Zk] -> [CoreExpr] -> DsM CoreExpr
+
+ds_app (CsPar _ e) cs_args core_args = ds_lapp e cs_args core_args
+
+ds_app (CsApp _ fun arg) cs_args core_args = do
+  core_arg <- dsLExpr arg
+  ds_lapp fun (arg : cs_args) (core_arg : core_args)
+
+ds_app (XExpr (WrapExpr cs_wrap fun)) cs_args core_args = do
+  (fun_wrap, all_args) <- splitCsWrapperArgs cs_wrap core_args
+  if isIdCsWrapper fun_wrap
+    then ds_app fun cs_args all_args
+    else do core_fun <- dsCsWrapper fun_wrap $ \core_wrap -> do
+              core_fun <- dsExpr fun
+              return $ core_wrap core_fun
+            return $ mkCoreApps core_fun all_args
+
+ds_app (XExpr (ConLike con)) _ core_args = do
+  ds_con <- dsCsConLike con
+  return $ mkApps ds_con core_args
+
+ds_app (CsVar _ lfun) cs_args core_args = ds_app_var lfun cs_args core_args
+
+ds_app e _ core_args = do
+  core_e <- dsExpr e
+  return $ mkCoreApps core_e core_args
+
+ds_app_var :: LocatedN (Id Zk) -> [LCsExpr Zk] -> [CoreExpr] -> DsM CoreExpr
+ds_app_var (L loc fun_id) cs_args core_args = ds_app_finish fun_id core_args
+
+ds_app_finish :: Id Zk -> [CoreExpr] -> DsM CoreExpr
+ds_app_finish fun_id core_args = return $ mkCoreApps (Var fun_id) core_args
+
+dsCsConLike :: ConLike Zk -> DsM CoreExpr
+dsCsConLike (RealDataCon dc) = return $ varToCoreExpr dataConId
+dsCsConLike PatSynCon = panic "dsCoConLike PatSynCon"

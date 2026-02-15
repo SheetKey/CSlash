@@ -149,7 +149,8 @@ deriving instance Data (CsOverLit Tc)
 deriving instance Data (CsOverLit Zk)
 
 deriving instance Data OverLitRn
-deriving instance Data OverLitTc
+deriving instance Data (OverLitP Tc) 
+deriving instance Data (OverLitP Zk)
 
 deriving instance Data (Pat Ps)
 deriving instance Data (Pat Rn)

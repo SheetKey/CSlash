@@ -553,9 +553,10 @@ zonkExpr (CsOverLit x lit) = do
   lit' <- zonkOverLit lit
   return (CsOverLit x lit')
 
-zonkExpr (CsLam x matches) = do
+zonkExpr (CsLam (x, fun_kis) matches) = do
   new_matches <- zonkMatchGroup zonkLExpr matches
-  return (CsLam x new_matches)
+  new_fun_kis <- zonkTcMonoKindsToMonoKindsX fun_kis
+  return (CsLam (x, new_fun_kis) new_matches)
 
 zonkExpr (CsTyLam x matches) = do
   new_matches <- zonkMatchGroup zonkLExpr matches

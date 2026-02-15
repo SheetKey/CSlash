@@ -29,15 +29,15 @@ data OverLitRn = OverLitRn
   { ol_from_fun :: LIdP Rn
   }
 
-data OverLitTc = OverLitTc
-  { ol_witness :: CsExpr Tc
-  , ol_type :: Type Tc
+data OverLitP p = OverLitP
+  { ol_witness :: CsExpr p
+  , ol_type :: Type p
   }
 
 type instance XOverLit Ps = NoExtField
 type instance XOverLit Rn = OverLitRn
-type instance XOverLit Tc = OverLitTc
-type instance XOverLit Zk = OverLitTc
+type instance XOverLit Tc = OverLitP Tc
+type instance XOverLit Zk = OverLitP Zk
 
 csOverLitNeedsParens :: PprPrec -> CsOverLit x -> Bool
 csOverLitNeedsParens p (OverLit { ol_val = olv }) = go olv

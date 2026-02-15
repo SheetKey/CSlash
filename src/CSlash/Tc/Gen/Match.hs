@@ -57,16 +57,16 @@ tcLambdaMatches
   -> MatchGroup Rn (LCsExpr Rn)
   -> [ExpPatType]
   -> ExpSigmaType
-  -> TcM (CsWrapper Tc, MatchGroup Tc (LCsExpr Tc))
+  -> TcM (CsWrapper Tc, [MonoKind Tc], MatchGroup Tc (LCsExpr Tc))
 tcLambdaMatches e matches invis_pat_tys res_ty = do
   arity <- checkArgCounts matches
 
   let herald = ExpectedFunTyLam e
-  (wrapper, r)
+  (wrapper, fun_kis, r)
     <- matchExpectedFunTys herald GenSigCtxt arity res_ty $ \pat_tys rhs_ty ->
        tcMatches tcBody (invis_pat_tys ++ pat_tys) rhs_ty matches
 
-  return (wrapper, r)
+  return (wrapper, fun_kis, r)
 
 {- *********************************************************************
 *                                                                      *

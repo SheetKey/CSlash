@@ -69,12 +69,14 @@ library
                     , CSlash.Core.Kind
                     , CSlash.Core.Kind.Compare
                     , CSlash.Core.Kind.FVs
+                    , CSlash.Core.Make
                     , CSlash.Core.Map.Kind
                     , CSlash.Core.Opt.CallerCC
                     , CSlash.Core.Opt.CallerCC.Types
                     , CSlash.Core.Ppr
                     , CSlash.Core.Predicate
                     , CSlash.Core.Reduction
+                    , CSlash.Core.SimpleOpt
                     , CSlash.Core.Subst
                     , CSlash.Core.TyCon
                     , CSlash.Core.TyCon.Set
@@ -85,8 +87,10 @@ library
                     , CSlash.Core.Type.Rep
                     , CSlash.Core.Type.Tidy
                     , CSlash.Core.Unfold
+                    , CSlash.Core.Unfold.Make
                     , CSlash.Core.Unify
                     , CSlash.Core.UsageEnv
+                    , CSlash.Core.Utils
 
                     , CSlash.Cs
                     , CSlash.Cs.Binds
@@ -112,6 +116,7 @@ library
                     , CSlash.CsToCore.Expr
                     , CSlash.CsToCore.Monad
                     , CSlash.CsToCore.Types
+                    , CSlash.CsToCore.Utils
 
                     , CSlash.Data.Bag
                     , CSlash.Data.Bool
@@ -135,6 +140,7 @@ library
                     , CSlash.Driver.Backend
                     , CSlash.Driver.Backend.Internal
                     , CSlash.Driver.CmdLine
+                    , CSlash.Driver.Config
                     , CSlash.Driver.Config.Diagnostic
                     , CSlash.Driver.Config.Finder
                     , CSlash.Driver.Config.Logger

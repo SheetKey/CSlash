@@ -21,6 +21,7 @@ import CSlash.Language.Syntax.Expr
 import CSlash.Language.Syntax.Extension
 
 import CSlash.Core.Type.Rep (Type)
+import CSlash.Core.Kind (MonoKind)
 import CSlash.Core.ConLike
 import CSlash.Tc.Types.Evidence
 
@@ -89,8 +90,25 @@ type instance XUnboundVar Zk = DataConCantHappen
 
 type instance XOverLitE (CsPass _) = NoExtField
 type instance XLitE (CsPass _) = NoExtField
-type instance XLam (CsPass _) = [AddEpAnn]
 type instance XApp (CsPass _) = NoExtField
+
+type instance XLam Ps = [AddEpAnn]
+type instance XLam Rn = [AddEpAnn]
+type instance XLam Tc = ([AddEpAnn], [MonoKind Tc]) -- See Note [MonoKinds in XLam]
+type instance XLam Zk = ([AddEpAnn], [MonoKind Zk])
+
+{- Note [MonoKinds in XLam]
+We record the function kinds for a lam in XLam. Consider
+\x y -> e
+This has type
+a -k1> b -k2> c
+where x:a, y:b, e:c.
+In core, we desugar the term to
+\x -k1> \y -k2> -> e
+That is, the function type kind must be written in the term to recover the kind information.
+So we save the fun kinds found in matchExpectedFunTys and return them from tcLambdaMatches.
+The consumer saves them in the XLam.
+-}
 
 type instance XTyLam (CsPass _) = [AddEpAnn]
 type instance XTyApp (CsPass _) = NoExtField

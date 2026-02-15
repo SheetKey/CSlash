@@ -3,8 +3,10 @@
 
 module CSlash.Types.Literal where
 
+import CSlash.Core.Type (Type)
 import CSlash.Utils.Outputable
 import CSlash.Settings.Constants
+import CSlash.Utils.Panic
 
 import Data.Int
 import Data.Char
@@ -37,6 +39,9 @@ instance Ord Literal where
 
 inCharRange :: Char -> Bool
 inCharRange c = c >= '\0' && c <= chr tARGET_MAX_CHAR
+
+literalType :: Literal -> Type p
+literalType _ = panic "literalType"
 
 cmpLit :: Literal -> Literal -> Ordering
 cmpLit (LitChar a) (LitChar b) = a `compare` b

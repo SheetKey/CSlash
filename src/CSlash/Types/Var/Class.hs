@@ -62,6 +62,9 @@ data ForAllFlag
   | Required              -- type application is required at call sight
   deriving (Eq, Ord, Data)
 
+coreTyLamForAllTyFlag :: ForAllFlag
+coreTyLamForAllTyFlag = Specified
+
 data Specificity = InferredSpec | SpecifiedSpec
   deriving (Eq, Ord, Data)
 

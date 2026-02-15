@@ -11,6 +11,9 @@ import {-# SOURCE #-} CSlash.Core.Type.Rep (Type, PredType)
 import {-# SOURCE #-} CSlash.Core.Kind (Kind, MonoKind)
 import {-# SOURCE #-} CSlash.Tc.Utils.TcType (TcVarDetails, pprTcVarDetails)
 import {-# SOURCE #-} CSlash.Types.Var.Id.Info (IdDetails, IdInfo, pprIdDetails)
+import {-# SOURCE #-} CSlash.Core.DataCon
+import {-# SOURCE #-} CSlash.Core.Subst (fromZkType)
+import {-# SOURCE #-} CSlash.Core.Predicate (isTyCoVarType)
 
 import CSlash.Cs.Pass
 
@@ -19,13 +22,13 @@ import CSlash.Types.Var.Id.Info
 
 import CSlash.Types.Name hiding (varName)
 import CSlash.Types.Unique
+import CSlash.Types.Unique.Supply
 import CSlash.Types.Basic
-
-import {-# SOURCE #-} CSlash.Core.DataCon
-import {-# SOURCE #-} CSlash.Core.Subst (fromZkType)
+import CSlash.Data.FastString
 
 import CSlash.Utils.Outputable
 import CSlash.Utils.Misc
+import CSlash.Utils.Panic
 
 import Data.Data
 
@@ -118,6 +121,13 @@ mkLocalId name ty = mkLocalIdWithInfo name ty vanillaIdInfo
 mkLocalIdWithInfo :: Name -> Type p -> IdInfo -> Id p
 mkLocalIdWithInfo name ty info = mk_id name ty (LocalId NotExported) VanillaId info
 
+mkSysLocal :: HasPass p p' => FastString -> Unique -> Type p -> Id p
+mkSysLocal fs uniq ty = assert (not (isTyCoVarType ty)) $
+                        mkLocalId (mkSystemVarName uniq fs) ty
+
+mkSysLocalM :: (MonadUnique m, HasPass p p') => FastString -> Type p -> m (Id p)
+mkSysLocalM fs ty = getUniqueM >>= \uniq -> return $ mkSysLocal fs uniq ty
+
 idInfo :: Id p -> IdInfo
 idInfo = id_info
 
@@ -144,6 +154,15 @@ changeIdTypeM f (Id { id_type = ty, .. }) = do
 fromZkId :: HasPass p pass => Id Zk -> Id p
 fromZkId = changeIdType fromZkType
 
+lazySetIdInfo :: Id p -> IdInfo -> Id p
+lazySetIdInfo id info = id { id_info = info }
+
+setIdInfo :: Id p -> IdInfo -> Id p
+setIdInfo id info = info `seq` (lazySetIdInfo id info)
+
+modifyIdInfo :: (IdInfo -> IdInfo) -> Id p -> Id p
+modifyIdInfo fn id = setIdInfo id (fn (idInfo id))
+
 {- *********************************************************************
 *                                                                      *
             Special Ids
@@ -167,3 +186,22 @@ isExportedId _ = False
 isLocalId :: Id p -> Bool
 isLocalId (Id { id_scope = LocalId _ }) = True
 isLocalId _ = False
+
+
+{- *********************************************************************
+*                                                                      *
+            IdInfo stuff
+*                                                                      *
+********************************************************************* -}
+
+---------------------------------
+-- UNFOLDING
+
+setIdUnfolding :: Id p -> Unfolding -> Id p
+setIdUnfolding id unfolding = modifyIdInfo (`setUnfoldingInfo` unfolding) id
+
+---------------------------------
+-- INLINING
+
+idInlinePragma :: Id p -> InlinePragma
+idInlinePragma id = defaultInlinePragma -- TODO: inlinePragInfo (idInfo id)

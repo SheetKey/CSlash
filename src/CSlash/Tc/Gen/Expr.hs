@@ -88,8 +88,8 @@ tcPolyExprCheck  expr res_ty = outer_skolemize res_ty $ \pat_tys rho_ty ->
                                return (CsPar x (L loc e'))
 
       tc_body e@(CsLam x matches) = do
-        (wrap, matches') <- tcLambdaMatches e matches pat_tys (mkCheckExpType rho_ty)
-        return (mkCsWrap wrap $ CsLam x matches')
+        (wrap, fun_kis, matches') <- tcLambdaMatches e matches pat_tys (mkCheckExpType rho_ty)
+        return (mkCsWrap wrap $ CsLam (x, fun_kis) matches')
 
       tc_body e = tcExpr e (mkCheckExpType rho_ty)
   in tc_body expr
@@ -142,8 +142,8 @@ tcExpr (CsPar x expr) res_ty = panic "tcExpr CsPar"
 tcExpr (NegApp x expr neg_expr) res_ty = panic "tcExpr NegApp"
 
 tcExpr e@(CsLam x matches) res_ty = do
-  (wrap, matches') <- tcLambdaMatches e matches [] res_ty
-  return $ mkCsWrap wrap $ CsLam x matches'
+  (wrap, fun_kis, matches') <- tcLambdaMatches e matches [] res_ty
+  return $ mkCsWrap wrap $ CsLam (x, fun_kis) matches'
 
 tcExpr e@(CsTyLam x matches) res_ty = do
  -- Either: 1. generate some patterns here to pass instead of the empty list

@@ -73,9 +73,9 @@ data CsWrapper p
   | WpKiCoLam (KiCoVar p)
   | WpKiLam (KiVar p)
   | WpTyApp (Type p)
-  | WpKiApp (MonoKind p)
   | WpKiCoApp (KindCoercion p)
-  | WpMultCoercion (KindCoercion p)
+  | WpKiApp (MonoKind p)
+  | WpMultCoercion (KindCoercion p) -- Really a kind cast for a term
   deriving Data.Data
 {- TODO: 'Wp..Lam' could have TcTyVar, TcKiCoVar, TcKiVar when p~Tc
 since these wrappers are created with freshly instantiated skolem vars (proper TcVars)

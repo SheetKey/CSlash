@@ -410,7 +410,7 @@ matchExpectedFunTys
   -> VisArity
   -> ExpSigmaType
   -> ([ExpPatType] -> ExpRhoType -> TcM a)
-  -> TcM (CsWrapper Tc, a)
+  -> TcM (CsWrapper Tc, [MonoKind Tc], a)
 matchExpectedFunTys herald _ arity (Infer inf_res) thing_inside = do
   (arg_tys, fun_kis) <- unzip <$> mapM new_infer_arg_ty_ki [1..arity]
   res_ty <- newInferExpType
@@ -418,12 +418,12 @@ matchExpectedFunTys herald _ arity (Infer inf_res) thing_inside = do
   arg_tys <- mapM readExpType arg_tys
   res_ty <- readExpType res_ty
   co <- fillInferResult (mkFunTys arg_tys fun_kis res_ty) inf_res
-  return (mkWpCast co, result)
+  return (mkWpCast co, fun_kis, result)
 
 matchExpectedFunTys herald ctx arity (Check top_ty) thing_inside
   = check arity [] top_ty
   where
-    check :: VisArity -> [ExpPatType] -> SigmaType Tc -> TcM (CsWrapper Tc, a)
+    check :: VisArity -> [ExpPatType] -> SigmaType Tc -> TcM (CsWrapper Tc, [MonoKind Tc], a)
     -- Skolemize vis/invis quantifiers
     check n_req rev_pat_tys ty
       | isSigmaTy ty
@@ -436,29 +436,30 @@ matchExpectedFunTys herald ctx arity (Check top_ty) thing_inside
                                         (kcv_nms `zip` kcvs)
                                         (tv_nms `zip` tvs)
                ; skol_info <- mkSkolemInfo sig_skol }
-           (wrap_res, result) <- checkConstraints (getSkolemInfo skol_info) kvs kcvs tvs
-                                 $ check n_req'
-                                         (reverse (map ExpForAllPatKi kvs
-                                                   ++ map ExpForAllPatKiCo kcvs
-                                                   ++ map ExpForAllPatTy tvbs)
-                                          ++ rev_pat_tys)
-                                         inner_ty
+           (wrap_res, fun_kis, result)
+             <- checkConstraints (getSkolemInfo skol_info) kvs kcvs tvs
+                $ check n_req'
+                  (reverse (map ExpForAllPatKi kvs
+                            ++ map ExpForAllPatKiCo kcvs
+                            ++ map ExpForAllPatTy tvbs)
+                   ++ rev_pat_tys)
+                  inner_ty
            assertPpr (not (null kvs && null kcvs && null tvbs)) (ppr ty)
-             $ return (wrap_gen <.> wrap_res, result)
+             $ return (wrap_gen <.> wrap_res, fun_kis, result)
     -- Base case
     check n_req rev_pat_tys rho_ty
       | n_req == 0
       = do let pat_tys = reverse rev_pat_tys
            res <- thing_inside pat_tys (mkCheckExpType rho_ty)
-           return (idCsWrapper, res)
+           return (idCsWrapper, [], res)
     -- Function types
     check n_req rev_pat_tys (FunTy { ft_kind = ki, ft_arg = arg_ty, ft_res = res_ty }) = do
       let arg_pos = arity - n_req + 1
-      (wrap_res, result) <- check (n_req - 1)
-                                  (mkCheckExpFunPatTy arg_ty : rev_pat_tys)
-                                  res_ty
+      (wrap_res, fun_kis, result) <- check (n_req - 1)
+                                     (mkCheckExpFunPatTy arg_ty : rev_pat_tys)
+                                     res_ty
       let fun_wrap = mkWpFun wrap_res ki arg_ty
-      return (fun_wrap, result)
+      return (fun_wrap, ki : fun_kis, result)
     -- Type variables
     check n_req rev_pat_tys ty@(TyVarTy tv)
       | Just mtv <- toTcTyVar_maybe tv
@@ -474,7 +475,7 @@ matchExpectedFunTys herald ctx arity (Check top_ty) thing_inside
       = addErrCtxtM (mkFunTysMsg herald (arity, top_ty))
         $ defer n_req rev_pat_tys res_ty
 
-    defer :: VisArity -> [ExpPatType] -> RhoType Tc -> TcM (CsWrapper Tc, a)
+    defer :: VisArity -> [ExpPatType] -> RhoType Tc -> TcM (CsWrapper Tc, [MonoKind Tc], a)
     defer n_req rev_pat_tys fun_ty = do
       (more_arg_tys, more_fun_kis)
         <- unzip <$> mapM new_check_arg_ty_ki [arity - n_req + 1 .. arity]
@@ -483,7 +484,7 @@ matchExpectedFunTys herald ctx arity (Check top_ty) thing_inside
       result <- thing_inside all_pats (mkCheckExpType res_ty)
 
       co <- unifyType Nothing (mkFunTys more_arg_tys more_fun_kis res_ty) fun_ty
-      return (mkWpCast co, result)
+      return (mkWpCast co, more_fun_kis, result)
 
 new_infer_arg_ty_ki :: Int -> TcM (ExpSigmaType, MonoKind Tc)
 new_infer_arg_ty_ki _ = do

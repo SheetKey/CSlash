@@ -1,5 +1,6 @@
 module CSlash.Tc.Gen.Match where
 
+import CSlash.Core.Kind (MonoKind)
 import CSlash.Cs (MatchGroup, CsExpr, LCsExpr)
 import CSlash.Tc.Utils.TcType (ExpSigmaType, ExpPatType)
 import CSlash.Tc.Types (TcM)
@@ -11,4 +12,4 @@ tcLambdaMatches
   -> MatchGroup Rn (LCsExpr Rn)
   -> [ExpPatType]
   -> ExpSigmaType
-  -> TcM (CsWrapper Tc, MatchGroup Tc (LCsExpr Tc))
+  -> TcM (CsWrapper Tc, [MonoKind Tc], MatchGroup Tc (LCsExpr Tc))

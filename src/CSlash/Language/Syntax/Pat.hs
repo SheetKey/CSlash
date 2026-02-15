@@ -45,6 +45,7 @@ data CsConPatTyArg p = CsConPatTyArg !(XConPatTyArg p) (CsTyPat p)
 
 type family XConPatTyArg p
 
+-- TODO: this might be wrong
 isInvisArgPat :: Pat p -> Bool
 isInvisArgPat ImpPat {} = True
 isInvisArgPat TyVarPat {} = True

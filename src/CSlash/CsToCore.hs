@@ -103,18 +103,17 @@ deSugar cs_env
                           , tcg_pc = other_pc_info
                           , tcg_complete_matches = complete_matches
                           })
-  -- = let dflags = cs_dflags cs_env
-  --       logger = cs_logger cs_env
-  --       name_ppr_ctx = mkNamePprCtx (cs_unit_env cs_env) rdr_env
-  --   in withTiming logger (text "Desugar" <+> brackets (ppr mod)) (const ()) $
-  --      do let export_set = availsToNameSet exports
-  --             bcknd = backend dflags
+  = let dflags = cs_dflags cs_env
+        logger = cs_logger cs_env
+        name_ppr_ctx = mkNamePprCtx (cs_unit_env cs_env) rdr_env
+    in withTiming logger (text "Desugar" <+> brackets (ppr mod)) (const ()) $
+       do let export_set = availsToNameSet exports
+              bcknd = backend dflags
 
-  --             ds_pc_info = emptyPcInfo other_pc_info
+              ds_pc_info = emptyPcInfo other_pc_info
 
-  --         (msgs, mb_res) <- initDs cs_env tcg_env $ do
-  --           core_prs <- dsTopLCsBinds binds
-  --           panic "post initDs"
+          (msgs, mb_res) <- initDs cs_env tcg_env $ do
+            core_prs <- dsTopLCsBinds binds
+            panic "post initDs"
 
-  --         panic "deSugar unfinished"
-  = panic "deSugar"
+          panic "deSugar unfinished"

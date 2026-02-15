@@ -234,7 +234,12 @@ tcFunBind ctxt fun_name (L loc body) invis_pat_tys exp_ty =
              --   return $ mkCsWrap wrap $ CsLam x matches'
 
            tc_body e@(CsTyLam x matches) = do
-             (wrap, matches') <- tcLambdaMatches e matches invis_pat_tys exp_ty
+             (wrap, fun_kis, matches') <- tcLambdaMatches e matches invis_pat_tys exp_ty
+             massertPpr (null fun_kis)
+               $ vcat [ text "tcFunBind CsTyLam, tcLambdaMatches has non-empty fun_kis"
+                      , text "expr" <+> ppr e
+                      , text "expr'" <+> ppr (CsTyLam x matches')
+                      , text "fun_kis" <+> ppr fun_kis ]
              return (wrap, CsTyLam x matches')
                 
            tc_body e = (idCsWrapper, ) <$> tcPolyExpr e exp_ty

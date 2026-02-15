@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -355,6 +356,12 @@ newUnique = do
   let tag = env_ut env
   liftIO $! uniqFromTag tag
 
+newUniqueSupply :: TcRnIf gbl lcl UniqSupply
+newUniqueSupply = do
+  env <- getEnv
+  let tag = env_ut env
+  liftIO $! mkSplitUniqSupply tag
+
 cloneLocalName :: Name -> TcM Name
 cloneLocalName name = newNameAt (nameOccName name) (nameSrcSpan name)
 
@@ -367,6 +374,10 @@ newSysName :: OccName -> TcRnIf gbl lcl Name
 newSysName occ = do
   uniq <- newUnique
   return $ mkSystemName uniq occ
+
+instance MonadUnique (IOEnv (Env gbl lcl)) where
+  getUniqueM = newUnique
+  getUniqueSupplyM = newUniqueSupply
 
 {- *********************************************************************
 *                                                                      *

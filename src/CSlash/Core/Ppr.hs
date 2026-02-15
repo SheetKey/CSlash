@@ -7,7 +7,7 @@ import Prelude hiding ((<>))
 
 import CSlash.Cs.Pass
 
-import CSlash.Core
+import CSlash.Core as Core
 import CSlash.Types.Fixity (LexicalFixity(..))
 import CSlash.Types.Name( pprInfixName, pprPrefixName )
 import CSlash.Types.Var
@@ -16,6 +16,7 @@ import CSlash.Types.Var.Id.Info
 import CSlash.Core.DataCon
 import CSlash.Core.TyCon
 import CSlash.Core.Type.Ppr
+import CSlash.Core.Kind
 import CSlash.Types.Basic
 import CSlash.Utils.Misc
 import CSlash.Utils.Outputable
@@ -28,8 +29,47 @@ pprCoreExpr = undefined
 instance OutputableBndr b => Outputable (Expr b) where
   ppr expr = pprCoreExpr expr
 
-instance IsPass p => OutputableBndr (Id (CsPass p)) where
+instance IsPass p => Outputable (CoreBndr (CsPass p)) where
+  ppr (Core.Id id) = ppr id
+  ppr (Tv v) = ppr v
+  ppr (KCv v) = ppr v
+  ppr (Kv v) = ppr v
+
+instance IsPass p => OutputableBndr (CoreBndr (CsPass p)) where
   pprBndr = pprCoreBinder
+
+  pprInfixOcc (Core.Id id) = pprInfixOcc id
+  pprInfixOcc (Tv v) = pprInfixOcc v
+  pprInfixOcc (KCv v) = pprInfixOcc v
+  pprInfixOcc (Kv v) = pprInfixOcc v
+
+  pprPrefixOcc (Core.Id id) = pprPrefixOcc id
+  pprPrefixOcc (Tv v) = pprPrefixOcc v
+  pprPrefixOcc (KCv v) = pprPrefixOcc v
+  pprPrefixOcc (Kv v) = pprPrefixOcc v
+
+  bndrIsJoin_maybe = undefined
+
+instance IsPass p => OutputableBndr (Id (CsPass p)) where
+  pprBndr b v = pprCoreBinder b (Core.Id v)
+  pprInfixOcc = pprInfixName . varName
+  pprPrefixOcc = pprPrefixName . varName
+  bndrIsJoin_maybe = undefined
+
+instance IsPass p => OutputableBndr (TyVar (CsPass p)) where
+  pprBndr b v = pprCoreBinder b (Tv v)
+  pprInfixOcc = pprInfixName . varName
+  pprPrefixOcc = pprPrefixName . varName
+  bndrIsJoin_maybe = undefined
+
+instance IsPass p => OutputableBndr (KiCoVar (CsPass p)) where
+  pprBndr b v = pprCoreBinder b (KCv v)
+  pprInfixOcc = pprInfixName . varName
+  pprPrefixOcc = pprPrefixName . varName
+  bndrIsJoin_maybe = undefined
+
+instance IsPass p => OutputableBndr (KiVar (CsPass p)) where
+  pprBndr b v = pprCoreBinder b (Kv v)
   pprInfixOcc = pprInfixName . varName
   pprPrefixOcc = pprPrefixName . varName
   bndrIsJoin_maybe = undefined
@@ -38,22 +78,26 @@ pprOcc :: OutputableBndr a => LexicalFixity -> a -> SDoc
 pprOcc Infix = pprInfixOcc
 pprOcc Prefix = pprPrefixOcc
 
-pprCoreBinder :: HasPass p pass => BindingSite -> Id p -> SDoc
-pprCoreBinder LetBind binder = pprTypedLetBinder binder $$ ppIdInfo binder (idInfo binder)
+pprCoreBinder :: HasPass p pass => BindingSite -> CoreBndr p -> SDoc
+pprCoreBinder LetBind (Core.Id binder)
+  = pprTypedLetBinder binder $$ ppIdInfo binder (idInfo binder)
 pprCoreBinder bind_site bndr = getPprDebug $ \debug -> pprTypedLamBinder bind_site debug bndr
 
-pprUntypedBinder :: HasPass p pass => Id p -> SDoc
-pprUntypedBinder binder = pprIdBndr binder
+pprUntypedBinder :: HasPass p pass => CoreBndr p -> SDoc
+pprUntypedBinder (Core.Id binder) = pprIdBndr binder
+pprUntypedBinder binder = pprPrefixOcc binder
 
-pprTypedLamBinder :: HasPass p pass => BindingSite -> Bool -> Id p -> SDoc
+pprTypedLamBinder :: HasPass p pass => BindingSite -> Bool -> CoreBndr p -> SDoc
 pprTypedLamBinder bind_site debug_on var
   = sdocOption sdocSuppressTypeSignatures $ \suppress_sigs -> 
     if | not debug_on
        , CaseBind <- bind_site
-       , isDeadBinder var -> empty
+       , Core.Id id <- var
+       , isDeadBinder id -> empty
 
        | not debug_on
-       , isDeadBinder var -> char '_' <+> pprIdBndrInfo (idInfo var)
+       , Core.Id id <- var
+       , isDeadBinder id -> char '_' <+> pprIdBndrInfo (idInfo id)
 
        | not debug_on
        , CaseBind <- bind_site -> pprUntypedBinder var
@@ -63,13 +107,21 @@ pprTypedLamBinder bind_site debug_on var
 
        | suppress_sigs -> pprUntypedBinder var
 
-       | otherwise -> parens (hang (pprIdBndr var)
-                              2 (vcat [ colon <+> pprType (varType var)
+       | otherwise -> parens (hang (pprUntypedBinder var)
+                              2 (vcat [ pp_type_or_kind
                                       , pp_unf ]))
+                          
   where
-    unf_info = realUnfoldingInfo (idInfo var)
-    pp_unf | hasSomeUnfolding unf_info = text "Unh=" <> ppr unf_info
+    unf_info_m | Core.Id id <- var = Just $ realUnfoldingInfo (idInfo id)
+               | otherwise = Nothing
+    pp_unf | Just unf_info <- unf_info_m
+           , hasSomeUnfolding unf_info = text "Unh=" <> ppr unf_info
            | otherwise = empty
+    pp_type_or_kind = case var of
+      Core.Id id -> colon <+> pprType (varType id)
+      Tv tv -> colon <+> pprMonoKind (varKind tv)
+      KCv kcv -> colon <+> pprMonoKind (varKind kcv)
+      Kv {} -> empty
 
 pprTypedLetBinder :: HasPass p pass => Id p -> SDoc
 pprTypedLetBinder binder

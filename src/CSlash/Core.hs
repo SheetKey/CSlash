@@ -5,6 +5,7 @@ module CSlash.Core where
 import CSlash.Cs.Pass
 import CSlash.Types.Var
 import CSlash.Core.Type
+import CSlash.Core.Kind
 import CSlash.Types.Name
 import CSlash.Types.Name.Set
 import CSlash.Types.Literal
@@ -33,11 +34,15 @@ data Expr b
   = Var (Id Zk)
   | Lit Literal
   | App (Expr b) (Arg b)
-  | Lam b (Expr b) -- can bind term, type, or kind vars
+  | Lam b (Maybe (MonoKind Zk)) (Expr b) -- can bind term, type, or kind vars ('Just kind' if b is a term)
   | Let (Bind b) (Expr b)
   | Case (Expr b) b (Type Zk) [Alt b]
+  | Cast (Expr b) (TypeCoercion Zk)
+  | Tick CoreTickish (Expr b)
+  -- below are used as 'Arg's (from CsWrappers)
   | Type (Type Zk)
-  | Coercion (TypeCoercion Zk)
+  | KiCo (KindCoercion Zk)
+  | Kind (MonoKind Zk)
   deriving Data
 
 type Arg b = Expr b
@@ -124,11 +129,15 @@ hasSomeUnfolding _ = True
 
 type CoreProgram = [CoreBind]
 
-type CoreBndr = Id Zk
+data CoreBndr p
+  = Id (Id p)
+  | Tv (TyVar p)
+  | KCv (KiCoVar p)
+  | Kv (KiVar p)
 
-type CoreExpr = Expr CoreBndr
+type CoreExpr = Expr (CoreBndr Zk)
 
-type CoreBind = Bind CoreBndr
+type CoreBind = Bind (CoreBndr Zk)
   
 {- *********************************************************************
 *                                                                      *
@@ -136,5 +145,17 @@ type CoreBind = Bind CoreBndr
 *                                                                      *
 ********************************************************************* -}
 
-varToCoreExpr :: CoreBndr -> Expr b
+varToCoreExpr :: CoreBndr Zk -> Expr b
 varToCoreExpr v = panic "varToCoreExpr"
+
+{- *********************************************************************
+*                                                                      *
+            Core-constructing functions with checking
+*                                                                      *
+********************************************************************* -}
+
+collectArgs :: Expr b -> (Expr b, [Arg b])
+collectArgs expr = go expr []
+  where
+    go (App f a) as = go f (a:as)
+    go e as = (e, as)

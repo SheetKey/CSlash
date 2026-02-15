@@ -7,6 +7,8 @@ module CSlash.Core.Type
   , TyVar, TyCoVar, ForAllBinder
   , KnotTied
 
+  , mkForAllTy, mkForAllKiCo, mkBigLamTy
+
   , mkTyVarTy, mkTyVarTys
 
   , mkAppTy, mkAppTys
@@ -332,6 +334,16 @@ type ErrorMsgType = Type
 *                                                                      *
 ********************************************************************* -}
 
+mkFunctionType :: HasDebugCallStack => Type p -> MonoKind p -> Type p -> Type p
+mkFunctionType arg_ty ki res_ty
+  = FunTy { ft_kind = ki, ft_arg = arg_ty, ft_res = res_ty }
+
+{-# INLINE splitFunTy_maybe #-}
+splitFunTy_maybe :: HasPass p pass => Type p -> Maybe (Type p, MonoKind p, Type p)
+splitFunTy_maybe ty
+  | FunTy ki arg res <- coreFullView ty = Just (arg, ki, res)
+  | otherwise = Nothing
+
 funTyConAppTy_maybe
   :: HasPass p pass => MonoKind p -> Type p -> Type p -> Maybe (TyCon p, [Type p])
 funTyConAppTy_maybe ki arg res = Just ( fUNTyCon
@@ -341,16 +353,86 @@ funTyConAppTy_maybe ki arg res = Just ( fUNTyCon
                                         , arg
                                         , res] )
 
-piResultTys :: (HasDebugCallStack, HasPass p pass) => Kind p -> [Type p] -> Kind p
-piResultTys ki [] = ki
-piResultTys ki orig_args@(arg:args)
+funResultTy :: (HasDebugCallStack, HasPass p pass) => Type p -> Type p
+funResultTy ty
+  | FunTy { ft_res = res } <- coreFullView ty = res
+  | otherwise = pprPanic "funResultTy" (ppr ty)
+
+piResultTy :: (HasDebugCallStack, HasPass p pass) => Type p -> Type p -> Type p
+piResultTy ty arg = case piResultTy_maybe ty arg of
+                      Just res -> res
+                      Nothing -> pprPanic "piResultTy" (ppr ty $$ ppr arg)
+
+piResultTy_maybe :: (HasPass p pass) => Type p -> Type p -> Maybe (Type p)
+piResultTy_maybe ty (Embed arg) = case coreFullView ty of
+  FunTy { ft_res = res } -> Just res
+  BigTyLamTy kv res ->
+    let empty_subst = mkEmptySubst (varsOfType res) (emptyVarSet, emptyVarSet, varsOfMonoKind arg)
+    in Just $ substTy (extendKvSubst empty_subst kv arg) res
+  _ -> Nothing
+piResultTy_maybe ty (KindCoercion arg) = case coreFullView ty of
+  FunTy { ft_res = res }  -> Just res
+  ForAllKiCo kcv res ->
+    let empty_subst = mkEmptySubst (varsOfType res)
+                      ((\(kcv, kv) -> (emptyVarSet, kcv, kv)) $ varsOfKindCoercion arg)
+    in Just $ substTy (extendKCvSubst empty_subst kcv arg) res
+  _ -> Nothing
+piResultTy_maybe ty arg = case coreFullView ty of
+  FunTy { ft_res = res } -> Just res
+  ForAllTy tv res ->
+    let empty_subst = mkEmptySubst (varsOfType res) (varsOfType arg)
+    in Just $ substTy (extendTvSubst empty_subst (binderVar tv) arg) res
+  _ -> Nothing
+
+piResultTys :: (HasDebugCallStack, HasPass p pass) => Type p -> [Type p] -> Type p
+piResultTys ty [] = ty
+piResultTys ty orig_args@(arg:args)
+  | FunTy { ft_res = res } <- ty -- should we check that the arg is not a Tv, KiCo, Kind?
+  = piResultTys res args
+  | ForAllTy (Bndr tv _) res <- ty -- should we check the arg isn't a KiCo or Kind? 
+  = go (extendTvSubst init_subst tv arg) res args
+  | ForAllKiCo kcv res <- ty
+  , KindCoercion kco <- arg
+  = go (extendKCvSubst init_subst kcv kco) res args
+  | BigTyLamTy kv res <- ty
+  , Embed ki <- arg
+  = go (extendKvSubst init_subst kv ki) res args
+  | Just ty' <- coreView ty
+  = piResultTys ty' orig_args
+  | otherwise
+  = pprPanic "piResultTys1" (ppr ty $$ ppr orig_args)
+  where
+    init_subst = mkEmptySubst (varsOfType ty) (varsOfTypes orig_args)
+
+    go subst ty [] = substTyUnchecked subst ty
+    go subst ty all_args@(arg:args)
+      | FunTy { ft_res = res } <- ty
+      = go subst res args
+      | ForAllTy (Bndr tv _) res <- ty
+      = go (extendTvSubst subst tv arg) res args
+      | ForAllKiCo kcv res <- ty
+      , KindCoercion kco <- arg
+      = go (extendKCvSubst subst kcv kco) res args
+      | BigTyLamTy kv res <- ty
+      , Embed ki <- arg
+      = go (extendKvSubst subst kv ki) res args
+      | Just ty' <- coreView ty
+      = go subst ty' all_args
+      | not (isEmptySubst subst)
+      = go init_subst (substTy subst ty) all_args
+      | otherwise
+      = pprPanic "piResultTys2" (ppr ty $$ ppr orig_args $$ ppr all_args)
+
+piKiResultTys :: (HasDebugCallStack, HasPass p pass) => Kind p -> [Type p] -> Kind p
+piKiResultTys ki [] = ki
+piKiResultTys ki orig_args@(arg:args)
   | Mono mki <- ki
-  = Mono $ monoPiResultTys mki orig_args
+  = Mono $ monoPiKiResultTys mki orig_args
   | ForAllKi kv res <- ki
   , Embed mki <- arg
   = go (extendKvSubst init_subst kv mki) res args
   | otherwise
-  = pprPanic "piResultTys2" (ppr ki $$ ppr orig_args)
+  = pprPanic "piKiResultTys2" (ppr ki $$ ppr orig_args)
   where
     init_subst = mkEmptySubst (emptyVarSet, emptyVarSet, varsOfKind ki) (varsOfTypes orig_args)
 
@@ -359,7 +441,7 @@ piResultTys ki orig_args@(arg:args)
       | Mono ki' <- ki
       = Mono $ substMonoKiUnchecked subst ki'
       | otherwise
-      = pprPanic "piResultTys3" (ppr ki)
+      = pprPanic "piKiResultTys3" (ppr ki)
     go subst ki all_args@(arg:args)
       | Mono (FunKi { fk_res = res }) <- ki
       = go subst (Mono res) args
@@ -367,15 +449,15 @@ piResultTys ki orig_args@(arg:args)
       , Embed mono_ki <- arg
       = go (extendKvSubst subst kv mono_ki) res args
       | otherwise
-      = pprPanic "piResultTys4" (ppr ki $$ ppr orig_args $$ ppr all_args)
+      = pprPanic "piKiResultTys4" (ppr ki $$ ppr orig_args $$ ppr all_args)
 
-monoPiResultTys :: HasPass p pass => MonoKind p -> [Type p] -> MonoKind p
-monoPiResultTys ki [] = ki
-monoPiResultTys ki orig_args@(arg:args)
+monoPiKiResultTys :: HasPass p pass => MonoKind p -> [Type p] -> MonoKind p
+monoPiKiResultTys ki [] = ki
+monoPiKiResultTys ki orig_args@(arg:args)
   | FunKi { fk_res = res } <- ki
-  = monoPiResultTys res args
+  = monoPiKiResultTys res args
   | otherwise
-  = pprPanic "monoPiResultTys1" (ppr ki $$ ppr orig_args)
+  = pprPanic "monoPiKiResultTys1" (ppr ki $$ ppr orig_args)
 
 {- *********************************************************************
 *                                                                      *
@@ -470,8 +552,8 @@ ty_coercion_lr_type which orig_co = go orig_co
     go co@(ForAllCo { tfco_tv = tv1, tfco_visL = visL, tfco_visR = visR
                     , tfco_tv_kind_co = kco, tfco_body = co1 })
       = case which of
-          CLeft -> mkForAllTy tv1 visL (go co1)
-          CRight | isReflKiCo kco -> mkForAllTy tv1 visR (go co1)
+          CLeft -> mkForAllTy (Bndr tv1 visL) (go co1)
+          CRight | isReflKiCo kco -> mkForAllTy (Bndr tv1 visR) (go co1)
                  | otherwise -> pprPanic "ForAllCo" (ppr co)
     go co@(ForAllCoCo { tfcoco_kcv = kcv1, tfcoco_kcv_kind_co = kco, tfcoco_body = co1 })
       = case which of
@@ -514,7 +596,7 @@ mkForAllCo v visL visR kind_co co
   | Just ty <- isReflTyCo_maybe co
   , isReflKiCo kind_co
   , visL `eqForAllVis` visR
-  = mkReflTyCo (mkForAllTy v visL ty)
+  = mkReflTyCo (mkForAllTy (Bndr v visL) ty)
   | otherwise
   = mkForAllCo_NoRefl v visL visR kind_co co
 
@@ -654,6 +736,11 @@ isForAllTy ty
   | ForAllKiCo {} <- coreFullView ty = True
   | otherwise = False
 
+isFunTy :: HasPass p pass => Type p -> Bool
+isFunTy ty = case coreFullView ty of
+  FunTy {} -> True
+  _ -> False
+
 isTauTy :: HasPass p pass => Type p -> Bool
 isTauTy ty | Just ty' <- coreView ty = isTauTy ty'
 isTauTy (TyVarTy _) = True
@@ -724,11 +811,11 @@ typeMonoKind :: (HasDebugCallStack, HasPass p pass) => Type p -> MonoKind p
 typeMonoKind (TyConApp tc tys)
   = case tyConDetails tc of
       TcTyCon { tcTyConKind = ki } ->
-        handle_non_mono (piResultTys ki tys)
+        handle_non_mono (piKiResultTys ki tys)
         $ \ki -> vcat [ ppr tc <+> colon <+> ppr ki, ppr tys ]
 
       other ->
-        handle_non_mono (piResultTys (fromZkKind $ tyConKind other) tys)
+        handle_non_mono (piKiResultTys (fromZkKind $ tyConKind other) tys)
         $ \ki -> vcat [ ppr tc <+> colon <+> ppr ki, ppr tys ]
                         
 typeMonoKind (FunTy { ft_kind = kind }) = kind
@@ -737,7 +824,7 @@ typeMonoKind (AppTy fun arg)
   = go fun [arg]
   where
     go (AppTy fun arg) args = go fun (arg:args)
-    go fun args = handle_non_mono (piResultTys (typeKind fun) args)
+    go fun args = handle_non_mono (piKiResultTys (typeKind fun) args)
                   $ \ki -> vcat [ ppr fun <+> colon <+> ppr ki
                                 , ppr args ]
 typeMonoKind ty@(ForAllTy {})
