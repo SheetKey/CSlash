@@ -15,7 +15,7 @@ import CSlash.Types.Unique.FM
 import CSlash.Types.Basic
 import CSlash.Data.Maybe   ( orElse )
 
-import CSlash.Core.Type    ( Type{-, isTerminatingType-} )
+import {-# SOURCE #-} CSlash.Core.Type.Rep    ( Type )
 -- import CSlash.Core.DataCon ( splitDataProductType_maybe, StrictnessMark, isMarkedStrict )
 -- import GHC.Core.Multiplicity    ( scaledThing )
 
@@ -158,6 +158,32 @@ absDmd = AbsDmd
 botDmd :: Demand
 botDmd = BotDmd
 
+argsOneShots :: DmdSig -> Arity -> [[OneShotInfo]]
+argsOneShots (DmdSig (DmdType _ arg_ds)) n_val_args
+  | unsaturated_call = []
+  | otherwise = go arg_ds
+  where
+    unsaturated_call = arg_ds `lengthExceeds` n_val_args
+
+    go [] = []
+    go (arg_d : arg_ds) = argOneShots arg_d `cons` go arg_ds
+
+    cons [] [] = []
+    cons a as = a:as
+
+argOneShots :: Demand -> [OneShotInfo]
+argOneShots AbsDmd = []
+argOneShots BotDmd = []
+argOneShots (_ :* sd) = map go (callCards sd)
+  where
+    go n | isAtMostOnce n = OneShotLam
+         | otherwise = NoOneShotInfo
+
+callCards :: SubDemand -> [Card]
+callCards (Call n sd) = n : callCards sd
+callCards (Poly _) = []
+callCards Prod{} = []
+
 {- *********************************************************************
 *                                                                      *
                  Divergence: Whether evaluation surely diverges
@@ -169,6 +195,14 @@ data Divergence
   | ExnOrDiv
   | Dunno
   deriving Eq
+
+topDiv :: Divergence
+topDiv = Dunno
+
+isDeadEndDiv :: Divergence -> Bool
+isDeadEndDiv Diverges = True
+isDeadEndDiv ExnOrDiv = True
+isDeadEndDiv Dunno = False
 
 defaultFvDmd :: Divergence -> Demand
 defaultFvDmd Dunno = absDmd
@@ -201,6 +235,15 @@ instance Eq DmdType where
   DmdType env1 ds1 == DmdType env2 ds2
     = ds1 == ds2 && env1 == env2
 
+mkEmptyDmdEnv :: Divergence -> DmdEnv
+mkEmptyDmdEnv div = DE emptyVarEnv div
+
+nopDmdEnv :: DmdEnv
+nopDmdEnv = mkEmptyDmdEnv topDiv
+
+nopDmdType :: DmdType
+nopDmdType = DmdType nopDmdEnv []
+
 {- *********************************************************************
 *                                                                      *
                      Demand signatures
@@ -209,6 +252,12 @@ instance Eq DmdType where
 
 newtype DmdSig = DmdSig DmdType
   deriving Eq
+
+nopSig :: DmdSig
+nopSig = DmdSig nopDmdType
+
+isDeadEndSig :: DmdSig -> Bool
+isDeadEndSig (DmdSig (DmdType env _)) = isDeadEndDiv (de_div env)
 
 {- *********************************************************************
 *                                                                      *

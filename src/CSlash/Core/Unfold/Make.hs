@@ -18,7 +18,7 @@ import CSlash.Utils.Panic
 import Data.Maybe ( fromMaybe )
 
 -- the very simple optimiser is used to optimise unfoldings
--- import {-# SOURCE #-} GHC.Core.SimpleOpt
+import {-# SOURCE #-} CSlash.Core.SimpleOpt
 
 mkInlineUnfoldingWithArity :: SimpleOpts -> UnfoldingSource -> Arity -> CoreExpr -> Unfolding
 mkInlineUnfoldingWithArity opts src arity expr
@@ -29,8 +29,8 @@ mkInlineUnfoldingWithArity opts src arity expr
                    , ug_unsat_ok = needSaturated
                    , ug_boring_ok = boring_ok }
 
-  boring_ok | arity == 0 = True
-            | otherwise = inlineBoringOk expr'
+    boring_ok | arity == 0 = True
+              | otherwise = inlineBoringOk expr'
 
 mkInlinableUnfolding :: SimpleOpts -> UnfoldingSource -> CoreExpr -> Unfolding
 mkInlinableUnfolding opts src expr
@@ -71,4 +71,9 @@ mkCoreUnfolding stc top_lvl expr precomputed_cache guidance
     is_work_free = exprIsWorkFree expr
     is_expandable = exprIsExpandable expr
 
-    unfinished
+    recomputed_cache = UnfoldingCache { uf_is_value = is_value
+                                      , uf_is_conlike = is_conlike
+                                      , uf_is_work_free = is_work_free
+                                      , uf_expandable = is_expandable }
+
+    cache = fromMaybe recomputed_cache precomputed_cache

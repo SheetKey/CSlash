@@ -27,6 +27,7 @@ import CSlash.Types.Var.TyVar
 import CSlash.Types.Var.KiVar
 import CSlash.Types.Var.CoVar
 import CSlash.Types.Var.Class
+import {-# SOURCE #-} CSlash.Types.Var.Id
 import CSlash.Types.Var.Set
 import CSlash.Types.Var.Env
 
@@ -68,7 +69,13 @@ fromZkKind ki = let subst = mkEmptySubst (emptyVarSet, emptyVarSet, varsOfKind k
 --   SubstP Tc p' = p' ~ Tc
 
 data Subst p p' = Subst
-  { tv_in_scope :: InScopeSet (TyVar p')
+  { id_in_scope :: InScopeSet (Id p')
+  , id_env :: IdSubstEnv p p'
+
+  , tcv_in_scope :: InScopeSet (TyCoVar p')
+  , tcv_env :: IdSubstEnv p p'
+
+  , tv_in_scope :: InScopeSet (TyVar p')
   , tv_env :: TvSubstEnv p p'
 
   , kcv_in_scope :: InScopeSet (KiCoVar p')
@@ -78,12 +85,20 @@ data Subst p p' = Subst
   , kv_env :: KvSubstEnv p p'
   }
 
+type CoreSubst = Subst Zk Zk
+
+type IdSubstEnv p p' = VarEnv (Id p) (Id p')
+type TCvSubstEnv p p' = VarEnv (TyCoVar p) (TypeCoercion p')
 type TvSubstEnv p p' = VarEnv (TyVar p) (Type p')
 type KCvSubstEnv p p' = VarEnv (KiCoVar p) (KindCoercion p')
 type KvSubstEnv p p' = VarEnv (KiVar p) (MonoKind p')
 
 instance IsPass p' => Outputable (Subst p (CsPass p')) where
-  ppr Subst {..} = vcat [ text "<<TvInScope =" <+> ppIS tv_in_scope
+  ppr Subst {..} = vcat [ text "<<IdInScope =" <+> ppIS id_in_scope
+                        , text "IdSubst =" <+> ppr id_env <> char '>'
+                        , text "<TCvInScope =" <+> ppIS tcv_in_scope
+                        , text "TCvSubst =" <+> ppr tcv_env <> char '>'
+                        , text "<TvInScope =" <+> ppIS tv_in_scope
                         , text "TvSubst =" <+> ppr tv_env <> char '>'
                         , text "<KCvInScope =" <+> ppIS kcv_in_scope
                         , text "KCvSubst =" <+> ppr kcv_env <> char '>'
@@ -97,11 +112,44 @@ type SubstInScope p' = ( InScopeSet (TyVar p')
                        , InScopeSet (KiCoVar p')
                        , InScopeSet (KiVar p') )
 
+type TermSubstInScope = ( InScopeSet (Id Zk)
+                        , InScopeSet (TyCoVar Zk)
+                        , InScopeSet (TyVar Zk)
+                        , InScopeSet (KiCoVar Zk)
+                        , InScopeSet (KiVar Zk) )
+
+substInScopeSets
+  :: Subst p p'
+  -> ( InScopeSet (Id p')
+     , InScopeSet (TyCoVar p')
+     , InScopeSet (TyVar p')
+     , InScopeSet (KiCoVar p')
+     , InScopeSet (KiVar p') )
+substInScopeSets Subst {..} = ( id_in_scope
+                              , tcv_in_scope
+                              , tv_in_scope
+                              , kcv_in_scope
+                              , kv_in_scope )
+
 mkInScopeSets :: (TyVarSet p, KiCoVarSet p, KiVarSet p) -> SubstInScope p
 mkInScopeSets (tv, kcv, kv) = (mkInScopeSet tv, mkInScopeSet kcv, mkInScopeSet kv)
 
+mkTermInScopeSets
+  :: (IdSet Zk, TyCoVarSet Zk, TyVarSet Zk, KiCoVarSet Zk, KiVarSet Zk)
+  -> TermSubstInScope
+mkTermInScopeSets (id, tcv, tv, kcv, kv)
+  = ( mkInScopeSet id
+    , mkInScopeSet tcv
+    , mkInScopeSet tv
+    , mkInScopeSet kcv
+    , mkInScopeSet kv )
+
 emptySubst :: Subst p p'
-emptySubst = Subst { tv_in_scope = emptyInScopeSet
+emptySubst = Subst { id_in_scope = emptyInScopeSet
+                   , id_env = emptyVarEnv
+                   , tcv_in_scope = emptyInScopeSet
+                   , tcv_env = emptyVarEnv
+                   , tv_in_scope = emptyInScopeSet
                    , tv_env = emptyVarEnv
                    , kcv_in_scope = emptyInScopeSet
                    , kcv_env = emptyVarEnv
@@ -121,7 +169,9 @@ mkEmptySubst
   -> Subst p p'
 mkEmptySubst (dom_tvs, dom_kcvs, dom_kvs) rng_fvs
   = let (tv_is, kcv_is, kv_is) = mkInScopeSets rng_fvs
-        subst1 = Subst { tv_in_scope = tv_is, tv_env = emptyVarEnv
+        subst1 = Subst { id_in_scope = emptyInScopeSet, id_env = emptyVarEnv
+                       , tcv_in_scope = emptyInScopeSet, tcv_env = emptyVarEnv
+                       , tv_in_scope = tv_is, tv_env = emptyVarEnv
                        , kcv_in_scope = kcv_is, kcv_env = emptyVarEnv
                        , kv_in_scope = kv_is, kv_env = emptyVarEnv }
         subst2 = nonDetStrictFoldVarSet (\kv subst -> bindFreeDomKv subst kv)
@@ -131,6 +181,17 @@ mkEmptySubst (dom_tvs, dom_kcvs, dom_kvs) rng_fvs
         subst4 = nonDetStrictFoldVarSet (\tv subst -> bindFreeDomTv subst tv)
                  subst3 dom_tvs
   in subst4
+
+mkEmptyTermSubst
+  :: (IdSet Zk, TyCoVarSet Zk, TyVarSet Zk, KiCoVarSet Zk, KiVarSet Zk)
+  -> CoreSubst
+mkEmptyTermSubst fvs
+  = let (id, tcv, tv, kcv, kv) = mkTermInScopeSets fvs
+    in Subst { id_in_scope = id, id_env = emptyVarEnv
+             , tcv_in_scope = tcv, tcv_env = emptyVarEnv
+             , tv_in_scope = tv, tv_env = emptyVarEnv
+             , kcv_in_scope = kcv, kcv_env = emptyVarEnv
+             , kv_in_scope = kv, kv_env = emptyVarEnv }
 
 bindFreeDomKv :: SubstP p p' => Subst p p' -> KiVar p -> Subst p p'
 bindFreeDomKv subst@(Subst {..}) dom_var

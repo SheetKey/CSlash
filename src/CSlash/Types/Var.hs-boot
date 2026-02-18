@@ -9,5 +9,5 @@ module CSlash.Types.Var
 import {-# SOURCE #-} CSlash.Types.Var.TyVar 
 import {-# SOURCE #-} CSlash.Types.Var.KiVar 
 import {-# SOURCE #-} CSlash.Types.Var.CoVar 
-import {-# SOURCE #-} CSlash.Types.Var.Id 
 import {-# SOURCE #-} CSlash.Types.Var.Class
+import {-# SOURCE #-} CSlash.Types.Var.Id

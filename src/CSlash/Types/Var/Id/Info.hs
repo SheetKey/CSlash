@@ -13,6 +13,7 @@ import CSlash.Types.Name
 import CSlash.Types.Basic
 import {-# SOURCE #-} CSlash.Core.DataCon
 import CSlash.Unit.Module
+import CSlash.Types.Demand
 
 import CSlash.Utils.Outputable
 import CSlash.Utils.Panic
@@ -42,6 +43,7 @@ pprIdDetails other = brackets (pp other)
 data IdInfo = IdInfo
   { realUnfoldingInfo :: Unfolding
   , occInfo :: OccInfo
+  , dmdSigInfo :: DmdSig
   , bitfield :: {-# UNPACK #-} !BitField
   , lfInfo :: !(Maybe LambdaFormInfo)
   , tagSig :: !(Maybe TagSig)
@@ -139,6 +141,7 @@ vanillaIdInfo :: IdInfo
 vanillaIdInfo
   = IdInfo { realUnfoldingInfo = noUnfolding
            , occInfo = noOccInfo
+           , dmdSigInfo = nopSig
            , bitfield = bitfieldSetCafInfo vanillaCafInfo $
                         bitfieldSetArityInfo unknownArity $
                         bitfieldSetCallArityInfo unknownArity $

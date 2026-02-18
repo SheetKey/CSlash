@@ -761,6 +761,13 @@ isForgetfulTy (ForAllTy (Bndr tv _) ty)
 isForgetfulTy (TyLamTy tv ty) = (not $ tv `elemVarSet` (fstOf3 $ varsOfType ty)) || isForgetfulTy ty
 isForgetfulTy other = pprPanic "isForgetfulTy" (ppr other)
 
+{-# INLINE splitPiTy_maybe #-} 
+splitPiTy_maybe :: HasPass p pass => Type p -> Maybe (PiTyBinder p, Type p)
+splitPiTy_maybe ty = case coreFullView ty of
+  ForAllTy bndr ty -> Just (NamedTy bndr, ty)
+  FunTy { ft_arg = arg, ft_res = res } -> Just (AnonTy arg, res)
+  _ -> Nothing
+
 splitPiTys :: HasPass p pass => Type p -> ([PiTyBinder p], Type p)
 splitPiTys ty = split ty ty []
   where

@@ -1,7 +1,7 @@
 module CSlash.CsToCore.Binds where
 
 import CSlash.Driver.DynFlags
--- import CSlash.Driver.Config
+import CSlash.Driver.Config
 import CSlash.Unit.Module
 
 import {-# SOURCE #-} CSlash.CsToCore.Expr  ( dsLExpr )
@@ -19,10 +19,10 @@ import CSlash.Cs
 import CSlash.Core as Core
 -- import GHC.Core.SimpleOpt    ( simpleOptExpr )
 -- import GHC.Core.Opt.OccurAnal ( occurAnalyseExpr )
--- import GHC.Core.Make
+import CSlash.Core.Make
 -- import GHC.Core.Utils
--- import GHC.Core.Opt.Arity     ( etaExpand )
--- import GHC.Core.Unfold.Make
+import CSlash.Core.Opt.Arity     ( etaExpand )
+import CSlash.Core.Unfold.Make
 -- import GHC.Core.FVs
 import CSlash.Core.Predicate
 import CSlash.Core.TyCon
@@ -53,6 +53,7 @@ import qualified Data.Set as S
 
 import CSlash.Utils.Constants (debugIsOn)
 import CSlash.Utils.Misc
+import CSlash.Utils.Trace
 import CSlash.Utils.Monad
 import CSlash.Utils.Outputable
 import CSlash.Utils.Panic
@@ -105,12 +106,12 @@ makeCorePair dflags gbl_id rhs
       Inline {} -> inline_pair
   where
     inline_prag = idInlinePragma gbl_id
-    simpl_opts = initSimpleOpts dflags
+    simple_opts = initSimpleOpts dflags
     inlinable_unf = mkInlinableUnfolding simple_opts StableUserSrc rhs
     inline_pair
       | Just arity <- inlinePragmaSat inline_prag
       = ( gbl_id `setIdUnfolding`
-          mkInlineUnfoldingWithArity simpl_opts StableUserSrc real_arity rhs
+          mkInlineUnfoldingWithArity simpl_opts StableUserSrc arity rhs
         , etaExpand arity rhs )
       | otherwise
       = pprTrace "makeCorePair: arity missing" (ppr gbl_id) $
@@ -135,7 +136,7 @@ ds_cs_wrapper wrap = go wrap
   where
     go WpHole k = k $ \e -> e
     go (WpTyApp ty) k = k $ \e -> App e (Type ty)
-    go (WpKiCoApp kco) k = k $ \e -> App e (KindCoercion kco)
+    go (WpKiCoApp kco) k = k $ \e -> App e (KiCo kco)
     go (WpKiApp ki) k = k $ \e -> App e (Kind ki)
     go (WpTyLam tv) k = k $ Lam (Tv tv) Nothing
     go (WpKiCoLam kcv) k = k $ Lam (KCv kcv) Nothing
@@ -145,7 +146,7 @@ ds_cs_wrapper wrap = go wrap
     go (WpCompose c1 c2) k = go c1 $ \w1 ->
                              go c2 $ \w2 ->
                              k (w1 . w2)
-    go (WpFun c_res ty_arg ki_fun) k = do
+    go (WpFun c_res ki_fun ty_arg) k = do
       x <- newSysLocalDs ty_arg
       go c_res $ \w_res ->
         let app f a = mkCoreApp (text "dsCsWrapper") f a

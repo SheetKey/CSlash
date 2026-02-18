@@ -1,7 +1,7 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 
 module CSlash.Types.Basic
-  ( ConTag
+  ( ConTag, O.JoinPointHood(..)
 
   , maybeParen
 
@@ -17,6 +17,7 @@ import Prelude hiding ((<>))
 import GHC.Types.Basic as X hiding
   ( TyConFlavour(..)
   , ConTag
+  , JoinPointHood(..)
   , pprAlternative
   , maybeParen
   , pprShortTailCallInfo
@@ -24,7 +25,7 @@ import GHC.Types.Basic as X hiding
   )
   
 import CSlash.Language.Syntax.Basic
-import CSlash.Utils.Outputable
+import CSlash.Utils.Outputable as O
 
 import Control.DeepSeq
 import Data.Data
@@ -95,6 +96,10 @@ instance Outputable OccInfo where
       pp_args IsInteresting = char '!'
       pp_args NotInteresting = empty
       pp_tail = pprShortTailCallInfo tail_info
+
+instance Outputable TailCallInfo where
+  ppr (AlwaysTailCalled ar) = sep [ text "Tail", int ar]
+  ppr _ = empty
 
 pprShortTailCallInfo :: TailCallInfo -> SDoc
 pprShortTailCallInfo (AlwaysTailCalled ar) = char 'T' <> brackets (int ar)

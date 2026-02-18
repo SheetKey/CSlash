@@ -6,6 +6,8 @@ module CSlash.Types.Var.Id where
 
 import Prelude hiding ((<>))
 
+import CSlash.Core hiding (Id)
+
 import {-# SOURCE #-} CSlash.Core.Type (typeKind)
 import {-# SOURCE #-} CSlash.Core.Type.Rep (Type, PredType)
 import {-# SOURCE #-} CSlash.Core.Kind (Kind, MonoKind)
@@ -14,6 +16,7 @@ import {-# SOURCE #-} CSlash.Types.Var.Id.Info (IdDetails, IdInfo, pprIdDetails)
 import {-# SOURCE #-} CSlash.Core.DataCon
 import {-# SOURCE #-} CSlash.Core.Subst (fromZkType)
 import {-# SOURCE #-} CSlash.Core.Predicate (isTyCoVarType)
+import {-# SOURCE #-} CSlash.Core (Unfolding(..))
 
 import CSlash.Cs.Pass
 
@@ -24,6 +27,7 @@ import CSlash.Types.Name hiding (varName)
 import CSlash.Types.Unique
 import CSlash.Types.Unique.Supply
 import CSlash.Types.Basic
+import CSlash.Types.Demand
 import CSlash.Data.FastString
 
 import CSlash.Utils.Outputable
@@ -169,6 +173,11 @@ modifyIdInfo fn id = setIdInfo id (fn (idInfo id))
 *                                                                      *
 ********************************************************************* -}
 
+isDataConId :: Id p -> Bool
+isDataConId id = case idDetails id of
+                   DataConId {} -> True
+                   _ -> False
+
 isDataConId_maybe :: Id p -> Maybe (DataCon Zk)
 isDataConId_maybe id = case idDetails id of
                          DataConId con -> Just con
@@ -195,13 +204,65 @@ isLocalId _ = False
 ********************************************************************* -}
 
 ---------------------------------
+-- ARITY
+
+idArity :: Id p -> Arity
+idArity id = arityInfo (idInfo id)
+
+isDeadEndId :: Id p -> Bool
+isDeadEndId id = isDeadEndSig (idDmdSig id)
+
+idDmdSig :: Id p -> DmdSig
+idDmdSig id = dmdSigInfo (idInfo id)
+
+---------------------------------
 -- UNFOLDING
+
+idUnfolding :: Id p -> Unfolding
+idUnfolding id = unfoldingInfo (idInfo id)
+
+realIdUnfolding :: Id p -> Unfolding
+realIdUnfolding id = realUnfoldingInfo (idInfo id)
 
 setIdUnfolding :: Id p -> Unfolding -> Id p
 setIdUnfolding id unfolding = modifyIdInfo (`setUnfoldingInfo` unfolding) id
+
+zapIdUnfolding :: Id p -> Id p
+zapIdUnfolding v
+  | hasSomeUnfolding (idUnfolding v) = setIdUnfolding v noUnfolding
+  | otherwise = v
+
+---------------------------------
+-- Occurrence INFO
+
+setIdOccInfo :: Id p -> OccInfo -> Id p
+setIdOccInfo id occ_info = modifyIdInfo (`setOccInfo` occ_info) id
 
 ---------------------------------
 -- INLINING
 
 idInlinePragma :: Id p -> InlinePragma
 idInlinePragma id = defaultInlinePragma -- TODO: inlinePragInfo (idInfo id)
+
+idRuleMatchInfo :: Id p -> RuleMatchInfo
+idRuleMatchInfo id = inlinePragmaRuleMatchInfo (idInlinePragma id)
+
+isConLikeId :: Id p -> Bool
+isConLikeId id = isConLike (idRuleMatchInfo id)
+
+---------------------------------
+-- ONE-SHOT LAMBDAS
+
+idOneShotInfo :: Id p -> OneShotInfo
+idOneShotInfo id = oneShotInfo (idInfo id)
+
+setIdOneShotInfo :: Id p -> OneShotInfo -> Id p
+setIdOneShotInfo id one_shot = modifyIdInfo (`setOneShotInfo` one_shot) id
+
+updOneShotInfo :: Id p -> OneShotInfo -> Id p
+updOneShotInfo id one_shot
+  | OneShotLam <- one_shot
+  , NoOneShotInfo <- idOneShotInfo id
+  = setIdOneShotInfo id OneShotLam
+  | otherwise
+  = id

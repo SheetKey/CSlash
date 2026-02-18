@@ -23,6 +23,7 @@ import CSlash.Types.Var.Set
 import CSlash.Types.Name
 import CSlash.Types.Literal
 import CSlash.Types.Tickish
+import CSlash.Types.Var.Id
 import CSlash.Types.Var.Id.Info
 import CSlash.Types.Basic( Arity )
 import CSlash.Types.Unique
@@ -107,3 +108,198 @@ applyTypeToArgs op_ty args = go op_ty args
     panic_msg as = vcat [ text "Type:" <+> ppr op_ty
                         , text "Args:" <+> ppr args
                         , text "Args':" <+> ppr as ]
+
+mkCastMCo :: CoreExpr -> Maybe (TypeCoercion Zk) -> CoreExpr
+mkCastMCo e Nothing = e
+mkCastMCo e (Just co) = Cast e co
+
+{- *********************************************************************
+*                                                                      *
+             Casts
+*                                                                      *
+********************************************************************* -}
+
+{- *********************************************************************
+*                                                                      *
+             Attaching ticks
+*                                                                      *
+********************************************************************* -}
+
+mkTick :: CoreTickish -> CoreExpr -> CoreExpr
+mkTick t orig_expr = mkTick' id id orig_expr
+  where
+    canSplit = tickishCanSplit t && tickishPlace (mkNoCount t) /= tickishPlace t
+
+    mkTick'
+      :: (CoreExpr -> CoreExpr)
+      -> (CoreExpr -> CoreExpr)
+      -> CoreExpr -> CoreExpr
+    mkTick' top rest expr = case expr of
+      Tick t2 e
+        | tickishPlace t2 /= tickishPlace t -> mkTick' (top . Tick t2) rest e
+        | tickishContains t t2 -> mkTick' top rest e
+        | tickishContains t2 t -> orig_expr
+        | otherwise -> mkTick' top (rest . Tick t2) e
+
+      Cast e co -> mkTick' (top . flip Cast co) rest e
+      KiCo co -> KiCo co -- TODO: Why?
+
+      Lam x mki e
+        | not (isRuntimeVar x) || tickishPlace t /= PlaceRuntime
+          -> mkTick' (top . Lam x mki) rest e
+        | canSplit
+          -> top $ Tick (mkNoScope t) $ rest $ Lam x mki $ mkTick (mkNoCount t) e
+
+      App f arg
+        | not (isRuntimeArg arg)
+          -> mkTick' (top . flip App arg) rest f
+
+        | isSaturatedConApp expr && canSplit -- TODO PlaceCostCentre
+          -> top $ Tick (mkNoScope t) $ rest $ tickHNFArgs (mkNoCount t) expr
+
+      Var x -- TODO PlaceCostCentre
+        | notFunction && canSplit
+          -> top $ Tick (mkNoScope t) $ rest expr
+        where
+          notFunction = not (isFunTy (varType x))
+
+      _ -> top $ Tick t $ rest expr
+      
+mkTicks :: [CoreTickish] -> CoreExpr -> CoreExpr
+mkTicks ticks expr = foldr mkTick expr ticks
+
+isSaturatedConApp :: CoreExpr -> Bool
+isSaturatedConApp e = go e []
+  where
+    go (App f a) as = go f (a:as)
+    go (Var fun) args = isConLikeId fun && idArity fun == valArgCount args
+    go (Cast f _) as = go f as
+    go _ _ = False
+
+tickHNFArgs :: CoreTickish -> CoreExpr -> CoreExpr
+tickHNFArgs t e = push t e
+  where
+    push t (App f (Type u)) = App (push t f) (Type u)
+    push t (App f (KiCo u)) = App (push t f) (KiCo u) -- TODO: check this
+    push t (App f (Kind u)) = App (push t f) (Kind u)
+    push t (App f arg) = App (push t f) (mkTick t arg)
+    push _ e = e
+
+{- *********************************************************************
+*                                                                      *
+             exprIsCheap, exprIsExpandable
+*                                                                      *
+********************************************************************* -}
+
+type CheapAppFun = Id Zk -> Arity -> Bool
+
+{-# INLINE exprIsCheapX #-}
+exprIsCheapX :: CheapAppFun -> Bool -> CoreExpr -> Bool
+exprIsCheapX ok_app expandable e = ok e
+  where
+    ok e = go 0 e
+
+    go n (Var v) = ok_app v n
+    go _ (Lit {}) = True
+    go _ (Type {}) = True
+    go _ (KiCo {}) = True
+    go _ (Kind {}) = True
+    go n (Cast e _) = go n e
+    go n (Case scrut _ _ alts) = not expandable &&
+                                 ok scrut &&
+                                 and [ go n rhs | Alt _ _ rhs <- alts ]
+    go n (Tick t e) | tickishCounts t = False
+                    | otherwise = go n e
+    go n (Lam x _ e) | isRuntimeVar x = n == 0 || go (n - 1) e
+                     | otherwise = go n e
+    go n (App f e) | isRuntimeArg e = go (n + 1) f && ok e
+                   | otherwise = go n f
+    go n (Let (NonRec _ r) e) = not expandable && go n e && ok r
+    go n (Let (Rec prs) e) = not expandable && go n e && all (ok . snd) prs
+
+exprIsWorkFree :: CoreExpr -> Bool
+exprIsWorkFree e = exprIsCheapX isWorkFreeApp False e
+
+isWorkFreeApp :: CheapAppFun
+isWorkFreeApp fn n_val_args
+  | n_val_args == 0
+  = True
+  | n_val_args <- idArity fn
+  = True
+  | otherwise
+  = case idDetails fn of
+      DataConId {} -> True
+      -- TODO: PrimOpId
+      _ -> False
+
+isExpandable :: CoreExpr -> Bool
+isExpandable e = exprIsCheapX isExpandableApp True e
+
+isExpandableApp :: CheapAppFun
+isExpandableApp fn n_val_args
+  | isWorkFreeApp fn n_val_args = True
+  | otherwise
+  = case idDetails fn of
+      -- TODO: PrimOpId
+      _ | isDeadEndId fn -> False
+        | isConLikeId fn -> True
+        | all_args_are_preds -> True
+        | otherwise -> False
+  where
+    all_args_are_preds = all_pred_args n_val_args (varType fn)
+
+    all_pred_args n_val_args ty
+      | n_val_args == 0
+      = True
+      | Just (bndr, ty) <- splitPiTy_maybe ty
+      = case bndr of
+          NamedTy {} -> all_pred_args n_val_args ty
+          AnonTy {} -> False
+      | otherwise
+      = False
+
+{- *********************************************************************
+*                                                                      *
+             exprIsHNF, exprIsConLike
+*                                                                      *
+********************************************************************* -}
+
+exprIsHNF :: CoreExpr -> Bool
+exprIsHNF = exprIsHNFlike isDataConId isEvaldUnfolding
+
+exprIsConLike :: CoreExpr -> Bool
+exprIsConLike = exprIsHNFlike isConLikeId isConLikeUnfolding
+
+exprIsHNFlike :: HasDebugCallStack => (Id Zk -> Bool) -> (Unfolding -> Bool) -> CoreExpr -> Bool
+exprIsHNFlike is_con is_con_unf e = is_hnf_like e
+  where
+    is_hnf_like (Var v) = True -- TODO (double check) our binders are always unlifted (and evald)
+    -- TODO: rubbish literals if added
+    is_hnf_like (Lit _) = True
+    is_hnf_like (Type _) = True
+    is_hnf_like (KiCo _) = True
+    is_hnf_like (Kind _) = True
+    is_hnf_like (Lam b _ e) = isRuntimeVar b || is_hnf_like e
+    is_hnf_like (Tick tickish e) = not (tickishCounts tickish) && is_hnf_like e
+    is_hnf_like (Case e _ _ _) = is_hnf_like e
+    is_hnf_like (App e a)
+      | isValArg a = app_is_value e [a]
+      | otherwise = is_hnf_like e
+    is_hnf_like (Let _ e) = panic "exprIsHNFlike" -- we DON'T have lazy let(rec), should be false like Case?
+    is_hnf_like _ = False
+
+    app_is_value :: CoreExpr -> [CoreArg] -> Bool
+    app_is_value (Var f) as = id_app_is_value f as
+    app_is_value (Tick _ f) as = app_is_value f as
+    app_is_value (Cast f _) as = app_is_value f as
+    app_is_value (App f a) as | isValArg a = app_is_value f (a:as)
+                              | otherwise = app_is_value f as
+    app_is_value _ _ = False
+
+    id_app_is_value id val_args = case compare (idArity id) (length val_args) of
+      EQ | is_con id -> all is_hnf_like val_args -- all fields are strict!
+
+      -- Partial application
+      GT -> all is_hnf_like val_args -- all types are unlifted
+
+      _ -> False

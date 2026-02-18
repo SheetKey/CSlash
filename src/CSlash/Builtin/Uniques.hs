@@ -3,7 +3,7 @@ module CSlash.Builtin.Uniques where
 import {-# SOURCE #-} CSlash.Builtin.Types
 import {-# SOURCE #-} CSlash.Core.TyCon
 import {-# SOURCE #-} CSlash.Core.DataCon
-import CSlash.Types.Var.Id ()
+import {-# SOURCE #-} CSlash.Types.Var.Id
 import {-# SOURCE #-} CSlash.Types.Var.Class (varName)
 import {-# SOURCE #-} CSlash.Types.Name hiding (varName)
 import CSlash.Types.Basic

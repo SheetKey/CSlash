@@ -268,7 +268,6 @@ instance HasFVs (Kind p) where
 
   fvEmptyAcc = ([], emptyVarSet)
   fvEmptyIS = emptyVarSet
-  
 
 {- **********************************************************************
 *                                                                       *

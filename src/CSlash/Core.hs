@@ -117,6 +117,10 @@ isEvaldUnfolding (OtherCon _) = True
 isEvaldUnfolding NoUnfolding = False
 isEvaldUnfolding (CoreUnfolding { uf_cache = cache }) = uf_is_value cache
 
+isConLikeUnfolding :: Unfolding -> Bool
+isConLikeUnfolding (CoreUnfolding { uf_cache = cache }) = uf_is_conlike cache
+isConLikeUnfolding _ = False
+
 hasSomeUnfolding :: Unfolding -> Bool
 hasSomeUnfolding NoUnfolding = False
 hasSomeUnfolding _ = True
@@ -136,6 +140,8 @@ data CoreBndr p
   | Kv (KiVar p)
 
 type CoreExpr = Expr (CoreBndr Zk)
+
+type CoreArg = Arg (CoreBndr Zk)
 
 type CoreBind = Bind (CoreBndr Zk)
   
@@ -159,3 +165,53 @@ collectArgs expr = go expr []
   where
     go (App f a) as = go f (a:as)
     go e as = (e, as)
+
+{- *********************************************************************
+*                                                                      *
+            Simple access functions
+*                                                                      *
+********************************************************************* -}
+
+collectArgsTicks :: (CoreTickish -> Bool) -> Expr b -> (Expr b, [Arg b], [CoreTickish])
+collectArgsTicks skipTick expr = go expr [] []
+  where go (App f a) as ts = go f (a:as) ts
+        go (Tick t e) as ts
+          | skipTick t = go e as (t:ts)
+        go e as ts = (e, as, reverse ts)
+
+{- *********************************************************************
+*                                                                      *
+            Predicates
+*                                                                      *
+********************************************************************* -}
+
+isRuntimeVar :: CoreBndr p -> Bool
+isRuntimeVar Id {} = True
+isRuntimeVar _ = False
+
+isRuntimeArg :: CoreExpr -> Bool
+isRuntimeArg = isValArg
+
+isValArg :: Expr b -> Bool
+isValArg Type {} = False
+isValArg Kind {} = False
+isValArg KiCo {} = False -- Different from GHC; TODO: check for consistency/correctness
+isValArg _ = True
+
+isNonValArg :: CoreExpr -> Bool
+isNonValArg = not . isValArg
+
+valArgCount :: [Arg b] -> Int
+valArgCount = count isValArg
+
+{- *********************************************************************
+*                                                                      *
+            In/Out type synonyms
+*                                                                      *
+********************************************************************* -}
+
+type InId = Id Zk
+type InExpr = CoreExpr
+
+type OutId = Id Zk
+type OutExpr = CoreExpr

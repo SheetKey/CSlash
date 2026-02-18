@@ -66,13 +66,16 @@ library
                     , CSlash.Core
                     , CSlash.Core.ConLike
                     , CSlash.Core.DataCon
+                    , CSlash.Core.FVs
                     , CSlash.Core.Kind
                     , CSlash.Core.Kind.Compare
                     , CSlash.Core.Kind.FVs
                     , CSlash.Core.Make
                     , CSlash.Core.Map.Kind
+                    , CSlash.Core.Opt.Arity
                     , CSlash.Core.Opt.CallerCC
                     , CSlash.Core.Opt.CallerCC.Types
+                    , CSlash.Core.Opt.OccurAnal
                     , CSlash.Core.Ppr
                     , CSlash.Core.Predicate
                     , CSlash.Core.Reduction
@@ -126,6 +129,7 @@ library
                     , CSlash.Data.FastString.Env
                     , CSlash.Data.FiniteMap
                     , CSlash.Data.Graph.Directed
+                    , CSlash.Data.Graph.UnVar
                     , CSlash.Data.IOEnv
                     , CSlash.Data.List.Infinite
                     , CSlash.Data.List.SetOps

@@ -247,6 +247,9 @@ mapVarEnv = mapUFM
 emptyVarEnv :: VarEnv var a
 emptyVarEnv = emptyUFM
 
+unitVarEnv :: Uniquable var => var -> a -> VarEnv var a
+unitVarEnv = unitUFM
+
 delVarEnvList :: Uniquable var => VarEnv var a -> [var] -> VarEnv var a
 delVarEnvList = delListFromUFM
 
@@ -265,6 +268,12 @@ extendVarEnv = addToUFM
 extendVarEnvList :: Uniquable v => VarEnv v a -> [(v, a)] -> VarEnv v a
 extendVarEnvList = addListToUFM
 
+plusVarEnv_C :: (a -> a -> a) -> VarEnv v a -> VarEnv v a -> VarEnv v a
+plusVarEnv_C = plusUFM_C
+
+plusVarEnv :: VarEnv v a -> VarEnv v a -> VarEnv v a
+plusVarEnv = plusUFM
+
 delVarEnv :: Uniquable v => VarEnv v a -> v -> VarEnv v a
 delVarEnv = delFromUFM
 
@@ -274,6 +283,12 @@ lookupVarEnv = lookupUFM
 
 lookupVarEnv_Directly :: VarEnv v a -> Unique -> Maybe a
 lookupVarEnv_Directly = lookupUFM_Directly
+
+elemVarEnvByKey :: Unique -> VarEnv v a -> Bool
+elemVarEnvByKey = elemUFM_Directly
+
+nonDetStrictFoldVarEnv_Directly :: (Unique -> a -> r -> r) -> r -> VarEnv v a -> r
+nonDetStrictFoldVarEnv_Directly = nonDetStrictFoldUFM_Directly
 
 {- *********************************************************************
 *                                                                      *
