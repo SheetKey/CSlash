@@ -172,34 +172,35 @@ shallowTvFolder = TyCoFolder { tcf_view = noView
 *                                                                      *
 ********************************************************************* -}
 
-coVarsOfType :: Type p -> (TyCoVarSet p, KiCoVarSet p)
-coVarsOfTypes :: [Type p] -> (TyCoVarSet p, KiCoVarSet p)
-coVarsOfTyCo :: TypeCoercion p -> (TyCoVarSet p, KiCoVarSet p)
-coVarsOfTyCos :: [TypeCoercion p] -> (TyCoVarSet p, KiCoVarSet p)
+coVarsOfType :: HasPass p p' => Type p -> (TyCoVarSet p, KiCoVarSet p)
+coVarsOfTypes :: HasPass p p' => [Type p] -> (TyCoVarSet p, KiCoVarSet p)
+coVarsOfTyCo :: HasPass p p' => TypeCoercion p -> (TyCoVarSet p, KiCoVarSet p)
+coVarsOfTyCos :: HasPass p p' => [TypeCoercion p] -> (TyCoVarSet p, KiCoVarSet p)
 
 coVarsOfType ty = runCoVars (deep_cv_ty ty)
 coVarsOfTypes tys = runCoVars (deep_cv_tys tys)
 coVarsOfTyCo co = runCoVars (deep_cv_co co)
 coVarsOfTyCos cos = runCoVars (deep_cv_cos cos)
 
-deep_cv_ty :: Type p -> Endo (TyCoVarSet p, KiCoVarSet p)
+deep_cv_ty :: HasPass p p' => Type p -> Endo (TyCoVarSet p, KiCoVarSet p)
 deep_cv_ty = case foldTyCo deepCoVarFolder (emptyVarSet, emptyVarSet) of
   (f, _, _, _) -> f
 
-deep_cv_tys :: [Type p] -> Endo (TyCoVarSet p, KiCoVarSet p)
+deep_cv_tys :: HasPass p p' => [Type p] -> Endo (TyCoVarSet p, KiCoVarSet p)
 deep_cv_tys = case foldTyCo deepCoVarFolder (emptyVarSet, emptyVarSet) of
   (_, f, _, _) -> f
 
-deep_cv_co :: TypeCoercion p -> Endo (TyCoVarSet p, KiCoVarSet p)
+deep_cv_co :: HasPass p p' => TypeCoercion p -> Endo (TyCoVarSet p, KiCoVarSet p)
 deep_cv_co = case foldTyCo deepCoVarFolder (emptyVarSet, emptyVarSet) of
   (_, _, f, _) -> f
 
-deep_cv_cos :: [TypeCoercion p] -> Endo (TyCoVarSet p, KiCoVarSet p)
+deep_cv_cos :: HasPass p p' => [TypeCoercion p] -> Endo (TyCoVarSet p, KiCoVarSet p)
 deep_cv_cos = case foldTyCo deepCoVarFolder (emptyVarSet, emptyVarSet) of
   (_, _, _, f) -> f
 
 deepCoVarFolder
-  :: TyCoFolder p
+  :: HasPass p p'
+  => TyCoFolder p
      (TyCoVarSet p, KiCoVarSet p)
      (KiCoVarSet p)
      (Endo (KiCoVarSet p))

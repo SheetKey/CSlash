@@ -205,27 +205,29 @@ shallowMKcvFolder = MKiCoFolder { mkcf_kivar = do_kivar
 *                                                                      *
 ********************************************************************* -}
 
-coVarsOfKiCo :: KindCoercion p -> KiCoVarSet p
+coVarsOfKiCo :: HasPass p p' => KindCoercion p -> KiCoVarSet p
 coVarsOfKiCo co = runCoVars (deep_kcv_co co)
 
-deep_kcv_mki :: MonoKind p -> Endo (KiCoVarSet p)
+deep_kcv_mki :: HasPass p p' => MonoKind p -> Endo (KiCoVarSet p)
 deep_kcv_mki = case foldMonoKiCo deepKiCoVarFolder emptyVarSet of
   (f, _, _, _) -> f
 
-deep_kcv_mkis :: [MonoKind p] -> Endo (KiCoVarSet p)
+deep_kcv_mkis :: HasPass p p' => [MonoKind p] -> Endo (KiCoVarSet p)
 deep_kcv_mkis = case foldMonoKiCo deepKiCoVarFolder emptyVarSet of
   (_, f, _, _) -> f
 
-deep_kcv_co :: KindCoercion p -> Endo (KiCoVarSet p)
+deep_kcv_co :: HasPass p p' => KindCoercion p -> Endo (KiCoVarSet p)
 deep_kcv_co = case foldMonoKiCo deepKiCoVarFolder emptyVarSet of
   (_, _, f, _) -> f
 
-deep_kcv_cos :: [KindCoercion p] -> Endo (KiCoVarSet p)
+deep_kcv_cos :: HasPass p p' => [KindCoercion p] -> Endo (KiCoVarSet p)
 deep_kcv_cos = case foldMonoKiCo deepKiCoVarFolder emptyVarSet of
   (_, _, _, f) -> f
 
-deepKiCoVarFolder :: MKiCoFolder p (KiCoVarSet p) (Endo (KiCoVarSet p))
-deepKiCoVarFolder = MKiCoFolder { mkcf_kivar = do_kivar
+deepKiCoVarFolder
+  :: forall p p'. HasPass p p'
+  => MKiCoFolder p (KiCoVarSet p) (Endo (KiCoVarSet p))
+deepKiCoVarFolder @p @p' = MKiCoFolder { mkcf_kivar = do_kivar
                                 , mkcf_covar = do_covar
                                 , mkcf_hole = do_hole }
   where
@@ -237,7 +239,13 @@ deepKiCoVarFolder = MKiCoFolder { mkcf_kivar = do_kivar
                   | v `elemVarSet` acc = acc
                   | otherwise = acc `extendVarSet` v
 
-    do_hole is hole = panic "do_covar is (coHoleCoVar hole)"
+    do_hole
+      :: KiCoVarSet p
+      -> KindCoercionHole
+      -> Endo (KiCoVarSet p)
+    do_hole is hole = case csPass @p' of
+                        Tc -> do_covar is (TcCoVar $ coHoleCoVar hole)
+                        _ -> panic "unreachable"
 
 {- *********************************************************************
 *                                                                      *
