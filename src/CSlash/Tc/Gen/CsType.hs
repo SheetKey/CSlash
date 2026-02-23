@@ -94,13 +94,23 @@ pprSigCtxt ctxt cs_ty
   = hang (text "In" <+> pprUserTypeCtxt ctxt <> colon)
     2 (ppr cs_ty)
 
+getInitialCtxtKind :: UserTypeCtxt -> LCsType Rn -> TcM ContextKind
+getInitialCtxtKind ctxt ty = case csTyKindSig ty of
+  Just ki_sig -> TheMonoKind <$> tcLCsKindSig ctxt ki_sig
+  Nothing -> case unLoc ty of
+    CsQualTy { cst_ctxt = ctxt, cst_body = res_ty }
+      | not (null (unLoc ctxt)) -> do
+          arg_kinds <- newMetaKindVars (length (unLoc ctxt))
+          res_kind <- newMetaKindVar
+          return $ TheMonoKind $ mkInvisFunKis_nc arg_kinds res_kind
+    _ -> return AnyMonoKind
+
 tcCsSigType :: UserTypeCtxt -> LCsSigType Rn -> TcM (Type Tc)
 tcCsSigType ctxt sig_ty = addSigCtxt ctxt sig_ty $ do
   traceTc "tcCsSigType {" (ppr sig_ty)
   let skol_info = SigTypeSkol ctxt
   skol_info <- mkSkolemInfo skol_info
-
-  (implic, ty) <- tc_lcs_sig_type skol_info sig_ty (expectedKindInCtxt ctxt)
+  (implic, ty) <- tc_lcs_sig_type ctxt skol_info sig_ty
 
   traceTc "tcCsSigType 2" (ppr implic)
   simplifyAndEmitFlatConstraints (mkKiImplicWC (unitBag implic))
@@ -110,10 +120,11 @@ tcCsSigType ctxt sig_ty = addSigCtxt ctxt sig_ty $ do
   traceTc "end tcCsSigType }" (ppr ty)
   return ty
 
-tc_lcs_sig_type :: SkolemInfo -> LCsSigType Rn -> ContextKind -> TcM (KiImplication, Type Tc)
-tc_lcs_sig_type skol_info full_cs_ty@(L loc (CsSig { sig_ext = kv_nms
-                                                   , sig_body = cs_ty })) ctxt_kind
+tc_lcs_sig_type :: UserTypeCtxt -> SkolemInfo -> LCsSigType Rn -> TcM (KiImplication, Type Tc)
+tc_lcs_sig_type ctxt skol_info full_cs_ty@(L loc (CsSig { sig_ext = kv_nms
+                                                        , sig_body = cs_ty })) 
   = setSrcSpanA loc $ do
+  ctxt_kind <- getInitialCtxtKind ctxt cs_ty
   (tc_lvl, wanted, (kv_bndrs, (exp_kind, ty)))
     <- pushLevelAndSolveKindCoercionsX "tc_lcs_sig_type"
        $ tcImplicitKiBndrs skol_info kv_nms $ do
@@ -216,7 +227,7 @@ tc_cs_type rn_ty@(CsQualTy { cst_ctxt = ctxt, cst_body = body_ty }) exp_kind
          $ vcat [ ppr rn_ty, ppr coVars ]
        (ty', body_ki) <- checkKiConstraints InferKindSkol [] coVars
                          $ tc_infer_lcs_type body_ty
-       let final_ty = mkTyLamTys (panic "toAnyTyVar <$> coVars") ty'
+       let final_ty = mkForAllKiCos (TcCoVar <$> coVars) ty'
            final_ki = mkInvisFunKis coVarKis body_ki
        checkExpectedKind rn_ty final_ty final_ki exp_kind
 
