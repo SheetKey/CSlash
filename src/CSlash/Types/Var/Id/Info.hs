@@ -204,6 +204,19 @@ trimUnfolding :: Unfolding -> Unfolding
 trimUnfolding unf | isEvaldUnfolding unf = evaldUnfolding
                   | otherwise = noUnfolding
 
+zapFragileInfo :: IdInfo -> Maybe IdInfo
+zapFragileInfo info@IdInfo{ occInfo = occ, realUnfoldingInfo = unf }
+  = new_unf `seq`
+    Just (info `setUnfoldingInfo` new_unf
+               `setOccInfo` zapFragileOcc occ)
+  where
+    new_unf = zapFragileUnfolding unf
+
+zapFragileUnfolding :: Unfolding -> Unfolding
+zapFragileUnfolding unf
+  | isEvaldUnfolding unf = evaldUnfolding
+  | otherwise = noUnfolding
+
 {- *********************************************************************
 *                                                                      *
             TickBoxOp

@@ -40,6 +40,7 @@ import CSlash.Utils.Constants (debugIsOn)
 import CSlash.Utils.Outputable
 import CSlash.Utils.Panic
 import CSlash.Utils.Misc
+import CSlash.Utils.Trace
 
 import Data.ByteString     ( ByteString )
 import Data.Function       ( on )
@@ -119,6 +120,20 @@ mkCastMCo e (Just co) = Cast e co
 *                                                                      *
 ********************************************************************* -}
 
+mkCast :: HasDebugCallStack => CoreExpr -> TypeCoercion Zk -> CoreExpr
+mkCast expr co = warnPprTrace (not (tycoercionLType co `eqType` exprType expr))
+                 "Trying to coerce" (parens (ppr expr
+                                              $$ colon <+> ppr (exprType expr))
+                                     $$ ppr co $$ ppr (tycoercionTypes co)
+                                     $$ callStackDoc) $
+                 case expr of
+                   Cast expr co2 -> mkCast expr (mkTyTransCo co2 co)
+                   Tick t expr -> Tick t (mkCast expr co)
+                   KiCo _ -> panic "Casting a KiCo"
+                   Kind _ -> panic "Casting a Kind"
+                   _ | isReflTyCo co -> expr
+                     | otherwise -> Cast expr co
+
 {- *********************************************************************
 *                                                                      *
              Attaching ticks
@@ -184,6 +199,32 @@ tickHNFArgs t e = push t e
     push t (App f (Kind u)) = App (push t f) (Kind u)
     push t (App f arg) = App (push t f) (mkTick t arg)
     push _ e = e
+
+{- *********************************************************************
+*                                                                      *
+             Other expression construction
+*                                                                      *
+********************************************************************* -}
+
+needsCaseBinding :: HasDebugCallStack => CoreExpr -> Bool
+needsCaseBinding rhs = not (exprOkForSpeculation rhs)
+
+{- *********************************************************************
+*                                                                      *
+             Operations over case alternatives
+*                                                                      *
+********************************************************************* -}
+
+findAlt :: AltCon -> [Alt b] -> Maybe (Alt b)
+findAlt con alts = case alts of
+  (deflt@(Alt DEFAULT _ _) : alts) -> go alts (Just deflt)
+  _ -> go alts Nothing
+  where
+    go [] deflt = deflt
+    go (alt@(Alt con1 _ _) : alts) deflt = case con `cmpAltCon` con1 of
+           LT -> deflt
+           EQ -> Just alt
+           GT -> assert (not (con1 == DEFAULT)) $ go alts deflt
 
 {- *********************************************************************
 *                                                                      *
@@ -260,6 +301,15 @@ isExpandableApp fn n_val_args
 
 {- *********************************************************************
 *                                                                      *
+             exprOkForSpeculation
+*                                                                      *
+********************************************************************* -}
+
+exprOkForSpeculation :: CoreExpr -> Bool
+exprOkForSpeculation = panic "unfinished"
+
+{- *********************************************************************
+*                                                                      *
              exprIsHNF, exprIsConLike
 *                                                                      *
 ********************************************************************* -}
@@ -303,3 +353,32 @@ exprIsHNFlike is_con is_con_unf e = is_hnf_like e
       GT -> all is_hnf_like val_args -- all types are unlifted
 
       _ -> False
+
+{- *********************************************************************
+*                                                                      *
+             CoreVarSets
+*                                                                      *
+********************************************************************* -}
+
+type CoreVarSets p = (IdSet p, TyVarSet p, KiCoVarSet p, KiVarSet p)
+
+mkCoreBndrVarSets :: [CoreBndr p] -> CoreVarSets p
+mkCoreBndrVarSets bndrs = go bndrs (emptyVarSet, emptyVarSet, emptyVarSet, emptyVarSet)
+  where
+    go [] acc = acc
+    go (Core.Id id : bndrs) (ids, tvs, kcvs, kvs)
+      = go bndrs (extendVarSet ids id, tvs, kcvs, kvs)
+    go (Tv tv : bndrs) (ids, tvs, kcvs, kvs)
+      = go bndrs (ids, extendVarSet tvs tv, kcvs, kvs)
+    go (KCv kcv : bndrs) (ids, tvs, kcvs, kvs)
+      = go bndrs (ids, tvs, extendVarSet kcvs kcv, kvs)
+    go (Kv kv : bndrs) (ids, tvs, kcvs, kvs)
+      = go bndrs (ids, tvs, kcvs, extendVarSet kvs kv)
+
+disjointCoreVarSets :: CoreVarSets p -> CoreVarSets p -> Bool
+disjointCoreVarSets (ids1, tvs1, kcvs1, kvs1) (ids2, tvs2, kcvs2, kvs2)
+  = disjointVarSet ids1 ids1
+    && disjointVarSet tvs1 tvs2
+    && disjointVarSet kcvs1 kcvs2
+    && disjointVarSet kvs1 kvs2
+

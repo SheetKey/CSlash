@@ -5,7 +5,8 @@ module CSlash.Core.Type.Compare where
 
 import CSlash.Cs.Pass
 
-import CSlash.Core.Type ( typeKind, coreView, tcSplitAppTyNoView_maybe, splitAppTyNoView_maybe )
+import CSlash.Core.Type
+  ( typeKind, coreView, tcSplitAppTyNoView_maybe, splitAppTyNoView_maybe, tycoercionTypes )
 
 import CSlash.Core.Type.Rep
 import CSlash.Core.Type.FVs
@@ -21,6 +22,8 @@ import CSlash.Types.Var.Set
 import CSlash.Utils.Outputable
 import CSlash.Utils.Misc
 import CSlash.Utils.Panic
+import CSlash.Data.Pair
+import CSlash.Data.Maybe
 
 import GHC.Base (reallyUnsafePtrEquality#)
 
@@ -141,3 +144,18 @@ hasCasts (KindCoercion {}) = True
 hasCasts (AppTy t1 t2) = hasCasts t1 || hasCasts t2
 hasCasts (ForAllTy _ ty) = hasCasts ty
 hasCasts _ = False
+
+-- BELONGS ELSEWHERE
+
+isReflexiveTyCo :: HasPass p pass => TypeCoercion p -> Bool
+isReflexiveTyCo = isJust . isReflexiveTyCo_maybe
+
+isReflexiveTyCo_maybe :: HasPass p pass => TypeCoercion p -> Maybe (Type p)
+isReflexiveTyCo_maybe (TyRefl ty) = Just ty
+isReflexiveTyCo_maybe (GRefl ty kco) | isReflKiCo kco = Just ty
+isReflexiveTyCo_maybe co
+  | ty1 `eqType` ty2
+  = Just ty1
+  | otherwise
+  = Nothing
+  where (Pair ty1 ty2) = tycoercionTypes co

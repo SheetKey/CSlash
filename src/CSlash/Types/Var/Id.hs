@@ -167,6 +167,10 @@ setIdInfo id info = info `seq` (lazySetIdInfo id info)
 modifyIdInfo :: (IdInfo -> IdInfo) -> Id p -> Id p
 modifyIdInfo fn id = setIdInfo id (fn (idInfo id))
 
+maybeModifyIdInfo :: Maybe IdInfo -> Id p -> Id p
+maybeModifyIdInfo (Just new_info) id = lazySetIdInfo id new_info
+maybeModifyIdInfo Nothing id = id
+
 {- *********************************************************************
 *                                                                      *
             Special Ids
@@ -196,6 +200,20 @@ isLocalId :: Id p -> Bool
 isLocalId (Id { id_scope = LocalId _ }) = True
 isLocalId _ = False
 
+isJoinId :: Id p -> Bool
+isJoinId id = case idDetails id of
+  JoinId _ -> True
+  _ -> False
+
+hasNoBinding :: Id p -> Bool
+hasNoBinding id = case idDetails id of
+  DataConId dc -> panic "isTupleDataCon dc"
+                  --  || isSumDataCon dc
+  VanillaId -> rest
+  TickBoxOpId _ -> rest
+  JoinId _ -> rest 
+  where
+    rest = isCompulsoryUnfolding (realIdUnfolding id)
 
 {- *********************************************************************
 *                                                                      *
@@ -221,11 +239,19 @@ idDmdSig id = dmdSigInfo (idInfo id)
 idUnfolding :: Id p -> Unfolding
 idUnfolding id = unfoldingInfo (idInfo id)
 
+alwaysActiveUnfoldingFun :: IdUnfoldingFun
+alwaysActiveUnfoldingFun id
+  | isAlwaysActive (idInlineActivation id) = idUnfolding id
+  | otherwise = noUnfolding
+
 realIdUnfolding :: Id p -> Unfolding
 realIdUnfolding id = realUnfoldingInfo (idInfo id)
 
 setIdUnfolding :: Id p -> Unfolding -> Id p
 setIdUnfolding id unfolding = modifyIdInfo (`setUnfoldingInfo` unfolding) id
+
+setCaseBndrEvald :: Id p -> Id p
+setCaseBndrEvald id = id `setIdUnfolding` evaldUnfolding
 
 zapIdUnfolding :: Id p -> Id p
 zapIdUnfolding v
@@ -250,6 +276,9 @@ idRuleMatchInfo id = inlinePragmaRuleMatchInfo (idInlinePragma id)
 isConLikeId :: Id p -> Bool
 isConLikeId id = isConLike (idRuleMatchInfo id)
 
+idInlineActivation :: Id p -> Activation
+idInlineActivation id = inlinePragmaActivation (idInlinePragma id)
+
 ---------------------------------
 -- ONE-SHOT LAMBDAS
 
@@ -266,3 +295,9 @@ updOneShotInfo id one_shot
   = setIdOneShotInfo id OneShotLam
   | otherwise
   = id
+
+zapInfo :: (IdInfo -> Maybe IdInfo) -> Id p -> Id p
+zapInfo zapper id = maybeModifyIdInfo (zapper (idInfo id)) id
+
+zapFragileIdInfo :: Id p -> Id p
+zapFragileIdInfo = zapInfo zapFragileInfo

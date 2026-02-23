@@ -2,7 +2,7 @@ module CSlash.Core.Unfold.Make where
 
 import CSlash.Core
 import CSlash.Core.Unfold
--- import CSlash.Core.Opt.OccurAnal ( occurAnalyseExpr )
+import CSlash.Core.Opt.OccurAnal ( occurAnalyzeExpr )
 -- import CSlash.Core.Opt.Arity   ( manifestArity )
 import CSlash.Core.DataCon
 import CSlash.Core.Utils
@@ -25,12 +25,12 @@ mkInlineUnfoldingWithArity opts src arity expr
   = mkCoreUnfolding src True expr' Nothing guide
   where
     expr' = simpleOptExpr opts expr
-    guie = UnfWhen { ug_arity = arity
+    guide = UnfWhen { ug_arity = arity
                    , ug_unsat_ok = needSaturated
                    , ug_boring_ok = boring_ok }
 
     boring_ok | arity == 0 = True
-              | otherwise = inlineBoringOk expr'
+              | otherwise = panic "inlineBoringOk expr'"
 
 mkInlinableUnfolding :: SimpleOpts -> UnfoldingSource -> CoreExpr -> Unfolding
 mkInlinableUnfolding opts src expr
@@ -51,16 +51,16 @@ mkUnfolding opts src top_lvl is_bottoming is_join expr cache
   = mkCoreUnfolding src top_lvl expr cache guidance
   where
     is_top_bottoming = top_lvl && is_bottoming
-    guidance = calcUnfoldingGuidance opts is_top_bottoming is_join expr
+    guidance = panic "calcUnfoldingGuidance opts is_top_bottoming is_join expr"
 
-mkCoreUnfolding :: UnfoldingSouce
+mkCoreUnfolding :: UnfoldingSource
   -> Bool
   -> CoreExpr
   -> Maybe UnfoldingCache
   -> UnfoldingGuidance
   -> Unfolding
-mkCoreUnfolding stc top_lvl expr precomputed_cache guidance
-  = CoreUnfolding { uf_tmpl = cache `seq` occurAnalyseExpr expr
+mkCoreUnfolding src top_lvl expr precomputed_cache guidance
+  = CoreUnfolding { uf_tmpl = cache `seq` occurAnalyzeExpr expr
                   , uf_src = src
                   , uf_is_top = top_lvl
                   , uf_cache = cache
@@ -69,7 +69,7 @@ mkCoreUnfolding stc top_lvl expr precomputed_cache guidance
     is_value = exprIsHNF expr
     is_conlike = exprIsConLike expr
     is_work_free = exprIsWorkFree expr
-    is_expandable = exprIsExpandable expr
+    is_expandable = panic "exprIsExpandable expr"
 
     recomputed_cache = UnfoldingCache { uf_is_value = is_value
                                       , uf_is_conlike = is_conlike

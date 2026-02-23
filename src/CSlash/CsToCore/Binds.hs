@@ -106,8 +106,8 @@ makeCorePair dflags gbl_id rhs
       Inline {} -> inline_pair
   where
     inline_prag = idInlinePragma gbl_id
-    simple_opts = initSimpleOpts dflags
-    inlinable_unf = mkInlinableUnfolding simple_opts StableUserSrc rhs
+    simpl_opts = initSimpleOpts dflags
+    inlinable_unf = mkInlinableUnfolding simpl_opts StableUserSrc rhs
     inline_pair
       | Just arity <- inlinePragmaSat inline_prag
       = ( gbl_id `setIdUnfolding`
@@ -115,7 +115,7 @@ makeCorePair dflags gbl_id rhs
         , etaExpand arity rhs )
       | otherwise
       = pprTrace "makeCorePair: arity missing" (ppr gbl_id) $
-        (gbl_id `setIdUnfolding` mkInlineUnfoldingNoArity simpl_opts StableUserSrc rhs, rhs)
+        panic "(gbl_id `setIdUnfolding` mkInlineUnfoldingNoArity simpl_opts StableUserSrc rhs, rhs)"
                                                 
 
 {-**********************************************************************

@@ -16,3 +16,6 @@ instance (Typeable p) => Data (Id p)
 instance Eq (Id p)
 instance IsVar (Id p) 
 instance IsPass p => Outputable (Id (CsPass p)) 
+
+isLocalId :: Id p -> Bool
+isJoinId :: Id p -> Bool

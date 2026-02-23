@@ -71,6 +71,9 @@ mkNoScope n | tickishScoped n == NoScope = n
             | not (tickishCanSplit n) = panic "mkNoScope: Cannot split!"
 mkNoScope CpcTick{} = panic "mkNoScope: Undefined split!"
 
+tickishIsCode :: GenTickish pass -> Bool
+tickishIsCode CpcTick{} = True
+
 data TickishPlacement
   = PlaceRuntime
   deriving (Eq, Show)

@@ -10,3 +10,6 @@ data PcInfo
     }
 
 type AnyPcUsage = Bool
+
+emptyPcInfo :: AnyPcUsage -> PcInfo
+emptyPcInfo = NoPcInfo

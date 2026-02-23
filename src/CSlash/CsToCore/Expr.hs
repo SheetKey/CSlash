@@ -23,8 +23,8 @@ import CSlash.Core.Type
 import CSlash.Core.Kind
 import CSlash.Core.Type.Rep
 import CSlash.Core
--- import CSlash.Core.Utils
--- import CSlash.Core.Make
+import CSlash.Core.Utils
+import CSlash.Core.Make
 
 import CSlash.Driver.Session
 -- import GHC.Types.CostCentre
@@ -36,7 +36,7 @@ import CSlash.Core.ConLike
 import CSlash.Core.DataCon
 import CSlash.Builtin.Types
 import CSlash.Builtin.Names
-import CSlash.Types.Basic
+import CSlash.Types.Basic hiding (ConLike)
 import CSlash.Types.SrcLoc
 import CSlash.Types.Tickish
 import CSlash.Utils.Misc
@@ -85,14 +85,14 @@ dsExpr e@(XExpr ext_expr_tc)
 -- Simpler than GHC because we always have LexicalNegation On      
 dsExpr (NegApp _ expr neg_expr) = panic "negapp"
 
-dsExpr (CsLam (_, fun_kis) mg) = do
-  (ids, body) <- matchWrapper LamAlt Nothing mg
-  massertPpr (ids `equalLength` fun_kis)
-    $ vcat [ text "dsExpr CsLam fun_kis and id binder length mismatch"
-           , text "fun_kis" <+> ppr fun_kis
-           , text "ids" <+> ppr ids
-           , text "body" <+> ppr body ]
-  return $ mkCoreLams (ids `zip` Just <$> fun_kis) body
+-- dsExpr (CsLam (_, fun_kis) mg) = do
+--   (ids, body) <- matchWrapper LamAlt Nothing mg
+--   massertPpr (ids `equalLength` fun_kis)
+--     $ vcat [ text "dsExpr CsLam fun_kis and id binder length mismatch"
+--            , text "fun_kis" <+> ppr fun_kis
+--            , text "ids" <+> ppr ids
+--            , text "body" <+> ppr body ]
+--   return $ mkCoreLams (ids `zip` Just <$> fun_kis) body
 
 dsExpr (CsTyLam {}) = panic "CsTyLam"
 
@@ -131,7 +131,7 @@ ds_app (XExpr (WrapExpr cs_wrap fun)) cs_args core_args = do
 
 ds_app (XExpr (ConLike con)) _ core_args = do
   ds_con <- dsCsConLike con
-  return $ mkApps ds_con core_args
+  return $ mkCoreApps ds_con core_args
 
 ds_app (CsVar _ lfun) cs_args core_args = ds_app_var lfun cs_args core_args
 
@@ -145,6 +145,19 @@ ds_app_var (L loc fun_id) cs_args core_args = ds_app_finish fun_id core_args
 ds_app_finish :: Id Zk -> [CoreExpr] -> DsM CoreExpr
 ds_app_finish fun_id core_args = return $ mkCoreApps (Var fun_id) core_args
 
+splitCsWrapperArgs :: CsWrapper Zk -> [CoreArg] -> DsM (CsWrapper Zk, [CoreArg])
+splitCsWrapperArgs wrap args = go wrap args
+  where
+    go (WpTyApp ty) args = return (WpHole, Type ty : args)
+    go (WpKiCoApp kco) args = return (WpHole, KiCo kco : args)
+    go (WpKiApp ki) args = return (WpHole, Kind ki : args)
+    go (WpCompose w1 w2) args = do
+      (w1', args') <- go w1 args
+      if isIdCsWrapper w1'
+        then go w2 args'
+        else return (w1' <.> w2, args')
+    go wrap args = return (wrap, args)
+
 dsCsConLike :: ConLike Zk -> DsM CoreExpr
-dsCsConLike (RealDataCon dc) = return $ varToCoreExpr dataConId
+dsCsConLike (RealDataCon dc) = return $ varToCoreExpr $ dataConId dc
 dsCsConLike PatSynCon = panic "dsCoConLike PatSynCon"

@@ -3,6 +3,7 @@ module CSlash.Core.Make where
 import CSlash.Cs.Pass
 
 import CSlash.Types.Var
+import CSlash.Types.Var.Id
 import CSlash.Types.TyThing
 import CSlash.Types.Var.Id.Info
 import CSlash.Types.Demand
@@ -65,3 +66,27 @@ mkCoreAppTyped _ (fun, fun_ty) (Kind ki)
 mkCoreAppTyped d (fun, fun_ty) arg
   = assertPpr (isFunTy fun_ty) (ppr fun $$ ppr arg $$ d)
     (App fun arg, funResultTy fun_ty)
+
+{-**********************************************************************
+*                                                                      *
+           Building case expressions
+*                                                                      *
+**********************************************************************-}
+
+mkWildValBinder :: Type Zk -> Id Zk
+mkWildValBinder ty = mkLocalId wildCardName ty
+
+{-**********************************************************************
+*                                                                      *
+           Floats
+*                                                                      *
+**********************************************************************-}
+
+data FloatBind
+  = FloatLet CoreBind
+  | FloatCase CoreExpr (Id Zk) AltCon [CoreBndr Zk]
+
+instance Outputable FloatBind where
+  ppr (FloatLet b) = text "LET" <+> panic "ppr b"
+  ppr (FloatCase e b c bs) = hang (text "CASE" <+> ppr e <+> text "of" <+> ppr b)
+                             2 (ppr c <+> ppr bs)

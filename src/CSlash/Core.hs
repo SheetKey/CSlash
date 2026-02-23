@@ -6,6 +6,7 @@ import CSlash.Cs.Pass
 import CSlash.Types.Var
 import CSlash.Core.Type
 import CSlash.Core.Kind
+import {-# SOURCE #-} CSlash.Core.Subst
 import CSlash.Types.Name
 import CSlash.Types.Name.Set
 import CSlash.Types.Literal
@@ -35,6 +36,7 @@ data Expr b
   | Lit Literal
   | App (Expr b) (Arg b)
   | Lam b (Maybe (MonoKind Zk)) (Expr b) -- can bind term, type, or kind vars ('Just kind' if b is a term)
+  -- Cant move the 'Maybe MonoKind' to 'CoreBndr.Id' since CoreBndr is used for case and other binding sites. 
   | Let (Bind b) (Expr b)
   | Case (Expr b) b (Type Zk) [Alt b]
   | Cast (Expr b) (TypeCoercion Zk)
@@ -60,11 +62,6 @@ data Bind b
   = NonRec b (Expr b)
   | Rec [(b, (Expr b))]
   deriving Data
-
-instance Outputable AltCon where
-  ppr (DataAlt dc) = ppr dc
-  ppr (LitAlt lit) = ppr lit
-  ppr DEFAULT = text "__DEFAULT"
 
 {- *********************************************************************
 *                                                                      *
@@ -105,6 +102,8 @@ data UnfoldingGuidance
   | UnfNever
   deriving Eq
         
+needSaturated :: Bool
+needSaturated = False
 
 noUnfolding :: Unfolding
 noUnfolding = NoUnfolding
@@ -121,10 +120,40 @@ isConLikeUnfolding :: Unfolding -> Bool
 isConLikeUnfolding (CoreUnfolding { uf_cache = cache }) = uf_is_conlike cache
 isConLikeUnfolding _ = False
 
+expandUnfolding_maybe :: Unfolding -> Maybe CoreExpr
+expandUnfolding_maybe (CoreUnfolding { uf_cache = cache, uf_tmpl = rhs })
+  | uf_expandable cache
+  = Just rhs
+expandUnfolding_maybe _ = Nothing
+
+isCompulsoryUnfolding :: Unfolding -> Bool
+isCompulsoryUnfolding (CoreUnfolding { uf_src = src }) = isCompulsorySource src
+isCompulsoryUnfolding _ = False
+
 hasSomeUnfolding :: Unfolding -> Bool
 hasSomeUnfolding NoUnfolding = False
 hasSomeUnfolding _ = True
-  
+
+{- *********************************************************************
+*                                                                      *
+             AltCon
+*                                                                      *
+********************************************************************* -}
+
+instance Outputable AltCon where
+  ppr (DataAlt dc) = ppr dc
+  ppr (LitAlt lit) = ppr lit
+  ppr DEFAULT = text "__DEFAULT"
+
+cmpAltCon :: AltCon -> AltCon -> Ordering
+cmpAltCon DEFAULT DEFAULT = EQ
+cmpAltCon DEFAULT _ = LT
+cmpAltCon (DataAlt d1) (DataAlt d2) = dataConTag d1 `compare` dataConTag d2
+cmpAltCon (DataAlt _) DEFAULT = GT
+cmpAltCon (LitAlt l1) (LitAlt l2) = l1 `compare` l2
+cmpAltCon (LitAlt _) DEFAULT = GT
+cmpAltCon con1 con2 = pprPanic "cmpAltCon" (ppr con1 $$ ppr con2)
+
 {- *********************************************************************
 *                                                                      *
             Useful synonyms
@@ -144,15 +173,15 @@ type CoreExpr = Expr (CoreBndr Zk)
 type CoreArg = Arg (CoreBndr Zk)
 
 type CoreBind = Bind (CoreBndr Zk)
-  
+
 {- *********************************************************************
 *                                                                      *
             Core-constructing functions with checking
 *                                                                      *
 ********************************************************************* -}
 
-varToCoreExpr :: CoreBndr Zk -> Expr b
-varToCoreExpr v = panic "varToCoreExpr"
+varToCoreExpr :: Id Zk -> Expr b
+varToCoreExpr = Var
 
 {- *********************************************************************
 *                                                                      *
@@ -204,6 +233,10 @@ isNonValArg = not . isValArg
 valArgCount :: [Arg b] -> Int
 valArgCount = count isValArg
 
+isJoinIdBndr :: CoreBndr p -> Bool
+isJoinIdBndr (Id id) = isJoinId id
+isJoinIdBndr _ = False
+
 {- *********************************************************************
 *                                                                      *
             In/Out type synonyms
@@ -211,7 +244,21 @@ valArgCount = count isValArg
 ********************************************************************* -}
 
 type InId = Id Zk
+type InVar = CoreBndr Zk
+type InBind = CoreBind
 type InExpr = CoreExpr
 
 type OutId = Id Zk
+type OutVar = CoreBndr Zk
+type OutBind = CoreBind
 type OutExpr = CoreExpr
+
+{- *********************************************************************
+*                                                                      *
+            Rewrite rules
+*                                                                      *
+********************************************************************* -}
+
+data InScopeEnv = ISE TermSubstInScope IdUnfoldingFun
+
+type IdUnfoldingFun = Id Zk -> Unfolding

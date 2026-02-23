@@ -12,7 +12,8 @@ import Prelude hiding ((<>))
 
 import CSlash.Cs.Pass
 
-import {-# SOURCE #-} CSlash.Core ( CoreExpr )
+import CSlash.Core as Core
+import CSlash.Core.Ppr
 import {-# SOURCE #-} CSlash.Core.Ppr ()
 import {-# SOURCE #-} CSlash.Core.Type ( mkAppTy, mkTyConApp, mkCastTy )
 import {-# SOURCE #-} CSlash.Core.Type.Ppr ( pprTyVar )
@@ -30,6 +31,7 @@ import CSlash.Types.Var.Class
 import {-# SOURCE #-} CSlash.Types.Var.Id
 import CSlash.Types.Var.Set
 import CSlash.Types.Var.Env
+import CSlash.Types.Tickish
 
 import CSlash.Utils.Constants (debugIsOn)
 import CSlash.Utils.Misc
@@ -87,7 +89,7 @@ data Subst p p' = Subst
 
 type CoreSubst = Subst Zk Zk
 
-type IdSubstEnv p p' = VarEnv (Id p) (Id p')
+type IdSubstEnv p p' = VarEnv (Id p) CoreExpr
 type TCvSubstEnv p p' = VarEnv (TyCoVar p) (TypeCoercion p')
 type TvSubstEnv p p' = VarEnv (TyVar p) (Type p')
 type KCvSubstEnv p p' = VarEnv (KiCoVar p) (KindCoercion p')
@@ -130,6 +132,51 @@ substInScopeSets Subst {..} = ( id_in_scope
                               , tv_in_scope
                               , kcv_in_scope
                               , kv_in_scope )
+
+setTermInScopeSets :: CoreSubst -> TermSubstInScope -> CoreSubst 
+setTermInScopeSets Subst{..} (ids, tcs, tvs, kcs, kvs)
+  = Subst { id_in_scope = ids
+          , tcv_in_scope = tcs
+          , tv_in_scope = tvs
+          , kcv_in_scope = kcs
+          , kv_in_scope = kvs
+          , .. } 
+
+extendTermSubstInScopeSetsSets
+  :: TermSubstInScope 
+  -> (IdSet Zk, TyCoVarSet Zk, TyVarSet Zk, KiCoVarSet Zk, KiVarSet Zk)
+  -> TermSubstInScope
+extendTermSubstInScopeSetsSets (idis, tcvis, tvis, kcvis, kvis) (ids, tcvs, tvs, kcvs, kvs)
+  = ( idis `extendInScopeSetSet` ids
+    , tcvis `extendInScopeSetSet` tcvs
+    , tvis `extendInScopeSetSet` tvs
+    , kcvis `extendInScopeSetSet` kcvs
+    , kvis `extendInScopeSetSet` kvs )
+
+-- extendTermSubstInScopeSets
+--   :: TermSubstInScope 
+--   -> ([Id Zk], [TyCoVar Zk], [TyVar Zk], [KiCoVar Zk], [KiVar Zk])
+--   -> TermSubstInScope
+-- extendTermSubstInScopeSets (idis, tcvis, tvis, kcvis, kvis) (ids, tcvs, tvs, kcvs, kvs)
+--   = ( idis `extendInScopeSet` ids
+--     , tcvis `extendInScopeSet` tcvs
+--     , tvis `extendInScopeSet` tvs
+--     , kcvis `extendInScopeSet` kcvs
+--     , kvis `extendInScopeSet` kvs )
+
+extendTermSubstInScopeSet :: TermSubstInScope -> Id Zk -> TermSubstInScope
+extendTermSubstInScopeSet (ids, tcvs, tvs, kcvs, kvs) id
+  = (extendInScopeSet ids id, tcvs, tvs, kcvs, kvs)
+
+extendTermSubstInScope :: CoreSubst -> CoreBndr Zk -> CoreSubst
+extendTermSubstInScope Subst{..} (Core.Id id)
+  = Subst { id_in_scope = id_in_scope `extendInScopeSet` id, .. }
+extendTermSubstInScope Subst{..} (Tv tv)
+  = Subst { tv_in_scope = tv_in_scope `extendInScopeSet` tv, .. }
+extendTermSubstInScope Subst{..} (KCv kcv)
+  = Subst { kcv_in_scope = kcv_in_scope `extendInScopeSet` kcv, .. }
+extendTermSubstInScope Subst{..} (Kv kv)
+  = Subst { kv_in_scope = kv_in_scope `extendInScopeSet` kv, .. }
 
 mkInScopeSets :: (TyVarSet p, KiCoVarSet p, KiVarSet p) -> SubstInScope p
 mkInScopeSets (tv, kcv, kv) = (mkInScopeSet tv, mkInScopeSet kcv, mkInScopeSet kv)
@@ -193,6 +240,14 @@ mkEmptyTermSubst fvs
              , kcv_in_scope = kcv, kcv_env = emptyVarEnv
              , kv_in_scope = kv, kv_env = emptyVarEnv }
 
+mkEmptyTermSubstIS :: TermSubstInScope -> CoreSubst
+mkEmptyTermSubstIS (id, tcv, tv, kcv, kv) =
+  Subst { id_in_scope = id, id_env = emptyVarEnv
+        , tcv_in_scope = tcv, tcv_env = emptyVarEnv
+        , tv_in_scope = tv, tv_env = emptyVarEnv
+        , kcv_in_scope = kcv, kcv_env = emptyVarEnv
+        , kv_in_scope = kv, kv_env = emptyVarEnv }
+  
 bindFreeDomKv :: SubstP p p' => Subst p p' -> KiVar p -> Subst p p'
 bindFreeDomKv subst@(Subst {..}) dom_var
   = case lookupInScope_Directly kv_in_scope (varUnique dom_var) of
@@ -279,6 +334,26 @@ extendSubstInScopeSetsSets (Subst { tv_in_scope = tis
           , kcv_in_scope = kcis `extendInScopeSetSet` nkcis
           , kv_in_scope = kis `extendInScopeSetSet` nkis
           , .. }
+
+extendSubst :: HasDebugCallStack => CoreSubst -> CoreBndr Zk -> CoreArg -> CoreSubst
+extendSubst subst var arg
+  = case arg of
+      Type ty
+        | Tv tv <- var -> extendTvSubst subst tv ty
+        | otherwise -> ppPanic
+      KiCo kco
+        | KCv kcv <- var -> extendKCvSubst subst kcv kco
+        | otherwise -> ppPanic
+      Kind ki
+        | Kv kv <- var -> extendKvSubst subst kv ki
+        | otherwise -> ppPanic
+      _ | Core.Id id <- var -> extendIdSubst subst id arg
+        | otherwise -> ppPanic
+  where ppPanic = pprPanic "extendSubst" (ppr var <+> text ":=" <+> ppr arg)
+
+extendIdSubst :: CoreSubst -> Id Zk -> CoreExpr -> CoreSubst
+extendIdSubst (Subst { id_env = ids, .. }) id expr
+  = Subst { id_env = extendVarEnv ids id expr, .. }
 
 extendTvSubstAndInScope :: HasPass p' pass => Subst p p' -> TyVar p -> Type p' -> Subst p p'
 extendTvSubstAndInScope (Subst { tv_env = tenv, .. }) tv ty
@@ -607,3 +682,25 @@ substKiCoVarBndrUsing subst_fn subst@(Subst {..}) old_var
               vacuous_set_kcv_kind (subst_fn subst (varKind old_var)) old_var
 
     new_env = extendVarEnv kcv_env old_var (mkKiCoVarCo new_var)
+
+{- *********************************************************************
+*                                                                      *
+            CoreSubst utils
+*                                                                      *
+********************************************************************* -}
+
+lookupIdSubst :: HasDebugCallStack => CoreSubst -> Id Zk -> CoreExpr
+lookupIdSubst (Subst { id_in_scope = in_scope, id_env = ids }) v
+  | not (isLocalId v) = Var v
+  | Just e <- lookupVarEnv ids v = e
+  | Just v' <- lookupInScope in_scope v = Var v'
+  | otherwise = pprPanic "lookupIdSubst" (ppr v $$ ppr in_scope)
+
+{- *********************************************************************
+*                                                                      *
+            IdInfo substitution
+*                                                                      *
+********************************************************************* -}
+
+substTickish :: CoreSubst -> CoreTickish -> CoreTickish
+substTickish _ t@(CpcTick{}) = t

@@ -89,7 +89,7 @@ import Data.Traversable (for)
 deSugar :: CsEnv -> ModLocation -> TcGblEnv Zk -> IO (Messages DsMessage, Maybe ModGuts)
 deSugar cs_env
         mod_loc
-        tcg_env@(TcGblEnv { tcg_mod = id_mod
+        tcg_env@(TcGblEnv { tcg_mod = mod
                           , tcg_src = cs_src
                           , tcg_type_env = type_env
                           , tcg_imports = imports

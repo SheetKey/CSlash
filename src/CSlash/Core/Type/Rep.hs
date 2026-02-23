@@ -118,6 +118,15 @@ instance Outputable TypeCoercionHole where
 instance Uniquable TypeCoercionHole where
   getUnique (TypeCoercionHole { tch_co_var = cv }) = getUnique cv
 
+data MTypeCoercion p
+  = MRefl
+  | MCo (TypeCoercion p)
+  deriving Data.Data
+
+instance Outputable (MTypeCoercion p) where
+  ppr MRefl = text "MRefl"
+  ppr (MCo co) = text "MCo" <+> ppr co
+
 liftKCo :: KindCoercion p -> TypeCoercion p
 liftKCo = LiftKCo
 

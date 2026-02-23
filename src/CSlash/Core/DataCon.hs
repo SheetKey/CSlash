@@ -171,6 +171,9 @@ mkDataConTy tycon arity =
 dataConName :: DataCon p -> Name
 dataConName = dcName
 
+dataConTag :: DataCon p -> ConTag
+dataConTag = dcTag
+
 dataConTyCon :: DataCon p -> TyCon Zk
 dataConTyCon = dcTyCon
 

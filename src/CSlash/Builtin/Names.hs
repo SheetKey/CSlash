@@ -54,6 +54,9 @@ basicKnownKeyNames :: [Name]
 basicKnownKeyNames
   = []
 
+wildCardName :: Name
+wildCardName = mkSystemVarName wildCardKey (fsLit "wild")
+
 {- *********************************************************************
 *                                                                      *
       Module names
@@ -161,6 +164,9 @@ mkIoResDataConKey = mkWiredInDataConUnique 17
       Uniques for wired-in Ids
 *                                                                      *
 ********************************************************************* -}
+ 
+wildCardKey :: Unique
+wildCardKey = mkWiredInMiscIdUnique 0
 
 assertIdKey :: Unique 
 assertIdKey = mkWiredInMiscIdUnique 44

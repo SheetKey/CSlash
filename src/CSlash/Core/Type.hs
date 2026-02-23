@@ -4,7 +4,7 @@
 
 module CSlash.Core.Type
   ( Type(..), TypeCoercion(..), TypeCoercionHole(..), PredType, ForAllFlag(..) -- , FunTyFlag(..)
-  , TyVar, TyCoVar, ForAllBinder
+  , TyVar, TyCoVar, ForAllBinder, MTypeCoercion(..)
   , KnotTied
 
   , mkForAllTy, mkForAllKiCo, mkBigLamTy
@@ -21,7 +21,7 @@ module CSlash.Core.Type
 
   , mkInvisForAllTys
 
-  , isReflTyCo, mkSymTyCo
+  , isReflTyCo, mkSymTyCo, mkReflTyCo, mkTyTransCo
 
   , binderVar, binderVars
 
@@ -33,7 +33,7 @@ import CSlash.Types.Basic
 import CSlash.Cs.Pass
 
 import CSlash.Core.Type.Rep
-import CSlash.Core.Subst
+import {-# SOURCE #-} CSlash.Core.Subst
 import CSlash.Core.Type.FVs
 
 import CSlash.Core.Kind
@@ -988,4 +988,3 @@ castCoercionKind1 g t1 t2 h
       TyRefl {} -> mkReflTyCo (mkCastTy t2 h)
       GRefl _ kco -> mkGReflCo (mkCastTy t1 h) (mkSymKiCo h `mkTransKiCo` kco `mkTransKiCo` h)
       _ -> castCoercionKind2 g t1 t2 h h
-
