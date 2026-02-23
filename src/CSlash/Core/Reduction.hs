@@ -142,6 +142,11 @@ mkFunKiRedn af (KiReduction arg_co arg_ki) (KiReduction res_co res_ki)
   = mkKiReduction (mkFunKiCo af arg_co res_co) (mkFunKi af arg_ki res_ki)
 {-# INLINE mkFunKiRedn #-}
 
+mkKiPredAppRedn :: KiPredCon -> KiReduction -> KiReduction -> KiReduction
+mkKiPredAppRedn pred (KiReduction co1 ki1) (KiReduction co2 ki2)
+  = mkKiReduction (mkKiPredAppCo pred co1 co2) (mkKiPredApp pred ki1 ki2)
+{-# INLINE mkKiPredAppRedn #-}
+
 mkAppRedn :: TyReduction -> TyReduction -> TyReduction
 mkAppRedn (TyReduction co1 ty1) (TyReduction co2 ty2)
   = mkTyReduction (mkAppCo co1 co2) (mkAppTy ty1 ty2)

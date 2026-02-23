@@ -327,7 +327,10 @@ rewrite_one_ki (KiVarKi kv) = rewriteKiVar kv
 
 rewrite_one_ki ki@(BIKi _) = return $ mkReflRednKi ki
 
-rewrite_one_ki KiPredApp {} = panic "rewrite_one_ki Pred"
+rewrite_one_ki (KiPredApp pred ki1 ki2) = do
+  redn1 <- rewrite_one_ki ki1
+  redn2 <- rewrite_one_ki ki2
+  return $ mkKiPredAppRedn pred redn1 redn2
 
 -- rewrite_one_ki (KiConApp kc kis) = rewrite_ki_con_app kc kis
 

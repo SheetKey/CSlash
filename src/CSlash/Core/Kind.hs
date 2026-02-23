@@ -345,6 +345,7 @@ data KindCoercion p where
     , fco_arg :: KindCoercion p
     , fco_res :: KindCoercion p }
     -> KindCoercion p
+  -- KiPredAppCo :: KiPredCon -> KindCoercion p -> KindCoercion p -> KindCoercion p
   KiCoVarCo :: (KiCoVar p) -> KindCoercion p
   SymCo :: (KindCoercion p) -> KindCoercion p
   TransCo :: (KindCoercion p) -> (KindCoercion p) -> KindCoercion p
@@ -508,6 +509,7 @@ kiCoercionPred co = go co
                                                      , text "but co does not have pred 'LTKi'" ])
                      LTEQKi
     go (FunCo{}) = panic "kiCoercionPred/FunCo"
+    -- go (KiPredAppCo{}) = panic "kiCoercionPred/KiPredAppCo"
     go (KiCoVarCo cv) = kiCoVarKiPred cv
     go (SymCo co) = case go co of
                       EQKi -> EQKi
@@ -878,6 +880,13 @@ splitMonoFunKis ki = split [] ki
 
 mkKiPredApp :: KiPredCon -> MonoKind kv -> MonoKind kv -> MonoKind kv
 mkKiPredApp = KiPredApp
+
+mkKiPredAppCo :: KiPredCon -> KindCoercion p -> KindCoercion p -> KindCoercion p
+mkKiPredAppCo pred co1 co2
+  | Just ki1 <- isReflKiCo_maybe co1
+  , Just ki2 <- isReflKiCo_maybe co2
+  = mkReflKiCo $ mkKiPredApp pred ki1 ki2
+  | otherwise = panic "KiPredAppCo pred co1 co2"
 
 isInvisibleKiFunArg :: FunKiFlag -> Bool
 isInvisibleKiFunArg af = not (isVisibleKiFunArg af)
