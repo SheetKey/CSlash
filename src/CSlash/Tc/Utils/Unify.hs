@@ -1480,8 +1480,10 @@ promote_meta_tyvar info dest_lvl occ_tv = do
 
 checkKiEqRhs :: KiEqFlags -> MonoKind Tc -> TcM (PuResult () KiReduction)
 checkKiEqRhs flags ki = case ki of
-  KiPredApp {} -> panic "checkKiEqRhs" --checkKiConApp flags ki kc kis
-               -- maybe 'fail impredicative'??
+  KiPredApp con ki1 ki2 -> do
+    redn1 <- checkKiEqRhs flags ki1
+    redn2 <- checkKiEqRhs flags ki2
+    return $ mkKiPredAppRedn con <$> redn1 <*> redn2
   BIKi {} -> okCheckReflKi ki
   KiVarKi kv -> checkKiVar flags kv
   FunKi { fk_f = af, fk_arg = a, fk_res = r }
