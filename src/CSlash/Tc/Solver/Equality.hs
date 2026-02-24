@@ -1075,7 +1075,7 @@ canKiCoCanLHSFinish_no_unification ev swapped lhs rhs = do
       continueWith $ Right $ KiCoCt { kc_ev = new_ev
                                     , kc_lhs = lhs
                                     , kc_rhs = reductionReducedKind rhs_redn
-                                    , kc_pred = panic "kc_rel" }
+                                    , kc_pred = ctKiEvRel new_ev }
 
 tryIrredTyInstead
   :: CheckTyKiEqResult
