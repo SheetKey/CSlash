@@ -44,6 +44,10 @@ data TcCoVar thing = TcCoVar'
   , tc_cv_details :: TcVarDetails Void -- No MetaCoVars, use HoleCoercion instead
   } 
 
+toTcCoVar_maybe :: CoVar thing Tc -> Maybe (TcCoVar thing)
+toTcCoVar_maybe CoVar {} = Nothing
+toTcCoVar_maybe (TcCoVar cv) = Just cv
+
 type KiCoVar = CoVar MonoKind
 type TcKiCoVar = TcCoVar MonoKind
 

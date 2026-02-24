@@ -279,10 +279,10 @@ simplifyInfer
   -> TcM ([TcKiVar], [TcTyVar], Bool)
 simplifyInfer rhs_tclvl infer_mode name_taus wanteds
   | isEmptyWC wanteds
-  = do dep_vars <- candidateQTyKiVarsOfTypes (map snd name_taus)
+  = do (kvs, _, tvs) <- candidateQTyKiVarsOfTypes (map snd name_taus)
 
        skol_info <- mkSkolemInfo (InferSkol name_taus)
-       qtkvs@(qkvs, qtvs) <- quantifyTyKiVars skol_info dep_vars
+       qtkvs@(qkvs, qtvs) <- quantifyTyKiVars skol_info (kvs, tvs)
        traceTc "simplifyInfer: empty WC" (ppr name_taus $$ ppr qtkvs)
        return (qkvs, qtvs, False)
 

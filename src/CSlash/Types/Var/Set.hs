@@ -2,7 +2,7 @@ module CSlash.Types.Var.Set where
 
 import CSlash.Types.Var
   ( TyVar, TcTyVar, TyCoVar
-  , KiVar, TcKiVar, KiCoVar
+  , KiVar, TcKiVar, KiCoVar, TcKiCoVar
   , Id )
 import CSlash.Types.Unique
 import CSlash.Types.Name ( Name )
@@ -102,6 +102,8 @@ type DVarSet = UniqDSet
 
 type DKiVarSet p = DVarSet (KiVar p)
 type DTcKiVarSet = DVarSet TcKiVar
+
+type DTcKiCoVarSet = DVarSet TcKiCoVar
 
 type DTyVarSet p = DVarSet (TyVar p)
 type DTcTyVarSet = DVarSet TcTyVar

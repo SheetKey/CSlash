@@ -579,64 +579,73 @@ newMetaKiVarKiAtLevel tc_lvl = do
 *                                                                      *
 ********************************************************************* -}
 
-candidateQTyKiVarsOfTypes :: [Type Tc] -> TcM (DTcKiVarSet, DTcTyVarSet)
+candidateQTyKiVarsOfTypes :: [Type Tc] -> TcM (DTcKiVarSet, DTcKiCoVarSet, DTcTyVarSet)
 candidateQTyKiVarsOfTypes tys = do
   cur_lvl <- getTcLevel
-  foldlM (\acc ty -> collect_cand_qtkvs ty cur_lvl (emptyVarSet, emptyVarSet) acc ty)
-         (emptyDVarSet, emptyDVarSet) tys
+  foldlM (\acc ty -> collect_cand_qtkvs ty cur_lvl
+                     (emptyVarSet, emptyVarSet, emptyVarSet) acc ty)
+         (emptyDVarSet, emptyDVarSet, emptyDVarSet) tys
 
 collect_cand_qtkvs
   :: Type Tc
   -> TcLevel
-  -> (KiVarSet Tc, TyVarSet Tc)
-  -> (DTcKiVarSet, DTcTyVarSet)
+  -> (KiVarSet Tc, KiCoVarSet Tc, TyVarSet Tc)
+  -> (DTcKiVarSet, DTcKiCoVarSet, DTcTyVarSet)
   -> Type Tc
-  -> TcM (DTcKiVarSet, DTcTyVarSet)
-collect_cand_qtkvs orig_ty cur_lvl (boundkvs, boundtvs) dvs ty = go dvs ty
+  -> TcM (DTcKiVarSet, DTcKiCoVarSet, DTcTyVarSet)
+collect_cand_qtkvs orig_ty cur_lvl (boundkvs, boundkcvs, boundtvs) dvs ty = go dvs ty
   where
     is_bound_kv kv = kv `elemVarSet` boundkvs
     is_bound_tv tv = tv `elemVarSet` boundtvs
 
-    go :: (DTcKiVarSet, DTcTyVarSet) -> Type Tc -> TcM (DTcKiVarSet, DTcTyVarSet)
+    go
+      :: (DTcKiVarSet, DTcKiCoVarSet, DTcTyVarSet)
+      -> Type Tc
+      -> TcM (DTcKiVarSet, DTcKiCoVarSet, DTcTyVarSet)
     go dv (AppTy t1 t2) = foldlM go dv [t1, t2]
     go dv (TyConApp _ tys) = foldlM go dv tys
-    go (dkv, dtv) (FunTy ki arg res) = do
+    go (dkv, dkcv, dtv) (FunTy ki arg res) = do
       dkv1 <- collect_cand_qkvs (Mono ki) cur_lvl boundkvs dkv (Mono ki)
-      foldlM go (dkv1, dtv) [arg, res]
+      foldlM go (dkv1, dkcv, dtv) [arg, res]
     go dv (TyVarTy tv)
       | is_bound_tv tv = return dv
       | otherwise = do m_contents <- isFilledMetaTyVar_maybe tv
                        case m_contents of
                          Just ind_ty -> go dv ind_ty
                          Nothing -> go_tv dv tv
-    go (dkv, dtv) (ForAllTy (Bndr tv _) ty) = do
+    go (dkv, dkcv, dtv) (ForAllTy (Bndr tv _) ty) = do
       dkv1 <- collect_cand_qkvs (Mono $ varKind tv) cur_lvl boundkvs dkv (Mono $ varKind tv)
-      collect_cand_qtkvs orig_ty cur_lvl (boundkvs, boundtvs `extendVarSet` tv) (dkv1, dtv) ty
+      collect_cand_qtkvs orig_ty cur_lvl
+        (boundkvs, boundkcvs, boundtvs `extendVarSet` tv) (dkv1, dkcv, dtv) ty
 
-    go (dkv, dtv) (TyLamTy tv ty) = do
+    go (dkv, dkcv, dtv) (TyLamTy tv ty) = do
       dkv1 <- collect_cand_qkvs (Mono $ varKind tv) cur_lvl boundkvs dkv (Mono $ varKind tv)
-      collect_cand_qtkvs orig_ty cur_lvl (boundkvs, boundtvs `extendVarSet` tv) (dkv1, dtv) ty
+      collect_cand_qtkvs orig_ty cur_lvl
+        (boundkvs, boundkcvs, boundtvs `extendVarSet` tv) (dkv1, dkcv, dtv) ty
 
     go dv (BigTyLamTy kv ty) = 
-      collect_cand_qtkvs orig_ty cur_lvl (boundkvs `extendVarSet` kv, boundtvs) dv ty
+      collect_cand_qtkvs orig_ty cur_lvl (boundkvs `extendVarSet` kv, boundkcvs, boundtvs) dv ty
 
     go dv (CastTy ty co) = do
-      (dkv1, dtv1) <- go dv ty
-      dkv2 <- collect_cand_qkvs_co co cur_lvl (boundtvs, boundkvs) dkv1 co
-      return (dkv2, dtv1)
+      (dkv1, dkcv1, dtv1) <- go dv ty
+      (dkcv2, dkv2) <- collect_cand_qkvs_co co cur_lvl (boundkcvs, boundkvs) (dkcv1, dkv1) co
+      return (dkv2, dkcv2, dtv1)
 
-    go (dkv, dtv) (Embed ki) = do
+    go (dkv, dkcv, dtv) (Embed ki) = do
       dkv1 <- collect_cand_qkvs (Mono ki) cur_lvl boundkvs dkv (Mono ki)
-      return (dkv1, dtv)
+      return (dkv1, dkcv, dtv)
 
-    go (dkv, dtv) (KindCoercion co) = do
-      dkv1 <- collect_cand_qkvs_co co cur_lvl (boundtvs, boundkvs) dkv co
-      return (dkv1, dtv)
+    go (dkv, dkcv, dtv) (KindCoercion co) = do
+      (dkcv1, dkv1) <- collect_cand_qkvs_co co cur_lvl (boundkcvs, boundkvs) (dkcv, dkv) co
+      return (dkv1, dkcv1, dtv)
 
-    go _ other = pprPanic "collect_cand_qkvs_ty" (ppr other)
+    go _ other = pprPanic "collect_cand_qtkvs" (ppr other)
 
-    go_tv :: (DTcKiVarSet, DTcTyVarSet) -> TyVar Tc -> TcM (DTcKiVarSet, DTcTyVarSet)
-    go_tv dv@(dkv, dtv) tv
+    go_tv
+      :: (DTcKiVarSet, DTcKiCoVarSet, DTcTyVarSet)
+      -> TyVar Tc
+      -> TcM (DTcKiVarSet, DTcKiCoVarSet, DTcTyVarSet)
+    go_tv dv@(dkv, dkcv, dtv) tv
       | cur_lvl `deeperThanOrSame` varLevel tv
       = return dv
       | case tcVarDetails tv of
@@ -653,21 +662,21 @@ collect_cand_qtkvs orig_ty cur_lvl (boundkvs, boundtvs) dvs ty = go dvs ty
                   $ vcat [ ppr tv <+> colon <+> ppr tv_kind
                          , ppr boundkvs, ppr tv_kind_vars ]
              else do dkv1 <- collect_cand_qkvs (Mono tv_kind) cur_lvl boundkvs dkv (Mono tv_kind)
-                     return (dkv1, dtv)
+                     return (dkv1, dkcv, dtv)
 
 candidateQKiVarsOfType :: Type Tc -> TcM DTcKiVarSet
 candidateQKiVarsOfType ty = do
   cur_lvl <- getTcLevel
-  collect_cand_qkvs_ty ty cur_lvl (emptyVarSet, emptyVarSet) emptyDVarSet ty
+  collect_cand_qkvs_ty ty cur_lvl (emptyVarSet, emptyVarSet, emptyVarSet) emptyDVarSet ty
 
 collect_cand_qkvs_ty
   :: Type Tc
   -> TcLevel
-  -> (TyVarSet Tc, KiVarSet Tc)
+  -> (TyVarSet Tc, KiCoVarSet Tc, KiVarSet Tc)
   -> DTcKiVarSet
   -> Type Tc
   -> TcM DTcKiVarSet
-collect_cand_qkvs_ty orig_ty cur_lvl (boundtvs, boundkvs) dvs ty = go dvs ty
+collect_cand_qkvs_ty orig_ty cur_lvl (boundtvs, boundkcvs, boundkvs) dvs ty = go dvs ty
   where
     is_bound tv = tv `elemVarSet` boundtvs
 
@@ -685,22 +694,31 @@ collect_cand_qkvs_ty orig_ty cur_lvl (boundtvs, boundkvs) dvs ty = go dvs ty
                          Nothing -> go_tv dv tv
     go dv (ForAllTy (Bndr tv _) ty) = do
       dv1 <- collect_cand_qkvs (Mono $ varKind tv) cur_lvl boundkvs dv (Mono $ varKind tv)
-      collect_cand_qkvs_ty orig_ty cur_lvl (boundtvs `extendVarSet` tv, boundkvs) dv1 ty
+      collect_cand_qkvs_ty orig_ty cur_lvl
+        (boundtvs `extendVarSet` tv, boundkcvs, boundkvs) dv1 ty
+
+    go dv (ForAllKiCo kcv ty) = do
+      dv1 <- collect_cand_qkvs (Mono $ varKind kcv) cur_lvl boundkvs dv (Mono $ varKind kcv)
+      collect_cand_qkvs_ty orig_ty cur_lvl
+        (boundtvs, boundkcvs `extendVarSet` kcv, boundkvs) dv1 ty
 
     go dv (TyLamTy tv ty) = do
       dv1 <- collect_cand_qkvs (Mono $ varKind tv) cur_lvl boundkvs dv (Mono $ varKind tv)
-      collect_cand_qkvs_ty orig_ty cur_lvl (boundtvs `extendVarSet` tv, boundkvs) dv1 ty
+      collect_cand_qkvs_ty orig_ty cur_lvl
+        (boundtvs `extendVarSet` tv, boundkcvs, boundkvs) dv1 ty
 
     go dv (BigTyLamTy kv ty) = 
-      collect_cand_qkvs_ty orig_ty cur_lvl (boundtvs, boundkvs `extendVarSet` kv) dv ty
+      collect_cand_qkvs_ty orig_ty cur_lvl
+      (boundtvs, boundkcvs, boundkvs `extendVarSet` kv) dv ty
 
     go dv (CastTy ty co) = do
       dv1 <- go dv ty
-      collect_cand_qkvs_co co cur_lvl (boundtvs, boundkvs) dv co
+      snd <$> collect_cand_qkvs_co co cur_lvl (boundkcvs, boundkvs) (emptyDVarSet, dv1) co
 
     go dv (Embed ki) = collect_cand_qkvs (Mono ki) cur_lvl boundkvs dv (Mono ki)
 
-    go dv (KindCoercion co) = collect_cand_qkvs_co co cur_lvl (boundtvs, boundkvs) dv co
+    go dv (KindCoercion co)
+      = snd <$> collect_cand_qkvs_co co cur_lvl (boundkcvs, boundkvs) (emptyDVarSet, dv) co
 
     go _ other = pprPanic "collect_cand_qkvs_ty" (ppr other)
 
@@ -768,17 +786,20 @@ collect_cand_qkvs orig_ki cur_lvl bound dvs ki = go dvs ki
 collect_cand_qkvs_co
   :: KindCoercion Tc
   -> TcLevel
-  -> (TyVarSet Tc, KiVarSet Tc)
-  -> DTcKiVarSet
+  -> (KiCoVarSet Tc, KiVarSet Tc)
+  -> (DTcKiCoVarSet, DTcKiVarSet)
   -> KindCoercion Tc
-  -> TcM DTcKiVarSet
-collect_cand_qkvs_co orig_co cur_lvl (boundtvs, boundkvs) = go_co
+  -> TcM (DTcKiCoVarSet, DTcKiVarSet)
+collect_cand_qkvs_co orig_co cur_lvl (boundkcvs, boundkvs) = go_co
   where
-    go_co dv (Refl ki) = collect_cand_qkvs (Mono ki) cur_lvl boundkvs dv (Mono ki)
+    go_co (dkcv, dkv) (Refl ki)
+      = (dkcv, ) <$> collect_cand_qkvs (Mono ki) cur_lvl boundkvs dkv (Mono ki)
     go_co dv BI_U_A = return dv
     go_co dv BI_A_L = return dv
-    go_co dv (BI_U_LTEQ ki) = collect_cand_qkvs (Mono ki) cur_lvl boundkvs dv (Mono ki)
-    go_co dv (BI_LTEQ_L ki) = collect_cand_qkvs (Mono ki) cur_lvl boundkvs dv (Mono ki)
+    go_co (dkcv, dkv) (BI_U_LTEQ ki)
+      = (dkcv, ) <$> collect_cand_qkvs (Mono ki) cur_lvl boundkvs dkv (Mono ki)
+    go_co (dkcv, dkv) (BI_LTEQ_L ki)
+      = (dkcv, ) <$> collect_cand_qkvs (Mono ki) cur_lvl boundkvs dkv (Mono ki)
     go_co dv (LiftEq co) = go_co dv co
     go_co dv (LiftLT co) = go_co dv co
     go_co dv (FunCo _ _ co1 co2) = foldM go_co dv [co1, co2]
@@ -791,19 +812,23 @@ collect_cand_qkvs_co orig_co cur_lvl (boundtvs, boundkvs) = go_co
       m_co <- unpackKiCoercionHole_maybe hole
       case m_co of
         Just co -> go_co dv co
-        Nothing -> go_cv dv (TcCoVar $ coHoleCoVar hole)
+        Nothing -> go_cv dv (coHoleCoVar hole)
 
-    go_co dv (KiCoVarCo cv) = go_cv dv cv
-
-    go_cv :: DTcKiVarSet -> KiCoVar Tc -> TcM DTcKiVarSet
-    go_cv dv cv
+    go_co dv (KiCoVarCo cv)
       | is_bound cv = return dv
-      | otherwise = do
-          traceTc "COLLECTING KICOVAR" (ppr cv)
-          collect_cand_qkvs (Mono $ varKind cv) cur_lvl boundkvs dv (Mono $ varKind cv)
+      | Just tccv <- toTcCoVar_maybe cv = go_cv dv tccv
+      | otherwise = pprPanic "collect_cand_qkvs_co found unbound non-meta kicovar"
+                    (ppr orig_co $$ ppr cv $$ ppr boundkcvs)
+
+    go_cv :: (DTcKiCoVarSet, DTcKiVarSet) -> TcKiCoVar -> TcM (DTcKiCoVarSet, DTcKiVarSet)
+    go_cv dv@(dkcv, dkv) cv
+      | cv `elemDVarSet` dkcv = return dv
+      | otherwise
+      = (dkcv `extendDVarSet` cv, ) <$>
+        collect_cand_qkvs (Mono $ varKind cv) cur_lvl boundkvs dkv (Mono $ varKind cv)
 
     is_bound :: KiCoVar Tc -> Bool
-    is_bound v = panic "v `elemVarSet` boundtvs"
+    is_bound v = v `elemVarSet` boundkcvs
 
 {- *********************************************************************
 *                                                                      *
