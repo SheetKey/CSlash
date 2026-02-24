@@ -491,13 +491,8 @@ tcTyFunRhs tc_name cs_ty = bindTyConKiVars tc_name
            , ppr (getLclEnvRdrEnv env) ]
 
   let skol_info = TyConSkol TypeFunFlavor tc_name
-      tc_tc_ki_bndrs = assertPpr (all isJust mbinders)
-                       (vcat [ text "tcTyFunRhs found KiVars in tycon binders"
-                             , ppr tc_ki_bndrs ])
-                       (catMaybes mbinders)
-        where mbinders = toTcKiVar_maybe <$> tc_ki_bndrs
 
-  rhs_ty <- pushLevelAndSolveKindCoercions skol_info tc_tc_ki_bndrs
+  rhs_ty <- pushLevelAndSolveKindCoercions skol_info tc_ki_bndrs
             $ tcCheckLCsType cs_ty (TheMonoKind rhs_kind)
 
   kvs <- candidateQKiVarsOfType rhs_ty
@@ -506,7 +501,7 @@ tcTyFunRhs tc_name cs_ty = bindTyConKiVars tc_name
   doNotQuantifyKiVars kvs 
 
   (ki_bndrs, rhs_ty) <- initZonkEnv NoFlexi
-                        $ runZonkBndrT (zonkKiVarBindersX tc_ki_bndrs)
+                        $ runZonkBndrT (zonkKiVarBindersX $ TcKiVar <$> tc_ki_bndrs)
                         $ \bndrs -> do rhs_ty <- zonkTcTypeToTypeX rhs_ty
                                        return (bndrs, rhs_ty)
   let rhs_kind' = mkForAllKisMono ki_bndrs (typeMonoKind rhs_ty)

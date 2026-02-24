@@ -943,16 +943,24 @@ newKiVarBndr (SM { sm_clone = clone, sm_var = var }) name = do
                  return $ SkolemVar skol_info lvl
   return $ mkTcKiVar name details
 
-bindTyConKiVars :: Name -> ([KiVar Tc] -> MonoKind Tc -> Arity -> TcM a) -> TcM a
+bindTyConKiVars :: Name -> ([TcKiVar] -> MonoKind Tc -> Arity -> TcM a) -> TcM a
 bindTyConKiVars tycon_name thing_inside = do
   tycon <- tcLookupTcTyCon tycon_name
-  -- let full_kind = tyConKind tycon
-  --     (binders, mono_kind) = splitForAllKiVars full_kind
-  --     arity = tyConArity tycon
-  -- traceTc "bindTyConKiVars" (ppr tycon_name $$ ppr binders $$ ppr mono_kind $$ ppr full_kind)
-  -- tcExtendKiVarEnv binders
-  --   $ thing_inside binders mono_kind arity
-  panic "bindTyConKiVars"
+  case tyConDetails tycon of
+    TcTyCon { tcTyConKind = full_ki } -> finish tycon full_ki
+    d -> panic "let full_ki = tyConKind d in finish tycon (fromZkKind full_ki)"
+  where
+    -- finish :: TyCon Tc -> Kind Tc -> TcM a
+    finish tycon full_kind = do
+      let (binders1, mono_kind) = splitForAllKiVars full_kind
+          binders = (`orElse` pprPanic "TcTyCon with non-TcKiVarBndr"
+                                       (ppr tycon $$ ppr full_kind))
+                    . toTcKiVar_maybe <$> binders1 
+          arity = tyConArity tycon
+      traceTc "bindTyConKiVars"
+        (ppr tycon_name $$ ppr binders $$ ppr mono_kind $$ ppr full_kind)
+      tcExtendKiVarEnv binders
+        $ thing_inside binders mono_kind arity
 
 bindImplicitKBndrs_Q_Kv :: [Name] -> TcM a -> TcM ([TcKiVar], a)
 bindImplicitKBndrs_Q_Kv = bindImplicitKBndrsX (smVanilla { sm_clone = False
