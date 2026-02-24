@@ -1210,7 +1210,9 @@ rewriteKiCoEvidence new_rewriters old_ev swapped (KiReduction lhs_co nlhs) (KiRe
   , isReflKiCo rhs_co
   = return $ setCtEvPredKind old_ev new_pred
   | CtKiGiven { ctkev_covar = old_covar } <- old_ev
-  = panic "rewriteKiCoEvidence"
+  = do traceTcS "rewriteKiCoEvidence/G" (ppr old_ev $$ ppr new_pred)
+       newGivenKiCoVar loc new_pred
+       -- TODO: we don't keep the actual coercion. Do we need to??
   | CtKiWanted { ctkev_dest = dest, ctkev_rewriters = rewriters } <- old_ev
   , let rewriters' = rewriters S.<> new_rewriters
   = do (new_ev, hole_co) <- newWantedKiCo loc rewriters' kc nlhs nrhs
