@@ -174,6 +174,14 @@ check_type ve@(ValidityEnv { ve_tidy_env = env }) ty
     (env', _) = panic "tidyForAllTyBinders env tvbs"
 
 check_type ve@(ValidityEnv { ve_tidy_env = env }) ty
+  | not (null kcvbs)
+  = do traceTc "check_type/FAkcv" (ppr ty)
+       check_type (ve { ve_tidy_env = env' }) rest
+  where
+    (kcvbs, rest) = tcSplitForAllKiCoVars ty
+    (env', _) = panic "tidyForAllKiCoVars env kcvbs"
+
+check_type ve@(ValidityEnv { ve_tidy_env = env }) ty
   | not (null tvbs)
   = do traceTc "check_type/TL" (ppr ty)
        check_type (ve { ve_tidy_env = env' }) rhs
