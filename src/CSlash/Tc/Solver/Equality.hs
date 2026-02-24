@@ -1220,7 +1220,8 @@ rewriteKiCoEvidence new_rewriters old_ev swapped (KiReduction lhs_co nlhs) (KiRe
                 lhs_co `mkTransKiCo` hole_co `mkTransKiCo` mkSymKiCo rhs_co
        setWantedKiCo dest co
        traceTcS "rewriteKiCoEvidence"
-         $ vcat [ ppr old_ev, ppr swapped, ppr nlhs, ppr nrhs, ppr hole_co
+         $ vcat [ ppr old_ev, ppr new_ev
+                , ppr swapped, ppr nlhs, ppr nrhs, ppr hole_co
                 , ppr co, ppr new_rewriters ]
        return new_ev
   where
