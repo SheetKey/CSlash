@@ -124,12 +124,12 @@ synonymTyConsOfType ty = nonDetNameEnvElts (go ty)
     go (AppTy a b) = go a `plusNameEnv` go b
     go (FunTy _ a b) = go a `plusNameEnv` go b
     go (ForAllTy _ ty) = go ty
+    go (ForAllKiCo _ ty) = go ty
     go (TyLamTy _ ty) = go ty
     go (BigTyLamTy _ ty) = go ty
     go (CastTy ty _) = go ty
     go (Embed _) = emptyNameEnv
     go (KindCoercion _) = emptyNameEnv
-    go other = pprPanic "synonymTyConsOfType" (ppr other)
 
     go_tc tc | isTypeSynonymTyCon tc = unitNameEnv (tyConName tc) tc
              | otherwise = emptyNameEnv
