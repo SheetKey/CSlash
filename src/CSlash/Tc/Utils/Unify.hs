@@ -1145,7 +1145,7 @@ uUnfilledKiVar2 env swapped kc kv1 ki2 = do
     ki1 = mkKiVarKi kv1
     defer = unSwap swapped (uKind_defer env kc) ki1 ki2
     not_ok_so_defer = do
-      traceTc "uUnfilledVar2 not ok" (ppr kv1 $$ ppr ki2)
+      traceTc "uUnfilledKiVar2 not ok" (ppr kv1 $$ ppr ki2)
       defer            
 
 swapOverKiVars :: Bool -> KiVar Tc -> KiVar Tc -> Bool
