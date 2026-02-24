@@ -100,9 +100,10 @@ getInitialCtxtKind ctxt ty = case csTyKindSig ty of
   Nothing -> case unLoc ty of
     CsQualTy { cst_ctxt = ctxt, cst_body = res_ty }
       | not (null (unLoc ctxt)) -> do
-          arg_kinds <- newMetaKindVars (length (unLoc ctxt))
-          res_kind <- newMetaKindVar
-          return $ TheMonoKind $ mkInvisFunKis_nc arg_kinds res_kind
+          -- Do NOT call newMetaKindVars here: they will have the wrong TcLevel if not careful
+          -- arg_kinds <- newMetaKindVars (length (unLoc ctxt))
+          -- res_kind <- newMetaKindVar
+          return $ ConstraintKind $ length (unLoc ctxt)
     _ -> return AnyMonoKind
 
 tcCsSigType :: UserTypeCtxt -> LCsSigType Rn -> TcM (Type Tc)
@@ -705,12 +706,17 @@ kcInferDeclHeader name flav kv_ns kc_res_ki = addTyConFlavCtxt name flav $ do
 ********************************************************************* -}
 
 data ContextKind
-  = TheMonoKind (MonoKind Tc)
+  = TheMonoKind (MonoKind Tc) -- be careful if this contains KiVars
   | AnyMonoKind
+  | ConstraintKind Arity -- Number of constraints
 
 newExpectedKind :: ContextKind -> TcM (MonoKind Tc)
 newExpectedKind (TheMonoKind k) = return k
 newExpectedKind AnyMonoKind = newMetaKindVar
+newExpectedKind (ConstraintKind arity) = do
+  arg_kinds <- newMetaKindVars arity
+  res_kind <- newMetaKindVar
+  return $ mkInvisFunKis_nc arg_kinds res_kind
 
 expectedKindInCtxt :: UserTypeCtxt -> ContextKind
 expectedKindInCtxt _ = AnyMonoKind
