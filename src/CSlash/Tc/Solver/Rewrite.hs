@@ -443,7 +443,7 @@ rewrite_kivar2 kv f = do
   case lookupDVarEnv ieqs kv of
     Just equal_ct_list
       | Just ct <- find can_rewrite equal_ct_list
-      , KiCoCt { kc_ev = ctev, kc_lhs = KiVarLHS kv, kc_rhs = rhs_ki } <- ct
+      , KiCoCt { kc_ev = ctev, kc_lhs = KiVarLHS kv, kc_pred = EQKi, kc_rhs = rhs_ki } <- ct
       -> do let wrw = isWanted ctev
             traceRewriteM "Following inert kivar"
               $ vcat [ ppr kv <+> equals <+> ppr rhs_ki
