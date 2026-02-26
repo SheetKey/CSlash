@@ -565,7 +565,7 @@ tcSplitSigma :: HasPass p pass => Type p -> ([KiVar p], [KiCoVar p], [TyVar p], 
 tcSplitSigma ty
   = case tcSplitBigLamTyVarBinders ty of
       (kvs, ty') -> case tcSplitForAllKiCoVars ty' of
-                      (kcvs, ty'') -> case tcSplitForAllInvisBinders ty' of
+                      (kcvs, ty'') -> case tcSplitForAllInvisBinders ty'' of
                                         (tvs, tau) -> (kvs, kcvs, tvs, tau)
 
 tcSplitNestedSigmaTys :: HasPass p pass => Type p -> ([KiVar p], [KiCoVar p], [TyVar p], Type p)
