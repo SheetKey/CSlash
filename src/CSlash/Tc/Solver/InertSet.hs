@@ -517,7 +517,7 @@ updGivenKiCos tclvl ct inerts@(IKC { inert_given_kico_lvl = kc_lvl })
 
 data KiKickOutSpec
   = KOAfterUnify (VarSet TcKiVar)
-  | KOAfterAdding CanKiCoLHS
+  | KOAfterAdding CanKiCoLHS KiPredCon
 
 data TyKickOutSpec
   = TKOAfterUnify (VarSet TcTyVar)
@@ -613,7 +613,8 @@ kickOutRewritableLHSKi ko_spec new_f ics@(IKC { inert_kicos = kv_kicos
       KOAfterUnify kvs -> f_kv_can_rewrite_ki look (\kv -> case toTcKiVar_maybe kv of
                                                              Just kv -> kv `elemVarSet` kvs
                                                              Nothing -> False)
-      KOAfterAdding (KiVarLHS kv) -> f_kv_can_rewrite_ki look (== kv)
+      KOAfterAdding (KiVarLHS kv) EQKi -> f_kv_can_rewrite_ki look (== kv)
+      KOAfterAdding _ _ -> const False
 
     f_may_rewrite f = new_f `eqCanRewriteF` f
 
@@ -639,8 +640,8 @@ kickOutRewritableLHSKi ko_spec new_f ics@(IKC { inert_kicos = kv_kicos
 
     is_new_lhs_ki = case ko_spec of
       KOAfterUnify vs -> is_kivar_ki_for vs
-      KOAfterAdding lhs -> (`eqMonoKind` canKiCoLHSKind lhs)
-
+      KOAfterAdding lhs _ -> (`eqMonoKind` canKiCoLHSKind lhs)
+                        -- TODO: maybe only for EQKi^ ?
     is_kivar_ki_for vs ki = case getKiVar_maybe ki of
                               Just kv
                                 | Just tckv <- toTcKiVar_maybe kv

@@ -106,7 +106,7 @@ solveKiCoercion ev rel ki1 ki2 = do
 
 updInertKiCos :: KiCoCt -> TcS ()
 updInertKiCos kico_ct = do
-  kickOutRewritable (KOAfterAdding (kiCoCtLHS kico_ct)) (kiCoCtFlavor kico_ct)
+  kickOutRewritable (KOAfterAdding (kiCoCtLHS kico_ct) (kc_pred kico_ct)) (kiCoCtFlavor kico_ct)
   tc_lvl <- getTcLevel
   updInertKiCans (addKiCoToCans tc_lvl kico_ct)
 
