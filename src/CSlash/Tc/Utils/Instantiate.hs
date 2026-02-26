@@ -95,7 +95,8 @@ topSkolemize skol_info ty = go init_subst idCsWrapper [] [] [] ty
                     , ppr kcvs <+> vcat (map (ppr . getSrcSpan) kcvs)
                     , ppr kcvs1 <+> vcat (map (ppr . getSrcSpan) kcvs1)
                     , ppr tvs <+> vcat (map (ppr . getSrcSpan) tvs)
-                    , ppr tvs1 <+> vcat (map (ppr . getSrcSpan) tvs1) ]
+                    , ppr tvs1 <+> vcat (map (ppr . getSrcSpan) tvs1)
+                    , ppr inner_ty ]
            go subst' (wrap <.> mkWpKiLams kvs1 <.> mkWpKiCoLams kcvs1 <.> mkWpTyLams tvs1)
                      (kv_prs ++ (map varName kvs `zip` tckvs1))
                      (kcv_prs ++ (map varName kcvs `zip` tckcvs1))
