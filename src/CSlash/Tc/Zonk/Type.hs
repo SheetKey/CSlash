@@ -694,7 +694,7 @@ zonk_pat (SigPat ty pat cs_ty) = do
 
 zonk_pat (NPat ty (L l lit) mb_new eq_expr) = panic "zonk NPat"
 
-zonk_pat _ = panic "zonk_pat"
+zonk_pat other = pprPanic "zonk_pat" (ppr other)
 
 zonkPats :: Traversable f => f (LPat Tc) -> ZonkBndrTcM (f (LPat Zk))
 zonkPats = traverse zonkPat
