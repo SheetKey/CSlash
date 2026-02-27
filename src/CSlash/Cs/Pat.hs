@@ -15,7 +15,7 @@ module CSlash.Cs.Pat
   , ConPatTc(..)
   , ConLikeP
   , CsPatExpansion(..)
-  , XXPatCsTc(..)
+  , XXPatCsP(..)
 
   , CsConPatDetails, csConPatArgs, csConPatTyArgs
   , CsConPatTyArg(..)
@@ -107,8 +107,8 @@ type instance XImpPat Zk = NoExtField
 
 type instance XXPat Ps = DataConCantHappen
 type instance XXPat Rn = CsPatExpansion (Pat Rn) (Pat Rn)
-type instance XXPat Tc = XXPatCsTc
-type instance XXPat Zk = XXPatCsTc
+type instance XXPat Tc = XXPatCsP Tc
+type instance XXPat Zk = XXPatCsP Zk
 
 type instance ConLikeP Ps = RdrName
 type instance ConLikeP Rn = Name
@@ -138,13 +138,13 @@ data EpAnnImpPat = EpAnnImpPat
 
 -- ---------------------------------------------------------------------
 
-data XXPatCsTc
-  = CoPat { co_cpt_wrap :: CsWrapper Tc
-          , co_pat_inner :: Pat Tc
-          , co_pat_ty :: Type Tc
+data XXPatCsP p
+  = CoPat { co_cpt_wrap :: CsWrapper p
+          , co_pat_inner :: Pat p
+          , co_pat_ty :: Type p
           }
-  | ExpansionPat (Pat Rn) (Pat Tc)
-  | TyPat (Pat Rn) (Type Tc) (CsTyPat Rn)
+  | ExpansionPat (Pat Rn) (Pat p)
+  | TyPat (Pat Rn) (Type p) (CsTyPat Rn) -- DO NOT REMOVE: this is my version of 'EmbTyPat'
 
 data CsPatExpansion a b = CsPatExpanded a b
   deriving Data

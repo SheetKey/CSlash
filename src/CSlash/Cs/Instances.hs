@@ -238,4 +238,5 @@ deriving instance Data CsThingRn
 
 deriving instance Data (XXExprP Tc)
 deriving instance Data (XXExprP Zk)
-deriving instance Data XXPatCsTc
+deriving instance Data (XXPatCsP Tc)
+deriving instance Data (XXPatCsP Zk)

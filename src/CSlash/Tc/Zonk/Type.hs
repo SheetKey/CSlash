@@ -694,6 +694,19 @@ zonk_pat (SigPat ty pat cs_ty) = do
 
 zonk_pat (NPat ty (L l lit) mb_new eq_expr) = panic "zonk NPat"
 
+zonk_pat (XPat ext) = case ext of
+  ExpansionPat orig pat -> do
+    pat' <- zonk_pat pat
+    return $ XPat $ ExpansionPat orig pat'
+  CoPat co_fn pat ty -> do
+    co_fn' <- zonkCoFn co_fn
+    pat' <- zonkPat (noLocA pat)
+    ty' <- noBinders $ zonkTcTypeToTypeX ty
+    return $ XPat $ CoPat co_fn' (unLoc pat') ty'
+  TyPat orig arg_ty tp -> do
+    arg_ty' <- noBinders $ zonkTcTypeToTypeX arg_ty
+    return $ XPat $ TyPat orig arg_ty' tp
+
 zonk_pat other = pprPanic "zonk_pat" (ppr other)
 
 zonkPats :: Traversable f => f (LPat Tc) -> ZonkBndrTcM (f (LPat Zk))
