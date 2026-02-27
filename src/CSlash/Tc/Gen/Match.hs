@@ -68,6 +68,16 @@ tcLambdaMatches e matches invis_pat_tys res_ty = do
 
   return (wrapper, fun_kis, r)
 
+tcCaseMatches
+  :: (AnnoBody body, Outputable (body Tc))
+  => TcMatchAltChecker body
+  -> SigmaType Tc
+  -> MatchGroup Rn (LocatedA (body Rn))
+  -> ExpRhoType
+  -> TcM (MatchGroup Tc (LocatedA (body Tc)))
+tcCaseMatches tc_body scrut_ty matches res_ty
+  = tcMatches tc_body [ExpFunPatTy (mkCheckExpType scrut_ty)] res_ty matches
+
 {- *********************************************************************
 *                                                                      *
                 tcMatch

@@ -22,7 +22,7 @@ import CSlash.Tc.Gen.Bind        ( tcLocalBinds )
 import CSlash.Rename.Env         ( addUsedGRE )
 import CSlash.Tc.Utils.Env
 -- import CSlash.Tc.Gen.Arrow
-import CSlash.Tc.Gen.Match ( tcBody, tcLambdaMatches{-, tcCaseMatches-}
+import CSlash.Tc.Gen.Match ( tcBody, tcLambdaMatches, tcCaseMatches
                            , tcGRHSList )
 import CSlash.Tc.Gen.CsType
 import CSlash.Tc.Utils.TcMType
@@ -111,6 +111,13 @@ tcPolyExprCheck  expr res_ty = outer_skolemize res_ty $ \pat_tys rho_ty ->
 *                                                                      *
 ********************************************************************* -}
 
+tcInferRho :: LCsExpr Rn -> TcM (LCsExpr Tc, RhoType Tc)
+tcInferRho (L loc expr) =
+  setSrcSpanA loc $
+  addExprCtxt expr $
+  do (expr', rho) <- tcInfer (tcExpr expr)
+     return (L loc expr', rho)
+
 tcInferRhoNC :: LCsExpr Rn -> TcM (LCsExpr Tc, RhoType Tc)
 tcInferRhoNC = panic "tcInferRhoNC"
 
@@ -172,6 +179,12 @@ tcExpr (CsLet x binds expr) res_ty = do
   (binds', wrapper, expr') <- tcLocalBinds binds $
                               tcMonoExpr expr res_ty
   return (CsLet x binds' (mkLCsWrap wrapper expr'))
+
+tcExpr (CsCase ctxt scrut matches) res_ty = do
+  -- TODO: Scaling Usage??
+  (scrut', scrut_ty) <- tcInferRho scrut
+  matches' <- tcCaseMatches tcBody scrut_ty matches res_ty
+  return (CsCase ctxt scrut' matches')
 
 tcExpr (CsIf x pred b1 b2) res_ty = do
   pred' <- tcCheckMonoExpr pred $ mkAppTy boolTy (Embed $ BIKi UKd)

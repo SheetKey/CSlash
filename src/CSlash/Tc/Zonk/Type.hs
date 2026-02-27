@@ -567,6 +567,11 @@ zonkExpr (CsApp x e1 e2) = do
   new_e2 <- zonkLExpr e2
   return $ CsApp x new_e1 new_e2
 
+zonkExpr (CsCase x expr ms) = do
+  new_expr <- zonkLExpr expr
+  new_ms <- zonkMatchGroup zonkLExpr ms
+  return (CsCase x new_expr new_ms)
+
 zonkExpr (CsLet x binds expr) = runZonkBndrT (zonkLocalBinds binds) $ \new_binds -> do
   new_expr <- zonkLExpr expr
   return (CsLet x new_binds new_expr)
@@ -656,7 +661,9 @@ zonk_pat (ParPat x p) = do
   p' <- zonkPat p
   return (ParPat x p')
   
-zonk_pat (WildPat ty) = return (WildPat ty)
+zonk_pat (WildPat ty) = do
+  ty' <- noBinders $ zonkTcTypeToTypeX ty
+  return (WildPat ty')
 
 zonk_pat (VarPat x (L l v)) = do
   v' <- zonkIdBndrX v
@@ -668,8 +675,9 @@ zonk_pat (AsPat x (L loc v) pat) = do
   return (AsPat x (L loc v') pat')
 
 zonk_pat (TuplePat tys pats) = do
+  tys' <- noBinders $ zonkTcTypesToTypesX tys
   pats' <- zonkPats pats
-  return (TuplePat tys pats')
+  return (TuplePat tys' pats')
 
 zonk_pat (SumPat tys pat alt arity) = do
   pat' <- zonkPat pat

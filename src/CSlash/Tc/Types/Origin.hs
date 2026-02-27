@@ -194,6 +194,10 @@ data CtOrigin -- DOUBLE CHECK PATTERN MATCHES IF YOU ADD 'AmbiguityCheckOrigin' 
   | IfThenElseOrigin
   | ImpedanceMatching (Id Tc)
   | Shouldn'tHappenOrigin String
+  | NonLinearPatternOrigin NonLinearPatternReason (LPat Rn)
+
+data NonLinearPatternReason
+  = OtherPatternReason
 
 isVisibleOrigin :: CtOrigin -> Bool
 isVisibleOrigin (KindCoOrigin { kco_visible = vis }) = vis
@@ -285,6 +289,10 @@ pprCtOrigin (Shouldn'tHappenOrigin note)
          , text "in an error message, it is a bug relating to"
            <+> quotes (text note) ]
 
+pprCtOrigin (NonLinearPatternOrigin reason pat)
+  = hang (ctoHerald <+> text "a non-linear pattern" <+> quotes (ppr pat))
+    2 (pprNonLinearPatternReason reason)
+
 pprCtOrigin simple_origin = ctoHerald <+> pprCtO simple_origin
 
 pprCtO :: HasCallStack => CtOrigin -> SDoc
@@ -295,7 +303,11 @@ pprCtO PatSigOrigin = text "a pattern type signature"
 pprCtO (UsageEnvironmentOf x) = hsep [ text "usage of", quotes (ppr x) ]
 
 pprCtO (GivenOrigin {}) = text "a given constraint"
+pprCtO (NonLinearPatternOrigin _ pat) = hsep [ text "a non-linear pattern" <+> quotes (ppr pat) ]
 pprCtO _ = panic "pprCtO"
+
+pprNonLinearPatternReason :: NonLinearPatternReason -> SDoc
+pprNonLinearPatternReason OtherPatternReason = empty
 
 {- *******************************************************************
 *                                                                    *

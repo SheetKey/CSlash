@@ -52,7 +52,7 @@ import Data.Data
 
 type instance XWildPat Ps = NoExtField
 type instance XWildPat Rn = NoExtField
-type instance XWildPat Tc = Type Zk
+type instance XWildPat Tc = Type Tc
 type instance XWildPat Zk = Type Zk
 
 type instance XVarPat (CsPass _) = NoExtField
@@ -70,7 +70,7 @@ type instance XParPat Zk = NoExtField
 
 type instance XTuplePat Ps = [AddEpAnn]
 type instance XTuplePat Rn = NoExtField
-type instance XTuplePat Tc = [Type Zk]
+type instance XTuplePat Tc = [Type Tc]
 type instance XTuplePat Zk = [Type Zk]
 
 type instance XSumPat Ps = EpAnnSumPat

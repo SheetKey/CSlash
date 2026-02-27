@@ -192,10 +192,25 @@ newLetBndr name ty = do
 type Checker inp out
   = forall r. PatEnv -> inp -> TcM r -> TcM (out, r)
 
+tcMultiple :: Checker inp out -> Checker [inp] [out]
+tcMultiple tc_pat penv args thing_inside = do
+  err_ctxt <- getErrCtxt
+  let loop [] = do
+        res <- thing_inside
+        return ([], res)
+      loop (arg:args) = do
+        (p', (ps', res)) <- tc_pat penv arg $ setErrCtxt err_ctxt $ loop args
+        return (p':ps', res)
+  loop args
+
 tc_lpat :: ExpSigmaType -> Checker (LPat Rn) (LPat Tc)
 tc_lpat pat_ty penv (L span pat) thing_inside = setSrcSpanA span $ do
   (pat', res) <- maybeWrapPatCtxt pat (tc_pat pat_ty penv pat) thing_inside
   return (L span pat', res)
+
+tc_lpats :: [ExpSigmaType] -> Checker [LPat Rn] [LPat Tc]
+tc_lpats tys penv pats = assertPpr (equalLength pats tys) (ppr pats $$ ppr tys) $
+  tcMultiple (\ penv' (p, t) -> tc_lpat t penv' p) penv (zipEqual "tc_lpats" pats tys)
 
 tc_pat :: ExpSigmaType -> Checker (Pat Rn) (Pat Tc)
 tc_pat pat_ty penv ps_pat thing_inside = case ps_pat of
@@ -213,7 +228,12 @@ tc_pat pat_ty penv ps_pat thing_inside = case ps_pat of
     return (ParPat x pat', res)
 
   WildPat _ -> do
-    panic "checkManyPattern/but really we want affine constraint"
+    res <- thing_inside
+    pat_ty <- expTypeToType pat_ty
+    -- TODO: Check that this is ok. (GHC does this check before 'thing_inside')
+    -- Should be fine unless kind defaulting happens (but even then, we default kinds to UKd)
+    mult_wrap <- checkAffinePattern OtherPatternReason (noLocA ps_pat) (typeKind pat_ty)
+    return (mkCsWrapPat mult_wrap (WildPat pat_ty) pat_ty, res)
 
   AsPat x (L nm_loc name) pat -> do
     panic "AsPat"
@@ -224,7 +244,32 @@ tc_pat pat_ty penv ps_pat thing_inside = case ps_pat of
     pat_ty <- readExpType pat_ty
     return (mkCsWrapPat wrap (SigPat inner_ty pat' sig_ty) pat_ty, res)
 
+  TuplePat _ pats -> do
+    let arity = length pats
+        tc = tupleTyCon arity
+    checkTupSize arity
+    (coi, arg_tys) <- matchExpectedPatTy (matchExpectedTyConApp tc) penv pat_ty
+    let con_arg_tys = drop ((arity * 2) + 1) arg_tys
+    traceTc "tc_pat Tuple"
+      $ vcat [ text "arity =" <+> ppr arity
+             , text "tc =" <+> ppr tc <+> colon <+> pprTyConKind tc
+             , text "arg_tys =" <+> ppr arg_tys
+             , text "con_arg_tys =" <+> ppr con_arg_tys ]
+    (pats', res) <- tc_lpats (map mkCheckExpType con_arg_tys)
+                    penv pats thing_inside
+
+    dflags <- getDynFlags
+
+    let pat_res = TuplePat con_arg_tys pats'
+
+    pat_ty <- readExpType pat_ty
+    massert (con_arg_tys `equalLength` pats)
+    return (mkCsWrapPat coi pat_res pat_ty, res)
+
   other -> pprPanic "tc_pat unfinished" (ppr other)
+
+checkAffinePattern :: NonLinearPatternReason -> LPat Rn -> Kind Tc -> TcM (CsWrapper Tc)
+checkAffinePattern reason pat pat_ty = tcSubMult (NonLinearPatternOrigin reason pat) AKd pat_ty
 
 tc_forall_lpat :: TcTyVar -> Checker (LPat Rn) (LPat Tc)
 tc_forall_lpat tv penv (L span pat) thing_inside = setSrcSpanA span $ do
@@ -309,6 +354,24 @@ tcPatSig sig res_ty = do
                      , nest 2 (hang (text "fits the type of its context:")
                                2 (ppr res_ty)) ]
       return (tidy_env, msg)
+
+{- *********************************************************************
+*                                                                      *
+            Constructors
+*                                                                      *
+********************************************************************* -}
+
+matchExpectedPatTy
+  :: (RhoType Tc -> TcM (TypeCoercion Tc, a))
+  -> PatEnv
+  -> ExpSigmaType
+  -> TcM (CsWrapper Tc, a)
+matchExpectedPatTy inner_match (PE { pe_orig = orig }) pat_ty = do
+  pat_ty <- expTypeToType pat_ty
+  (wrap, pat_rho) <- topInstantiate orig pat_ty
+  (co, res) <- inner_match pat_rho
+  traceTc "matchExpectedPatTy" (ppr pat_ty $$ ppr wrap)
+  return (mkWpCast (mkSymTyCo co) <.> wrap, res)
 
 {- *********************************************************************
 *                                                                      *
