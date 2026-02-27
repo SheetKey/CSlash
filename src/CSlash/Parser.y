@@ -436,6 +436,15 @@ sigtype :: { LCsSigType Ps }
 --                                      , cst_body = $3 })) }
 --   | exp {% runPV (unETP $1) }
 
+bar_types2 :: { [LCsType Ps] }
+  : texp '|' texp {% runPV (unETP $1) >>= \ ($1 :: LCsType Ps) ->
+                     runPV (unETP $3) >>= \ ($3 :: LCsType Ps) -> do
+                     { h <- addTrailingVbarA $1 (glA $2)
+                     ; return [h, $3] } }
+  | texp '|' bar_types2 {% runPV (unETP $1) >>= \($1 :: LCsType Ps) -> do
+                           { h <- addTrailingVbarA $1 (glA $2)
+                           ; return (h : $3) } }
+
 -----------------------------------------------------------------------------
 -- Type Binders
 
@@ -729,6 +738,9 @@ aexp1 :: { ETP }
                          ; an = NameAnnCommas NameParens (glAA $1) (map srcSpan2e (fst $2))
                                 (glAA $3) [] }
                      in ETP $ mkCsTupleSysConPV l an (snd $2 + 1) }
+  | '(' bar_types2 ')' {% do { res <- amsA' $ sLL $1 $> $
+                                      CsSumTy (AnnParen AnnParens (glAA $1) (glAA $3)) $2
+                             ; return $ etpFromTy res } }
   | '(' ARR_U ')' {% do { kind <- amsA' $ sL1 $2 $ CsUKd noExtField
                         ; name <- amsA' $ sL1 $2 $ getRdrName unrestrictedFUNTyCon
                         ; tyvar <- amsA' $ sL1 $2 $ CsTyVar [] name
