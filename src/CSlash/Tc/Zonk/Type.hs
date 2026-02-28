@@ -567,6 +567,11 @@ zonkExpr (CsApp x e1 e2) = do
   new_e2 <- zonkLExpr e2
   return $ CsApp x new_e1 new_e2
 
+zonkExpr (ExplicitSum args alt arity expr) = do
+  new_args <- mapM zonkTcTypeToTypeX args
+  new_expr <- zonkLExpr expr
+  return (ExplicitSum new_args alt arity new_expr)
+
 zonkExpr (CsCase x expr ms) = do
   new_expr <- zonkLExpr expr
   new_ms <- zonkMatchGroup zonkLExpr ms
