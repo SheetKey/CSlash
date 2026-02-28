@@ -175,6 +175,15 @@ tcExpr expr@(ExplicitTuple x tup_args) res_ty
   | otherwise
   = panic "tcExpr ExplicitTuple section"
 
+tcExpr (ExplicitSum _ alt arity expr) res_ty = do
+  let sum_tc = sumTyCon arity
+  res_ty <- expTypeToType res_ty
+  (coi, arg_tys) <- matchExpectedTyConApp sum_tc res_ty
+  let arg_tys' = drop ((arity * 2) + 1) arg_tys
+      arg_ty = getNth arg_tys' (alt - 1)
+  expr' <- tcCheckPolyExpr expr arg_ty
+  return $ mkCsWrapTyCo coi (ExplicitSum arg_tys' alt arity expr')
+
 tcExpr (CsLet x binds expr) res_ty = do
   (binds', wrapper, expr') <- tcLocalBinds binds $
                               tcMonoExpr expr res_ty

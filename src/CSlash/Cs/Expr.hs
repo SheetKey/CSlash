@@ -148,8 +148,8 @@ type instance XExplicitTuple Zk = NoExtField
 
 type instance XExplicitSum Ps = AnnExplicitSum
 type instance XExplicitSum Rn = NoExtField
-type instance XExplicitSum Tc = NoExtField -- should be [Type]
-type instance XExplicitSum Zk = NoExtField -- should be [Type]
+type instance XExplicitSum Tc = [Type Tc]
+type instance XExplicitSum Zk = [Type Zk]
 
 type instance XCase Ps = EpAnnCsCase
 type instance XCase Rn = CsMatchContextRn
