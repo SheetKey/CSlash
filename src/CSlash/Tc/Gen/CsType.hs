@@ -241,13 +241,14 @@ tc_cs_type rn_ty@(CsTupleTy _ tup_args) exp_kind
     tyTupArgPresent (TyPresent {}) = True
     tyTupArgPresent (TyMissing {}) = False
 
+-- TODO: move to '..infer_ek'
 tc_cs_type rn_ty@(CsSumTy _ cs_tys) exp_kind = do
+  loc <- getSrcSpanM
   let arity = length cs_tys
-  arg_kinds <- mapM (\_ -> newOpenTypeKind) cs_tys
-  tau_tys <- zipWithM tc_lcs_type cs_tys arg_kinds
-  let sum_ty = mkTyConApp (sumTyCon arity) tau_tys
-      sum_kind = panic "sum_kind"
-  checkExpectedKind rn_ty sum_ty sum_kind exp_kind
+  let sum_ty = tyConNullaryTy $ sumTyCon arity
+  (ty, res_kind) <- tcInferTyApps (L (noAnnSrcSpan loc) rn_ty)
+                    sum_ty (CsValArg noExtField <$> cs_tys)
+  checkExpectedKind rn_ty ty res_kind exp_kind
 
 tc_cs_type ty@(CsTyLamTy _ matches) ek = tcTyLamMatches ty matches ek
 
@@ -543,6 +544,7 @@ mk_app_ty fun arg = assertPpr (isFunKi fun_kind)
 --   = return (ty, kind)
 
 appTypeToArg :: LCsType Rn -> [LCsTypeArg Rn] -> LCsType Rn
+appTypeToArg sum@(L _ (CsSumTy {})) _ = sum
 appTypeToArg f [] = f
 appTypeToArg f (CsValArg _ arg : args) = appTypeToArg (mkCsAppTy f arg) args
 appTypeToArg f (CsArgPar _ : args) = appTypeToArg f args
