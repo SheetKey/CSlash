@@ -195,6 +195,7 @@ data CtOrigin -- DOUBLE CHECK PATTERN MATCHES IF YOU ADD 'AmbiguityCheckOrigin' 
   | ImpedanceMatching (Id Tc)
   | Shouldn'tHappenOrigin String
   | NonLinearPatternOrigin NonLinearPatternReason (LPat Rn)
+  | LambdaMatchOrigin -- TODO: add the pat and type for better error messages
 
 data NonLinearPatternReason
   = OtherPatternReason
@@ -304,6 +305,7 @@ pprCtO (UsageEnvironmentOf x) = hsep [ text "usage of", quotes (ppr x) ]
 
 pprCtO (GivenOrigin {}) = text "a given constraint"
 pprCtO (NonLinearPatternOrigin _ pat) = hsep [ text "a non-linear pattern" <+> quotes (ppr pat) ]
+pprCtO LambdaMatchOrigin = text "a lambda right hand side"
 pprCtO _ = panic "pprCtO"
 
 pprNonLinearPatternReason :: NonLinearPatternReason -> SDoc

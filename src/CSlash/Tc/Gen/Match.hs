@@ -62,11 +62,34 @@ tcLambdaMatches e matches invis_pat_tys res_ty = do
   arity <- checkArgCounts matches
 
   let herald = ExpectedFunTyLam e
-  (wrapper, fun_kis, r)
+  (wrapper, fun_kis, mg)
     <- matchExpectedFunTys herald GenSigCtxt arity res_ty $ \pat_tys rhs_ty ->
        tcMatches tcBody (invis_pat_tys ++ pat_tys) rhs_ty matches
 
-  return (wrapper, fun_kis, r)
+  -- Now we ensure fun rhs is well kinded.
+  let (pat_kis, res_ki) = case mg_ext mg of
+                            MatchGroup pat_tys rhs_ty _ 
+                              -> (typeMonoKind <$> pat_tys, typeMonoKind rhs_ty)
+      rhs_kis = tail fun_kis ++ [res_ki]
+      -- A pair '(pat_ki, rhs_ki)' requires a constraint 'pat_ki <= rhs_ki'
+      constraint_prs :: [(MonoKind Tc, MonoKind Tc)]
+      constraint_prs = [ (pat_ki, rhs_ki)
+                       | (pat_ki, i) <- pat_kis `zip` [0, 1..]
+                       , rhs_ki <- drop i rhs_kis
+                       ]
+  traceTc "tcLambdaMatches"
+    $ vcat [ text "pat_kis =" <+> ppr pat_kis
+           , text "fun_kis =" <+> ppr fun_kis
+           , text "res_ki =" <+> ppr res_ki
+           , text "rhs_kis =" <+> ppr rhs_kis
+           , text "constraint_prs =" <+> ppr constraint_prs ]
+  massert (pat_kis `equalLength` rhs_kis)
+
+  let orig = LambdaMatchOrigin
+  _ <- mapM (uncurry $ unifyKindAndEmit orig LTEQKi) constraint_prs
+    -- TODO: Should this use 'emitKiSimple' instead of 'unifyKindAndEmit'?
+           
+  return (wrapper, fun_kis, mg)
 
 tcCaseMatches
   :: (AnnoBody body, Outputable (body Tc))
