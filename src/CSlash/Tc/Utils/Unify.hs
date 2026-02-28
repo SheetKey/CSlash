@@ -192,9 +192,19 @@ checkConstraints skol_info skol_kvs skol_kcvs skol_tvs thing_inside = do
              emitTyImplications tyImplics
              return result
      | ki_implication_needed
-       -> panic "unfinished"
+       -> do (tclvl, wanted, result) <- pushLevelAndCaptureConstraints thing_inside
+             wanted <- case onlyWantedKiConstraints_maybe wanted of
+                         Just w -> return w
+                         _ -> pprPanic "checkConstraints/only ki has ty constraints"
+                              (ppr wanted)
+             implics <- buildKiImplicationFor tclvl skol_info skol_kvs skol_kcvs wanted
+             emitKiImplications implics
+             return result
      | ty_implication_needed
-       -> panic "unfinished"
+       -> do (tclvl, wanted, result) <- pushLevelAndCaptureConstraints thing_inside
+             implics <- buildTyImplicationFor tclvl skol_info skol_tvs wanted
+             emitTyImplications implics
+             return result
      | otherwise -> thing_inside
 
 checkTyConstraints :: SkolemInfoAnon -> [TcTyVar] -> TcM result -> TcM (result)
