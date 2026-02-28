@@ -212,8 +212,8 @@ type instance XPresent (CsPass _) = NoExtField
 
 type instance XMissing Ps = EpAnn Bool
 type instance XMissing Rn = NoExtField
-type instance XMissing Tc = NoExtField -- should be Scaled Type
-type instance XMissing Zk = NoExtField -- should be Scaled Type
+type instance XMissing Tc = Type Tc
+type instance XMissing Zk = Type Zk
 
 tupArgPresent :: CsTupArg (CsPass p) -> Bool
 tupArgPresent (Present {}) = True

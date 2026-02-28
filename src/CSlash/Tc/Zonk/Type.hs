@@ -567,6 +567,17 @@ zonkExpr (CsApp x e1 e2) = do
   new_e2 <- zonkLExpr e2
   return $ CsApp x new_e1 new_e2
 
+zonkExpr (ExplicitTuple x tup_args) = do
+  new_tup_args <- mapM zonk_tup_arg tup_args
+  return (ExplicitTuple x new_tup_args)
+  where
+    zonk_tup_arg (Present x e) = do
+      e' <- zonkLExpr e
+      return (Present x e')
+    zonk_tup_arg (Missing t) = do
+      t' <- zonkTcTypeToTypeX t
+      return (Missing t')
+
 zonkExpr (ExplicitSum args alt arity expr) = do
   new_args <- mapM zonkTcTypeToTypeX args
   new_expr <- zonkLExpr expr
