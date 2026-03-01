@@ -1,3 +1,5 @@
+{-# LANGUAGE TupleSections #-}
+
 module CSlash.CsToCore.Binds where
 
 import CSlash.Driver.DynFlags
@@ -94,7 +96,64 @@ dsCsBind dflags b@(FunBind { fun_id = L loc fun
           core_binds = makeCorePair dflags fun rhs
       return [core_binds]
 
+dsCsBind dflags (XCsBindsLR (AbsBinds { abs_tvs = tyvars, abs_kvs = kivars
+                                      , abs_exports = exports
+                                      , abs_binds = binds, abs_sig = has_sig }))
+  = assertPpr (null tyvars) (text "dsCsBind/AbsBinds has nonempty tyvars") $
+    assertPpr (null kivars) (text "dsCsBind/AbsBinds has nonempty kivars") $ do
+      ds_binds <- dsLCsBinds binds
+      dsAbsBinds dflags exports ds_binds (isSingleton binds) has_sig
+
 dsCsBind _ bind = pprPanic "dsCsBind" (ppr bind)
+
+dsAbsBinds
+  :: DynFlags
+  -> [ABExport Zk]
+  -> [(Id Zk, CoreExpr)]
+  -> Bool
+  -> Bool
+  -> DsM [(Id Zk, CoreExpr)]
+dsAbsBinds dflags exports bind_prs is_singleton has_sig
+  | [export] <- exports
+  , ABE { abe_poly = global_id
+        , abe_mono = local_id
+        , abe_wrap = wrap } <- export
+  = dsCsWrapper wrap $ \core_wrap -> 
+      let rhs = core_wrap body
+          body | has_sig
+               , [(_, lrhs)] <- bind_prs
+               = lrhs
+               | otherwise
+               = mkLetRec (map (\(id, e) -> (Core.Id id, e)) bind_prs) (Var local_id)
+          main_bind = makeCorePair dflags global_id rhs
+      in return [main_bind]
+  | otherwise
+  = do let wrap_first_bind f ((main, main_rhs) : other_binds)
+             = ((main, f main_rhs) : other_binds)
+           wrap_first_bind _ [] = panic "dsAbsBinds received an empty binding list"
+
+           mk_main :: ABExport Zk -> DsM (Id Zk, CoreExpr)
+           mk_main (ABE { abe_poly = gbl_id, abe_mono = lcl_id, abe_wrap = wrap }) = do
+             dsCsWrapper wrap $ \core_wrap ->
+               return ( gbl_id `setInlinePragma` defaultInlinePragma
+                      , core_wrap (Var lcl_id) )
+
+       main_prs <- mapM mk_main exports
+       let final_prs = map mk_aux_bind bind_prs
+       return (final_prs ++ main_prs)
+  -- | otherwise
+  -- = do -- let aux_binds = Rec $ map mk_aux_bind bind_prs
+  --      -- locals 
+  --      panic "dsAbsBinds unfinished"
+  where
+    mk_aux_bind :: (Id Zk, CoreExpr) -> (Id Zk, CoreExpr)
+    mk_aux_bind (lcl_id, rhs) = let lcl_w_inline = lookupVarEnv inline_env lcl_id `orElse` lcl_id
+                                in makeCorePair dflags lcl_w_inline rhs
+
+    inline_env :: VarEnv (Id Zk) (Id Zk)
+    inline_env = mkVarEnv [ (lcl_id, setInlinePragma lcl_id prag)
+                          | ABE { abe_mono = lcl_id, abe_poly = gbl_id } <- exports
+                          , let prag = idInlinePragma gbl_id ]
 
 makeCorePair :: DynFlags -> Id Zk -> CoreExpr -> (Id Zk, CoreExpr)
 makeCorePair dflags gbl_id rhs

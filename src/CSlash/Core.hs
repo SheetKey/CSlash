@@ -180,6 +180,10 @@ type CoreBind = Bind (CoreBndr Zk)
 *                                                                      *
 ********************************************************************* -}
 
+mkLetRec :: [(b, Expr b)] -> Expr b -> Expr b
+mkLetRec [] body = body
+mkLetRec bs body = Let (Rec bs) body
+
 varToCoreExpr :: Id Zk -> Expr b
 varToCoreExpr = Var
 

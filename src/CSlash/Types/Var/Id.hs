@@ -268,7 +268,10 @@ setIdOccInfo id occ_info = modifyIdInfo (`setOccInfo` occ_info) id
 -- INLINING
 
 idInlinePragma :: Id p -> InlinePragma
-idInlinePragma id = defaultInlinePragma -- TODO: inlinePragInfo (idInfo id)
+idInlinePragma id = inlinePragInfo (idInfo id)
+
+setInlinePragma :: Id p -> InlinePragma -> Id p
+setInlinePragma id prag = modifyIdInfo (`setInlinePragInfo` prag) id
 
 idRuleMatchInfo :: Id p -> RuleMatchInfo
 idRuleMatchInfo id = inlinePragmaRuleMatchInfo (idInlinePragma id)

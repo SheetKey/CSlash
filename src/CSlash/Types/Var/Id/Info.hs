@@ -42,6 +42,7 @@ pprIdDetails other = brackets (pp other)
 
 data IdInfo = IdInfo
   { realUnfoldingInfo :: Unfolding
+  , inlinePragInfo :: InlinePragma
   , occInfo :: OccInfo
   , dmdSigInfo :: DmdSig
   , bitfield :: {-# UNPACK #-} !BitField
@@ -108,6 +109,9 @@ callArityInfo = bitfieldGetCallArityInfo . bitfield
 tagSigInfo :: IdInfo -> Maybe TagSig
 tagSigInfo = tagSig
 
+setInlinePragInfo ::IdInfo -> InlinePragma -> IdInfo
+setInlinePragInfo info pr = pr `seq` info { inlinePragInfo = pr }
+
 setOccInfo :: IdInfo -> OccInfo -> IdInfo
 setOccInfo info oc = oc `seq` info { occInfo = oc }
 
@@ -140,6 +144,7 @@ setOneShotInfo info lb = info { bitfield = bitfieldSetOneShotInfo lb (bitfield i
 vanillaIdInfo :: IdInfo
 vanillaIdInfo
   = IdInfo { realUnfoldingInfo = noUnfolding
+           , inlinePragInfo = defaultInlinePragma
            , occInfo = noOccInfo
            , dmdSigInfo = nopSig
            , bitfield = bitfieldSetCafInfo vanillaCafInfo $
