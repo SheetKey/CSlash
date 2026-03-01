@@ -53,9 +53,31 @@ type TcKiCoVar = TcCoVar MonoKind
 type TyCoVar = CoVar Type
 type TcTyCoVar = TcCoVar Type
 
-instance VarHasType (TyCoVar p) p
+instance VarHasType (TyCoVar p) p where
+  varType (TcCoVar cv) = tc_cv_thing cv
+  varType cv = cv_thing cv
 
-instance VarHasType TcTyCoVar Tc
+  setVarType (TcCoVar cv) ty = TcCoVar $ setVarType cv ty
+  setVarType cv ty = cv { cv_thing = ty }
+
+  updateVarType f (TcCoVar cv) = TcCoVar $ updateVarType f cv 
+  updateVarType f (CoVar {..}) = CoVar { cv_thing = f cv_thing, .. }
+
+  updateVarTypeM f (TcCoVar cv) = TcCoVar <$> updateVarTypeM f cv
+  updateVarTypeM f (CoVar {..}) = do
+    ty' <- f cv_thing
+    return $ CoVar { cv_thing = ty', .. }
+
+instance VarHasType TcTyCoVar Tc where
+  varType = tc_cv_thing
+
+  setVarType cv ty = cv { tc_cv_thing = ty }
+
+  updateVarType f (TcCoVar' {..}) = TcCoVar' { tc_cv_thing = f tc_cv_thing, .. }
+
+  updateVarTypeM f (TcCoVar' {..}) = do
+    ty' <- f tc_cv_thing
+    return $ TcCoVar' { tc_cv_thing = ty', .. }
 
 instance VarHasKind (KiCoVar p) p where
   varKind (TcCoVar cv) = tc_cv_thing cv
