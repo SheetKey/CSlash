@@ -261,7 +261,7 @@ reportTyImplic ctxt implic@(TyImplic { tic_skols = tvs
 
     info' = tidySkolemInfoAnon env1 info
     implic' = implic { tic_skols = tvs'
-                     , tic_given = map (tidyTyCoVar env1) given
+                     , tic_given = panic "map (tidyTyCoVar env1) given"
                      , tic_info = info' }
 
     ctxt1 = ctxt { cec_defer_type_errors = ErrorWithoutFlag

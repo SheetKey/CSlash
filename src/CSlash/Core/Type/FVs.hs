@@ -1,3 +1,5 @@
+{-# LANGUAGE ExplicitForAll #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeAbstractions #-}
 
@@ -199,13 +201,13 @@ deep_cv_cos = case foldTyCo deepCoVarFolder (emptyVarSet, emptyVarSet) of
   (_, _, _, f) -> f
 
 deepCoVarFolder
-  :: HasPass p p'
+  :: forall p p'. HasPass p p'
   => TyCoFolder p
      (TyCoVarSet p, KiCoVarSet p)
      (KiCoVarSet p)
      (Endo (KiCoVarSet p))
      (Endo (TyCoVarSet p, KiCoVarSet p))
-deepCoVarFolder = TyCoFolder { tcf_view = noView
+deepCoVarFolder @p @p' = TyCoFolder { tcf_view = noView
                              , tcf_tyvar = do_tyvar
                              , tcf_covar = do_covar
                              , tcf_hole = do_hole
@@ -222,6 +224,7 @@ deepCoVarFolder = TyCoFolder { tcf_view = noView
   where
     do_tyvar _ _ = mempty
 
+    do_covar :: (TyCoVarSet p, KiCoVarSet p) -> TyCoVar p -> Endo (TyCoVarSet p, KiCoVarSet p)
     do_covar (is, _) v = Endo do_it
       where
         do_it acc@(tacc, kacc) | v `elemVarSet` is = acc
@@ -235,7 +238,13 @@ deepCoVarFolder = TyCoFolder { tcf_view = noView
     do_tylambinder is _ = is
     do_kilambinder is _ = is
 
-    do_hole is hole = panic "do_covar is (tyCoHoleCoVar hole)"
+    do_hole
+      :: (TyCoVarSet p, KiCoVarSet p)
+      -> TypeCoercionHole
+      -> Endo (TyCoVarSet p, KiCoVarSet p)
+    do_hole is hole = case csPass @p' of
+                        Tc -> do_covar is (TcCoVar $ tyCoHoleCoVar hole)
+                        _ -> panic "unreachable"
 
 {- *********************************************************************
 *                                                                      *

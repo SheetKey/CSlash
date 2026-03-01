@@ -443,7 +443,7 @@ foldQLInstVars check_tv ty = do_ty ty
                                                  , mkcf_covar = \_ _ -> ()
                                                  , mkcf_hole = \_ _ -> () }
                         }
-    do_hole _ hole = do_ty (tyCoVarPred (tyCoHoleCoVar hole))
+    do_hole _ hole = do_ty (varType (tyCoHoleCoVar hole))
 
     do_tv :: () -> TyVar Tc -> a
     do_tv _ tv | Just tctv <- toTcTyVar_maybe tv

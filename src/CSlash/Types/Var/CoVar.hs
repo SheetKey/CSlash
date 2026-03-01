@@ -22,6 +22,7 @@ import CSlash.Types.Unique
 
 import CSlash.Utils.Misc
 import CSlash.Utils.Outputable
+import CSlash.Utils.Panic
 
 import Data.Data
 import Data.Void
@@ -33,9 +34,7 @@ data CoVar thing p where
        , cv_thing :: thing p
        }
     -> CoVar thing p
-  TcCoVar :: (TcCoVar MonoKind) -> CoVar MonoKind Tc -- no TcCoVars for TyCoVars (yet)
-             -- if they are needed, replace MonoKind with thing
-             -- also, TcCoVar must accept another argument for the coercion type
+  TcCoVar :: (TcCoVar thing) -> CoVar thing Tc
 
 data TcCoVar thing = TcCoVar'
   { tc_cv_name :: !Name
@@ -192,11 +191,17 @@ mkCoVar name thing = CoVar { cv_name = name
                            , cv_real_unique = nameUnique name
                            , cv_thing = thing }
 
-mkTcKiCoVar :: Name -> MonoKind Tc -> TcVarDetails Void -> TcKiCoVar
-mkTcKiCoVar name kind details = TcCoVar' { tc_cv_name = name
-                                         , tc_cv_real_unique = nameUnique name
-                                         , tc_cv_thing = kind
-                                         , tc_cv_details = details }
+mkTcCoVar :: Name -> thing Tc -> TcVarDetails Void -> TcCoVar thing
+mkTcCoVar name thing details = TcCoVar' { tc_cv_name = name
+                                        , tc_cv_real_unique = nameUnique name
+                                        , tc_cv_thing = thing
+                                        , tc_cv_details = details }
 
 changeCvTypeM :: Monad m => (Type p -> m (Type p')) -> TyCoVar p -> m (TyCoVar p')
 changeCvTypeM f (CoVar name uniq thing) = (CoVar name uniq) <$> f thing
+changeCvTypeM f (TcCoVar tv) = panic "changeTcCvTypeM f tv"
+
+changeTcCvTypeM :: Monad m => (Type Tc -> m (Type Tc)) -> TcTyCoVar -> m TcTyCoVar
+changeTcCvTypeM f TcCoVar' {..} = do
+  thing' <- f tc_cv_thing
+  return TcCoVar' { tc_cv_thing = thing', .. }

@@ -111,10 +111,10 @@ newWanted orig pred = do
   loc <- getCtLocM orig Nothing
   newWantedWithLoc loc pred
 
-newTyCoVar :: PredType Tc -> TcRnIf gbl lcl (TyCoVar Tc)
+newTyCoVar :: PredType Tc -> TcRnIf gbl lcl TcTyCoVar
 newTyCoVar ty = do
   name <- newSysName (predTypeOccName ty)
-  return $ mkCoVar name ty
+  return $ mkTcCoVar name ty vanillaSkolemVarUnk
 
 newKiCoVars :: [PredKind Tc] -> TcM [TcKiCoVar]
 newKiCoVars theta = mapM newKiCoVar theta
@@ -122,7 +122,7 @@ newKiCoVars theta = mapM newKiCoVar theta
 newKiCoVar :: PredKind Tc -> TcRnIf gbl lcl TcKiCoVar
 newKiCoVar ki = do
   name <- newSysName (predKindOccName ki)
-  return (mkTcKiCoVar name ki vanillaSkolemVarUnk)
+  return $ mkTcCoVar name ki vanillaSkolemVarUnk
 
 -- newWanted :: CtOrigin -> Maybe TypeOrKind -> AnyPredKind -> TcM CtKiEvidence
 -- newWanted orig t_or_k predki = do
@@ -169,7 +169,7 @@ newTyCoercionHole pred_ty = do
 newKiCoercionHoleX :: Subst p Tc -> KiCoVar p -> TcM (Subst p Tc, KindCoercionHole)
 newKiCoercionHoleX subst kcv = do
   name <- cloneKiCoVarName (varName kcv)
-  let kcv' = mkTcKiCoVar name (substMonoKi subst (varKind kcv)) vanillaSkolemVarUnk  
+  let kcv' = mkTcCoVar name (substMonoKi subst (varKind kcv)) vanillaSkolemVarUnk  
   traceTc "New coercion hole X:"
     $ vcat [ text "kcv" <+> ppr kcv <+> colon <+> ppr (varKind kcv)
            , text "kcv'" <+> ppr kcv' <+> colon <+> ppr (varKind kcv') ]

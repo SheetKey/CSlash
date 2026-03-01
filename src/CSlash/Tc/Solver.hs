@@ -627,7 +627,7 @@ setTyImplicationStatus implic@(TyImplic { tic_status = old_status
 
        bad_telescope <- checkBadTyTelescope implic
 
-       let warn_givens = findUnnecessaryTyGivens info need_inner givens
+       let warn_givens = findUnnecessaryTyGivens info need_inner (TcCoVar <$> givens)
 
            discard_entire_implication
              = null warn_givens
@@ -751,7 +751,7 @@ neededTyCoVars implic@(TyImplic { tic_given = givens
 
        let seeds1 = foldr add_implic_seeds old_needs implics
            need_inner = seeds1 `unionVarSet` tcvs
-           need_outer = need_inner `delVarSetList` givens
+           need_outer = need_inner `delVarSetList` (TcCoVar <$> givens)
 
        traceTcS "neededTyCoVars"
          $ vcat [ text "old_needs:" <+> ppr old_needs

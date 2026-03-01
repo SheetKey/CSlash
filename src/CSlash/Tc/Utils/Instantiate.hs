@@ -298,7 +298,7 @@ tcInstSkolVarsAt skol_info lvl subst kvs kcvs tvs
     sk_details_kv = SkolemVar skol_info lvl
     new_skol_kv name = mkTcKiVar name sk_details_kv
     sk_details_kcv = SkolemVar skol_info lvl
-    new_skol_kcv name kind = mkTcKiCoVar name kind sk_details_kcv
+    new_skol_kcv name kind = mkTcCoVar name kind sk_details_kcv
     sk_details_tv = SkolemVar skol_info lvl
     new_skol_tv name kind = mkTcTyVar name kind sk_details_tv
 

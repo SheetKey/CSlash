@@ -206,6 +206,11 @@ zonkTcTyVarToTcTyVar tv = do
 *                                                                      *
 ********************************************************************* -}
 
+zonkVarType :: VarHasType v Tc => v -> ZonkM v
+zonkVarType v = do
+  type' <- zonkTcType $ varType v
+  return $ setVarType v type'
+
 zonkVarKind :: VarHasKind tv Tc => tv -> ZonkM tv
 zonkVarKind tv = do
   kind' <- zonkTcMonoKind $ varKind tv
@@ -289,7 +294,7 @@ zonkTcKiVarToTcKiVar kv = do
 ********************************************************************* -}
 
 checkTyCoercionHole
-  :: TyCoVar Tc
+  :: TcTyCoVar 
   -> TypeCoercion Tc
   -> ZonkM (TypeCoercion Tc)
 checkTyCoercionHole cv co
@@ -342,7 +347,7 @@ zonkTyImplication implic@(TyImplic { tic_skols = skols
                                    , tic_wanted = wanted
                                    , tic_info = info })
   = do skols' <- mapM zonkVarKind skols
-       given' <- mapM zonkTyCoVar given
+       given' <- mapM zonkVarType given
        info' <- zonkSkolemInfoAnon info
        wanted' <- zonkWTCRec wanted
        return (implic { tic_skols = skols'

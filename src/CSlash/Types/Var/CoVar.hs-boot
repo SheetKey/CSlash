@@ -3,5 +3,5 @@
 
 module CSlash.Types.Var.CoVar where
 
-type role CoVar nominal nominal
+type role CoVar representational nominal
 data CoVar (thing :: * -> *) p

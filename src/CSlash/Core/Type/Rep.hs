@@ -103,7 +103,7 @@ data TypeCoercion p where
 instance Data.Typeable p => Data.Data (TypeCoercion p)
 
 data TypeCoercionHole = TypeCoercionHole
-  { tch_co_var :: TyCoVar Tc
+  { tch_co_var :: TcTyCoVar
   , tch_ref :: IORef (Maybe (TypeCoercion Tc))
   }
 
@@ -220,7 +220,7 @@ mkCoherenceRightMCo
 mkCoherenceRightMCo _ Nothing co2 = co2
 mkCoherenceRightMCo ty (Just kco) co2 = mkCoherenceRightCo ty kco co2
 
-tyCoHoleCoVar :: TypeCoercionHole -> TyCoVar Tc
+tyCoHoleCoVar :: TypeCoercionHole -> TcTyCoVar 
 tyCoHoleCoVar = tch_co_var
 
 isReflTyCo :: TypeCoercion p -> Bool

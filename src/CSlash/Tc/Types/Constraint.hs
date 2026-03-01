@@ -250,11 +250,11 @@ mkKiGivens loc co_vars = map mk co_vars
                                                 , ctkev_pred = varKind co_var
                                                 , ctkev_loc = loc })
 
-mkTyGivens :: CtLoc -> [TyCoVar Tc] -> [TyCt]
+mkTyGivens :: CtLoc -> [TcTyCoVar] -> [TyCt]
 mkTyGivens loc co_vars = map mk co_vars
   where
     mk co_var = mkNonCanonicalTy (CtTyGiven { cttev_covar = co_var
-                                            , cttev_pred = tyCoVarPred co_var
+                                            , cttev_pred = varType co_var
                                             , cttev_loc = loc })
 
 ctKiEvidence :: KiCt -> CtKiEvidence
@@ -548,7 +548,7 @@ data TyImplication
     { tic_tclvl :: TcLevel
     , tic_info :: SkolemInfoAnon
     , tic_skols :: [TcTyVar]
-    , tic_given :: [TyCoVar Tc]
+    , tic_given :: [TcTyCoVar]
     , tic_given_eqs :: HasGivenTyEqs
     , tic_warn_inaccessible :: Bool
     , tic_env :: !CtLocEnv
@@ -659,7 +659,7 @@ instance Outputable TyImplication where
              , text "Skolems =" <+> ppr skols
              , text "Given-eqs =" <+> ppr given_eqs
              , text "Status =" <+> ppr status
-             , hang (text "Given =") 2 (pprTyCoVars given)
+             , hang (text "Given =") 2 (pprTcTyCoVars given)
              , hang (text "Wanted =") 2 (ppr wanted)
              , pprSkolInfo info ] <+> rbrace)
 
@@ -896,6 +896,9 @@ pprKiCoVars co_vars = vcat (map pprKiCoVarWithKind co_vars)
 pprTcKiCoVars :: [TcKiCoVar] -> SDoc
 pprTcKiCoVars co_vars = vcat (map pprTcKiCoVarWithKind co_vars)
 
+pprTcTyCoVars :: [TcTyCoVar] -> SDoc
+pprTcTyCoVars co_vars = vcat (map pprTcTyCoVarWithType co_vars)
+
 pprKiCoVarTheta :: [TcKiCoVar] -> SDoc
 pprKiCoVarTheta co_vars = pprTheta (map varKind co_vars)
   where
@@ -904,11 +907,14 @@ pprKiCoVarTheta co_vars = pprTheta (map varKind co_vars)
 pprKiCoVarWithKind :: KiCoVar Tc -> SDoc
 pprKiCoVarWithKind v = ppr v <+> colon <+> ppr (kiCoVarPred v)
 
+pprTyCoVarWithType :: TyCoVar Tc -> SDoc
+pprTyCoVarWithType v = ppr v <+> colon <+> ppr (tyCoVarPred v)
+
 pprTcKiCoVarWithKind :: TcKiCoVar -> SDoc
 pprTcKiCoVarWithKind v = ppr v <+> colon <+> ppr (varKind v)
 
-pprTyCoVarWithType :: TyCoVar Tc -> SDoc
-pprTyCoVarWithType v = ppr v <+> colon <+> ppr (tyCoVarPred v)
+pprTcTyCoVarWithType :: TcTyCoVar -> SDoc
+pprTcTyCoVarWithType v = ppr v <+> colon <+> ppr (varType v)
 
 {- *********************************************************************
 *                                                                      *
@@ -919,7 +925,7 @@ pprTyCoVarWithType v = ppr v <+> colon <+> ppr (tyCoVarPred v)
 data CtTyEvidence
   = CtTyGiven
     { cttev_pred :: PredType Tc
-    , cttev_covar :: TyCoVar Tc
+    , cttev_covar :: TcTyCoVar 
     , cttev_loc :: CtLoc
     }
   | CtTyWanted
@@ -1000,7 +1006,7 @@ ctEvKiCoercion (CtKiWanted { ctkev_dest = hole })
 
 ctEvTyCoercion :: HasDebugCallStack => CtTyEvidence -> TypeCoercion Tc
 ctEvTyCoercion (CtTyGiven { cttev_pred = pred, cttev_covar = co_var })
-  = mkTyCoVarCo co_var
+  = mkTyCoVarCo $ TcCoVar co_var
 ctEvTyCoercion (CtTyWanted { cttev_dest = hole })
   = mkTyHoleCo hole
 

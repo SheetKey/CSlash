@@ -1,3 +1,6 @@
+{-# LANGUAGE ExplicitForAll #-}
+{-# LANGUAGE TypeAbstractions #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE BangPatterns #-}
@@ -532,16 +535,19 @@ tycoercionRType
 tycoercionRType co = ty_coercion_lr_type CRight co
 
 ty_coercion_lr_type
-  :: (HasDebugCallStack, HasPass p pass)
+  :: forall p pass. (HasDebugCallStack, HasPass p pass)
   => LeftOrRight -> TypeCoercion p -> Type p
-ty_coercion_lr_type which orig_co = go orig_co
+ty_coercion_lr_type @p @pass which orig_co = go orig_co
   where
+    go :: TypeCoercion p -> Type p
     go (TyRefl ty) = ty
     go (GRefl ty kco) = pickLR which (ty, mkCastTy ty kco)
     go (TyConAppCo tc cos) = mkTyConApp tc (map go cos)
     go (AppCo co1 co2) = mkAppTy (go co1) (go co2)
     go (TyCoVarCo cv) = go_covar cv
-    go (TyHoleCo h) = go_covar (tyCoHoleCoVar h)
+    go (TyHoleCo h) = case csPass @pass of
+                        Tc -> go_covar (TcCoVar $ tyCoHoleCoVar h)
+                        _ -> panic "unreachable"
     go (TySymCo co) = pickLR which (tycoercionRType co, tycoercionLType co)
     go (TyTransCo co1 co2) = pickLR which (go co1, go co2)
     go (LRCo lr co) = pickLR lr (splitAppTy (go co))
@@ -561,6 +567,7 @@ ty_coercion_lr_type which orig_co = go orig_co
           CRight | isReflKiCo kco -> mkForAllKiCo kcv1 (go co1)
                  | otherwise -> pprPanic "ForAllCoCo" (ppr co)
 
+    go_covar :: TyCoVar p -> Type p
     go_covar cv = pickLR which (coVarLType cv, coVarRType cv)
 
 coVarLType :: (HasDebugCallStack, HasPass p pass) => TyCoVar p -> Type p
@@ -970,7 +977,7 @@ decomposePiCos co stuff args = pprPanic "decomposePiCos not EQKi"
 setCoHoleType :: TypeCoercionHole -> Type Tc -> TypeCoercionHole
 setCoHoleType h t = setTyCoHoleCoVar h (setVarType (tyCoHoleCoVar h) t)
 
-setTyCoHoleCoVar :: TypeCoercionHole -> TyCoVar Tc -> TypeCoercionHole
+setTyCoHoleCoVar :: TypeCoercionHole -> TcTyCoVar -> TypeCoercionHole
 setTyCoHoleCoVar h cv = h { tch_co_var = cv }
 
 castCoercionKind2

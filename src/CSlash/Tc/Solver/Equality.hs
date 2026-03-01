@@ -491,7 +491,7 @@ can_ty_eq_app ev s1 t1 s2 t2
   = canTyEqHardFailure ev (s1 `mkAppTy` t1) (s2 `mkAppTy` t2)
 
   | CtTyGiven { cttev_covar = covar } <- ev
-  = do let co = mkTyCoVarCo covar
+  = do let co = mkTyCoVarCo $ TcCoVar covar
            co_s = mkLRTyCo CLeft co
            co_t = mkLRTyCo CRight co
        covar_s <- newGivenTyCoVar loc (mkTyEqPred s1 s2)
@@ -570,7 +570,7 @@ canDecomposableTyConAppOK ev tc (ty1, tys1) (ty2, tys2)
 
     CtTyGiven { cttev_covar = covar }
       | let pred_ty = mkTyEqPred ty1 ty2
-            ev_co = mkTyCoVarCo (setVarType covar pred_ty)
+            ev_co = mkTyCoVarCo $ TcCoVar $ setVarType covar pred_ty
         -> emitNewTyGivens loc (panic "canDecomposableTyConAppOK")
            -- [ (mkSelCo (SelTyCon i) ev_co)
            -- | (ty1, ty2, i) <- zip3 tys1 tys2 [0..]
@@ -604,7 +604,7 @@ canDecomposableFunTy ev f1@(ty1, k1, a1, r1) f2@(ty2, k2, a2, r2) = do
             setWantedTyCo dest co
     CtTyGiven { cttev_covar = covar }
       -> let pred_ty = mkTyEqPred ty1 ty2
-             ev_co = mkTyCoVarCo (setVarType covar pred_ty)
+             ev_co = mkTyCoVarCo $ TcCoVar $ setVarType covar pred_ty
          in emitNewTyGivens loc (panic "[ mkSelCo (SelFun fs) ev_co")
                                 --  | fs <- [SelKind, SelArg, SelRes] ]
   stopWith ev "Decomposed FunTyConApp"
@@ -627,7 +627,7 @@ canTyEqHardFailure ev ty1 ty2 = do
   traceTcS "canTyEqHardFailure" (ppr ty1 $$ ppr ty2)
   (redn1, ty_rewriters1, ki_rewriters1) <- rewriteTyForErrors ev ty1
   (redn2, ty_rewriters2, ki_rewriters2) <- rewriteTyForErrors ev ty2
-  traceTcS "canTyEqHardFailure ************************* DISCARDING ki_rewriters"
+  traceTcS "canTyEqHardFailure ************************* DISCARDING ki_rewriters" -- TODO
     $ vcat [ text "ki_rewriters1 =" <+> ppr ki_rewriters1
            , text "ki_rewriters2 =" <+> ppr ki_rewriters2 ]
   new_ev <- rewriteTyEqEvidence (ty_rewriters1 S.<> ty_rewriters2) ev NotSwapped redn1 redn2

@@ -971,7 +971,7 @@ setKiCoBindIfWanted ev co = case ev of
   CtKiWanted { ctkev_dest = dest } -> setWantedKiCo dest co
   _ -> return ()
 
-newTyCoVar :: PredType Tc -> TcS (TyCoVar Tc)
+newTyCoVar :: PredType Tc -> TcS TcTyCoVar
 newTyCoVar pred = wrapTcS (TcM.newTyCoVar pred)
 
 newKiCoVar :: PredKind Tc -> TcS TcKiCoVar
