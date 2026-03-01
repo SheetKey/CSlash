@@ -81,7 +81,18 @@ mkDsEnvsFromTcGbl
   :: MonadIO m
   => CsEnv -> IORef (Messages DsMessage) -> TcGblEnv Zk -> m (DsGblEnv, DsLclEnv)
 mkDsEnvsFromTcGbl cs_env msg_var tcg_env = do
-  panic "unfinished"
+  eps <- liftIO $ csEPS cs_env
+  let unit_env = cs_unit_env cs_env
+      this_mod = tcg_mod tcg_env
+      rdr_env = tcg_rdr_env tcg_env
+      type_env = tcg_type_env tcg_env
+      tcg_comp_env = panic "tcg_complete_match_env tcg_env"
+
+  ds_complete_matches <- liftIO $ unsafeInterleaveIO $
+    traverse (lookupCompleteMatch type_env cs_env) =<<
+    localAndImportedCompleteMatches tcg_comp_env eps
+
+  return $ mkDsEnvs unit_env this_mod rdr_env type_env msg_var ds_complete_matches
 
 lookupCompleteMatch :: TypeEnv -> CsEnv -> CompleteMatch -> IO DsCompleteMatch
 lookupCompleteMatch type_env cs_env (CompleteMatch { cmConLikes = nms, cmResultTyCon = mb_tc })
@@ -109,6 +120,33 @@ runDs cs_env (ds_gbl, ds_lcl) thing_inside = do
                 | Right r <- res = Just r
                 | otherwise = panic "initDs"
   return (msgs, final_res)  
+
+mkDsEnvs
+  :: UnitEnv
+  -> Module
+  -> GlobalRdrEnv
+  -> TypeEnv
+  -> IORef (Messages DsMessage)
+  -> DsCompleteMatches
+  -> (DsGblEnv, DsLclEnv)
+mkDsEnvs unit_env mod rdr_env type_env msg_var complete_matches
+  = let if_genv = IfGblEnv { if_doc = text "mkDsEnv"
+                           , if_rec_types = KnotVars [mod] (\that_mod -> if that_mod == mod
+                                                             then Just (return type_env)
+                                                             else Nothing)
+                           }
+        if_lenv = mkIfLclEnv mod (text "CSL error in desugarer lookup in" <+> ppr mod)
+        real_span = realSrcLocSpan (mkRealSrcLoc (moduleNameFS (moduleName mod)) 1 1)
+        gbl_env = DsGblEnv { ds_mod = mod
+                           , ds_gbl_rdr_env = rdr_env
+                           , ds_name_ppr_ctx = mkNamePprCtx unit_env rdr_env
+                           , ds_msgs = msg_var
+                           , ds_if_env = (if_genv, if_lenv)
+                           , ds_complete_matches = complete_matches
+                           }
+        lcl_env = DsLclEnv { dsl_loc = real_span }
+  in (gbl_env, lcl_env)
+
 
 {- *********************************************************************
 *                                                                      *

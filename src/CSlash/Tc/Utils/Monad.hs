@@ -74,6 +74,7 @@ import CSlash.Types.Unique.Supply
 import CSlash.Types.Basic( TopLevelFlag, TypeOrKind(..) )
 -- import GHC.Types.CostCentre.State
 import CSlash.Types.SourceFile
+import CSlash.Types.CompleteMatch
 
 -- import qualified GHC.LanguageExtensions as LangExt
 
@@ -1027,3 +1028,7 @@ liftZonkM (ZonkM f) = do
                        , zge_binder_stack = bndrs }
   liftIO $ f zge
 {-# INLINE liftZonkM #-}
+
+localAndImportedCompleteMatches :: CompleteMatches -> ExternalPackageState -> IO CompleteMatches
+localAndImportedCompleteMatches tcg_comps eps = do
+  return $ tcg_comps ++ eps_complete_matches eps

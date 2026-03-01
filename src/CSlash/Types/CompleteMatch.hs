@@ -16,7 +16,7 @@ type CompleteMatch = CompleteMatchX Name
 type DsCompleteMatch = CompleteMatchX (ConLike Zk)
 
 type CompleteMatches = [CompleteMatch]
-type DsCompleteMatches = CompleteMatches
+type DsCompleteMatches = [DsCompleteMatch]
 
 data CompleteMatchX con = CompleteMatch
   { cmConLikes :: UniqDSet con
