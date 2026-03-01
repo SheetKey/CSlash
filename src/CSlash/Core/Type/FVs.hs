@@ -319,13 +319,12 @@ fvsOfKiCo (TransCo co1 co2) f bound_vars acc
 fvsOfKiCo (SelCo _ co) f bound_vars acc = fvsOfKiCo co f bound_vars acc
 
 fvsOfKiCoVar :: KiCoVar p -> TyFV p
--- fvsOfKiCoVar v f (bound_vars, bks) acc@(acc_list, acc_set, kl, ks)
---   | not (f (Left v)) = acc
---   | v `elemVarSet` bound_vars = acc
---   | v `elemVarSet` acc_set = acc
---   | otherwise = liftKiFV (fvsOfMonoKind (varKind v))
---                 f (bound_vars, bks) (v:acc_list, extendVarSet acc_set v, kl, ks)
-fvsOfKiCoVar = panic "fvsOfKiCoVar"
+fvsOfKiCoVar v f (bts, bound_vars, bks) acc@(tl, ts, acc_list, acc_set, kl, ks)
+  | not (f (In2 v)) = acc
+  | v `elemVarSet` bound_vars = acc
+  | v `elemVarSet` acc_set = acc
+  | otherwise = liftKiFV (fvsOfMonoKind (varKind v))
+                f (bts, bound_vars, bks) (tl, ts, v:acc_list, extendVarSet acc_set v, kl, ks)
 
 fvsOfKiCos :: [KindCoercion p] -> TyFV p
 fvsOfKiCos [] f bound_vars acc = emptyFV f bound_vars acc
