@@ -71,10 +71,11 @@ tcLambdaMatches e matches invis_pat_tys res_ty = do
                             MatchGroup pat_tys rhs_ty _ 
                               -> (typeMonoKind <$> pat_tys, typeMonoKind rhs_ty)
       rhs_kis = tail fun_kis ++ [res_ki]
+      pats_need_constraint = lambdaMatchNeedsConstraint mg
       -- A pair '(pat_ki, rhs_ki)' requires a constraint 'pat_ki <= rhs_ki'
       constraint_prs :: [(MonoKind Tc, MonoKind Tc)]
       constraint_prs = [ (pat_ki, rhs_ki)
-                       | (pat_ki, i) <- pat_kis `zip` [0, 1..]
+                       | (pat_ki, True, i) <- zip3 pat_kis pats_need_constraint [0, 1..] 
                        , rhs_ki <- drop i rhs_kis
                        ]
   traceTc "tcLambdaMatches"
@@ -82,8 +83,10 @@ tcLambdaMatches e matches invis_pat_tys res_ty = do
            , text "fun_kis =" <+> ppr fun_kis
            , text "res_ki =" <+> ppr res_ki
            , text "rhs_kis =" <+> ppr rhs_kis
+           , text "pats_need_ocnstraint =" <+> ppr pats_need_constraint
            , text "constraint_prs =" <+> ppr constraint_prs ]
   massert (pat_kis `equalLength` rhs_kis)
+  massert (pat_kis `equalLength` pats_need_constraint)
 
   let orig = LambdaMatchOrigin
   _ <- mapM (uncurry $ unifyKindAndEmit orig LTEQKi) constraint_prs
@@ -142,7 +145,7 @@ tcMatches tc_body pat_tys rhs_ty (MG { mg_alts = L l matches, mg_ext = origin })
        rhs_ty <- readExpType rhs_ty
        traceTc "tcMatches" (ppr matches' $$ ppr pat_tys $$ ppr rhs_ty)
        return $ MG { mg_alts = L l matches'
-                   , mg_ext = MatchGroup pat_tys rhs_ty origin }
+                   , mg_ext = MatchGroup pat_tys rhs_ty origin } 
   where
     filter_out_forall_pat_tys :: [ExpPatType] -> [ExpSigmaType]
     filter_out_forall_pat_tys = mapMaybe match_fun_pat_ty
@@ -311,3 +314,13 @@ checkArgCounts (MG { mg_alts = L _ (match1:matches) })
     mb_bad_matches = NE.nonEmpty [m | m <- matches, reqd_args_in_match m /= n_args1]
 
     reqd_args_in_match (L _ (Match { m_pats = L _ pats })) = count (isVisArgPat . unLoc) pats
+
+lambdaMatchNeedsConstraint :: MatchGroup Tc (LCsExpr Tc) -> [Bool]
+lambdaMatchNeedsConstraint MG { mg_alts = L _ [L _ Match { m_pats = L _ pats }] }
+  = go <$> pats
+  where
+    go (L _ WildPat {}) = False
+    go (L _ (ParPat _ p)) = go p
+    go (L _ (SigPat _ p _)) = go p
+    go _ = True
+lambdaMatchNeedsConstraint _ = panic "lambdaMatchNeedsConstraint"
