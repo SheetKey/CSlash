@@ -32,16 +32,51 @@ import CSlash.Core.Type.Compare( eqType )
 import CSlash.Core.Type
 import CSlash.Data.Maybe
 import CSlash.Types.SourceText (FractionalLit(..))
-import Control.Monad (zipWithM, replicateM)
+import Control.Monad (zipWithM, replicateM, mapAndUnzipM)
 import Data.List (elemIndex)
 import Data.List.NonEmpty ( NonEmpty(..) )
 import qualified Data.List.NonEmpty as NE
+
+mkPmLetVar :: Id Zk -> Id Zk -> GrdDag
+mkPmLetVar x y = sequencePmGrds [ PmLet x (Var y) | x /= y ]
 
 vanillaConGrd :: Id Zk -> DataCon Zk -> [a] -> PmGrd
 vanillaConGrd = panic "vanillaConGrd"
 
 desugarPat :: Id Zk -> Pat Zk -> DsM GrdDag
-desugarPat = panic "desugarPat"
+desugarPat x pat = case pat of
+  WildPat _ -> pure GdEnd
+  VarPat _ y -> pure (mkPmLetVar (unLoc y) x)
+  ParPat _ p -> desugarLPat x p
+  AsPat _ (L _ y) p -> (mkPmLetVar y x `gdSeq`) <$> desugarLPat y p
+  SigPat _ p _ -> desugarLPat x p
+  KdSigPat {} -> panic "desugarPat KdSigPat"
+  ImpPat _ _ -> panic "desugarPat ImpPat"
+  ConPat {} -> panic "desugarPat ConPat"
+  NPat {} -> panic "desugarPat NPat"
+  LitPat _ lit -> panic "desugarPat LitPat"
+  TuplePat _ pats -> do
+    (vars, grdss) <- mapAndUnzipM desugarLPatV pats
+    let tuple_con = tupleDataCon (length vars)
+    pure $ vanillaConGrd x tuple_con vars `consGrdDag` sequenceGrdDags grdss
+  SumPat _ p alt arity -> do
+    (y, grds) <- desugarLPatV p
+    let sum_con = sumDataCon alt arity
+    pure $ vanillaConGrd x sum_con [y] `consGrdDag` grds
+  XPat ext -> case ext of
+    ExpansionPat orig expansion -> do
+      case orig of
+        -- Todo: ListPat
+        _ -> desugarPat x expansion
+    CoPat wrapper p _
+      | isIdCsWrapper wrapper -> desugarPat x p
+      | WpCast co <- wrapper, panic "isReflexiveTyCo co" -> desugarPat x p
+      | otherwise -> do
+          (y, grds) <- desugarPatV p
+          dsCsWrapper wrapper $ \wrap_rhs_y ->
+            pure (PmLet y (wrap_rhs_y (Var x)) `consGrdDag` grds)
+    TyPat {} -> pure GdEnd
+  TyVarPat {} -> panic "desugarPat TyVarPat"
 
 desugarPatV :: Pat Zk -> DsM (Id Zk, GrdDag)
 desugarPatV pat = do
