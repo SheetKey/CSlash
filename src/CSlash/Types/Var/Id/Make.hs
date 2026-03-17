@@ -91,3 +91,7 @@ leftTySectionName = panic "leftTySectionName"
 
 rightTySectionName :: Name
 rightTySectionName = panic "rightTySectionName"
+
+-- TODO: Should builtins be functions of kinds? Rather than be exprs/types which require kind args.
+unitExpr :: CoreExpr
+unitExpr = panic "unitExpr"

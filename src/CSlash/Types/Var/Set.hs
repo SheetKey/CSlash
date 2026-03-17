@@ -99,6 +99,7 @@ pprVarSet :: UniqSet a -> ([a] -> SDoc) -> SDoc
 pprVarSet = pprUFM . getUniqSet
 
 type DVarSet = UniqDSet
+type DIdSet p = DVarSet (Id p)
 
 type DKiVarSet p = DVarSet (KiVar p)
 type DTcKiVarSet = DVarSet TcKiVar

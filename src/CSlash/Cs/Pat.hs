@@ -23,6 +23,8 @@ module CSlash.Cs.Pat
   , patNeedsParens
 
   , pprParendLPat
+
+  , isBoringCsPat
   ) where
 
 import Prelude hiding ((<>))
@@ -253,6 +255,15 @@ pprConArgs
 pprConArgs (PrefixCon ts pats) = fsep (pprTyArgs ts : map (pprParendLPat appPrec) pats)
   where pprTyArgs tyargs = fsep (map ppr tyargs)
 pprConArgs (InfixCon p1 p2) = sep [ pprParendLPat appPrec p1, pprParendLPat appPrec p2 ]
+
+{- *********************************************************************
+*                                                                      *
+* Predicates for checking things about pattern-lists in EquationInfo   *
+*                                                                      *
+********************************************************************* -}
+
+isBoringCsPat :: forall p. OutputableBndrId p => LPat (CsPass p) -> Bool
+isBoringCsPat = panic "goL"
 
 type instance Anno (Pat (CsPass p)) = SrcSpanAnnA
 type instance Anno (CsOverLit (CsPass p)) = EpAnnCO

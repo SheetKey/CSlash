@@ -1,15 +1,15 @@
 module CSlash.CsToCore.Expr where
 
--- import GHC.HsToCore.Match
--- import GHC.HsToCore.Match.Literal
+import CSlash.CsToCore.Match
+import CSlash.CsToCore.Match.Literal
 import CSlash.CsToCore.Binds
--- import GHC.HsToCore.GuardedRHSs
+import CSlash.CsToCore.GuardedRHSs
 -- import GHC.HsToCore.ListComp
--- import GHC.HsToCore.Utils
+import CSlash.CsToCore.Utils
 -- import GHC.HsToCore.Arrows
 import CSlash.CsToCore.Monad
--- import GHC.HsToCore.Pmc
--- import GHC.HsToCore.Errors.Types
+import CSlash.CsToCore.Pmc
+import CSlash.CsToCore.Errors.Types
 import CSlash.Types.SourceText
 import CSlash.Types.Name hiding (varName)
 -- import GHC.HsToCore.Quote
@@ -22,7 +22,7 @@ import CSlash.Tc.Utils.Monad
 import CSlash.Core.Type
 import CSlash.Core.Kind
 import CSlash.Core.Type.Rep
-import CSlash.Core
+import CSlash.Core as Core
 import CSlash.Core.Utils
 import CSlash.Core.Make
 
@@ -51,6 +51,11 @@ import CSlash.Types.Error
                 dsLocalBinds, dsValBinds
 *                                                                      *
 ********************************************************************* -}
+
+dsLocalBinds :: CsLocalBinds Zk -> CoreExpr -> DsM CoreExpr
+dsLocalBinds (EmptyLocalBinds _) body = return body
+dsLocalBinds b@(CsValBinds _ binds) body
+  = panic "dsLocalBinds"
 
 {- *********************************************************************
 *                                                                      *
@@ -85,14 +90,14 @@ dsExpr e@(XExpr ext_expr_tc)
 -- Simpler than GHC because we always have LexicalNegation On      
 dsExpr (NegApp _ expr neg_expr) = panic "negapp"
 
--- dsExpr (CsLam (_, fun_kis) mg) = do
---   (ids, body) <- matchWrapper LamAlt Nothing mg
---   massertPpr (ids `equalLength` fun_kis)
---     $ vcat [ text "dsExpr CsLam fun_kis and id binder length mismatch"
---            , text "fun_kis" <+> ppr fun_kis
---            , text "ids" <+> ppr ids
---            , text "body" <+> ppr body ]
---   return $ mkCoreLams (ids `zip` Just <$> fun_kis) body
+dsExpr (CsLam (_, fun_kis) mg) = do
+  (ids, body) <- matchWrapper LamAlt Nothing mg
+  massertPpr (ids `equalLength` fun_kis)
+    $ vcat [ text "dsExpr CsLam fun_kis and id binder length mismatch"
+           , text "fun_kis" <+> ppr fun_kis
+           , text "ids" <+> ppr ids
+           , text "body" <+> ppr body ]
+  return $ mkCoreLams (fmap Core.Id ids `zip` fmap Just fun_kis) body
 
 dsExpr (CsTyLam {}) = panic "CsTyLam"
 

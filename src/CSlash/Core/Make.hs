@@ -11,7 +11,7 @@ import CSlash.Types.Name hiding (varName)
 import CSlash.Types.Literal
 import CSlash.Types.Unique.Supply
 
-import CSlash.Core
+import CSlash.Core as Core
 import CSlash.Core.Utils
 import CSlash.Core.Type
 import CSlash.Core.Kind
@@ -75,6 +75,16 @@ mkCoreAppTyped d (fun, fun_ty) arg
 
 mkWildValBinder :: Type Zk -> Id Zk
 mkWildValBinder ty = mkLocalId wildCardName ty
+
+mkWildCase :: CoreExpr -> Type Zk -> Type Zk -> [CoreAlt] -> CoreExpr
+mkWildCase scrut scrut_ty res_ty alts
+  = Case scrut (Core.Id $ mkWildValBinder scrut_ty) res_ty alts
+
+mkIfThenElse :: CoreExpr -> CoreExpr -> CoreExpr -> CoreExpr
+mkIfThenElse guard then_expr else_expr
+  = mkWildCase guard (exprType guard) (exprType then_expr)
+    [ Alt (DataAlt falseDataCon) [] else_expr
+    , Alt (DataAlt trueDataCon) [] then_expr ]
 
 {-**********************************************************************
 *                                                                      *

@@ -27,6 +27,7 @@ import CSlash.Types.Name hiding (varName)
 import CSlash.Types.Unique
 import CSlash.Types.Unique.Supply
 import CSlash.Types.Basic
+import CSlash.Types.SrcLoc
 import CSlash.Types.Demand
 import CSlash.Data.FastString
 
@@ -132,6 +133,10 @@ mkSysLocal fs uniq ty = assert (not (isTyCoVarType ty)) $
 mkSysLocalM :: (MonadUnique m, HasPass p p') => FastString -> Type p -> m (Id p)
 mkSysLocalM fs ty = getUniqueM >>= \uniq -> return $ mkSysLocal fs uniq ty
 
+mkUserLocal :: HasPass p p' => OccName -> Unique -> Type p -> SrcSpan -> Id p
+mkUserLocal occ uniq ty loc = assert (not (isTyCoVarType ty)) $
+                              mkLocalId (mkInternalName uniq occ loc) ty
+
 idInfo :: Id p -> IdInfo
 idInfo = id_info
 
@@ -157,6 +162,13 @@ changeIdTypeM f (Id { id_type = ty, .. }) = do
 
 fromZkId :: HasPass p pass => Id Zk -> Id p
 fromZkId = changeIdType fromZkType
+
+localizeId :: Id p -> Id p
+localizeId id
+  | isLocalId id && isInternalName (varName id)
+  = id
+  | otherwise
+  = mk_id (localiseName $ varName id) (varType id) (LocalId NotExported) (idDetails id) (idInfo id)
 
 lazySetIdInfo :: Id p -> IdInfo -> Id p
 lazySetIdInfo id info = id { id_info = info }
@@ -239,6 +251,9 @@ idDmdSig id = dmdSigInfo (idInfo id)
 idUnfolding :: Id p -> Unfolding
 idUnfolding id = unfoldingInfo (idInfo id)
 
+noUnfoldingFun :: Id p -> Unfolding
+noUnfoldingFun _ = noUnfolding
+
 alwaysActiveUnfoldingFun :: IdUnfoldingFun
 alwaysActiveUnfoldingFun id
   | isAlwaysActive (idInlineActivation id) = idUnfolding id
@@ -287,6 +302,9 @@ idInlineActivation id = inlinePragmaActivation (idInlinePragma id)
 
 idOneShotInfo :: Id p -> OneShotInfo
 idOneShotInfo id = oneShotInfo (idInfo id)
+
+setOneShotLambda :: Id p -> Id p
+setOneShotLambda id = modifyIdInfo (`setOneShotInfo` OneShotLam) id
 
 setIdOneShotInfo :: Id p -> OneShotInfo -> Id p
 setIdOneShotInfo id one_shot = modifyIdInfo (`setOneShotInfo` one_shot) id

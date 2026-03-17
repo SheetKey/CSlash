@@ -11,7 +11,7 @@ import CSlash.Types.Var
 import CSlash.Types.Name.Reader (GlobalRdrEnv)
 import CSlash.Cs (CsExpr, Zk)
 import CSlash.Tc.Types (TcRnIf, IfGblEnv, IfLclEnv)
--- import GHC.HsToCore.Pmc.Types (Nablas)
+import CSlash.CsToCore.Pmc.Types (Nablas)
 import CSlash.CsToCore.Errors.Types
 import CSlash.Core (CoreExpr)
 import CSlash.Utils.Outputable as Outputable
@@ -33,7 +33,6 @@ data DsGblEnv = DsGblEnv
   , ds_name_ppr_ctx :: NamePprCtx
   , ds_msgs :: IORef (Messages DsMessage)
   , ds_if_env :: (IfGblEnv, IfLclEnv)
-  , ds_complete_matches :: DsCompleteMatches
   }
 
 instance ContainsModule DsGblEnv where
@@ -41,6 +40,7 @@ instance ContainsModule DsGblEnv where
 
 data DsLclEnv = DsLclEnv
   { dsl_loc :: RealSrcSpan
+  , dsl_nablas :: Nablas
   }
 
 type DsM = TcRnIf DsGblEnv DsLclEnv

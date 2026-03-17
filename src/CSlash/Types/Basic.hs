@@ -117,3 +117,15 @@ instance Outputable UnfoldingSource where
   ppr StableUserSrc = text "StableUser"
   ppr StableSystemSrc = text "StableSystem"
   ppr VanillaSrc = text "<vanilla>"
+
+instance Outputable GenReason where
+  ppr DoExpansion{} = undefined
+  ppr OtherExpansion = text "OtherExpansion"
+
+instance Outputable Origin where
+  ppr FromSource = text "FromSource"
+  ppr (Generated reason pmc) = text "Generated" <+> ppr reason <+> ppr pmc
+
+instance Outputable DoPmc where
+  ppr SkipPmc = text "SkipPmc"
+  ppr DoPmc = text "DoPmc"

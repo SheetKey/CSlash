@@ -90,7 +90,7 @@ import qualified CSlash.Data.EnumSet as EnumSet
 import CSlash.Core.Opt.CallerCC.Types
 
 import Control.Monad (msum, (<=<))
--- import Control.Monad.Trans.Class (lift)
+import Control.Monad.Trans.Class (lift)
 -- import Control.Monad.Trans.Except (ExceptT)
 -- import Control.Monad.Trans.Reader (ReaderT)
 -- import Control.Monad.Trans.Writer (WriterT)
@@ -260,6 +260,9 @@ data DynFlags = DynFlags
 
 class HasDynFlags m where
   getDynFlags :: m DynFlags
+
+instance (Monad m, HasDynFlags m) => HasDynFlags (MaybeT m) where
+    getDynFlags = lift getDynFlags
 
 class ContainsDynFlags t where
   extractDynFlags :: t -> DynFlags

@@ -305,6 +305,9 @@ whenWOptM flag thing_inside = do
   when b thing_inside
 {-# INLINE whenWOptM #-}
 
+updTopFlags :: (DynFlags -> DynFlags) -> TcRnIf gbl lcl a -> TcRnIf gbl lcl a
+updTopFlags f = updTopEnv (csUpdateFlags f)
+
 getEpsVar :: TcRnIf gbl lcl (TcRef ExternalPackageState)
 getEpsVar = do
   env <- getTopEnv

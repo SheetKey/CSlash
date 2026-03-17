@@ -206,6 +206,16 @@ tickHNFArgs t e = push t e
 *                                                                      *
 ********************************************************************* -}
 
+bindNonRec :: HasDebugCallStack => Id Zk -> CoreExpr -> CoreExpr -> CoreExpr
+bindNonRec bndr rhs body
+  | isJoinId bndr = let_bind
+  | needsCaseBinding rhs = case_bind
+  | otherwise = let_bind
+  where
+    case_bind = panic "mkDefaultCase rhs bndr body"
+    let_bind = Let (NonRec (Core.Id bndr) rhs) body
+
+-- TODO: this probably isn't necessarily since we have strict LET!!!
 needsCaseBinding :: HasDebugCallStack => CoreExpr -> Bool
 needsCaseBinding rhs = not (exprOkForSpeculation rhs)
 

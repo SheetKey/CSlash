@@ -174,6 +174,8 @@ type CoreArg = Arg (CoreBndr Zk)
 
 type CoreBind = Bind (CoreBndr Zk)
 
+type CoreAlt = Alt (CoreBndr Zk)
+
 {- *********************************************************************
 *                                                                      *
             Core-constructing functions with checking

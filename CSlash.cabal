@@ -71,6 +71,7 @@ library
                     , CSlash.Core.Kind.Compare
                     , CSlash.Core.Kind.FVs
                     , CSlash.Core.Make
+                    , CSlash.Core.Map.Expr
                     , CSlash.Core.Map.Kind
                     , CSlash.Core.Opt.Arity
                     , CSlash.Core.Opt.CallerCC
@@ -117,7 +118,17 @@ library
                     , CSlash.CsToCore.Errors.Ppr
                     , CSlash.CsToCore.Errors.Types
                     , CSlash.CsToCore.Expr
+                    , CSlash.CsToCore.GuardedRHSs
+                    , CSlash.CsToCore.Match
+                    , CSlash.CsToCore.Match.Literal
                     , CSlash.CsToCore.Monad
+                    , CSlash.CsToCore.Pmc
+                    , CSlash.CsToCore.Pmc.Check
+                    , CSlash.CsToCore.Pmc.Desugar
+                    , CSlash.CsToCore.Pmc.Solver
+                    , CSlash.CsToCore.Pmc.Solver.Types
+                    , CSlash.CsToCore.Pmc.Types
+                    , CSlash.CsToCore.Pmc.Utils
                     , CSlash.CsToCore.Types
                     , CSlash.CsToCore.Utils
 
@@ -340,6 +351,7 @@ library
                     , CSlash.Types.Unique.DSet
                     , CSlash.Types.Unique.FM
                     , CSlash.Types.Unique.Map
+                    , CSlash.Types.Unique.SDFM
                     , CSlash.Types.Unique.Set
                     , CSlash.Types.Unique.Supply
                     , CSlash.Types.Var
