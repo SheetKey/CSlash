@@ -145,11 +145,10 @@ mkDsEnvsFromTcGbl cs_env msg_var tcg_env = do
       this_mod = tcg_mod tcg_env
       rdr_env = tcg_rdr_env tcg_env
       type_env = tcg_type_env tcg_env
-      tcg_comp_env = panic "tcg_complete_match_env tcg_env"
 
   ds_complete_matches <- liftIO $ unsafeInterleaveIO $
-    traverse (lookupCompleteMatch type_env cs_env) =<<
-    localAndImportedCompleteMatches tcg_comp_env eps
+    traverse (lookupCompleteMatch type_env cs_env) $
+    localAndImportedCompleteMatches (tcg_complete_matches tcg_env) eps
   unless (null ds_complete_matches) $
     pprPanic "ds_complete_matches" (ppr ds_complete_matches)
 

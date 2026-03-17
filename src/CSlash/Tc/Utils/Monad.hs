@@ -1032,6 +1032,7 @@ liftZonkM (ZonkM f) = do
   liftIO $ f zge
 {-# INLINE liftZonkM #-}
 
-localAndImportedCompleteMatches :: CompleteMatches -> ExternalPackageState -> IO CompleteMatches
-localAndImportedCompleteMatches tcg_comps eps = do
-  return $ tcg_comps ++ eps_complete_matches eps
+localAndImportedCompleteMatches
+  :: CompleteMatches -> ExternalPackageState -> CompleteMatches
+localAndImportedCompleteMatches tcg_comps eps
+  = tcg_comps ++ eps_complete_matches eps
