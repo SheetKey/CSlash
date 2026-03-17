@@ -73,6 +73,7 @@ library
                     , CSlash.Core.Make
                     , CSlash.Core.Map.Expr
                     , CSlash.Core.Map.Kind
+                    , CSlash.Core.Map.Type
                     , CSlash.Core.Opt.Arity
                     , CSlash.Core.Opt.CallerCC
                     , CSlash.Core.Opt.CallerCC.Types
