@@ -39,7 +39,8 @@ data CoreMapX a = CM
 instance Eq (DeBruijn CoreExpr) where
   (==) = panic "eqDeBruijnExpr"
 
-instance Outputable a => Outputable (CoreMap a)
+instance Outputable a => Outputable (CoreMap a) where
+  ppr m = text "CoreMap elts" <+> ppr (foldTM (:) m [])
 
 instance Functor CoreMap where
   fmap f = \(CoreMap m) -> CoreMap (fmap f m)
