@@ -264,3 +264,11 @@ putSrcSpanDsA loc = putSrcSpanDs (locA loc)
 
 mkNamePprCtxDs :: DsM NamePprCtx
 mkNamePprCtxDs = ds_name_ppr_ctx <$> getGblEnv
+
+discardWarningsDs :: DsM a -> DsM a
+discardWarningsDs thing_inside = do
+  env <- getGblEnv
+  old_msgs <- readTcRef (ds_msgs env)
+  result <- thing_inside
+  writeTcRef (ds_msgs env) old_msgs
+  return result
