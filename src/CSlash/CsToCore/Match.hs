@@ -194,7 +194,10 @@ matchWrapper ctxt scrs (MG { mg_alts = L _ matches
                            dsGRHSs ctxt grhss rhs_ty rhss_nablas
            return $ mkEqnInfo upats match_result
 
-    discard_warnings_if_skip_pmc orig = panic "I may not want to discard these"
+    discard_warnings_if_skip_pmc orig =
+      if requiresPMC orig
+      then id
+      else discardWarningsDs
     
 matchEquations
   :: CsMatchContextRn
