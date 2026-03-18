@@ -65,5 +65,3 @@ data DeBruijn a = D CmEnv a
 
 deBruijnize :: a -> DeBruijn a
 deBruijnize = D emptyCME
-
-instance 
