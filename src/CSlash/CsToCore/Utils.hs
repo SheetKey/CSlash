@@ -111,7 +111,8 @@ mkGuardedMatchResult pred_expr mr = MR_Fallible $ \fail -> do
 **********************************************************************-}
 
 mkFailExpr :: CsMatchContextRn -> Type Zk -> DsM CoreExpr
-mkFailExpr = panic "mkFailExpr"
+mkFailExpr ctxt ty
+  = return $ panic "mkFailExpr"
 
 mkCastDs :: CoreExpr -> TypeCoercion Zk -> CoreExpr
 mkCastDs e co | isReflTyCo co = e
