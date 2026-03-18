@@ -501,3 +501,10 @@ matchConLikeResTy _ ty (RealDataCon dc) = pure $ do
     then panic "Just (zipSubst (dataConUnivVars dc) tc_args)"
     else Nothing
 matchConLikeResTy _ _ PatSynCon = panic "unfinished"
+
+--------------------------------------
+-- * Generating inhabitants of a Nabla
+
+data GenerateInhabitingPatternsMode
+  = MinimalCover
+  deriving (Eq, Show)
