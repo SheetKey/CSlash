@@ -71,7 +71,7 @@ import Control.Monad
 dsTopLCsBinds :: LCsBinds Zk -> DsM (OrdList (Id Zk, CoreExpr))
 dsTopLCsBinds binds = do
   prs <- dsLCsBinds binds
-  panic "dsTopLCsBinds"
+  return $ toOL prs
 
 dsLCsBinds :: LCsBinds Zk -> DsM [(Id Zk, CoreExpr)]
 dsLCsBinds binds = do
