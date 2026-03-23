@@ -70,6 +70,7 @@ library
                     , CSlash.Core.Kind
                     , CSlash.Core.Kind.Compare
                     , CSlash.Core.Kind.FVs
+                    , CSlash.Core.Lint
                     , CSlash.Core.Make
                     , CSlash.Core.Map.Expr
                     , CSlash.Core.Map.Kind
@@ -78,6 +79,8 @@ library
                     , CSlash.Core.Opt.CallerCC
                     , CSlash.Core.Opt.CallerCC.Types
                     , CSlash.Core.Opt.OccurAnal
+                    , CSlash.Core.Opt.Pipeline.Types
+                    , CSlash.Core.Opt.Simplify
                     , CSlash.Core.Ppr
                     , CSlash.Core.Predicate
                     , CSlash.Core.Reduction
@@ -157,6 +160,7 @@ library
                     , CSlash.Driver.Backend.Internal
                     , CSlash.Driver.CmdLine
                     , CSlash.Driver.Config
+                    , CSlash.Driver.Config.Core.Lint
                     , CSlash.Driver.Config.Diagnostic
                     , CSlash.Driver.Config.Finder
                     , CSlash.Driver.Config.Logger

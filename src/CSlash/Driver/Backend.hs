@@ -57,6 +57,10 @@ backendSpecialModuleSource :: Backend -> Maybe String
 backendSpecialModuleSource (Named LLVM) =  Nothing
 backendSpecialModuleSource (Named NoBackend) = Just "nothing"
 
+backendWantsGlobalBindings :: Backend -> Bool
+backendWantsGlobalBindings (Named LLVM) = False
+backendWantsGlobalBindings (Named NoBackend) = False
+
 backendSupportsPc :: Backend -> Bool
 backendSupportsPc (Named LLVM) = True
 backendSupportsPc (Named NoBackend) = True

@@ -22,6 +22,7 @@ import GHC.Types.Basic as X hiding
   , maybeParen
   , pprShortTailCallInfo
   , pprOneShotInfo
+  , isJoinPoint
   )
   
 import CSlash.Language.Syntax.Basic

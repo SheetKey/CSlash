@@ -572,6 +572,15 @@ batchMsgWith extra cs_env_start mod_index recomp node =
                          <> extra cs_env mod_index recomp node
                          <> reason
 
+--------------------------------------------------------------
+-- Simplifiers
+--------------------------------------------------------------
+
+csSimplify' :: ModGuts -> Cs ModGuts
+csSimplify' ds_result = do
+  cs_env <- getCsEnv
+  {-# SCC "Core2Core" #-} liftIO $ panic "core2core cs_env ds_result"
+
 {- *********************************************************************
 *                                                                      *
         Progress Messages: Module i of n

@@ -1,3 +1,4 @@
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiWayIf #-}
 
@@ -15,7 +16,9 @@ import CSlash.Types.Var.Id
 import CSlash.Types.Var.Id.Info
 import CSlash.Core.DataCon
 import CSlash.Core.TyCon
+import CSlash.Core.Type
 import CSlash.Core.Type.Ppr
+import CSlash.Core.Type.Rep
 import CSlash.Core.Kind
 import CSlash.Types.Basic
 import CSlash.Utils.Misc
@@ -23,11 +26,227 @@ import CSlash.Utils.Outputable
 import CSlash.Types.SrcLoc ( pprUserRealSpan )
 import CSlash.Types.Tickish
 
+import CSlash.Utils.Panic
+
+{- *********************************************************************
+*                                                                      *
+                Public interfaces for Core printing
+*                                                                      *
+********************************************************************* -}
+
+pprCoreBindings :: OutputableBndr b => [Bind b] -> SDoc
+pprCoreBindings = pprTopBinds noAnn
+
+pprCoreBindingsWithSize :: [CoreBind] -> SDoc
+pprCoreBindingsWithSize = pprTopBinds sizeAnn
+
 pprCoreExpr :: OutputableBndr b => Expr b -> SDoc
-pprCoreExpr = undefined
+pprCoreExpr expr = ppr_expr noParens expr
+
+pprParendExpr :: OutputableBndr b => Expr b -> SDoc
+pprParendExpr expr = ppr_expr parens expr
+
+instance OutputableBndr b => Outputable (Bind b) where
+  ppr bind = ppr_bind noAnn bind
 
 instance OutputableBndr b => Outputable (Expr b) where
   ppr expr = pprCoreExpr expr
+
+instance OutputableBndr b => Outputable (Alt b) where
+  ppr expr = pprCoreAlt expr
+
+{- *********************************************************************
+*                                                                      *
+                The guts
+*                                                                      *
+********************************************************************* -}
+
+type Annotation b = Expr b -> SDoc
+
+sizeAnn :: CoreExpr -> SDoc
+sizeAnn e = panic "sizeAnn" -- text "-- RHS size:" <+> ppr (exprStats e)
+
+noAnn :: Expr b -> SDoc
+noAnn _ = empty
+
+pprTopBinds
+  :: OutputableBndr a
+  => Annotation a
+  -> [Bind a]
+  -> SDoc
+pprTopBinds ann binds = vcat (map (pprTopBind ann) binds)
+ 
+pprTopBind :: OutputableBndr a => Annotation a -> Bind a -> SDoc
+pprTopBind ann (NonRec binder expr) = ppr_binding ann (binder, expr) $$ blankLine
+pprTopBind _ (Rec []) = text "Rec { }"
+pprTopBind ann (Rec (b:bs))
+  = vcat [ text "Rec {"
+         , ppr_binding ann b
+         , vcat [ blankLine $$ ppr_binding ann b | b <- bs]
+         , text "end Rec }"
+         , blankLine ]
+
+ppr_bind :: OutputableBndr b => Annotation b -> Bind b -> SDoc
+ppr_bind ann (NonRec val_bndr expr) = ppr_binding ann (val_bndr, expr)
+ppr_bind ann (Rec binds) = vcat (map pp binds) where pp bind = ppr_binding ann bind <> semi
+
+ppr_binding :: OutputableBndr b => Annotation b -> (b, Expr b) -> SDoc
+ppr_binding ann (val_bndr, expr)
+  = vcat [ ann expr
+         , ppUnlessOption sdocSuppressTypeSignatures
+           (pprBndr LetBind val_bndr)
+         , pp_bind ]
+  where
+    pp_val_bndr = pprPrefixOcc val_bndr
+
+    pp_bind = case bndrIsJoin_maybe val_bndr of
+                NotJoinPoint -> pp_normal_bind
+                JoinPoint ar -> pp_join_bind ar
+
+    pp_normal_bind = hang pp_val_bndr 2 (equals <+> pprCoreExpr expr)
+
+    pp_join_bind join_arity = panic "pp_join_bind"
+
+noParens :: SDoc -> SDoc
+noParens pp = pp
+
+pprOptTyCo :: TypeCoercion Zk -> SDoc
+pprOptTyCo co = panic "sdocOption sdocSuppressCoercions" $ \case
+  True -> angleBrackets (text "TCo:" <> int (panic "tycoercionSize co")) <+> colon <+> co_type
+  False -> parens $ sep [ppr co, colon <+> co_type ]
+  where
+    co_type = panic "sdocOption sdocSuppressCoercionTypes" {-$ \case
+      True -> text "..."
+      False -> panic "ppr (tycoercionType co)"-}
+
+pprOptKiCo :: KindCoercion Zk -> SDoc
+pprOptKiCo co = panic "sdocOption sdocSuppressCoercions" $ \case
+  True -> angleBrackets (text "KCo:" <> int (panic "kicoercionSize co")) <+> colon <+> co_kind
+  False -> parens $ sep [ppr co, colon <+> co_kind]
+  where
+    co_kind = panic "sdocOption sdocSuppressCoercionTypes" $ \case
+      True -> text "..."
+      False -> ppr (kiCoercionKind co)
+
+ppr_id_occ :: (SDoc -> SDoc) -> Id Zk -> SDoc
+ppr_id_occ add_par id
+  | isJoinId id = add_par ((text "jump") <+> pp_id)
+  | otherwise = pp_id
+  where
+    pp_id = ppr id
+
+ppr_expr :: OutputableBndr b => (SDoc -> SDoc) -> Expr b -> SDoc
+ppr_expr add_par (Var id) = ppr_id_occ add_par id
+ppr_expr add_par (Type ty) = add_par (text "TYPE:" <+> ppr ty)
+ppr_expr add_par (Kind ki) = add_par (text "KIND:" <+> ppr ki)
+ppr_expr add_par (KiCo kco) = add_par (text "KCO:" <+> ppr kco)
+ppr_expr add_par (Lit lit) = panic "pprLiteral add_par lit"
+ppr_expr add_par (Cast expr co) = add_par $ sep
+                                  [pprParendExpr expr, text "`cast`" <+> pprOptTyCo co]
+ppr_expr add_par expr@(Lam {})
+  -- = let (bndrs, body) = collectBinders expr
+  --       (vars, ids) = panic "break isRuntimeVar bndrs"
+  --   in add_par $
+  --      hang (text "/\\" <+> sep (map (pprBndr LambdaBind) vars) <+> arrow
+  --            <+> text "\\" <+> sep (map (pprBndr LambdaBind) ids) <+> arrow)
+  --      2 (pprCoreExpr body)
+  = let (bndrs, body) = collectBinders expr
+    in add_par $
+       hang (text "\\" <+> sep (map (pprBndr LambdaBind) bndrs) <+> arrow)
+       2 (pprCoreExpr body)
+
+ppr_expr add_par expr@(App {})
+  = panic "sdocOption sdocSuppressTypeApplications" $ \supp_ty_app ->
+    case collectArgs expr of
+      (fun, args) -> let pp_args = sep (map pprArg args)
+                         val_args = dropWhile isNonValArg args
+                         pp_tup_args = pprWithCommas pprCoreExpr val_args
+                         args'
+                           | supp_ty_app = val_args
+                           | otherwise = args
+                         parens
+                           | null args' = id
+                           | otherwise = add_par
+                     in case fun of
+                          Var f -> case isDataConId_maybe f of
+                            Just dc | val_args `lengthIs` idArity f
+                                    , isTupleTyCon (dataConTyCon dc)
+                                    -> parens pp_tup_args
+                            _ -> parens (hang fun_doc 2 pp_args)
+                              where
+                                fun_doc = ppr_id_occ noParens f
+                          _ -> parens (hang (pprParendExpr fun) 2 pp_args)
+
+ppr_expr add_par (Case expr _ ty []) = panic "empty case"
+
+ppr_expr add_par (Case expr var ty [Alt con args rhs])
+  = sdocOption sdocPrintCaseAsLet $ \case
+      True -> panic "print case as let"
+      False -> add_par $ sep [ sep [ sep [ text "case" <+> pprCoreExpr expr
+                                         , whenPprDebug (text "return" <+> ppr ty)
+                                         , text "of" <+> ppr_bndr var
+                                         ]
+                                   , char '{' <+> ppr_case_pat con args <+> arrow
+                                   ]
+                             , pprCoreExpr rhs
+                             , char '}'
+                             ]
+  where
+    ppr_bndr = pprBndr CaseBind
+
+ppr_expr add_par (Case expr var ty alts)
+  = add_par $ sep [ sep [ text "case"
+                          <+> pprCoreExpr expr
+                          <+> whenPprDebug (text "return" <+> ppr ty)
+                        , text "of" <+> ppr_bndr var <+> char '{'
+                        ]
+                  , nest 2 (vcat (punctuate semi (map pprCoreAlt alts)))
+                  , char '}'
+                  ]
+  where
+    ppr_bndr = pprBndr CaseBind
+
+ppr_expr add_par (Let bind expr)
+  = add_par $
+    sep [ hang (keyword bind <+> char '{') 2 (ppr_bind noAnn bind <+> text "} in ")
+        , pprCoreExpr expr ]
+  where
+    keyword (NonRec b _)
+      | isJoinPoint (bndrIsJoin_maybe b) = text "join"
+      | otherwise = text "let"
+    keyword (Rec pairs)
+      | ((b, _):_) <- pairs
+      , isJoinPoint (bndrIsJoin_maybe b) = text "joinrec"
+      | otherwise = text "letrec"
+
+ppr_expr add_par (Tick tickish expr)
+  = sdocOption sdocSuppressTicks $ \case
+      True | not (tickishIsCode tickish) -> ppr_expr add_par expr
+      _ -> add_par (sep [ppr tickish, pprCoreExpr expr])
+
+pprCoreAlt :: OutputableBndr a => Alt a -> SDoc
+pprCoreAlt (Alt con args rhs)
+  = hang (ppr_case_pat con args <+> arrow) 2 (pprCoreExpr rhs)
+
+ppr_case_pat :: OutputableBndr a => AltCon -> [a] -> SDoc
+ppr_case_pat (DataAlt dc) args
+  | isTupleTyCon tc
+  = parens (pprWithCommas ppr_bndr args)
+  where
+    ppr_bndr = pprBndr CasePatBind
+    tc = dataConTyCon dc
+
+ppr_case_pat con args
+  = ppr con <+> (fsep (map ppr_bndr args))
+  where ppr_bndr = pprBndr CasePatBind
+
+pprArg :: OutputableBndr a => Expr a -> SDoc
+pprArg (Type ty) = panic "ppUnlessOption sdocSuppressTypeApplications"
+                   (braces (pprType ty))
+pprArg (Kind ki) = panic "ppUnlessOption sdocSuppressTypeApplications"
+                   (braces (pprMonoKind ki))
+pprArg (KiCo co) = braces (char '~' <+> pprOptKiCo co)
+pprArg expr = pprParendExpr expr
 
 instance IsPass p => Outputable (CoreBndr (CsPass p)) where
   ppr (Core.Id id) = ppr id

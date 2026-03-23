@@ -2,7 +2,7 @@ module CSlash.CsToCore where
 
 import CSlash.Driver.DynFlags
 -- import CSlash.Driver.Config
--- import GHC.Driver.Config.Core.Lint ( endPassHscEnvIO )
+import CSlash.Driver.Config.Core.Lint ( endPassCsEnvIO )
 -- import GHC.Driver.Config.HsToCore.Ticks
 -- import GHC.Driver.Config.HsToCore.Usage
 import CSlash.Driver.Env
@@ -32,12 +32,12 @@ import CSlash.Core.TyCon       ( tyConDataCons )
 import CSlash.Core
 -- import GHC.Core.FVs       ( exprsSomeFreeVarsList, exprFreeVars )
 -- import GHC.Core.SimpleOpt ( simpleOptPgm, simpleOptExpr )
--- import GHC.Core.Utils
--- import GHC.Core.Unfold.Make
+import CSlash.Core.Utils
+import CSlash.Core.Unfold.Make
 -- import GHC.Core.Coercion
 -- import GHC.Core.DataCon ( dataConWrapId )
--- import GHC.Core.Make
--- import GHC.Core.Opt.Pipeline.Types ( CoreToDo(..) )
+import CSlash.Core.Make
+import CSlash.Core.Opt.Pipeline.Types ( CoreToDo(..) )
 import CSlash.Core.Ppr
 
 import CSlash.Builtin.Names
@@ -56,6 +56,7 @@ import CSlash.Utils.Monad
 import CSlash.Utils.Logger
 
 import CSlash.Types.Var.Id
+import CSlash.Types.Var.Class
 import CSlash.Types.Var.Id.Info
 -- import GHC.Types.Id.Make ( mkRepPolyIdConcreteTyVars )
 -- import GHC.Types.ForeignStubs
@@ -65,7 +66,7 @@ import CSlash.Types.Var.Set
 import CSlash.Types.SrcLoc
 import CSlash.Types.SourceFile
 import CSlash.Types.TypeEnv
-import CSlash.Types.Name
+import CSlash.Types.Name hiding (varName)
 import CSlash.Types.Name.Set
 import CSlash.Types.Name.Env
 import CSlash.Types.Name.Ppr
@@ -114,6 +115,40 @@ deSugar cs_env
 
           (msgs, mb_res) <- initDs cs_env tcg_env $ do
             core_prs <- dsTopLCsBinds binds
-            panic "post initDs"
+            let pc_init | gopt Opt_Pc dflags = panic "pc_init"
+                        | otherwise = panic "mempty"
+            return (core_prs, pc_init)
+            
+          case mb_res of
+            Nothing -> return (msgs, Nothing)
+            Just (all_prs, ds_fords) -> do
+              keep_alive <- readIORef keep_var
+              let final_prs = panic "addExportFlags bcknd export_set keep_alive (fromOL all_prs)"
 
-          panic "deSugar unfinished"
+                  final_pgm = [Rec final_prs]
+
+              endPassCsEnvIO cs_env name_ppr_ctx CoreDesugar final_pgm
+
+              panic "deSugar unfinished"
+
+{- *********************************************************************
+*                                                                      *
+*              Add export flags to binders
+*                                                                      *
+********************************************************************* -}
+
+addExportFlags :: Backend -> NameSet -> NameSet -> [(Id Zk, t)] -> [(Id Zk, t)]
+addExportFlags bcknd exports keep_alive = mapFst add_export_flag
+  where
+    add_export_flag bndr
+      | dont_discard bndr = setIdExported bndr
+      | otherwise = bndr
+
+    dont_discard :: Id Zk -> Bool
+    dont_discard bndr = is_exported name
+                        || name `elemNameSet` keep_alive
+      where name = varName bndr
+
+    is_exported :: Name -> Bool
+    is_exported  | backendWantsGlobalBindings bcknd = isExternalName
+                 | otherwise = (`elemNameSet` exports)

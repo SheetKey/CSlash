@@ -207,6 +207,17 @@ collectArgs expr = go expr []
 *                                                                      *
 ********************************************************************* -}
 
+flattenBinds :: [Bind b] -> [(b, Expr b)]
+flattenBinds (NonRec b r : binds) = (b, r) : flattenBinds binds
+flattenBinds (Rec prs1 : binds) = prs1 ++ flattenBinds binds
+flattenBinds [] = []
+
+collectBinders :: Expr b -> ([b], Expr b)
+collectBinders expr = go [] expr
+  where
+    go bs (Lam b _ e) = go (b:bs) e
+    go bs e = (reverse bs, e)
+
 collectArgsTicks :: (CoreTickish -> Bool) -> Expr b -> (Expr b, [Arg b], [CoreTickish])
 collectArgsTicks skipTick expr = go expr [] []
   where go (App f a) as ts = go f (a:as) ts
@@ -233,7 +244,7 @@ isValArg Kind {} = False
 isValArg KiCo {} = False -- Different from GHC; TODO: check for consistency/correctness
 isValArg _ = True
 
-isNonValArg :: CoreExpr -> Bool
+isNonValArg :: Expr b -> Bool
 isNonValArg = not . isValArg
 
 valArgCount :: [Arg b] -> Int

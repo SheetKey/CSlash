@@ -163,6 +163,11 @@ changeIdTypeM f (Id { id_type = ty, .. }) = do
 fromZkId :: HasPass p pass => Id Zk -> Id p
 fromZkId = changeIdType fromZkType
 
+setIdExported :: Id p -> Id p
+setIdExported id@(Id { id_scope = LocalId {} }) = id { id_scope = LocalId Exported }
+setIdExported id@(Id { id_scope = GlobalId }) = id
+
+
 localizeId :: Id p -> Id p
 localizeId id
   | isLocalId id && isInternalName (varName id)
