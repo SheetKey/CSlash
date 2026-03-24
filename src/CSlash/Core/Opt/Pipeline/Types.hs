@@ -23,3 +23,18 @@ data CoreToDo
 
   | CoreTidy
   | CorePrep
+
+instance Outputable CoreToDo where
+  ppr (CoreDoSimplify _) = text "Simplifier"
+  ppr CoreDesugar = text "Desugar (before optimization)"
+  ppr CoreDesugarOpt = text "Desugar (after optimization)"
+  ppr CoreTidy = text "Tidy Core"
+  ppr CorePrep = text "CorePrep"
+
+pprPassDetails :: CoreToDo -> SDoc
+pprPassDetails (CoreDoSimplify cfg) = vcat [ text "Max iterations =" <+> int n
+                                           , ppr md ]
+  where
+    n = so_iterations cfg
+    md = so_mode cfg
+pprPassDetails _ = Outputable.empty

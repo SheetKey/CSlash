@@ -32,8 +32,8 @@ initEndPassConfig dflags name_ppr_ctx pass = EndPassConfig
                         else Nothing
   , ep_namePprCtx = name_ppr_ctx
   , ep_dumpFlag = coreDumpFlag pass
-  , ep_prettyPass = panic "ppr pass"
-  , ep_passDetails = panic "pprPassDetails pass"
+  , ep_prettyPass = ppr pass
+  , ep_passDetails = pprPassDetails pass
   }
 
 coreDumpFlag :: CoreToDo -> Maybe DumpFlag
