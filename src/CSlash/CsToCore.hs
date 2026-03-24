@@ -29,7 +29,7 @@ import CSlash.Core.Type
 import CSlash.Core.Kind
 import CSlash.Core.Type.Compare( eqType )
 import CSlash.Core.TyCon       ( tyConDataCons )
-import CSlash.Core
+import CSlash.Core as Core
 -- import GHC.Core.FVs       ( exprsSomeFreeVarsList, exprFreeVars )
 -- import GHC.Core.SimpleOpt ( simpleOptPgm, simpleOptExpr )
 import CSlash.Core.Utils
@@ -123,9 +123,9 @@ deSugar cs_env
             Nothing -> return (msgs, Nothing)
             Just (all_prs, ds_fords) -> do
               keep_alive <- readIORef keep_var
-              let final_prs = panic "addExportFlags bcknd export_set keep_alive (fromOL all_prs)"
+              let final_prs = addExportFlags bcknd export_set keep_alive (fromOL all_prs)
 
-                  final_pgm = [Rec final_prs]
+                  final_pgm = [Rec $ mapFst Core.Id final_prs]
 
               endPassCsEnvIO cs_env name_ppr_ctx CoreDesugar final_pgm
 
