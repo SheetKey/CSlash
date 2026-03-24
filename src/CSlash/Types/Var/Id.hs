@@ -167,7 +167,6 @@ setIdExported :: Id p -> Id p
 setIdExported id@(Id { id_scope = LocalId {} }) = id { id_scope = LocalId Exported }
 setIdExported id@(Id { id_scope = GlobalId }) = id
 
-
 localizeId :: Id p -> Id p
 localizeId id
   | isLocalId id && isInternalName (varName id)
@@ -221,6 +220,11 @@ isJoinId :: Id p -> Bool
 isJoinId id = case idDetails id of
   JoinId _ -> True
   _ -> False
+
+idJoinPointHood :: Id p -> JoinPointHood
+idJoinPointHood id = case idDetails id of
+                       JoinId arity -> JoinPoint arity
+                       _ -> NotJoinPoint
 
 hasNoBinding :: Id p -> Bool
 hasNoBinding id = case idDetails id of
