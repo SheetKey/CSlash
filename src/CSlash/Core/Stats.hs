@@ -16,3 +16,6 @@ instance Outputable CoreStats where
 
 coreBindsStats :: [CoreBind] -> CoreStats
 coreBindsStats _ = CS
+
+exprStats :: CoreExpr -> CoreStats
+exprStats _ = CS

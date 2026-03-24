@@ -310,7 +310,10 @@ data SDocContext = SDC
   , sdocPrintTypecheckerElaboration :: !Bool
   , sdocSuppressTicks               :: !Bool
   , sdocSuppressTypeSignatures      :: !Bool
+  , sdocSuppressTypeApplications    :: !Bool
   , sdocSuppressIdInfo              :: !Bool
+  , sdocSuppressCoercions           :: !Bool
+  , sdocSuppressCoercionTypes       :: !Bool
   , sdocSuppressUnfoldings          :: !Bool
   , sdocSuppressUniques             :: !Bool
   , sdocSuppressModulePrefixes      :: !Bool
@@ -342,7 +345,10 @@ defaultSDocContext = SDC
   , sdocPrintTypecheckerElaboration = False
   , sdocSuppressTicks               = False
   , sdocSuppressTypeSignatures      = False
+  , sdocSuppressTypeApplications    = False
   , sdocSuppressIdInfo              = False
+  , sdocSuppressCoercions           = False
+  , sdocSuppressCoercionTypes       = False
   , sdocSuppressUnfoldings          = False
   , sdocSuppressUniques             = False
   , sdocSuppressModulePrefixes      = False

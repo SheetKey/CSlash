@@ -9,6 +9,7 @@ import Prelude hiding ((<>))
 import CSlash.Cs.Pass
 
 import CSlash.Core as Core
+import CSlash.Core.Stats (exprStats)
 import CSlash.Types.Fixity (LexicalFixity(..))
 import CSlash.Types.Name( pprInfixName, pprPrefixName )
 import CSlash.Types.Var
@@ -64,7 +65,7 @@ instance OutputableBndr b => Outputable (Alt b) where
 type Annotation b = Expr b -> SDoc
 
 sizeAnn :: CoreExpr -> SDoc
-sizeAnn e = panic "sizeAnn" -- text "-- RHS size:" <+> ppr (exprStats e)
+sizeAnn e = text "-- RHS size:" <+> ppr (exprStats e)
 
 noAnn :: Expr b -> SDoc
 noAnn _ = empty
@@ -111,20 +112,20 @@ noParens :: SDoc -> SDoc
 noParens pp = pp
 
 pprOptTyCo :: TypeCoercion Zk -> SDoc
-pprOptTyCo co = panic "sdocOption sdocSuppressCoercions" $ \case
+pprOptTyCo co = sdocOption sdocSuppressCoercions $ \case
   True -> angleBrackets (text "TCo:" <> int (panic "tycoercionSize co")) <+> colon <+> co_type
   False -> parens $ sep [ppr co, colon <+> co_type ]
   where
-    co_type = panic "sdocOption sdocSuppressCoercionTypes" {-$ \case
+    co_type = sdocOption sdocSuppressCoercionTypes $ \case
       True -> text "..."
-      False -> panic "ppr (tycoercionType co)"-}
+      False -> panic "ppr (tycoercionType co)"
 
 pprOptKiCo :: KindCoercion Zk -> SDoc
-pprOptKiCo co = panic "sdocOption sdocSuppressCoercions" $ \case
+pprOptKiCo co = sdocOption sdocSuppressCoercions $ \case
   True -> angleBrackets (text "KCo:" <> int (panic "kicoercionSize co")) <+> colon <+> co_kind
   False -> parens $ sep [ppr co, colon <+> co_kind]
   where
-    co_kind = panic "sdocOption sdocSuppressCoercionTypes" $ \case
+    co_kind = sdocOption sdocSuppressCoercionTypes $ \case
       True -> text "..."
       False -> ppr (kiCoercionKind co)
 
@@ -156,7 +157,7 @@ ppr_expr add_par expr@(Lam {})
        2 (pprCoreExpr body)
 
 ppr_expr add_par expr@(App {})
-  = panic "sdocOption sdocSuppressTypeApplications" $ \supp_ty_app ->
+  = sdocOption sdocSuppressTypeApplications $ \supp_ty_app ->
     case collectArgs expr of
       (fun, args) -> let pp_args = sep (map pprArg args)
                          val_args = dropWhile isNonValArg args
@@ -241,9 +242,9 @@ ppr_case_pat con args
   where ppr_bndr = pprBndr CasePatBind
 
 pprArg :: OutputableBndr a => Expr a -> SDoc
-pprArg (Type ty) = panic "ppUnlessOption sdocSuppressTypeApplications"
+pprArg (Type ty) = ppUnlessOption sdocSuppressTypeApplications
                    (braces (pprType ty))
-pprArg (Kind ki) = panic "ppUnlessOption sdocSuppressTypeApplications"
+pprArg (Kind ki) = ppUnlessOption sdocSuppressTypeApplications
                    (braces (pprMonoKind ki))
 pprArg (KiCo co) = braces (char '~' <+> pprOptKiCo co)
 pprArg expr = pprParendExpr expr
@@ -267,31 +268,32 @@ instance IsPass p => OutputableBndr (CoreBndr (CsPass p)) where
   pprPrefixOcc (KCv v) = pprPrefixOcc v
   pprPrefixOcc (Kv v) = pprPrefixOcc v
 
-  bndrIsJoin_maybe = undefined
+  bndrIsJoin_maybe (Core.Id id) = idJoinPointHood id
+  bndrIsJoin_maybe _ = NotJoinPoint
 
 instance IsPass p => OutputableBndr (Id (CsPass p)) where
   pprBndr b v = pprCoreBinder b (Core.Id v)
   pprInfixOcc = pprInfixName . varName
   pprPrefixOcc = pprPrefixName . varName
-  bndrIsJoin_maybe = undefined
+  bndrIsJoin_maybe = idJoinPointHood
 
 instance IsPass p => OutputableBndr (TyVar (CsPass p)) where
   pprBndr b v = pprCoreBinder b (Tv v)
   pprInfixOcc = pprInfixName . varName
   pprPrefixOcc = pprPrefixName . varName
-  bndrIsJoin_maybe = undefined
+  bndrIsJoin_maybe _ = NotJoinPoint
 
 instance IsPass p => OutputableBndr (KiCoVar (CsPass p)) where
   pprBndr b v = pprCoreBinder b (KCv v)
   pprInfixOcc = pprInfixName . varName
   pprPrefixOcc = pprPrefixName . varName
-  bndrIsJoin_maybe = undefined
+  bndrIsJoin_maybe _ = NotJoinPoint
 
 instance IsPass p => OutputableBndr (KiVar (CsPass p)) where
   pprBndr b v = pprCoreBinder b (Kv v)
   pprInfixOcc = pprInfixName . varName
   pprPrefixOcc = pprPrefixName . varName
-  bndrIsJoin_maybe = undefined
+  bndrIsJoin_maybe _ = NotJoinPoint
 
 pprOcc :: OutputableBndr a => LexicalFixity -> a -> SDoc
 pprOcc Infix = pprInfixOcc

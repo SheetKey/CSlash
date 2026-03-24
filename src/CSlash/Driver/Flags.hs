@@ -281,6 +281,8 @@ data GeneralFlag
   | Opt_ShowLoadedModules
   | Opt_HexWordLiterals
 
+  | Opt_SuppressCoercions
+  | Opt_SuppressCoercionTypes
   -- Suppress module id prefixes on variables.
   | Opt_SuppressModulePrefixes
   -- Suppress info such as arity and unfoldings on identifiers.
@@ -290,6 +292,7 @@ data GeneralFlag
   | Opt_SuppressUnfoldings
   -- Suppress the details of even stable unfoldings
   | Opt_SuppressTypeSignatures
+  | Opt_SuppressTypeApplications
   -- Suppress unique ids on variables.
   -- Except for uniques, as some simplifier phases introduce new
   -- variables that have otherwise identical names.
