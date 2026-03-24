@@ -18,7 +18,7 @@ import CSlash.Platform
 import CSlash.Core as Core
 import CSlash.Core.FVs
 import CSlash.Core.Utils
--- import CSlash.Core.Stats ( coreBindsStats )
+import CSlash.Core.Stats ( coreBindsStats )
 import CSlash.Core.DataCon
 import CSlash.Core.Ppr
 import CSlash.Core.Type as Type
@@ -124,7 +124,7 @@ dumpPassResult logger dump_core_sizes name_ppr_ctx mb_flag hdr extra_info binds 
   Err.debugTraceMsg logger 2 size_doc
   where
     size_doc = sep [ text "Result size of" <+> text hdr
-                   , nest 2 (equals <+> panic "ppr (coreBindsStats binds)") ]
+                   , nest 2 (equals <+> ppr (coreBindsStats binds)) ]
 
     dump_doc = vcat [ nest 2 extra_info
                     , size_doc

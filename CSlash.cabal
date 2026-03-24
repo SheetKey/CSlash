@@ -86,6 +86,7 @@ library
                     , CSlash.Core.Reduction
                     , CSlash.Core.SimpleOpt
                     , CSlash.Core.Subst
+                    , CSlash.Core.Stats
                     , CSlash.Core.TyCon
                     , CSlash.Core.TyCon.Set
                     , CSlash.Core.Type
