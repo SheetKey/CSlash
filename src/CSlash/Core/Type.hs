@@ -10,6 +10,8 @@ module CSlash.Core.Type
   , TyVar, TyCoVar, ForAllBinder, MTypeCoercion(..)
   , KnotTied
 
+  , typeSize
+
   , mkFunTy
 
   , mkForAllTy, mkForAllKiCo, mkBigLamTy
