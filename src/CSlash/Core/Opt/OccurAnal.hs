@@ -551,15 +551,16 @@ occAnal !_ expr@(Lit _) = WUD emptyDetails expr
 
 occAnal env expr@(Var _) = occAnalApp env (expr, [], [])
 
-occAnal _ expr@(Type ty) = panic "dunno"
-occAnal _ expr@(KiCo kco) = panic "dunno"
-occAnal _ expr@(Kind ki) = panic "dunno"
+-- TODO: do we need covar usage??
+occAnal _ expr@(Type ty) = WUD emptyDetails expr
+occAnal _ expr@(KiCo kco) = WUD emptyDetails expr
+occAnal _ expr@(Kind ki) = WUD emptyDetails expr
 
 occAnal env (Tick tickish body) = WUD usage' (Tick tickish body')
   where
     WUD usage body' = occAnal env body
     usage' | tickish `tickishScopesLike` SoftScope = usage
-           | otherwise = panic "currently unreachabel"
+           | otherwise = panic "currently unreachable"
 
 occAnal env (Cast expr co)
   = let (WUD usage expr') = occAnal env expr
