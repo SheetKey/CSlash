@@ -8,7 +8,7 @@ import CSlash.Core.Subst
 import CSlash.Core.Utils
 import CSlash.Core.FVs
 import CSlash.Core.Unfold
--- import CSlash.Core.Unfold.Make
+import CSlash.Core.Unfold.Make
 import CSlash.Core.Make ( FloatBind(..), mkCoreLams, mkWildValBinder )
 import CSlash.Core.Opt.OccurAnal( occurAnalyzeExpr, occurAnalyzePgm{-, zapLambdaBndrs-} )
 import CSlash.Core.DataCon
@@ -109,6 +109,16 @@ soeSetInScope :: TermSubstInScope -> SimpleOptEnv -> SimpleOptEnv
 soeSetInScope in_scope env@(SOE { soe_subst = subst })
   = env { soe_subst = setTermInScopeSets subst in_scope }
 
+enterRecGroupRHSs
+  :: SimpleOptEnv
+  -> [OutId]
+  -> (SimpleOptEnv -> (SimpleOptEnv, r))
+  -> (SimpleOptEnv, r)
+enterRecGroupRHSs env bndrs k
+  = (env' { soe_rec_ids = soe_rec_ids env }, r)
+  where
+    (env', r) = k env{ soe_rec_ids = extendUnVarSetList bndrs (soe_rec_ids env) }
+
 simple_opt_clo :: HasDebugCallStack => TermSubstInScope -> SimpleClo -> OutExpr
 simple_opt_clo in_scope (e_env, e)
   = simple_opt_expr (soeSetInScope in_scope e_env) e
@@ -182,7 +192,73 @@ simple_app :: HasDebugCallStack => SimpleOptEnv -> InExpr -> [SimpleClo] -> Core
 simple_app = panic "unfinished"
 
 simple_opt_bind :: SimpleOptEnv -> InBind -> TopLevelFlag -> (SimpleOptEnv, Maybe OutBind)
-simple_opt_bind = panic "unfinished"
+simple_opt_bind env (NonRec b r) top_level
+  = (env', uncurry NonRec <$> mb_pr)
+  where
+    (b', r') = joinPointBinding_maybe b r `orElse` (b, r)
+    (env', mb_pr) = simple_bind_pair env b' Nothing (env, r') top_level
+
+simple_opt_bind env (Rec prs) top_lvl
+  = (env2, res_bind)
+  where
+    res_bind = Just (Rec (reverse rev_prs'))
+    prs' = joinPointBindings_maybe prs `orElse` prs
+    (env1, bndrs') = subst_opt_ids env (map fst prs')
+    (env2, rev_prs') = enterRecGroupRHSs env1 bndrs' $ \env ->
+                       foldl' do_pr (env, []) (prs' `zip` bndrs')
+    do_pr (env, prs) ((b, r), b')
+      = (env', case mb_pr of
+                 Just pr -> pr : prs
+                 Nothing -> prs)
+      where (env', mb_pr) = simple_bind_pair env b (Just b') (env, r) top_lvl
+
+simple_bind_pair
+  :: SimpleOptEnv
+  -> InId
+  -> Maybe OutId
+  -> SimpleClo
+  -> TopLevelFlag
+  -> (SimpleOptEnv, Maybe (OutId, OutExpr))
+simple_bind_pair env@(SOE { soe_inl = inl_env, soe_subst = subst })
+                 in_bndr mb_out_bndr clo@(rhs_env, in_rhs) top_level
+  | Type _ <- in_rhs
+  = panic "type let"
+  | KiCo _ <- in_rhs
+  = panic "kico let"
+  | Kind _ <- in_rhs
+  = panic "kind let"
+
+  | pre_inline_unconditionally
+  = (env { soe_inl = extendVarEnv inl_env in_bndr clo }, Nothing)
+
+  | otherwise
+  = simple_out_bind_pair env in_bndr mb_out_bndr out_rhs occ active stable_unf top_level
+  where
+    stable_unf = isStableUnfolding (idUnfolding in_bndr)
+    active = isAlwaysActive (idInlineActivation in_bndr)
+    occ = idOccInfo in_bndr
+    in_scope = substInScopeSets subst
+
+    out_rhs | JoinPoint join_arity <- idJoinPointHood in_bndr
+            = simple_join_rhs join_arity
+            | otherwise
+            = simple_opt_clo in_scope clo
+
+    simple_join_rhs join_arity
+      = mkCoreLams (join_bndrs' `zip` fun_kis) (simple_opt_expr env_body join_body)
+      where
+        env0 = soeSetInScope in_scope rhs_env
+        (join_bndrs_kis, join_body) = collectNBinders join_arity in_rhs
+        (join_bndrs, fun_kis) = unzip join_bndrs_kis
+        (env_body, join_bndrs') = subst_opt_bndrs env0 join_bndrs
+
+    pre_inline_unconditionally :: Bool
+    pre_inline_unconditionally
+      | isExportedId in_bndr = False
+      | stable_unf = False
+      | not active = False
+      | not (safe_to_inline occ) = False
+      | otherwise = True
 
 safe_to_inline :: OccInfo -> Bool
 safe_to_inline IAmALoopBreaker{} = False
@@ -203,11 +279,42 @@ do_case_elim scrut case_bndr alt_bndrs = panic "do_case_elim"
 simple_out_bind
   :: TopLevelFlag
   -> SimpleOptEnv
-  -> (InVar, OutExpr)
-  -> (SimpleOptEnv, Maybe (OutVar, OutExpr))
+  -> (InBndr, OutExpr)
+  -> (SimpleOptEnv, Maybe (OutBndr, OutExpr))
 simple_out_bind = panic "unfinished"
 
-subst_opt_bndrs :: SimpleOptEnv -> [InVar] -> (SimpleOptEnv, [OutVar])
+simple_out_bind_pair
+  :: SimpleOptEnv
+  -> InId
+  -> Maybe OutId
+  -> OutExpr
+  -> OccInfo
+  -> Bool
+  -> Bool
+  -> TopLevelFlag
+  -> (SimpleOptEnv, Maybe (OutId, OutExpr))
+simple_out_bind_pair env in_bndr mb_out_bndr out_rhs occ_info active stable_unf top_level
+  | post_inline_unconditionally
+  = ( env' { soe_subst = extendIdSubst (soe_subst env) in_bndr out_rhs }
+    , Nothing )
+  | otherwise
+  = (env', Just (out_bndr, out_rhs))
+  where
+    (env', bndr1) = case mb_out_bndr of
+                      Just out_bndr -> (env, out_bndr)
+                      Nothing -> subst_opt_id env in_bndr
+    out_bndr = add_info env' in_bndr top_level out_rhs bndr1
+
+    post_inline_unconditionally :: Bool
+    post_inline_unconditionally
+      | isExportedId in_bndr = False
+      | stable_unf = False
+      | not active = False
+      | isWeakLoopBreaker occ_info = False
+      | exprIsTrivial out_rhs = True
+      | otherwise = False
+
+subst_opt_bndrs :: SimpleOptEnv -> [InBndr] -> (SimpleOptEnv, [OutBndr])
 subst_opt_bndrs env bndrs = mapAccumL (\s v -> fst2Of3 $ subst_opt_bndr s v Nothing) env bndrs
   where
     fst2Of3 (a, b, _) = (a, b)
@@ -218,11 +325,15 @@ subst_opt_id_bndrs env bndrs
   where
     fst2Of3 (a, b, _) = (a, b)
 
+subst_opt_ids :: SimpleOptEnv -> [InId] -> (SimpleOptEnv, [OutId])
+subst_opt_ids env bndrs
+  = mapAccumL (\s v -> subst_opt_id s v) env bndrs
+
 subst_opt_bndr
   :: SimpleOptEnv
-  -> InVar
+  -> InBndr
   -> Maybe (MonoKind Zk)
-  -> (SimpleOptEnv, OutVar, Maybe (MonoKind Zk))
+  -> (SimpleOptEnv, OutBndr, Maybe (MonoKind Zk))
 subst_opt_bndr env (Core.Id id) mki = case subst_opt_id_bndr env id mki of
   (a, b, c) -> (a, Core.Id b, c)
 subst_opt_bndr env (Tv tv) Nothing
@@ -250,8 +361,7 @@ subst_opt_id_bndr env@(SOE { soe_subst = subst, soe_inl = inl }) old_id old_fun_
     new_id = zapFragileIdInfo id2
     new_fun_ki = substMonoKi subst <$> old_fun_ki -- maybe substMonoKiUnchecked?
 
-    new_id_in_scope = case in_scope of
-      (id, _, _, _, _) -> id `extendInScopeSet` new_id
+    new_id_in_scope = id_in_scope `extendInScopeSet` new_id
 
     no_change = new_id == old_id
 
@@ -263,9 +373,70 @@ subst_opt_id_bndr env@(SOE { soe_subst = subst, soe_inl = inl }) old_id old_fun_
                       , id_env = new_id_subst }
     new_inl = delVarEnv inl old_id
 
+subst_opt_id
+  :: SimpleOptEnv
+  -> InId
+  -> (SimpleOptEnv, OutId)
+subst_opt_id env@(SOE { soe_subst = subst, soe_inl = inl }) old_id
+  = (env { soe_subst = new_subst, soe_inl = new_inl }, new_id)
+  where
+    in_scope@(id_in_scope, _, _, _, _) = substInScopeSets subst
+    id1 = uniqAway id_in_scope old_id
+    id2 = updateVarType (substTyUnchecked subst) id1
+    new_id = zapFragileIdInfo id2
+  
+    new_id_in_scope = id_in_scope `extendInScopeSet` new_id
+
+    no_change = new_id == old_id
+
+    new_id_subst
+      | no_change = delVarEnv (id_env subst) old_id
+      | otherwise = extendVarEnv (id_env subst) old_id (Var new_id)
+
+    new_subst = subst { id_in_scope = new_id_in_scope
+                      , id_env = new_id_subst }
+    new_inl = delVarEnv inl old_id
+
+add_info :: SimpleOptEnv -> InId -> TopLevelFlag -> OutExpr -> OutId -> OutId
+add_info env old_bndr top_level new_rhs new_bndr
+  = lazySetIdInfo new_bndr new_info
+  where
+    subst = soe_subst env
+    uf_opts = so_uf_opts (soe_opts env)
+    old_info = idInfo old_bndr
+
+    new_info = idInfo new_bndr `setUnfoldingInfo` new_unfolding
+
+    old_unfolding = realUnfoldingInfo old_info
+    new_unfolding | isStableUnfolding old_unfolding
+                  = panic "substUnfolding subst old_unfolding"
+                  | otherwise
+                  = unfolding_from_rhs
+
+    unfolding_from_rhs = mkUnfolding uf_opts VanillaSrc
+                         (isTopLevel top_level) False False new_rhs Nothing
+
 -- wrapLet :: Maybe (Id Zk, CoreExpr) -> CoreExpr -> CoreExpr
 -- wrapLet Nothing body = body
 -- wrapLet (Just (b, r)) body = Let (NonRec b r) body
+
+joinPointBinding_maybe :: InId -> InExpr -> Maybe (InId, InExpr)
+joinPointBinding_maybe bndr rhs
+  | isJoinId bndr
+  = Just (bndr, rhs)
+  | AlwaysTailCalled join_arity <- tailCallInfo (idOccInfo bndr)
+  , (bndrs, body) <- panic "etaExpandToJoinPoint join_arity rhs"
+  , let str_sig = idDmdSig bndr
+        str_arity = count (isId . fst) bndrs
+        join_bndr = bndr `asJoinId` join_arity
+                         `setIdDmdSig` panic "etaConvertDmdSig str_arity str_sig"
+  = Just (join_bndr, mkCoreLams bndrs body)
+  | otherwise
+  = Nothing
+
+
+joinPointBindings_maybe :: [(InId, InExpr)] -> Maybe [(InId, InExpr)]
+joinPointBindings_maybe bndrs = mapM (uncurry joinPointBinding_maybe) bndrs
 
 {- *********************************************************************
 *                                                                      *

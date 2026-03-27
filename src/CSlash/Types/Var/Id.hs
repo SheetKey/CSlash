@@ -34,6 +34,7 @@ import CSlash.Data.FastString
 import CSlash.Utils.Outputable
 import CSlash.Utils.Misc
 import CSlash.Utils.Panic
+import CSlash.Utils.Trace
 
 import Data.Data
 
@@ -177,6 +178,9 @@ localizeId id
 lazySetIdInfo :: Id p -> IdInfo -> Id p
 lazySetIdInfo id info = id { id_info = info }
 
+setIdDetails :: Id p -> IdDetails -> Id p
+setIdDetails id details = id { id_details = details }
+
 setIdInfo :: Id p -> IdInfo -> Id p
 setIdInfo id info = info `seq` (lazySetIdInfo id info)
 
@@ -253,6 +257,9 @@ isDeadEndId id = isDeadEndSig (idDmdSig id)
 
 idDmdSig :: Id p -> DmdSig
 idDmdSig id = dmdSigInfo (idInfo id)
+
+setIdDmdSig :: Id p -> DmdSig -> Id p
+setIdDmdSig id sig = modifyIdInfo (`setDmdSigInfo` sig) id
 
 ---------------------------------
 -- UNFOLDING
@@ -334,3 +341,22 @@ zapInfo zapper id = maybeModifyIdInfo (zapper (idInfo id)) id
 
 zapFragileIdInfo :: Id p -> Id p
 zapFragileIdInfo = zapInfo zapFragileInfo
+
+{- *********************************************************************
+*                                                                      *
+              Join variables
+*                                                                      *
+********************************************************************* -}
+
+asJoinId :: HasPass p p' => Id p -> JoinArity -> Id p
+asJoinId id arity = warnPprTrace (not (isLocalId id))
+                    "global id being marked as a join var" (ppr id) $
+                    warnPprTrace (not (is_vanilla_or_join id))
+                    "asJoinId"
+                    (ppr id <+> pprIdDetails (idDetails id)) $
+                    id `setIdDetails` JoinId arity
+  where
+    is_vanilla_or_join id = case idDetails id of
+      VanillaId -> True
+      JoinId {} -> True
+      _ -> False

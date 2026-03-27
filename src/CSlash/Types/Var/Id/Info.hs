@@ -142,6 +142,9 @@ setTagSig info sig = info { tagSig = Just sig }
 setOneShotInfo :: IdInfo -> OneShotInfo -> IdInfo
 setOneShotInfo info lb = info { bitfield = bitfieldSetOneShotInfo lb (bitfield info) }
 
+setDmdSigInfo :: IdInfo -> DmdSig -> IdInfo
+setDmdSigInfo info dd = dd `seq` info { dmdSigInfo = dd }
+
 vanillaIdInfo :: IdInfo
 vanillaIdInfo
   = IdInfo { realUnfoldingInfo = noUnfolding

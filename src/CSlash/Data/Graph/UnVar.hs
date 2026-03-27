@@ -46,6 +46,9 @@ mkUnVarSet vs = UnVarSet $ S.fromList $ map k vs
 extendUnVarSet :: Id Zk -> UnVarSet -> UnVarSet
 extendUnVarSet v (UnVarSet s) = UnVarSet $ S.insert (k v) s
 
+extendUnVarSetList :: [Id Zk] -> UnVarSet -> UnVarSet
+extendUnVarSetList vs s = s `unionUnVarSet` mkUnVarSet vs
+
 unionUnVarSet :: UnVarSet -> UnVarSet -> UnVarSet
 unionUnVarSet (UnVarSet set1) (UnVarSet set2) = UnVarSet (set1 `S.union` set2)
 

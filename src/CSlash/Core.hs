@@ -185,6 +185,10 @@ data CoreBndrP p
   | KCv (KiCoVar p)
   | Kv (KiVar p)
 
+isId :: CoreBndrP p -> Bool
+isId (Id _) = True
+isId _ = False
+
 type CoreExpr = Expr CoreBndr CoreId
 
 type CoreArg = Arg CoreBndr CoreId
@@ -242,11 +246,19 @@ flattenBinds (NonRec b r : binds) = (b, r) : flattenBinds binds
 flattenBinds (Rec prs1 : binds) = prs1 ++ flattenBinds binds
 flattenBinds [] = []
 
-collectBinders :: Expr b1 b2 -> ([b1], Expr b1 b2)
+collectBinders :: Expr b1 b2 -> ([(b1, Maybe CoreMonoKind)], Expr b1 b2)
 collectBinders expr = go [] expr
   where
-    go bs (Lam b _ e) = go (b:bs) e
+    go bs (Lam b mki e) = go ((b, mki) : bs) e
     go bs e = (reverse bs, e)
+
+collectNBinders :: JoinArity -> Expr b1 b2 -> ([(b1, Maybe CoreMonoKind)], Expr b1 b2)
+collectNBinders orig_n orig_expr
+  = go orig_n [] orig_expr
+  where
+    go 0 bs expr = (reverse bs, expr)
+    go n bs (Lam b mki e) = go (n - 1) ((b, mki) : bs) e
+    go _ _ _ = pprPanic "collectNBinders" $ int orig_n
 
 collectArgsTicks :: (CoreTickish -> Bool) -> Expr b1 b2 -> (Expr b1 b2, [Arg b1 b2], [CoreTickish])
 collectArgsTicks skipTick expr = go expr [] []
@@ -291,12 +303,12 @@ isJoinIdBndr _ = False
 ********************************************************************* -}
 
 type InId = CoreId
-type InVar = CoreBndr 
+type InBndr = CoreBndr
 type InBind = CoreBind
 type InExpr = CoreExpr
 
 type OutId = CoreId
-type OutVar = CoreBndr 
+type OutBndr = CoreBndr
 type OutBind = CoreBind
 type OutExpr = CoreExpr
 
