@@ -267,7 +267,8 @@ tcRnSrcDecls export_ies decls = do
   --------- Run finalizers --------------
   let init_tcg_env = tcg_env { tcg_binds = []
                              , tcg_type_env = tcg_type_env tcg_env `plusTypeEnv` id_env }
-
+  let tcg_env = init_tcg_env
+  
   traceTc "Tc11" empty
 
   --------- Deal with the exports ----------
