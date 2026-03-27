@@ -274,6 +274,9 @@ realIdUnfolding id = realUnfoldingInfo (idInfo id)
 setIdUnfolding :: Id p -> Unfolding -> Id p
 setIdUnfolding id unfolding = modifyIdInfo (`setUnfoldingInfo` unfolding) id
 
+idDemandInfo :: Id p -> Demand
+idDemandInfo id = demandInfo (idInfo id)
+
 setCaseBndrEvald :: Id p -> Id p
 setCaseBndrEvald id = id `setIdUnfolding` evaldUnfolding
 

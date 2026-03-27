@@ -209,8 +209,7 @@ lintCoreBindings' cfg binds = initL cfg $ addLoc TopLevelBindings $ do
   checkL (null ext_dups) (dupExtVars ext_dups)
   lintRecBindings TopLevel all_pairs $ \_ -> return ()
   where
-    all_pairs = mapFst (\case { Core.Id id -> id; _ -> panic "lintCoreBindings'" })
-                $ flattenBinds binds
+    all_pairs = flattenBinds binds
 
     binders = map fst all_pairs
 

@@ -1,16 +1,16 @@
 module CSlash.CsToCore where
 
 import CSlash.Driver.DynFlags
--- import CSlash.Driver.Config
+import CSlash.Driver.Config
 import CSlash.Driver.Config.Core.Lint ( endPassCsEnvIO )
 -- import GHC.Driver.Config.HsToCore.Ticks
--- import GHC.Driver.Config.HsToCore.Usage
+-- import CSlash.Driver.Config.CsToCore.Usage
 import CSlash.Driver.Env
 import CSlash.Driver.Backend
 
 import CSlash.Cs
 
--- import GHC.HsToCore.Usage
+import CSlash.CsToCore.Usage
 import CSlash.CsToCore.Monad
 import CSlash.CsToCore.Errors.Types
 import CSlash.CsToCore.Expr
@@ -31,7 +31,7 @@ import CSlash.Core.Type.Compare( eqType )
 import CSlash.Core.TyCon       ( tyConDataCons )
 import CSlash.Core as Core
 -- import GHC.Core.FVs       ( exprsSomeFreeVarsList, exprFreeVars )
--- import GHC.Core.SimpleOpt ( simpleOptPgm, simpleOptExpr )
+import CSlash.Core.SimpleOpt ( simpleOptPgm, simpleOptExpr )
 import CSlash.Core.Utils
 import CSlash.Core.Unfold.Make
 -- import GHC.Core.Coercion
@@ -125,9 +125,23 @@ deSugar cs_env
               keep_alive <- readIORef keep_var
               let final_prs = addExportFlags bcknd export_set keep_alive (fromOL all_prs)
 
-                  final_pgm = [Rec $ mapFst Core.Id final_prs]
+                  final_pgm = [Rec final_prs]
 
               endPassCsEnvIO cs_env name_ppr_ctx CoreDesugar final_pgm
+              let simpl_opts = initSimpleOpts dflags
+              let (ds_binds, occ_anald_binds) = simpleOptPgm simpl_opts mod final_pgm
+              putDumpFileMaybe logger Opt_D_dump_occur_anal "Occurrence analysis"
+                FormatCore (pprCoreBindings occ_anald_binds)
+
+              endPassCsEnvIO cs_env name_ppr_ctx CoreDesugarOpt ds_binds
+
+              let used_names = mkUsedNames tcg_env
+                  home_unit = cs_home_unit cs_env
+              let deps = mkDependencies home_unit
+                                        (tcg_mod tcg_env)
+                                        (tcg_imports tcg_env)
+
+              -- let uc = initUsageConfig cs_env
 
               panic "deSugar unfinished"
 

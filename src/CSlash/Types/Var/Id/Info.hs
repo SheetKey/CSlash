@@ -45,6 +45,7 @@ data IdInfo = IdInfo
   , inlinePragInfo :: InlinePragma
   , occInfo :: OccInfo
   , dmdSigInfo :: DmdSig
+  , demandInfo :: Demand
   , bitfield :: {-# UNPACK #-} !BitField
   , lfInfo :: !(Maybe LambdaFormInfo)
   , tagSig :: !(Maybe TagSig)
@@ -147,6 +148,7 @@ vanillaIdInfo
            , inlinePragInfo = defaultInlinePragma
            , occInfo = noOccInfo
            , dmdSigInfo = nopSig
+           , demandInfo = topDmd
            , bitfield = bitfieldSetCafInfo vanillaCafInfo $
                         bitfieldSetArityInfo unknownArity $
                         bitfieldSetCallArityInfo unknownArity $

@@ -56,15 +56,15 @@ import qualified Data.Set as Set
 *                                                                      *
 **********************************************************************-}
 
-exprType :: HasDebugCallStack => CoreExpr -> Type Zk
+exprType :: HasDebugCallStack => CoreExpr -> CoreType 
 exprType (Var var) = varType var
 exprType (Lit lit) = literalType lit
 exprType (Let bind body)
-  | NonRec (Tv tv) rhs <- bind
+  | NonRec _ (Type _) <- bind
   = panic "exprType"
-  | NonRec (KCv kcv) rhs <- bind
+  | NonRec _ (KiCo _) <- bind
   = panic "exprType"
-  | NonRec (Kv kv) rhs <- bind
+  | NonRec _ (Kind _) <- bind
   = panic "exprType"
   | otherwise = exprType body
 exprType (Case _ _ ty _) = ty
@@ -77,7 +77,7 @@ exprType (Type ty) = pprPanic "exprType" (ppr ty)
 exprType (KiCo kco) = pprPanic "exprType" (ppr kco)
 exprType (Kind ki) = pprPanic "exprType" (ppr ki)
 
-mkLamType :: HasDebugCallStack => CoreBndr Zk -> Maybe (MonoKind Zk) -> Type Zk -> Type Zk
+mkLamType :: HasDebugCallStack => CoreBndr -> Maybe CoreMonoKind -> CoreType -> CoreType 
 mkLamType (Core.Id id) (Just ki) body_ty = mkFunctionType (varType id) ki body_ty
 mkLamType (Tv tv) Nothing body_ty = mkForAllTy (Bndr tv coreTyLamForAllTyFlag) body_ty
 mkLamType (KCv kcv) Nothing body_ty = mkForAllKiCo kcv body_ty
@@ -87,7 +87,7 @@ mkLamType bndr ki body = pprPanic "mkLamType bad CsLam"
                                 , text "maybe fun ki" <+> ppr ki
                                 , text "body" <+> ppr body ]
 
-applyTypeToArgs :: HasDebugCallStack => Type Zk -> [CoreExpr] -> Type Zk
+applyTypeToArgs :: HasDebugCallStack => CoreType -> [CoreExpr] -> CoreType 
 applyTypeToArgs op_ty args = go op_ty args
   where
     go op_ty [] = op_ty
@@ -206,14 +206,20 @@ tickHNFArgs t e = push t e
 *                                                                      *
 ********************************************************************* -}
 
-bindNonRec :: HasDebugCallStack => Id Zk -> CoreExpr -> CoreExpr -> CoreExpr
+bindNonRec :: HasDebugCallStack => CoreId -> CoreExpr -> CoreExpr -> CoreExpr
 bindNonRec bndr rhs body
+  | Type _ <- rhs
+  = panic "bindNonRec"
+  | KiCo _ <- rhs
+  = panic "bindNonRec"
+  | Kind _ <- rhs
+  = panic "bindNonRec"
   | isJoinId bndr = let_bind
   | needsCaseBinding rhs = case_bind
   | otherwise = let_bind
   where
     case_bind = panic "mkDefaultCase rhs bndr body"
-    let_bind = Let (NonRec (Core.Id bndr) rhs) body
+    let_bind = Let (NonRec bndr rhs) body
 
 -- TODO: this probably isn't necessarily since we have strict LET!!!
 needsCaseBinding :: HasDebugCallStack => CoreExpr -> Bool
@@ -225,7 +231,7 @@ needsCaseBinding rhs = not (exprOkForSpeculation rhs)
 *                                                                      *
 ********************************************************************* -}
 
-findAlt :: AltCon -> [Alt b] -> Maybe (Alt b)
+findAlt :: AltCon -> [Alt a b] -> Maybe (Alt a b)
 findAlt con alts = case alts of
   (deflt@(Alt DEFAULT _ _) : alts) -> go alts (Just deflt)
   _ -> go alts Nothing
@@ -238,11 +244,35 @@ findAlt con alts = case alts of
 
 {- *********************************************************************
 *                                                                      *
+             exprIsTrivial
+*                                                                      *
+********************************************************************* -}
+
+{-# INLINE trivial_expr_fold #-}
+trivial_expr_fold :: (CoreId -> r) -> (Literal -> r) -> r -> r -> CoreExpr -> r
+trivial_expr_fold k_id k_lit k_triv k_not_triv = go
+  where
+    go (Var v) = k_id v
+    go (Lit l) | panic "litIsTrivial l" = k_lit l
+    go (Type _) = k_triv
+    go (KiCo _) = k_triv
+    go (Kind _) = k_triv
+    go (App f t) | not (isRuntimeArg t) = go f
+    go (Lam b _ e) | not (isRuntimeVar b) = go e
+    go (Tick t e) | not (tickishIsCode t) = go e
+    go (Cast e _) = go e
+    go _ = k_not_triv
+
+exprIsTrivial :: CoreExpr -> Bool
+exprIsTrivial e = trivial_expr_fold (const True) (const True) True False e
+
+{- *********************************************************************
+*                                                                      *
              exprIsCheap, exprIsExpandable
 *                                                                      *
 ********************************************************************* -}
 
-type CheapAppFun = Id Zk -> Arity -> Bool
+type CheapAppFun = CoreId -> Arity -> Bool
 
 {-# INLINE exprIsCheapX #-}
 exprIsCheapX :: CheapAppFun -> Bool -> CoreExpr -> Bool
@@ -330,7 +360,7 @@ exprIsHNF = exprIsHNFlike isDataConId isEvaldUnfolding
 exprIsConLike :: CoreExpr -> Bool
 exprIsConLike = exprIsHNFlike isConLikeId isConLikeUnfolding
 
-exprIsHNFlike :: HasDebugCallStack => (Id Zk -> Bool) -> (Unfolding -> Bool) -> CoreExpr -> Bool
+exprIsHNFlike :: HasDebugCallStack => (CoreId -> Bool) -> (Unfolding -> Bool) -> CoreExpr -> Bool
 exprIsHNFlike is_con is_con_unf e = is_hnf_like e
   where
     is_hnf_like (Var v) = True -- TODO (double check) our binders are always unlifted (and evald)
@@ -370,24 +400,24 @@ exprIsHNFlike is_con is_con_unf e = is_hnf_like e
 *                                                                      *
 ********************************************************************* -}
 
-type CoreVarSets p = (IdSet p, TyVarSet p, KiCoVarSet p, KiVarSet p)
-
-mkCoreBndrVarSets :: [CoreBndr p] -> CoreVarSets p
-mkCoreBndrVarSets bndrs = go bndrs (emptyVarSet, emptyVarSet, emptyVarSet, emptyVarSet)
+mkCoreBndrVarSets :: [CoreBndr] -> CoreVarSets
+mkCoreBndrVarSets bndrs
+  = go bndrs (emptyVarSet, emptyVarSet, emptyVarSet, emptyVarSet, emptyVarSet)
   where
     go [] acc = acc
-    go (Core.Id id : bndrs) (ids, tvs, kcvs, kvs)
-      = go bndrs (extendVarSet ids id, tvs, kcvs, kvs)
-    go (Tv tv : bndrs) (ids, tvs, kcvs, kvs)
-      = go bndrs (ids, extendVarSet tvs tv, kcvs, kvs)
-    go (KCv kcv : bndrs) (ids, tvs, kcvs, kvs)
-      = go bndrs (ids, tvs, extendVarSet kcvs kcv, kvs)
-    go (Kv kv : bndrs) (ids, tvs, kcvs, kvs)
-      = go bndrs (ids, tvs, kcvs, extendVarSet kvs kv)
+    go (Core.Id id : bndrs) (ids, tcvs, tvs, kcvs, kvs)
+      = go bndrs (extendVarSet ids id, tcvs, tvs, kcvs, kvs)
+    go (Tv tv : bndrs) (ids, tcvs, tvs, kcvs, kvs)
+      = go bndrs (ids, tcvs, extendVarSet tvs tv, kcvs, kvs)
+    go (KCv kcv : bndrs) (ids, tcvs, tvs, kcvs, kvs)
+      = go bndrs (ids, tcvs, tvs, extendVarSet kcvs kcv, kvs)
+    go (Kv kv : bndrs) (ids, tcvs, tvs, kcvs, kvs)
+      = go bndrs (ids, tcvs, tvs, kcvs, extendVarSet kvs kv)
 
-disjointCoreVarSets :: CoreVarSets p -> CoreVarSets p -> Bool
-disjointCoreVarSets (ids1, tvs1, kcvs1, kvs1) (ids2, tvs2, kcvs2, kvs2)
-  = disjointVarSet ids1 ids1
+disjointCoreVarSets :: CoreVarSets -> CoreVarSets -> Bool
+disjointCoreVarSets (ids1, tcvs1, tvs1, kcvs1, kvs1) (ids2, tcvs2, tvs2, kcvs2, kvs2)
+  = disjointVarSet ids1 ids2
+    && disjointVarSet tcvs1 tcvs2
     && disjointVarSet tvs1 tvs2
     && disjointVarSet kcvs1 kcvs2
     && disjointVarSet kvs1 kvs2

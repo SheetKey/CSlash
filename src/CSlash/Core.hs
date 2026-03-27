@@ -4,6 +4,7 @@ module CSlash.Core where
 
 import CSlash.Cs.Pass
 import CSlash.Types.Var
+import CSlash.Types.Var.Set
 import CSlash.Core.Type
 import CSlash.Core.Kind
 import {-# SOURCE #-} CSlash.Core.Subst
@@ -31,25 +32,25 @@ import Data.Word
 *                                                                      *
 ********************************************************************* -}
 
-data Expr b
-  = Var (Id Zk)
+data Expr bLam bLet
+  = Var CoreId
   | Lit Literal
-  | App (Expr b) (Arg b)
-  | Lam b (Maybe (MonoKind Zk)) (Expr b) -- can bind term, type, or kind vars ('Just kind' if b is a term)
+  | App (Expr bLam bLet) (Arg bLam bLet)
+  | Lam bLam (Maybe (MonoKind Zk)) (Expr bLam bLet) -- can bind term, type, or kind vars ('Just kind' if b is a term)
   -- Cant move the 'Maybe MonoKind' to 'CoreBndr.Id' since CoreBndr is used for case and other binding sites. 
-  | Let (Bind b) (Expr b)
-  | Case (Expr b) b (Type Zk) [Alt b]
-  | Cast (Expr b) (TypeCoercion Zk)
-  | Tick CoreTickish (Expr b)
+  | Let (Bind bLam bLet) (Expr bLam bLet)
+  | Case (Expr bLam bLet) bLet (Type Zk) [Alt bLam bLet]
+  | Cast (Expr bLam bLet) (TypeCoercion Zk)
+  | Tick CoreTickish (Expr bLam bLet)
   -- below are used as 'Arg's (from CsWrappers)
   | Type (Type Zk)
   | KiCo (KindCoercion Zk)
   | Kind (MonoKind Zk)
   deriving Data
 
-type Arg b = Expr b
+type Arg = Expr 
 
-data Alt b = Alt AltCon [b] (Expr b)
+data Alt bLam bLet = Alt AltCon [bLet] (Expr bLam bLet)
   deriving (Data)
 
 data AltCon
@@ -58,9 +59,12 @@ data AltCon
   | DEFAULT
   deriving (Eq, Data)
 
-data Bind b
-  = NonRec b (Expr b)
-  | Rec [(b, (Expr b))]
+-- We replace 'b' with 'CoreId' as the binder.
+-- This removes 'type lets' that are present (but a pain) in GHC.
+-- The situations where GHC finds a 'type let' useful do not occur in CSL.
+data Bind bLam bLet
+  = NonRec bLet (Expr bLam bLet)
+  | Rec [(bLet, (Expr bLam bLet))]
   deriving Data
 
 {- *********************************************************************
@@ -130,9 +134,21 @@ isCompulsoryUnfolding :: Unfolding -> Bool
 isCompulsoryUnfolding (CoreUnfolding { uf_src = src }) = isCompulsorySource src
 isCompulsoryUnfolding _ = False
 
+isStableUnfolding :: Unfolding -> Bool
+isStableUnfolding (CoreUnfolding { uf_src = src }) = isStableSource src
+isStableUnfolding _ = False
+
 hasSomeUnfolding :: Unfolding -> Bool
 hasSomeUnfolding NoUnfolding = False
 hasSomeUnfolding _ = True
+
+neverUnfoldGuidance :: UnfoldingGuidance -> Bool
+neverUnfoldGuidance UnfNever = True
+neverUnfoldGuidance _ = False
+
+canUnfold :: Unfolding -> Bool
+canUnfold (CoreUnfolding { uf_guidance = g }) = not (neverUnfoldGuidance g)
+canUnfold _ = False
 
 {- *********************************************************************
 *                                                                      *
@@ -162,19 +178,26 @@ cmpAltCon con1 con2 = pprPanic "cmpAltCon" (ppr con1 $$ ppr con2)
 
 type CoreProgram = [CoreBind]
 
-data CoreBndr p
+type CoreBndr = CoreBndrP Zk
+data CoreBndrP p
   = Id (Id p)
   | Tv (TyVar p)
   | KCv (KiCoVar p)
   | Kv (KiVar p)
 
-type CoreExpr = Expr (CoreBndr Zk)
+type CoreExpr = Expr CoreBndr CoreId
 
-type CoreArg = Arg (CoreBndr Zk)
+type CoreArg = Arg CoreBndr CoreId
 
-type CoreBind = Bind (CoreBndr Zk)
+type CoreBind = Bind CoreBndr CoreId
 
-type CoreAlt = Alt (CoreBndr Zk)
+type CoreAlt = Alt CoreBndr CoreId
+
+type CoreId = Id Zk
+type CoreType = Type Zk
+type CoreKind = Kind Zk
+type CoreMonoKind = MonoKind Zk
+type CoreVarSets = (IdSet Zk, TyCoVarSet Zk, TyVarSet Zk, KiCoVarSet Zk, KiVarSet Zk)
 
 {- *********************************************************************
 *                                                                      *
@@ -182,11 +205,11 @@ type CoreAlt = Alt (CoreBndr Zk)
 *                                                                      *
 ********************************************************************* -}
 
-mkLetRec :: [(b, Expr b)] -> Expr b -> Expr b
+mkLetRec :: [(b2, Expr b1 b2)] -> Expr b1 b2 -> Expr b1 b2
 mkLetRec [] body = body
 mkLetRec bs body = Let (Rec bs) body
 
-varToCoreExpr :: Id Zk -> Expr b
+varToCoreExpr :: CoreId -> Expr b1 b2
 varToCoreExpr = Var
 
 {- *********************************************************************
@@ -195,7 +218,7 @@ varToCoreExpr = Var
 *                                                                      *
 ********************************************************************* -}
 
-collectArgs :: Expr b -> (Expr b, [Arg b])
+collectArgs :: Expr b1 b2 -> (Expr b1 b2, [Arg b1 b2])
 collectArgs expr = go expr []
   where
     go (App f a) as = go f (a:as)
@@ -207,18 +230,25 @@ collectArgs expr = go expr []
 *                                                                      *
 ********************************************************************* -}
 
-flattenBinds :: [Bind b] -> [(b, Expr b)]
+rhssOfBind :: Bind b1 b2 -> [Expr b1 b2]
+rhssOfBind (NonRec _ rhs) = [rhs]
+rhssOfBind (Rec pairs) = snd <$> pairs
+
+rhssOfAlts :: [Alt b1 b2] -> [Expr b1 b2]
+rhssOfAlts alts = [e | Alt _ _ e <- alts]
+
+flattenBinds :: [Bind b1 b2] -> [(b2, Expr b1 b2)]
 flattenBinds (NonRec b r : binds) = (b, r) : flattenBinds binds
 flattenBinds (Rec prs1 : binds) = prs1 ++ flattenBinds binds
 flattenBinds [] = []
 
-collectBinders :: Expr b -> ([b], Expr b)
+collectBinders :: Expr b1 b2 -> ([b1], Expr b1 b2)
 collectBinders expr = go [] expr
   where
     go bs (Lam b _ e) = go (b:bs) e
     go bs e = (reverse bs, e)
 
-collectArgsTicks :: (CoreTickish -> Bool) -> Expr b -> (Expr b, [Arg b], [CoreTickish])
+collectArgsTicks :: (CoreTickish -> Bool) -> Expr b1 b2 -> (Expr b1 b2, [Arg b1 b2], [CoreTickish])
 collectArgsTicks skipTick expr = go expr [] []
   where go (App f a) as ts = go f (a:as) ts
         go (Tick t e) as ts
@@ -231,26 +261,26 @@ collectArgsTicks skipTick expr = go expr [] []
 *                                                                      *
 ********************************************************************* -}
 
-isRuntimeVar :: CoreBndr p -> Bool
+isRuntimeVar :: CoreBndr -> Bool
 isRuntimeVar Id {} = True
 isRuntimeVar _ = False
 
 isRuntimeArg :: CoreExpr -> Bool
 isRuntimeArg = isValArg
 
-isValArg :: Expr b -> Bool
+isValArg :: Expr b1 b2 -> Bool
 isValArg Type {} = False
 isValArg Kind {} = False
 isValArg KiCo {} = False -- Different from GHC; TODO: check for consistency/correctness
 isValArg _ = True
 
-isNonValArg :: Expr b -> Bool
+isNonValArg :: Expr b1 b2 -> Bool
 isNonValArg = not . isValArg
 
-valArgCount :: [Arg b] -> Int
+valArgCount :: [Arg b1 b2] -> Int
 valArgCount = count isValArg
 
-isJoinIdBndr :: CoreBndr p -> Bool
+isJoinIdBndr :: CoreBndr -> Bool
 isJoinIdBndr (Id id) = isJoinId id
 isJoinIdBndr _ = False
 
@@ -260,13 +290,13 @@ isJoinIdBndr _ = False
 *                                                                      *
 ********************************************************************* -}
 
-type InId = Id Zk
-type InVar = CoreBndr Zk
+type InId = CoreId
+type InVar = CoreBndr 
 type InBind = CoreBind
 type InExpr = CoreExpr
 
-type OutId = Id Zk
-type OutVar = CoreBndr Zk
+type OutId = CoreId
+type OutVar = CoreBndr 
 type OutBind = CoreBind
 type OutExpr = CoreExpr
 
@@ -278,4 +308,4 @@ type OutExpr = CoreExpr
 
 data InScopeEnv = ISE TermSubstInScope IdUnfoldingFun
 
-type IdUnfoldingFun = Id Zk -> Unfolding
+type IdUnfoldingFun = CoreId -> Unfolding

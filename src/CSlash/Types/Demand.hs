@@ -139,6 +139,9 @@ viewCall (Poly n)
   | isAbs n = Just (n :: Card, botSubDmd)
 viewCall _ = Nothing
 
+topDmd :: Demand
+topDmd = C_1N :* topSubDmd
+
 botDmd :: Demand
 botDmd = BotDmd
 

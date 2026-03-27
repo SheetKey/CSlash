@@ -50,7 +50,7 @@ joinRhsArity _ = 0
 *                                                                      *
 ********************************************************************* -}
 
-isOneShotBndr :: CoreBndr Zk -> Bool
+isOneShotBndr :: CoreBndr -> Bool
 isOneShotBndr Tv{} = True
 isOneShotBndr KCv{} = True -- TODO: double check
 isOneShotBndr Kv{} = True
@@ -76,7 +76,7 @@ etaExpand n orig_expr = panic "exa_expand in_scope (replicate n NoOneShotInfo) o
 
 tryEtaReduce
   :: UnVarSet
-  -> [(CoreBndr Zk, Maybe (MonoKind Zk))]
+  -> [(CoreBndr, Maybe CoreMonoKind)]
   -> CoreExpr
   -> SubDemand
   -> Maybe CoreExpr
@@ -85,7 +85,7 @@ tryEtaReduce rec_ids bndrs body eval_sd
   where
     incoming_arity = count (isRuntimeVar . fst) bndrs
 
-    go :: [(CoreBndr Zk, Maybe (MonoKind Zk))] -> CoreExpr -> TypeCoercion Zk -> Maybe CoreExpr
+    go :: [(CoreBndr, Maybe CoreMonoKind)] -> CoreExpr -> TypeCoercion Zk -> Maybe CoreExpr
     go bs (Cast e co1) co2 = go bs e (co1 `mkTyTransCo` co2)
     go bs (Tick t e) co
       | tickishFloatable t
@@ -139,10 +139,10 @@ tryEtaReduce rec_ids bndrs body eval_sd
     ok_lam = not . isRuntimeVar . fst
 
     ok_arg
-      :: (CoreBndr Zk, Maybe (MonoKind Zk))
+      :: (CoreBndr, Maybe CoreMonoKind)
       -> CoreExpr
       -> TypeCoercion Zk
-      -> Type Zk
+      -> CoreType 
       -> Maybe (TypeCoercion Zk, [CoreTickish])
     ok_arg (Tv bndr, _) (Type arg_ty) co fun_ty
       | Just tv <- getTyVar_maybe arg_ty
@@ -159,7 +159,7 @@ tryEtaReduce rec_ids bndrs body eval_sd
     ok_arg bndr (Tick t arg) co fun_ty = panic "unfinished"
     ok_arg _ _ _ _ = Nothing
 
-cantEtaReduceFun :: Id Zk -> Bool
+cantEtaReduceFun :: CoreId -> Bool
 cantEtaReduceFun fun
   = hasNoBinding fun
     || isJoinId fun
@@ -199,5 +199,5 @@ pushCoDataCon
   :: DataCon Zk
   -> [CoreExpr]
   -> MTypeCoercion Zk
-  -> Maybe (DataCon Zk, [Type Zk], [CoreExpr])
+  -> Maybe (DataCon Zk, [CoreType], [CoreExpr])
 pushCoDataCon = panic "pushCoDataCon"

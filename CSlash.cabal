@@ -135,6 +135,7 @@ library
                     , CSlash.CsToCore.Pmc.Types
                     , CSlash.CsToCore.Pmc.Utils
                     , CSlash.CsToCore.Types
+                    , CSlash.CsToCore.Usage
                     , CSlash.CsToCore.Utils
 
                     , CSlash.Data.Bag

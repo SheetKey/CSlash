@@ -97,7 +97,7 @@ adjustMatchResultDs encl_fn = \case
 wrapBind :: Id Zk -> Id Zk -> CoreExpr -> CoreExpr
 wrapBind new old body
   | new == old = body
-  | otherwise = Let (NonRec (Core.Id new) (varToCoreExpr old)) body
+  | otherwise = Let (NonRec new (varToCoreExpr old)) body
 
 mkGuardedMatchResult :: CoreExpr -> MatchResult CoreExpr -> MatchResult CoreExpr
 mkGuardedMatchResult pred_expr mr = MR_Fallible $ \fail -> do
@@ -129,7 +129,7 @@ mkFailurePair expr = do
   fail_fun_var <- newFailLocalMDs (mkFunTy (BIKi UKd) (mkAppTy unitTy (Embed (BIKi UKd))) ty)
   fail_fun_arg <- newSysLocalMDs (mkAppTy unitTy (Embed (BIKi UKd)))
   let real_arg = setOneShotLambda fail_fun_arg
-  return ( NonRec (Core.Id fail_fun_var) (Lam (Core.Id real_arg) (Just (BIKi UKd)) expr)
+  return ( NonRec fail_fun_var (Lam (Core.Id real_arg) (Just (BIKi UKd)) expr)
          , App (Var fail_fun_var) unitExpr )
   where ty = exprType expr
 

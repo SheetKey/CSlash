@@ -5,12 +5,19 @@ module CSlash.Core where
 import CSlash.Cs.Pass
 import {-# SOURCE #-} CSlash.Types.Var
 
-data Expr a
+data Expr a b
 
-type role CoreBndr nominal
-data CoreBndr p
+type CoreBndr = CoreBndrP Zk
+type role CoreBndrP nominal
+data CoreBndrP p
 
-type CoreExpr = Expr (CoreBndr Zk)
+type CoreExpr = Expr CoreBndr CoreId
+
+type CoreId = Id Zk
+-- type CoreType = Type Zk
+-- type CoreKind = Kind Zk
+-- type CoreMonoKind = MonoKind Zk
+-- type CoreVarSets = (IdSet Zk, TyVarSet Zk, KiCoVarSet Zk, KiVarSet Zk)
 
 data Unfolding
 

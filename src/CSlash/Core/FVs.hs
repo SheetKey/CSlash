@@ -119,8 +119,13 @@ exprLocalFVs = filterFV isLocal . exprFVs
   where isLocal (In1 id) = isLocalId id
         isLocal _ = True
 
-addBndrFV :: CoreBndr Zk -> CoreFV -> CoreFV
-addBndrFV bndr fv fv_cand in_scope acc = case bndr of
+addLetBndrFV :: CoreId -> CoreFV -> CoreFV
+addLetBndrFV id fv fv_cand in_scope acc =
+  (liftTyToCoreFV (fvsOfType (varType id)) `unionFV`
+   FV.delFV (In1 id) fv) fv_cand in_scope acc
+
+addLamBndrFV :: CoreBndr -> CoreFV -> CoreFV
+addLamBndrFV bndr fv fv_cand in_scope acc = case bndr of
   Core.Id id ->
     (liftTyToCoreFV (fvsOfType (varType id)) `unionFV`
      FV.delFV (In1 id) fv) fv_cand in_scope acc
@@ -133,8 +138,11 @@ addBndrFV bndr fv fv_cand in_scope acc = case bndr of
   Kv kv ->
     (FV.delFV (In5 kv) fv) fv_cand in_scope acc
 
-addBndrsFV :: [CoreBndr Zk] -> CoreFV -> CoreFV
-addBndrsFV bndrs fv = foldr addBndrFV fv bndrs
+addLetBndrsFV :: [CoreId] -> CoreFV -> CoreFV
+addLetBndrsFV bndrs fv = foldr addLetBndrFV fv bndrs
+
+addLamBndrsFV :: [CoreBndr] -> CoreFV -> CoreFV
+addLamBndrsFV bndrs fv = foldr addLamBndrFV fv bndrs
 
 exprsFVs :: [CoreExpr] -> CoreFV
 exprsFVs exprs = mapUnionFV exprFVs exprs
@@ -149,26 +157,26 @@ exprFVs (Tick _ expr) fv_cand in_scope acc = exprFVs expr fv_cand in_scope acc
 exprFVs (App fun arg) fv_cand in_scope acc
   = (exprFVs fun `unionFV` exprFVs arg) fv_cand in_scope acc
 exprFVs (Lam bndr Nothing body) fv_cand in_scope acc
-  = addBndrFV bndr (exprFVs body) fv_cand in_scope acc
+  = addLamBndrFV bndr (exprFVs body) fv_cand in_scope acc
 exprFVs (Lam bndr (Just ki) body) fv_cand in_scope acc
   = (liftKiToCoreFV (fvsOfMonoKind ki) `unionFV`
-     addBndrFV bndr (exprFVs body)) fv_cand in_scope acc
+     addLamBndrFV bndr (exprFVs body)) fv_cand in_scope acc
 exprFVs (Cast expr co) fv_cand in_scope acc
   = (exprFVs expr `unionFV` fvsOfTyCo co) fv_cand in_scope acc
 exprFVs (Case scrut bndr ty alts) fv_cand in_scope acc
-  = (exprFVs scrut `unionFV` liftTyToCoreFV (fvsOfType ty) `unionFV` addBndrFV bndr
+  = (exprFVs scrut `unionFV` liftTyToCoreFV (fvsOfType ty) `unionFV` addLetBndrFV bndr
      (mapUnionFV alt_fvs alts)) fv_cand in_scope acc
   where
-    alt_fvs (Alt _ bndrs rhs) = addBndrsFV bndrs (exprFVs rhs)
+    alt_fvs (Alt _ bndrs rhs) = addLetBndrsFV bndrs (exprFVs rhs)
 exprFVs (Let (NonRec bndr rhs) body) fv_cand in_scope acc
-  = (rhs_fvs (bndr, rhs) `unionFV` addBndrFV bndr (exprFVs body)) fv_cand in_scope acc
+  = (rhs_fvs (bndr, rhs) `unionFV` addLetBndrFV bndr (exprFVs body)) fv_cand in_scope acc
 exprFVs (Let (Rec pairs) body) fv_cand in_scope acc
-  = addBndrsFV (map fst pairs)
+  = addLetBndrsFV (map fst pairs)
     (mapUnionFV rhs_fvs pairs `unionFV` exprFVs body)
     fv_cand in_scope acc
 
-rhs_fvs :: (CoreBndr Zk, CoreExpr) -> CoreFV
-rhs_fvs (bndr, rhs) = exprFVs rhs `unionFV` bndrUnfoldingFVs bndr
+rhs_fvs :: (CoreId, CoreExpr) -> CoreFV
+rhs_fvs (bndr, rhs) = exprFVs rhs `unionFV` idUnfoldingFVs bndr
 
 fvsOfTyCos :: [TypeCoercion Zk] -> CoreFV
 fvsOfTyCos [] fv_cand in_scope acc = emptyFV fv_cand in_scope acc
@@ -188,11 +196,11 @@ fvsOfTyCo (TyConAppCo _ cos) fv_cand in_scope acc
 fvsOfTyCo (AppCo co arg) fv_cand in_scope acc
   = (fvsOfTyCo co `unionFV` fvsOfTyCo arg) fv_cand in_scope acc
 fvsOfTyCo (ForAllCo { tfco_tv = tv, tfco_tv_kind_co = kco, tfco_body = co }) fv_cand in_scope acc
-  = (addBndrFV (Tv tv) (fvsOfTyCo co) `unionFV` liftTyToCoreFV (fvsOfKiCo kco))
+  = (addLamBndrFV (Tv tv) (fvsOfTyCo co) `unionFV` liftTyToCoreFV (fvsOfKiCo kco))
     fv_cand in_scope acc
 fvsOfTyCo (ForAllCoCo { tfcoco_kcv = kcv, tfcoco_kcv_kind_co = kco, tfcoco_body = co })
           fv_cand in_scope acc
-  = (addBndrFV (KCv kcv) (fvsOfTyCo co) `unionFV` liftTyToCoreFV (fvsOfKiCo kco))
+  = (addLamBndrFV (KCv kcv) (fvsOfTyCo co) `unionFV` liftTyToCoreFV (fvsOfKiCo kco))
     fv_cand in_scope acc
 fvsOfTyCo (TyFunCo { tfco_ki = kco, tfco_arg = co1, tfco_res = co2 }) fv_cand in_scope acc
   = (fvsOfTyCo co1 `unionFV` fvsOfTyCo co2 `unionFV` liftTyToCoreFV (fvsOfKiCo kco))
@@ -216,11 +224,11 @@ fvsOfTyCoVar v fv_cand in_scope acc
 *                                                                      *
 ********************************************************************* -}
 
-bndrUnfoldingFVs :: CoreBndr Zk -> CoreFV
+bndrUnfoldingFVs :: CoreBndr -> CoreFV
 bndrUnfoldingFVs (Core.Id id) = idUnfoldingFVs id
 bndrUnfoldingFVs _ = emptyFV
 
-idUnfoldingFVs :: Id Zk -> CoreFV
+idUnfoldingFVs :: CoreId -> CoreFV
 idUnfoldingFVs id = stableUnfoldingFVs (realIdUnfolding id) `orElse` emptyFV
  
 stableUnfoldingFVs :: Unfolding -> Maybe CoreFV

@@ -7,7 +7,7 @@ import CSlash.Core.Ppr     ( pprCoreBindings, pprCoreExpr )
 -- import CSlash.Core.Opt.OccurAnal ( occurAnalysePgm, occurAnalyseExpr )
 -- import CSlash.Core.Stats   ( coreBindsSize, coreBindsStats, exprSize )
 -- import CSlash.Core.Utils   ( mkTicks, stripTicksTop )
--- import CSlash.Core.Lint    ( LintPassResultConfig, dumpPassResult, lintPassResult )
+import CSlash.Core.Lint    ( LintPassResultConfig, dumpPassResult, lintPassResult )
 -- import CSlash.Core.Opt.Simplify.Iteration ( simplTopBinds, simplExpr, simplImpRules )
 -- import CSlash.Core.Opt.Simplify.Utils  ( activeRule )
 -- import CSlash.Core.Opt.Simplify.Inline ( activeUnfolding )
@@ -48,7 +48,9 @@ import Data.Foldable ( for_ )
 ********************************************************************* -}
 
 data SimplifyOpts = SimplifyOpts
-  -- { so_dump_core_sizes :: !Bool
-  -- , so_iterations :: !Int
-  -- , so_mode :: !SimplMode
-  -- , so_pass_result_cfg :: !(M
+  { so_dump_core_sizes :: !Bool
+  , so_iterations :: !Int
+  , so_mode :: !() -- SimplMode
+  , so_pass_result_cfg :: !(Maybe LintPassResultConfig)
+  -- , so_top_env_cfg :: !TopEnvConfig
+  }

@@ -168,7 +168,7 @@ extendTermSubstInScopeSet :: TermSubstInScope -> Id Zk -> TermSubstInScope
 extendTermSubstInScopeSet (ids, tcvs, tvs, kcvs, kvs) id
   = (extendInScopeSet ids id, tcvs, tvs, kcvs, kvs)
 
-extendTermSubstInScope :: CoreSubst -> CoreBndr Zk -> CoreSubst
+extendTermSubstInScope :: CoreSubst -> CoreBndr -> CoreSubst
 extendTermSubstInScope Subst{..} (Core.Id id)
   = Subst { id_in_scope = id_in_scope `extendInScopeSet` id, .. }
 extendTermSubstInScope Subst{..} (Tv tv)
@@ -335,7 +335,7 @@ extendSubstInScopeSetsSets (Subst { tv_in_scope = tis
           , kv_in_scope = kis `extendInScopeSetSet` nkis
           , .. }
 
-extendSubst :: HasDebugCallStack => CoreSubst -> CoreBndr Zk -> CoreArg -> CoreSubst
+extendSubst :: HasDebugCallStack => CoreSubst -> CoreBndr -> CoreArg -> CoreSubst
 extendSubst subst var arg
   = case arg of
       Type ty

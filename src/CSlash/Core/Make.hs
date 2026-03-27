@@ -42,7 +42,7 @@ import Data.Char (ord)
 *                                                                      *
 **********************************************************************-}
 
-mkCoreLams :: [(CoreBndr Zk, Maybe (MonoKind Zk))] -> CoreExpr -> CoreExpr
+mkCoreLams :: [(CoreBndr, Maybe CoreMonoKind)] -> CoreExpr -> CoreExpr
 mkCoreLams bndrs body = foldr (uncurry Lam) body bndrs 
 
 infixl 4`mkCoreApps`
@@ -56,7 +56,7 @@ infixl 4 `mkCoreApp`
 mkCoreApp :: SDoc -> CoreExpr -> CoreExpr -> CoreExpr
 mkCoreApp s fun arg = fst $ mkCoreAppTyped s (fun, exprType fun) arg
 
-mkCoreAppTyped :: SDoc -> (CoreExpr, Type Zk) -> CoreExpr -> (CoreExpr, Type Zk)
+mkCoreAppTyped :: SDoc -> (CoreExpr, CoreType) -> CoreExpr -> (CoreExpr, CoreType)
 mkCoreAppTyped _ (fun, fun_ty) (Type ty)
   = (App fun (Type ty), piResultTy fun_ty ty)
 mkCoreAppTyped _ (fun, fun_ty) (KiCo kco)
@@ -73,12 +73,12 @@ mkCoreAppTyped d (fun, fun_ty) arg
 *                                                                      *
 **********************************************************************-}
 
-mkWildValBinder :: Type Zk -> Id Zk
+mkWildValBinder :: CoreType -> CoreId 
 mkWildValBinder ty = mkLocalId wildCardName ty
 
-mkWildCase :: CoreExpr -> Type Zk -> Type Zk -> [CoreAlt] -> CoreExpr
+mkWildCase :: CoreExpr -> CoreType -> CoreType -> [CoreAlt] -> CoreExpr
 mkWildCase scrut scrut_ty res_ty alts
-  = Case scrut (Core.Id $ mkWildValBinder scrut_ty) res_ty alts
+  = Case scrut (mkWildValBinder scrut_ty) res_ty alts
 
 mkIfThenElse :: CoreExpr -> CoreExpr -> CoreExpr -> CoreExpr
 mkIfThenElse guard then_expr else_expr
@@ -94,7 +94,7 @@ mkIfThenElse guard then_expr else_expr
 
 data FloatBind
   = FloatLet CoreBind
-  | FloatCase CoreExpr (Id Zk) AltCon [CoreBndr Zk]
+  | FloatCase CoreExpr CoreId AltCon [CoreId]
 
 instance Outputable FloatBind where
   ppr (FloatLet b) = text "LET" <+> panic "ppr b"

@@ -35,25 +35,25 @@ import CSlash.Utils.Panic
 *                                                                      *
 ********************************************************************* -}
 
-pprCoreBindings :: OutputableBndr b => [Bind b] -> SDoc
+pprCoreBindings :: (OutputableBndr b1, OutputableBndr b2) => [Bind b1 b2] -> SDoc
 pprCoreBindings = pprTopBinds noAnn
 
 pprCoreBindingsWithSize :: [CoreBind] -> SDoc
 pprCoreBindingsWithSize = pprTopBinds sizeAnn
 
-pprCoreExpr :: OutputableBndr b => Expr b -> SDoc
+pprCoreExpr :: (OutputableBndr b1, OutputableBndr b2) => Expr b1 b2 -> SDoc
 pprCoreExpr expr = ppr_expr noParens expr
 
-pprParendExpr :: OutputableBndr b => Expr b -> SDoc
+pprParendExpr :: (OutputableBndr b1, OutputableBndr b2) => Expr b1 b2 -> SDoc
 pprParendExpr expr = ppr_expr parens expr
 
-instance OutputableBndr b => Outputable (Bind b) where
+instance (OutputableBndr b1, OutputableBndr b2) => Outputable (Bind b1 b2) where
   ppr bind = ppr_bind noAnn bind
 
-instance OutputableBndr b => Outputable (Expr b) where
+instance (OutputableBndr b1, OutputableBndr b2) => Outputable (Expr b1 b2) where
   ppr expr = pprCoreExpr expr
 
-instance OutputableBndr b => Outputable (Alt b) where
+instance (OutputableBndr b1, OutputableBndr b2) => Outputable (Alt b1 b2) where
   ppr expr = pprCoreAlt expr
 
 {- *********************************************************************
@@ -62,37 +62,54 @@ instance OutputableBndr b => Outputable (Alt b) where
 *                                                                      *
 ********************************************************************* -}
 
-type Annotation b = Expr b -> SDoc
+type Annotation b1 b2 = Expr b1 b2 -> SDoc
 
 sizeAnn :: CoreExpr -> SDoc
 sizeAnn e = text "-- RHS size:" <+> ppr (exprStats e)
 
-noAnn :: Expr b -> SDoc
+noAnn :: Expr b1 b2 -> SDoc
 noAnn _ = empty
 
 pprTopBinds
-  :: OutputableBndr a
-  => Annotation a
-  -> [Bind a]
+  :: (OutputableBndr a, OutputableBndr b)
+  => Annotation a b
+  -> [Bind a b]
   -> SDoc
 pprTopBinds ann binds = vcat (map (pprTopBind ann) binds)
  
-pprTopBind :: OutputableBndr a => Annotation a -> Bind a -> SDoc
-pprTopBind ann (NonRec binder expr) = ppr_binding ann (binder, expr) $$ blankLine
+pprTopBind :: (OutputableBndr a, OutputableBndr b) => Annotation a b -> Bind a b -> SDoc
+pprTopBind ann (NonRec binder expr) = ppr_let_binding ann (binder, expr) $$ blankLine
 pprTopBind _ (Rec []) = text "Rec { }"
 pprTopBind ann (Rec (b:bs))
   = vcat [ text "Rec {"
-         , ppr_binding ann b
-         , vcat [ blankLine $$ ppr_binding ann b | b <- bs]
+         , ppr_let_binding ann b
+         , vcat [ blankLine $$ ppr_let_binding ann b | b <- bs]
          , text "end Rec }"
          , blankLine ]
 
-ppr_bind :: OutputableBndr b => Annotation b -> Bind b -> SDoc
-ppr_bind ann (NonRec val_bndr expr) = ppr_binding ann (val_bndr, expr)
-ppr_bind ann (Rec binds) = vcat (map pp binds) where pp bind = ppr_binding ann bind <> semi
+ppr_bind :: (OutputableBndr a, OutputableBndr b) => Annotation a b -> Bind a b -> SDoc
+ppr_bind ann (NonRec val_bndr expr) = ppr_let_binding ann (val_bndr, expr)
+ppr_bind ann (Rec binds) = vcat (map pp binds) where pp bind = ppr_let_binding ann bind <> semi
 
-ppr_binding :: OutputableBndr b => Annotation b -> (b, Expr b) -> SDoc
-ppr_binding ann (val_bndr, expr)
+ppr_let_binding :: (OutputableBndr a, OutputableBndr b) => Annotation a b -> (b, Expr a b) -> SDoc
+ppr_let_binding ann (val_bndr, expr)
+  = vcat [ ann expr
+         , ppUnlessOption sdocSuppressTypeSignatures
+           (pprBndr LetBind val_bndr)
+         , pp_bind ]
+  where
+    pp_val_bndr = pprPrefixOcc val_bndr
+
+    pp_bind = case bndrIsJoin_maybe val_bndr of
+                NotJoinPoint -> pp_normal_bind
+                JoinPoint ar -> pp_join_bind ar
+
+    pp_normal_bind = hang pp_val_bndr 2 (equals <+> pprCoreExpr expr)
+
+    pp_join_bind join_arity = panic "pp_join_bind"
+
+ppr_lam_binding :: (OutputableBndr a, OutputableBndr b) => Annotation a b -> (a, Expr a b) -> SDoc
+ppr_lam_binding ann (val_bndr, expr)
   = vcat [ ann expr
          , ppUnlessOption sdocSuppressTypeSignatures
            (pprBndr LetBind val_bndr)
@@ -136,7 +153,7 @@ ppr_id_occ add_par id
   where
     pp_id = ppr id
 
-ppr_expr :: OutputableBndr b => (SDoc -> SDoc) -> Expr b -> SDoc
+ppr_expr :: (OutputableBndr a, OutputableBndr b) => (SDoc -> SDoc) -> Expr a b -> SDoc
 ppr_expr add_par (Var id) = ppr_id_occ add_par id
 ppr_expr add_par (Type ty) = add_par (text "TYPE:" <+> ppr ty)
 ppr_expr add_par (Kind ki) = add_par (text "KIND:" <+> ppr ki)
@@ -225,7 +242,7 @@ ppr_expr add_par (Tick tickish expr)
       True | not (tickishIsCode tickish) -> ppr_expr add_par expr
       _ -> add_par (sep [ppr tickish, pprCoreExpr expr])
 
-pprCoreAlt :: OutputableBndr a => Alt a -> SDoc
+pprCoreAlt :: (OutputableBndr a, OutputableBndr b) => Alt a b -> SDoc
 pprCoreAlt (Alt con args rhs)
   = hang (ppr_case_pat con args <+> arrow) 2 (pprCoreExpr rhs)
 
@@ -241,7 +258,7 @@ ppr_case_pat con args
   = ppr con <+> (fsep (map ppr_bndr args))
   where ppr_bndr = pprBndr CasePatBind
 
-pprArg :: OutputableBndr a => Expr a -> SDoc
+pprArg :: (OutputableBndr a, OutputableBndr b) => Expr a b -> SDoc
 pprArg (Type ty) = ppUnlessOption sdocSuppressTypeApplications
                    (braces (pprType ty))
 pprArg (Kind ki) = ppUnlessOption sdocSuppressTypeApplications
@@ -249,13 +266,13 @@ pprArg (Kind ki) = ppUnlessOption sdocSuppressTypeApplications
 pprArg (KiCo co) = braces (char '~' <+> pprOptKiCo co)
 pprArg expr = pprParendExpr expr
 
-instance IsPass p => Outputable (CoreBndr (CsPass p)) where
+instance IsPass p => Outputable (CoreBndrP (CsPass p)) where
   ppr (Core.Id id) = ppr id
   ppr (Tv v) = ppr v
   ppr (KCv v) = ppr v
   ppr (Kv v) = ppr v
 
-instance IsPass p => OutputableBndr (CoreBndr (CsPass p)) where
+instance IsPass p => OutputableBndr (CoreBndrP (CsPass p)) where
   pprBndr = pprCoreBinder
 
   pprInfixOcc (Core.Id id) = pprInfixOcc id
@@ -299,16 +316,16 @@ pprOcc :: OutputableBndr a => LexicalFixity -> a -> SDoc
 pprOcc Infix = pprInfixOcc
 pprOcc Prefix = pprPrefixOcc
 
-pprCoreBinder :: HasPass p pass => BindingSite -> CoreBndr p -> SDoc
+pprCoreBinder :: HasPass p pass => BindingSite -> CoreBndrP p -> SDoc
 pprCoreBinder LetBind (Core.Id binder)
   = pprTypedLetBinder binder $$ ppIdInfo binder (idInfo binder)
 pprCoreBinder bind_site bndr = getPprDebug $ \debug -> pprTypedLamBinder bind_site debug bndr
 
-pprUntypedBinder :: HasPass p pass => CoreBndr p -> SDoc
+pprUntypedBinder :: HasPass p pass => CoreBndrP p -> SDoc
 pprUntypedBinder (Core.Id binder) = pprIdBndr binder
 pprUntypedBinder binder = pprPrefixOcc binder
 
-pprTypedLamBinder :: HasPass p pass => BindingSite -> Bool -> CoreBndr p -> SDoc
+pprTypedLamBinder :: HasPass p pass => BindingSite -> Bool -> CoreBndrP p -> SDoc
 pprTypedLamBinder bind_site debug_on var
   = sdocOption sdocSuppressTypeSignatures $ \suppress_sigs -> 
     if | not debug_on

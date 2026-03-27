@@ -124,7 +124,7 @@ dsAbsBinds dflags exports bind_prs is_singleton has_sig
                , [(_, lrhs)] <- bind_prs
                = lrhs
                | otherwise
-               = mkLetRec (map (\(id, e) -> (Core.Id id, e)) bind_prs) (Var local_id)
+               = mkLetRec bind_prs (Var local_id)
           main_bind = makeCorePair dflags global_id rhs
       in return [main_bind]
   | otherwise

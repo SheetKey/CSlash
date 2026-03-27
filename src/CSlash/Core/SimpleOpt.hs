@@ -10,7 +10,7 @@ import CSlash.Core.FVs
 import CSlash.Core.Unfold
 -- import CSlash.Core.Unfold.Make
 import CSlash.Core.Make ( FloatBind(..), mkCoreLams, mkWildValBinder )
-import CSlash.Core.Opt.OccurAnal( occurAnalyzeExpr{-, occurAnalysePgm, zapLambdaBndrs-} )
+import CSlash.Core.Opt.OccurAnal( occurAnalyzeExpr, occurAnalyzePgm{-, zapLambdaBndrs-} )
 import CSlash.Core.DataCon
 -- import CSlash.Core.Coercion.Opt ( optCoercion, OptCoercionOpts (..) )
 import CSlash.Core.Type
@@ -69,6 +69,21 @@ simpleOptExprWith opts subst expr
   where
     init_env = (emptyEnv opts) { soe_subst = subst }
 
+simpleOptPgm
+  :: SimpleOpts
+  -> Module
+  -> CoreProgram
+  -> (CoreProgram, CoreProgram)
+simpleOptPgm opts this_mod binds = (reverse binds', occ_anald_binds)
+  where
+    occ_anald_binds = occurAnalyzePgm this_mod (const True) binds
+
+    (final_env, binds') = foldl' do_one (emptyEnv opts, []) occ_anald_binds
+
+    do_one (env, binds') bind = case simple_opt_bind env bind TopLevel of
+                                  (env', Nothing) -> (env', binds')
+                                  (env', Just bind') -> (env', bind' : binds')
+
 type SimpleClo = (SimpleOptEnv, InExpr)
 
 data SimpleOptEnv = SOE
@@ -123,8 +138,7 @@ simple_opt_expr env expr = go expr
                            (env', Just bind) -> Let bind (simple_opt_expr env' body)
     go lam@(Lam {}) = go_lam env [] lam
     go (Case e b ty as)
-      | Core.Id id <- b
-      , isDeadBinder id
+      | isDeadBinder b
       , Just (_, [], con, _, es) <- exprIsConApp_maybe in_scope_env e'
       , Just (Alt altcon bs rhs) <- findAlt (DataAlt con) as
       = case altcon of
@@ -136,7 +150,7 @@ simple_opt_expr env expr = go expr
       = Case e' b' (substTyUnchecked subst ty) (map (go_alt env') as)
       where
         e' = go e
-        (env', b', _) = subst_opt_bndr env b Nothing
+        (env', b', _) = subst_opt_id_bndr env b Nothing
 
     go_tco co = panic "optTyCoercion (so_co_opts (soe_opts env)) subst co"
 
@@ -145,7 +159,7 @@ simple_opt_expr env expr = go expr
     go_alt env (Alt con bndrs rhs)
       = Alt con bndrs' (simple_opt_expr env' rhs)
       where
-        (env', bndrs') = subst_opt_bndrs env bndrs
+        (env', bndrs') = subst_opt_id_bndrs env bndrs
 
     go_lam env bs' (Lam b mki e) = go_lam env' ((b', mki'):bs') e
       where (env', b', mki') = subst_opt_bndr env b mki
@@ -177,13 +191,13 @@ safe_to_inline OneOcc{ occ_in_lam = NotInsideLam, occ_n_br = 1 } = True
 safe_to_inline OneOcc{} = False
 safe_to_inline ManyOccs{} = False
 
-do_beta_by_substitution :: CoreBndr Zk -> CoreExpr -> Bool
+do_beta_by_substitution :: CoreBndr -> CoreExpr -> Bool
 do_beta_by_substitution (Core.Id bndr) rhs
   = panic "exprIsTrivial rhs" -- exprIsTrivial must do kind checking
     || safe_to_inline (idOccInfo bndr)
 do_beta_by_substitution _ _ = False
 
-do_case_elim :: CoreExpr -> CoreBndr Zk -> [CoreBndr Zk] -> Bool
+do_case_elim :: CoreExpr -> CoreId -> [CoreId] -> Bool
 do_case_elim scrut case_bndr alt_bndrs = panic "do_case_elim"
 
 simple_out_bind
@@ -198,12 +212,19 @@ subst_opt_bndrs env bndrs = mapAccumL (\s v -> fst2Of3 $ subst_opt_bndr s v Noth
   where
     fst2Of3 (a, b, _) = (a, b)
 
+subst_opt_id_bndrs :: SimpleOptEnv -> [InId] -> (SimpleOptEnv, [OutId])
+subst_opt_id_bndrs env bndrs
+  = mapAccumL (\s v -> fst2Of3 $ subst_opt_id_bndr s v Nothing) env bndrs
+  where
+    fst2Of3 (a, b, _) = (a, b)
+
 subst_opt_bndr
   :: SimpleOptEnv
   -> InVar
   -> Maybe (MonoKind Zk)
   -> (SimpleOptEnv, OutVar, Maybe (MonoKind Zk))
-subst_opt_bndr env (Core.Id id) mki = subst_opt_id_bndr env id mki
+subst_opt_bndr env (Core.Id id) mki = case subst_opt_id_bndr env id mki of
+  (a, b, c) -> (a, Core.Id b, c)
 subst_opt_bndr env (Tv tv) Nothing
   = let (subst', tv') = substTyVarBndr (soe_subst env) tv
     in (env { soe_subst = subst' }, Tv tv', Nothing)
@@ -219,9 +240,9 @@ subst_opt_id_bndr
   :: SimpleOptEnv
   -> InId
   -> Maybe (MonoKind Zk)
-  -> (SimpleOptEnv, OutVar, Maybe (MonoKind Zk))
+  -> (SimpleOptEnv, OutId, Maybe (MonoKind Zk))
 subst_opt_id_bndr env@(SOE { soe_subst = subst, soe_inl = inl }) old_id old_fun_ki
-  = (env { soe_subst = new_subst, soe_inl = new_inl}, Core.Id new_id, new_fun_ki)
+  = (env { soe_subst = new_subst, soe_inl = new_inl}, new_id, new_fun_ki)
   where
     in_scope@(id_in_scope, _, _, _, _) = substInScopeSets subst
     id1 = uniqAway id_in_scope old_id
@@ -284,14 +305,14 @@ exprIsConApp_maybe ise@(ISE in_scope id_unf) expr
             float = FloatLet (NonRec bndr' arg)
         in go subst' (float:floats) body (CC args mco)
     go subst floats (Let (NonRec bndr rhs) expr) cont
-      | not (isJoinIdBndr bndr)
+      | not (isJoinId bndr)
       = let rhs' = subst_expr subst rhs
             (subst', bndr') = subst_bndr subst bndr
             float = FloatLet (NonRec bndr' rhs')
         in go subst' (float:floats) expr cont
     go subst floats (Case scrut b _ [Alt con vars expr]) cont
       | do_case_elim scrut' b vars
-      = go (extend subst b scrut') floats expr cont
+      = go (extend subst (Core.Id b) scrut') floats expr cont
       | otherwise
       = let (subst', b') = subst_bndr subst b
             (subst'', vars') = subst_bndrs subst' vars
@@ -366,7 +387,7 @@ exprIsConApp_maybe ise@(ISE in_scope id_unf) expr
 
     extend
       :: Either TermSubstInScope CoreSubst
-      -> CoreBndr Zk
+      -> CoreBndr
       -> CoreExpr
       -> Either TermSubstInScope CoreSubst
     extend (Left in_scope) v e = Right (extendSubst (mkEmptyTermSubstIS in_scope) v e)

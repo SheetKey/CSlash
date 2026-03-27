@@ -24,6 +24,21 @@ data Dependencies = Deps
   , dep_direct_pkgs :: Set UnitId
   }
 
+mkDependencies :: HomeUnit -> Module -> ImportAvails -> Dependencies
+mkDependencies home_unit mod imports =
+  let all_direct_mods = imp_direct_dep_mods imports
+
+      modDepsElts = Set.fromList . installedModuleEnvElts
+
+      direct_mods = first moduleUnit `Set.map`
+                    modDepsElts (delInstalledModuleEnv all_direct_mods (toUnitId <$> mod))
+
+      direct_pkgs = imp_dep_direct_pkgs imports
+
+  in Deps { dep_direct_mods = direct_mods
+          , dep_direct_pkgs = direct_pkgs
+          }
+
 instance Binary Dependencies where
   put_ bh deps = do
     put_ bh (dep_direct_mods deps)
