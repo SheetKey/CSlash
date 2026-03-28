@@ -298,6 +298,26 @@ exprIsCheapX ok_app expandable e = ok e
     go n (Let (NonRec _ r) e) = not expandable && go n e && ok r
     go n (Let (Rec prs) e) = not expandable && go n e && all (ok . snd) prs
 
+exprIsExpandable :: CoreExpr -> Bool
+exprIsExpandable e = ok e
+  where
+    ok e = go 0 e
+
+    go n (Var v) = isExpandableApp v n
+    go _ (Lit {}) = True
+    go _ (Type {}) = True
+    go _ (KiCo {}) = True
+    go _ (Kind {}) = True
+    go n (Cast e _) = go n e
+    go n (Tick t e) | tickishCounts t = False
+                    | otherwise = go n e
+    go n (Lam x k e) | isRuntimeVar x = n ==0 || go (n - 1) e
+                     | otherwise = go n e
+    go n (App f e) | isRuntimeArg e = go (n + 1) f && ok e
+                   | otherwise = go n f
+    go _ (Case {}) = False
+    go _ (Let {}) = False
+
 exprIsWorkFree :: CoreExpr -> Bool
 exprIsWorkFree e = exprIsCheapX isWorkFreeApp False e
 

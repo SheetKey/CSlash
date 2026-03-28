@@ -69,7 +69,7 @@ mkCoreUnfolding src top_lvl expr precomputed_cache guidance
     is_value = exprIsHNF expr
     is_conlike = exprIsConLike expr
     is_work_free = exprIsWorkFree expr
-    is_expandable = panic "exprIsExpandable expr"
+    is_expandable = exprIsExpandable expr
 
     recomputed_cache = UnfoldingCache { uf_is_value = is_value
                                       , uf_is_conlike = is_conlike
