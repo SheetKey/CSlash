@@ -422,3 +422,13 @@ disjointCoreVarSets (ids1, tcvs1, tvs1, kcvs1, kvs1) (ids2, tcvs2, tvs2, kcvs2, 
     && disjointVarSet kcvs1 kcvs2
     && disjointVarSet kvs1 kvs2
 
+{- *********************************************************************
+*                                                                      *
+              Join points
+*                                                                      *
+********************************************************************* -}
+
+isJoinBind :: CoreBind -> Bool
+isJoinBind (NonRec b _) = isJoinId b
+isJoinBind (Rec ((b, _) : _)) = isJoinId b
+isJoinBind _ = False

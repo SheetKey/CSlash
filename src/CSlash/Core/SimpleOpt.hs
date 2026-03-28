@@ -105,6 +105,13 @@ emptyEnv opts = SOE { soe_inl = emptyVarEnv
                     , soe_rec_ids = emptyUnVarSet
                     , soe_opts = opts }
 
+soeZapSubst :: SimpleOptEnv -> SimpleOptEnv
+soeZapSubst env@(SOE { soe_subst = subst })
+  = env { soe_inl = emptyVarEnv, soe_subst = zapSubst subst }
+
+soeInScope :: SimpleOptEnv -> TermSubstInScope
+soeInScope (SOE { soe_subst = subst }) = substInScopeSets subst 
+
 soeSetInScope :: TermSubstInScope -> SimpleOptEnv -> SimpleOptEnv
 soeSetInScope in_scope env@(SOE { soe_subst = subst })
   = env { soe_subst = setTermInScopeSets subst in_scope }
@@ -189,7 +196,71 @@ mk_cast e co | isReflexiveTyCo co = e
 -- TODO: check for other places to use isReflexiveTyCo instead of isReflTyCo
 
 simple_app :: HasDebugCallStack => SimpleOptEnv -> InExpr -> [SimpleClo] -> CoreExpr
-simple_app = panic "unfinished"
+simple_app env (Var v) as
+  | Just (env', e) <- lookupVarEnv (soe_inl env) v
+  = simple_app (soeSetInScope (soeInScope env) env') e as
+
+  | let unf = idUnfolding v
+  , isCompulsoryUnfolding unf
+  , isAlwaysActive (idInlineActivation v)
+  = simple_app (soeZapSubst env) (unfoldingTemplate unf) as
+
+  | otherwise
+  = let out_fn = lookupIdSubst (soe_subst env) v
+    in finish_app env out_fn as
+
+simple_app env (App e1 e2) as
+  = simple_app env e1 ((env, e2) : as)
+
+simple_app env e@(Lam {}) as@(_:_)
+  = do_beta env (panic "zapLambdaBndrs e n_args") as
+  where
+    n_args = length as
+
+    do_beta :: SimpleOptEnv -> InExpr -> [SimpleClo] -> CoreExpr
+    do_beta env (Lam b k body) (a:as)
+      | needsCaseBinding (snd a)
+      = let a' = simple_opt_clo (soeInScope env) a
+        in panic "mkDefaultCase a' b' $ do_beta env' body as"
+
+      | Core.Id b <- b
+      , Core.Id b' <- b'
+      , (env'', mb_pr) <- simple_bind_pair env' b (Just b') a NotTopLevel
+      = panic "wrapLet"
+
+      where (env', b', k') = subst_opt_bndr env b k
+
+    do_beta env body as = simple_app env body as
+
+simple_app env (Tick t e) as
+  | t `tickishScopesLike` SoftScope
+  = mkTick t $ simple_app env e as
+  
+simple_app env (Let bind body) args
+  = case simple_opt_bind env bind NotTopLevel of
+      (env', Nothing) -> simple_app env' body args
+      (env', Just bind')
+        | isJoinBind bind' -> finish_app env expr' args
+        | otherwise -> Let bind' (simple_app env' body args)
+        where
+          expr' = Let bind' (simple_opt_expr env' body)
+
+simple_app env e as = finish_app env (simple_opt_expr env e) as
+
+finish_app
+  :: HasDebugCallStack
+  => SimpleOptEnv
+  -> OutExpr
+  -> [SimpleClo]
+  -> OutExpr
+finish_app env (Cast (Lam (Core.Id x) k e) co) as@(_:_)
+  | Just (x', e') <- panic "pushCoercionIntoLambda (soeInScope env) x e co"
+  = simple_app (soeZapSubst env) (Lam x' k e') as
+  
+finish_app env fun args = foldl mk_app fun args
+  where
+    in_scope = soeInScope env
+    mk_app fun arg = App fun (simple_opt_clo in_scope arg)
 
 simple_opt_bind :: SimpleOptEnv -> InBind -> TopLevelFlag -> (SimpleOptEnv, Maybe OutBind)
 simple_opt_bind env (NonRec b r) top_level

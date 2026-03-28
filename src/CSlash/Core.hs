@@ -115,6 +115,9 @@ noUnfolding = NoUnfolding
 evaldUnfolding :: Unfolding
 evaldUnfolding = OtherCon []
 
+unfoldingTemplate :: Unfolding -> CoreExpr
+unfoldingTemplate = uf_tmpl
+
 isEvaldUnfolding :: Unfolding -> Bool
 isEvaldUnfolding (OtherCon _) = True
 isEvaldUnfolding NoUnfolding = False
