@@ -51,7 +51,7 @@ mkUnfolding opts src top_lvl is_bottoming is_join expr cache
   = mkCoreUnfolding src top_lvl expr cache guidance
   where
     is_top_bottoming = top_lvl && is_bottoming
-    guidance = panic "calcUnfoldingGuidance opts is_top_bottoming is_join expr"
+    guidance = calcUnfoldingGuidance opts is_top_bottoming is_join expr
 
 mkCoreUnfolding :: UnfoldingSource
   -> Bool

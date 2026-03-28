@@ -283,6 +283,10 @@ isRuntimeVar _ = False
 isRuntimeArg :: CoreExpr -> Bool
 isRuntimeArg = isValArg
 
+runtimeVar_maybe :: CoreBndr -> Maybe CoreId
+runtimeVar_maybe (Id id) = Just id
+runtimeVar_maybe _ = Nothing
+
 isValArg :: Expr b1 b2 -> Bool
 isValArg Type {} = False
 isValArg Kind {} = False

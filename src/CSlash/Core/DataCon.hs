@@ -191,3 +191,6 @@ dataConImplicitTyThing (MkData { dcId = id }) = mkAnId id
 
 dataConFullSig :: DataCon p -> Type Zk
 dataConFullSig (MkData { dcType = full_ty }) = full_ty
+
+isTupleDataCon :: DataCon p -> Bool
+isTupleDataCon (MkData { dcTyCon = tc }) = isTupleTyCon tc

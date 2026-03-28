@@ -447,7 +447,7 @@ instance Outputable Unfolding where
                 [ text "Src=" <> ppr src
                 , text "TopLvl=" <> ppr top
                 , ppr cache
-                , text "Guaance=" <> ppr g ]
+                , text "Guidance=" <> ppr g ]
       pp_tmpl = ppUnlessOption sdocSuppressUnfoldings (text "Tmpl=" <+> ppr rhs)
       pp_rhs | isStableSource src = pp_tmpl
              | otherwise = empty
