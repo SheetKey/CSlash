@@ -154,7 +154,10 @@ tryEtaReduce rec_ids bndrs body eval_sd
                       $$ text "fun_ty:" <+> ppr fun_ty)
     ok_arg (KCv bndr, _) (KiCo arg_co) co fun_ty = panic "unfinished"
     ok_arg (Kv bndr, _) (Kind arg_ki) co fun_ty = panic "unfinished"
-    ok_arg (Core.Id bndr, _) (Var v) co fun_ty = panic "unfinished"
+    ok_arg (Core.Id bndr, _) (Var v) co fun_ty
+      | bndr == v
+      , Just (_, fki, _) <- splitFunTy_maybe fun_ty
+      = Just (mkTyFunCo (mkReflKiCo fki) (mkReflTyCo (varType bndr)) co, [])
     ok_arg bndr (Cast e co_arg) co fun_ty = panic "unfinished"
     ok_arg bndr (Tick t arg) co fun_ty = panic "unfinished"
     ok_arg _ _ _ _ = Nothing
