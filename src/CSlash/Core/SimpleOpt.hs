@@ -12,7 +12,7 @@ import CSlash.Core.Unfold.Make
 import CSlash.Core.Make ( FloatBind(..), mkCoreLams, mkWildValBinder )
 import CSlash.Core.Opt.OccurAnal( occurAnalyzeExpr, occurAnalyzePgm{-, zapLambdaBndrs-} )
 import CSlash.Core.DataCon
--- import CSlash.Core.Coercion.Opt ( optCoercion, OptCoercionOpts (..) )
+import CSlash.Core.Opt.Coercion
 import CSlash.Core.Type
 import CSlash.Core.Type.Compare
 import CSlash.Core.Kind
@@ -51,9 +51,8 @@ import qualified Data.ByteString as BS
 
 data SimpleOpts = SimpleOpts
   { so_uf_opts :: !UnfoldingOpts
-  -- TODO: , so_co_opts :: !OptCoercionOpts
+  , so_co_opts :: !OptCoercionOpts
   , so_eta_red :: !Bool
-  , so_inline :: !Bool
   }
 
 simpleOptExpr :: HasDebugCallStack => SimpleOpts -> CoreExpr -> CoreExpr
@@ -171,7 +170,7 @@ simple_opt_expr env expr = go expr
 
     go_tco co = panic "optTyCoercion (so_co_opts (soe_opts env)) subst co"
 
-    go_kco co = panic "optKiCoercion (so_co_opts (soe_opts env)) subst co"
+    go_kco co = optKiCoercion (so_co_opts (soe_opts env)) subst co
 
     go_alt env (Alt con bndrs rhs)
       = Alt con bndrs' (simple_opt_expr env' rhs)

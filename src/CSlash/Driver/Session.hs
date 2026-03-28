@@ -582,6 +582,8 @@ dynamic_flags_deps =
         (NoArg (setGeneralFlag Opt_NoCsMain))
   , make_ord_flag defCsFlag "fno-state-hack"
         (NoArg (setGeneralFlag Opt_G_NoStateHack))
+  , make_ord_flag defCsFlag "fno-opt-coercion"
+        (NoArg (setGeneralFlag Opt_G_NoOptCoercion))
   , make_ord_flag defCsFlag "with-rtsopts"
         (HasArg setRtsOpts)
   , make_ord_flag defCsFlag "rtsopts"

@@ -78,6 +78,7 @@ library
                     , CSlash.Core.Opt.Arity
                     , CSlash.Core.Opt.CallerCC
                     , CSlash.Core.Opt.CallerCC.Types
+                    , CSlash.Core.Opt.Coercion
                     , CSlash.Core.Opt.OccurAnal
                     , CSlash.Core.Opt.Pipeline.Types
                     , CSlash.Core.Opt.Simplify

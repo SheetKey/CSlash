@@ -321,6 +321,7 @@ data GeneralFlag
   | Opt_WriteIfSimplifiedCore
 
   | Opt_G_NoStateHack
+  | Opt_G_NoOptCoercion
   deriving (Eq, Show, Enum)
 
 optimisationFlags :: EnumSet GeneralFlag

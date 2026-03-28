@@ -4,7 +4,7 @@ module CSlash.Driver.DynFlags
   , WarningFlag(..), DiagnosticReason(..)
   , FatalMessager, FlushOut(..)
   , ProfAuto(..)
-  , hasPprDebug, hasNoDebugOutput, hasNoStateHack
+  , hasPprDebug, hasNoDebugOutput, hasNoStateHack, hasNoOptCoercion
   , dopt, dopt_set, dopt_unset
   , gopt, gopt_set, gopt_unset
   , wopt, wopt_set, wopt_unset
@@ -570,6 +570,9 @@ hasNoDebugOutput = dopt Opt_D_no_debug_output
 
 hasNoStateHack :: DynFlags -> Bool
 hasNoStateHack = gopt Opt_G_NoStateHack
+
+hasNoOptCoercion :: DynFlags -> Bool
+hasNoOptCoercion = gopt Opt_G_NoOptCoercion
 
 dopt :: DumpFlag -> DynFlags -> Bool
 dopt = getDumpFlagFrom verbosity dumpFlags

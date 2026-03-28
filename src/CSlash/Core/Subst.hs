@@ -308,6 +308,11 @@ isEmptySubstTy Subst { tv_env = tv_env, kcv_env = kcv_env, kv_env = kv_env }
     && isEmptyVarEnv kcv_env
     && isEmptyVarEnv kv_env
 
+isEmptySubstKiCo :: Subst p p' -> Bool
+isEmptySubstKiCo Subst { kcv_env = kcv_env, kv_env = kv_env }
+  = isEmptyVarEnv kcv_env
+    && isEmptyVarEnv kv_env
+
 isEmptySubstKi :: Subst p p' -> Bool
 isEmptySubstKi Subst { kv_env = kv_env }
   = isEmptyVarEnv kv_env
@@ -564,6 +569,11 @@ instance SubstP p p where
     TcCoVar v -> TcCoVar $ v { tc_cv_thing = ki }
 
   vacuous_tycon tc = tc
+
+substKiCo :: CoreSubst -> KindCoercion Zk -> KindCoercion Zk
+substKiCo subst co
+  | isEmptySubstKiCo subst = co
+  | otherwise = checkValidSubst subst $ subst_kco subst co
 
 subst_kco :: HasPass p' pass => Subst p p' -> KindCoercion p -> KindCoercion p'
 subst_kco subst co = go co
