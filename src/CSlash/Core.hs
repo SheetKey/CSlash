@@ -2,6 +2,8 @@
 
 module CSlash.Core where
 
+import Prelude hiding ((<>))
+
 import CSlash.Cs.Pass
 import CSlash.Types.Var
 import CSlash.Types.Var.Set
@@ -201,10 +203,33 @@ type CoreBind = Bind CoreBndr CoreId
 type CoreAlt = Alt CoreBndr CoreId
 
 type CoreId = Id Zk
+type CoreTyVar = TyVar Zk
+type CoreKiCoVar = KiCoVar Zk
+type CoreKiVar = KiVar Zk
+
 type CoreType = Type Zk
 type CoreKind = Kind Zk
 type CoreMonoKind = MonoKind Zk
 type CoreVarSets = (IdSet Zk, TyCoVarSet Zk, TyVarSet Zk, KiCoVarSet Zk, KiVarSet Zk)
+
+{- *********************************************************************
+*                                                                      *
+            Tagging
+*                                                                      *
+********************************************************************* -}
+
+data TaggedBndr b t = TB b t
+
+type TaggedLetBndr = TaggedBndr CoreId
+type TaggedLamBndr = TaggedBndr CoreBndr
+
+type TaggedBind t = Bind (TaggedLamBndr t) (TaggedLetBndr t)
+type TaggedExpr t = Expr (TaggedLamBndr t) (TaggedLetBndr t)
+type TaggedArg t = Arg (TaggedLamBndr t) (TaggedLetBndr t)
+type TaggedAlt t = Alt (TaggedLamBndr t) (TaggedLetBndr t)
+
+instance (Outputable b, Outputable t) => Outputable (TaggedBndr b t) where
+  ppr (TB b l) = char '<' <> ppr b <> comma <> ppr l <> char '>'
 
 {- *********************************************************************
 *                                                                      *
@@ -302,6 +327,33 @@ valArgCount = count isValArg
 isJoinIdBndr :: CoreBndr -> Bool
 isJoinIdBndr (Id id) = isJoinId id
 isJoinIdBndr _ = False
+
+{- *********************************************************************
+*                                                                      *
+            Annotated core
+*                                                                      *
+********************************************************************* -}
+
+type AnnExpr lamBndr letBndr annot = (annot, AnnExpr' lamBndr letBndr annot)
+
+data AnnExpr' lamBndr letBndr annot
+  = AnnVar CoreId
+  | AnnLit Literal
+  | AnnLam lamBndr (Maybe (annot, CoreMonoKind)) (AnnExpr lamBndr letBndr annot)
+  | AnnApp (AnnExpr lamBndr letBndr annot) (AnnExpr lamBndr letBndr annot)
+  | AnnCase (AnnExpr lamBndr letBndr annot) letBndr CoreType [AnnAlt lamBndr letBndr annot]
+  | AnnLet (AnnBind lamBndr letBndr annot) (AnnExpr lamBndr letBndr annot)
+  | AnnCast (AnnExpr lamBndr letBndr annot) (annot, TypeCoercion Zk)
+  | AnnTick CoreTickish (AnnExpr lamBndr letBndr annot)
+  | AnnType CoreType
+  | AnnKiCo (KindCoercion Zk)
+  | AnnKind CoreMonoKind
+
+data AnnAlt lamBndr letBndr annot = AnnAlt AltCon [letBndr] (AnnExpr lamBndr letBndr annot)
+
+data AnnBind lamBndr letBndr annot
+  = AnnNonRec letBndr (AnnExpr lamBndr letBndr annot)
+  | AnnRec [(letBndr, AnnExpr lamBndr letBndr annot)]
 
 {- *********************************************************************
 *                                                                      *
