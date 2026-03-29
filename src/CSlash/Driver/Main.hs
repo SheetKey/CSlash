@@ -536,6 +536,12 @@ csDesugarAndSimplify summary (FrontendTypecheck tc_result) tc_warnings mb_old_ha
     Just desugared_guts
       | backendGeneratesCode bcknd -> do
           simplified_guts <- csSimplify' desugared_guts
+          panic "unfinished"
+
+      | gopt Opt_WriteIfSimplifiedCore dflags -> do
+          panic "unfinished"
+
+    _ -> do panic "unfinished"
                             
 
   panic "csDesugarAndSimplify"
