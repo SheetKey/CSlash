@@ -238,6 +238,12 @@ mkEmptyTidyEnv occ_env = (occ_env, emptyVarEnv, emptyVarEnv, emptyVarEnv)
 
 type VarEnv var elt = UniqFM var elt
 
+type IdEnv p elt = VarEnv (Id p) elt
+type TyCoVarEnv p elt = VarEnv (TyCoVar p) elt
+type TyVarEnv p elt = VarEnv (TyVar p) elt
+type KiCoVarEnv p elt = VarEnv (KiCoVar p) elt
+type KiVarEnv p elt = VarEnv (KiVar p) elt
+
 mkVarEnv :: Uniquable var => [(var, a)] -> VarEnv var a
 mkVarEnv = listToUFM
 

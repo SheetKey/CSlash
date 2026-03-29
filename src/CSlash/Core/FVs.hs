@@ -29,6 +29,8 @@ import CSlash.Utils.FV as FV
 import CSlash.Utils.Misc
 import CSlash.Utils.Panic.Plain
 
+import Data.List (unzip5)
+
 {- *********************************************************************
 *                                                                      *
          Finding the free variables of an expression
@@ -220,21 +222,185 @@ fvsOfTyCoVar v fv_cand in_scope acc
 
 {- *********************************************************************
 *                                                                      *
-           Attaching free variables to every sub-expression
+            Attaching free variables to every sub-expression
 *                                                                      *
 ********************************************************************* -}
 
-bndrUnfoldingFVs :: CoreBndr -> CoreFV
-bndrUnfoldingFVs (Core.Id id) = idUnfoldingFVs id
-bndrUnfoldingFVs _ = emptyFV
+type DCoreIdSet = DIdSet Zk
+type DCoreTyCoVarSet = DTyCoVarSet Zk
+type DCoreTyVarSet = DTyVarSet Zk
+type DCoreKiCoVarSet = DKiCoVarSet Zk
+type DCoreKiVarSet = DKiVarSet Zk
+
+type FVAnn = (DCoreIdSet, DCoreTyCoVarSet, DCoreTyVarSet, DCoreKiCoVarSet, DCoreKiVarSet)
+
+type CoreBindWithFVs = AnnBind CoreBndr CoreId FVAnn
+
+type CoreExprWithFVs = AnnExpr CoreBndr CoreId FVAnn
+
+type CoreAltWithFVs = AnnAlt CoreBndr CoreId FVAnn
+
+freeVarsOf :: CoreExprWithFVs -> FVAnn
+freeVarsOf (fvs, _) = fvs
+
+aFreeId :: CoreId -> FVAnn
+aFreeId id = (unitDVarSet id, emptyDVarSet, emptyDVarSet, emptyDVarSet, emptyDVarSet)
+
+emptyFVAnn :: FVAnn
+emptyFVAnn = (emptyDVarSet, emptyDVarSet, emptyDVarSet, emptyDVarSet, emptyDVarSet)
+
+unionFVs :: FVAnn -> FVAnn -> FVAnn
+unionFVs (id1, tcv1, tv1, kcv1, kv1) (id2, tcv2, tv2, kcv2, kv2)
+  = ( unionDVarSet id1 id2
+    , unionDVarSet tcv1 tcv2
+    , unionDVarSet tv1 tv2
+    , unionDVarSet kcv1 kcv2
+    , unionDVarSet kv1 kv2 )
+
+unionFVss :: [FVAnn] -> FVAnn
+unionFVss fvs
+  = let (ids, tcvs, tvs, kcvs, kvs) = unzip5 fvs
+    in ( unionDVarSets ids
+       , unionDVarSets tcvs
+       , unionDVarSets tvs
+       , unionDVarSets kcvs
+       , unionDVarSets kvs )
+
+delLamBindersFV :: [CoreBndr] -> FVAnn -> FVAnn
+delLamBindersFV bs fvs = foldr delLamBinderFV fvs bs
+
+delLamBinderFV :: CoreBndr -> FVAnn -> FVAnn
+delLamBinderFV (Core.Id id) s = delLetBinderFV id s
+delLamBinderFV (Tv tv) (ids, tcvs, tvs, kcvs, kvs)
+  = (ids, tcvs, tvs `delDVarSet` tv, kcvs, kvs)
+    `unionFVs` dTyVarFVs tv
+delLamBinderFV (KCv kcv) (ids, tcvs, tvs, kcvs, kvs)
+  = (ids, tcvs, tvs, kcvs `delDVarSet` kcv, kvs)
+    `unionFVs` dKiCoVarFVs kcv
+delLamBinderFV (Kv kv) (ids, tcvs, tvs, kcvs, kvs)
+  = (ids, tcvs, tvs, kcvs, kvs `delDVarSet` kv)
+
+delLetBindersFV :: [CoreId] -> FVAnn -> FVAnn
+delLetBindersFV bs fvs = foldr delLetBinderFV fvs bs
+
+delLetBinderFV :: CoreId -> FVAnn -> FVAnn
+delLetBinderFV id (ids, tcvs, tvs, kcvs, kvs)
+  = (ids `delDVarSet` id, tcvs, tvs, kcvs, kvs)
+    `unionFVs` dIdFVs id
+
+fvDVarSets :: CoreFV -> FVAnn
+fvDVarSets fvs = case fvVarAcc fvs of
+  (ids, _, tcvs, _, tvs, _, kcvs, _, kvs, _)
+    -> (mkDVarSet ids, mkDVarSet tcvs, mkDVarSet tvs, mkDVarSet kcvs, mkDVarSet kvs)
+
+dIdFVs :: CoreId -> FVAnn
+dIdFVs id = fvDVarSets $ liftTyToCoreFV (fvsOfType (varType id))
+
+dTyVarFVs :: CoreTyVar -> FVAnn
+dTyVarFVs tv = fvDVarSets $ liftKiToCoreFV (fvsOfMonoKind (varKind tv))
+
+dKiCoVarFVs :: CoreKiCoVar -> FVAnn
+dKiCoVarFVs kcv = fvDVarSets $ liftKiToCoreFV (fvsOfMonoKind (varKind kcv))
+
+bndrUnfoldingVarsDSet :: CoreId -> FVAnn
+bndrUnfoldingVarsDSet id = fvDVarSets $ idUnfoldingFVs id
 
 idUnfoldingFVs :: CoreId -> CoreFV
 idUnfoldingFVs id = stableUnfoldingFVs (realIdUnfolding id) `orElse` emptyFV
- 
+
 stableUnfoldingFVs :: Unfolding -> Maybe CoreFV
-stableUnfoldingFVs unf = case unf of
-  CoreUnfolding { uf_tmpl = rhs, uf_src = src }
-    | isStableSource src -> Just (exprLocalFVs rhs)
-    | otherwise -> Nothing
-  NoUnfolding -> Nothing
-  OtherCon {} -> Nothing
+stableUnfoldingFVs unf
+  = case unf of
+      CoreUnfolding { uf_tmpl = rhs, uf_src = src }
+        | isStableSource src
+        -> Just (exprLocalFVs rhs)
+      _ -> Nothing
+
+{- *********************************************************************
+*                                                                      *
+            Free variables
+*                                                                      *
+********************************************************************* -}
+
+freeVarsBind
+  :: CoreBind
+  -> FVAnn
+  -> (CoreBindWithFVs, FVAnn)
+freeVarsBind (NonRec binder rhs) body_fvs
+  = ( AnnNonRec binder rhs2
+    , freeVarsOf rhs2
+      `unionFVs` body_fvs2
+      `unionFVs` bndrUnfoldingVarsDSet binder )
+  where
+    rhs2 = freeVars rhs
+    body_fvs2 = binder `delLetBinderFV` body_fvs
+    
+freeVarsBind (Rec binds) body_fvs
+  = ( AnnRec (binders `zip` rhss2)
+    , delLetBindersFV binders all_fvs )
+  where
+    (binders, rhss) = unzip binds
+    rhss2 = map freeVars rhss
+    rhs_body_fvs = foldr (unionFVs . freeVarsOf) body_fvs rhss2
+    binders_fvs = fvDVarSets $ mapUnionFV idUnfoldingFVs binders
+    all_fvs = rhs_body_fvs `unionFVs` binders_fvs
+    
+freeVars :: CoreExpr -> CoreExprWithFVs
+freeVars = go
+  where
+    go :: CoreExpr -> CoreExprWithFVs
+    go (Var v)
+      | isLocalId v = (aFreeId v `unionFVs` ty_fvs, AnnVar v)
+      | otherwise = (emptyFVAnn, AnnVar v)
+      where ty_fvs = dIdFVs v
+    go (Lit lit) = (emptyFVAnn, AnnLit lit)
+    go (Lam b k body)
+      = ( b_fvs `unionFVs` k_fvs `unionFVs` (b `delLamBinderFV` body_fvs)
+        , AnnLam b k' body' )
+      where
+        body'@(body_fvs, _) = go body
+        b_fvs = case b of -- TODO: this is redundant since we call 'delLamBinderFV', right??
+                  Core.Id id -> dIdFVs id
+                  Tv tv -> dTyVarFVs tv
+                  KCv kcv -> dKiCoVarFVs kcv
+                  Kv _ -> emptyFVAnn
+        (k', k_fvs) = case k of
+          Just ki -> let fvs = fvDVarSets $ liftKiToCoreFV $ fvsOfMonoKind ki
+                     in (Just (fvs, ki), fvs)
+          Nothing -> (Nothing, emptyFVAnn)
+    go (App fun arg)
+      = ( freeVarsOf fun' `unionFVs` freeVarsOf arg'
+        , AnnApp fun' arg' )
+      where
+        fun' = go fun
+        arg' = go arg
+    go (Case scrut bndr ty alts)
+      = ( (bndr `delLetBinderFV` alts_fvs)
+          `unionFVs` freeVarsOf scrut2
+          `unionFVs` (fvDVarSets $ liftTyToCoreFV $ fvsOfType ty)
+        , AnnCase scrut2 bndr ty alts2 )
+      where
+        scrut2 = go scrut
+
+        (alts_fvs_s, alts2) = mapAndUnzip fv_alt alts
+        alts_fvs = unionFVss alts_fvs_s
+
+        fv_alt (Alt con args rhs) = ( delLetBindersFV args (freeVarsOf rhs2)
+                                    , (AnnAlt con args rhs2) )
+          where rhs2 = go rhs
+    go (Let bind body)
+      = (bind_fvs, AnnLet bind2 body2)
+      where
+        (bind2, bind_fvs) = freeVarsBind bind (freeVarsOf body2)
+        body2 = go body
+    go (Cast expr co)
+      = ( freeVarsOf expr2 `unionFVs` cfvs
+        , AnnCast expr2 (cfvs, co) )
+      where
+        expr2 = go expr
+        cfvs = fvDVarSets $ fvsOfTyCo co
+    go (Tick tickish expr)
+      = panic "Tick fvs"
+    go (Type ty) = (fvDVarSets $ liftTyToCoreFV $ fvsOfType ty, AnnType ty)
+    go (KiCo co) = (fvDVarSets $ liftTyToCoreFV $ fvsOfKiCo co, AnnKiCo co)
+    go (Kind ki) = (fvDVarSets $ liftKiToCoreFV $ fvsOfMonoKind ki, AnnKind ki)

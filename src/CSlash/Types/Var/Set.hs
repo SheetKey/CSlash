@@ -104,15 +104,19 @@ type DIdSet p = DVarSet (Id p)
 type DKiVarSet p = DVarSet (KiVar p)
 type DTcKiVarSet = DVarSet TcKiVar
 
+type DKiCoVarSet p = DVarSet (KiCoVar p)
 type DTcKiCoVarSet = DVarSet TcKiCoVar
 
 type DTyVarSet p = DVarSet (TyVar p)
 type DTcTyVarSet = DVarSet TcTyVar
 
-type DKiCoVarSet p = DVarSet (KiCoVar p)
+type DTyCoVarSet p = DVarSet (TyCoVar p)
 
 emptyDVarSet :: UniqDSet a
 emptyDVarSet = emptyUniqDSet
+
+unitDVarSet :: Uniquable a => a -> UniqDSet a
+unitDVarSet = unitUniqDSet
 
 mkDVarSet :: Uniquable a => [a] -> UniqDSet a
 mkDVarSet = mkUniqDSet
@@ -122,6 +126,15 @@ extendDVarSet = addOneToUniqDSet
 
 elemDVarSet :: Uniquable a => a -> UniqDSet a -> Bool
 elemDVarSet = elementOfUniqDSet
+
+unionDVarSet :: Uniquable a => UniqDSet a -> UniqDSet a -> UniqDSet a
+unionDVarSet = unionUniqDSets
+
+unionDVarSets :: Uniquable a => [UniqDSet a] -> UniqDSet a
+unionDVarSets = unionManyUniqDSets
+
+delDVarSet :: Uniquable a => UniqDSet a -> a -> UniqDSet a
+delDVarSet = delOneFromUniqDSet
 
 dVarSetElems :: UniqDSet a -> [a]
 dVarSetElems = uniqDSetToList
