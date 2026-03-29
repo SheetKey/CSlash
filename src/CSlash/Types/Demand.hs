@@ -252,6 +252,15 @@ nopSig = DmdSig nopDmdType
 isDeadEndSig :: DmdSig -> Bool
 isDeadEndSig (DmdSig (DmdType env _)) = isDeadEndDiv (de_div env)
 
+prependArgsDmdSig :: Int -> DmdSig -> DmdSig
+prependArgsDmdSig new_args sig@(DmdSig dmd_ty@(DmdType env dmds))
+  | new_args == 0 = sig
+  | dmd_ty == nopDmdType = sig
+  | otherwise = DmdSig (DmdType env dmds')
+  where
+    dmds' = assertPpr (new_args > 0) (ppr new_args)
+            $ replicate new_args topDmd ++ dmds
+
 {- *********************************************************************
 *                                                                      *
                      Outputable and Binary instances
@@ -356,3 +365,15 @@ instance Binary DmdType where
 instance Binary DmdSig where
   put_ bh (DmdSig aa) = put_ bh aa
   get bh = DmdSig <$> get bh
+
+{- *********************************************************************
+*                                                                      *
+                     Demand transformers
+*                                                                      *
+********************************************************************* -}
+
+zapDmdEnv :: DmdEnv -> DmdEnv
+zapDmdEnv (DE _ div) = mkEmptyDmdEnv div
+
+zapDmdEnvSig :: DmdSig -> DmdSig
+zapDmdEnvSig (DmdSig (DmdType env ds)) = DmdSig (DmdType (zapDmdEnv env) ds)
