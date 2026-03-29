@@ -63,3 +63,6 @@ pprLiteral _ (LitNumber nt i)
   = case nt of
       LitNumInt _ -> integer i
       LitNumWord _ -> word i
+
+litIsTrivial :: Literal -> Bool
+litIsTrivial = panic "litIsTrivial"
