@@ -9,13 +9,19 @@ import CSlash.Core.Lint
 import CSlash.Core.Opt.Pipeline.Types
 import CSlash.Core.Opt.Simplify ( SimplifyOpts(..) )
 -- import CSlash.Core.Opt.Simplify.Env ( SimplMode(..) )
--- import CSlash.Core.Opt.Monad
+import CSlash.Core.Opt.Monad
 -- import CSlash.Core.Coercion
 
 import CSlash.Types.Basic ( CompilerPhase(..) )
 
 import CSlash.Utils.Outputable as Outputable
 import CSlash.Utils.Panic
+
+endPass :: CoreToDo -> CoreProgram -> CoreM ()
+endPass pass binds = do
+  cs_env <- getCsEnv
+  name_ppr_ctx <- getNamePprCtx
+  liftIO $ endPassCsEnvIO cs_env name_ppr_ctx pass binds
 
 endPassCsEnvIO :: CsEnv -> NamePprCtx -> CoreToDo -> CoreProgram -> IO ()
 endPassCsEnvIO cs_env name_ppr_ctx pass binds = do
