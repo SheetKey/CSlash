@@ -12,6 +12,8 @@ module CSlash.Core.Type
 
   , typeSize
 
+  , varsOfType
+
   , mkFunTy
 
   , mkForAllTy, mkForAllKiCo, mkBigLamTy
