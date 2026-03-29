@@ -39,7 +39,7 @@ data ModGuts = ModGuts
   , mg_loc :: SrcSpan
   , mg_exports :: ![AvailInfo]
   , mg_deps :: !Dependencies
-  , mg_usage :: ![Usage]
+  , mg_usages :: ![Usage]
   , mg_rdr_env :: !GlobalRdrEnv
   , mg_fix_env :: !FixityEnv
   , mg_tcs :: ![TyCon Zk]

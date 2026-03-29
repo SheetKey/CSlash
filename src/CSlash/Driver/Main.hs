@@ -245,6 +245,12 @@ initCsEnv mb_top_dir = do
 
 -- -----------------------------------------------------------------------------
 
+getDiagnostics :: Cs (Messages CsMessage)
+getDiagnostics = Cs $ \_ w -> return (w, w)
+
+clearDiagnostics :: Cs ()
+clearDiagnostics = Cs $ \ _ _ -> return ((), emptyMessages)
+
 logDiagnostics :: Messages CsMessage -> Cs ()
 logDiagnostics w = Cs $ \_ w0 -> return ((), w0 `unionMessages` w)
 
@@ -521,6 +527,16 @@ csDesugarAndSimplify summary (FrontendTypecheck tc_result) tc_warnings mb_old_ha
   mb_desugar <- if ms_mod summary /= cSLASH_BUILTIN && cs_src == CsSrcFile
                 then Just <$> csDesugar' (ms_location summary) tc_result
                 else pure Nothing
+
+  w <- getDiagnostics
+  liftIO $ printOrThrowDiagnostics logger print_config diag_opts (unionMessages tc_warnings w)
+  clearDiagnostics
+
+  case mb_desugar of
+    Just desugared_guts
+      | backendGeneratesCode bcknd -> do
+          simplified_guts <- csSimplify' desugared_guts
+                            
 
   panic "csDesugarAndSimplify"
 
