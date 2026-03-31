@@ -142,4 +142,9 @@ instance MonadIO CoreM where
             Reader, writer, and state
 *                                                                      *
 ********************************************************************* -}
+ 
+getCsEnv :: CoreM CsEnv
+getCsEnv = read cr_cs_env
 
+getNamePprCtx :: CoreM NamePprCtx
+getNamePprCtx = read cr_name_ppr_ctx
