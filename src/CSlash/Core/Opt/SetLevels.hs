@@ -1,16 +1,23 @@
+{-# LANGUAGE FlexibleContexts #-}
+{-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
+
 module CSlash.Core.Opt.SetLevels where
+
+import Prelude hiding ((<>))
+
+import CSlash.Cs.Pass
 
 import CSlash.Core as Core
 import CSlash.Core.Opt.Monad ( FloatOutSwitches(..) )
 import CSlash.Core.Utils
--- import CSlash.Core.Opt.Arity   ( exprBotStrictness_maybe, isOneShotBndr )
+import CSlash.Core.Opt.Arity   ( exprBotStrictness_maybe, isOneShotBndr )
 import CSlash.Core.FVs     -- all of it
 import CSlash.Core.Subst
--- import CSlash.Core.Make    ( sortQuantVars )
-import CSlash.Core.Type    ( Type, tyCoVarsOfType
-                           , closeOverKindsDSet
+import CSlash.Core.Make
+import CSlash.Core.Type    ( Type, varsOfType
+                           --, closeOverKindsDSet
                            )
-import GHC.Core.Kind
+import CSlash.Core.Kind
 
 import CSlash.Types.Var.Id
 import CSlash.Types.Var.Id.Info
@@ -21,10 +28,10 @@ import CSlash.Types.Unique.DSet  ( getUniqDSet )
 import CSlash.Types.Var.Env
 import CSlash.Types.Literal      ( litIsTrivial )
 import CSlash.Types.Demand       ( DmdSig, prependArgsDmdSig )
-import CSlash.Types.Cpr          ( CprSig, prependArgsCprSig )
+-- import CSlash.Types.Cpr          ( CprSig, prependArgsCprSig )
 import CSlash.Types.Name         ( getOccName, mkSystemVarName )
 import CSlash.Types.Name.Occurrence ( occNameFS )
-import CSlash.Types.Unique       ( hasKey )
+import CSlash.Types.Unique       ( Uniquable, hasKey )
 import CSlash.Types.Tickish      ( tickishIsCode )
 import CSlash.Types.Unique.Supply
 import CSlash.Types.Unique.DFM
@@ -39,6 +46,7 @@ import CSlash.Utils.FV
 import CSlash.Utils.Misc
 import CSlash.Utils.Outputable
 import CSlash.Utils.Panic
+import CSlash.Utils.Trace
 
 import Data.Maybe
 
@@ -88,15 +96,15 @@ ltLvl (Level maj1 min1) (Level maj2 min2)
 ltMajLvl :: Level -> Level -> Bool
 ltMajLvl (Level maj1 _) (Level maj2 _) = maj1 < maj2
 
-isTopLvlv :: Level -> Bool
-isTopLvlv (Level 0 0) = True
-isTopLvlv _ = False
+isTopLvl :: Level -> Bool
+isTopLvl (Level 0 0) = True
+isTopLvl _ = False
 
 instance Outputable Level where
   ppr (Level maj min) = hcat [ char '<', int maj, char ',', int min, char '>' ]
 
 instance Eq Level where
-  (Level maj1 min2) == (Level maj2 min2) = maj1 == maj2 && min1 == min2
+  (Level maj1 min1) == (Level maj2 min2) = maj1 == maj2 && min1 == min2
 
 {- *********************************************************************
 *                                                                      *
@@ -129,7 +137,7 @@ lvlTopBind env (Rec pairs) = do
   return (Rec prs')
 
 lvl_top :: LevelEnv -> RecFlag -> CoreId -> CoreExpr -> LvlM (LevelledLetBndr, LevelledExpr)
-lvl_top env is_rec (Core.Id bndr) rhs = do
+lvl_top env is_rec bndr rhs = do
   rhs' <- lvlRhs env is_rec (isDeadEndId bndr) NotJoinPoint (freeVars rhs)
   return (stayPutLet tOP_LEVEL bndr, rhs')
 
@@ -145,11 +153,12 @@ lvlExpr
   -> LvlM LevelledExpr
 lvlExpr env (_, AnnType ty) = return (Type (substTyUnchecked (le_subst env) ty))
 lvlExpr env (_, AnnKiCo co) = return (KiCo (substKiCo (le_subst env) co))
+lvlExpr env (_, AnnKind ki) = return (Kind (substMonoKi (le_subst env) ki))
 lvlExpr env (_, AnnVar v) = return (lookupVar env v)
 lvlExpr _ (_, AnnLit lit) = return (Lit lit)
 lvlExpr env (_, AnnCast expr (_, co)) = do
   expr' <- lvlNonTailExpr env expr
-  return (Case expr' (substTyCo (le_subst env) co))
+  return (Cast expr' (panic "substTyCo (le_subst env) co"))
 lvlExpr env (_, AnnTick tickish expr) = do
   expr' <- lvlNonTailExpr env expr
   let tickish' = substTickish (le_subst env) tickish
@@ -157,7 +166,7 @@ lvlExpr env (_, AnnTick tickish expr) = do
 lvlExpr env expr@(_, AnnApp _ _) = lvlApp env expr (collectAnnArgs expr)
 lvlExpr env expr@(_, AnnLam {}) = do
   new_body <- lvlNonTailMFE new_env True body
-  return (mkLams new_bndrs new_body)
+  return (mkCoreLams new_bndrs new_body)
   where
     (bndrs, body) = collectAnnBndrs expr
     (env1, bndrs1) = substLamBndrsSL env bndrs
@@ -165,6 +174,7 @@ lvlExpr env expr@(_, AnnLam {}) = do
 lvlExpr env (_, AnnLet bind body) = do
   (bind', new_env) <- lvlBind env bind
   body' <- lvlExpr new_env body
+  return (Let bind' body')
 lvlExpr env (_, AnnCase scrut case_bndr ty alts) = do
   scrut' <- lvlNonTailMFE env True scrut
   lvlCase env (freeVarsOf scrut) scrut' case_bndr ty alts
@@ -180,7 +190,7 @@ lvlApp
   -> CoreExprWithFVs
   -> (CoreExprWithFVs, [CoreExprWithFVs])
   -> LvlM LevelledExpr
-lvlApp env orig_Expr ((_, AnnVar fn), args)
+lvlApp env orig_expr ((_, AnnVar fn), args)
   --  | fn `hasKey` runRWKey
 
   | floatOverSat env
@@ -223,11 +233,11 @@ lvlCase env scrut_fvs scrut' case_bndr ty alts
   , exprIsHNF (deTagExpr scrut')
   , not (isTopLvl dest_lvl)
   , not (floatTopLvlOnly env)
-  , nonLinear (varKind case_bndr)
+  , panic "nonLinear (varKind case_bndr)"
   = do (env1, (case_bndr' : bs')) <- cloneCaseBndrs env dest_lvl (case_bndr : bs)
        let rhs_env = extendCaseBndrEnv env1 case_bndr scrut'
        body' <- lvlMFE rhs_env True body
-       let alt' = Alt con (map (stayPut dest_lvl) bs') body
+       let alt' = Alt con (map (stayPutLet dest_lvl) bs') body'
        return (Case scrut' (TB case_bndr' (FloatMe dest_lvl)) ty' [alt'])
   | otherwise
   = do let (alts_env1, [case_bndr']) = substAndLvlLetBndrs NonRecursive env incd_lvl [case_bndr]
@@ -238,7 +248,7 @@ lvlCase env scrut_fvs scrut' case_bndr ty alts
     ty' = substTyUnchecked (le_subst env) ty
 
     incd_lvl = incMinorLvl (le_ctxt_lvl env)
-    dest_lvl = maxFvLevel (const True) env scrut_fvs
+    dest_lvl = maxFvLevel True (const True) env scrut_fvs
 
     lvl_alt alts_env (AnnAlt con bs rhs) = do
       rhs' <- lvlMFE new_env True rhs
@@ -267,9 +277,9 @@ lvlMFE env strict_ctxt (_, AnnTick t e) = do
   let t' = substTickish (le_subst env) t
   return (Tick t' e')
   
-lvlMFE env stict_ctxt (_, AnnCast e (_, co)) = do
+lvlMFE env strict_ctxt (_, AnnCast e (_, co)) = do
   e' <- lvlMFE env strict_ctxt e
-  return (Case e' (substTyCo (le_subst env) co))
+  return (Cast e' (panic "substTyCo (le_subst env) co"))
   
 lvlMFE env strict_ctxt e@(_, AnnCase{})
   | strict_ctxt
@@ -285,22 +295,31 @@ lvlMFE env strict_ctxt ann_expr
   | float_is_new_lam || exprIsTopLevelBindable expr expr_ty
   = do expr1 <- lvlFloatRhs abs_vars dest_lvl rhs_env NonRecursive
                 is_bot_lam NotJoinPoint ann_expr
-       var <- newLvlVar expr1 NotJoinPoint is_mk_static
+       var <- newLvlVar expr1 NotJoinPoint
        let var2 = annotateBotStr var float_n_lams mb_bot_str
        return (Let (NonRec (TB var2 (FloatMe dest_lvl)) expr1)
-                   (mkVarApps (Var var2) abs_vars))
+                   (mkAbsVarApps (Var var2) abs_vars))
 
   | otherwise
   = lvlExpr env ann_expr
   where
     expr = deAnnotate ann_expr
+    expr_ty = exprType expr
     fvs = freeVarsOf ann_expr
+    fvs_ty = varsOfType expr_ty
+    is_bot_lam = isJust mb_bot_str
+    is_function = isFunction ann_expr
+    mb_bot_str = exprBotStrictness_maybe expr
+
     abs_vars = abstractVars dest_lvl env fvs
+    dest_lvl = destLevel env fvs fvs_ty is_function is_bot_lam
 
     float_is_new_lam = float_n_lams > 0
-    float_n_lams = count isId abs_vars
+    float_n_lams = count (isId . fst) abs_vars
 
-    float_me = saves_work || saves_alloc || is_mk_static
+    (rhs_env, abs_vars_w_lvls) = lvlLamBndrs env dest_lvl abs_vars
+
+    float_me = saves_work || saves_alloc
 
     saves_work = escapes_value_lam
                  && not (exprIsHNF expr)
@@ -314,17 +333,20 @@ lvlMFE env strict_ctxt ann_expr
                       || exprIsHNF expr
                       || (is_bot_lam && escapes_value_lam))
 
-annotateBotStr :: Id Zk -> Arity -> Maybe (Arity, DmdSig, CprSig) -> Id Zk
+hasFreeJoin :: LevelEnv -> DCoreVarSets -> Bool
+hasFreeJoin env fvs
+  = not (maxFvLevel False isJoinId env fvs == tOP_LEVEL)
+
+annotateBotStr :: Id Zk -> Arity -> Maybe (Arity, DmdSig) -> Id Zk
 annotateBotStr id n_extra mb_bot_str
-  | Just (arity, str_sig, cpr_sig) <- mb_bot_str
+  | Just (arity, str_sig) <- mb_bot_str
   = id `setIdArity` (arity + n_extra)
        `setIdDmdSig` prependArgsDmdSig n_extra str_sig
-       `setIdCprSig` prependArgsCprSig n_extra cpr_sig
   | otherwise
   = id
 
-notWorthFloating :: CoreExpr -> [Id Zk] -> Bool
-notWorthFloating e abs_var = go e (count isId abs_vars)
+notWorthFloating :: CoreExpr -> [(CoreBndr, a)] -> Bool
+notWorthFloating e abs_vars = go e (count (isRuntimeVar . fst) abs_vars)
   where
     go (Var{}) n = n >= 0
     go (Lit lit) n = assert (n == 0) $ litIsTrivial lit
@@ -351,8 +373,7 @@ lvlBind
   -> CoreBindWithFVs
   -> LvlM (LevelledBind, LevelEnv)
 lvlBind env (AnnNonRec bndr rhs)
-  | not (isRuntimeVar bndr)
-    || not (wantToFloat env NonRecursive dest_lvl is_join is_top_bindable)
+  | not (wantToFloat env NonRecursive dest_lvl is_join is_top_bindable)
   = do rhs' <- lvlRhs env NonRecursive is_bot_lam mb_join_arity rhs
        let bind_lvl = incMinorLvl (le_ctxt_lvl env)
            (env', [bndr']) = substAndLvlLetBndrs NonRecursive env bind_lvl [bndr]
@@ -374,7 +395,7 @@ lvlBind env (AnnNonRec bndr rhs)
     bndr_ty = varType bndr
     ty_fvs = varsOfType bndr_ty
     rhs_fvs = freeVarsOf rhs
-    bind_fvs = rhs_fvs `unionCoreVarSets` dIdFreeVars bndr
+    bind_fvs = rhs_fvs `unionDCoreVarSets` dIdFreeVars bndr
     abs_vars = abstractVars dest_lvl env bind_fvs
     dest_lvl = destLevel env bind_fvs ty_fvs (isFunction rhs) is_bot_lam
 
@@ -383,7 +404,7 @@ lvlBind env (AnnNonRec bndr rhs)
     is_bot_lam = not is_join && isJust mb_bot_str
 
     is_top_bindable = exprIsTopLevelBindable deann_rhs bndr_ty
-    n_extra = count isId abs_vars
+    n_extra = count (isId . fst) abs_vars
     mb_join_arity = idJoinPointHood bndr
     is_join = isJoinPoint mb_join_arity
 
@@ -402,16 +423,24 @@ lvlBind env (AnnRec pairs)
               , new_env )
 
   | [(bndr, rhs)] <- pairs -- TODO (check GHC futures for this)
-  , length (term_vars abs_vars) > 1
-  = do let (rhs_env, abs_vars_w_lvls) <- lvlLamBndrs env dest_lvl abs_vars
+  , count (isRuntimeVar . fst) abs_vars > 1
+  = do let (rhs_env, abs_vars_w_lvls) = lvlLamBndrs env dest_lvl abs_vars
            rhs_lvl = le_ctxt_lvl rhs_env
-       (rhs_env', abs_vars_w_lvls) <- cloneLetVars Recursive rhs_env rhs_lvl [bndr]
+
+       (rhs_env', [new_bndr]) <- cloneLetVars Recursive rhs_env rhs_lvl [bndr]
+       let (lam_bndrs, rhs_body) = collectAnnBndrs rhs
+           (body_env1, lam_bndrs1) = substLamBndrsSL rhs_env' lam_bndrs
+           (body_env2, lam_bndrs2) = lvlLamBndrs body_env1 rhs_lvl lam_bndrs1
+       new_rhs_body <- lvlRhs body_env2 Recursive is_bot NotJoinPoint rhs_body
+
+       (poly_env, [poly_bndr]) <- newPolyBndrs dest_lvl env abs_vars [bndr]
+
        return  (Rec [ (TB poly_bndr (FloatMe dest_lvl)
-                      , mkLams abs_vars_w_lvls $
-                        mkLams lam_bndrs2 $
+                      , mkCoreLams abs_vars_w_lvls $
+                        mkCoreLams lam_bndrs2 $
                         Let (Rec [( TB new_bndr (StayPut rhs_lvl)
-                                  , mkLams lam_bndrs2 new_rhs_body )])
-                             (mkVarApps (Var new_bndr) lam_bndrs1)) ]
+                                  , mkCoreLams lam_bndrs2 new_rhs_body )])
+                             (mkAbsVarApps (Var new_bndr) lam_bndrs1)) ]
                , poly_env)
 
   | otherwise
@@ -470,7 +499,7 @@ lvlRhs env rec_flag is_bot mb_join_arity expr
   = lvlFloatRhs [] (le_ctxt_lvl env) env rec_flag is_bot mb_join_arity expr
 
 lvlFloatRhs
-  :: [OutVar]
+  :: [(OutBndr, Maybe CoreMonoKind)]
   -> Level
   -> LevelEnv
   -> RecFlag
@@ -479,10 +508,10 @@ lvlFloatRhs
   -> CoreExprWithFVs
   -> LvlM (Expr LevelledLamBndr LevelledLetBndr)
 lvlFloatRhs abs_vars dest_lvl env is_rec is_bot mb_join_arity rhs = do
-  body' <- if not is_bot && any isId bndrs
+  body' <- if not is_bot && any (isRuntimeVar . fst) bndrs
            then lvlMFE body_env True body
            else lvlExpr body_env body
-  return (mkLams bndrs' body')
+  return (mkCoreLams bndrs' body')
   where
     (bndrs, body) | JoinPoint join_arity <- mb_join_arity
                   = collectNAnnBndrs join_arity rhs
@@ -501,13 +530,13 @@ lvlFloatRhs abs_vars dest_lvl env is_rec is_bot mb_join_arity rhs = do
 *                                                                      *
 ********************************************************************* -}
 
-substAndLvlLetBndrs :: RecFlag -> LevelEnv -> Level -> [InVar] -> (LevelEnv, [LevelledLetBndr])
-substAndLvlLetBndrs is_rec env lvl_bndrs
+substAndLvlLetBndrs :: RecFlag -> LevelEnv -> Level -> [InId] -> (LevelEnv, [LevelledLetBndr])
+substAndLvlLetBndrs is_rec env lvl bndrs
   = lvlLetBndrs subst_env lvl subst_bndrs
   where
     (subst_env, subst_bndrs) = substLetBndrsSL is_rec env bndrs
 
-substLetBndrsSL :: RecFlag -> LevelEnv -> [InVar] -> (LevelEnv, [OutVar])
+substLetBndrsSL :: RecFlag -> LevelEnv -> [InId] -> (LevelEnv, [OutId])
 substLetBndrsSL is_rec env@(LE { le_subst = subst, le_env = id_env }) bndrs
   = ( env { le_subst = subst'
           , le_env = foldl' add_id id_env (bndrs `zip` bndrs') }
@@ -517,42 +546,87 @@ substLetBndrsSL is_rec env@(LE { le_subst = subst, le_env = id_env }) bndrs
                          NonRecursive -> substLetBndrs subst bndrs
                          Recursive -> substLetRecBndrs subst bndrs
 
-substAndLvlLamBndrs :: LevelEnv -> Level -> [InBndr] -> (LevelEnv, [LevelledLamBndr])
-substAndLvlLamBndrs env lvl_bndrs
-  = lvlLamBndrs subst_env lvl subst_bndrs
-  where
-    (subst_env, subst_bndrs) = substLamBndrsSL env bndrs
+-- substAndLvlLamBndrs :: LevelEnv -> Level -> [InBndr] -> (LevelEnv, [LevelledLamBndr])
+-- substAndLvlLamBndrs env lvl bndrs
+--   = lvlLamBndrs subst_env lvl subst_bndrs
+--   where
+--     (subst_env, subst_bndrs) = substLamBndrsSL env bndrs
 
-substLamBndrsLS :: LevelEnv -> [InBndr] -> (LevelEnv, [OutBndr])
-substLamBndrsLS env@(LE { le_subst = subst, le_env = id_env }) bndrs
+substLamBndrsSL
+  :: LevelEnv
+  -> [(InBndr, Maybe CoreMonoKind)]
+  -> (LevelEnv, [(OutBndr, Maybe CoreMonoKind)])
+substLamBndrsSL env@(LE { le_subst = subst, le_env = id_env }) bndrs
   = ( env { le_subst = subst'
           , le_env = foldl' add_bndr id_env (bndrs `zip` bndrs') }
     , bndrs' )
   where
     (subst', bndrs') = substLamBndrs subst bndrs
 
-lvlLamBndrs :: LevelEnv -> Level -> [OutBndr] -> (LevelEnv, [LevelledLamBndr])
+lvlLamBndrs :: LevelEnv -> Level -> [(OutBndr, a)] -> (LevelEnv, [(LevelledLamBndr, a)])
 lvlLamBndrs env@(LE { le_lvl_env = lvl_env }) lvl bndrs
-  = ( env { le_ctxt = new_lvl
+  = ( env { le_ctxt_lvl = new_lvl
           , le_lvl_env = addLamLvls new_lvl lvl_env bndrs }
-    , map (stayPut new_lvl) bndrs )
+    , map (stayPutLam new_lvl) bndrs )
   where
     new_lvl | any is_major bndrs = incMajorLvl lvl
             | otherwise = incMinorLvl lvl
-    is_major bndr = not (isOneShotBndr bndr)
+    is_major (bndr, _) = not (isOneShotBndr bndr)
 
-lvlLetBndrs :: LevelEnv -> Level -> [OutVar] -> (LevelEnv, [LevelledLetBndr])
+lvlLetBndrs :: LevelEnv -> Level -> [OutId] -> (LevelEnv, [LevelledLetBndr])
 lvlLetBndrs env@(LE { le_lvl_env = lvl_env }) new_lvl bndrs
-  = ( env { le_ctxt = new_lvl
+  = ( env { le_ctxt_lvl = new_lvl
           , le_lvl_env = addLetLvls new_lvl lvl_env bndrs }
-    , map (stayPut new_lvl) bndrs )
+    , map (stayPutLet new_lvl) bndrs )
 
 lvlJoinBndrs
   :: LevelEnv
   -> Level
   -> RecFlag
-  -> [OutBndr]
-lvlJoinBndrs
+  -> [(OutBndr, Maybe CoreMonoKind)]
+  -> (LevelEnv, [(LevelledLamBndr, Maybe CoreMonoKind)])
+lvlJoinBndrs env lvl is_rec bndrs
+  = lvlLamBndrs env new_lvl bndrs
+  where
+    new_lvl | isRec is_rec = incMajorLvl lvl
+            | otherwise = incMinorLvl lvl
+
+stayPutLet :: Level -> OutId -> LevelledLetBndr
+stayPutLet new_lvl bndr = TB bndr (StayPut new_lvl)
+
+stayPutLam :: Level -> (OutBndr, a) -> (LevelledLamBndr, a)
+stayPutLam new_lvl (bndr, a) = (TB bndr (StayPut new_lvl), a)
+
+destLevel
+  :: LevelEnv
+  -> DCoreVarSets
+  -> (TyVarSet Zk, KiCoVarSet Zk, KiVarSet Zk)
+  -> Bool
+  -> Bool
+  -> Level
+destLevel env fvs fvs_ty is_function is_bot
+  | isTopLvl max_fv_id_level
+  = tOP_LEVEL
+
+  | is_bot
+  = as_far_as_poss
+
+  | floatLams env
+  , is_function
+  = as_far_as_poss
+
+  | otherwise
+  = max_fv_id_level
+
+  where
+    max_fv_id_level = maxFvLevel False (const True) env fvs
+
+    as_far_as_poss = maxFvLevel' False env fvs_ty
+
+isFunction :: CoreExprWithFVs -> Bool
+isFunction (_, AnnLam (Core.Id _) _ _) = True
+isFunction (_, AnnLam _ _ e) = isFunction e
+isFunction _ = False
 
 {- *********************************************************************
 *                                                                      *
@@ -572,42 +646,133 @@ data LevelEnv = LE
   , le_ctxt_lvl :: Level
   , le_lvl_env :: CoreVarEnv Level
   , le_subst :: CoreSubst
-  , le_env :: IdEnv ([OutVar], LevelledExpr)
+  , le_env :: IdEnv Zk ([OutId], LevelledExpr) -- don't care about the [OutId]s, just their max level
   }
+
+leTCvEnv :: LevelEnv -> TyCoVarEnv Zk Level
+leTCvEnv (LE { le_lvl_env = (_, env, _, _, _) }) = env
+
+leTvEnv :: LevelEnv -> TyVarEnv Zk Level
+leTvEnv (LE { le_lvl_env = (_, _, env, _, _) }) = env
+
+leKCvEnv :: LevelEnv -> KiCoVarEnv Zk Level
+leKCvEnv (LE { le_lvl_env = (_, _, _, env, _) }) = env
+
+leKvEnv :: LevelEnv -> KiVarEnv Zk Level
+leKvEnv (LE { le_lvl_env = (_, _, _, _, env) }) = env
 
 initialEnv :: FloatOutSwitches -> CoreProgram -> LevelEnv
 initialEnv float_lams binds
   = LE { le_switches = float_lams
        , le_ctxt_lvl = tOP_LEVEL
-       , le_lvl_env = emptyVarEnv
+       , le_lvl_env = (emptyVarEnv, emptyVarEnv, emptyVarEnv, emptyVarEnv, emptyVarEnv)
        , le_subst = mkEmptyTermSubst in_scope_toplvl
        , le_env = emptyVarEnv }
   where
     in_scope_toplvl = panic "I don't remember the right names"
 
-addLetLvl :: Level -> CoreVarEnv Level -> OutVar -> CoreVarEnv Level
+addLetLvl :: Level -> CoreVarEnv Level -> OutId -> CoreVarEnv Level
 addLetLvl dest_lvl (id, tco, ty, kco, ki) v'
   = (extendVarEnv id v' dest_lvl, tco, ty, kco, ki)
 
-addLamLvl :: Level -> CoreVarEnv Level -> OutBndr -> CoreVarEnv Level
-addLamLvl dest_lvl (id, tco, ty, kco, ki) (Core.Id v')
+addLamLvl :: Level -> CoreVarEnv Level -> (OutBndr, a) -> CoreVarEnv Level
+addLamLvl dest_lvl (id, tco, ty, kco, ki) (Core.Id v', _)
   = (extendVarEnv id v' dest_lvl, tco, ty, kco, ki)
-addLamLvl dest_lvl (id, tco, ty, kco, ki) (Core.Tv v')
+addLamLvl dest_lvl (id, tco, ty, kco, ki) (Core.Tv v', _)
   = (id, tco, extendVarEnv ty v' dest_lvl, kco, ki)
-addLamLvl dest_lvl (id, tco, ty, kco, ki) (Core.KCv v')
+addLamLvl dest_lvl (id, tco, ty, kco, ki) (Core.KCv v', _)
   = (id, tco, ty, extendVarEnv kco v' dest_lvl, ki)
-addLamLvl dest_lvl (id, tco, ty, kco, ki) (Core.Kv v')
+addLamLvl dest_lvl (id, tco, ty, kco, ki) (Core.Kv v', _)
   = (id, tco, ty, kco, extendVarEnv ki v' dest_lvl)
 
-addLetLvls :: Level -> CoreVarEnv Level -> [OutVar] -> CoreVarEnv Level
+addLetLvls :: Level -> CoreVarEnv Level -> [OutId] -> CoreVarEnv Level
 addLetLvls dest_lvl env vs = foldl' (addLetLvl dest_lvl) env vs
 
-addLamLvls :: Level -> CoreVarEnv Level -> [OutBndr] -> CoreVarEnv Level
+addLamLvls :: Level -> CoreVarEnv Level -> [(OutBndr, a)] -> CoreVarEnv Level
 addLamLvls dest_lvl env vs = foldl' (addLamLvl dest_lvl) env vs
 
+floatLams :: LevelEnv -> Bool
+floatLams le = floatOutAllLambdas (le_switches le)
+
+floatConsts :: LevelEnv -> Bool
+floatConsts le = floatOutConstants (le_switches le)
+
+floatOverSat :: LevelEnv -> Bool
+floatOverSat le = floatOutOverSatApps (le_switches le)
+
+floatTopLvlOnly :: LevelEnv -> Bool
+floatTopLvlOnly le = floatToTopLevelOnly (le_switches le)
+
+extendCaseBndrEnv
+  :: LevelEnv
+  -> CoreId
+  -> Expr LevelledLamBndr LevelledLetBndr
+  -> LevelEnv
+extendCaseBndrEnv le@(LE { le_subst = subst, le_env = id_env }) case_bndr (Var scrut_var)
+  = le { le_subst = extendIdSubst subst case_bndr (Var scrut_var)
+       , le_env = add_id id_env (case_bndr, scrut_var) }
+extendCaseBndrEnv env _ _ = env
+
+maxFvLevel
+  :: Bool
+  -> (CoreId -> Bool)
+  -> LevelEnv
+  -> DCoreVarSets
+  -> Level
+maxFvLevel all_vars max_me env (ids, tcvs, tvs, kcvs, kvs)
+  | all_vars
+  = nonDetStrictFoldDVarSet (maxIn max_me env) tOP_LEVEL ids `maxLvl`
+    nonDetStrictFoldDVarSet (maxInOther (leTCvEnv env)) tOP_LEVEL tcvs `maxLvl`
+    nonDetStrictFoldDVarSet (maxInOther (leTvEnv env)) tOP_LEVEL tvs `maxLvl`
+    nonDetStrictFoldDVarSet (maxInOther (leKCvEnv env)) tOP_LEVEL kcvs `maxLvl`
+    nonDetStrictFoldDVarSet (maxInOther (leKvEnv env)) tOP_LEVEL kvs
+  | otherwise
+  = nonDetStrictFoldDVarSet (maxIn max_me env) tOP_LEVEL ids `maxLvl`
+    nonDetStrictFoldDVarSet (maxInOther (leTCvEnv env)) tOP_LEVEL tcvs `maxLvl`
+    nonDetStrictFoldDVarSet (maxInOther (leKCvEnv env)) tOP_LEVEL kcvs
+
+maxFvLevel'
+  :: Bool
+  -> LevelEnv
+  -> (TyVarSet Zk, KiCoVarSet Zk, KiVarSet Zk)
+  -> Level
+maxFvLevel' all_vars env (tvs, kcvs, kvs)
+  | all_vars
+  = nonDetStrictFoldUniqSet (maxInOther (leTvEnv env)) tOP_LEVEL tvs `maxLvl`
+    nonDetStrictFoldUniqSet (maxInOther (leKCvEnv env)) tOP_LEVEL kcvs `maxLvl`
+    nonDetStrictFoldUniqSet (maxInOther (leKvEnv env)) tOP_LEVEL kvs
+  | otherwise
+  = nonDetStrictFoldUniqSet (maxInOther (leKCvEnv env)) tOP_LEVEL kcvs
+
+maxIn :: (CoreId -> Bool) -> LevelEnv -> InId -> Level -> Level
+maxIn max_me (LE { le_lvl_env = (lvl_env, _, _, _, _), le_env = id_env }) in_var lvl
+  = case lookupVarEnv id_env in_var of
+      Just (abs_vars, _) -> foldr max_out lvl abs_vars
+      Nothing -> max_out in_var lvl
+  where
+    max_out out_var lvl
+      | max_me out_var = case lookupVarEnv lvl_env out_var of
+                           Just lvl' -> maxLvl lvl' lvl
+                           Nothing -> lvl
+      | otherwise = lvl
+ 
+maxInOther :: Uniquable a => VarEnv a Level -> a -> Level -> Level
+maxInOther env var lvl
+  = case lookupVarEnv env var of
+      Just lvl' -> maxLvl lvl' lvl
+      Nothing -> lvl
 
 --type syn to CSlash.Core
 type DCoreVarSets = (DIdSet Zk, DTyCoVarSet Zk, DTyVarSet Zk, DKiCoVarSet Zk, DKiVarSet Zk)
+
+unionDCoreVarSets :: DCoreVarSets -> DCoreVarSets -> DCoreVarSets
+unionDCoreVarSets (id1, tcv1, tv1, kcv1, kv1) (id2, tcv2, tv2, kcv2, kv2)
+  = ( unionDVarSet id1 id2
+    , unionDVarSet tcv1 tcv2
+    , unionDVarSet tv1 tv2
+    , unionDVarSet kcv1 kcv2
+    , unionDVarSet kv1 kv2 )
+
 
 lookupBndrLvl :: CoreVarEnv Level -> CoreBndr -> Maybe Level
 lookupBndrLvl (env, _, _, _, _)(Core.Id v) = lookupVarEnv env v 
@@ -615,12 +780,17 @@ lookupBndrLvl (_, _, env, _, _) (Tv v) = lookupVarEnv env v
 lookupBndrLvl (_, _, _, env, _) (KCv v) = lookupVarEnv env v 
 lookupBndrLvl (_, _, _, _, env) (Kv v) = lookupVarEnv env v 
 
+lookupVar :: LevelEnv -> CoreId -> LevelledExpr
+lookupVar le v = case lookupVarEnv (le_env le) v of
+                   Just (_, expr) -> expr
+                   _ -> Var v
+
 abstractVars
   :: Level
   -> LevelEnv
   -> DCoreVarSets
-  -> [CoreBndr]
-abstractVars dest_lvl (LE { le_subst, le_lvl_env = lvl_env }) (ids, tcvs, tvs, kcvs, kvs)
+  -> [(CoreBndr, Maybe CoreMonoKind)]
+abstractVars dest_lvl (LE { le_subst = subst, le_lvl_env = lvl_env }) in_fvs
   = map zap $
     filter abstract_me $
     to_bndrs $
@@ -633,12 +803,112 @@ abstractVars dest_lvl (LE { le_subst, le_lvl_env = lvl_env }) (ids, tcvs, tvs, k
 
     zap (Core.Id v) = warnPprTrace (isStableUnfolding (idUnfolding v))
                       "absVarsOf: discarding info on" (ppr v) $
-                      setIdInfo v vanillaIdInfo
-    zap v = v
+                      (Core.Id $ setIdInfo v vanillaIdInfo, Just (BIKi LKd)) -- TODO: check linear
+    zap v = (v, Nothing)
 
     to_bndrs (ids, tcvs, tvs, kcvs, kvs)
-      = assertPpr (emptyDVarSet tcvs) "abstractVars has TyCoVars" (ppr tcvs)
+      = assertPpr (isEmptyDVarSet tcvs) (text "abstractVars has TyCoVars" <+> ppr tcvs)
         fmap Kv (dVarSetElems kvs) ++
         fmap KCv (dVarSetElems kcvs) ++
         fmap Tv (dVarSetElems tvs) ++
         fmap Core.Id (dVarSetElems ids)
+
+type LvlM result = UniqSM result
+
+initLvl :: UniqSupply -> UniqSM a -> a
+initLvl = initUs_
+
+newPolyBndrs
+  :: Level
+  -> LevelEnv
+  -> [(OutBndr, Maybe CoreMonoKind)]
+  -> [InId]
+  -> LvlM (LevelEnv, [OutId])
+newPolyBndrs dest_lvl env@(LE { le_lvl_env = lvl_env, le_subst = subst, le_env = id_env })
+             abs_vars bndrs
+  = do
+      uniqs <- getUniquesM
+      let new_bndrs = zipWith mk_poly_bndr bndrs uniqs
+          bndr_prs = bndrs `zip` new_bndrs
+          env' = env { le_lvl_env = addLetLvls dest_lvl lvl_env new_bndrs
+                     , le_subst = foldl' add_subst subst bndr_prs
+                     , le_env = panic "foldl' add_id id_env bndr_prs" }
+      return (env', new_bndrs)
+  where
+    add_subst env (v, v') = extendIdSubst env v (mkAbsVarApps (Var v') abs_vars)
+    add_id env (v, v') = extendVarEnv env v ((v' : panic "abs_vars"), mkAbsVarApps (Var v') abs_vars)
+
+    mk_poly_bndr bndr uniq
+      = transferPolyIdInfo bndr abs_vars $
+        transfer_join_info bndr $
+        mkSysLocal str uniq poly_ty
+      where
+        str = fsLit "poly_" `appendFS` occNameFS (getOccName bndr)
+        poly_ty = mkLamTypes abs_vars (substTyUnchecked subst (varType bndr))
+
+    dest_is_top = isTopLvl dest_lvl
+    transfer_join_info bndr new_bndr
+      | JoinPoint join_arity <- idJoinPointHood bndr
+      , not dest_is_top
+      = new_bndr `asJoinId` (join_arity + length abs_vars)
+      | otherwise
+      = new_bndr
+
+newLvlVar
+  :: LevelledExpr
+  -> JoinPointHood
+  -> LvlM CoreId
+newLvlVar lvld_rhs join_arity_maybe = do
+  uniq <- getUniqueM
+  return (add_join_info (mk_id uniq rhs_ty))
+  where
+    add_join_info var = var `asJoinId_maybe` join_arity_maybe
+    de_tagged_rhs = deTagExpr lvld_rhs
+    rhs_ty = exprType de_tagged_rhs
+
+    mk_id uniq rhs_ty = mkSysLocal (mkFastString "lvl") uniq rhs_ty
+
+cloneCaseBndrs :: LevelEnv -> Level -> [CoreId] -> LvlM (LevelEnv, [CoreId])
+cloneCaseBndrs env@(LE { le_subst = subst, le_lvl_env = lvl_env, le_env = id_env }) new_lvl vs
+  = do (subst', vs') <- cloneIdBndrs subst vs
+       let env' = env { le_lvl_env = addLetLvls new_lvl lvl_env vs'
+                      , le_subst = subst'
+                      , le_env = foldl' add_id id_env (vs `zip` vs') }
+       return (env', vs')
+
+cloneLetVars
+  :: RecFlag
+  -> LevelEnv
+  -> Level
+  -> [InId]
+  -> LvlM (LevelEnv, [OutId])
+cloneLetVars is_rec env@(LE { le_subst = subst, le_lvl_env = lvl_env, le_env = id_env }) dest_lvl vs
+  = do let vs1 = map zap vs
+       (subst', vs2) <- case is_rec of
+         NonRecursive -> cloneIdBndrs subst vs1
+         Recursive -> cloneRecIdBndrs subst vs1
+       let prs = vs `zip` vs2
+           env' = env { le_lvl_env = addLetLvls dest_lvl lvl_env vs2
+                      , le_subst = subst'
+                      , le_env = foldl' add_id id_env prs }
+       return (env', vs2)
+  where
+    zap :: CoreId -> CoreId
+    zap v = zap_join (floatifyIdDemandInfo v)
+
+    zap_join | isTopLvl dest_lvl = zapJoinId
+             | otherwise = id
+
+add_id
+  :: IdEnv Zk ([CoreId], LevelledExpr)
+  -> (CoreId, CoreId)
+  -> IdEnv Zk ([CoreId], LevelledExpr)
+add_id id_env (v, v1) = extendVarEnv id_env v ([v1], Var v1)
+
+add_bndr
+  :: IdEnv Zk ([CoreId], LevelledExpr)
+  -> ((CoreBndr, a), (CoreBndr, a))
+  -> IdEnv Zk ([CoreId], LevelledExpr)
+add_bndr id_env ((Core.Id v, _), (Core.Id v1, _))
+  = extendVarEnv id_env v ([v1], Var v1)
+add_bndr id_env _ = id_env
