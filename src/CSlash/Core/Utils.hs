@@ -77,6 +77,9 @@ exprType (Type ty) = pprPanic "exprType" (ppr ty)
 exprType (KiCo kco) = pprPanic "exprType" (ppr kco)
 exprType (Kind ki) = pprPanic "exprType" (ppr ki)
 
+mkLamTypes :: [(CoreBndr, Maybe CoreMonoKind)] -> CoreType -> CoreType
+mkLamTypes vs ty = foldr (uncurry mkLamType) ty vs 
+
 mkLamType :: HasDebugCallStack => CoreBndr -> Maybe CoreMonoKind -> CoreType -> CoreType 
 mkLamType (Core.Id id) (Just ki) body_ty = mkFunctionType (varType id) ki body_ty
 mkLamType (Tv tv) Nothing body_ty = mkForAllTy (Bndr tv coreTyLamForAllTyFlag) body_ty
@@ -414,6 +417,9 @@ exprIsHNFlike is_con is_con_unf e = is_hnf_like e
 
       _ -> False
 
+exprIsTopLevelBindable :: CoreExpr -> CoreType -> Bool
+exprIsTopLevelBindable expr ty = True -- TODO: check for ticked strings?
+
 {- *********************************************************************
 *                                                                      *
              CoreVarSets
@@ -441,6 +447,20 @@ disjointCoreVarSets (ids1, tcvs1, tvs1, kcvs1, kvs1) (ids2, tcvs2, tvs2, kcvs2, 
     && disjointVarSet tvs1 tvs2
     && disjointVarSet kcvs1 kcvs2
     && disjointVarSet kvs1 kvs2
+
+{- *********************************************************************
+*                                                                      *
+              Type utilities
+*                                                                      *
+********************************************************************* -}
+
+isEmptyTy :: CoreType -> Bool
+isEmptyTy ty
+  | Just (tc, inst_tys) <- splitTyConApp_maybe ty
+  , panic "isEmptyTy" -- TODO: we do need 'dataConCannotMatch' since (Void, Void) is empty!
+  = True
+  | otherwise
+  = False
 
 {- *********************************************************************
 *                                                                      *
