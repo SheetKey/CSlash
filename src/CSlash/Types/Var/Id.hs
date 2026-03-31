@@ -240,6 +240,19 @@ hasNoBinding id = case idDetails id of
   where
     rest = isCompulsoryUnfolding (realIdUnfolding id)
 
+zapJoinId :: Id p -> Id p
+zapJoinId jid
+  | isJoinId jid = zapIdTailCallInfo (newIdDetails `seq` jid `setIdDetails` newIdDetails)
+  | otherwise = jid
+  where
+    newIdDetails = case idDetails jid of
+      JoinId _ -> VanillaId -- TODO: should we add 'WorkerLikeId'??
+      _ -> panic "impossible"
+
+asJoinId_maybe :: HasPass p p' => Id p -> JoinPointHood -> Id p
+asJoinId_maybe id (JoinPoint arity) = asJoinId id arity
+asJoinId_maybe id NotJoinPoint = zapJoinId id
+
 {- *********************************************************************
 *                                                                      *
             IdInfo stuff
@@ -251,6 +264,9 @@ hasNoBinding id = case idDetails id of
 
 idArity :: Id p -> Arity
 idArity id = arityInfo (idInfo id)
+
+setIdArity :: Id p -> Arity -> Id p
+setIdArity id arity = modifyIdInfo (`setArityInfo` arity) id
 
 isDeadEndId :: Id p -> Bool
 isDeadEndId id = isDeadEndSig (idDmdSig id)
@@ -341,6 +357,37 @@ zapInfo zapper id = maybeModifyIdInfo (zapper (idInfo id)) id
 
 zapFragileIdInfo :: Id p -> Id p
 zapFragileIdInfo = zapInfo zapFragileInfo
+
+zapIdTailCallInfo :: Id p -> Id p
+zapIdTailCallInfo = zapInfo zapTailCallInfo
+
+floatifyIdDemandInfo :: Id p -> Id p
+floatifyIdDemandInfo = zapInfo floatifyDemandInfo
+
+transferPolyIdInfo
+  :: CoreId
+  -> [(CoreBndr, a)]
+  -> CoreId
+  -> CoreId
+transferPolyIdInfo old_id abstract_wrt new_id
+  = modifyIdInfo transfer new_id
+  where
+    arity_increase = count (isRuntimeVar . fst) abstract_wrt
+
+    old_info = idInfo old_id
+    old_arity = arityInfo old_info
+    old_inline_prag = inlinePragInfo old_info
+    old_occ_info = occInfo old_info
+    new_arity = old_arity + arity_increase
+    new_occ_info = zapOccTailCallInfo old_occ_info
+
+    old_strictness = dmdSigInfo old_info
+    new_strictness = prependArgsDmdSig arity_increase old_strictness
+
+    transfer new_info = new_info `setArityInfo` new_arity
+                                 `setInlinePragInfo` old_inline_prag
+                                 `setOccInfo` new_occ_info
+                                 `setDmdSigInfo` new_strictness
 
 {- *********************************************************************
 *                                                                      *
