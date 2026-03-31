@@ -121,6 +121,15 @@ polyFieldDmd :: CardNonOnce -> Demand
 polyFieldDmd C_10 = BotDmd
 polyFieldDmd n = n :* Poly n & assertPpr (isCardNonOnce n) (ppr n)
 
+mkProd :: [Demand] -> SubDemand
+mkProd ds
+  | all (== BotDmd) ds = Poly C_10
+  | dmd@(n :* Poly m) : _ <- ds
+  , n == m
+  , all (== dmd) ds
+  = Poly n
+  | otherwise = Prod ds
+
 viewProd :: Arity -> SubDemand -> Maybe [Demand]
 viewProd n (Prod ds)
   | ds `lengthIs` n = Just ds
@@ -144,6 +153,23 @@ topDmd = C_1N :* topSubDmd
 
 botDmd :: Demand
 botDmd = BotDmd
+
+multDmd :: Card -> Demand -> Demand
+multDmd C_11 dmd = dmd
+multDmd C_10 (D {}) = BotDmd
+multDmd _ BotDmd = BotDmd
+multDmd n (D m sd) = multCard n m :* multSubDmd n sd
+
+multSubDmd :: Card -> SubDemand -> SubDemand
+multSubDmd C_11 sd = sd
+multSubDmd C_10 (Poly {}) = botSubDmd
+multSubDmd C_10 (Call {}) = botSubDmd
+multSubDmd n (Poly m) = Poly (multCard n m)
+multSubDmd n (Call m sd) = mkCall (multCard n m) sd
+multSubDmd n (Prod ds) = mkProd (strictMap (multDmd n) ds)
+
+floatifyDmd :: Demand -> Demand
+floatifyDmd = multDmd C_1N
 
 peelManyCalls :: Arity -> SubDemand -> (Bool, Card, SubDemand)
 peelManyCalls k sd = go k C_11 sd
@@ -192,6 +218,9 @@ data Divergence
 topDiv :: Divergence
 topDiv = Dunno
 
+botDiv :: Divergence
+botDiv = Diverges
+
 isDeadEndDiv :: Divergence -> Bool
 isDeadEndDiv Diverges = True
 isDeadEndDiv ExnOrDiv = True
@@ -201,6 +230,11 @@ defaultFvDmd :: Divergence -> Demand
 defaultFvDmd Dunno = botDmd
 defaultFvDmd ExnOrDiv = botDmd
 defaultFvDmd Diverges = botDmd
+
+defaultArgDmd :: Divergence -> Demand
+defaultArgDmd Dunno = topDmd
+defaultArgDmd ExnOrDiv = panic "absDmd"
+defaultArgDmd Diverges = botDmd
 
 {- *********************************************************************
 *                                                                      *
@@ -237,6 +271,18 @@ nopDmdEnv = mkEmptyDmdEnv topDiv
 nopDmdType :: DmdType
 nopDmdType = DmdType nopDmdEnv []
 
+dmdTypeDepth :: DmdType -> Arity
+dmdTypeDepth = length . dt_args
+
+etaExpandDmdType :: Arity -> DmdType -> DmdType
+etaExpandDmdType n d@DmdType { dt_args = ds, dt_env = env }
+  | n == depth = d
+  | n > depth = d { dt_args = inc_ds }
+  | otherwise = pprPanic "etaExpandDmdType: arity decrease" (ppr n $$ ppr d)
+  where
+    depth = length ds
+    inc_ds = take n (ds ++ repeat (defaultArgDmd (de_div env)))
+
 {- *********************************************************************
 *                                                                      *
                      Demand signatures
@@ -245,6 +291,22 @@ nopDmdType = DmdType nopDmdEnv []
 
 newtype DmdSig = DmdSig DmdType
   deriving Eq
+
+mkDmdSigForArity :: Arity -> DmdType -> DmdSig
+mkDmdSigForArity threshold_arity dmd_ty@(DmdType fvs args)
+  | threshold_arity < dmdTypeDepth dmd_ty
+  = DmdSig $ DmdType (fvs { de_div = topDiv }) (take threshold_arity args)
+  | otherwise
+  = DmdSig (etaExpandDmdType threshold_arity dmd_ty)
+
+mkClosedDmdSig :: [Demand] -> Divergence -> DmdSig
+mkClosedDmdSig ds div = mkDmdSigForArity (length ds) (DmdType (mkEmptyDmdEnv div) ds)
+
+mkVanillaDmdSig :: Arity -> Divergence -> DmdSig
+mkVanillaDmdSig ar div = mkClosedDmdSig (replicate ar topDmd) div
+
+splitDmdSig :: DmdSig -> ([Demand], Divergence)
+splitDmdSig (DmdSig (DmdType env dmds)) = (dmds, de_div env)
 
 nopSig :: DmdSig
 nopSig = DmdSig nopDmdType
