@@ -75,8 +75,8 @@ import CSlash.Core
 -- import GHC.Core.Tidy           ( tidyExpr )
 -- import GHC.Core.Utils          ( exprType )
 import CSlash.Core.ConLike
--- import GHC.Core.Opt.Pipeline
--- import GHC.Core.Opt.Pipeline.Types      ( CoreToDo (..))
+import CSlash.Core.Opt.Pipeline
+import CSlash.Core.Opt.Pipeline.Types      ( CoreToDo (..))
 import CSlash.Core.TyCon
 -- import GHC.Core.InstEnv
 -- import GHC.Core.FamInstEnv
@@ -601,7 +601,7 @@ batchMsgWith extra cs_env_start mod_index recomp node =
 csSimplify' :: ModGuts -> Cs ModGuts
 csSimplify' ds_result = do
   cs_env <- getCsEnv
-  {-# SCC "Core2Core" #-} liftIO $ panic "core2core cs_env ds_result"
+  {-# SCC "Core2Core" #-} liftIO $ core2core cs_env ds_result
 
 {- *********************************************************************
 *                                                                      *
