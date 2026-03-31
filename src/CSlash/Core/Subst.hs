@@ -23,26 +23,33 @@ import CSlash.Core.Type.Rep
 import CSlash.Core.Kind
 import CSlash.Core.Kind.FVs
 import CSlash.Core.Type.FVs
+import CSlash.Core.FVs
 
 import CSlash.Types.Var.TyVar
 import CSlash.Types.Var.KiVar
 import CSlash.Types.Var.CoVar
 import CSlash.Types.Var.Class
 import {-# SOURCE #-} CSlash.Types.Var.Id
+import CSlash.Types.Var.Id.Info
 import CSlash.Types.Var.Set
 import CSlash.Types.Var.Env
 import CSlash.Types.Tickish
 
+import CSlash.Utils.FV
 import CSlash.Utils.Constants (debugIsOn)
 import CSlash.Utils.Misc
 import CSlash.Types.Unique
 import CSlash.Types.Unique.FM
 import CSlash.Types.Unique.Set
+import CSlash.Types.Unique.Supply
 import CSlash.Utils.Outputable
 import CSlash.Utils.Panic
 import CSlash.Data.Maybe (orElse)
 
 import Data.Kind (Constraint)
+
+import Data.Functor.Identity (Identity (..))
+import Data.List (mapAccumL)
 
 {- **********************************************************************
 *                                                                       *
@@ -75,7 +82,7 @@ data Subst p p' = Subst
   , id_env :: IdSubstEnv p p'
 
   , tcv_in_scope :: InScopeSet (TyCoVar p')
-  , tcv_env :: IdSubstEnv p p'
+  , tcv_env :: TCvSubstEnv p p'
 
   , tv_in_scope :: InScopeSet (TyVar p')
   , tv_env :: TvSubstEnv p p'
@@ -714,3 +721,180 @@ lookupIdSubst (Subst { id_in_scope = in_scope, id_env = ids }) v
 
 substTickish :: CoreSubst -> CoreTickish -> CoreTickish
 substTickish _ t@(CpcTick{}) = t
+
+
+{- *********************************************************************
+*                                                                      *
+              Substituting binders
+*                                                                      *
+********************************************************************* -}
+
+substLamBndr
+  :: CoreSubst
+  -> (CoreBndr, Maybe CoreMonoKind)
+  -> (CoreSubst, (CoreBndr, Maybe CoreMonoKind))
+substLamBndr subst (Core.Id id, Just ki)
+  = let ki' = substMonoKi subst ki
+        (subst', id') = substIdBndr (text "lam-bndr") subst subst id
+    in (subst', (Core.Id id', Just ki'))
+substLamBndr subst (Tv tv, Nothing)
+  = let (subst', tv') = substTyVarBndr subst tv
+    in (subst', (Tv tv', Nothing))
+substLamBndr subst (KCv kcv, Nothing)
+  = let (subst', kcv') = substKiCoVarBndr subst kcv
+    in (subst', (KCv kcv', Nothing))
+substLamBndr subst (Kv kv, Nothing)
+  = let (subst', kv') = substKiVarBndr subst kv
+    in (subst', (Kv kv', Nothing))
+substLamBndr _ pair = pprPanic "substLamBndr" (ppr pair)
+
+substLamBndrs
+  :: Traversable f
+  => CoreSubst
+  -> f (CoreBndr, Maybe CoreMonoKind)
+  -> (CoreSubst, f (CoreBndr, Maybe CoreMonoKind))
+substLamBndrs = mapAccumL substLamBndr
+{-# INLINE substLamBndrs #-}
+
+substLetBndr :: CoreSubst -> CoreId -> (CoreSubst, CoreId)
+substLetBndr subst bndr = substIdBndr (text "let-bndr") subst subst bndr
+
+substLetBndrs :: Traversable f => CoreSubst -> f CoreId -> (CoreSubst, f CoreId)
+substLetBndrs = mapAccumL substLetBndr
+{-# INLINE substLetBndrs #-}
+
+substLetRecBndrs :: Traversable f => CoreSubst -> f CoreId -> (CoreSubst, f CoreId)
+substLetRecBndrs subst bndrs
+  = (new_subst, new_bndrs)
+  where (new_subst, new_bndrs) = mapAccumL (substIdBndr (text "rec-bndr") new_subst) subst bndrs
+{-# SPECIALIZE substLetRecBndrs :: CoreSubst -> [CoreId] -> (CoreSubst, [CoreId]) #-}
+{-# SPECIALIZE substLetRecBndrs :: CoreSubst -> Identity CoreId -> (CoreSubst, Identity CoreId) #-}
+
+substIdBndr
+  :: SDoc
+  -> CoreSubst
+  -> CoreSubst
+  -> CoreId
+  -> (CoreSubst, CoreId)
+substIdBndr _ rec_subst subst@Subst{..} old_id
+  = (subst { id_in_scope = new_in_scope, id_env = new_env }, new_id)
+  where
+    id1 = uniqAway id_in_scope old_id
+    id2 | no_type_change = id1
+        | otherwise = updateVarType (substTyUnchecked subst) id1
+
+    old_ty = varType old_id
+    no_type_change = (isEmptyVarEnv tcv_env &&
+                      isEmptyVarEnv tv_env &&
+                      isEmptyVarEnv kcv_env &&
+                      isEmptyVarEnv kv_env)
+                     || noFreeVarsOfType old_ty
+                      
+    !new_id = maybeModifyIdInfo mb_new_info id2
+    mb_new_info = substIdInfo rec_subst id2 (idInfo id2)
+
+    !new_in_scope = id_in_scope `extendInScopeSet` new_id
+    !new_env | no_change = delVarEnv id_env old_id
+             | otherwise = extendVarEnv id_env old_id (Var new_id)
+
+    no_change = id1 == old_id
+
+cloneIdBndrs :: MonadUnique m => CoreSubst -> [CoreId] -> m (CoreSubst, [CoreId])
+cloneIdBndrs subst ids = do
+  us <- getUniquesM
+  pure $ mapAccumL (clone_id subst) subst (ids `zip` us)
+
+cloneRecIdBndrs :: MonadUnique m => CoreSubst -> [CoreId] -> m (CoreSubst, [CoreId])
+cloneRecIdBndrs subst ids = do
+  us <- getUniquesM
+  let (subst', ids') = mapAccumL (clone_id subst') subst (ids `zip` us)
+  pure (subst', ids')
+
+clone_id
+  :: CoreSubst
+  -> CoreSubst
+  -> (CoreId, Unique)
+  -> (CoreSubst, CoreId)
+clone_id rec_subst subst@Subst{..} (old_id, uniq)
+  = (subst { id_in_scope = new_in_scope, id_env = new_idvs }, new_id)
+  where
+    id1 = setVarUnique old_id uniq
+    id2 = substIdType subst id1
+    !new_id = maybeModifyIdInfo (substIdInfo rec_subst id2 (idInfo old_id)) id2
+    !new_in_scope = id_in_scope `extendInScopeSet` new_id
+    !new_idvs = extendVarEnv id_env old_id (Var new_id)
+
+{- *********************************************************************
+*                                                                      *
+              IdInfo substitution
+*                                                                      *
+********************************************************************* -}
+
+substIdType :: CoreSubst -> CoreId -> CoreId
+substIdType subst@Subst{..} id
+  | (isEmptyVarEnv tcv_env &&
+     isEmptyVarEnv tv_env &&
+     isEmptyVarEnv kcv_env &&
+     isEmptyVarEnv kv_env)
+    || noFreeVarsOfType old_ty
+  = id
+  | otherwise
+  = updateVarType (substTyUnchecked subst) id
+  where
+    old_ty = varType id
+
+substIdInfo :: CoreSubst -> CoreId -> IdInfo -> Maybe IdInfo
+substIdInfo subst new_id info
+  | nothing_to_do = Nothing
+  | otherwise = Just (info `setUnfoldingInfo` substUnfolding subst old_unf)
+  where
+    old_unf = realUnfoldingInfo info
+    nothing_to_do = not (hasCoreUnfolding old_unf)
+
+substUnfolding :: CoreSubst -> Unfolding -> Unfolding
+substUnfolding subst unf@CoreUnfolding{ uf_tmpl = tmpl, uf_src = src }
+  | not (isStableSource src)
+  = NoUnfolding
+  | otherwise
+  = panic "seqExpr new_tmpl `seq` unf { uf_tmpl = new_tmpl }"
+  -- where
+  --   new_tmpl = panic "substExpr subst tmpl"
+substUnfolding _ unf = unf
+
+substDCoreVarSets
+  :: HasDebugCallStack
+  => CoreSubst
+  -> (DIdSet Zk, DTyCoVarSet Zk, DTyVarSet Zk, DKiCoVarSet Zk, DKiVarSet Zk)
+  -> (DIdSet Zk, DTyCoVarSet Zk, DTyVarSet Zk, DKiCoVarSet Zk, DKiVarSet Zk)
+substDCoreVarSets subst@Subst{..} (ids, tcvs, tvs, kcvs, kvs)
+  = id_fvs `unionFVs`
+    tcv_fvs `unionFVs`
+    tv_fvs `unionFVs`
+    kcv_fvs `unionFVs`
+    kv_fvs
+  where
+    id_fvs = fvAccDVarSets $ foldr subst_id fvEmptyAcc $ dVarSetElems ids
+    tcv_fvs = fvAccDVarSets $ foldr subst_tcv fvEmptyAcc $ dVarSetElems tcvs
+    tv_fvs = fvAccDVarSets $ foldr subst_tv fvEmptyAcc $ dVarSetElems tvs
+    kcv_fvs = fvAccDVarSets $ foldr subst_kcv fvEmptyAcc $ dVarSetElems kcvs
+    kv_fvs = fvAccDVarSets $ foldr subst_kv fvEmptyAcc $ dVarSetElems kvs
+
+    subst_id :: CoreId -> FVAcc CoreExpr -> FVAcc CoreExpr
+    subst_id fv acc = let fv_expr = lookupIdSubst subst fv
+                      in exprFVs fv_expr (const True) fvEmptyIS $! acc
+
+    subst_tcv :: TyCoVar Zk -> FVAcc CoreExpr -> FVAcc CoreExpr
+    subst_tcv fv acc = let fv_co = lookupVarEnv tcv_env fv `orElse` mkTyCoVarCo fv
+                       in fvsOfTyCo fv_co (const True) fvEmptyIS $! acc
+
+    subst_tv :: TyVar Zk -> FVAcc CoreExpr -> FVAcc CoreExpr
+    subst_tv fv acc = let fv_ty = lookupVarEnv tv_env fv `orElse` mkTyVarTy fv
+                      in liftTyToCoreFV (fvsOfType fv_ty) (const True) fvEmptyIS $! acc
+
+    subst_kcv :: KiCoVar Zk -> FVAcc CoreExpr -> FVAcc CoreExpr
+    subst_kcv fv acc = let fv_co = lookupVarEnv kcv_env fv `orElse` mkKiCoVarCo fv
+                       in liftTyToCoreFV (fvsOfKiCo fv_co) (const True) fvEmptyIS $! acc
+
+    subst_kv :: KiVar Zk -> FVAcc CoreExpr -> FVAcc CoreExpr
+    subst_kv fv acc = let fv_ki = lookupVarEnv kv_env fv `orElse` mkKiVarKi fv
+                      in liftKiToCoreFV (fvsOfMonoKind fv_ki) (const True) fvEmptyIS $! acc
