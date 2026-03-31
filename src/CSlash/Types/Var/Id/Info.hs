@@ -214,6 +214,10 @@ trimUnfolding :: Unfolding -> Unfolding
 trimUnfolding unf | isEvaldUnfolding unf = evaldUnfolding
                   | otherwise = noUnfolding
 
+floatifyDemandInfo :: IdInfo -> Maybe IdInfo
+floatifyDemandInfo info@(IdInfo { demandInfo = dmd })
+  = Just (info { demandInfo = floatifyDmd dmd })
+
 zapFragileInfo :: IdInfo -> Maybe IdInfo
 zapFragileInfo info@IdInfo{ occInfo = occ, realUnfoldingInfo = unf }
   = new_unf `seq`
@@ -226,6 +230,12 @@ zapFragileUnfolding :: Unfolding -> Unfolding
 zapFragileUnfolding unf
   | isEvaldUnfolding unf = evaldUnfolding
   | otherwise = noUnfolding
+
+zapTailCallInfo :: IdInfo -> Maybe IdInfo
+zapTailCallInfo info = case occInfo info of
+                            occ | isAlwaysTailCalled occ -> Just (info `setOccInfo` safe_occ)
+                                | otherwise -> Nothing
+                              where safe_occ = occ { occ_tail = NoTailCallInfo }
 
 {- *********************************************************************
 *                                                                      *
