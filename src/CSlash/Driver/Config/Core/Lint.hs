@@ -15,6 +15,7 @@ import CSlash.Core.Opt.Monad
 import CSlash.Types.Basic ( CompilerPhase(..) )
 
 import CSlash.Utils.Outputable as Outputable
+import CSlash.Utils.Monad
 import CSlash.Utils.Panic
 
 endPass :: CoreToDo -> CoreProgram -> CoreM ()
