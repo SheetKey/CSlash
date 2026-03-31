@@ -42,7 +42,7 @@ import Data.Char (ord)
 *                                                                      *
 **********************************************************************-}
 
-mkCoreLams :: [(CoreBndr, Maybe CoreMonoKind)] -> CoreExpr -> CoreExpr
+mkCoreLams :: [(lamB, Maybe CoreMonoKind)] -> Expr lamB letB -> Expr lamB letB
 mkCoreLams bndrs body = foldr (uncurry Lam) body bndrs 
 
 infixl 4`mkCoreApps`
