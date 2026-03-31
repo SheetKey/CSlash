@@ -288,10 +288,17 @@ delLetBinderFV id (ids, tcvs, tvs, kcvs, kvs)
   = (ids `delDVarSet` id, tcvs, tvs, kcvs, kvs)
     `unionFVs` dIdFVs id
 
+dIdFreeVars :: CoreId -> FVAnn
+dIdFreeVars id = fvDVarSets $ liftTyToCoreFV (fvsOfType (varType id)) `unionFV` idUnfoldingFVs id  
+
 fvDVarSets :: CoreFV -> FVAnn
 fvDVarSets fvs = case fvVarAcc fvs of
   (ids, _, tcvs, _, tvs, _, kcvs, _, kvs, _)
     -> (mkDVarSet ids, mkDVarSet tcvs, mkDVarSet tvs, mkDVarSet kcvs, mkDVarSet kvs)
+
+fvAccDVarSets :: FVAcc CoreExpr -> FVAnn
+fvAccDVarSets (ids, _, tcvs, _, tvs, _, kcvs, _, kvs, _)
+  = (mkDVarSet ids, mkDVarSet tcvs, mkDVarSet tvs, mkDVarSet kcvs, mkDVarSet kvs)
 
 dIdFVs :: CoreId -> FVAnn
 dIdFVs id = fvDVarSets $ liftTyToCoreFV (fvsOfType (varType id))
