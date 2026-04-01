@@ -1,5 +1,7 @@
 module CSlash.Core.Opt.Arity where
 
+import Prelude hiding ((<>))
+
 import CSlash.Cs.Pass
 
 import CSlash.Core as Core
@@ -44,17 +46,119 @@ joinRhsArity :: CoreExpr -> JoinArity
 joinRhsArity (Lam _ _ e) = 1 + joinRhsArity e
 joinRhsArity _ = 0
 
+exprBotStrictness_maybe :: CoreExpr -> Maybe (Arity, DmdSig)
+exprBotStrictness_maybe e = arityTypeBotSigs_maybe (cheapArityType e)
+
+arityTypeBotSigs_maybe :: ArityType -> Maybe (Arity, DmdSig)
+arityTypeBotSigs_maybe (AT lams div)
+  | isDeadEndDiv div = Just (arity, mkVanillaDmdSig arity botDiv)
+  | otherwise = Nothing
+  where
+    arity = length lams
+
 {- *********************************************************************
 *                                                                      *
               typeArity
 *                                                                      *
 ********************************************************************* -}
 
+typeOneShots :: CoreType -> [OneShotInfo]
+typeOneShots ty = panic "go initRecTc ty"
+
 isOneShotBndr :: CoreBndr -> Bool
 isOneShotBndr Tv{} = True
 isOneShotBndr KCv{} = True -- TODO: double check
 isOneShotBndr Kv{} = True
 isOneShotBndr (Core.Id id) = idOneShotInfo id == OneShotLam
+
+{- *********************************************************************
+*                                                                      *
+           Computing the "arity" of an expression
+*                                                                      *
+********************************************************************* -}
+
+data ArityType = AT ![ATLamInfo] !Divergence
+  deriving Eq
+
+type ATLamInfo = (Cost, OneShotInfo)
+
+data Cost = IsCheap | IsExpensive
+  deriving Eq
+
+instance Outputable ArityType where
+  ppr (AT oss div)
+    | null oss = pp_div div
+    | otherwise = char '\\' <> hcat (map pp_os oss) <> dot <> pp_div div
+    where
+      pp_div Diverges = char '⊥'
+      pp_div ExnOrDiv = char 'x'
+      pp_div Dunno    = char 'T'
+      pp_os (IsCheap, OneShotLam) = text "(C1)"
+      pp_os (IsExpensive, OneShotLam) = text "(X1)"
+      pp_os (IsCheap, NoOneShotInfo) = text "(C?)"
+      pp_os (IsExpensive, NoOneShotInfo) = text "(X?)"
+
+mkBotArityType :: [OneShotInfo] -> ArityType
+mkBotArityType oss = AT [(IsCheap, os) | os <- oss] botDiv
+
+botArityType :: ArityType
+botArityType = mkBotArityType []
+
+topArityType :: ArityType
+topArityType = AT [] topDiv
+
+{- *********************************************************************
+*                                                                      *
+                   findRhsArity
+*                                                                      *
+********************************************************************* -}
+
+{- *********************************************************************
+*                                                                      *
+                   arityType
+*                                                                      *
+********************************************************************* -}
+
+arityLam :: CoreId -> ArityType -> ArityType
+arityLam id (AT oss div) = AT ((IsCheap, one_shot) : oss) div
+  where
+    one_shot | isDeadEndDiv div = OneShotLam
+             | otherwise = idOneShotInfo id
+
+idArityType :: CoreId -> ArityType
+idArityType v
+  | strict_sig <- idDmdSig v
+  , (ds, div) <- splitDmdSig strict_sig
+  , isDeadEndDiv div
+  = AT (takeList ds one_shots) div
+  | isEmptyTy id_ty
+  = botArityType
+  | otherwise
+  = AT (take (idArity v) one_shots) topDiv
+  where
+    id_ty = varType v
+
+    one_shots = repeat IsCheap `zip` typeOneShots id_ty
+
+cheapArityType :: HasDebugCallStack => CoreExpr -> ArityType
+cheapArityType e = go e
+  where
+    go (Var v) = idArityType v
+    go (Cast e _) = go e
+    go (Lam x _ e) | Core.Id v <- x = arityLam v (go e)
+                   | otherwise = go e
+    go (App e a) | isNonValArg a = go e
+                 | otherwise = arity_app a (go e)
+    go (Tick t e) | not (tickishIsCode t) = go e
+    go (Case _ _ _ alts) | null alts = panic "empty case"
+    go _ = topArityType
+
+    arity_app _ at@(AT [] _) = at
+    arity_app arg at@(AT ((cost, _) : lams) div)
+      | assertPpr (cost == IsCheap) (ppr at $$ ppr arg) $
+        isDeadEndDiv div = AT lams div
+      | exprIsTrivial arg = AT lams topDiv
+      | otherwise = topArityType
 
 {- *********************************************************************
 *                                                                      *
@@ -204,3 +308,4 @@ pushCoDataCon
   -> MTypeCoercion Zk
   -> Maybe (DataCon Zk, [CoreType], [CoreExpr])
 pushCoDataCon = panic "pushCoDataCon"
+

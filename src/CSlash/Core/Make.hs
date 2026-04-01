@@ -100,3 +100,7 @@ instance Outputable FloatBind where
   ppr (FloatLet b) = text "LET" <+> panic "ppr b"
   ppr (FloatCase e b c bs) = hang (text "CASE" <+> ppr e <+> text "of" <+> ppr b)
                              2 (ppr c <+> ppr bs)
+
+wrapFloat :: FloatBind -> CoreExpr -> CoreExpr
+wrapFloat (FloatLet defns) body = Let defns body
+wrapFloat (FloatCase e b con bs) body = mkSingleAltCase e b con bs body

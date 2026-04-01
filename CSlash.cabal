@@ -86,6 +86,8 @@ library
                     , CSlash.Core.Opt.Pipeline.Types
                     , CSlash.Core.Opt.SetLevels
                     , CSlash.Core.Opt.Simplify
+                    , CSlash.Core.Opt.Simplify.Env
+                    , CSlash.Core.Opt.Stats
                     , CSlash.Core.Ppr
                     , CSlash.Core.Predicate
                     , CSlash.Core.Reduction
@@ -168,6 +170,7 @@ library
                     , CSlash.Driver.CmdLine
                     , CSlash.Driver.Config
                     , CSlash.Driver.Config.Core.Lint
+                    , CSlash.Driver.Config.Core.Opt.Simplify
                     , CSlash.Driver.Config.Diagnostic
                     , CSlash.Driver.Config.Finder
                     , CSlash.Driver.Config.Logger

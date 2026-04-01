@@ -55,7 +55,7 @@ floatTopBind :: LevelledBind -> (FloatStats, Bag CoreBind)
 floatTopBind bind = case floatBind bind of
   (fs, floats, bind') -> let float_bag = flattenTopFloats floats
                          in case bind' of
-                              [Rec prs] -> (fs, unitBag (Rec (addTOpFloatPairs float_bag prs)))
+                              [Rec prs] -> (fs, unitBag (Rec (addTopFloatPairs float_bag prs)))
                               [NonRec b e] -> (fs, float_bag `snocBag` NonRec b e)
                               _ -> pprPanic "floatTopBind" (ppr bind')
 
@@ -71,7 +71,7 @@ floatBind (NonRec (TB var _) rhs)
       (fs, rhs_floats, rhs') -> (fs, rhs_floats, [NonRec var rhs'])
 floatBind (Rec pairs)
   = case floatList do_pair pairs of
-      (fs, rhs_floats, rhs') ->
+      (fs, rhs_floats, new_pairs) ->
         let (new_ul_pairss, new_other_pairss) = unzip new_pairs
             (new_join_pairs, new_l_pairs) = partition (isJoinId . fst) (concat new_other_pairss)
 
@@ -84,7 +84,7 @@ floatBind (Rec pairs)
         in (fs, rhs_floats, new_non_rec_binds ++ new_rec_binds)
   where
     do_pair
-      :: (LevelledBndr, LevelledExpr)
+      :: (LevelledLetBndr, LevelledExpr)
       -> (FloatStats, FloatBinds, ([(CoreId, CoreExpr)], [(CoreId, CoreExpr)]))
     do_pair (TB name spec, rhs)
       | isTopLvl dest_lvl
@@ -103,7 +103,7 @@ floatBind (Rec pairs)
                         (ul_pairs, pairs, case_heres)
                           -> let pairs' = (name, installUnderLambdas case_heres rhs') : pairs
                              in (fs, rhs_floats', (ul_pairs, pairs'))
-            where dest_lvl = floatSpecLevel spec
+      where dest_lvl = floatSpecLevel spec
 
 splitRecFloats
   :: Bag FloatBind
@@ -163,12 +163,12 @@ floatExpr (App e a)
         case floatExpr a of
           (fsa, floats_a, a') ->
             (fse `add_stats` fsa, floats_e `plusFloats` floats_a, App e' a')
-floatExpr lam@(Lam (TB _ lam_spec) _)
+floatExpr lam@(Lam (TB _ lam_spec) _ _)
   = let (bndrs_w_lvls, body) = collectBinders lam
-        bndrs = [b | TB b _ <- bndrs_w_lvls]
+        bndrs = [(b, mki) | (TB b _, mki) <- bndrs_w_lvls]
         bndr_lvl = floatSpecLevel lam_spec
     in case floatBody bndr_lvl body of
-         (fs, floats, body') -> (add_to_stats fs floats, floats, mkLams bndrs body')
+         (fs, floats, body') -> (add_to_stats fs floats, floats, mkCoreLams bndrs body')
 
 floatExpr (Tick tickish expr) = panic "floatExpr Tick"
 
@@ -200,7 +200,7 @@ floatExpr (Let bind body)
   where
     bind_spec = case bind of
                   NonRec (TB _ s) _ -> s
-                  Rec ((Tb _ s, _) : _) -> s
+                  Rec ((TB _ s, _) : _) -> s
                   Rec [] -> panic "floatExpr:rec"
 
 floatExpr (Case scrut (TB case_bndr case_spec) ty alts)
@@ -224,11 +224,11 @@ floatExpr (Case scrut (TB case_bndr case_spec) ty alts)
                       (add_stats fse fsa, fda `plusFloats` fde, Case scrut' case_bndr ty alts')
   where
     float_alt bind_lvl (Alt con bs rhs)
-      = case floatBody bind_lvl hrs of
+      = case floatBody bind_lvl rhs of
           (fs, rhs_floats, rhs') -> (fs, rhs_floats, Alt con [b | TB b _ <- bs] rhs')
 
 floatRhs
-  :: CoreBndr
+  :: CoreId
   -> LevelledExpr
   -> (FloatStats, FloatBinds, CoreExpr)
 floatRhs bndr rhs
@@ -236,15 +236,16 @@ floatRhs bndr rhs
   , Just (bndrs, body) <- try_collect join_arity rhs []
   = case bndrs of
       [] -> floatExpr rhs
-      (TB _ lam_spec) : _ ->
+      (TB _ lam_spec, _) : _ ->
         let lvl = floatSpecLevel lam_spec
         in case floatBody lvl body of
-             (fs, floats, body') -> (fs, floats, mkLams [b | TB b _ <- bndrs] body')
+             (fs, floats, body') -> (fs, floats
+                                    , mkCoreLams [(b, mki) | (TB b _, mki) <- bndrs] body')
   | otherwise
   = floatExpr rhs
   where
     try_collect 0 expr acc = Just (reverse acc, expr)
-    try_collect n (Lam b e) acc = try_collect (n - 1) e (b : acc)
+    try_collect n (Lam b mki e) acc = try_collect (n - 1) e ((b, mki) : acc)
     try_collect _ _ _ = Nothing
 
 {- *********************************************************************
@@ -286,7 +287,7 @@ type MinorEnv = M.IntMap (Bag FloatBind)
 
 data FloatBinds = FB !(Bag FloatLet) !MajorEnv
 
-instance Ouptutable FloatBinds where
+instance Outputable FloatBinds where
   ppr (FB fbs defs) = text "FB" <+> (braces $ vcat
                                      [ text "tops =" <+> ppr fbs
                                      , text "non-tops =" <+> ppr defs ])
@@ -299,11 +300,11 @@ addTopFloatPairs :: Bag CoreBind -> [(CoreId, CoreExpr)] -> [(CoreId, CoreExpr)]
 addTopFloatPairs float_bag prs
   = foldr add prs float_bag
   where
-    add (NonRed b r) prs = (b, r) : prs
+    add (NonRec b r) prs = (b, r) : prs
     add (Rec prs1) prs2 = prs1 ++ prs2
 
 flattenMajor :: MajorEnv -> Bag FloatBind
-flattenMajor = M.foldr (unionBags . falttenMinor) emptyBag
+flattenMajor = M.foldr (unionBags . flattenMinor) emptyBag
 
 flattenMinor :: MinorEnv -> Bag FloatBind
 flattenMinor = M.foldr unionBags emptyBag
@@ -320,11 +321,11 @@ unitCaseFloat (Level major minor) e b con bs
 unitLetFloat :: Level -> FloatLet -> FloatBinds
 unitLetFloat lvl@(Level major minor) b
   | isTopLvl lvl = FB (unitBag b) M.empty
-  | otherwise = FP emptyBag (M.singleton major (M.singleton minor floats))
+  | otherwise = FB emptyBag (M.singleton major (M.singleton minor floats))
   where
     floats = unitBag (FloatLet b)
 
-plusFloats :: FloatBInds -> FloatBinds -> FloatBinds
+plusFloats :: FloatBinds -> FloatBinds -> FloatBinds
 plusFloats (FB t1 l1) (FB t2 l2)
   = FB (t1 `unionBags` t2) (l1 `plusMajor` l2)
 
@@ -335,7 +336,7 @@ plusMinor :: MinorEnv -> MinorEnv -> MinorEnv
 plusMinor = M.unionWith unionBags
 
 install :: Bag FloatBind -> CoreExpr -> CoreExpr
-install defn_group expr = foldr wrapFloat expr defn_groups
+install defn_groups expr = foldr wrapFloat expr defn_groups
 
 partitionByLevel
   :: Level

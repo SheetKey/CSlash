@@ -8,7 +8,7 @@ import CSlash.Driver.DynFlags
 import CSlash.Driver.Env
 
 -- import GHC.Core.Rules     ( RuleBase, RuleEnv, mkRuleEnv )
--- import GHC.Core.Opt.Stats ( SimplCount, zeroSimplCount, plusSimplCount )
+import CSlash.Core.Opt.Stats ( SimplCount{-, zeroSimplCount, plusSimplCount-} )
 
 -- import GHC.Types.Annotations
 import CSlash.Types.Unique.Supply
@@ -71,7 +71,7 @@ data CoreReader = CoreReader
   }
 
 newtype CoreWriter = CoreWriter
-  { cw_simpl_count :: () {-SimplCount-} }
+  { cw_simpl_count :: SimplCount }
 
 type CoreIOEnv = IOEnv CoreReader
 
@@ -111,6 +111,26 @@ instance MonadUnique CoreM where
     tag <- read cr_uniq_tag
     liftIO $! uniqFromTag tag
 
+runCoreM
+  :: CsEnv
+  -> Char
+  -> Module
+  -> NamePprCtx
+  -> SrcSpan
+  -> CoreM a
+  -> IO (a, SimplCount)
+runCoreM cs_env tag mod name_ppr_ctx loc m
+  = liftM extract $ runIOEnv reader $ unCoreM m
+  where
+    reader = CoreReader { cr_cs_env = cs_env
+                        , cr_module = mod
+                        , cr_name_ppr_ctx = name_ppr_ctx
+                        , cr_loc = loc
+                        , cr_uniq_tag = tag }
+
+    extract :: (a, CoreWriter) -> (a, SimplCount)
+    extract (value, writer) = (value, cw_simpl_count writer)
+
 {- *********************************************************************
 *                                                                      *
             Core combinators
@@ -134,8 +154,8 @@ liftIOEnv mx = CoreM (mx >>= (\x -> nop x))
 instance MonadIO CoreM where
   liftIO = liftIOEnv . IOEnv.liftIO
 
--- liftIOWithCount :: IO (SimplCount, a) -> CoreM a
--- liftIOWithCount what = liftIO what >>= (\(count, x) -> addSimplCount 
+liftIOWithCount :: IO (SimplCount, a) -> CoreM a
+liftIOWithCount what = liftIO what >>= (\(count, x) -> addSimplCount count >> return x)
 
 {- *********************************************************************
 *                                                                      *
@@ -148,3 +168,15 @@ getCsEnv = read cr_cs_env
 
 getNamePprCtx :: CoreM NamePprCtx
 getNamePprCtx = read cr_name_ppr_ctx
+
+addSimplCount :: SimplCount -> CoreM ()
+addSimplCount count = write (CoreWriter { cw_simpl_count = count })
+
+instance HasDynFlags CoreM where
+  getDynFlags = fmap cs_dflags getCsEnv
+
+instance HasLogger CoreM where
+  getLogger = fmap cs_logger getCsEnv
+
+instance HasModule CoreM where
+  getModule = read cr_module

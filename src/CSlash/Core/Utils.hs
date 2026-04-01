@@ -228,6 +228,18 @@ bindNonRec bndr rhs body
 needsCaseBinding :: HasDebugCallStack => CoreExpr -> Bool
 needsCaseBinding rhs = not (exprOkForSpeculation rhs)
 
+mkSingleAltCase :: CoreExpr -> CoreId -> AltCon -> [CoreId] -> CoreExpr -> CoreExpr
+mkSingleAltCase scrut case_bndr con bndrs body
+  = Case scrut case_bndr case_ty [Alt con bndrs body]
+  where
+    body_ty = exprType body
+
+    case_ty
+      | Just body_ty' <- panic "occCheckExpand bndrs body_ty"
+      = body_ty'
+      | otherwise
+      = pprPanic "mkSingleAltCase" (ppr scrut $$ ppr bndrs $$ ppr body_ty)
+
 {- *********************************************************************
 *                                                                      *
              Operations over case alternatives

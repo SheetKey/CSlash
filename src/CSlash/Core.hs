@@ -1,6 +1,9 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 
-module CSlash.Core where
+module CSlash.Core
+  ( module CSlash.Core
+  , isStableSource
+  ) where
 
 import Prelude hiding ((<>))
 
@@ -151,6 +154,10 @@ neverUnfoldGuidance :: UnfoldingGuidance -> Bool
 neverUnfoldGuidance UnfNever = True
 neverUnfoldGuidance _ = False
 
+hasCoreUnfolding :: Unfolding -> Bool
+hasCoreUnfolding CoreUnfolding{} = True
+hasCoreUnfolding _ = False
+
 canUnfold :: Unfolding -> Bool
 canUnfold (CoreUnfolding { uf_guidance = g }) = not (neverUnfoldGuidance g)
 canUnfold _ = False
@@ -231,11 +238,42 @@ type TaggedAlt t = Alt (TaggedLamBndr t) (TaggedLetBndr t)
 instance (Outputable b, Outputable t) => Outputable (TaggedBndr b t) where
   ppr (TB b l) = char '<' <> ppr b <> comma <> ppr l <> char '>'
 
+deTagExpr :: TaggedExpr t -> CoreExpr
+deTagExpr (Var v) = Var v
+deTagExpr (Lit l) = Lit l
+deTagExpr (Type ty) = Type ty
+deTagExpr (KiCo co) = KiCo co
+deTagExpr (Kind ki) = Kind ki
+deTagExpr (App e1 e2) = App (deTagExpr e1) (deTagExpr e2)
+deTagExpr (Lam (TB b _) k e) = Lam b k (deTagExpr e)
+deTagExpr (Let bind body) = Let (deTagBind bind) (deTagExpr body)
+deTagExpr (Case e (TB b _) ty alts) = Case (deTagExpr e) b ty (map deTagAlt alts)
+deTagExpr (Tick t e) = Tick t (deTagExpr e)
+deTagExpr (Cast e co) = Cast (deTagExpr e) co
+
+deTagBind :: TaggedBind t -> CoreBind
+deTagBind (NonRec (TB b _) rhs) = NonRec b (deTagExpr rhs)
+deTagBind (Rec prs) = Rec [(b, deTagExpr rhs) | (TB b _, rhs) <- prs]
+
+deTagAlt :: TaggedAlt t -> CoreAlt
+deTagAlt (Alt con bndrs rhs) = Alt con [b | TB b _ <- bndrs] (deTagExpr rhs)
+
 {- *********************************************************************
 *                                                                      *
             Core-constructing functions with checking
 *                                                                      *
 ********************************************************************* -}
+
+mkVarApps :: Expr b1 b2 -> [CoreId] -> Expr b1 b2
+mkVarApps f vars = foldl' (\e a -> App e (varToCoreExpr a)) f vars
+
+mkAbsVarApps :: Expr b1 b2 -> [(CoreBndr, a)] -> Expr b1 b2
+mkAbsVarApps = foldl' (\e (a, _) -> case a of
+                                            Id v -> App e (varToCoreExpr v)
+                                            Tv v -> App e (Type (mkTyVarTy v))
+                                            KCv v -> App e (KiCo (mkKiCoVarCo v))
+                                            Kv v -> App e (Kind (mkKiVarKi v)))
+
 
 mkLetRec :: [(b2, Expr b1 b2)] -> Expr b1 b2 -> Expr b1 b2
 mkLetRec [] body = body
@@ -243,18 +281,6 @@ mkLetRec bs body = Let (Rec bs) body
 
 varToCoreExpr :: CoreId -> Expr b1 b2
 varToCoreExpr = Var
-
-{- *********************************************************************
-*                                                                      *
-            Core-constructing functions with checking
-*                                                                      *
-********************************************************************* -}
-
-collectArgs :: Expr b1 b2 -> (Expr b1 b2, [Arg b1 b2])
-collectArgs expr = go expr []
-  where
-    go (App f a) as = go f (a:as)
-    go e as = (e, as)
 
 {- *********************************************************************
 *                                                                      *
@@ -288,6 +314,12 @@ collectNBinders orig_n orig_expr
     go n bs (Lam b mki e) = go (n - 1) ((b, mki) : bs) e
     go _ _ _ = pprPanic "collectNBinders" $ int orig_n
 
+collectArgs :: Expr b1 b2 -> (Expr b1 b2, [Arg b1 b2])
+collectArgs expr = go expr []
+  where
+    go (App f a) as = go f (a:as)
+    go e as = (e, as)
+
 collectArgsTicks :: (CoreTickish -> Bool) -> Expr b1 b2 -> (Expr b1 b2, [Arg b1 b2], [CoreTickish])
 collectArgsTicks skipTick expr = go expr [] []
   where go (App f a) as ts = go f (a:as) ts
@@ -304,6 +336,12 @@ collectArgsTicks skipTick expr = go expr [] []
 isRuntimeVar :: CoreBndr -> Bool
 isRuntimeVar Id {} = True
 isRuntimeVar _ = False
+
+isCoBndr :: CoreBndr -> Bool
+isCoBndr KCv {} = True
+isCoBndr Id {} = False
+isCoBndr Tv {} = False
+isCoBndr Kv {} = False
 
 isRuntimeArg :: CoreExpr -> Bool
 isRuntimeArg = isValArg
@@ -354,6 +392,59 @@ data AnnAlt lamBndr letBndr annot = AnnAlt AltCon [letBndr] (AnnExpr lamBndr let
 data AnnBind lamBndr letBndr annot
   = AnnNonRec letBndr (AnnExpr lamBndr letBndr annot)
   | AnnRec [(letBndr, AnnExpr lamBndr letBndr annot)]
+
+collectAnnArgs :: AnnExpr b1 b2 a -> (AnnExpr b1 b2 a, [AnnExpr b1 b2 a])
+collectAnnArgs expr
+  = go expr []
+  where
+    go (_, AnnApp f a) as = go f (a:as)
+    go e as = (e, as)
+
+collectAnnBndrs :: AnnExpr b1 b2 a -> ([(b1, Maybe CoreMonoKind)], AnnExpr b1 b2 a)
+collectAnnBndrs e = collect [] e
+  where
+    collect bs (_, AnnLam b mk body) = collect ((b, k) : bs) body
+      where k = case mk of
+                  Just (_, k) -> Just k
+                  _ -> Nothing
+    collect bs body = (reverse bs, body)
+
+collectNAnnBndrs :: Int -> AnnExpr b1 b2 a -> ([(b1, Maybe CoreMonoKind)], AnnExpr b1 b2 a)
+collectNAnnBndrs orig_n e
+  = collect orig_n [] e
+  where
+    collect 0 bs body = (reverse bs, body)
+    collect n bs (_, AnnLam b mk body) = collect (n - 1) ((b, k) : bs) body
+      where k = case mk of
+                  Just (_, k) -> Just k
+                  _ -> Nothing
+    collect _ _ _ = pprPanic "collectNAnnBnders" $ int orig_n
+
+deAnnotate :: AnnExpr b1 b2 a -> Expr b1 b2
+deAnnotate (_, e) = deAnnotate' e
+
+deAnnotate' :: AnnExpr' b1 b2 a -> Expr b1 b2
+deAnnotate' (AnnType t) = Type t
+deAnnotate' (AnnKiCo co) = KiCo co
+deAnnotate' (AnnKind ki) = Kind ki
+deAnnotate' (AnnVar v) = Var v
+deAnnotate' (AnnLit lit) = Lit lit
+deAnnotate' (AnnLam binder Nothing body) = Lam binder Nothing (deAnnotate body)
+deAnnotate' (AnnLam binder (Just (_, ki))  body) = Lam binder (Just ki) (deAnnotate body)
+deAnnotate' (AnnApp fun arg) = App (deAnnotate fun) (deAnnotate arg)
+deAnnotate' (AnnCast e (_, co)) = Cast (deAnnotate e) co
+deAnnotate' (AnnTick tick body) = Tick tick (deAnnotate body)
+deAnnotate' (AnnLet bind body)
+  = Let (deAnnBind bind) (deAnnotate body)
+deAnnotate' (AnnCase scrut v t alts)
+  = Case (deAnnotate scrut) v t (map deAnnAlt alts)
+
+deAnnAlt :: AnnAlt b1 b2 a -> Alt b1 b2
+deAnnAlt (AnnAlt con args rhs) = Alt con args (deAnnotate rhs)
+
+deAnnBind :: AnnBind b1 b2 a -> Bind b1 b2
+deAnnBind (AnnNonRec var rhs) = NonRec var (deAnnotate rhs)
+deAnnBind (AnnRec pairs) = Rec [(v, deAnnotate rhs) | (v, rhs) <- pairs]
 
 {- *********************************************************************
 *                                                                      *

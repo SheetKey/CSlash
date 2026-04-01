@@ -45,10 +45,24 @@ initEndPassConfig dflags name_ppr_ctx pass = EndPassConfig
 
 coreDumpFlag :: CoreToDo -> Maybe DumpFlag
 coreDumpFlag CoreDoSimplify{} = Just Opt_D_verbose_core2core
+coreDumpFlag CoreDoFloatInwards = Just Opt_D_dump_float_in
+coreDumpFlag CoreDoFloatOutwards{} = Just Opt_D_dump_float_out
+coreDumpFlag CoreLiberateCase = Just Opt_D_dump_liberate_case
+coreDumpFlag CoreDoStaticArgs = Just Opt_D_dump_static_argument_transformation
+coreDumpFlag CoreDoCallArity = Just Opt_D_dump_call_arity
+coreDumpFlag CoreDoExitify = Just Opt_D_dump_exitify
+coreDumpFlag CoreDoDemand = Just Opt_D_dump_dmdanal
+coreDumpFlag CoreDoSpecializing = Just Opt_D_dump_spec
+coreDumpFlag CoreDoSpecConstr = Just Opt_D_dump_spec_constr
+coreDumpFlag CoreCSE = Just Opt_D_dump_cse
 coreDumpFlag CoreDesugar = Just Opt_D_dump_ds_preopt
 coreDumpFlag CoreDesugarOpt = Just Opt_D_dump_ds
 coreDumpFlag CoreTidy = Just Opt_D_dump_simpl
 coreDumpFlag CorePrep = Just Opt_D_dump_prep
+coreDumpFlag CoreDoNothing = Nothing
+coreDumpFlag CoreDoPasses{} = Nothing
+coreDumpFlag CoreAddCallerCcs = Nothing
+coreDumpFlag CoreAddLateCcs = Nothing
 
 initLintPassResultConfig :: DynFlags -> CoreToDo -> LintPassResultConfig
 initLintPassResultConfig dflags pass = LintPassResultConfig

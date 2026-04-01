@@ -289,6 +289,12 @@ instance IsPass p => OutputableBndr (CoreBndrP (CsPass p)) where
   bndrIsJoin_maybe (Core.Id id) = idJoinPointHood id
   bndrIsJoin_maybe _ = NotJoinPoint
 
+instance (OutputableBndr b, Outputable t) => OutputableBndr (TaggedBndr b t) where
+  pprBndr _ b = ppr b
+  pprInfixOcc b = ppr b
+  pprPrefixOcc b = ppr b
+  bndrIsJoin_maybe (TB b _) = bndrIsJoin_maybe b
+
 instance IsPass p => OutputableBndr (Id (CsPass p)) where
   pprBndr b v = pprCoreBinder b (Core.Id v)
   pprInfixOcc = pprInfixName . varName

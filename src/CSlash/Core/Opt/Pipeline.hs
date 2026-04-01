@@ -1,10 +1,13 @@
+{-# LANGUAGE BangPatterns #-}
+
 module CSlash.Core.Opt.Pipeline where
 
 import CSlash.Driver.DynFlags
 import CSlash.Driver.Env
 import CSlash.Driver.Config.Core.Lint ( endPass )
 -- import GHC.Driver.Config.Core.Opt.LiberateCase ( initLiberateCaseOpts )
--- import GHC.Driver.Config.Core.Opt.Simplify ( initSimplifyOpts, initSimplMode, initGentleSimplMode )
+import CSlash.Driver.Config.Core.Opt.Simplify
+  ( initSimplifyOpts, initSimplMode, initGentleSimplMode )
 -- import GHC.Driver.Config.Core.Opt.WorkWrap ( initWorkWrapOpts )
 -- import GHC.Driver.Config.Core.Rules ( initRuleOpts )
 import CSlash.Platform.Ways  ( hasWay, Way(WayProf) )
@@ -13,14 +16,15 @@ import CSlash.Core
 -- import GHC.Core.Opt.CSE  ( cseProgram )
 -- import GHC.Core.Rules   ( RuleBase, mkRuleBase, ruleCheckProgram, getRules )
 import CSlash.Core.Ppr     ( pprCoreBindings )
-import CSlash.Core.Utils   ( dumpIdInfoOfProgram )
-import CSlash.Core.Lint    ( lintAnnots )
--- import GHC.Core.Opt.Simplify ( simplifyExpr, simplifyPgm )
+-- import CSlash.Core.Utils   ( dumpIdInfoOfProgram )
+-- import CSlash.Core.Lint    ( lintAnnots )
+-- import CSlash.Core.Opt.Simplify ( simplifyExpr, simplifyPgm )
 -- import GHC.Core.Opt.Simplify.Monad
--- import GHC.Core.Opt.Monad
+import CSlash.Core.Opt.Monad
+import CSlash.Core.Opt.Stats
 import CSlash.Core.Opt.Pipeline.Types
 -- import GHC.Core.Opt.FloatIn      ( floatInwards )
--- import GHC.Core.Opt.FloatOut     ( floatOutwards )
+import CSlash.Core.Opt.FloatOut     ( floatOutwards )
 -- import GHC.Core.Opt.LiberateCase ( liberateCase )
 -- import GHC.Core.Opt.StaticArgs   ( doStaticArgs )
 -- import GHC.Core.Opt.Specialise   ( specProgram)
@@ -38,6 +42,7 @@ import CSlash.Utils.Error  ( withTiming )
 import CSlash.Utils.Logger as Logger
 import CSlash.Utils.Outputable
 import CSlash.Utils.Panic
+import CSlash.Utils.Monad
 
 import CSlash.Unit.Module.ModGuts
 
@@ -46,6 +51,8 @@ import CSlash.Types.Basic
 import CSlash.Types.Demand ( zapDmdEnvSig )
 import CSlash.Types.Name.Ppr
 import CSlash.Types.Var
+import CSlash.Types.Unique
+import CSlash.Types.Unique.Supply
 
 import Control.Monad
 import CSlash.Unit.Module
@@ -85,27 +92,29 @@ core2core cs_env guts@(ModGuts { mg_module = mod
 ********************************************************************* -}
 
 getCoreToDo :: DynFlags -> [CoreToDo]
-getCoreToDo dfalgs = flatten_todos core_todo
+getCoreToDo dflags = flatten_todos core_todo
   where
     phases = simplPhases dflags
     max_iter = maxSimplIterations dflags
     const_fold = gopt Opt_CoreConstantFolding dflags
     call_arity = gopt Opt_CallArity dflags
     exitification = gopt Opt_Exitification dflags
-    do_sepcialize = gopt Opt_Specialize dflags
+    strictness = True -- TODO: gopt Opt_Strictness dflags
+    do_specialize = gopt Opt_Specialise dflags
     do_float_in = gopt Opt_FloatIn dflags
     cse = gopt Opt_CSE dflags
     spec_constr = gopt Opt_SpecConstr dflags
     liberate_case = gopt Opt_LiberateCase dflags
     late_dmd_anal = gopt Opt_LateDmdAnal dflags
-    late_specialize = gopt Opt_LateSpecialize dflags
+    late_specialize = gopt Opt_LateSpecialise dflags
+    static_args = gopt Opt_StaticArgumentTransformation dflags
     profiling = ways dflags `hasWay` WayProf
 
-    do_presimplify = do_sepcialize
+    do_presimplify = do_specialize
     do_simpl3 = const_fold
 
     maybe_strictness_before (Phase phase)
-      | phase `elem` strictnessBefore dflags = CoreDoDemand False
+      | phase `elem` [] {-TODO: strictnessBefore dflags-} = CoreDoDemand 
     maybe_strictness_before _ = CoreDoNothing
 
     simpl_phase phase name iter
@@ -114,14 +123,17 @@ getCoreToDo dfalgs = flatten_todos core_todo
         , CoreDoSimplify $ initSimplifyOpts dflags iter
           (initSimplMode dflags phase name)
         ]
+
     simplify name = simpl_phase FinalPhase name max_iter
 
     simpl_gently
       = CoreDoSimplify $ initSimplifyOpts dflags max_iter (initGentleSimplMode dflags)
 
-    dmd_cpr_ww = [CoreDoDemand False]
+    dmd_cpr_ww = [CoreDoDemand]
 
-    add_caller ccs = runWhen (profiling && not (null $ callerCcFilters dflags)) CoreAddCallerCcs
+    demand_analyzer = CoreDoPasses (dmd_cpr_ww ++ [simplify "post-demand"])
+
+    add_caller_ccs = runWhen (profiling && not (null $ callerCcFilters dflags)) CoreAddCallerCcs
 
     add_late_ccs = runWhen (profiling && gopt Opt_ProfLateInlineCcs dflags) $ CoreAddLateCcs
 
@@ -139,7 +151,7 @@ getCoreToDo dfalgs = flatten_todos core_todo
       , runWhen do_simpl3
         (CoreDoPasses $ [ simpl_phase (Phase phase) "main" max_iter
                         | phase <- [phases, phases-1..1] ]
-          ++ [simple_phase (Phase 0) "main" (max max_iter 3) ])
+          ++ [simpl_phase (Phase 0) "main" (max max_iter 3) ])
       , runWhen do_float_in CoreDoFloatInwards
       , runWhen call_arity $ CoreDoPasses [ CoreDoCallArity, simplify "post-call-arity" ]
       , runWhen strictness demand_analyzer
@@ -165,8 +177,8 @@ getCoreToDo dfalgs = flatten_todos core_todo
         [ CoreCSE, simplify "post-final-cse" ]
         -- End of -O2
       , runWhen late_dmd_anal $ CoreDoPasses
-        (dmd_cpr_ww ++ [simplfiy "post-late-ww"])
-      , CoreDoDemand False
+        (dmd_cpr_ww ++ [simplify "post-late-ww"])
+      , CoreDoDemand
       , add_caller_ccs
       , add_late_ccs
       ]
@@ -198,6 +210,8 @@ runCorePasses passes guts = foldM do_pass guts passes
         endPass pass (mg_binds guts')
         return guts'
 
+    mod = mg_module guts
+
 doCorePass :: CoreToDo -> ModGuts -> CoreM ModGuts
 doCorePass pass guts = do
   logger <- getLogger
@@ -211,3 +225,49 @@ doCorePass pass guts = do
       name_ppr_ctx = mkNamePprCtx (cs_unit_env cs_env) rdr_env
 
   case pass of 
+    CoreDoSimplify opts -> {-# SCC "Simplify" #-}
+                           panic "liftIOWithCount $ simplifyPgm logger (cs_unit_env cs_env)"
+
+    CoreCSE -> {-# SCC "CommonSubExpr" #-}
+               panic "updateBinds cseProgram"
+
+    CoreLiberateCase -> {-# SCC "LiberateCase" #-}
+                        panic "updateBinds (liberateCase (initLiberateCaseOpts dflags))"
+
+    CoreDoFloatInwards -> {-# SCC "FloatInwards" #-}
+                          panic "updateBinds (floatInwards platform)"
+
+    CoreDoFloatOutwards f -> {-# SCC "FloatOutwards" #-}
+                             updateBindsM (liftIO . floatOutwards logger f us)
+
+    CoreDoStaticArgs -> {-# SCC "StaticArgs" #-}
+                        panic "updateBinds (doStaticArgs us)"
+
+    CoreDoCallArity -> {-# SCC "CallArity" #-}
+                       panic "updateBinds callArityAnalProgram"
+
+    CoreDoExitify -> {-# SCC "Exitify" #-}
+                     panic "updateBinds exitifyProgram"
+
+    CoreDoDemand -> {-# SCC "DmdAnal" #-}
+                    panic "updateBindsM (liftIO . dmdAnal logger dflags)"
+
+    CoreDoSpecializing -> {-# SCC "Specialize" #-}
+                          panic "specProgram guts"
+
+    CoreDoSpecConstr -> {-# SCC "SpecConstr" #-}
+                        panic "specConstrProgram" guts
+
+    CoreAddCallerCcs -> {-# SCC "AddCallerCcs" #-}
+                        panic "addCallerCostCenters guts"
+
+    CoreAddLateCcs -> {-# SCC "AddLateCcs" #-}
+                      panic "topLevelBindsCCMG guts"
+
+    CoreDoNothing -> return guts
+    CoreDoPasses passes -> runCorePasses passes guts
+
+    CoreDesugar -> pprPanic "doCorePass" (ppr pass)
+    CoreDesugarOpt -> pprPanic "doCorePass" (ppr pass)
+    CoreTidy -> pprPanic "doCorePass" (ppr pass)
+    CorePrep -> pprPanic "doCorePass" (ppr pass)

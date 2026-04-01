@@ -11,7 +11,7 @@ import CSlash.Core.Lint    ( LintPassResultConfig, dumpPassResult, lintPassResul
 -- import CSlash.Core.Opt.Simplify.Iteration ( simplTopBinds, simplExpr, simplImpRules )
 -- import CSlash.Core.Opt.Simplify.Utils  ( activeRule )
 -- import CSlash.Core.Opt.Simplify.Inline ( activeUnfolding )
--- import CSlash.Core.Opt.Simplify.Env
+import CSlash.Core.Opt.Simplify.Env
 -- import CSlash.Core.Opt.Simplify.Monad
 -- import CSlash.Core.Opt.Stats ( simplCountN )
 
@@ -50,7 +50,7 @@ import Data.Foldable ( for_ )
 data SimplifyOpts = SimplifyOpts
   { so_dump_core_sizes :: !Bool
   , so_iterations :: !Int
-  , so_mode :: !() -- SimplMode
+  , so_mode :: !SimplMode
   , so_pass_result_cfg :: !(Maybe LintPassResultConfig)
   -- , so_top_env_cfg :: !TopEnvConfig
   }
