@@ -666,10 +666,10 @@ initialEnv float_lams binds
   = LE { le_switches = float_lams
        , le_ctxt_lvl = tOP_LEVEL
        , le_lvl_env = (emptyVarEnv, emptyVarEnv, emptyVarEnv, emptyVarEnv, emptyVarEnv)
-       , le_subst = mkEmptyTermSubst in_scope_toplvl
+       , le_subst = subst_toplvl
        , le_env = emptyVarEnv }
   where
-    in_scope_toplvl = panic "I don't remember the right names"
+    subst_toplvl = extendTermSubstInScopeBndrs emptySubst binds
 
 addLetLvl :: Level -> CoreVarEnv Level -> OutId -> CoreVarEnv Level
 addLetLvl dest_lvl (id, tco, ty, kco, ki) v'

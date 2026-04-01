@@ -288,6 +288,18 @@ varToCoreExpr = Var
 *                                                                      *
 ********************************************************************* -}
 
+{-# INLINE foldBindersOfBindStrict #-}
+foldBindersOfBindStrict :: (a -> b -> a) -> a -> Bind bLam b -> a
+foldBindersOfBindStrict f = \z bind -> case bind of
+  NonRec b _ -> f z b
+  Rec pairs -> foldl' f z $ map fst pairs
+
+{-# INLINE foldBindersOfBindsStrict #-}
+foldBindersOfBindsStrict :: (a -> b -> a) -> a -> [Bind bLam b] -> a
+foldBindersOfBindsStrict f = \z binds -> foldl' fold_bind z binds
+  where
+    fold_bind = foldBindersOfBindStrict f
+
 rhssOfBind :: Bind b1 b2 -> [Expr b1 b2]
 rhssOfBind (NonRec _ rhs) = [rhs]
 rhssOfBind (Rec pairs) = snd <$> pairs

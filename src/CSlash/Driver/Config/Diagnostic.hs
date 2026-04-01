@@ -1,4 +1,4 @@
-module CSlash.Driver.Config.Diagnostic where
+qmodule CSlash.Driver.Config.Diagnostic where
 
 import CSlash.Driver.Flags
 import CSlash.Driver.DynFlags

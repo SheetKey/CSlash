@@ -185,6 +185,13 @@ extendTermSubstInScope Subst{..} (KCv kcv)
 extendTermSubstInScope Subst{..} (Kv kv)
   = Subst { kv_in_scope = kv_in_scope `extendInScopeSet` kv, .. }
 
+extendTermSubstInScopeId :: CoreSubst -> CoreId -> CoreSubst
+extendTermSubstInScopeId Subst{..} id
+  = Subst { id_in_scope = id_in_scope `extendInScopeSet` id, .. }
+
+extendTermSubstInScopeBndrs :: CoreSubst -> [CoreBind] -> CoreSubst
+extendTermSubstInScopeBndrs = foldBindersOfBindsStrict extendTermSubstInScopeId
+
 mkInScopeSets :: (TyVarSet p, KiCoVarSet p, KiVarSet p) -> SubstInScope p
 mkInScopeSets (tv, kcv, kv) = (mkInScopeSet tv, mkInScopeSet kcv, mkInScopeSet kv)
 
