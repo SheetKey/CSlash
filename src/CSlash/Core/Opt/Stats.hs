@@ -18,6 +18,28 @@ import CSlash.Utils.Panic
 
 data SimplCount
   = VerySimplCount !Int
+  | SimplCount
+    -- { ticks :: !Int
+    -- , details :: !TickCounts
+    -- , n_log :: !Int
+    -- , log1 :: [Tick]
+    -- , log2 :: [Tick]
+    -- }
+
+-- type TickCounts = Map Tick Int
 
 pprSimplCount :: SimplCount -> SDoc
 pprSimplCount = panic "pprSimplCount"
+
+zeroSimplCount :: Bool -> SimplCount
+zeroSimplCount dump_simpl_stats
+  | dump_simpl_stats
+  = SimplCount
+  | otherwise
+  = VerySimplCount 0
+
+plusSimplCount :: SimplCount -> SimplCount -> SimplCount 
+plusSimplCount SimplCount SimplCount = SimplCount
+plusSimplCount (VerySimplCount n) (VerySimplCount m) = VerySimplCount (n + m)
+plusSimplCount lhr rhs =
+  panic "plusSimplCount"

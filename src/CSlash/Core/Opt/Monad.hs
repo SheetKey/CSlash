@@ -8,7 +8,7 @@ import CSlash.Driver.DynFlags
 import CSlash.Driver.Env
 
 -- import GHC.Core.Rules     ( RuleBase, RuleEnv, mkRuleEnv )
-import CSlash.Core.Opt.Stats ( SimplCount{-, zeroSimplCount, plusSimplCount-} )
+import CSlash.Core.Opt.Stats ( SimplCount, zeroSimplCount, plusSimplCount )
 
 -- import GHC.Types.Annotations
 import CSlash.Types.Unique.Supply
@@ -79,10 +79,12 @@ newtype CoreM a = CoreM { unCoreM :: CoreIOEnv (a, CoreWriter) }
   deriving Functor
 
 emptyWriter :: Bool -> CoreWriter
-emptyWriter dump_simpl_stats = panic "emptyWriter"
+emptyWriter dump_simpl_stats = CoreWriter
+  { cw_simpl_count = zeroSimplCount dump_simpl_stats }
 
 plusWriter :: CoreWriter -> CoreWriter -> CoreWriter
-plusWriter w1 w2 = panic "plusWriter"
+plusWriter w1 w2 = CoreWriter
+  { cw_simpl_count = (cw_simpl_count w1) `plusSimplCount` (cw_simpl_count w2) }
 
 instance Applicative CoreM where
   pure x = CoreM $ nop x
