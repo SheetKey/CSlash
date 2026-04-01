@@ -82,6 +82,7 @@ import CSlash.Builtin.Names ( isUnboundName )
 
 import Data.Set      ( Set )
 import qualified Data.Set as S
+import qualified Data.Map as M
 import Data.Dynamic  ( Dynamic )
 import Data.Map ( Map )
 import Data.Typeable ( TypeRep )
@@ -236,7 +237,7 @@ plusModDeps = plusInstalledModuleEnv plus_mod_dep
 
 emptyImportAvails :: ImportAvails
 emptyImportAvails = ImportAvails
-                    { imp_mods = emptyModuleEnv
+                    { imp_mods = M.empty
                     , imp_direct_dep_mods = emptyInstalledModuleEnv
                     , imp_dep_direct_pkgs = S.empty
                     }
@@ -249,6 +250,6 @@ plusImportAvails
   (ImportAvails { imp_mods = mods2
                 , imp_direct_dep_mods = ddmods2
                 , imp_dep_direct_pkgs = ddpkgs2 })
-  = ImportAvails { imp_mods = plusModuleEnv_C (++) mods1 mods2
+  = ImportAvails { imp_mods = M.unionWith (++) mods1 mods2
                  , imp_direct_dep_mods = ddmods1 `plusModDeps` ddmods2
                  , imp_dep_direct_pkgs = ddpkgs1 `S.union` ddpkgs2 }

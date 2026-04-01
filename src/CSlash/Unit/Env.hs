@@ -263,6 +263,9 @@ ue_unitHomeUnit_maybe uid ue_env
 ue_unitHomeUnit :: UnitId -> UnitEnv -> HomeUnit
 ue_unitHomeUnit uid ue_env = homeUnitEnv_unsafeHomeUnit $ ue_findHomeUnitEnv uid ue_env
 
+ue_all_home_unit_ids :: UnitEnv -> Set.Set UnitId
+ue_all_home_unit_ids = unitEnv_keys . ue_home_unit_graph
+
 -- -------------------------------------------------------
 -- Query and modify the currently active unit
 -- -------------------------------------------------------

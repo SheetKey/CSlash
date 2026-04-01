@@ -69,6 +69,10 @@ data Usage
     , usg_entities :: [(OccName, Fingerprint)]
     , usg_exports :: Maybe Fingerprint
     }
+  | UsageMergedRequirement
+    { usg_mod :: Module
+    , usg_mod_hash :: Fingerprint
+    }
   deriving (Eq)
 
 instance Binary Usage where
@@ -83,6 +87,10 @@ instance Binary Usage where
     put_ bh (usg_mod_hash usg)
     put_ bh (usg_exports usg)
     put_ bh (usg_entities usg)
+  put_ bh usg@UsageMergedRequirement{} = do
+    putByte bh 2
+    put_ bh (usg_mod usg)
+    put_ bh (usg_mod_hash usg)
 
   get bh = do
     h <- getByte bh
@@ -97,6 +105,10 @@ instance Binary Usage where
               ents <- get bh
               return UsageHomeModule { usg_mod_name = nm, usg_mod_hash = mod, usg_unit_id = uid
                                      , usg_exports = exps, usg_entities = ents }
+      2 -> do
+        mod <- get bh
+        hash <- get bh
+        return UsageMergedRequirement { usg_mod = mod, usg_mod_hash = hash }
       i -> error ("Binary.get(Usage): " ++ show i)
 
 data ImportAvails = ImportAvails

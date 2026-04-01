@@ -204,7 +204,7 @@ calculateAvails home_unit other_home_units iface imported_by =
                                 then S.singleton (moduleUnitId imp_mod, moduleName imp_mod)
                                 else S.empty
   in ImportAvails
-     { imp_mods = unitModuleEnv (mi_module iface) [imported_by]
+     { imp_mods = Map.singleton (mi_module iface) [imported_by]
      , imp_direct_dep_mods = direct_mods
      , imp_dep_direct_pkgs = dependent_pkgs
      }

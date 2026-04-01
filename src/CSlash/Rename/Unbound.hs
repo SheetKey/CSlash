@@ -39,6 +39,7 @@ import Data.List (sortBy, partition, nub)
 import Data.List.NonEmpty ( pattern (:|), NonEmpty )
 import Data.Function ( on )
 import qualified Data.Semigroup as S
+import qualified Data.Map as M
 
 data WhatLooking
   = WL_Anything
@@ -247,7 +248,7 @@ importSuggestions looking_for global_env hpt currMod imports rdr_name
       Qual mod_name occ_name -> (Just mod_name, occ_name)
       _ -> panic "importSuggestions: dead code"
 
-    interesting_imports = [ (mod, imp) | (mod, mod_imports) <- moduleEnvToList (imp_mods imports)
+    interesting_imports = [ (mod, imp) | (mod, mod_imports) <- M.toList (imp_mods imports)
                                        , Just imp <- return $ pick (importedByUser mod_imports) ]
 
     pick = listToMaybe . sortBy cmp . filter select

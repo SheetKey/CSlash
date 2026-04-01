@@ -9,8 +9,9 @@ import CSlash.Unit.Module
 
 import CSlash.Types.Name.Reader
 import CSlash.Types.SrcLoc
+import Data.Map (Map)
 
-type ImportedMods = ModuleEnv [ImportedBy]
+type ImportedMods = Map Module [ImportedBy]
 
 data ImportedBy
     = ImportedByUser ImportedModsVal

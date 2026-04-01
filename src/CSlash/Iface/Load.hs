@@ -523,6 +523,8 @@ pprUsage usage@UsageHomeModule{}
     nest 2 ( maybe Outputable.empty (\v -> text "exports: " <> ppr v) (usg_exports usage) $$
              vcat [ ppr n <+> ppr v | (n, v) <- usg_entities usage ]
            )
+pprUsage usage@UsageMergedRequirement{}
+  = hsep [text "merged", ppr (usg_mod usage), ppr (usg_mod_hash usage)]
 
 pprUsageImport :: Outputable a => Usage -> (Usage -> a) -> SDoc
 pprUsageImport usage usg_mod'

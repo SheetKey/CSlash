@@ -421,6 +421,11 @@ checkModUsage _ UsagePackageModule { usg_mod = mod, usg_mod_hash = old_mod_hash 
   needInterface mod $ \iface -> 
     let reason = ModuleChanged (moduleName mod)
     in checkModuleFingerprint logger reason old_mod_hash (mi_mod_hash (mi_final_exts iface))
+checkModUsage _ UsageMergedRequirement{ usg_mod = mod, usg_mod_hash = old_mod_hash } = do
+  logger <- getLogger
+  needInterface mod $ \iface -> do
+    let reason = ModuleChangedRaw (moduleName mod)
+    checkModuleFingerprint logger reason old_mod_hash (mi_mod_hash (mi_final_exts iface))
 checkModUsage _ UsageHomeModule { usg_mod_name = mod_name
                                 , usg_unit_id = uid
                                 , usg_mod_hash = old_mod_hash

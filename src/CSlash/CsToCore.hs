@@ -141,18 +141,17 @@ deSugar cs_env
                                         (tcg_mod tcg_env)
                                         (tcg_imports tcg_env)
 
-              -- let uc = initUsageConfig cs_env
-              -- let fc = cs_FC cs_env
-              -- let unit_env = cs_unit_env cs_env
-              -- usages <- initIfaceLoad cs_env $
-              --           mkUsageInfo uc fc unit_env mod (imp_mods imports) used_names merged
+              let fc = cs_FC cs_env
+              let unit_env = cs_unit_env cs_env
+              usages <- initIfaceLoad cs_env $
+                        mkUsageInfo fc unit_env mod (imp_mods imports) used_names merged
 
               let mod_guts = ModGuts
                     { mg_module = mod
                     , mg_cs_src = cs_src
                     , mg_loc = panic "mkFileSrcSpan mod_loc"
                     , mg_exports = exports
-                    , mg_usages = panic "usages"
+                    , mg_usages = usages
                     , mg_deps = deps
                     , mg_rdr_env = rdr_env
                     , mg_fix_env = fix_env
