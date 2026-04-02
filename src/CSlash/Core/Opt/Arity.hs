@@ -63,7 +63,20 @@ arityTypeBotSigs_maybe (AT lams div)
 ********************************************************************* -}
 
 typeOneShots :: CoreType -> [OneShotInfo]
-typeOneShots ty = panic "go initRecTc ty"
+typeOneShots ty = go ty
+  where
+    go ty
+      | (_:_, ty') <- splitBigLamTyBinders ty
+      = go ty'
+      | (_:_, ty') <- splitForAllKiCoVars ty
+      = go ty'
+      | (_:_, ty') <- splitForAllForAllTyBinders ty
+      = go ty'
+      | Just (_, _, res) <- splitFunTy_maybe ty
+      = NoOneShotInfo : go res
+      | otherwise
+      = []
+      
 
 isOneShotBndr :: CoreBndr -> Bool
 isOneShotBndr Tv{} = True
