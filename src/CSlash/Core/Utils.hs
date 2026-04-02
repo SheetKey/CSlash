@@ -468,8 +468,9 @@ disjointCoreVarSets (ids1, tcvs1, tvs1, kcvs1, kvs1) (ids2, tcvs2, tvs2, kcvs2, 
 
 isEmptyTy :: CoreType -> Bool
 isEmptyTy ty
-  | Just (tc, inst_tys) <- splitTyConApp_maybe ty
-  , panic "isEmptyTy" -- TODO: we do need 'dataConCannotMatch' since (Void, Void) is empty!
+  | Just (tc, _) <- splitTyConApp_maybe ty
+  , Just dcs <- tyConDataCons_maybe tc
+  , null dcs -- TODO: must change if we add gadts
   = True
   | otherwise
   = False
