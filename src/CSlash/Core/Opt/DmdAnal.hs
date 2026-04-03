@@ -12,7 +12,7 @@ import CSlash.Core.Utils
 import CSlash.Core.TyCon
 import CSlash.Core.Type
 -- import GHC.Core.Predicate( isEqualityClass, isCTupleClass )
--- import GHC.Core.FVs      ( rulesRhsFreeIds, bndrRuleAndUnfoldingIds )
+import CSlash.Core.FVs ( bndrUnfoldingIds )
 -- import GHC.Core.Coercion ( Coercion )
 -- import GHC.Core.TyCo.FVs     ( coVarsOfCos )
 import CSlash.Core.Type.Compare ( eqType )
@@ -73,6 +73,12 @@ dmdAnalProgram binds
 
 demandRoot :: AnalEnv -> CoreId -> DmdEnv
 demandRoot env id = fst (dmdAnalStar env topDmd (Var id))
+
+demandRoots :: AnalEnv -> [CoreId] -> DmdEnv
+demandRoots env roots = plusDmdEnvs (map (demandRoot env) roots)
+
+demandRootSet :: AnalEnv -> IdSet Zk -> DmdEnv
+demandRootSet env ids = demandRoots env (nonDetEltsUniqSet ids)
 
 isInterestingTopLevelFn :: CoreId -> Bool
 isInterestingTopLevelFn id = typeArity (varType id) > 0
@@ -319,13 +325,33 @@ dmdAnalRhsSig
   -> CoreId
   -> CoreExpr
   -> (AnalEnv, CoreId, CoreExpr)
-dmdAnalRhsSig top_lvl rec_flag env let_sd id rhs = panic "dmdAnalRhsSig"
-  -- = (final_env, finnnal_id, final_rhs)
-  -- where
-  --   body_sd | isJoinId id = let_sd
-  --           | otherwise = topSubDmd
+dmdAnalRhsSig top_lvl rec_flag env let_sd id rhs
+  = (final_env, final_id, final_rhs)
+  where
+    arity = case idJoinPointHood id of
+      JoinPoint join_arity -> count (isRuntimeVar . fst) $ fst $ collectNBinders join_arity rhs
+      NotJoinPoint -> idArity id
 
-  --   adjusted_body_sd = 
+    body_sd | isJoinId id = let_sd
+            | otherwise = topSubDmd
+
+    rhs_sd = mkCalledOnceDmds arity body_sd
+
+    WithDmdType rhs_dmd_ty rhs' = dmdAnal env rhs_sd rhs
+    DmdType rhs_env rhs_dmds = rhs_dmd_ty
+    (final_rhs_dmds, final_rhs) = (rhs_dmds, rhs')
+
+    dmd_sig_arity = arity + strictCallArity body_sd
+    sig = mkDmdSigForArity dmd_sig_arity (DmdType sig_env final_rhs_dmds)
+
+    final_id = setIdDmdSig id sig
+    !final_env = extendAnalEnv top_lvl env final_id sig
+
+    rhs_env1 = case rec_flag of
+      Recursive -> reuseEnv rhs_env
+      NonRecursive -> rhs_env
+
+    sig_env = rhs_env1 `plusDmdEnv` demandRootSet env (bndrUnfoldingIds id)
 
 useLetUp :: TopLevelFlag -> CoreId -> Bool
 useLetUp top_lvl f = isNotTopLevel top_lvl && idArity f == 0 && not (isJoinId f)
@@ -398,6 +424,13 @@ emptyAnalEnv = AE { ae_sigs = emptySigEnv, ae_virgin = True }
 
 emptySigEnv :: SigEnv
 emptySigEnv = emptyVarEnv
+
+extendAnalEnv :: TopLevelFlag -> AnalEnv -> CoreId -> DmdSig -> AnalEnv
+extendAnalEnv top_lvl env var sig
+  = env { ae_sigs = extendSigEnv top_lvl (ae_sigs env) var sig }
+
+extendSigEnv :: TopLevelFlag -> SigEnv -> CoreId -> DmdSig -> SigEnv
+extendSigEnv top_lvl sigs var sig = extendVarEnv sigs var (sig, top_lvl)
 
 lookupSigEnv :: AnalEnv -> CoreId -> Maybe (DmdSig, TopLevelFlag)
 lookupSigEnv env id = lookupVarEnv (ae_sigs env) id

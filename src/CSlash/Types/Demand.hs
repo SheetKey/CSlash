@@ -233,6 +233,9 @@ floatifyDmd = multDmd C_1N
 mkCalledOnceDmd :: SubDemand -> SubDemand
 mkCalledOnceDmd sd = mkCall C_11 sd
 
+mkCalledOnceDmds :: Arity -> SubDemand -> SubDemand
+mkCalledOnceDmds arity sd = iterate mkCalledOnceDmd sd !! arity
+
 peelCallDmd :: SubDemand -> (Card, SubDemand)
 peelCallDmd sd = viewCall sd `orElse` (topCard, topSubDmd)
 
@@ -243,6 +246,13 @@ peelManyCalls k sd = go k C_11 sd
     go 0 !n !sd = (True, n, sd)
     go k !n (viewCall -> Just (m, sd)) = go (k-1) (n `multCard` m) sd
     go _ _ _ = (False, topCard, topSubDmd)
+{-# INLINE peelManyCalls #-}
+
+strictCallArity :: SubDemand -> Arity
+strictCallArity sd = go 0 sd
+  where
+    go n (Call card sd) = go (n + 1) sd
+    go n _ = n
 
 argsOneShots :: DmdSig -> Arity -> [[OneShotInfo]]
 argsOneShots (DmdSig (DmdType _ arg_ds)) n_val_args
@@ -337,6 +347,9 @@ instance Eq DmdEnv where
 multDmdEnv :: Card -> DmdEnv -> DmdEnv
 multDmdEnv C_11 env = env
 multDmdEnv n (DE fvs div) = DE (mapVarEnv (multDmd n) fvs) (multDivergence n div)
+
+reuseEnv :: DmdEnv -> DmdEnv
+reuseEnv = multDmdEnv C_1N
 
 lookupDmdEnv :: DmdEnv -> Id Zk -> Demand
 lookupDmdEnv (DE fv div) id = lookupVarEnv fv id `orElse` defaultFvDmd div

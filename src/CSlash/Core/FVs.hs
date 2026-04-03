@@ -296,6 +296,13 @@ fvDVarSets fvs = case fvVarAcc fvs of
   (ids, _, tcvs, _, tvs, _, kcvs, _, kvs, _)
     -> (mkDVarSet ids, mkDVarSet tcvs, mkDVarSet tvs, mkDVarSet kcvs, mkDVarSet kvs)
 
+fvVarSets
+  :: CoreFV
+  -> (IdSet Zk, TyCoVarSet Zk, TyVarSet Zk, KiCoVarSet Zk, KiVarSet Zk)
+fvVarSets fvs = case fvVarAcc fvs of
+  (_, ids, _, tcvs, _, tvs, _, kcvs, _, kvs)
+    -> (ids, tcvs, tvs, kcvs, kvs)
+
 fvAccDVarSets :: FVAcc CoreExpr -> FVAnn
 fvAccDVarSets (ids, _, tcvs, _, tvs, _, kcvs, _, kvs, _)
   = (mkDVarSet ids, mkDVarSet tcvs, mkDVarSet tvs, mkDVarSet kcvs, mkDVarSet kvs)
@@ -314,6 +321,10 @@ bndrUnfoldingVarsDSet id = fvDVarSets $ idUnfoldingFVs id
 
 idUnfoldingFVs :: CoreId -> CoreFV
 idUnfoldingFVs id = stableUnfoldingFVs (realIdUnfolding id) `orElse` emptyFV
+
+bndrUnfoldingIds :: CoreId -> IdSet Zk
+bndrUnfoldingIds id = case fvVarSets $ idUnfoldingFVs id of
+  (ids, _, _, _, _) -> ids
 
 stableUnfoldingFVs :: Unfolding -> Maybe CoreFV
 stableUnfoldingFVs unf
