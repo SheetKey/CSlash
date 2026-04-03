@@ -277,6 +277,9 @@ extendVarEnvList = addListToUFM
 plusVarEnv_C :: (a -> a -> a) -> VarEnv v a -> VarEnv v a -> VarEnv v a
 plusVarEnv_C = plusUFM_C
 
+plusVarEnv_CD :: (a -> a -> a) -> VarEnv v a -> a -> VarEnv v a -> a -> VarEnv v a
+plusVarEnv_CD = plusUFM_CD
+
 plusVarEnv :: VarEnv v a -> VarEnv v a -> VarEnv v a
 plusVarEnv = plusUFM
 

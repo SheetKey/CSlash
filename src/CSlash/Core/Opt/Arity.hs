@@ -62,6 +62,9 @@ arityTypeBotSigs_maybe (AT lams div)
 *                                                                      *
 ********************************************************************* -}
 
+typeArity :: CoreType -> Arity
+typeArity = length . typeOneShots
+
 typeOneShots :: CoreType -> [OneShotInfo]
 typeOneShots ty = go ty
   where
@@ -77,7 +80,6 @@ typeOneShots ty = go ty
       | otherwise
       = []
       
-
 isOneShotBndr :: CoreBndr -> Bool
 isOneShotBndr Tv{} = True
 isOneShotBndr KCv{} = True -- TODO: double check

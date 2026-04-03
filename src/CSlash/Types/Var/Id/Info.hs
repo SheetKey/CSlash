@@ -1,6 +1,9 @@
 {-# LANGUAGE BinaryLiterals #-}
 
-module CSlash.Types.Var.Id.Info where
+module CSlash.Types.Var.Id.Info
+  ( module CSlash.Types.Var.Id.Info
+  , OneShotInfo(..)
+  ) where
 
 import Prelude hiding ((<>))
 
@@ -141,6 +144,9 @@ setTagSig info sig = info { tagSig = Just sig }
 
 setOneShotInfo :: IdInfo -> OneShotInfo -> IdInfo
 setOneShotInfo info lb = info { bitfield = bitfieldSetOneShotInfo lb (bitfield info) }
+
+setDemandInfo :: IdInfo -> Demand -> IdInfo
+setDemandInfo info dd = dd `seq` info { demandInfo = dd }
 
 setDmdSigInfo :: IdInfo -> DmdSig -> IdInfo
 setDmdSigInfo info dd = dd `seq` info { dmdSigInfo = dd }

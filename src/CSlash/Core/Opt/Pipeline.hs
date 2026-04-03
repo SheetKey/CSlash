@@ -16,7 +16,7 @@ import CSlash.Core
 -- import GHC.Core.Opt.CSE  ( cseProgram )
 -- import GHC.Core.Rules   ( RuleBase, mkRuleBase, ruleCheckProgram, getRules )
 import CSlash.Core.Ppr     ( pprCoreBindings )
--- import CSlash.Core.Utils   ( dumpIdInfoOfProgram )
+import CSlash.Core.Utils   ( dumpIdInfoOfProgram )
 -- import CSlash.Core.Lint    ( lintAnnots )
 -- import CSlash.Core.Opt.Simplify ( simplifyExpr, simplifyPgm )
 -- import GHC.Core.Opt.Simplify.Monad
@@ -29,14 +29,14 @@ import CSlash.Core.Opt.FloatOut     ( floatOutwards )
 -- import GHC.Core.Opt.StaticArgs   ( doStaticArgs )
 -- import GHC.Core.Opt.Specialise   ( specProgram)
 -- import GHC.Core.Opt.SpecConstr   ( specConstrProgram)
--- import GHC.Core.Opt.DmdAnal
+import CSlash.Core.Opt.DmdAnal
 -- import GHC.Core.Opt.CprAnal      ( cprAnalProgram )
 -- import GHC.Core.Opt.CallArity    ( callArityAnalProgram )
 -- import GHC.Core.Opt.Exitify      ( exitifyProgram )
 -- import GHC.Core.Opt.WorkWrap     ( wwTopBinds )
 -- import GHC.Core.Opt.CallerCC     ( addCallerCostCentres )
 -- import GHC.Core.LateCC.TopLevelBinds (topLevelBindsCCMG)
--- import GHC.Core.Seq (seqBinds)
+import CSlash.Core.Seq (seqBinds)
 
 import CSlash.Utils.Error  ( withTiming )
 import CSlash.Utils.Logger as Logger
@@ -250,7 +250,7 @@ doCorePass pass guts = do
                      panic "updateBinds exitifyProgram"
 
     CoreDoDemand -> {-# SCC "DmdAnal" #-}
-                    panic "updateBindsM (liftIO . dmdAnal logger dflags)"
+                    updateBindsM (liftIO . dmdAnal logger dflags)
 
     CoreDoSpecializing -> {-# SCC "Specialize" #-}
                           panic "specProgram guts"
@@ -271,3 +271,17 @@ doCorePass pass guts = do
     CoreDesugarOpt -> pprPanic "doCorePass" (ppr pass)
     CoreTidy -> pprPanic "doCorePass" (ppr pass)
     CorePrep -> pprPanic "doCorePass" (ppr pass)
+
+{- *********************************************************************
+*                                                                      *
+          Core pass combinators
+*                                                                      *
+********************************************************************* -}
+
+dmdAnal :: Logger -> DynFlags -> CoreProgram -> IO CoreProgram
+dmdAnal logger dflags binds = do
+  let binds_plus_dmds = dmdAnalProgram binds
+  Logger.putDumpFileMaybe logger Opt_D_dump_dmd_signatures "Demand signatures" FormatText
+    $ dumpIdInfoOfProgram (hasPprDebug dflags) (ppr . zapDmdEnvSig . dmdSigInfo) binds_plus_dmds
+
+  seqBinds binds_plus_dmds `seq` return binds_plus_dmds

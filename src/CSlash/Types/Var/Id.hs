@@ -300,6 +300,9 @@ setIdUnfolding id unfolding = modifyIdInfo (`setUnfoldingInfo` unfolding) id
 idDemandInfo :: Id p -> Demand
 idDemandInfo id = demandInfo (idInfo id)
 
+setIdDemandInfo :: Id p -> Demand -> Id p
+setIdDemandInfo id dmd = modifyIdInfo (`setDemandInfo` dmd) id
+
 setCaseBndrEvald :: Id p -> Id p
 setCaseBndrEvald id = id `setIdUnfolding` evaldUnfolding
 

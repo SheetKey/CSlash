@@ -79,6 +79,7 @@ library
                     , CSlash.Core.Opt.CallerCC
                     , CSlash.Core.Opt.CallerCC.Types
                     , CSlash.Core.Opt.Coercion
+                    , CSlash.Core.Opt.DmdAnal
                     , CSlash.Core.Opt.FloatOut
                     , CSlash.Core.Opt.Monad
                     , CSlash.Core.Opt.OccurAnal

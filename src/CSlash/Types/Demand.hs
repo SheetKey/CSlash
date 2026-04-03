@@ -10,6 +10,7 @@ import Prelude hiding ((<>))
 import CSlash.Cs.Pass
 
 import CSlash.Types.Var
+import {-# SOURCE #-} CSlash.Types.Var.Id (Id)
 import CSlash.Types.Var.Env
 import CSlash.Types.Unique.FM
 import CSlash.Types.Basic
@@ -65,6 +66,28 @@ isCardNonAbs = not . isAbs
 isCardNonOnce :: Card -> Bool
 isCardNonOnce n = isAbs n || not (isAtMostOnce n)
 
+oneifyCard :: Card -> Card 
+oneifyCard = glbCard C_11
+
+lubCard :: Card -> Card -> Card
+lubCard C_10 c = c
+lubCard c C_10 = c
+lubCard C_11 c = c
+lubCard c C_11 = c
+lubCard C_1N C_1N = C_1N
+
+glbCard :: Card -> Card -> Card
+glbCard C_10 _ = C_10
+glbCard _ C_10 = C_10
+glbCard C_11 _ = C_11
+glbCard _ C_11 = C_11
+glbCard C_1N C_1N = C_1N
+
+plusCard :: Card -> Card -> Card
+plusCard C_10 c = c
+plusCard c C_10 = c
+plusCard _ _ = C_1N
+
 multCard :: Card -> Card -> Card
 multCard C_10 C_10 = C_10
 multCard C_10 C_11 = C_10
@@ -117,6 +140,9 @@ botSubDmd = Poly C_10
 topSubDmd :: SubDemand
 topSubDmd = Poly C_1N
 
+seqSubDmd :: SubDemand
+seqSubDmd = Poly C_10 -- TODO: What??
+
 polyFieldDmd :: CardNonOnce -> Demand
 polyFieldDmd C_10 = BotDmd
 polyFieldDmd n = n :* Poly n & assertPpr (isCardNonOnce n) (ppr n)
@@ -168,9 +194,49 @@ multSubDmd n (Poly m) = Poly (multCard n m)
 multSubDmd n (Call m sd) = mkCall (multCard n m) sd
 multSubDmd n (Prod ds) = mkProd (strictMap (multDmd n) ds)
 
+lubDmd :: Demand -> Demand -> Demand
+lubDmd BotDmd dmd2 = dmd2
+lubDmd dmd1 BotDmd = dmd1
+lubDmd (n1 :* sd1) (n2 :* sd2) = lubCard n1 n2 :* lubSubDmd sd1 sd2
+
+lubSubDmd :: SubDemand -> SubDemand -> SubDemand
+lubSubDmd (Poly C_10) sd = sd
+lubSubDmd sd (Poly C_10) = sd
+lubSubDmd (Prod ds1) (Poly n2) = let !d = polyFieldDmd n2 in mkProd (strictMap (lubDmd d) ds1)
+lubSubDmd (Prod ds1) (Prod ds2)
+  | equalLength ds1 ds2
+  = mkProd (strictZipWith lubDmd ds1 ds2)
+lubSubDmd (Call n1 sd1) (viewCall -> Just (n2, sd2)) = mkCall (lubCard n1 n2) (lubSubDmd sd1 sd2)
+lubSubDmd (Poly n1) (Poly n2) = Poly (lubCard n1 n2)
+lubSubDmd sd1@Poly{} sd2 = lubSubDmd sd2 sd1
+lubSubDmd _ _ = topSubDmd
+
+plusDmd :: Demand -> Demand -> Demand
+plusDmd (n1 :* sd1) (n2 :* sd2)
+  = plusCard n1 n2 :* plusSubDmd sd1 sd2
+
+plusSubDmd :: SubDemand -> SubDemand -> SubDemand
+plusSubDmd (Prod ds1) (Poly n2)
+  = let !d = polyFieldDmd n2 in mkProd (strictMap (plusDmd d) ds1)
+plusSubDmd (Prod ds1) (Prod ds2)
+  | equalLength ds1 ds2
+  = mkProd (strictZipWith plusDmd ds1 ds2)
+plusSubDmd (Call n1 sd1) (viewCall -> Just (n2, sd2))
+  = mkCall (plusCard n1 n2) (lubSubDmd sd1 sd2)
+plusSubDmd (Poly n1) (Poly n2) = Poly (plusCard n1 n2)
+plusSubDmd sd1@Poly{} sd2 = plusSubDmd sd2 sd1
+plusSubDmd _ _ = topSubDmd
+
 floatifyDmd :: Demand -> Demand
 floatifyDmd = multDmd C_1N
 
+mkCalledOnceDmd :: SubDemand -> SubDemand
+mkCalledOnceDmd sd = mkCall C_11 sd
+
+peelCallDmd :: SubDemand -> (Card, SubDemand)
+peelCallDmd sd = viewCall sd `orElse` (topCard, topSubDmd)
+
+-- The bool is my addition: True => saturated function call
 peelManyCalls :: Arity -> SubDemand -> (Bool, Card, SubDemand)
 peelManyCalls k sd = go k C_11 sd
   where
@@ -215,6 +281,21 @@ data Divergence
   | Dunno
   deriving Eq
 
+lubDivergence :: Divergence -> Divergence -> Divergence
+lubDivergence Diverges div = div
+lubDivergence div Diverges = div
+lubDivergence ExnOrDiv ExnOrDiv = ExnOrDiv
+lubDivergence _ _ = Dunno
+
+plusDivergence :: Divergence -> Divergence -> Divergence
+plusDivergence Dunno Dunno = Dunno
+plusDivergence Diverges _ = Diverges
+plusDivergence _ Diverges = Diverges
+plusDivergence _ _ = ExnOrDiv
+
+multDivergence :: Card -> Divergence -> Divergence
+multDivergence _ d = d
+
 topDiv :: Divergence
 topDiv = Dunno
 
@@ -253,6 +334,16 @@ instance Eq DmdEnv where
     where
       canonicalise div fv = filterUFM (/= defaultFvDmd div) fv
 
+multDmdEnv :: Card -> DmdEnv -> DmdEnv
+multDmdEnv C_11 env = env
+multDmdEnv n (DE fvs div) = DE (mapVarEnv (multDmd n) fvs) (multDivergence n div)
+
+lookupDmdEnv :: DmdEnv -> Id Zk -> Demand
+lookupDmdEnv (DE fv div) id = lookupVarEnv fv id `orElse` defaultFvDmd div
+
+delDmdEnv :: DmdEnv -> Id Zk -> DmdEnv
+delDmdEnv (DE fv div) id = DE (fv `delVarEnv` id) div
+
 data DmdType = DmdType
   { dt_env :: !DmdEnv
   , dt_args :: ![Demand]
@@ -268,6 +359,53 @@ mkEmptyDmdEnv div = DE emptyVarEnv div
 nopDmdEnv :: DmdEnv
 nopDmdEnv = mkEmptyDmdEnv topDiv
 
+botDmdEnv :: DmdEnv
+botDmdEnv = mkEmptyDmdEnv botDiv
+
+lubDmdEnv :: DmdEnv -> DmdEnv -> DmdEnv
+lubDmdEnv (DE fv1 d1) (DE fv2 d2) = DE lub_fv lub_div
+  where
+    lub_fv = plusVarEnv_CD lubDmd fv1 (defaultFvDmd d1) fv2 (defaultFvDmd d2)
+    lub_div = lubDivergence d1 d2
+
+addVarDmdEnv :: DmdEnv -> Id Zk -> Demand -> DmdEnv
+addVarDmdEnv env@(DE fvs div) id dmd
+  = DE (extendVarEnv fvs id (dmd `plusDmd` lookupDmdEnv env id)) div
+
+plusDmdEnv :: DmdEnv -> DmdEnv -> DmdEnv
+plusDmdEnv (DE fv1 d1) (DE fv2 d2)
+  -- No absDmd!
+  -- | isEmptyVarEnv fv2, defaultFvDmd d2 == absDmd
+  -- = DE fv1 (d1 `plusDivergence` d2)
+  -- | isEmptyVarEnv fv1, defaultFvDmd d1 == absDmd
+  -- = DE fv2 (d1 `plusDivergence` d2)
+  | otherwise
+  = DE (plusVarEnv_CD plusDmd fv1 (defaultFvDmd d1) fv2 (defaultFvDmd d2))
+       (d1 `plusDivergence` d2)
+
+plusDmdEnvs :: [DmdEnv] -> DmdEnv
+plusDmdEnvs [] = nopDmdEnv
+plusDmdEnvs pdas = foldl1' plusDmdEnv pdas
+
+lubDmdType :: DmdType -> DmdType -> DmdType
+lubDmdType d1 d2 = DmdType lub_fv lub_ds
+  where
+    n = max (dmdTypeDepth d1) (dmdTypeDepth d2)
+    (DmdType fv1 ds1) = etaExpandDmdType n d1
+    (DmdType fv2 ds2) = etaExpandDmdType n d2
+    lub_ds = zipWithEqual "lubDmdType" lubDmd ds1 ds2
+    lub_fv = lubDmdEnv fv1 fv2
+
+discardArgDmds :: DmdType -> DmdEnv
+discardArgDmds (DmdType fv _) = fv
+
+plusDmdType :: DmdType -> DmdEnv -> DmdType
+plusDmdType (DmdType fv ds) fv'
+  = DmdType (plusDmdEnv fv fv') ds
+
+botDmdType :: DmdType
+botDmdType = DmdType botDmdEnv []
+
 nopDmdType :: DmdType
 nopDmdType = DmdType nopDmdEnv []
 
@@ -282,6 +420,27 @@ etaExpandDmdType n d@DmdType { dt_args = ds, dt_env = env }
   where
     depth = length ds
     inc_ds = take n (ds ++ repeat (defaultArgDmd (de_div env)))
+
+splitDmdTy :: DmdType -> (Demand, DmdType)
+splitDmdTy ty@DmdType{ dt_args = dmd : args } = (dmd, ty{ dt_args = args })
+splitDmdTy ty@DmdType{ dt_env = env } = (defaultArgDmd (de_div env), ty)
+
+multDmdType :: Card -> DmdType -> DmdType
+multDmdType C_11 dmd_ty = dmd_ty
+multDmdType n (DmdType fv args)
+  = DmdType (multDmdEnv n fv) (strictMap (multDmd n) args)
+
+peelFV :: DmdType -> Id Zk -> (DmdType, Demand)
+peelFV (DmdType fv ds) id = (DmdType fv' ds, dmd)
+  where
+    !fv' = fv `delDmdEnv` id
+    !dmd = lookupDmdEnv fv id
+
+addDemand :: Demand -> DmdType -> DmdType
+addDemand dmd (DmdType fv ds) = DmdType fv (dmd : ds)
+
+findIdDemand :: DmdType -> Id Zk -> Demand
+findIdDemand (DmdType fv _) id = lookupDmdEnv fv id
 
 {- *********************************************************************
 *                                                                      *
@@ -434,8 +593,50 @@ instance Binary DmdSig where
 *                                                                      *
 ********************************************************************* -}
 
+type DmdTransformer = SubDemand -> DmdType
+
+dmdTransformSig :: DmdSig -> DmdTransformer
+dmdTransformSig (DmdSig dmd_ty@(DmdType _ arg_ds)) sd
+  = multDmdType (sndOf3 $ peelManyCalls (length arg_ds) sd) dmd_ty
+
+dmdTransformDataConSig :: Arity -> DmdTransformer
+dmdTransformDataConSig arity sd = case viewProd arity body_sd of
+  Just dmds -> mk_body_ty n dmds
+  Nothing -> nopDmdType
+  where
+    (_, n, body_sd) = peelManyCalls arity sd
+    mk_body_ty n dmds = DmdType nopDmdEnv ((bump n) <$> dmds)
+    bump n dmd = multDmd n (plusDmd (C_11 :* seqSubDmd) dmd)
+
 zapDmdEnv :: DmdEnv -> DmdEnv
 zapDmdEnv (DE _ div) = mkEmptyDmdEnv div
 
 zapDmdEnvSig :: DmdSig -> DmdSig
 zapDmdEnvSig (DmdSig (DmdType env ds)) = DmdSig (DmdType (zapDmdEnv env) ds)
+
+{- *********************************************************************
+*                                                                      *
+        Sequencing demands
+*                                                                      *
+********************************************************************* -}
+
+seqDemand :: Demand -> ()
+seqDemand BotDmd = ()
+seqDemand (_ :* sd) = seqSubDemand sd
+
+seqSubDemand :: SubDemand -> ()
+seqSubDemand (Prod ds) = seqDemandList ds
+seqSubDemand (Call _ sd) = seqSubDemand sd
+seqSubDemand (Poly _) = ()
+
+seqDemandList :: [Demand] -> ()
+seqDemandList = foldr (seq . seqDemand) ()
+
+seqDmdType :: DmdType -> ()
+seqDmdType (DmdType env ds) = seqDmdEnv env `seq` seqDemandList ds `seq` ()
+
+seqDmdEnv :: DmdEnv -> ()
+seqDmdEnv (DE fvs _) = seqEltsUFM seqDemand fvs
+
+seqDmdSig :: DmdSig -> ()
+seqDmdSig (DmdSig ty) = seqDmdType ty

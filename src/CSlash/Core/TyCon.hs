@@ -440,6 +440,19 @@ tyConDataCons_maybe (TyCon { tyConDetails = details })
       AbstractTyCon -> Nothing
 tyConDataCons_maybe _ = Nothing   
 
+tyConSingleDataCon_maybe :: TyCon p -> Maybe (DataCon Zk)
+tyConSingleDataCon_maybe TyCon { tyConDetails = details }
+  | AlgTyCon { algTcRhs = rhs } <- details
+   = case rhs of
+      DataTyCon { data_cons = [c] } -> Just c
+      TupleTyCon { data_con = c } -> Just c
+      _ -> Nothing
+  | otherwise = Nothing
+
+tyConSingleAlgDataCon_maybe :: TyCon p -> Maybe (DataCon Zk)
+tyConSingleAlgDataCon_maybe tycon
+  = tyConSingleDataCon_maybe tycon -- todo: check for newtypes
+
 synTyConDefn_maybe :: TyCon p -> Maybe (Type Zk)
 synTyConDefn_maybe (TyCon { tyConDetails = details })
   | SynonymTyCon {synTcRhs = ty} <- details

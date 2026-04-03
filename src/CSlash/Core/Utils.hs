@@ -1,5 +1,7 @@
 module CSlash.Core.Utils where
 
+import Prelude hiding ((<>))
+
 import CSlash.Cs.Pass
 
 import CSlash.Platform
@@ -485,3 +487,12 @@ isJoinBind :: CoreBind -> Bool
 isJoinBind (NonRec b _) = isJoinId b
 isJoinBind (Rec ((b, _) : _)) = isJoinId b
 isJoinBind _ = False
+
+dumpIdInfoOfProgram :: Bool -> (IdInfo -> SDoc) -> CoreProgram -> SDoc
+dumpIdInfoOfProgram dump_locals ppr_id_info binds = vcat (map printId ids)
+  where
+    ids = sortBy (stableNameCmp `on` getName) (concatMap bindersOf binds)
+
+    printId :: CoreId -> SDoc
+    printId id | isExportedId id || dump_locals = ppr id <> colon <+> ppr_id_info (idInfo id)
+               | otherwise = empty
