@@ -960,3 +960,29 @@ isAtomicKi _ = False
 isForAllKi :: Kind kv -> Bool
 isForAllKi ForAllKi{} = True
 isForAllKi Mono{} = False
+
+{- *********************************************************************
+*                                                                      *
+        Sequencing on kinds
+*                                                                      *
+********************************************************************* -}
+
+seqKind :: MonoKind Zk -> ()
+seqKind (KiVarKi kv) = kv `seq` ()
+seqKind (BIKi bi) = bi `seq` ()
+seqKind (KiPredApp p k1 k2) = p `seq` seqKind k1 `seq` seqKind k2
+seqKind (FunKi _ k1 k2) = seqKind k1 `seq` seqKind k2
+
+seqKiCo :: KindCoercion Zk -> ()
+seqKiCo (Refl ki) = seqKind ki
+seqKiCo BI_U_A = ()
+seqKiCo BI_A_L = ()
+seqKiCo (BI_U_LTEQ ki) = seqKind ki
+seqKiCo (BI_LTEQ_L ki) = seqKind ki
+seqKiCo (LiftEq co) = seqKiCo co
+seqKiCo (LiftLT co) = seqKiCo co
+seqKiCo (FunCo af1 af2 co1 co2) = af1 `seq` af2 `seq` seqKiCo co1 `seq` seqKiCo co2
+seqKiCo (KiCoVarCo cv) = cv `seq` ()
+seqKiCo (SymCo co) = seqKiCo co
+seqKiCo (TransCo co1 co2) = seqKiCo co1 `seq` seqKiCo co2
+seqKiCo (SelCo n co) = n `seq` seqKiCo co

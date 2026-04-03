@@ -288,6 +288,10 @@ varToCoreExpr = Var
 *                                                                      *
 ********************************************************************* -}
 
+bindersOf :: Bind b1 b2 -> [b2]
+bindersOf (NonRec binder _) = [binder]
+bindersOf (Rec pairs) = fst <$> pairs
+
 {-# INLINE foldBindersOfBindStrict #-}
 foldBindersOfBindStrict :: (a -> b -> a) -> a -> Bind bLam b -> a
 foldBindersOfBindStrict f = \z bind -> case bind of

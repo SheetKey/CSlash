@@ -136,6 +136,9 @@ unionDVarSets = unionManyUniqDSets
 delDVarSet :: Uniquable a => UniqDSet a -> a -> UniqDSet a
 delDVarSet = delOneFromUniqDSet
 
+seqDVarSet :: DVarSet a -> ()
+seqDVarSet s = s `seq` ()
+
 dVarSetElems :: UniqDSet a -> [a]
 dVarSetElems = uniqDSetToList
 

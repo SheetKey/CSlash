@@ -816,6 +816,49 @@ buildSynTyCon name kind arity rhs
 
 {- *********************************************************************
 *                                                                      *
+        Sequencing on types
+*                                                                      *
+********************************************************************* -}
+
+seqType :: Type Zk -> ()
+seqType (TyVarTy tv) = tv `seq` ()
+seqType (AppTy t1 t2) = seqType t1 `seq` seqType t2
+seqType (FunTy k t1 t2) = seqType t1 `seq` seqKind k `seq` seqType t2
+seqType (TyConApp tc tys) = tc `seq` seqTypes tys
+seqType (ForAllTy (Bndr tv _) ty) = seqKind (varKind tv) `seq` seqType ty
+seqType (ForAllKiCo kcv ty) = seqKind (varKind kcv) `seq` seqType ty
+seqType (TyLamTy tv ty) = seqKind (varKind tv) `seq` seqType ty
+seqType (BigTyLamTy kv ty) = kv `seq` seqType ty
+seqType (CastTy ty co) = seqType ty `seq` seqKiCo co
+seqType (Embed ki) = seqKind ki
+seqType (KindCoercion co) = seqKiCo co
+
+seqTypes :: [Type Zk] -> ()
+seqTypes [] = ()
+seqTypes (ty : tys) = seqType ty `seq` seqTypes tys
+
+seqTyCo :: TypeCoercion Zk -> ()
+seqTyCo (TyRefl ty) = seqType ty
+seqTyCo (GRefl ty co) = seqType ty `seq` seqKiCo co
+seqTyCo (TyConAppCo tc cos) = tc `seq` seqTyCos cos
+seqTyCo (AppCo co1 co2) = seqTyCo co1 `seq` seqTyCo co2
+seqTyCo (ForAllCo tv visL visR kco tco)
+  = seqKind (varKind tv) `seq` visL `seq` visR `seq` seqKiCo kco `seq` seqTyCo tco
+seqTyCo (ForAllCoCo kcv kco tco)
+  = seqKind (varKind kcv) `seq` seqKiCo kco `seq` seqTyCo tco
+seqTyCo (TyFunCo kco co1 co2) = seqKiCo kco `seq` seqTyCo co1 `seq` seqTyCo co2
+seqTyCo (TyCoVarCo cv) = cv `seq` () 
+seqTyCo (LiftKCo co) = seqKiCo co
+seqTyCo (TySymCo co) = seqTyCo co 
+seqTyCo (TyTransCo co1 co2) = seqTyCo co1 `seq` seqTyCo co2
+seqTyCo (LRCo lr co) = lr `seq` seqTyCo co
+
+seqTyCos :: [TypeCoercion Zk] -> ()
+seqTyCos [] = ()
+seqTyCos (co:cos) = seqTyCo co `seq` seqTyCos cos
+
+{- *********************************************************************
+*                                                                      *
         The kind of a type
 *                                                                      *
 ********************************************************************* -}

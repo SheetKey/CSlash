@@ -91,6 +91,7 @@ library
                     , CSlash.Core.Ppr
                     , CSlash.Core.Predicate
                     , CSlash.Core.Reduction
+                    , CSlash.Core.Seq
                     , CSlash.Core.SimpleOpt
                     , CSlash.Core.Subst
                     , CSlash.Core.Stats
