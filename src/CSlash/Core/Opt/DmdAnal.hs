@@ -454,7 +454,7 @@ findBndrDmd :: AnalEnv -> DmdType -> CoreId -> WithDmdType Demand
 findBndrDmd env dmd_ty id
   = WithDmdType dmd_ty' dmd'
   where
-    dmd' = panic "trimToType starting_dmd (findTypeShape id_ty)"
+    dmd' = trimToType starting_dmd (findTypeShape id_ty)
 
     (dmd_ty', starting_dmd) = peelFV dmd_ty id
 

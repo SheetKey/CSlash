@@ -653,3 +653,28 @@ seqDmdEnv (DE fvs _) = seqEltsUFM seqDemand fvs
 
 seqDmdSig :: DmdSig -> ()
 seqDmdSig (DmdSig ty) = seqDmdType ty
+
+{- *********************************************************************
+*                                                                      *
+        TypeShape and demand trimming
+*                                                                      *
+********************************************************************* -}
+
+data TypeShape
+  = TsFun TypeShape
+  | TsProd [TypeShape]
+  | TsUnk
+
+trimToType :: Demand -> TypeShape -> Demand
+trimToType d _ = d
+-- trimToType BotDmd _ = BotDmd
+-- trimToType (n :* sd) ts = n :* go sd ts
+--   where
+--     go (Prod ds) (TsProd tss)
+--       | equalLength ds tss = mkProd (zipWith trimToType ds tss)
+--     go (Call n sd) (TsFun ts) = mkCall n (go sd ts)
+--     go sd@Poly{} _ = sd
+--     go _ _ = topSubDmd
+
+findTypeShape :: a -> TypeShape
+findTypeShape ty = panic "findTypeShape" -- TODO: fix once mu is added (recursive types)
