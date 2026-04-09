@@ -521,3 +521,8 @@ rulesFVs from = mapUnionFV (ruleFVs from)
 
 rulesFreeVarsDSets :: [CoreRule] -> FVAnn
 rulesFreeVarsDSets rules = fvDVarSets $ rulesFVs BothSides rules
+
+rulesRhsFreeIds :: [CoreRule] -> CoreIdSet
+rulesRhsFreeIds rules
+  = case fvVarSets (rulesFVs RhsOnly rules) of
+      (ids, _, _, _, _) -> filterVarSet isLocalId ids

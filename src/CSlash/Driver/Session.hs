@@ -823,6 +823,8 @@ dynamic_flags_deps =
       (intSuffix (\n d -> d { liberateCaseThreshold = Just n }))
   , make_ord_flag defFlag "fno-liberate-case-threshold"
       (noArg (\d -> d { liberateCaseThreshold = Nothing }))
+  , make_ord_flag defFlag "drule-check"
+      (sepArg (\s d -> d { ruleCheck = Just s }))
   , make_ord_flag defFlag "dinline-check"
       (sepArg (\s d -> d { unfoldingOpts = updateReportPrefix (Just s) (unfoldingOpts d)}))
   , make_ord_flag defFlag "freduction-depth"
@@ -1124,6 +1126,7 @@ fFlagsDeps =
   , flagSpec "do-clever-arg-eta-expansion"      Opt_DoCleverArgEtaExpansion
   , flagSpec "eager-blackholing"                Opt_EagerBlackHoling
   , flagSpec "embed-manifest"                   Opt_EmbedManifest
+  , flagSpec "enable-rewrite-rules"             Opt_EnableRewriteRules
   , flagSpec "error-spans"                      Opt_ErrorSpans
   , flagSpec "excess-precision"                 Opt_ExcessPrecision
   , flagSpec "expose-all-unfoldings"            Opt_ExposeAllUnfoldings

@@ -164,6 +164,7 @@ data GeneralFlag
   | Opt_CaseMerge
   | Opt_CaseFolding                    -- Constant folding through case-expressions
   | Opt_DictsCheap
+  | Opt_EnableRewriteRules
   | Opt_LlvmFillUndefWithGarbage       -- Testing for undef bugs (hidden flag)
   | Opt_IrrefutableTuples
   | Opt_OmitYields
@@ -346,6 +347,7 @@ optimisationFlags = EnumSet.fromList
   , Opt_CaseMerge
   , Opt_CaseFolding
   , Opt_DictsCheap
+  , Opt_EnableRewriteRules
   , Opt_IrrefutableTuples
   , Opt_Loopification
   , Opt_WeightlessBlocklayout

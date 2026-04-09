@@ -22,7 +22,7 @@ import CSlash.Core.Utils
 import CSlash.Core.TyCon
 import CSlash.Core.Type
 -- import GHC.Core.Predicate( isEqualityClass, isCTupleClass )
-import CSlash.Core.FVs ( bndrRuleAndUnfoldingIds )
+import CSlash.Core.FVs ( bndrRuleAndUnfoldingIds, rulesRhsFreeIds )
 -- import GHC.Core.Coercion ( Coercion )
 -- import GHC.Core.TyCo.FVs     ( coVarsOfCos )
 import CSlash.Core.Type.Compare ( eqType )
@@ -61,8 +61,8 @@ getAnnotated (WithDmdType _ a) = a
 
 data DmdResult a b = R !a !b
 
-dmdAnalProgram :: CoreProgram -> CoreProgram
-dmdAnalProgram binds
+dmdAnalProgram :: [CoreRule] -> CoreProgram -> CoreProgram
+dmdAnalProgram rules binds
   = getAnnotated $ go emptyAnalEnv binds
   where
     go _ [] = WithDmdType nopDmdType []
@@ -79,7 +79,10 @@ dmdAnalProgram binds
     keep_alive_roots env ids = plusDmdEnvs (map (demandRoot env) (filter is_root ids))
 
     is_root :: CoreId -> Bool
-    is_root id = isExportedId id
+    is_root id = isExportedId id || elemVarSet id rule_fvs
+
+    rule_fvs :: CoreIdSet
+    rule_fvs = rulesRhsFreeIds rules
 
 demandRoot :: AnalEnv -> CoreId -> DmdEnv
 demandRoot env id = fst (dmdAnalStar env topDmd (Var id))

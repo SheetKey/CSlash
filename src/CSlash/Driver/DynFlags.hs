@@ -693,6 +693,8 @@ optLevelFlags
     , ([1,2], Opt_CaseMerge)
     , ([1,2], Opt_CaseFolding)
 
+    , ([1,2], Opt_EnableRewriteRules)
+
     , ([1,2], Opt_FloatIn)
     , ([1,2], Opt_IgnoreAsserts)
     , ([1,2], Opt_Loopification)

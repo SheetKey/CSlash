@@ -18,18 +18,18 @@ import CSlash.Utils.Outputable as Outputable
 import CSlash.Utils.Monad
 import CSlash.Utils.Panic
 
-endPass :: CoreToDo -> CoreProgram -> CoreM ()
-endPass pass binds = do
+endPass :: CoreToDo -> CoreProgram -> [CoreRule] -> CoreM ()
+endPass pass binds rules = do
   cs_env <- getCsEnv
   name_ppr_ctx <- getNamePprCtx
-  liftIO $ endPassCsEnvIO cs_env name_ppr_ctx pass binds
+  liftIO $ endPassCsEnvIO cs_env name_ppr_ctx pass binds rules
 
-endPassCsEnvIO :: CsEnv -> NamePprCtx -> CoreToDo -> CoreProgram -> IO ()
-endPassCsEnvIO cs_env name_ppr_ctx pass binds = do
+endPassCsEnvIO :: CsEnv -> NamePprCtx -> CoreToDo -> CoreProgram -> [CoreRule] -> IO ()
+endPassCsEnvIO cs_env name_ppr_ctx pass binds rules = do
   let dflags = cs_dflags cs_env
   endPassIO (cs_logger cs_env)
             (initEndPassConfig dflags name_ppr_ctx pass)
-            binds
+            binds rules
 
 initEndPassConfig :: DynFlags -> NamePprCtx -> CoreToDo -> EndPassConfig
 initEndPassConfig dflags name_ppr_ctx pass = EndPassConfig
@@ -59,6 +59,7 @@ coreDumpFlag CoreDesugar = Just Opt_D_dump_ds_preopt
 coreDumpFlag CoreDesugarOpt = Just Opt_D_dump_ds
 coreDumpFlag CoreTidy = Just Opt_D_dump_simpl
 coreDumpFlag CorePrep = Just Opt_D_dump_prep
+coreDumpFlag CoreDoRuleCheck{} = Nothing
 coreDumpFlag CoreDoNothing = Nothing
 coreDumpFlag CoreDoPasses{} = Nothing
 coreDumpFlag CoreAddCallerCcs = Nothing

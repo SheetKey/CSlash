@@ -127,13 +127,13 @@ deSugar cs_env
 
                   final_pgm = [Rec final_prs]
 
-              endPassCsEnvIO cs_env name_ppr_ctx CoreDesugar final_pgm
+              endPassCsEnvIO cs_env name_ppr_ctx CoreDesugar final_pgm [] -- TODO: rules
               let simpl_opts = initSimpleOpts dflags
               let (ds_binds, occ_anald_binds) = simpleOptPgm simpl_opts mod final_pgm
               putDumpFileMaybe logger Opt_D_dump_occur_anal "Occurrence analysis"
                 FormatCore (pprCoreBindings occ_anald_binds)
 
-              endPassCsEnvIO cs_env name_ppr_ctx CoreDesugarOpt ds_binds
+              endPassCsEnvIO cs_env name_ppr_ctx CoreDesugarOpt ds_binds [] -- TODO: rules
 
               let used_names = mkUsedNames tcg_env
                   home_unit = cs_home_unit cs_env

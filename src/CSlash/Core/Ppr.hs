@@ -477,6 +477,9 @@ instance Outputable UnfoldingCache where
 instance Outputable CoreRule where
   ppr = pprRule
 
+pprRules :: [CoreRule] -> SDoc
+pprRules rules = vcat (map pprRule rules)
+
 pprRule :: CoreRule -> SDoc
 pprRule BuiltinRule = text "Built in rule for"
 pprRule Rule{ ru_name = name

@@ -96,6 +96,7 @@ getCoreToDo dflags = flatten_todos core_todo
   where
     phases = simplPhases dflags
     max_iter = maxSimplIterations dflags
+    rule_check = ruleCheck dflags
     const_fold = gopt Opt_CoreConstantFolding dflags
     call_arity = gopt Opt_CallArity dflags
     exitification = gopt Opt_Exitification dflags
@@ -107,11 +108,14 @@ getCoreToDo dflags = flatten_todos core_todo
     liberate_case = gopt Opt_LiberateCase dflags
     late_dmd_anal = gopt Opt_LateDmdAnal dflags
     late_specialize = gopt Opt_LateSpecialise dflags
+    rules_on = gopt Opt_EnableRewriteRules dflags
     static_args = gopt Opt_StaticArgumentTransformation dflags
     profiling = ways dflags `hasWay` WayProf
 
     do_presimplify = do_specialize
-    do_simpl3 = const_fold
+    do_simpl3 = const_fold || rules_on
+
+    maybe_rule_check phase = runMaybe rule_check (CoreDoRuleCheck phase)
 
     maybe_strictness_before (Phase phase)
       | phase `elem` [] {-TODO: strictnessBefore dflags-} = CoreDoDemand 
@@ -122,6 +126,7 @@ getCoreToDo dflags = flatten_todos core_todo
         [ maybe_strictness_before phase
         , CoreDoSimplify $ initSimplifyOpts dflags iter
           (initSimplMode dflags phase name)
+        , maybe_rule_check phase
         ]
 
     simplify name = simpl_phase FinalPhase name max_iter
@@ -166,11 +171,13 @@ getCoreToDo dflags = flatten_todos core_todo
       , runWhen cse CoreCSE
       , runWhen do_float_in CoreDoFloatInwards
       , simplify "final"
+      , maybe_rule_check FinalPhase
         -- -O2
       , runWhen liberate_case $ CoreDoPasses
         [ CoreLiberateCase, simplify "post-liberate-case" ]
       , runWhen spec_constr $ CoreDoPasses
         [ CoreDoSpecConstr, simplify "post-spec-constr" ]
+      , maybe_rule_check FinalPhase
       , runWhen late_specialize $ CoreDoPasses
         [ CoreDoSpecializing, simplify "post-late-spec" ]
       , runWhen ((liberate_case || spec_constr) && cse) $ CoreDoPasses
@@ -179,6 +186,7 @@ getCoreToDo dflags = flatten_todos core_todo
       , runWhen late_dmd_anal $ CoreDoPasses
         (dmd_cpr_ww ++ [simplify "post-late-ww"])
       , CoreDoDemand
+      , maybe_rule_check FinalPhase
       , add_caller_ccs
       , add_late_ccs
       ]
@@ -191,6 +199,10 @@ getCoreToDo dflags = flatten_todos core_todo
 runWhen :: Bool -> CoreToDo -> CoreToDo
 runWhen True do_this = do_this
 runWhen False _ = CoreDoNothing
+
+runMaybe :: Maybe a -> (a -> CoreToDo) -> CoreToDo
+runMaybe (Just x) f = f x
+runMaybe Nothing _ = CoreDoNothing
 
 {- *********************************************************************
 *                                                                      *
@@ -207,7 +219,7 @@ runCorePasses passes guts = foldM do_pass guts passes
       logger <- getLogger
       withTiming logger (ppr pass <+> brackets (ppr mod)) (const ()) $ do
         guts' <- doCorePass pass guts
-        endPass pass (mg_binds guts')
+        endPass pass (mg_binds guts') (mg_rules guts')
         return guts'
 
     mod = mg_module guts
@@ -250,7 +262,7 @@ doCorePass pass guts = do
                      panic "updateBinds exitifyProgram"
 
     CoreDoDemand -> {-# SCC "DmdAnal" #-}
-                    updateBindsM (liftIO . dmdAnal logger dflags)
+                    updateBindsM (liftIO . dmdAnal logger dflags (mg_rules guts))
 
     CoreDoSpecializing -> {-# SCC "Specialize" #-}
                           specProgram guts
@@ -263,6 +275,9 @@ doCorePass pass guts = do
 
     CoreAddLateCcs -> {-# SCC "AddLateCcs" #-}
                       panic "topLevelBindsCCMG guts"
+
+    CoreDoRuleCheck phase pat -> {-# SCC "RuleCheck" #-}
+                                 panic "ruleCheckPass phase pat guts"
 
     CoreDoNothing -> return guts
     CoreDoPasses passes -> runCorePasses passes guts
@@ -278,9 +293,9 @@ doCorePass pass guts = do
 *                                                                      *
 ********************************************************************* -}
 
-dmdAnal :: Logger -> DynFlags -> CoreProgram -> IO CoreProgram
-dmdAnal logger dflags binds = do
-  let binds_plus_dmds = dmdAnalProgram binds
+dmdAnal :: Logger -> DynFlags -> [CoreRule] -> CoreProgram -> IO CoreProgram
+dmdAnal logger dflags rules binds = do
+  let binds_plus_dmds = dmdAnalProgram rules binds
   Logger.putDumpFileMaybe logger Opt_D_dump_dmd_signatures "Demand signatures" FormatText
     $ dumpIdInfoOfProgram (hasPprDebug dflags) (ppr . zapDmdEnvSig . dmdSigInfo) binds_plus_dmds
 

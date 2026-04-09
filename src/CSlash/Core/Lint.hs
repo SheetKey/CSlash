@@ -96,11 +96,12 @@ endPassIO
   :: Logger
   -> EndPassConfig
   -> CoreProgram
+  -> [CoreRule]
   -> IO ()
-endPassIO logger cfg binds = do
+endPassIO logger cfg binds rules = do
   dumpPassResult logger (ep_dumpCoreSizes cfg) (ep_namePprCtx cfg) mb_flag
                  (renderWithContext defaultSDocContext (ep_prettyPass cfg))
-                 (ep_passDetails cfg) binds
+                 (ep_passDetails cfg) binds rules
   for_ (ep_lintPassResult cfg) $ \lp_cfg -> lintPassResult logger lp_cfg binds
   where
     mb_flag = case ep_dumpFlag cfg of
@@ -116,8 +117,9 @@ dumpPassResult
   -> String
   -> SDoc
   -> CoreProgram
+  -> [CoreRule]
   -> IO ()
-dumpPassResult logger dump_core_sizes name_ppr_ctx mb_flag hdr extra_info binds = do
+dumpPassResult logger dump_core_sizes name_ppr_ctx mb_flag hdr extra_info binds rules = do
   forM_ mb_flag $ \flag ->
     logDumpFile logger (mkDumpStyle name_ppr_ctx) flag hdr FormatCore dump_doc
 
@@ -132,7 +134,11 @@ dumpPassResult logger dump_core_sizes name_ppr_ctx mb_flag hdr extra_info binds 
                     , if dump_core_sizes
                       then pprCoreBindingsWithSize binds
                       else pprCoreBindings binds
+                    , ppUnless (null rules) pp_rules
                     ]
+    pp_rules = vcat [ blankLine
+                    , text "------ Local rules for imported ids --------"
+                    , pprRules rules ]
 
 {- *********************************************************************
 *                                                                      *

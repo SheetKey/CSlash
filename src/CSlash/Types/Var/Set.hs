@@ -1,5 +1,7 @@
 module CSlash.Types.Var.Set where
 
+import CSlash.Cs.Pass
+
 import CSlash.Types.Var
   ( TyVar, TcTyVar, TyCoVar
   , KiVar, TcKiVar, KiCoVar, TcKiCoVar
@@ -25,6 +27,8 @@ type TcKiVarSet = VarSet TcKiVar
 type TyCoVarSet p = VarSet (TyCoVar p)
 
 type KiCoVarSet p = VarSet (KiCoVar p)
+
+type CoreIdSet = IdSet Zk
 
 emptyVarSet :: UniqSet a
 emptyVarSet = emptyUniqSet
@@ -70,6 +74,9 @@ lookupVarSet = lookupUniqSet
 
 lookupVarSet_Directly :: UniqSet a -> Unique -> Maybe a 
 lookupVarSet_Directly = lookupUniqSet_Directly
+
+filterVarSet :: (a -> Bool) -> UniqSet a -> UniqSet a
+filterVarSet = filterUniqSet
 
 anyVarSet :: (a -> Bool) -> UniqSet a -> Bool
 anyVarSet = uniqSetAny

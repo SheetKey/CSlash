@@ -30,6 +30,7 @@ data CoreToDo
   | CoreDoSpecializing
   | CoreDoSpecConstr
   | CoreCSE
+  | CoreDoRuleCheck CompilerPhase String
 
   | CoreDoNothing
   | CoreDoPasses [CoreToDo]
@@ -60,6 +61,7 @@ instance Outputable CoreToDo where
   ppr CoreDesugarOpt = text "Desugar (after optimization)"
   ppr CoreTidy = text "Tidy Core"
   ppr CorePrep = text "CorePrep"
+  ppr CoreDoRuleCheck{} = text "Rule check"
   ppr CoreAddCallerCcs = text "Add caller cost-centers"
   ppr CoreAddLateCcs = text "Add late core cost-centers"
 
