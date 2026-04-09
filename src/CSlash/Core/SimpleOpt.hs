@@ -42,7 +42,6 @@ import CSlash.Data.Graph.UnVar
 import Data.List (mapAccumL)
 import qualified Data.ByteString as BS
 
-
 {- *********************************************************************
 *                                                                      *
         The Simple Optimiser

@@ -1,3 +1,5 @@
+{-# LANGUAGE BangPatterns #-}
+
 module CSlash.Core.Unfold.Make where
 
 import CSlash.Core
@@ -19,6 +21,10 @@ import Data.Maybe ( fromMaybe )
 
 -- the very simple optimiser is used to optimise unfoldings
 import {-# SOURCE #-} CSlash.Core.SimpleOpt
+
+mkSimpleUnfolding :: UnfoldingOpts -> CoreExpr -> Unfolding
+mkSimpleUnfolding !opts rhs
+  = mkUnfolding opts VanillaSrc False False False rhs Nothing
 
 mkInlineUnfoldingWithArity :: SimpleOpts -> UnfoldingSource -> Arity -> CoreExpr -> Unfolding
 mkInlineUnfoldingWithArity opts src arity expr

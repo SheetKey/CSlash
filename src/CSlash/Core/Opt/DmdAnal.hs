@@ -2,6 +2,16 @@
 
 module CSlash.Core.Opt.DmdAnal (dmdAnalProgram) where
 
+{-
+TODO(performance): Introduce weak demands:
+In GHC, a weak demand is 'lazy used many times'
+In CSL, a weak demand \could be\ 'strict used many times'
+We would have to ensure that consumers of dmdsigs use this as the default in the absense of
+an explicit sig in the environment.
+
+As GHC says, this would improve performance of fixpointing the dmd.
+-}
+
 import CSlash.Cs.Pass
 
 import CSlash.Types.Demand
@@ -12,7 +22,7 @@ import CSlash.Core.Utils
 import CSlash.Core.TyCon
 import CSlash.Core.Type
 -- import GHC.Core.Predicate( isEqualityClass, isCTupleClass )
-import CSlash.Core.FVs ( bndrUnfoldingIds )
+import CSlash.Core.FVs ( bndrRuleAndUnfoldingIds )
 -- import GHC.Core.Coercion ( Coercion )
 -- import GHC.Core.TyCo.FVs     ( coVarsOfCos )
 import CSlash.Core.Type.Compare ( eqType )
@@ -124,7 +134,8 @@ dmdAnalBindLetUp top_lvl env id rhs anal_body
     !id' = setBindIdDemandInfo top_lvl id id_dmd'
     (rhs_ty, rhs') = dmdAnalStar env id_dmd' rhs
 
-    final_ty = body_ty' `plusDmdType` rhs_ty
+    rule_fvs = bndrRuleAndUnfoldingIds id
+    final_ty = body_ty' `plusDmdType` rhs_ty `plusDmdType` demandRootSet env rule_fvs
 
 dmdAnalBindLetDown
   :: TopLevelFlag
@@ -351,7 +362,9 @@ dmdAnalRhsSig top_lvl rec_flag env let_sd id rhs
       Recursive -> reuseEnv rhs_env
       NonRecursive -> rhs_env
 
-    sig_env = rhs_env1 `plusDmdEnv` demandRootSet env (bndrUnfoldingIds id)
+    rhs_env2 = rhs_env1 `plusDmdEnv` demandRootSet env (bndrRuleAndUnfoldingIds id)
+
+    !sig_env = rhs_env2
 
 useLetUp :: TopLevelFlag -> CoreId -> Bool
 useLetUp top_lvl f = isNotTopLevel top_lvl && idArity f == 0 && not (isJoinId f)

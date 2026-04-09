@@ -130,3 +130,10 @@ instance Outputable Origin where
 instance Outputable DoPmc where
   ppr SkipPmc = text "SkipPmc"
   ppr DoPmc = text "DoPmc"
+
+instance Outputable Activation where
+  ppr AlwaysActive = empty
+  ppr NeverActive = brackets (text "~")
+  ppr (ActiveBefore _ n) = brackets (char '~' <> int n)
+  ppr (ActiveAfter _ n) = brackets (int n)
+  ppr FinalActive = text "[final]"

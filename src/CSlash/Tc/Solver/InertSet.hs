@@ -678,7 +678,7 @@ mightEqualLater inert_set given_pred given_loc wanted_pred wanted_loc
   where
     in_scope = mkInScopeSet $ varsOfMonoKinds [given_pred, wanted_pred]
 
-    bind_fun :: BindFun
+    bind_fun :: KiBindFun Tc
     bind_fun kv rhs_ki
       | Just kv' <- toTcKiVar_maybe kv
       , isMetaVar kv'

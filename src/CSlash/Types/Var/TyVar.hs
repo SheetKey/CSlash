@@ -18,6 +18,7 @@ import {-# SOURCE #-} CSlash.Tc.Utils.TcType (TcVarDetails, pprTcVarDetails, van
 import CSlash.Cs.Pass
 
 import CSlash.Types.Var.KiVar
+import CSlash.Types.Var.CoVar
 import CSlash.Types.Var.Class
 
 import CSlash.Types.Name hiding (varName)
@@ -198,17 +199,22 @@ toTcTyVar_maybe @p v = case csPass @p of
 ********************************************************************** -}
 
 data PiTyBinder p
-  = NamedTy (ForAllBinder (TyVar p))
-  | AnonTy (Type p)
+  = NamedTy (ForAllBinder (TyVar p)) -- forall tv. res
+  | NamedKiCo (KiCoVar p)            -- forall kcv . res
+  | NamedKi (KiVar p)                -- forall kv. res
+  | AnonTy (Type p)                  -- a -> res
   -- deriving Data
 
 instance IsPass p => Outputable (PiTyBinder (CsPass p)) where
   ppr (AnonTy ty) = ppr ty
   ppr (NamedTy v) = ppr v
+  ppr (NamedKiCo v) = ppr v
+  ppr (NamedKi v) = ppr v
 
 isInvisiblePiTyBinder :: PiTyBinder p -> Bool
 isInvisiblePiTyBinder (NamedTy (Bndr _ vis)) = isInvisibleForAllFlag vis
-isInvisiblePiTyBinder (AnonTy _) = True
+isInvisiblePiTyBinder (AnonTy _) = False
+isInvisiblePiTyBinder _ = True
 
 isVisiblePiTyBinder :: PiTyBinder p -> Bool
 isVisiblePiTyBinder = not . isInvisiblePiTyBinder

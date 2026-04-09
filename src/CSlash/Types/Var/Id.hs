@@ -127,6 +127,10 @@ mkLocalId name ty = mkLocalIdWithInfo name ty vanillaIdInfo
 mkLocalIdWithInfo :: Name -> Type p -> IdInfo -> Id p
 mkLocalIdWithInfo name ty info = mk_id name ty (LocalId NotExported) VanillaId info
 
+mkLocalIdWithDetailsAndInfo :: IdDetails -> Name -> Type p -> IdInfo -> Id p
+mkLocalIdWithDetailsAndInfo d n t i
+  = mk_id n t (LocalId NotExported) d i
+
 mkSysLocal :: HasPass p p' => FastString -> Unique -> Type p -> Id p
 mkSysLocal fs uniq ty = assert (not (isTyCoVarType ty)) $
                         mkLocalId (mkSystemVarName uniq fs) ty
@@ -146,6 +150,9 @@ idDetails = id_details
 
 idOccInfo :: Id p -> OccInfo
 idOccInfo id = occInfo (idInfo id)
+
+zapIdOccInfo :: Id p -> Id p
+zapIdOccInfo b = b `setIdOccInfo` noOccInfo
 
 isDeadBinder :: Id p -> Bool
 isDeadBinder bndr = isDeadOcc (idOccInfo bndr)
@@ -291,6 +298,11 @@ alwaysActiveUnfoldingFun id
   | isAlwaysActive (idInlineActivation id) = idUnfolding id
   | otherwise = noUnfolding
 
+whenActiveUnfoldingFun :: (Activation -> Bool) -> IdUnfoldingFun
+whenActiveUnfoldingFun is_active id
+  | is_active (idInlineActivation id) = idUnfolding id
+  | otherwise = NoUnfolding
+
 realIdUnfolding :: Id p -> Unfolding
 realIdUnfolding id = realUnfoldingInfo (idInfo id)
 
@@ -310,6 +322,18 @@ zapIdUnfolding :: Id p -> Id p
 zapIdUnfolding v
   | hasSomeUnfolding (idUnfolding v) = setIdUnfolding v noUnfolding
   | otherwise = v
+
+---------------------------------
+-- SPECIALIZATION
+
+idSpecialization :: Id p -> RuleInfo
+idSpecialization id = ruleInfo (idInfo id)
+
+idCoreRules :: Id p -> [CoreRule]
+idCoreRules id = ruleInfoRules (idSpecialization id)
+
+setIdSpecialization :: Id p -> RuleInfo -> Id p
+setIdSpecialization id spec_info = modifyIdInfo (`setRuleInfo` spec_info) id
 
 ---------------------------------
 -- Occurrence INFO

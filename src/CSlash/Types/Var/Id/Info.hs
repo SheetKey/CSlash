@@ -9,11 +9,12 @@ import Prelude hiding ((<>))
 
 import CSlash.Cs.Pass
 
-import {-# SOURCE #-} CSlash.Core
+import CSlash.Core
 -- import CSlash.Core.Type
 -- import CSlash.Core.Kind
 import CSlash.Types.Name
 import CSlash.Types.Basic
+import CSlash.Types.Var.Set
 import {-# SOURCE #-} CSlash.Core.DataCon
 import CSlash.Unit.Module
 import CSlash.Types.Demand
@@ -44,7 +45,8 @@ pprIdDetails other = brackets (pp other)
     pp (JoinId arity) = text "JoinId" <> parens (int arity)
 
 data IdInfo = IdInfo
-  { realUnfoldingInfo :: Unfolding
+  { ruleInfo :: RuleInfo
+  , realUnfoldingInfo :: Unfolding
   , inlinePragInfo :: InlinePragma
   , occInfo :: OccInfo
   , dmdSigInfo :: DmdSig
@@ -113,6 +115,9 @@ callArityInfo = bitfieldGetCallArityInfo . bitfield
 tagSigInfo :: IdInfo -> Maybe TagSig
 tagSigInfo = tagSig
 
+setRuleInfo :: IdInfo -> RuleInfo -> IdInfo
+setRuleInfo info sp = sp `seq` info { ruleInfo = sp }
+
 setInlinePragInfo ::IdInfo -> InlinePragma -> IdInfo
 setInlinePragInfo info pr = pr `seq` info { inlinePragInfo = pr }
 
@@ -153,7 +158,8 @@ setDmdSigInfo info dd = dd `seq` info { dmdSigInfo = dd }
 
 vanillaIdInfo :: IdInfo
 vanillaIdInfo
-  = IdInfo { realUnfoldingInfo = noUnfolding
+  = IdInfo { ruleInfo = emptyRuleInfo
+           , realUnfoldingInfo = noUnfolding
            , inlinePragInfo = defaultInlinePragma
            , occInfo = noOccInfo
            , dmdSigInfo = nopSig
@@ -184,6 +190,25 @@ unknownArity = 0
 ppArityInfo :: Int -> SDoc
 ppArityInfo 0 = empty
 ppArityInfo n = hsep [text "Arity", int n]
+
+{- *********************************************************************
+*                                                                      *
+           RuleInfo
+*                                                                      *
+********************************************************************* -}
+
+data RuleInfo
+  = RuleInfo [CoreRule] (DIdSet Zk, DTyCoVarSet Zk, DTyVarSet Zk, DKiCoVarSet Zk, DKiVarSet Zk)
+
+emptyRuleInfo :: RuleInfo
+emptyRuleInfo = RuleInfo [] (emptyDVarSet, emptyDVarSet, emptyDVarSet, emptyDVarSet, emptyDVarSet)
+
+ruleInfoRules :: RuleInfo -> [CoreRule]
+ruleInfoRules (RuleInfo rules _) = rules
+
+ruleInfoFreeVars
+  :: RuleInfo -> (DIdSet Zk, DTyCoVarSet Zk, DTyVarSet Zk, DKiCoVarSet Zk, DKiVarSet Zk)
+ruleInfoFreeVars (RuleInfo _ fvs) = fvs
 
 {- *********************************************************************
 *                                                                      *

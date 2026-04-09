@@ -11,7 +11,7 @@ import CSlash.Unit.Module.Warnings
 
 -- import GHC.Core.InstEnv ( InstEnv, ClsInst )
 -- import GHC.Core.FamInstEnv
-import CSlash.Core         ( CoreProgram{-, CoreRule-} )
+import CSlash.Core         ( CoreProgram, CoreRule )
 import CSlash.Core.TyCon
 -- import GHC.Core.PatSyn
 
@@ -43,6 +43,7 @@ data ModGuts = ModGuts
   , mg_rdr_env :: !GlobalRdrEnv
   , mg_fix_env :: !FixityEnv
   , mg_tcs :: ![TyCon Zk]
+  , mg_rules :: ![CoreRule]
   , mg_binds :: !CoreProgram
   , mg_complete_matches :: CompleteMatches
   , mg_pc_info :: !PcInfo

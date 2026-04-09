@@ -778,6 +778,8 @@ isForgetfulTy other = pprPanic "isForgetfulTy" (ppr other)
 splitPiTy_maybe :: HasPass p pass => Type p -> Maybe (PiTyBinder p, Type p)
 splitPiTy_maybe ty = case coreFullView ty of
   ForAllTy bndr ty -> Just (NamedTy bndr, ty)
+  ForAllKiCo bndr ty -> Just (NamedKiCo bndr, ty)
+  BigTyLamTy bndr ty -> Just (NamedKi bndr, ty)
   FunTy { ft_arg = arg, ft_res = res } -> Just (AnonTy arg, res)
   _ -> Nothing
 

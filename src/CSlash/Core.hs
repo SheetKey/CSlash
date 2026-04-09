@@ -3,6 +3,7 @@
 module CSlash.Core
   ( module CSlash.Core
   , isStableSource
+  , RuleOpts(..)
   ) where
 
 import Prelude hiding ((<>))
@@ -13,7 +14,8 @@ import CSlash.Types.Var.Set
 import CSlash.Core.Type
 import CSlash.Core.Kind
 import {-# SOURCE #-} CSlash.Core.Subst
-import CSlash.Types.Name
+import CSlash.Core.Rules.Config ( RuleOpts(..) )
+import CSlash.Types.Name hiding (varName)
 import CSlash.Types.Name.Set
 import CSlash.Types.Literal
 import CSlash.Types.Tickish
@@ -274,6 +276,21 @@ mkAbsVarApps = foldl' (\e (a, _) -> case a of
                                             KCv v -> App e (KiCo (mkKiCoVarCo v))
                                             Kv v -> App e (Kind (mkKiVarKi v)))
 
+bndrToCoreExpr :: CoreBndr -> Expr b1 b2
+bndrToCoreExpr b = case b of
+  Id v -> varToCoreExpr v
+  Tv v -> Type (mkTyVarTy v)
+  KCv v -> KiCo (mkKiCoVarCo v)
+  Kv v -> Kind (mkKiVarKi v)
+
+bndrsToCoreExprs :: [CoreBndr] -> [Expr b1 b2]
+bndrsToCoreExprs = fmap bndrToCoreExpr
+
+bndrName :: CoreBndr -> Name
+bndrName (Id v) = varName v
+bndrName (Tv v) = varName v
+bndrName (KCv v) = varName v
+bndrName (Kv v) = varName v
 
 mkLetRec :: [(b2, Expr b1 b2)] -> Expr b1 b2 -> Expr b1 b2
 mkLetRec [] body = body
@@ -472,17 +489,52 @@ type InId = CoreId
 type InBndr = CoreBndr
 type InBind = CoreBind
 type InExpr = CoreExpr
+type InAlt = CoreAlt
 
 type OutId = CoreId
 type OutBndr = CoreBndr
 type OutBind = CoreBind
 type OutExpr = CoreExpr
+type OutAlt = CoreAlt
+
+{- *********************************************************************
+*                                                                      *
+            Orphans
+*                                                                      *
+********************************************************************* -}
+
+data IsOrphan
+  = IsOrphan
+  | NotOrphan !OccName
+  deriving Data
+ 
+chooseOrphanAnchor :: NameSet -> IsOrphan
+chooseOrphanAnchor local_names
+  | isEmptyNameSet local_names = IsOrphan
+  | otherwise = NotOrphan (minimum occs)
+  where
+    occs = map nameOccName $ nonDetEltsUniqSet local_names
 
 {- *********************************************************************
 *                                                                      *
             Rewrite rules
 *                                                                      *
 ********************************************************************* -}
+
+data CoreRule
+  = Rule
+    { ru_name :: RuleName
+    , ru_act :: Activation
+    , ru_fn :: !Name
+    , ru_rough :: [Maybe Name]
+    , ru_bndrs :: [CoreBndr]
+    , ru_args :: [CoreExpr]
+    , ru_rhs :: CoreExpr
+    , ru_origin :: !Module
+    , ru_orphan :: !IsOrphan
+    , ru_local :: Bool
+    }
+  | BuiltinRule
 
 data InScopeEnv = ISE TermSubstInScope IdUnfoldingFun
 

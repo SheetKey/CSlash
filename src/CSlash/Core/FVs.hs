@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE FlexibleInstances #-}
 
@@ -9,7 +10,7 @@ import CSlash.Core as Core
 import CSlash.Types.Var.Id
 import CSlash.Types.Var.Id.Info
 import CSlash.Types.Name.Set
-import CSlash.Types.Name
+import CSlash.Types.Name hiding (varName)
 import CSlash.Types.Tickish
 import CSlash.Types.Basic
 import CSlash.Types.Var.Set
@@ -316,14 +317,27 @@ dTyVarFVs tv = fvDVarSets $ liftKiToCoreFV (fvsOfMonoKind (varKind tv))
 dKiCoVarFVs :: CoreKiCoVar -> FVAnn
 dKiCoVarFVs kcv = fvDVarSets $ liftKiToCoreFV (fvsOfMonoKind (varKind kcv))
 
-bndrUnfoldingVarsDSet :: CoreId -> FVAnn
-bndrUnfoldingVarsDSet id = fvDVarSets $ idUnfoldingFVs id
+bndrRuleAndUnfoldingVarsDSet :: CoreId -> FVAnn
+bndrRuleAndUnfoldingVarsDSet id = fvDVarSets $ bndrRuleAndUnfoldingFVs id
+
+bndrRuleAndUnfoldingFVs :: CoreId -> CoreFV
+bndrRuleAndUnfoldingFVs id = idRuleFVs id `unionFV` idUnfoldingFVs id
+
+idRuleFVs :: CoreId -> CoreFV
+idRuleFVs id
+  = let (ids, tcvs, tvs, kcvs, kvs) = ruleInfoFreeVars (idSpecialization id)
+        ids' = In1 <$> dVarSetElems ids
+        tcvs' = In2 <$> dVarSetElems tcvs
+        tvs' = In3 <$> dVarSetElems tvs
+        kcvs' = In4 <$> dVarSetElems kcvs
+        kvs' = In5 <$> dVarSetElems kvs
+    in FV.mkFVs (ids' ++ tcvs' ++ tvs' ++ kcvs' ++ kvs')
 
 idUnfoldingFVs :: CoreId -> CoreFV
 idUnfoldingFVs id = stableUnfoldingFVs (realIdUnfolding id) `orElse` emptyFV
 
-bndrUnfoldingIds :: CoreId -> IdSet Zk
-bndrUnfoldingIds id = case fvVarSets $ idUnfoldingFVs id of
+bndrRuleAndUnfoldingIds :: CoreId -> IdSet Zk
+bndrRuleAndUnfoldingIds id = case fvVarSets $ bndrRuleAndUnfoldingFVs id of
   (ids, _, _, _, _) -> ids
 
 stableUnfoldingFVs :: Unfolding -> Maybe CoreFV
@@ -348,7 +362,7 @@ freeVarsBind (NonRec binder rhs) body_fvs
   = ( AnnNonRec binder rhs2
     , freeVarsOf rhs2
       `unionFVs` body_fvs2
-      `unionFVs` bndrUnfoldingVarsDSet binder )
+      `unionFVs` bndrRuleAndUnfoldingVarsDSet binder )
   where
     rhs2 = freeVars rhs
     body_fvs2 = binder `delLetBinderFV` body_fvs
@@ -422,3 +436,88 @@ freeVars = go
     go (Type ty) = (fvDVarSets $ liftTyToCoreFV $ fvsOfType ty, AnnType ty)
     go (KiCo co) = (fvDVarSets $ liftTyToCoreFV $ fvsOfKiCo co, AnnKiCo co)
     go (Kind ki) = (fvDVarSets $ liftKiToCoreFV $ fvsOfMonoKind ki, AnnKind ki)
+
+{- **********************************************************************
+*                                                                       *
+                    Orphan names
+*                                                                       *
+%********************************************************************* -}
+
+orphNamesOfTyCon :: TyCon Zk -> NameSet
+orphNamesOfTyCon tycon = unitNameSet (getName tycon)
+
+orphNamesOfType :: CoreType -> NameSet
+orphNamesOfType ty | Just ty' <- coreView ty = orphNamesOfType ty'
+orphNamesOfType (TyVarTy _) = emptyNameSet
+orphNamesOfType (ForAllTy _ res) = orphNamesOfType res
+orphNamesOfType (ForAllKiCo _ res) = orphNamesOfType res
+orphNamesOfType (AppTy fun arg) = orphNamesOfType fun `unionNameSet` orphNamesOfType arg
+orphNamesOfType (TyConApp tycon tys) = orphNamesOfTyCon tycon
+                                       `unionNameSet` orphNamesOfTypes tys
+orphNamesOfType (FunTy _ arg res) = unitNameSet (tyConName fUNTyCon)
+                                    `unionNameSet` orphNamesOfType arg
+                                    `unionNameSet` orphNamesOfType res
+orphNamesOfType (CastTy ty _) = orphNamesOfType ty
+orphNamesOfType (KindCoercion _) = emptyNameSet
+orphNamesOfType BigTyLamTy{} = panic "orphNamesOfType BigTyLamTy" -- TODO: maybe not a panic
+orphNamesOfType TyLamTy{} = panic "orphNamesOfType TyLamTy"
+orphNamesOfType Embed{} = emptyNameSet
+
+orphNamesOfTypes :: [CoreType] -> NameSet
+orphNamesOfTypes = foldr (unionNameSet . orphNamesOfType) emptyNameSet
+
+orphNamesOfExpr :: CoreExpr -> NameSet
+orphNamesOfExpr e = go e
+  where
+    go (Var v)
+      | isExternalName n = unitNameSet n
+      | otherwise = emptyNameSet
+      where n = varName v
+    go (Lit _) = emptyNameSet
+    go (Type ty) = orphNamesOfType ty
+    go (KiCo _) = emptyNameSet
+    go (Kind _) = emptyNameSet
+    go (App e1 e2) = go e1 `unionNameSet` go e2
+    go (Lam v _ e) = go e `delFromNameSet` bndrName v
+    go (Tick _ e) = go e
+    go (Cast e _) = go e
+    go (Let (NonRec _ r) e) = go e `unionNameSet` go r
+    go (Let (Rec prs) e) = orphNamesOfExprs (map snd prs) `unionNameSet` go e
+    go (Case e _ ty as) = go e `unionNameSet` orphNamesOfType ty
+                               `unionNameSet` unionNameSets (map go_alt as)
+
+    go_alt (Alt _ _ r) = go r
+
+orphNamesOfExprs :: [CoreExpr] -> NameSet
+orphNamesOfExprs es = foldr (unionNameSet . orphNamesOfExpr) emptyNameSet es
+
+{- *********************************************************************
+*                                                                      *
+                        Rules
+*                                                                      *
+********************************************************************* -}
+
+data RuleFVsFrom
+  = LhsOnly
+  | RhsOnly
+  | BothSides
+
+ruleFVs :: RuleFVsFrom -> CoreRule -> CoreFV
+ruleFVs !_ BuiltinRule{} = emptyFV
+ruleFVs from Rule{ ru_bndrs = bndrs, ru_rhs = rhs, ru_args = args }
+  = filterFV isLocal $ addLamBndrsFV bndrs (exprsFVs exprs)
+
+  where
+    isLocal (In1 id) = isLocalId id
+    isLocal _ = True
+
+    exprs = case from of
+      LhsOnly -> args
+      RhsOnly -> [rhs]
+      BothSides -> rhs:args
+
+rulesFVs :: RuleFVsFrom -> [CoreRule] -> CoreFV
+rulesFVs from = mapUnionFV (ruleFVs from)
+
+rulesFreeVarsDSets :: [CoreRule] -> FVAnn
+rulesFreeVarsDSets rules = fvDVarSets $ rulesFVs BothSides rules

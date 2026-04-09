@@ -156,6 +156,7 @@ deSugar cs_env
                     , mg_rdr_env = rdr_env
                     , mg_fix_env = fix_env
                     , mg_tcs = tcs
+                    , mg_rules = [] -- TODO: fix if add tcg_rules/tcg_imp_specs
                     , mg_binds = ds_binds
                     , mg_pc_info = ds_pc_info
                     , mg_complete_matches = complete_matches

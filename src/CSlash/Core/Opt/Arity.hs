@@ -37,6 +37,7 @@ import CSlash.Utils.Constants (debugIsOn)
 import CSlash.Utils.Outputable
 import CSlash.Utils.Panic
 import CSlash.Utils.Misc
+import CSlash.Utils.Trace
 
 import Data.List.NonEmpty ( nonEmpty )
 import qualified Data.List.NonEmpty as NE
@@ -324,3 +325,40 @@ pushCoDataCon
   -> Maybe (DataCon Zk, [CoreType], [CoreExpr])
 pushCoDataCon = panic "pushCoDataCon"
 
+{- *********************************************************************
+*                                                                      *
+                Join points
+*                                                                      *
+********************************************************************* -}
+
+etaExpandToJoinPoint :: JoinArity -> CoreExpr -> ([(CoreBndr, Maybe CoreMonoKind)], CoreExpr)
+etaExpandToJoinPoint join_arity expr
+  = go join_arity [] expr
+  where
+    go 0 rev_bs e = (reverse rev_bs, e)
+    go n rev_bs (Lam b k e) = go (n - 1) ((b, k) : rev_bs) e
+    go n rev_bs e = case etaBodyForJoinPoint n e of
+                      (bs, e') -> (reverse rev_bs ++ bs, e')
+
+etaExpandToJoinPointRule :: JoinArity -> CoreRule -> CoreRule
+etaExpandToJoinPointRule _ rule@BuiltinRule{}
+  = warnPprTrace True "Can't eta-expand built-in rule:" (ppr rule)
+    rule
+etaExpandToJoinPointRule join_arity rule@Rule{ ru_bndrs = bndrs, ru_rhs = rhs, ru_args = args }
+  | need_args == 0
+  = rule
+  | need_args < 0
+  = pprPanic "etaExpandToJoinPointRule" (ppr join_arity $$ ppr rule)
+  | otherwise
+  = rule { ru_bndrs = bndrs ++ new_bndrs
+         , ru_args = args ++ new_args
+         , ru_rhs = new_rhs }
+  where
+    need_args = join_arity - length args
+    (new_bndrs1, new_rhs) = etaBodyForJoinPoint need_args rhs
+    new_bndrs = fst <$> new_bndrs1
+    new_args = bndrsToCoreExprs new_bndrs
+
+etaBodyForJoinPoint :: Int -> CoreExpr -> ([(CoreBndr, Maybe CoreMonoKind)], CoreExpr) 
+etaBodyForJoinPoint need_args body
+  = panic "etaBodyForJoinPoint"

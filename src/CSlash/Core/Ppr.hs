@@ -328,6 +328,9 @@ pprCoreBinder LetBind (Core.Id binder)
   = pprTypedLetBinder binder $$ ppIdInfo binder (idInfo binder)
 pprCoreBinder bind_site bndr = getPprDebug $ \debug -> pprTypedLamBinder bind_site debug bndr
 
+pprCoreBinders :: HasPass p pass => [CoreBndrP p] -> SDoc
+pprCoreBinders vs = sep (map (pprCoreBinder LambdaBind) vs)
+
 pprUntypedBinder :: HasPass p pass => CoreBndrP p -> SDoc
 pprUntypedBinder (Core.Id binder) = pprIdBndr binder
 pprUntypedBinder binder = pprPrefixOcc binder
@@ -466,3 +469,24 @@ instance Outputable UnfoldingCache where
       , text "ConLike=" <> ppr conlike
       , text "WorkFree=" <> ppr wf
       , text "Expandable=" <> ppr exp ]
+
+{- --------------------------------------------------
+--      Rules
+-------------------------------------------------- -}
+
+instance Outputable CoreRule where
+  ppr = pprRule
+
+pprRule :: CoreRule -> SDoc
+pprRule BuiltinRule = text "Built in rule for"
+pprRule Rule{ ru_name = name
+            , ru_act = act
+            , ru_fn = fn
+            , ru_bndrs = tpl_vars
+            , ru_args = tpl_args
+            , ru_rhs = rhs }
+  = hang (doubleQuotes (ftext name) <+> ppr act)
+    4 (sep [ text "forall" <+> pprCoreBinders tpl_vars <> dot
+           , nest 2 (ppr fn <+> sep (map pprArg tpl_args))
+           , nest 2 (text "=" <+> pprCoreExpr rhs)
+           ])

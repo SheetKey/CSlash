@@ -195,6 +195,12 @@ extendTermSubstInScopeBndrs = foldBindersOfBindsStrict extendTermSubstInScopeId
 mkInScopeSets :: (TyVarSet p, KiCoVarSet p, KiVarSet p) -> SubstInScope p
 mkInScopeSets (tv, kcv, kv) = (mkInScopeSet tv, mkInScopeSet kcv, mkInScopeSet kv)
 
+elemInScopeSets :: CoreBndr -> TermSubstInScope -> Bool
+elemInScopeSets (Core.Id v) (is, _, _, _, _) = v `elemInScopeSet` is
+elemInScopeSets (Tv v) (_, _, is, _, _) = v `elemInScopeSet` is 
+elemInScopeSets (KCv v) (_, _, _, is, _) = v `elemInScopeSet` is
+elemInScopeSets (Kv v) (_, _, _, _, is) = v `elemInScopeSet` is
+
 mkTermInScopeSets
   :: (IdSet Zk, TyCoVarSet Zk, TyVarSet Zk, KiCoVarSet Zk, KiVarSet Zk)
   -> TermSubstInScope
@@ -415,12 +421,13 @@ extendKvSubstWithClone (Subst { kv_in_scope = kis, kv_env = kvs, .. }) kv kv'
           , .. }
 
 zapSubst :: Subst p p' -> Subst p p'
-zapSubst Subst {..} = Subst { tv_env = emptyVarEnv
+zapSubst Subst {..} = Subst { id_env = emptyVarEnv
+                            , tcv_env = emptyVarEnv
+                            , tv_env = emptyVarEnv
                             , kcv_env = emptyVarEnv
                             , kv_env = emptyVarEnv
                             , ..
                             }
-
 
 {- **********************************************************************
 *                                                                       *
@@ -584,10 +591,10 @@ instance SubstP p p where
 
   vacuous_tycon tc = tc
 
-substKiCo :: CoreSubst -> KindCoercion Zk -> KindCoercion Zk
+substKiCo :: HasPass p' pass => Subst p p' -> KindCoercion p -> KindCoercion p'
 substKiCo subst co
-  | isEmptySubstKiCo subst = co
-  | otherwise = checkValidSubst subst $ subst_kco subst co
+{-  | isEmptySubstKiCo subst = co
+  | otherwise-} = checkValidSubst subst $ subst_kco subst co
 
 subst_kco :: HasPass p' pass => Subst p p' -> KindCoercion p -> KindCoercion p'
 subst_kco subst co = go co
@@ -805,6 +812,11 @@ substIdBndr _ rec_subst subst@Subst{..} old_id
              | otherwise = extendVarEnv id_env old_id (Var new_id)
 
     no_change = id1 == old_id
+
+cloneIdBndr :: MonadUnique m => CoreSubst -> CoreId -> m (CoreSubst, CoreId)
+cloneIdBndr subst old_id = do
+  u <- getUniqueM
+  pure $ clone_id subst subst (old_id, u)
 
 cloneIdBndrs :: MonadUnique m => CoreSubst -> [CoreId] -> m (CoreSubst, [CoreId])
 cloneIdBndrs subst ids = do

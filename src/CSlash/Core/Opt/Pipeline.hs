@@ -27,7 +27,7 @@ import CSlash.Core.Opt.Pipeline.Types
 import CSlash.Core.Opt.FloatOut     ( floatOutwards )
 -- import GHC.Core.Opt.LiberateCase ( liberateCase )
 -- import GHC.Core.Opt.StaticArgs   ( doStaticArgs )
--- import GHC.Core.Opt.Specialise   ( specProgram)
+import CSlash.Core.Opt.Specialize   ( specProgram)
 -- import GHC.Core.Opt.SpecConstr   ( specConstrProgram)
 import CSlash.Core.Opt.DmdAnal
 -- import GHC.Core.Opt.CprAnal      ( cprAnalProgram )
@@ -253,7 +253,7 @@ doCorePass pass guts = do
                     updateBindsM (liftIO . dmdAnal logger dflags)
 
     CoreDoSpecializing -> {-# SCC "Specialize" #-}
-                          panic "specProgram guts"
+                          specProgram guts
 
     CoreDoSpecConstr -> {-# SCC "SpecConstr" #-}
                         panic "specConstrProgram" guts

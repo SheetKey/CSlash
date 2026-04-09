@@ -205,6 +205,21 @@ tickHNFArgs t e = push t e
     push t (App f arg) = App (push t f) (mkTick t arg)
     push _ e = e
 
+stripTicksTop :: (CoreTickish -> Bool) -> Expr b1 b2 -> ([CoreTickish], Expr b1 b2)
+stripTicksTop p = go []
+  where go ts (Tick t e) | p t = go (t : ts) e
+        go ts other = (reverse ts, other)
+
+stripTicksTopE :: (CoreTickish -> Bool) -> Expr b1 b2 -> Expr b1 b2
+stripTicksTopE p = go
+  where go (Tick t e) | p t = go e
+        go other            = other
+
+stripTicksTopT :: (CoreTickish -> Bool) -> Expr b1 b2 -> [CoreTickish]
+stripTicksTopT p = go []
+  where go ts (Tick t e) | p t = go (t:ts) e
+        go ts _                = ts
+
 {- *********************************************************************
 *                                                                      *
              Other expression construction
@@ -372,6 +387,8 @@ isExpandableApp fn n_val_args
       | Just (bndr, ty) <- splitPiTy_maybe ty
       = case bndr of
           NamedTy {} -> all_pred_args n_val_args ty
+          NamedKiCo {} -> all_pred_args n_val_args ty
+          NamedKi {} -> all_pred_args n_val_args ty
           AnonTy {} -> False
       | otherwise
       = False
