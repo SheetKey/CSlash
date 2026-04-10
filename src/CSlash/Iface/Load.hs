@@ -42,7 +42,7 @@ import CSlash.Builtin.Names
 import CSlash.Builtin.Utils
 -- import GHC.Builtin.PrimOps    ( allThePrimOps, primOpFixity, primOpOcc )
 
--- import GHC.Core.Rules
+import CSlash.Core.Rules
 import CSlash.Core.TyCon
 -- import GHC.Core.InstEnv
 -- import GHC.Core.FamInstEnv
@@ -238,11 +238,13 @@ loadInterface doc_str mod from
                                $$ ppr hug $$ doc_str $$ ppr mod $$ ppr (moduleUnitId mod))
                             ignore_prags <- goptM Opt_IgnoreInterfacePragmas
                             new_eps_decls <- tcIfaceDecls ignore_prags (mi_decls iface)
+                            let new_eps_rules = [] -- TODO: if add mi_rules
                             new_eps_complete_matches <-
                               tcIfaceCompleteMatches (mi_complete_matches iface)
                             let final_iface = iface
                                   & set_mi_decls (panic "No mi_decls in PIT")
                                   & set_mi_anns (panic "No mi_anns in PIT")
+                                  -- & set_mi_rules (panic "No mi_rules in PIT")
                                   & set_mi_extra_decls (panic "No mi_extra_decls in PIT")
                             updateEps_ $ \eps ->
                               if elemModuleEnv mod (eps_PIT eps)
@@ -250,10 +252,13 @@ loadInterface doc_str mod from
                               else eps
                                    { eps_PIT = extendModuleEnv (eps_PIT eps) mod final_iface
                                    , eps_PTE = addDeclsToPTE (eps_PTE eps) new_eps_decls
+                                   , eps_rule_base
+                                       = extendRuleBaseList (eps_rule_base eps) new_eps_rules
                                    , eps_complete_matches = eps_complete_matches eps
                                                             ++ new_eps_complete_matches
                                    , eps_stats = addEpsInStats (eps_stats eps)
                                                                (length new_eps_decls)
+                                                               (length new_eps_rules)
                                    }
                             return (Succeeded iface)
 
@@ -499,6 +504,7 @@ pprModIface unit_state iface@ModIface{ mi_final_exts = exts }
             Nothing -> empty
             Just eds -> text "extra decls:"
                           $$ nest 2 (vcat ([ppr bs | bs <- eds]))
+        -- , vcat (map ppr (mi_rules iface))
         , vcat (map ppr (mi_complete_matches iface))
         ]
   where

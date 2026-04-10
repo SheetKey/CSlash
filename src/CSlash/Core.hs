@@ -539,3 +539,6 @@ data CoreRule
 data InScopeEnv = ISE TermSubstInScope IdUnfoldingFun
 
 type IdUnfoldingFun = CoreId -> Unfolding
+
+ruleIdName :: CoreRule -> Name
+ruleIdName = ru_fn

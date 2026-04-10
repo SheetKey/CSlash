@@ -173,6 +173,28 @@ addIdSpecializations id rules
 
 {- *********************************************************************
 *                                                                      *
+                        RuleBase
+*                                                                      *
+********************************************************************* -}
+
+type RuleBase = NameEnv [CoreRule]
+
+emptyRuleBase :: RuleBase
+emptyRuleBase = emptyNameEnv
+
+mkRuleBase :: [CoreRule] -> RuleBase
+mkRuleBase rules = extendRuleBaseList emptyRuleBase rules
+
+extendRuleBaseList :: RuleBase -> [CoreRule] -> RuleBase
+extendRuleBaseList rule_base new_rules
+  = foldl' extendRuleBase rule_base new_rules
+
+extendRuleBase :: RuleBase -> CoreRule -> RuleBase
+extendRuleBase rule_base rule
+  = extendNameEnv_Acc (:) Utils.singleton rule_base (ruleIdName rule) rule
+
+{- *********************************************************************
+*                                                                      *
                         Matching
 *                                                                      *
 ********************************************************************* -}
