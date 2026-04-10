@@ -26,7 +26,7 @@ import CSlash.Unit.Home.ModInfo
 import CSlash.Unit.Env
 import CSlash.Unit.External
 
--- import GHC.Core         ( CoreRule )
+import CSlash.Core         ( CoreRule )
 -- import GHC.Core.FamInstEnv
 -- import GHC.Core.InstEnv
 
@@ -96,6 +96,9 @@ csUpdateHUG f cs_env = cs_env { cs_unit_env = updateHug f (cs_unit_env cs_env) }
 
 csEPS :: CsEnv -> IO ExternalPackageState
 csEPS cs_env = readIORef (euc_eps (ue_eps (cs_unit_env cs_env)))
+
+hptRules :: CsEnv -> UnitId -> ModuleName -> [CoreRule]
+hptRules _ _ _ = [] -- TODO: hptSomeThingsBelowUs (md_rules . hm_details) False
 
 cs_all_home_unit_ids :: CsEnv -> Set.Set UnitId
 cs_all_home_unit_ids = unitEnv_keys . cs_HUG

@@ -74,9 +74,11 @@ import Data.List.NonEmpty ( NonEmpty (..) )
 specProgram :: ModGuts -> CoreM ModGuts
 specProgram guts@ModGuts { mg_module = this_mod, mg_rules = local_rules, mg_binds = binds } = do
   dflags <- getDynFlags
+  rule_env <- initRuleEnv guts
 
   let top_env = SE { se_subst = Core.extendTermSubstInScopeBndrs Core.emptySubst binds
                    , se_module = this_mod
+                   , se_rules = rule_env
                    , se_dflags = dflags }
 
       go [] = return ([], emptyUDs)
@@ -103,6 +105,7 @@ specProgram guts@ModGuts { mg_module = this_mod, mg_rules = local_rules, mg_bind
 data SpecEnv = SE
   { se_subst :: Core.CoreSubst
   , se_module :: Module
+  , se_rules :: RuleEnv
   , se_dflags :: DynFlags
   }
 

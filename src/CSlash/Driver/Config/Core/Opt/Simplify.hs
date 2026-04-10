@@ -1,5 +1,6 @@
 module CSlash.Driver.Config.Core.Opt.Simplify where
 
+import CSlash.Core.Rules (RuleBase)
 import CSlash.Core.Opt.Pipeline.Types ( CoreToDo(..) )
 import CSlash.Core.Opt.Simplify ( {-SimplifyExprOpts(..), -}SimplifyOpts(..) )
 import CSlash.Core.Opt.Simplify.Env ( FloatEnable(..), SimplMode(..) )
@@ -14,8 +15,8 @@ import CSlash.Types.Basic ( CompilerPhase(..) )
 
 import CSlash.Utils.Panic
 
-initSimplifyOpts :: DynFlags -> Int -> SimplMode -> SimplifyOpts
-initSimplifyOpts dflags iterations mode
+initSimplifyOpts :: DynFlags -> Int -> SimplMode -> RuleBase -> SimplifyOpts
+initSimplifyOpts dflags iterations mode hpt_rule_base
   = let opts = SimplifyOpts
           { so_dump_core_sizes = not $ gopt Opt_SuppressCoreSizes dflags
           , so_iterations = iterations
@@ -23,6 +24,7 @@ initSimplifyOpts dflags iterations mode
           , so_pass_result_cfg = if gopt Opt_DoCoreLinting dflags
                                  then Just $ initLintPassResultConfig dflags (CoreDoSimplify opts)
                                  else Nothing
+          , so_hpt_rules = hpt_rule_base
           }
     in opts
 

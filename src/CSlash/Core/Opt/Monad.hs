@@ -7,7 +7,7 @@ import Prelude hiding (read)
 import CSlash.Driver.DynFlags
 import CSlash.Driver.Env
 
--- import GHC.Core.Rules     ( RuleBase, RuleEnv, mkRuleEnv )
+import CSlash.Core.Rules     ( RuleBase, RuleEnv, mkRuleEnv )
 import CSlash.Core.Opt.Stats ( SimplCount, zeroSimplCount, plusSimplCount )
 
 -- import GHC.Types.Annotations
@@ -64,6 +64,7 @@ pprFloatOutSwitches sw
 
 data CoreReader = CoreReader
   { cr_cs_env :: CsEnv
+  , cr_rule_base :: RuleBase
   , cr_module :: Module
   , cr_name_ppr_ctx :: NamePprCtx
   , cr_loc :: SrcSpan
@@ -115,16 +116,18 @@ instance MonadUnique CoreM where
 
 runCoreM
   :: CsEnv
+  -> RuleBase
   -> Char
   -> Module
   -> NamePprCtx
   -> SrcSpan
   -> CoreM a
   -> IO (a, SimplCount)
-runCoreM cs_env tag mod name_ppr_ctx loc m
+runCoreM cs_env rule_base tag mod name_ppr_ctx loc m
   = liftM extract $ runIOEnv reader $ unCoreM m
   where
     reader = CoreReader { cr_cs_env = cs_env
+                        , cr_rule_base = rule_base
                         , cr_module = mod
                         , cr_name_ppr_ctx = name_ppr_ctx
                         , cr_loc = loc
@@ -168,6 +171,18 @@ liftIOWithCount what = liftIO what >>= (\(count, x) -> addSimplCount count >> re
 getCsEnv :: CoreM CsEnv
 getCsEnv = read cr_cs_env
 
+getHomeRuleBase :: CoreM RuleBase
+getHomeRuleBase = read cr_rule_base
+
+initRuleEnv :: ModGuts -> CoreM RuleEnv
+initRuleEnv guts = do
+  hpt_rules <- getHomeRuleBase
+  eps_rules <- getExternalRuleBase
+  return $ mkRuleEnv guts eps_rules hpt_rules
+
+getExternalRuleBase :: CoreM RuleBase
+getExternalRuleBase = eps_rule_base <$> get_eps
+
 getNamePprCtx :: CoreM NamePprCtx
 getNamePprCtx = read cr_name_ppr_ctx
 
@@ -182,3 +197,8 @@ instance HasLogger CoreM where
 
 instance HasModule CoreM where
   getModule = read cr_module
+
+get_eps :: CoreM ExternalPackageState
+get_eps = do
+  cs_env <- getCsEnv
+  liftIO $ csEPS cs_env

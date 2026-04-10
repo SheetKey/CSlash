@@ -5,6 +5,7 @@ import CSlash.Cs.Pass
 import CSlash.Driver.Flags
 
 import CSlash.Core
+import CSlash.Core.Rules
 import CSlash.Core.Ppr     ( pprCoreBindings, pprCoreExpr )
 -- import CSlash.Core.Opt.OccurAnal ( occurAnalysePgm, occurAnalyseExpr )
 -- import CSlash.Core.Stats   ( coreBindsSize, coreBindsStats, exprSize )
@@ -58,6 +59,7 @@ data SimplifyOpts = SimplifyOpts
   , so_iterations :: !Int
   , so_mode :: !SimplMode
   , so_pass_result_cfg :: !(Maybe LintPassResultConfig)
+  , so_hpt_rules :: !RuleBase
   -- , so_top_env_cfg :: !TopEnvConfig
   }
 

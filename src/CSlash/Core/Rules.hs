@@ -193,6 +193,23 @@ extendRuleBase :: RuleBase -> CoreRule -> RuleBase
 extendRuleBase rule_base rule
   = extendNameEnv_Acc (:) Utils.singleton rule_base (ruleIdName rule) rule
 
+data RuleEnv = RuleEnv
+  { re_local_rules :: !RuleBase
+  , re_home_rules :: !RuleBase
+  , re_eps_rules :: !RuleBase
+  , re_visible_orphs :: !ModuleSet
+  }
+
+mkRuleEnv :: ModGuts -> RuleBase -> RuleBase -> RuleEnv
+mkRuleEnv ModGuts{ mg_module = this_mod, mg_deps = deps, mg_rules = local_rules }
+  eps_rules hpt_rules
+  = RuleEnv { re_local_rules = mkRuleBase local_rules
+            , re_home_rules = hpt_rules
+            , re_eps_rules = eps_rules
+            , re_visible_orphs = mkModuleSet vis_orphs }
+  where
+    vis_orphs = [this_mod] -- TODO: if add dep_orphs
+
 {- *********************************************************************
 *                                                                      *
                         Matching

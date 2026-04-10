@@ -9,12 +9,12 @@ import CSlash.Driver.Config.Core.Lint ( endPass )
 import CSlash.Driver.Config.Core.Opt.Simplify
   ( initSimplifyOpts, initSimplMode, initGentleSimplMode )
 -- import GHC.Driver.Config.Core.Opt.WorkWrap ( initWorkWrapOpts )
--- import GHC.Driver.Config.Core.Rules ( initRuleOpts )
+import CSlash.Driver.Config.Core.Rules ( initRuleOpts )
 import CSlash.Platform.Ways  ( hasWay, Way(WayProf) )
 
 import CSlash.Core
 -- import GHC.Core.Opt.CSE  ( cseProgram )
--- import GHC.Core.Rules   ( RuleBase, mkRuleBase, ruleCheckProgram, getRules )
+import CSlash.Core.Rules   ( RuleBase, mkRuleBase{-, ruleCheckProgram, getRules-} )
 import CSlash.Core.Ppr     ( pprCoreBindings )
 import CSlash.Core.Utils   ( dumpIdInfoOfProgram )
 -- import CSlash.Core.Lint    ( lintAnnots )
@@ -67,9 +67,9 @@ core2core :: CsEnv -> ModGuts -> IO ModGuts
 core2core cs_env guts@(ModGuts { mg_module = mod
                                , mg_loc = loc
                                , mg_rdr_env = rdr_env })
-  = do let builtin_passes = getCoreToDo dflags
+  = do let builtin_passes = getCoreToDo dflags hpt_rule_base
            uniq_tag = 's'
-       (guts2, stats) <- runCoreM cs_env uniq_tag mod name_ppr_ctx loc $ do
+       (guts2, stats) <- runCoreM cs_env hpt_rule_base uniq_tag mod name_ppr_ctx loc $ do
          cs_env' <- getCsEnv
          runCorePasses builtin_passes guts
 
@@ -83,6 +83,8 @@ core2core cs_env guts@(ModGuts { mg_module = mod
   where
     dflags = cs_dflags cs_env
     logger = cs_logger cs_env
+    home_pkg_rules = hptRules cs_env (moduleUnitId mod) (moduleName mod)
+    hpt_rule_base = mkRuleBase home_pkg_rules
     name_ppr_ctx = mkNamePprCtx (cs_unit_env cs_env) rdr_env
 
 {- *********************************************************************
@@ -91,8 +93,8 @@ core2core cs_env guts@(ModGuts { mg_module = mod
 *                                                                      *
 ********************************************************************* -}
 
-getCoreToDo :: DynFlags -> [CoreToDo]
-getCoreToDo dflags = flatten_todos core_todo
+getCoreToDo :: DynFlags -> RuleBase -> [CoreToDo]
+getCoreToDo dflags hpt_rule_base = flatten_todos core_todo
   where
     phases = simplPhases dflags
     max_iter = maxSimplIterations dflags
@@ -125,14 +127,15 @@ getCoreToDo dflags = flatten_todos core_todo
       = CoreDoPasses
         [ maybe_strictness_before phase
         , CoreDoSimplify $ initSimplifyOpts dflags iter
-          (initSimplMode dflags phase name)
+          (initSimplMode dflags phase name) hpt_rule_base
         , maybe_rule_check phase
         ]
 
     simplify name = simpl_phase FinalPhase name max_iter
 
     simpl_gently
-      = CoreDoSimplify $ initSimplifyOpts dflags max_iter (initGentleSimplMode dflags)
+      = CoreDoSimplify $
+        initSimplifyOpts dflags max_iter (initGentleSimplMode dflags) hpt_rule_base
 
     dmd_cpr_ww = [CoreDoDemand]
 
