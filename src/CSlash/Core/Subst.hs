@@ -102,6 +102,12 @@ type TvSubstEnv p p' = VarEnv (TyVar p) (Type p')
 type KCvSubstEnv p p' = VarEnv (KiCoVar p) (KindCoercion p')
 type KvSubstEnv p p' = VarEnv (KiVar p) (MonoKind p')
 
+type CoreIdSubstEnv = IdSubstEnv Zk Zk
+type CoreTCvSubstEnv = TCvSubstEnv Zk Zk
+type CoreTvSubstEnv = TvSubstEnv Zk Zk
+type CoreKCvSubstEnv = KCvSubstEnv Zk Zk
+type CoreKvSubstEnv = KvSubstEnv Zk Zk
+
 instance IsPass p' => Outputable (Subst p (CsPass p')) where
   ppr Subst {..} = vcat [ text "<<IdInScope =" <+> ppIS id_in_scope
                         , text "IdSubst =" <+> ppr id_env <> char '>'

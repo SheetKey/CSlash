@@ -18,7 +18,7 @@ import CSlash.Core.Rules   ( RuleBase, mkRuleBase{-, ruleCheckProgram, getRules-
 import CSlash.Core.Ppr     ( pprCoreBindings )
 import CSlash.Core.Utils   ( dumpIdInfoOfProgram )
 -- import CSlash.Core.Lint    ( lintAnnots )
--- import CSlash.Core.Opt.Simplify ( simplifyExpr, simplifyPgm )
+import CSlash.Core.Opt.Simplify ( simplifyExpr, simplifyPgm )
 -- import GHC.Core.Opt.Simplify.Monad
 import CSlash.Core.Opt.Monad
 import CSlash.Core.Opt.Stats
@@ -241,7 +241,7 @@ doCorePass pass guts = do
 
   case pass of 
     CoreDoSimplify opts -> {-# SCC "Simplify" #-}
-                           panic "liftIOWithCount $ simplifyPgm logger (cs_unit_env cs_env)"
+                           liftIOWithCount $ simplifyPgm logger (cs_unit_env cs_env)
 
     CoreCSE -> {-# SCC "CommonSubExpr" #-}
                panic "updateBinds cseProgram"

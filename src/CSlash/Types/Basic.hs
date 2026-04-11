@@ -137,3 +137,8 @@ instance Outputable Activation where
   ppr (ActiveBefore _ n) = brackets (char '~' <> int n)
   ppr (ActiveAfter _ n) = brackets (int n)
   ppr FinalActive = text "[final]"
+
+instance Outputable CompilerPhase where
+  ppr (Phase n) = int n
+  ppr InitialPhase = text "InitialPhase"
+  ppr FinalPhase = text "FinalPhase"
