@@ -2,6 +2,8 @@
 
 module CSlash.Core.Unfold where
 
+import Prelude hiding ((<>))
+
 import CSlash.Cs.Pass
 
 import CSlash.Core as Core
@@ -77,6 +79,36 @@ updateCaseScaling n opts = opts { unfoldingCaseScaling = n }
 
 updateReportPrefix :: Maybe String -> UnfoldingOpts -> UnfoldingOpts
 updateReportPrefix n opts = opts { unfoldingReportPrefix = n }
+
+data ArgSummary
+  = TrivArg
+  | NonTrivArg
+  | ValueArg
+
+instance Outputable ArgSummary where
+  ppr TrivArg    = text "TrivArg"
+  ppr NonTrivArg = text "NonTrivArg"
+  ppr ValueArg   = text "ValueArg"
+
+nonTriv ::  ArgSummary -> Bool
+nonTriv TrivArg = False
+nonTriv _       = True
+
+data CallCtxt      
+  = BoringCtxt     
+  | RhsCtxt RecFlag
+  | DiscArgCtxt    
+  | RuleArgCtxt    
+  | ValAppCtxt     
+  | CaseCtxt       
+
+instance Outputable CallCtxt where
+  ppr CaseCtxt = text "CaseCtxt"
+  ppr ValAppCtxt = text "ValAppCtxt"
+  ppr BoringCtxt = text "BoringCtxt"
+  ppr (RhsCtxt ir) = text "RhsCtxt" <> parens (ppr ir)
+  ppr DiscArgCtxt = text "DiscArgCtxt"
+  ppr RuleArgCtxt = text "RuleArgCtxt"
 
 {- *********************************************************************
 *                                                                      *
