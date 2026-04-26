@@ -57,6 +57,10 @@ data Expr bLam bLet
 
 type Arg = Expr 
 
+-- TODO: should this be bLam instead of bLet?
+-- I.e., can type variables be bound in user code or generated code?
+-- No (I think) since we don't have existentials so there's no need to bind anything:
+-- Its already necessarily in scope.
 data Alt bLam bLet = Alt AltCon [bLet] (Expr bLam bLet)
   deriving (Data)
 
@@ -163,6 +167,20 @@ hasCoreUnfolding _ = False
 canUnfold :: Unfolding -> Bool
 canUnfold (CoreUnfolding { uf_guidance = g }) = not (neverUnfoldGuidance g)
 canUnfold _ = False
+
+isBetterUnfoldingThan :: Unfolding -> Unfolding -> Bool
+isBetterUnfoldingThan NoUnfolding _ = False
+isBetterUnfoldingThan CoreUnfolding{ uf_cache = uc1 } unf2
+  = case unf2 of
+      CoreUnfolding{ uf_cache = uc2 } -> uf_is_value uc1 && not (uf_is_value uc2)
+      OtherCon _ -> uf_is_value uc1
+      _ -> True
+      
+isBetterUnfoldingThan (OtherCon cs1) unf2
+  = case unf2 of
+      CoreUnfolding{ uf_cache = uc } -> not (uf_is_value uc)
+      OtherCon cs2 -> not (null cs1) && null cs2
+      NoUnfolding -> True
 
 {- *********************************************************************
 *                                                                      *
@@ -332,6 +350,13 @@ flattenBinds :: [Bind b1 b2] -> [(b2, Expr b1 b2)]
 flattenBinds (NonRec b r : binds) = (b, r) : flattenBinds binds
 flattenBinds (Rec prs1 : binds) = prs1 ++ flattenBinds binds
 flattenBinds [] = []
+
+collectNonValBinders :: CoreExpr -> ([(CoreBndr, Maybe CoreMonoKind)], CoreExpr)
+collectNonValBinders expr = go [] expr
+  where
+    go bs e@(Lam (Id _) _ _) = (reverse bs, e)
+    go bs (Lam b mki e) = go ((b, mki) : bs) e
+    go bs e = (reverse bs, e)
 
 collectBinders :: Expr b1 b2 -> ([(b1, Maybe CoreMonoKind)], Expr b1 b2)
 collectBinders expr = go [] expr
