@@ -117,6 +117,10 @@ exprFreeVars :: CoreExpr -> (IdSet Zk, TyCoVarSet Zk, TyVarSet Zk, KiCoVarSet Zk
 exprFreeVars e = case fvVarAcc (exprLocalFVs e) of
   (_, ids, _, tcs, _, ts, _, kcs, _, ks) -> (ids, tcs, ts, kcs, ks)
 
+exprFreeIds :: CoreExpr -> IdSet Zk
+exprFreeIds e = case fvVarAcc (exprLocalFVs e) of
+  (_, ids, _, _, _, _, _, _, _, _) -> ids
+
 exprLocalFVs :: CoreExpr -> CoreFV
 exprLocalFVs = filterFV isLocal . exprFVs
   where isLocal (In1 id) = isLocalId id
