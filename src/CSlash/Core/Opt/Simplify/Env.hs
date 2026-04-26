@@ -64,6 +64,10 @@ data SimplEnv = SimplEnv
   , seInlineDepth :: !Int
   }
 
+seIdInScope :: SimplEnv -> InScopeSet CoreId
+seIdInScope env = case seInScope env of
+  (ids, _, _, _, _) -> ids
+
 seCaseCase :: SimplEnv -> Bool
 seCaseCase = sm_case_case . seMode
 
