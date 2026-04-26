@@ -88,6 +88,7 @@ library
                     , CSlash.Core.Opt.Pipeline.Types
                     , CSlash.Core.Opt.SetLevels
                     , CSlash.Core.Opt.Simplify
+                    , CSlash.Core.Opt.Simplify.Inline
                     , CSlash.Core.Opt.Simplify.Iteration
                     , CSlash.Core.Opt.Simplify.Monad
                     , CSlash.Core.Opt.Simplify.Utils
