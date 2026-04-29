@@ -98,8 +98,14 @@ data ArityType = AT ![ATLamInfo] !Divergence
 
 type ATLamInfo = (Cost, OneShotInfo)
 
+type SafeArityType = ArityType
+
 data Cost = IsCheap | IsExpensive
   deriving Eq
+
+addCost :: Cost -> Cost -> Cost
+addCost IsCheap IsCheap = IsCheap
+addCost _ _ = IsExpensive
 
 instance Outputable ArityType where
   ppr (AT oss div)
@@ -123,6 +129,31 @@ botArityType = mkBotArityType []
 topArityType :: ArityType
 topArityType = AT [] topDiv
 
+safeArityType :: ArityType -> SafeArityType
+safeArityType at@(AT lams _)
+  = case go 0 IsCheap lams of
+      Nothing -> at
+      Just ar -> AT (take ar lams) topDiv
+  where
+    go :: Arity -> Cost -> [(Cost, OneShotInfo)] -> Maybe Arity
+    go _ _ [] = Nothing
+    go ar ch1 ((ch2, os):lams)
+      = case (ch1 `addCost` ch2, os) of
+          (IsExpensive, NoOneShotInfo) -> Just ar
+          (ch, _) -> go (ar + 1) ch lams
+
+data ArityOpts = ArityOpts
+  -- { ao_ped_bod :: !Bool }
+
+exprEtaExpandArity :: HasDebugCallStack => ArityOpts -> CoreExpr -> Maybe SafeArityType
+exprEtaExpandArity opts e
+  | AT [] _ <- arity_type
+  = Nothing
+  | otherwise
+  = Just arity_type
+  where
+    arity_type = safeArityType (arityType (findRhsArityEnv opts False) e)
+
 {- *********************************************************************
 *                                                                      *
                    findRhsArity
@@ -140,6 +171,26 @@ arityLam id (AT oss div) = AT ((IsCheap, one_shot) : oss) div
   where
     one_shot | isDeadEndDiv div = OneShotLam
              | otherwise = idOneShotInfo id
+
+data ArityEnv = AE
+  { am_opts :: !ArityOpts
+  , am_sigs :: !(IdEnv Zk SafeArityType)
+  , am_free_joins :: !Bool
+  }
+
+instance Outputable ArityEnv where
+  ppr AE{ am_sigs = sigs, am_free_joins = free_joins }
+    = text "AE" <+> braces (sep [ text "free joins:" <+> ppr free_joins
+                                , text "sigs:" <+> ppr sigs ])
+
+findRhsArityEnv :: ArityOpts -> Bool -> ArityEnv
+findRhsArityEnv opts free_joins
+  = AE { am_opts = opts
+       , am_free_joins = free_joins
+       , am_sigs = emptyVarEnv }
+
+arityType :: HasDebugCallStack => ArityEnv -> CoreExpr -> ArityType
+arityType _ _ = panic "arityType"
 
 idArityType :: CoreId -> ArityType
 idArityType v
