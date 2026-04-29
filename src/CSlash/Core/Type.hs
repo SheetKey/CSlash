@@ -367,6 +367,11 @@ funResultTy ty
   | FunTy { ft_res = res } <- coreFullView ty = res
   | otherwise = pprPanic "funResultTy" (ppr ty)
 
+funArgTy :: (HasDebugCallStack, HasPass p pass) => Type p -> Type p
+funArgTy ty
+  | FunTy { ft_arg = arg } <- coreFullView ty = arg
+  | otherwise = pprPanic "funArgTy" (ppr ty)
+
 piResultTy :: (HasDebugCallStack, HasPass p pass) => Type p -> Type p -> Type p
 piResultTy ty arg = case piResultTy_maybe ty arg of
                       Just res -> res
