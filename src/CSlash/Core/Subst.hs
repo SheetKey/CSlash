@@ -24,6 +24,7 @@ import CSlash.Core.Kind
 import CSlash.Core.Kind.FVs
 import CSlash.Core.Type.FVs
 import CSlash.Core.FVs
+import CSlash.Core.Utils (mkTick)
 
 import CSlash.Types.Var.TyVar
 import CSlash.Types.Var.KiVar
@@ -322,9 +323,28 @@ noDomFVs thing (tv, kcv, kv) =
 mkKvSubst :: InScopeSet (KiVar p') -> KvSubstEnv p p' -> Subst p p'
 mkKvSubst kv_is kenv = emptySubst { kv_in_scope = kv_is, kv_env = kenv }
 
+mkCoreSubst
+  :: TermSubstInScope
+  -> CoreIdSubstEnv
+  -> CoreTCvSubstEnv
+  -> CoreTvSubstEnv
+  -> CoreKCvSubstEnv
+  -> CoreKvSubstEnv
+  -> CoreSubst
+mkCoreSubst in_scope ids tcvs tvs kcvs kvs
+  = (mkEmptyTermSubstIS in_scope)
+    { id_env = ids
+    , tcv_env = tcvs
+    , tv_env = tvs
+    , kcv_env = kcvs
+    , kv_env = kvs }
+
 isEmptySubst :: Subst p p' -> Bool
-isEmptySubst Subst { tv_env = tv_env, kcv_env = kcv_env, kv_env = kv_env }
-  = isEmptyVarEnv tv_env
+isEmptySubst Subst { id_env = id_env, tcv_env = tcv_env, tv_env = tv_env
+                   , kcv_env = kcv_env, kv_env = kv_env }
+  = isEmptyVarEnv id_env
+    && isEmptyVarEnv tcv_env
+    && isEmptyVarEnv tv_env
     && isEmptyVarEnv kcv_env
     && isEmptyVarEnv kv_env
 
@@ -381,6 +401,10 @@ extendSubst subst var arg
       _ | Core.Id id <- var -> extendIdSubst subst id arg
         | otherwise -> ppPanic
   where ppPanic = pprPanic "extendSubst" (ppr var <+> text ":=" <+> ppr arg)
+
+extendSubstList :: CoreSubst -> [(CoreBndr, CoreArg)] -> CoreSubst
+extendSubstList subst [] = subst
+extendSubstList subst ((var, rhs):prs) = extendSubstList (extendSubst subst var rhs) prs
 
 extendIdSubst :: CoreSubst -> Id Zk -> CoreExpr -> CoreSubst
 extendIdSubst (Subst { id_env = ids, .. }) id expr
@@ -923,3 +947,45 @@ substDCoreVarSets subst@Subst{..} (ids, tcvs, tvs, kcvs, kvs)
     subst_kv :: KiVar Zk -> FVAcc CoreExpr -> FVAcc CoreExpr
     subst_kv fv acc = let fv_ki = lookupVarEnv kv_env fv `orElse` mkKiVarKi fv
                       in liftKiToCoreFV (fvsOfMonoKind fv_ki) (const True) fvEmptyIS $! acc
+
+{- *********************************************************************
+*                                                                      *
+        Substituting expressions
+*                                                                      *
+********************************************************************* -}
+
+substExpr :: HasDebugCallStack => CoreSubst -> CoreExpr -> CoreExpr
+substExpr subst expr
+  = go expr
+  where
+    go (Var v) = lookupIdSubst subst v
+    go (Type ty) = Type (substTyUnchecked subst ty)
+    go (KiCo co) = KiCo (substKiCo subst co)
+    go (Kind ki) = Kind (substMonoKiUnchecked subst ki)
+    go (Lit lit) = Lit lit
+    go (App fun arg) = App (go fun) (go arg)
+    go (Tick tickish e) = mkTick (substTickish subst tickish) (go e)
+    go (Cast e co) = panic "substExpr Cast"
+    go (Lam bndr mki body) = Lam bndr' mki' (substExpr subst' body)
+                             where
+                               (subst', (bndr', mki')) = substLamBndr subst (bndr, mki)
+    go (Let bind body) = Let bind' (substExpr subst' body)
+                         where
+                           (subst', bind') = substBind subst bind
+    go (Case scrut bndr ty alts)
+      = Case (go scrut) bndr' (substTyUnchecked subst ty) (map (go_alt subst') alts)
+      where (subst', bndr') = substLetBndr subst bndr
+
+    go_alt subst (Alt con bndrs rhs) = Alt con bndrs' (substExpr subst' rhs)
+      where (subst', bndrs') = substLetBndrs subst bndrs
+
+substBind :: HasDebugCallStack => CoreSubst -> CoreBind -> (CoreSubst, CoreBind)
+substBind subst (NonRec bndr rhs)
+  = (subst', NonRec bndr' (substExpr subst rhs))
+  where (subst', bndr') = substLetBndr subst bndr
+substBind subst (Rec pairs)
+  = (subst', Rec (bndrs' `zip` rhss'))
+  where
+    (bndrs, rhss) = unzip pairs
+    (subst', bndrs') = substLetRecBndrs subst bndrs
+    rhss' = map (substExpr subst') rhss
