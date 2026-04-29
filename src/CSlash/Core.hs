@@ -129,6 +129,10 @@ evaldUnfolding = OtherCon []
 unfoldingTemplate :: Unfolding -> CoreExpr
 unfoldingTemplate = uf_tmpl
 
+maybeUnfoldingTemplate :: Unfolding -> Maybe CoreExpr
+maybeUnfoldingTemplate CoreUnfolding{ uf_tmpl = expr } = Just expr
+maybeUnfoldingTemplate _ = Nothing
+
 isEvaldUnfolding :: Unfolding -> Bool
 isEvaldUnfolding (OtherCon _) = True
 isEvaldUnfolding NoUnfolding = False
@@ -137,6 +141,10 @@ isEvaldUnfolding (CoreUnfolding { uf_cache = cache }) = uf_is_value cache
 isConLikeUnfolding :: Unfolding -> Bool
 isConLikeUnfolding (CoreUnfolding { uf_cache = cache }) = uf_is_conlike cache
 isConLikeUnfolding _ = False
+
+isCheapUnfolding :: Unfolding -> Bool
+isCheapUnfolding CoreUnfolding{ uf_cache = cache } = uf_is_work_free cache
+isCheapUnfolding _ = False
 
 expandUnfolding_maybe :: Unfolding -> Maybe CoreExpr
 expandUnfolding_maybe (CoreUnfolding { uf_cache = cache, uf_tmpl = rhs })
@@ -230,6 +238,7 @@ type CoreBind = Bind CoreBndr CoreId
 type CoreAlt = Alt CoreBndr CoreId
 
 type CoreId = Id Zk
+type CoreTyCoVar = TyCoVar Zk
 type CoreTyVar = TyVar Zk
 type CoreKiCoVar = KiCoVar Zk
 type CoreKiVar = KiVar Zk
@@ -238,6 +247,9 @@ type CoreType = Type Zk
 type CoreKind = Kind Zk
 type CoreMonoKind = MonoKind Zk
 type CoreVarSets = (IdSet Zk, TyCoVarSet Zk, TyVarSet Zk, KiCoVarSet Zk, KiVarSet Zk)
+
+type CoreTypeCoercion = TypeCoercion Zk
+type CoreKindCoercion = KindCoercion Zk
 
 {- *********************************************************************
 *                                                                      *
@@ -395,6 +407,9 @@ isRuntimeVar :: CoreBndr -> Bool
 isRuntimeVar Id {} = True
 isRuntimeVar _ = False
 
+isNonRuntimeVar :: CoreBndr -> Bool
+isNonRuntimeVar = not . isRuntimeVar
+
 isCoBndr :: CoreBndr -> Bool
 isCoBndr KCv {} = True
 isCoBndr Id {} = False
@@ -511,16 +526,32 @@ deAnnBind (AnnRec pairs) = Rec [(v, deAnnotate rhs) | (v, rhs) <- pairs]
 ********************************************************************* -}
 
 type InId = CoreId
+type InTyCoVar = CoreTyCoVar
+type InTyVar = CoreTyVar
+type InKiCoVar = CoreKiCoVar
+type InKiVar = CoreKiVar
 type InBndr = CoreBndr
 type InBind = CoreBind
 type InExpr = CoreExpr
 type InAlt = CoreAlt
+type InType = CoreType
+type InMonoKind = CoreMonoKind
+type InTypeCoercion = CoreTypeCoercion
+type InKindCoercion = CoreKindCoercion
 
 type OutId = CoreId
+type OutTyCoVar = CoreTyCoVar
+type OutTyVar = CoreTyVar
+type OutKiCoVar = CoreKiCoVar
+type OutKiVar = CoreKiVar
 type OutBndr = CoreBndr
 type OutBind = CoreBind
 type OutExpr = CoreExpr
 type OutAlt = CoreAlt
+type OutType = CoreType
+type OutMonoKind = CoreMonoKind
+type OutTypeCoercion = CoreTypeCoercion
+type OutKindCoercion = CoreKindCoercion
 
 {- *********************************************************************
 *                                                                      *
@@ -532,7 +563,15 @@ data IsOrphan
   = IsOrphan
   | NotOrphan !OccName
   deriving Data
- 
+
+isOrphan :: IsOrphan -> Bool
+isOrphan IsOrphan = True
+isOrphan _ = False
+
+notOrphan :: IsOrphan -> Bool
+notOrphan NotOrphan{} = True
+notOrphan _ = False
+
 chooseOrphanAnchor :: NameSet -> IsOrphan
 chooseOrphanAnchor local_names
   | isEmptyNameSet local_names = IsOrphan
@@ -564,6 +603,10 @@ data CoreRule
 data InScopeEnv = ISE TermSubstInScope IdUnfoldingFun
 
 type IdUnfoldingFun = CoreId -> Unfolding
+
+ruleArity :: CoreRule -> Int
+ruleArity BuiltinRule = panic "BuiltinRule"
+ruleArity Rule{ ru_args = args } = length args
 
 ruleIdName :: CoreRule -> Name
 ruleIdName = ru_fn
