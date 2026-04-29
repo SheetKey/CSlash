@@ -254,6 +254,9 @@ strictCallArity sd = go 0 sd
     go n (Call card sd) = go (n + 1) sd
     go n _ = n
 
+subDemandIfEvaluated :: Demand -> SubDemand
+subDemandIfEvaluated (_ :* sd) = sdo
+
 argsOneShots :: DmdSig -> Arity -> [[OneShotInfo]]
 argsOneShots (DmdSig (DmdType _ arg_ds)) n_val_args
   | unsaturated_call = []
