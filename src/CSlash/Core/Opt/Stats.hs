@@ -1,7 +1,10 @@
 module CSlash.Core.Opt.Stats where
 
+import CSlash.Cs.Pass
+
 import CSlash.Types.Var
 import CSlash.Types.Error
+import CSlash.Core.Kind (MonoKind)
 
 import CSlash.Utils.Outputable as Outputable
 
@@ -43,3 +46,19 @@ plusSimplCount SimplCount SimplCount = SimplCount
 plusSimplCount (VerySimplCount n) (VerySimplCount m) = VerySimplCount (n + m)
 plusSimplCount lhr rhs =
   panic "plusSimplCount"
+
+data Tick
+  = PreInlineUnconditionally (Id Zk)
+  | PostInlineUnconditionally (Id Zk)
+
+  | UnfoldingDone (Id Zk)
+  | RuleFired FastString
+
+  | LetFloatFromLet
+  | EtaExpancion (Id Zk)
+  | EtaReduction (Id Zk)
+  | BetaReduction (Id Zk) (Maybe (MonoKind Zk))
+
+  | CaseOfCase (Id Zk)
+  | KnownBranch (Id Zk)
+  | SimplifierDone
