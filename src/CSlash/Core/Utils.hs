@@ -14,7 +14,7 @@ import CSlash.Core.Type as Type
 -- import GHC.Core.Predicate( isEqPred )
 import CSlash.Core.Type.Compare( eqType )
 -- import GHC.Core.Coercion
-import CSlash.Core.Reduction
+-- import CSlash.Core.Reduction
 import CSlash.Core.TyCon
 import CSlash.Core.Kind
 
@@ -242,6 +242,7 @@ bindNonRec bndr rhs body
     let_bind = Let (NonRec bndr rhs) body
 
 -- TODO: this probably isn't necessarily since we have strict LET!!!
+-- Probably keep it so that lets can float
 needsCaseBinding :: HasDebugCallStack => CoreExpr -> Bool
 needsCaseBinding rhs = not (exprOkForSpeculation rhs)
 
