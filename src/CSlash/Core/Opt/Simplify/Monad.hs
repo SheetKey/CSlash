@@ -159,3 +159,9 @@ newId fs ty = mkSysLocalM fs ty
 
 getSimplCount :: SimplM SimplCount
 getSimplCount = SM $ \_ sc -> return (sc, sc)
+
+tick :: Tick -> SimplM ()
+tick t = SM $ \st_env sc -> panic "tick"
+  -- let history_size = te_history_size (st_config st_env)
+  --     sc' = doSimplTick history_size t sc
+  -- in sc' `seq` return ((), sc'))
