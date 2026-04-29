@@ -210,6 +210,37 @@ mkRuleEnv ModGuts{ mg_module = this_mod, mg_deps = deps, mg_rules = local_rules 
   where
     vis_orphs = [this_mod] -- TODO: if add dep_orphs
 
+getRules :: RuleEnv -> CoreId -> [CoreRule]
+getRules RuleEnv{ re_local_rules = local_rule_base
+                , re_home_rules = home_rule_base
+                , re_eps_rules = eps_rule_base
+                , re_visible_orphs = orphs } fn
+  | Just {} <- isDataConId_maybe fn
+  = []
+  | Just export_flag <- isLocalId_maybe fn
+  = case export_flag of
+      NotExported -> idCoreRules fn
+      Exported -> case get home_rule_base of
+        [] -> idCoreRules fn
+        home_rules -> drop_orphs home_rules ++ idCoreRules fn
+  | otherwise
+  = case (get local_rule_base, get home_rule_base, get eps_rule_base) of
+      ([], [], []) -> idCoreRules fn
+      (local_rules, home_rules, eps_rules) -> local_rules ++
+                                              drop_orphs home_rules ++
+                                              drop_orphs eps_rules ++
+                                              idCoreRules fn
+  where
+    fn_name = varName fn
+    drop_orphs [] = []
+    drop_orphs xs = filter (ruleIsVisible orphs) xs
+    get rb = lookupNameEnv rb fn_name `orElse` []
+
+ruleIsVisible :: ModuleSet -> CoreRule -> Bool
+ruleIsVisible _ BuiltinRule{} = True
+ruleIsVisible vis_orphs Rule{ ru_orphan = orph, ru_origin = origin }
+  = notOrphan orph || origin `elemModuleSet` vis_orphs
+
 {- *********************************************************************
 *                                                                      *
                         Matching
