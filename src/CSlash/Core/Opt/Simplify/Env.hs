@@ -11,7 +11,7 @@ import CSlash.Core.Opt.Simplify.Monad
 import CSlash.Core
 import CSlash.Core.Utils
 import CSlash.Core.Unfold
-import CSlash.Core.Subst
+import CSlash.Core.Subst as Subst
 import CSlash.Core.Kind
 import CSlash.Core.Make ( mkWildValBinder{-, mkCoreLet-} )
 import CSlash.Core.Type
@@ -249,6 +249,101 @@ init_in_scope = ( mkInScopeSet (unitVarSet $
                 , emptyInScopeSet
                 , emptyInScopeSet )
 
+updMode :: (SimplMode -> SimplMode) -> SimplEnv -> SimplEnv
+updMode upd env = let mode = upd $! (seMode env)
+                  in env { seMode = mode }
+
+bumpCaseDepth :: SimplEnv -> SimplEnv
+bumpCaseDepth env = env { seCaseDepth = seCaseDepth env + 1 }
+
+reSimplifying :: SimplEnv -> Bool
+reSimplifying SimplEnv{ seInlineDepth = n } = n > 0
+
+extendIdSubst :: SimplEnv -> CoreId -> SimplSR -> SimplEnv
+extendIdSubst env@SimplEnv{ seIdSubst = subst } var res
+  = env { seIdSubst = extendVarEnv subst var res }
+
+extendTCvSubst :: SimplEnv -> CoreTyCoVar -> CoreTypeCoercion -> SimplEnv
+extendTCvSubst env@SimplEnv{ seTCvSubst = subst } var res
+  = env { seTCvSubst = extendVarEnv subst var res }
+
+extendTvSubst :: SimplEnv -> CoreTyVar -> CoreType -> SimplEnv
+extendTvSubst env@SimplEnv{ seTvSubst = subst } var res
+  = env { seTvSubst = extendVarEnv subst var res }
+
+extendKCvSubst :: SimplEnv -> CoreKiCoVar -> CoreKindCoercion -> SimplEnv
+extendKCvSubst env@SimplEnv{ seKCvSubst = subst } var res
+  = env { seKCvSubst = extendVarEnv subst var res }
+
+extendKvSubst :: SimplEnv -> CoreKiVar -> CoreMonoKind -> SimplEnv
+extendKvSubst env@SimplEnv{ seKvSubst = subst } var res
+  = env { seKvSubst = extendVarEnv subst var res }
+
+getInScope :: SimplEnv -> TermSubstInScope
+getInScope = seInScope
+
+setInScopeSet :: SimplEnv -> TermSubstInScope -> SimplEnv
+setInScopeSet env in_scope = env { seInScope = in_scope }
+
+setInScopeFromE :: SimplEnv -> SimplEnv -> SimplEnv
+setInScopeFromE rhs_env here_env = rhs_env { seInScope = seInScope here_env }
+
+setInScopeFromF :: SimplEnv -> SimplFloats -> SimplEnv
+setInScopeFromF env floats
+  = env { seInScope = ( sfInScope floats
+                      , emptyInScopeSet
+                      , emptyInScopeSet
+                      , emptyInScopeSet
+                      , emptyInScopeSet ) }
+
+addNewInScopeIds :: SimplEnv -> [CoreId] -> SimplEnv
+addNewInScopeIds env@SimplEnv{ seInScope = (in_scope, tcvs, tvs, kcvs, kvs)
+                             , seIdSubst = id_subst } vs 
+  = let !in_scope1 = in_scope `extendInScopeSetList` vs
+        !id_subst1 = id_subst `delVarEnvList` vs
+    in env { seInScope = (in_scope1, tcvs, tvs, kcvs, kvs)
+           , seIdSubst = id_subst1 }
+
+enterRecGroupRHSs
+  :: SimplEnv
+  -> [CoreId]
+  -> (SimplEnv -> SimplM (r, SimplEnv))
+  -> SimplM (r, SimplEnv)
+enterRecGroupRHSs env bndrs k = do
+  (r, env'') <- k env{ seRecIds = extendUnVarSetList bndrs (seRecIds env) }
+  return (r, env'' { seRecIds = seRecIds env })
+
+zapSubstEnv :: SimplEnv -> SimplEnv
+zapSubstEnv env@SimplEnv{ seInlineDepth = n }
+  = env { seIdSubst = emptyVarEnv
+        , seTCvSubst = emptyVarEnv
+        , seTvSubst = emptyVarEnv
+        , seKCvSubst = emptyVarEnv
+        , seKvSubst = emptyVarEnv
+        , seInlineDepth = n + 1 }
+
+setSubstEnv
+  :: SimplEnv
+  -> SimplIdSubst
+  -> CoreTCvSubstEnv
+  -> CoreTvSubstEnv
+  -> CoreKCvSubstEnv
+  -> CoreKvSubstEnv
+  -> SimplEnv
+setSubstEnv env ids tcvs tvs kcvs kvs
+  = env { seIdSubst = ids
+        , seTCvSubst = tcvs
+        , seTvSubst = tvs
+        , seKCvSubst = kcvs
+        , seKvSubst = kvs }        
+
+mkContEx :: SimplEnv -> InExpr -> SimplSR
+mkContEx SimplEnv{ seIdSubst = ids
+                 , seTCvSubst = tcvs
+                 , seTvSubst = tvs
+                 , seKCvSubst = kcvs
+                 , seKvSubst = kvs } e
+  = ContEx ids tcvs tvs kcvs kvs e
 
 {- *********************************************************************
 *                                                                      *
@@ -285,3 +380,40 @@ emptyJoinFloats = nilOL
 
 isEmptyJoinFloats :: JoinFloats -> Bool
 isEmptyJoinFloats = isNilOL
+
+{- *********************************************************************
+*                                                                      *
+        Substitution of Vars
+*                                                                      *
+********************************************************************* -}
+
+substId :: SimplEnv -> InId -> SimplSR
+substId SimplEnv{ seInScope = in_scope, seIdSubst = ids } v
+  = case lookupVarEnv ids v of
+      Nothing -> DoneId (refineFromInScope in_scope v)
+      Just (DoneId v) -> DoneId (refineFromInScope in_scope v)
+      Just res -> res
+
+refineFromInScope :: TermSubstInScope -> CoreId -> CoreId
+refineFromInScope (in_scope, _, _, _, _) v
+  | isLocalId v = case lookupInScope in_scope v of
+                    Just v' -> v'
+                    Nothing -> pprPanic "refinedFromInScope" (ppr in_scope $$ ppr v)
+  | otherwise = v
+
+{- *********************************************************************
+*                                                                      *
+                Impedance matching to type substitution
+*                                                                      *
+********************************************************************* -}
+
+getSubst :: SimplEnv -> CoreSubst
+getSubst SimplEnv{ seInScope = in_scope
+                 , seTCvSubst = tcvs
+                 , seTvSubst = tvs
+                 , seKCvSubst = kcvs
+                 , seKvSubst = kvs }
+  = mkCoreSubst in_scope emptyVarEnv tcvs tvs kcvs kvs
+
+substTy :: HasDebugCallStack => SimplEnv -> CoreType -> CoreType
+substTy env ty = Subst.substTy (getSubst env) ty
