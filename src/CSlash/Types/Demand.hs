@@ -255,7 +255,7 @@ strictCallArity sd = go 0 sd
     go n _ = n
 
 subDemandIfEvaluated :: Demand -> SubDemand
-subDemandIfEvaluated (_ :* sd) = sdo
+subDemandIfEvaluated (_ :* sd) = sd
 
 argsOneShots :: DmdSig -> Arity -> [[OneShotInfo]]
 argsOneShots (DmdSig (DmdType _ arg_ds)) n_val_args
