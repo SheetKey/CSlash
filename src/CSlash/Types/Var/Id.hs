@@ -227,6 +227,10 @@ isLocalId :: Id p -> Bool
 isLocalId (Id { id_scope = LocalId _ }) = True
 isLocalId _ = False
 
+isLocalId_maybe :: Id p -> Maybe ExportFlag
+isLocalId_maybe Id{ id_scope = LocalId ef } = Just ef
+isLocalId_maybe _ = Nothing
+
 isJoinId :: Id p -> Bool
 isJoinId id = case idDetails id of
   JoinId _ -> True
