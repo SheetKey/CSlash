@@ -71,16 +71,20 @@ simpleOptPgm
   :: SimpleOpts
   -> Module
   -> CoreProgram
-  -> (CoreProgram, CoreProgram)
-simpleOptPgm opts this_mod binds = (reverse binds', occ_anald_binds)
+  -> [CoreRule]
+  -> (CoreProgram, [CoreRule], CoreProgram)
+simpleOptPgm opts this_mod binds rules@[] = (reverse binds', rules', occ_anald_binds)
   where
-    occ_anald_binds = panic "occurAnalyzePgm this_mod (const True) binds" -- deal with rules
+    occ_anald_binds = occurAnalyzePgm this_mod (const True) (\_ -> False) rules binds
 
-    (final_env, binds') = panic "foldl' do_one (emptyEnv opts, []) occ_anald_binds"
+    (final_env, binds') = foldl' do_one (emptyEnv opts, []) occ_anald_binds
+
+    rules' = [] -- TODO
 
     do_one (env, binds') bind = case simple_opt_bind env bind TopLevel of
                                   (env', Nothing) -> (env', binds')
                                   (env', Just bind') -> (env', bind' : binds')
+simpleOptPgm _ _ _ _ = panic "simpleOptPgm non-empty rules"
 
 type SimpleClo = (SimpleOptEnv, InExpr)
 

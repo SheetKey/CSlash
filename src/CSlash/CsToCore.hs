@@ -129,7 +129,10 @@ deSugar cs_env
 
               endPassCsEnvIO cs_env name_ppr_ctx CoreDesugar final_pgm [] -- TODO: rules
               let simpl_opts = initSimpleOpts dflags
-              let (ds_binds, occ_anald_binds) = simpleOptPgm simpl_opts mod final_pgm
+              let (ds_binds, ds_rules_for_imps, occ_anald_binds)
+                    = simpleOptPgm simpl_opts mod final_pgm [] -- TODO: rules
+              massert (null ds_rules_for_imps) -- TODO: rules
+              
               putDumpFileMaybe logger Opt_D_dump_occur_anal "Occurrence analysis"
                 FormatCore (pprCoreBindings occ_anald_binds)
 
