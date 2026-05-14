@@ -386,6 +386,9 @@ updOneShotInfo id one_shot
 zapInfo :: (IdInfo -> Maybe IdInfo) -> Id p -> Id p
 zapInfo zapper id = maybeModifyIdInfo (zapper (idInfo id)) id
 
+zapLamIdInfo :: Id p -> Id p
+zapLamIdInfo = zapInfo zapLamInfo
+
 zapFragileIdInfo :: Id p -> Id p
 zapFragileIdInfo = zapInfo zapFragileInfo
 
