@@ -53,22 +53,27 @@ occurAnalyzeExpr expr = expr'
 occurAnalyzePgm
   :: Module
   -> (Id Zk -> Bool)
+  -> (Activation -> Bool)
+  -> [CoreRule]
   -> CoreProgram
   -> CoreProgram
-occurAnalyzePgm this_mod active_unf binds
-  | isEmptyDetails final_usage
-  = occ_anald_binds
-  | otherwise
-  = warnPprTrace True "Glomming in" (hang (ppr this_mod <> colon) 2 (ppr final_usage))
-    (panic "occ_anald_glommed_binds Not possible")
-  where
-    init_env = initOccEnv { occ_unf_act = active_unf }
+occurAnalyzePgm this_mod active_unf active_rule imp_rules binds
+  -- | isEmptyDetails final_usage
+  -- = occ_anald_binds
+  | otherwise = panic "unfinished: need to deal with rules here now"
+  -- = warnPprTrace True "Glomming in" (hang (ppr this_mod <> colon) 2 (ppr final_usage))
+  --   (panic "occ_anald_glommed_binds Not possible")
+  -- where
+  --   init_env = initOccEnv { occ_rule_act = active_rule
+  --                         , occ_unf_act = active_unf }
 
-    WUD final_usage occ_anald_binds = go binds init_env
+  --   WUD final_usage occ_anald_binds = go binds init_env
 
-    go :: [CoreBind ] -> OccEnv -> WithUsageDetails [CoreBind]
-    go [] _ = WUD emptyDetails []
-    go (bind:binds) env = occAnalBind env TopLevel bind (go binds) (++)
+  --   go :: [CoreBind ] -> OccEnv -> WithUsageDetails [CoreBind]
+  --   go [] _ = WUD emptyDetails []
+  --   go (bind:binds) env = occAnalBind env TopLevel imp_rule_edges bind (go binds) (++)
+
+  --   initial_uds = addManyOccs emptyDetails 
 
 {- *********************************************************************
 *                                                                      *
