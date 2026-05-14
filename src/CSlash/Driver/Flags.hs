@@ -86,6 +86,8 @@ data DumpFlag
   | Opt_D_dump_faststrings
   | Opt_D_faststring_stats
   | Opt_D_ipe_stats
+  | Opt_D_dump_rule_rewrites
+  | Opt_D_dump_rule_firings
   deriving (Eq, Ord, Show, Enum, Bounded)
 
 getDumpFlagFrom
@@ -117,6 +119,8 @@ enabledIfVerbose Opt_D_dump_ticked                 = False
 enabledIfVerbose Opt_D_dump_mod_cycles             = False
 enabledIfVerbose Opt_D_dump_mod_map                = False
 enabledIfVerbose Opt_D_dump_ec_trace               = False
+enabledIfVerbose Opt_D_dump_rule_firings           = False
+enabledIfVerbose Opt_D_dump_rule_rewrites          = False
 enabledIfVerbose _                                 = True
 
 
