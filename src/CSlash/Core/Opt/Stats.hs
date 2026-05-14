@@ -20,6 +20,10 @@ import qualified Data.Map as Map
 import qualified Data.Map.Strict as MapStrict
 import CSlash.Utils.Panic
 
+isZeroSimplCount :: SimplCount -> Bool
+isZeroSimplCount (VerySimplCount n) = n == 0
+isZeroSimplCount SimplCount = panic "isZerosimplcount"
+
 data SimplCount
   = VerySimplCount !Int
   | SimplCount
@@ -31,6 +35,10 @@ data SimplCount
     -- }
 
 -- type TickCounts = Map Tick Int
+
+simplCountN :: SimplCount -> Int
+simplCountN (VerySimplCount n) = n
+simplCountN SimplCount = panic "simplcountn"
 
 pprSimplCount :: SimplCount -> SDoc
 pprSimplCount = panic "pprSimplCount"
