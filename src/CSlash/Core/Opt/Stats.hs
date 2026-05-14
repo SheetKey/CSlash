@@ -2,6 +2,7 @@ module CSlash.Core.Opt.Stats where
 
 import CSlash.Cs.Pass
 
+import CSlash.Core
 import CSlash.Types.Var
 import CSlash.Types.Error
 import CSlash.Core.Kind (MonoKind)
@@ -55,10 +56,12 @@ data Tick
   | RuleFired FastString
 
   | LetFloatFromLet
-  | EtaExpancion (Id Zk)
-  | EtaReduction (Id Zk)
-  | BetaReduction (Id Zk) (Maybe (MonoKind Zk))
+  | EtaExpansion CoreBndr
+  | EtaReduction CoreBndr
+  | BetaReduction CoreBndr (Maybe (MonoKind Zk))
 
   | CaseOfCase (Id Zk)
   | KnownBranch (Id Zk)
+  | CaseElim (Id Zk)
+
   | SimplifierDone
