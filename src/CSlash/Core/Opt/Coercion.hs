@@ -43,3 +43,6 @@ optKiCoercion opts env co
   = panic "optKiCoercion"
   | otherwise
   = substKiCo env co
+
+optTyCoercion :: OptCoercionOpts -> CoreSubst -> TypeCoercion Zk -> TypeCoercion Zk
+optTyCoercion = panic "optTyCoercion"
