@@ -482,6 +482,24 @@ isOneShotFun (Lam b _ e) = isOneShotBndr b && isOneShotFun e
 isOneShotFun (Cast e _) = isOneShotFun e
 isOneShotFun _ = True
 
+zapLambdaBndrs :: CoreExpr -> FullArgCount -> CoreExpr
+zapLambdaBndrs fun arg_count
+  = zap arg_count fun `orElse` fun
+  where
+    zap :: FullArgCount -> CoreExpr -> Maybe CoreExpr
+    zap 0 e | isOneShotFun e = Nothing
+            | otherwise = Just e
+    zap n (Cast e co) = do
+      e' <- zap n e
+      return (Cast e' co)
+    zap n (Lam b k e) = do
+      e' <- zap (n - 1) e
+      return (Lam (zap_bndr b) k e')
+    zap _ _ = Nothing
+
+    zap_bndr (Core.Id b) = Core.Id (zapLamIdInfo b)
+    zap_bndr b = b
+
 occAnalLamTail :: OccEnv -> CoreExpr -> WithTailUsageDetails CoreExpr
 occAnalLamTail env expr
   = let !(WUD usage expr') = occ_anal_lam_tail env expr
@@ -816,6 +834,16 @@ mkZeroedForm (UD { ud_env = rhs_occs })
                     Binder swap
 *                                                                      *
 ********************************************************************* -}
+
+data BinderSwapDecision
+  = NoBinderSwap
+  | DoBinderSwap OutId (Maybe CoreTypeCoercion)
+
+scrutOkForBinderSwap :: OutExpr -> BinderSwapDecision
+scrutOkForBinderSwap (Var v) = DoBinderSwap v Nothing
+scrutOkForBinderSwap (Cast (Var v) co) = DoBinderSwap v (Just (mkSymTyCo co))
+scrutOkForBinderSwap (Tick _ e) = scrutOkForBinderSwap e
+scrutOkForBinderSwap _ = NoBinderSwap
 
 lookupBndrSwap :: OccEnv -> Id Zk -> (CoreExpr, Id Zk)
 lookupBndrSwap env@(OccEnv { occ_bs_env = bs_env }) bndr
