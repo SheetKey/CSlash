@@ -33,6 +33,9 @@ data UnitEnv = UnitEnv
   , ue_namever :: !CsNameVersion
   }
 
+ueEPS :: UnitEnv -> IO ExternalPackageState
+ueEPS = eucEPS . ue_eps
+
 initUnitEnv :: UnitId -> HomeUnitGraph -> CsNameVersion -> Platform -> IO UnitEnv
 initUnitEnv cur_unit hug namever platform = do
   eps <- initExternalUnitCache
