@@ -52,6 +52,10 @@ import Data.Ord            ( comparing )
 import Control.Monad       ( guard )
 import qualified Data.Set as Set
 
+zapBndrUnfolding :: CoreBndr -> CoreBndr
+zapBndrUnfolding (Core.Id b) = Core.Id (zapIdUnfolding b)
+zapBndrUnfolding b = b
+
 {-**********************************************************************
 *                                                                      *
            Type of a Core atom/expression
@@ -299,11 +303,16 @@ trivial_expr_fold k_id k_lit k_triv k_not_triv = go
 exprIsTrivial :: CoreExpr -> Bool
 exprIsTrivial e = trivial_expr_fold (const True) (const True) True False e
 
+getIdFromTrivialExpr_maybe :: CoreExpr -> Maybe CoreId
+getIdFromTrivialExpr_maybe e = trivial_expr_fold Just (const Nothing) Nothing Nothing e
+
 {- *********************************************************************
 *                                                                      *
              exprIsCheap, exprIsExpandable
 *                                                                      *
 ********************************************************************* -}
+
+-- We follow 9.14 for this section.
 
 type CheapAppFun = CoreId -> Arity -> Bool
 
@@ -331,43 +340,40 @@ exprIsCheapX ok_app expandable e = ok e
     go n (Let (NonRec _ r) e) = not expandable && go n e && ok r
     go n (Let (Rec prs) e) = not expandable && go n e && all (ok . snd) prs
 
-exprIsExpandable :: CoreExpr -> Bool
-exprIsExpandable e = ok e
-  where
-    ok e = go 0 e
-
-    go n (Var v) = isExpandableApp v n
-    go _ (Lit {}) = True
-    go _ (Type {}) = True
-    go _ (KiCo {}) = True
-    go _ (Kind {}) = True
-    go n (Cast e _) = go n e
-    go n (Tick t e) | tickishCounts t = False
-                    | otherwise = go n e
-    go n (Lam x k e) | isRuntimeVar x = n ==0 || go (n - 1) e
-                     | otherwise = go n e
-    go n (App f e) | isRuntimeArg e = go (n + 1) f && ok e
-                   | otherwise = go n f
-    go _ (Case {}) = False
-    go _ (Let {}) = False
-
 exprIsWorkFree :: CoreExpr -> Bool
 exprIsWorkFree e = exprIsCheapX isWorkFreeApp False e
+
+exprIsCheap :: CoreExpr -> Bool
+exprIsCheap e = exprIsCheapX isCheapApp False e
+
+exprIsExpandable :: CoreExpr -> Bool
+exprIsExpandable e = exprIsCheapX isExpandableApp True e
 
 isWorkFreeApp :: CheapAppFun
 isWorkFreeApp fn n_val_args
   | n_val_args == 0
   = True
-  | n_val_args <- idArity fn
+  | n_val_args < idArity fn
   = True
   | otherwise
   = case idDetails fn of
-      DataConId {} -> True
-      -- TODO: PrimOpId
-      _ -> False
+      DataConId{} -> True
+      -- PrimOpId
+      VanillaId -> False
+      TickBoxOpId{} -> False
+      JoinId{} -> False
 
-isExpandable :: CoreExpr -> Bool
-isExpandable e = exprIsCheapX isExpandableApp True e
+isCheapApp :: CheapAppFun
+isCheapApp fn n_val_args
+  | isWorkFreeApp fn n_val_args = True
+  | isDeadEndId fn = True
+  | otherwise
+  = case idDetails fn of
+      DataConId{} -> True
+      -- PrimOpId
+      VanillaId -> False
+      TickBoxOpId{} -> False
+      JoinId{} -> False
 
 isExpandableApp :: CheapAppFun
 isExpandableApp fn n_val_args
@@ -402,6 +408,9 @@ isExpandableApp fn n_val_args
 
 exprOkForSpeculation :: CoreExpr -> Bool
 exprOkForSpeculation = panic "unfinished"
+
+exprOkToDiscard :: CoreExpr -> Bool
+exprOkToDiscard = panic "unfinished"
 
 {- *********************************************************************
 *                                                                      *
@@ -480,6 +489,35 @@ disjointCoreVarSets (ids1, tcvs1, tvs1, kcvs1, kvs1) (ids2, tcvs2, tvs2, kcvs2, 
     && disjointVarSet kcvs1 kcvs2
     && disjointVarSet kvs1 kvs2
 
+mapUnionCoreVarSets :: (a -> CoreVarSets) -> [a] -> CoreVarSets
+mapUnionCoreVarSets get_sets xs
+  = foldr (unionCoreVarSets . get_sets) emptyCoreVarSets xs
+
+unionCoreVarSets :: CoreVarSets -> CoreVarSets -> CoreVarSets
+unionCoreVarSets (ids1, tcvs1, tvs1, kcvs1, kvs1) (ids2, tcvs2, tvs2, kcvs2, kvs2)
+  = ( unionVarSet ids1 ids2
+    , unionVarSet tcvs1 tcvs2
+    , unionVarSet tvs1 tvs2
+    , unionVarSet kcvs1 kcvs2
+    , unionVarSet kvs1 kvs2 )
+
+nonDetStrictFoldCoreVarSets
+  :: (CoreId -> a -> a)
+  -> (CoreTyCoVar -> a -> a)
+  -> (CoreTyVar -> a -> a)
+  -> (CoreKiCoVar -> a -> a)
+  -> (CoreKiVar -> a -> a)
+  -> a
+  -> CoreVarSets
+  -> a
+nonDetStrictFoldCoreVarSets do_id do_tcv do_tv do_kcv do_kv a (ids, tcvs, tvs, kcvs, kvs)
+  = flip (nonDetStrictFoldVarSet do_id) ids $
+    flip (nonDetStrictFoldVarSet do_tcv) tcvs $
+    flip (nonDetStrictFoldVarSet do_tv) tvs $
+    flip (nonDetStrictFoldVarSet do_kcv) kcvs $
+    flip (nonDetStrictFoldVarSet do_kv) kvs $
+    a    
+
 {- *********************************************************************
 *                                                                      *
               Type utilities
@@ -494,6 +532,16 @@ isEmptyTy ty
   = True
   | otherwise
   = False
+
+{- *********************************************************************
+*                                                                      *
+              InScopeSet
+*                                                                      *
+********************************************************************* -}
+
+extendInScopeSetBind :: InScopeSet CoreId -> CoreBind -> InScopeSet CoreId
+extendInScopeSetBind (InScope in_scope) binds
+  = InScope $ foldBindersOfBindStrict extendVarSet in_scope binds
 
 {- *********************************************************************
 *                                                                      *
