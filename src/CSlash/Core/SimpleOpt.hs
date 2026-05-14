@@ -74,9 +74,9 @@ simpleOptPgm
   -> (CoreProgram, CoreProgram)
 simpleOptPgm opts this_mod binds = (reverse binds', occ_anald_binds)
   where
-    occ_anald_binds = occurAnalyzePgm this_mod (const True) binds
+    occ_anald_binds = panic "occurAnalyzePgm this_mod (const True) binds" -- deal with rules
 
-    (final_env, binds') = foldl' do_one (emptyEnv opts, []) occ_anald_binds
+    (final_env, binds') = panic "foldl' do_one (emptyEnv opts, []) occ_anald_binds"
 
     do_one (env, binds') bind = case simple_opt_bind env bind TopLevel of
                                   (env', Nothing) -> (env', binds')
