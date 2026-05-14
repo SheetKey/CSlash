@@ -526,6 +526,10 @@ wrapJoinFloatsX floats body
 wrapJoinFloats :: JoinFloats -> OutExpr -> OutExpr
 wrapJoinFloats join_floats body = foldrOL Let body join_floats
 
+getTopFloatBinds :: SimplFloats -> [CoreBind]
+getTopFloatBinds SimplFloats{ sfLetFloats = lbs, sfJoinFloats = jbs }
+  = assert (isNilOL jbs) $ letFloatBinds lbs
+
 {-# INLINE mapLetFloats #-}
 mapLetFloats :: LetFloats -> ((CoreId, CoreExpr) -> (CoreId, CoreExpr)) -> LetFloats
 mapLetFloats (LetFloats fs ff) fun
