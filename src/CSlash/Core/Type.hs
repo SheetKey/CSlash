@@ -16,7 +16,8 @@ module CSlash.Core.Type
 
   , mkFunTy
 
-  , mkForAllTy, mkForAllKiCo, mkBigLamTy
+  , mkForAllTy, mkForAllKiCo, mkForAllKiCos, mkBigLamTy
+  , mkInfForAllTy, mkInfForAllTys
 
   , mkTyVarTy, mkTyVarTys
 
@@ -347,6 +348,11 @@ mkFunctionType :: HasDebugCallStack => Type p -> MonoKind p -> Type p -> Type p
 mkFunctionType arg_ty ki res_ty
   = FunTy { ft_kind = ki, ft_arg = arg_ty, ft_res = res_ty }
 
+splitFunTy :: HasPass p pass => Type p -> (Type p, MonoKind p, Type p)
+splitFunTy ty = case splitFunTy_maybe ty of
+  Just (arg, ki, res) -> (arg, ki, res)
+  Nothing -> pprPanic "splitFunTy" (ppr ty)
+
 {-# INLINE splitFunTy_maybe #-}
 splitFunTy_maybe :: HasPass p pass => Type p -> Maybe (Type p, MonoKind p, Type p)
 splitFunTy_maybe ty
@@ -485,6 +491,14 @@ tyConAppTyCon_maybe ty = case coreFullView ty of
   TyConApp tc _ -> Just tc
   FunTy {} -> Just fUNTyCon
   _ -> Nothing
+
+tyConAppArgs_maybe :: HasPass p pass => Type p -> Maybe [Type p]
+tyConAppArgs_maybe ty = case splitTyConApp_maybe ty of
+                          Just (_, tys) -> Just tys
+                          Nothing -> Nothing
+
+tyConAppArgs :: (HasDebugCallStack, HasPass p pass) => Type p -> [Type p]
+tyConAppArgs ty = tyConAppArgs_maybe ty `orElse` pprPanic "tyConAppArgs" (ppr ty)
 
 splitTyConApp_maybe
   :: (HasDebugCallStack, HasPass p pass)
