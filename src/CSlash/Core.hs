@@ -256,11 +256,10 @@ type CoreKiVar = KiVar Zk
 type CoreType = Type Zk
 type CoreKind = Kind Zk
 type CoreMonoKind = MonoKind Zk
-type CoreVarSets = (IdSet Zk, TyCoVarSet Zk, TyVarSet Zk, KiCoVarSet Zk, KiVarSet Zk)
 type CoreDataCon = DataCon Zk
 
-emptyCoreVarSets :: CoreVarSets
-emptyCoreVarSets = (emptyVarSet, emptyVarSet, emptyVarSet, emptyVarSet, emptyVarSet)
+type CoreVarSets = (IdSet Zk, TyCoVarSet Zk, TyVarSet Zk, KiCoVarSet Zk, KiVarSet Zk)
+type DCoreVarSets = (DIdSet Zk, DTyCoVarSet Zk, DTyVarSet Zk, DKiCoVarSet Zk, DKiVarSet Zk)
 
 type CoreTypeCoercion = TypeCoercion Zk
 type CoreKindCoercion = KindCoercion Zk
@@ -654,3 +653,6 @@ ruleModule BuiltinRule{} = Nothing
 
 ruleIdName :: CoreRule -> Name
 ruleIdName = ru_fn
+
+setRuleIdName :: Name -> CoreRule -> CoreRule
+setRuleIdName nm ru = ru { ru_fn = nm }
