@@ -1,4 +1,8 @@
+{-# LANGUAGE BangPatterns #-}
+
 module CSlash.Core.Opt.Simplify where
+
+import Prelude hiding ((<>))
 
 import CSlash.Cs.Pass
 
@@ -7,25 +11,29 @@ import CSlash.Driver.Flags
 import CSlash.Core
 import CSlash.Core.Rules
 import CSlash.Core.Ppr     ( pprCoreBindings, pprCoreExpr )
--- import CSlash.Core.Opt.OccurAnal ( occurAnalysePgm, occurAnalyseExpr )
--- import CSlash.Core.Stats   ( coreBindsSize, coreBindsStats, exprSize )
--- import CSlash.Core.Utils   ( mkTicks, stripTicksTop )
+import CSlash.Core.Opt.OccurAnal ( occurAnalyzePgm, occurAnalyzeExpr )
+import CSlash.Core.Stats   ( coreBindsSize, coreBindsStats, exprSize )
+import CSlash.Core.Utils   ( mkTicks, stripTicksTop )
 import CSlash.Core.Lint    ( LintPassResultConfig, dumpPassResult, lintPassResult )
 import CSlash.Core.Opt.Simplify.Iteration ( simplTopBinds, simplExpr, simplImpRules )
+import CSlash.Core.Opt.Simplify.Utils (activeRule)
 import CSlash.Core.Opt.Simplify.Inline ( activeUnfolding )
 import CSlash.Core.Opt.Simplify.Env
 import CSlash.Core.Opt.Simplify.Monad
--- import CSlash.Core.Opt.Stats ( simplCountN )
+import CSlash.Core.Opt.Stats
 
 import CSlash.Utils.Error  ( withTiming )
 import CSlash.Utils.Logger as Logger
 import CSlash.Utils.Outputable
 import CSlash.Utils.Constants (debugIsOn)
+import CSlash.Utils.Panic
+import CSlash.Utils.Trace
 
--- import CSlash.Unit.Env ( UnitEnv, ueEPS )
+import CSlash.Unit.Env ( UnitEnv, ueEPS )
 import CSlash.Unit.External
 import CSlash.Unit.Module.ModGuts
 
+import CSlash.Types.Var
 import CSlash.Types.Var.Id
 import CSlash.Types.Var.Id.Info
 import CSlash.Types.Basic
@@ -115,7 +123,7 @@ simplifyPgm logger unit_env name_ppr_ctx opts guts@(ModGuts { mg_module = this_m
       | let sz = coreBindsSize binds
       , () <- sz `seq` ()
       = do let tagged_binds = {-# SCC "OccAnal" #-}
-                              occurAnaluzePgm this_mod active_unf active_rule local_rules binds
+                              occurAnalyzePgm this_mod active_unf active_rule local_rules binds
 
            Logger.putDumpFileMaybe logger Opt_D_dump_occur_anal "Occurrence analysis"
              FormatCore (pprCoreBindings tagged_binds)
@@ -147,13 +155,13 @@ simplifyPgm logger unit_env name_ppr_ctx opts guts@(ModGuts { mg_module = this_m
 
              else do let binds2 = {-# SCC "ZapInd" #-} shortOutIndirections binds1
 
-                     dump_end_iteration logger dump_cor_sizes name_ppr_ctx
+                     dump_end_iteration logger dump_core_sizes name_ppr_ctx
                        iteration_no counts1 binds2 rules1
 
                      for_ (so_pass_result_cfg opts) $ \pass_result_cfg ->
                        lintPassResult logger pass_result_cfg binds2
 
-                     do_iterations (iteration_no + 1) (counts1 : counts_so_fat) binds2 rules1
+                     do_iteration (iteration_no + 1) (counts1 : counts_so_far) binds2 rules1
       where
         totalize :: [SimplCount] -> SimplCount
         totalize = foldr (\c acc -> acc `plusSimplCount` c)
@@ -169,7 +177,7 @@ dump_end_iteration
   -> [CoreRule]
   -> IO ()
 dump_end_iteration logger dump_core_sizes name_ppr_ctx iteration_no counts binds rules
-  = dumpPassResult logger dump_core_sizes name_ppr_ctx mb_flag hdr ppr_counts binds rules
+  = dumpPassResult logger dump_core_sizes name_ppr_ctx mb_flag hdr pp_counts binds rules
   where
     mb_flag | logHasDumpFlag logger Opt_D_dump_simpl_iterations = Just Opt_D_dump_simpl_iterations
             | otherwise = Nothing
@@ -197,7 +205,7 @@ shortOutIndirections binds
 
     exp_ids = map fst $ nonDetEltsUFM ind_env
     exp_id_set = mkVarSet exp_ids
-    no_need_to_flatten = all (null . ruleInfoRule . idSpecialization) exp_ids
+    no_need_to_flatten = all (null . ruleInfoRules . idSpecialization) exp_ids
 
     binds' = concatMap zap binds
 
@@ -219,13 +227,13 @@ makeIndEnv binds = foldl' add_bind emptyVarEnv binds
   where
     add_bind :: IndEnv -> CoreBind -> IndEnv
     add_bind env (NonRec exported_id rhs) = add_pair env (exported_id, rhs)
-    add_bind env (Rec pairs) = foldrl' add_pair env pairs
+    add_bind env (Rec pairs) = foldl' add_pair env pairs
 
     add_pair :: IndEnv -> (CoreId, CoreExpr) -> IndEnv
     add_pair env (exported_id, exported)
       | (ticks, Var local_id) <- stripTicksTop tickishFloatable exported
       , shortMeOut env exported_id local_id
-      = extendVarenv env local_id (exported_id, ticks)
+      = extendVarEnv env local_id (exported_id, ticks)
     add_pair env _ = env
 
 shortMeOut :: IndEnv -> CoreId -> CoreId -> Bool
@@ -249,12 +257,12 @@ hasShortableIdInfo id
 
 transferIdInfo :: CoreId -> CoreId -> (CoreId, CoreId)
 transferIdInfo exported_id local_id
-  = ( modifyIfInfo transfer exported_id
+  = ( modifyIdInfo transfer exported_id
     , modifyIdInfo zap_info local_id )
   where
     local_info = idInfo local_id
     transfer exp_info = exp_info `setDmdSigInfo` dmdSigInfo local_info
-                                 `setUnfoldingInfo` realUnfoldingInfo loacl_info
+                                 `setUnfoldingInfo` realUnfoldingInfo local_info
                                  `setInlinePragInfo` inlinePragInfo local_info
                                  `setRuleInfo` addRuleInfo (ruleInfo exp_info) new_info
 
