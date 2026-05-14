@@ -42,6 +42,12 @@ import Data.Char (ord)
 *                                                                      *
 **********************************************************************-}
 
+mkCoreLet :: CoreBind -> CoreExpr -> CoreExpr
+mkCoreLet (NonRec bndr rhs) body
+  = bindNonRec bndr rhs body
+mkCoreLet bind body
+  = Let bind body
+
 mkCoreLams :: [(lamB, Maybe CoreMonoKind)] -> Expr lamB letB -> Expr lamB letB
 mkCoreLams bndrs body = foldr (uncurry Lam) body bndrs 
 
@@ -86,6 +92,13 @@ mkIfThenElse guard then_expr else_expr
     [ Alt (DataAlt falseDataCon) [] else_expr
     , Alt (DataAlt trueDataCon) [] then_expr ]
 
+castBottomExpr :: CoreExpr -> CoreType -> CoreExpr
+castBottomExpr e res_ty
+  | e_ty `eqType` res_ty = e
+  | otherwise = Case e (mkWildValBinder e_ty) res_ty []
+  where
+    e_ty = exprType e
+
 {-**********************************************************************
 *                                                                      *
            Floats
@@ -104,3 +117,6 @@ instance Outputable FloatBind where
 wrapFloat :: FloatBind -> CoreExpr -> CoreExpr
 wrapFloat (FloatLet defns) body = Let defns body
 wrapFloat (FloatCase e b con bs) body = mkSingleAltCase e b con bs body
+
+wrapFloats :: [FloatBind] -> CoreExpr -> CoreExpr
+wrapFloats floats expr = foldr wrapFloat expr floats
