@@ -323,6 +323,10 @@ noDomFVs thing (tv, kcv, kv) =
 mkKvSubst :: InScopeSet (KiVar p') -> KvSubstEnv p p' -> Subst p p'
 mkKvSubst kv_is kenv = emptySubst { kv_in_scope = kv_is, kv_env = kenv }
 
+termSubstInScope :: CoreSubst -> TermSubstInScope
+termSubstInScope Subst{..}
+  = (id_in_scope, tcv_in_scope, tv_in_scope, kcv_in_scope, kv_in_scope)
+
 mkCoreSubst
   :: TermSubstInScope
   -> CoreIdSubstEnv
@@ -756,6 +760,10 @@ lookupIdSubst (Subst { id_in_scope = in_scope, id_env = ids }) v
   | Just e <- lookupVarEnv ids v = e
   | Just v' <- lookupInScope in_scope v = Var v'
   | otherwise = pprPanic "lookupIdSubst" (ppr v $$ ppr in_scope)
+
+lookupIdSubst_maybe :: HasDebugCallStack => CoreSubst -> Id Zk -> Maybe CoreExpr
+lookupIdSubst_maybe Subst{ id_env = ids } v
+  = lookupVarEnv ids v
 
 {- *********************************************************************
 *                                                                      *
