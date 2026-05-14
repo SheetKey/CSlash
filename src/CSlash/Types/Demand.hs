@@ -227,6 +227,9 @@ plusSubDmd (Poly n1) (Poly n2) = Poly (plusCard n1 n2)
 plusSubDmd sd1@Poly{} sd2 = plusSubDmd sd2 sd1
 plusSubDmd _ _ = topSubDmd
 
+isStrUsedDmd :: Demand -> Bool
+isStrUsedDmd (n :* _) = not (isAbs n)
+
 floatifyDmd :: Demand -> Demand
 floatifyDmd = multDmd C_1N
 
