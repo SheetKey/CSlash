@@ -132,6 +132,9 @@ unfoldingInfo info
 setUnfoldingInfo :: IdInfo -> Unfolding -> IdInfo
 setUnfoldingInfo info uf = info { realUnfoldingInfo = uf }
 
+hasInlineUnfolding :: IdInfo -> Bool
+hasInlineUnfolding info = isInlineUnfolding (unfoldingInfo info)
+
 setArityInfo :: IdInfo -> ArityInfo -> IdInfo
 setArityInfo info ar = info { bitfield = bitfieldSetArityInfo ar (bitfield info) }
 
@@ -241,6 +244,25 @@ ppCafInfo MayHaveCafRefs = empty
 *                                                                      *
 ********************************************************************* -}
 
+zapLamInfo :: IdInfo -> Maybe IdInfo
+zapLamInfo info@IdInfo{ occInfo = occ, demandInfo = demand }
+  | is_safe_occ occ && is_safe_dmd demand
+  = Nothing
+  | otherwise
+  = Just $ info { occInfo = safe_occ, demandInfo = topDmd }
+  where
+    is_safe_occ occ | isAlwaysTailCalled occ = False
+    is_safe_occ OneOcc{ occ_in_lam = NotInsideLam } = False
+    is_safe_occ _ = True
+
+    safe_occ = case occ of
+      OneOcc{} -> occ { occ_in_lam = IsInsideLam
+                      , occ_tail = NoTailCallInfo }
+      IAmALoopBreaker{} -> occ { occ_tail = NoTailCallInfo }
+      _ -> occ
+
+    is_safe_dmd dmd = not (isStrUsedDmd dmd)
+
 trimUnfolding :: Unfolding -> Unfolding
 trimUnfolding unf | isEvaldUnfolding unf = evaldUnfolding
                   | otherwise = noUnfolding
@@ -267,6 +289,9 @@ zapTailCallInfo info = case occInfo info of
                             occ | isAlwaysTailCalled occ -> Just (info `setOccInfo` safe_occ)
                                 | otherwise -> Nothing
                               where safe_occ = occ { occ_tail = NoTailCallInfo }
+
+zapCallArityInfo :: IdInfo -> IdInfo
+zapCallArityInfo info = setCallArityInfo info 0
 
 {- *********************************************************************
 *                                                                      *
