@@ -129,6 +129,9 @@ botArityType = mkBotArityType []
 topArityType :: ArityType
 topArityType = AT [] topDiv
 
+arityTypeArity :: SafeArityType -> Arity
+arityTypeArity (AT lams _) = length lams
+
 safeArityType :: ArityType -> SafeArityType
 safeArityType at@(AT lams _)
   = case go 0 IsCheap lams of
@@ -159,6 +162,14 @@ exprEtaExpandArity opts e
                    findRhsArity
 *                                                                      *
 ********************************************************************* -}
+
+findRhsArity
+  :: ArityOpts
+  -> RecFlag
+  -> CoreId
+  -> CoreExpr
+  -> (Bool, SafeArityType)
+findRhsArity = panic "findRhsArity"
 
 {- *********************************************************************
 *                                                                      *
@@ -238,6 +249,9 @@ etaExpand n orig_expr = panic "exa_expand in_scope (replicate n NoOneShotInfo) o
   -- where
   --   in_scope = {-# SCC "eta_expand:in-scopeX" #-}
   --              panic "mkTermInScopeSets (exprFreeVars orig_expr)"
+
+etaExpandAT :: TermSubstInScope -> SafeArityType -> CoreExpr -> CoreExpr
+etaExpandAT in_scope at orig_expr = panic "etaExpandAT"
 
 {- *********************************************************************
 *                                                                      *
