@@ -203,6 +203,7 @@ data PiTyBinder p
   | NamedKiCo (KiCoVar p)            -- forall kcv . res
   | NamedKi (KiVar p)                -- forall kv. res
   | AnonTy (Type p)                  -- a -> res
+  -- AnonTy probably also needs to record the function kind as in 'a -k> res'
   -- deriving Data
 
 instance IsPass p => Outputable (PiTyBinder (CsPass p)) where
