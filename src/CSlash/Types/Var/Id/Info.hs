@@ -206,12 +206,19 @@ data RuleInfo
 emptyRuleInfo :: RuleInfo
 emptyRuleInfo = RuleInfo [] (emptyDVarSet, emptyDVarSet, emptyDVarSet, emptyDVarSet, emptyDVarSet)
 
+isEmptyRuleInfo :: RuleInfo -> Bool
+isEmptyRuleInfo (RuleInfo rs _) = null rs
+
 ruleInfoRules :: RuleInfo -> [CoreRule]
 ruleInfoRules (RuleInfo rules _) = rules
 
 ruleInfoFreeVars
   :: RuleInfo -> (DIdSet Zk, DTyCoVarSet Zk, DTyVarSet Zk, DKiCoVarSet Zk, DKiVarSet Zk)
 ruleInfoFreeVars (RuleInfo _ fvs) = fvs
+
+setRuleInfoHead :: Name -> RuleInfo -> RuleInfo
+setRuleInfoHead fn (RuleInfo rules fvs)
+  = RuleInfo (map (setRuleIdName fn) rules) fvs
 
 {- *********************************************************************
 *                                                                      *
