@@ -1,6 +1,9 @@
 {-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
 
-module CSlash.Core.Opt.ConstantFold (builtinRules) where
+module CSlash.Core.Opt.ConstantFold
+  ( builtinRules
+  , caseRules2
+  ) where
 
 -- import GHC.Platform
 -- import GHC.Float
@@ -42,7 +45,7 @@ import CSlash.Core
 
 -- import GHC.Utils.Outputable
 -- import GHC.Utils.Misc
--- import GHC.Utils.Panic
+import CSlash.Utils.Panic
 
 -- import Control.Applicative ( Alternative(..) )
 -- import Control.Monad
@@ -54,3 +57,6 @@ import CSlash.Core
 
 builtinRules :: [CoreRule]
 builtinRules = []
+
+caseRules2 :: InExpr -> InId -> [InAlt] -> Maybe (InExpr, InId, [InAlt])
+caseRules2 scrut bndr alts = panic "caseRules2"
