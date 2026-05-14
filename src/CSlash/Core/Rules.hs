@@ -163,6 +163,10 @@ extendRuleInfo :: RuleInfo -> [CoreRule] -> RuleInfo
 extendRuleInfo (RuleInfo rs1 fvs1) rs2
   = RuleInfo (rs2 ++ rs2) (rulesFreeVarsDSets rs2 `unionFVs` fvs1)
 
+addRuleInfo :: RuleInfo -> RuleInfo -> RuleInfo
+addRuleInfo (RuleInfo rs1 fvs1) (RuleInfo rs2 fvs2)
+  = RuleInfo (rs1 ++ rs2) (fvs1 `unionDCoreVarSets` fvs2)
+
 addIdSpecializations :: CoreId -> [CoreRule] -> CoreId
 addIdSpecializations id rules
   | null rules
@@ -209,6 +213,14 @@ mkRuleEnv ModGuts{ mg_module = this_mod, mg_deps = deps, mg_rules = local_rules 
             , re_visible_orphs = mkModuleSet vis_orphs }
   where
     vis_orphs = [this_mod] -- TODO: if add dep_orphs
+
+updExternalPackageRules :: RuleEnv -> RuleBase -> RuleEnv
+updExternalPackageRules rule_env eps_rules
+  = rule_env { re_eps_rules = eps_rules }
+
+updLocalRules :: RuleEnv -> [CoreRule] -> RuleEnv
+updLocalRules rule_env local_rules
+  = rule_env { re_local_rules = mkRuleBase local_rules }
 
 getRules :: RuleEnv -> CoreId -> [CoreRule]
 getRules RuleEnv{ re_local_rules = local_rule_base
