@@ -105,3 +105,8 @@ tyCoStats co = zeroCS { cs_ty_co = 0 {-tyCoercionSize co-} }
 kiCoStats :: KindCoercion Zk -> CoreStats
 kiCoStats co = zeroCS { cs_ki_co = 0 {-kiCoercionSize co-} }
 
+coreBindsSize :: [CoreBind] -> Int
+coreBindsSize = panic "coreBindsSize"
+
+exprSize :: CoreExpr -> Int
+exprSize = panic "exprSize"
