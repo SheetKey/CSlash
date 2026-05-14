@@ -30,6 +30,9 @@ newtype ExternalUnitCache = ExternalUnitCache
 initExternalUnitCache :: IO ExternalUnitCache
 initExternalUnitCache = ExternalUnitCache <$> newIORef initExternalPackageState
 
+eucEPS :: ExternalUnitCache -> IO ExternalPackageState
+eucEPS = readIORef . euc_eps
+
 initExternalPackageState :: ExternalPackageState
 initExternalPackageState = EPS
   { eps_PIT = emptyPackageIfaceTable
