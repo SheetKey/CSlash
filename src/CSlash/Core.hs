@@ -126,6 +126,9 @@ noUnfolding = NoUnfolding
 evaldUnfolding :: Unfolding
 evaldUnfolding = OtherCon []
 
+mkOtherCon :: [AltCon] -> Unfolding
+mkOtherCon = OtherCon
+
 unfoldingTemplate :: Unfolding -> CoreExpr
 unfoldingTemplate = uf_tmpl
 
@@ -159,6 +162,13 @@ isCompulsoryUnfolding _ = False
 isStableUnfolding :: Unfolding -> Bool
 isStableUnfolding (CoreUnfolding { uf_src = src }) = isStableSource src
 isStableUnfolding _ = False
+
+isInlineUnfolding :: Unfolding -> Bool
+isInlineUnfolding CoreUnfolding{ uf_src = src, uf_guidance = guidance }
+  | isStableSource src
+  , UnfWhen{} <- guidance
+  = True
+isInlineUnfolding _ = False
 
 hasSomeUnfolding :: Unfolding -> Bool
 hasSomeUnfolding NoUnfolding = False
@@ -247,6 +257,10 @@ type CoreType = Type Zk
 type CoreKind = Kind Zk
 type CoreMonoKind = MonoKind Zk
 type CoreVarSets = (IdSet Zk, TyCoVarSet Zk, TyVarSet Zk, KiCoVarSet Zk, KiVarSet Zk)
+type CoreDataCon = DataCon Zk
+
+emptyCoreVarSets :: CoreVarSets
+emptyCoreVarSets = (emptyVarSet, emptyVarSet, emptyVarSet, emptyVarSet, emptyVarSet)
 
 type CoreTypeCoercion = TypeCoercion Zk
 type CoreKindCoercion = KindCoercion Zk
@@ -299,6 +313,23 @@ deTagAlt (Alt con bndrs rhs) = Alt con [b | TB b _ <- bndrs] (deTagExpr rhs)
 mkVarApps :: Expr b1 b2 -> [CoreId] -> Expr b1 b2
 mkVarApps f vars = foldl' (\e a -> App e (varToCoreExpr a)) f vars
 
+mkBndrApps :: Expr b1 b2 -> [CoreBndr] -> Expr b1 b2
+mkBndrApps f vars = foldl' (\e a -> App e (bndrToCoreExpr a)) f vars
+
+mkTyApps :: Expr b1 b2 -> [CoreType] -> Expr b1 b2
+mkTyApps f args = foldl' (\e a -> App e (Type a)) f args
+
+mkKiCoApps :: Expr b1 b2 -> [CoreKindCoercion] -> Expr b1 b2
+mkKiCoApps f args = foldl' (\e a -> App e (KiCo a)) f args
+
+mkKiApps :: Expr b1 b2 -> [CoreMonoKind] -> Expr b1 b2
+mkKiApps f args = foldl' (\e a -> App e (Kind a)) f args
+
+mkConApp2 :: CoreDataCon -> [CoreType] -> [CoreId] -> Expr b1 b2
+mkConApp2 con tys args = Var (dataConId con)
+                            `mkTyApps` tys
+                            `mkVarApps` args
+
 mkAbsVarApps :: Expr b1 b2 -> [(CoreBndr, a)] -> Expr b1 b2
 mkAbsVarApps = foldl' (\e (a, _) -> case a of
                                             Id v -> App e (varToCoreExpr v)
@@ -329,6 +360,9 @@ mkLetRec bs body = Let (Rec bs) body
 varToCoreExpr :: CoreId -> Expr b1 b2
 varToCoreExpr = Var
 
+varsToCoreExprs :: [CoreId] -> [Expr b1 b2]
+varsToCoreExprs vs = map varToCoreExpr vs
+
 {- *********************************************************************
 *                                                                      *
             Simple access functions
@@ -338,6 +372,9 @@ varToCoreExpr = Var
 bindersOf :: Bind b1 b2 -> [b2]
 bindersOf (NonRec binder _) = [binder]
 bindersOf (Rec pairs) = fst <$> pairs
+
+bindersOfBinds :: [Bind b1 b2] -> [b2]
+bindersOfBinds binds = foldr ((++) . bindersOf) [] binds
 
 {-# INLINE foldBindersOfBindStrict #-}
 foldBindersOfBindStrict :: (a -> b -> a) -> a -> Bind bLam b -> a
@@ -607,6 +644,13 @@ type IdUnfoldingFun = CoreId -> Unfolding
 ruleArity :: CoreRule -> Int
 ruleArity BuiltinRule = panic "BuiltinRule"
 ruleArity Rule{ ru_args = args } = length args
+
+ruleName :: CoreRule -> RuleName
+ruleName = ru_name
+
+ruleModule :: CoreRule -> Maybe Module
+ruleModule Rule { ru_origin = orig } = Just orig
+ruleModule BuiltinRule{} = Nothing
 
 ruleIdName :: CoreRule -> Name
 ruleIdName = ru_fn
