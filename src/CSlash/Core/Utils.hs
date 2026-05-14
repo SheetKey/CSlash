@@ -467,6 +467,17 @@ exprIsTopLevelBindable expr ty = True -- TODO: check for ticked strings?
 *                                                                      *
 ********************************************************************* -}
 
+unionDCoreVarSets :: DCoreVarSets -> DCoreVarSets -> DCoreVarSets
+unionDCoreVarSets (id1, tcv1, tv1, kcv1, kv1) (id2, tcv2, tv2, kcv2, kv2)
+  = ( unionDVarSet id1 id2
+    , unionDVarSet tcv1 tcv2
+    , unionDVarSet tv1 tv2
+    , unionDVarSet kcv1 kcv2
+    , unionDVarSet kv1 kv2 )
+
+emptyCoreVarSets :: CoreVarSets
+emptyCoreVarSets = (emptyVarSet, emptyVarSet, emptyVarSet, emptyVarSet, emptyVarSet)
+
 mkCoreBndrVarSets :: [CoreBndr] -> CoreVarSets
 mkCoreBndrVarSets bndrs
   = go bndrs (emptyVarSet, emptyVarSet, emptyVarSet, emptyVarSet, emptyVarSet)

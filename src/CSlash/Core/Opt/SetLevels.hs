@@ -762,18 +762,6 @@ maxInOther env var lvl
       Just lvl' -> maxLvl lvl' lvl
       Nothing -> lvl
 
---type syn to CSlash.Core
-type DCoreVarSets = (DIdSet Zk, DTyCoVarSet Zk, DTyVarSet Zk, DKiCoVarSet Zk, DKiVarSet Zk)
-
-unionDCoreVarSets :: DCoreVarSets -> DCoreVarSets -> DCoreVarSets
-unionDCoreVarSets (id1, tcv1, tv1, kcv1, kv1) (id2, tcv2, tv2, kcv2, kv2)
-  = ( unionDVarSet id1 id2
-    , unionDVarSet tcv1 tcv2
-    , unionDVarSet tv1 tv2
-    , unionDVarSet kcv1 kcv2
-    , unionDVarSet kv1 kv2 )
-
-
 lookupBndrLvl :: CoreVarEnv Level -> CoreBndr -> Maybe Level
 lookupBndrLvl (env, _, _, _, _)(Core.Id v) = lookupVarEnv env v 
 lookupBndrLvl (_, _, env, _, _) (Tv v) = lookupVarEnv env v 
