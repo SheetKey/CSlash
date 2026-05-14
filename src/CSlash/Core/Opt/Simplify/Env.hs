@@ -7,14 +7,19 @@ import Prelude hiding ((<>))
 import CSlash.Cs.Pass
 
 import CSlash.Core.Opt.Coercion ( OptCoercionOpts )
+import CSlash.Core.Opt.Arity (ArityOpts(..))
 import CSlash.Core.Opt.Simplify.Monad
-import CSlash.Core
+import CSlash.Core as C
 import CSlash.Core.Utils
 import CSlash.Core.Unfold
-import CSlash.Core.Subst as Subst
+import CSlash.Core.Subst hiding
+  ( substIdBndr, substIdType
+  , substTyVarBndr, substKiCoVarBndr, substKiVarBndr)
+import qualified CSlash.Core.Subst as Subst
 import CSlash.Core.Kind
-import CSlash.Core.Make ( mkWildValBinder{-, mkCoreLet-} )
+import CSlash.Core.Make ( mkWildValBinder, mkCoreLet )
 import CSlash.Core.Type
+import CSlash.Core.Type.FVs (noFreeVarsOfType)
 import qualified CSlash.Core.Type as Type
 
 import CSlash.Types.Var
@@ -67,6 +72,9 @@ data SimplEnv = SimplEnv
 seIdInScope :: SimplEnv -> InScopeSet CoreId
 seIdInScope env = case seInScope env of
   (ids, _, _, _, _) -> ids
+
+seArityOpts :: SimplEnv -> ArityOpts
+seArityOpts env = sm_arity_opts (seMode env)
 
 seCaseCase :: SimplEnv -> Bool
 seCaseCase = sm_case_case . seMode
@@ -128,6 +136,7 @@ data SimplMode = SimplMode
   , sm_pre_inline :: !Bool
   , sm_float_enable :: !FloatEnable
   , sm_do_eta_reduction :: !Bool
+  , sm_arity_opts :: !ArityOpts
   , sm_rule_opts :: !RuleOpts
   , sm_case_folding :: !Bool
   , sm_case_merge :: !Bool
@@ -304,6 +313,10 @@ addNewInScopeIds env@SimplEnv{ seInScope = (in_scope, tcvs, tvs, kcvs, kvs)
     in env { seInScope = (in_scope1, tcvs, tvs, kcvs, kvs)
            , seIdSubst = id_subst1 }
 
+modifyInScope :: SimplEnv -> CoreId -> SimplEnv
+modifyInScope env@SimplEnv{ seInScope = (in_scope, tcvs, tvs, kcvs, kvs) } v
+  = env { seInScope = (extendInScopeSet in_scope v, tcvs, tvs, kcvs, kvs) }
+
 enterRecGroupRHSs
   :: SimplEnv
   -> [CoreId]
@@ -369,6 +382,31 @@ instance Outputable FloatFlag where
   ppr FltOkSpec = text "FltOkSpec"
   ppr FltCareful = text "FltCareful"
 
+andFF :: FloatFlag -> FloatFlag -> FloatFlag
+andFF FltCareful _ = FltCareful
+andFF FltOkSpec FltCareful = FltCareful
+andFF FltOkSpec _ = FltOkSpec
+andFF FltStringLit flt = flt
+
+doFloatFromRhs :: FloatEnable -> TopLevelFlag -> RecFlag -> SimplFloats -> OutExpr -> Bool
+doFloatFromRhs fe lvl is_rec SimplFloats{ sfLetFloats = LetFloats fs ff } rhs
+  = floatEnabled lvl fe
+    && not (isNilOL fs)
+    && want_to_float
+    && can_float
+  where
+    want_to_float = isTopLevel lvl || exprIsCheap rhs || exprIsExpandable rhs
+
+    can_float = case ff of
+      FltStringLit -> True
+      FltOkSpec -> isNotTopLevel lvl && isNonRec is_rec
+      FltCareful -> isNotTopLevel lvl && isNonRec is_rec
+
+    floatEnabled :: TopLevelFlag -> FloatEnable -> Bool
+    floatEnabled _ FloatDisabled = False
+    floatEnabled lvl FloatNestedOnly = not (isTopLevel lvl)
+    floatEnabled _ FloatEnabled = True
+
 emptyLetFloats :: LetFloats
 emptyLetFloats = LetFloats nilOL FltStringLit
 
@@ -380,6 +418,122 @@ emptyJoinFloats = nilOL
 
 isEmptyJoinFloats :: JoinFloats -> Bool
 isEmptyJoinFloats = isNilOL
+
+unitLetFloat :: OutBind -> LetFloats
+unitLetFloat bind = assert (all (not . isJoinId) (bindersOf bind)) $
+  LetFloats (unitOL bind) (flag bind)
+  where
+    flag Rec{} = panic "what to do"
+    flag (NonRec bndr rhs)
+      | panic "exprIsTickedString rhs" = FltStringLit
+      | exprOkForSpeculation rhs = FltOkSpec
+      | otherwise = FltCareful
+
+unitJoinFloat :: OutBind -> JoinFloats
+unitJoinFloat bind = assert (all isJoinId (bindersOf bind)) $ unitOL bind
+
+mkFloatBind :: SimplEnv -> OutBind -> (SimplFloats, SimplEnv)
+mkFloatBind env bind = (floats, env { seInScope = in_scope' })
+  where
+    floats
+      | isJoinBind bind
+      = SimplFloats { sfLetFloats = emptyLetFloats
+                    , sfJoinFloats = unitJoinFloat bind
+                    , sfInScope = id_in_scope' }
+      | otherwise
+      = SimplFloats { sfLetFloats = unitLetFloat bind
+                    , sfJoinFloats = emptyJoinFloats
+                    , sfInScope = id_in_scope' }
+    !in_scope'@(id_in_scope', _, _, _, _) = case seInScope env of
+      (ids, tcvs, tvs, kcvs, kvs)
+        -> (ids `extendInScopeSetBind` bind, tcvs, tvs, kcvs, kvs)
+
+extendFloats :: SimplFloats -> OutBind -> SimplFloats 
+extendFloats SimplFloats{ sfLetFloats = floats
+                        , sfJoinFloats = jfloats
+                        , sfInScope = in_scope } bind
+  | isJoinBind bind
+  = SimplFloats { sfInScope = in_scope'
+                , sfLetFloats = floats
+                , sfJoinFloats = jfloats' }
+  | otherwise
+  = SimplFloats { sfInScope = in_scope'
+                , sfLetFloats = floats'
+                , sfJoinFloats = jfloats }
+  where
+    in_scope' = in_scope `extendInScopeSetBind` bind
+    floats' = floats `addLetFlts` unitLetFloat bind
+    jfloats' = jfloats `addJoinFlts` unitJoinFloat bind  
+
+addLetFloats :: SimplFloats -> LetFloats -> SimplFloats
+addLetFloats floats let_floats
+  = floats { sfLetFloats = sfLetFloats floats `addLetFlts` let_floats
+           , sfInScope = sfInScope floats `extendInScopeFromLF` let_floats }
+
+extendInScopeFromLF :: InScopeSet CoreId -> LetFloats -> InScopeSet CoreId
+extendInScopeFromLF in_scope (LetFloats binds _)
+  = foldlOL extendInScopeSetBind in_scope binds
+
+addJoinFloats :: SimplFloats -> JoinFloats -> SimplFloats
+addJoinFloats floats join_floats
+  = floats { sfJoinFloats = sfJoinFloats floats `addJoinFlts` join_floats
+           , sfInScope = foldlOL extendInScopeSetBind (sfInScope floats) join_floats }
+
+addFloats :: SimplFloats -> SimplFloats -> SimplFloats
+addFloats SimplFloats{ sfLetFloats = lf1, sfJoinFloats = jf1 }
+          SimplFloats{ sfLetFloats = lf2, sfJoinFloats = jf2, sfInScope = in_scope }
+  = SimplFloats { sfLetFloats = lf1 `addLetFlts` lf2
+                , sfJoinFloats = jf1 `addJoinFlts` jf2
+                , sfInScope = in_scope }
+
+addLetFlts :: LetFloats -> LetFloats -> LetFloats
+addLetFlts (LetFloats bs1 l1) (LetFloats bs2 l2)
+  = LetFloats (bs1 `appOL` bs2) (l1 `andFF` l2)
+
+letFloatBinds :: LetFloats -> [CoreBind]
+letFloatBinds (LetFloats bs _) = fromOL bs
+
+addJoinFlts :: JoinFloats -> JoinFloats -> JoinFloats
+addJoinFlts = appOL
+
+mkRecFloats :: SimplFloats -> SimplFloats
+mkRecFloats floats@SimplFloats{ sfLetFloats = LetFloats bs _
+                              , sfJoinFloats = jbs
+                              , sfInScope = in_scope }
+  = assertPpr (isNilOL bs || isNilOL jbs) (ppr floats) $
+    SimplFloats { sfLetFloats = floats'
+                , sfJoinFloats = jfloats'
+                , sfInScope = in_scope }
+  where
+    !floats' | isNilOL bs = emptyLetFloats
+             | otherwise = unitLetFloat (Rec (flattenBinds (fromOL bs)))
+    !jfloats' | isNilOL jbs = emptyJoinFloats
+              | otherwise = unitJoinFloat (Rec (flattenBinds (fromOL jbs)))
+
+wrapFloats :: SimplFloats -> OutExpr -> OutExpr
+wrapFloats floats@SimplFloats{ sfLetFloats = LetFloats bs flag
+                             , sfJoinFloats = jbs
+                             , sfInScope = in_scope } body
+  = foldrOL mk_let (wrapJoinFloats jbs body) bs
+  where mk_let | FltCareful <- flag = mkCoreLet
+               | otherwise = Let
+
+wrapJoinFloatsX :: SimplFloats -> OutExpr -> (SimplFloats, OutExpr)
+wrapJoinFloatsX floats body
+  = ( floats { sfJoinFloats = emptyJoinFloats }
+    , wrapJoinFloats (sfJoinFloats floats) body )
+
+wrapJoinFloats :: JoinFloats -> OutExpr -> OutExpr
+wrapJoinFloats join_floats body = foldrOL Let body join_floats
+
+{-# INLINE mapLetFloats #-}
+mapLetFloats :: LetFloats -> ((CoreId, CoreExpr) -> (CoreId, CoreExpr)) -> LetFloats
+mapLetFloats (LetFloats fs ff) fun
+  = LetFloats fs1 ff
+  where
+    app (NonRec b e) = case fun (b, e) of (b', e') -> NonRec b' e'
+    app (Rec bs) = Rec (strictMap fun bs)
+    !fs1 = mapOL' app fs
 
 {- *********************************************************************
 *                                                                      *
@@ -401,6 +555,149 @@ refineFromInScope (in_scope, _, _, _, _) v
                     Nothing -> pprPanic "refinedFromInScope" (ppr in_scope $$ ppr v)
   | otherwise = v
 
+lookupRecBndr :: SimplEnv -> InId -> OutId
+lookupRecBndr SimplEnv{ seInScope = in_scope, seIdSubst = ids } v
+  = case lookupVarEnv ids v of
+      Just (DoneId v) -> v
+      Just _ -> pprPanic "lookupRecBndr" (ppr v)
+      Nothing -> refineFromInScope in_scope v
+
+{- *********************************************************************
+*                                                                      *
+                Substituting an Id binder
+*                                                                      *
+********************************************************************* -}
+
+simplBinders :: SimplEnv -> [(InBndr, a)] -> SimplM (SimplEnv, [(OutBndr, a)])
+simplBinders !env bndrs = mapAccumLM simplBinder env bndrs
+
+simplIdBinders :: SimplEnv -> [InId] -> SimplM (SimplEnv, [OutId])
+simplIdBinders !env bndrs = mapAccumLM simplIdBinder env bndrs
+
+-- TODO: I may have to substitute into the kind as well. (Change 'a' to 'Maybe CoreMonoKind')
+simplBinder :: SimplEnv -> (InBndr, a) -> SimplM (SimplEnv, (OutBndr, a))
+simplBinder !env (var, a) = case var of
+  C.Id bndr -> do let (env', id) = substIdBndr env bndr
+                  seqId id `seq` return (env', (C.Id id, a))
+  Tv bndr -> do let (env', tv) = substTyVarBndr env bndr
+                seqVar tv `seq` return (env', (Tv tv, a))
+  KCv bndr -> do let (env', kcv) = substKiCoVarBndr env bndr
+                 seqVar kcv `seq` return (env', (KCv kcv, a))
+  Kv bndr -> do let (env', kv) = substKiVarBndr env bndr
+                seqVar kv `seq` return (env', (Kv kv, a))  
+
+simplIdBinder :: SimplEnv -> InId -> SimplM (SimplEnv, OutId)
+simplIdBinder !env bndr
+  = let (env', id) = substIdBndr env bndr
+    in seqId id `seq` return (env', id)
+
+simplNonRecBndr :: SimplEnv -> InId -> SimplM (SimplEnv, OutId)
+simplNonRecBndr !env id = do
+  let (!env1, id1) = substIdBndr env id
+  seqId id1 `seq` return (env1, id1)
+
+simplRecBndrs :: SimplEnv -> [InId] -> SimplM SimplEnv
+simplRecBndrs env ids
+  = assert (all (not . isJoinId) ids) $ do
+  let (!env1, ids1) = mapAccumL substIdBndr env ids
+  seqIds ids1 `seq` return env1
+
+substIdBndr :: SimplEnv -> InId -> (SimplEnv, OutId)
+substIdBndr env id = subst_id_bndr env id (\x -> x)
+
+{-# INLINE subst_id_bndr #-}
+subst_id_bndr
+  :: SimplEnv
+  -> InId
+  -> (OutId -> OutId)
+  -> (SimplEnv, OutId)
+subst_id_bndr env@SimplEnv{ seInScope = (in_scope, tcvs, tvs, kcvs, kvs)
+                          , seIdSubst = id_subst } old_id adjust_type
+  = ( env { seInScope = (new_in_scope, tcvs, tvs, kcvs, kvs)
+          , seIdSubst = new_subst }
+    , new_id )
+  where
+    !id1 = uniqAway in_scope old_id
+    !id2 = substIdType env id1
+    !id3 = zapFragileIdInfo id2
+
+    !new_id = adjust_type id3
+
+    !new_subst
+      | new_id /= old_id
+      = extendVarEnv id_subst old_id (DoneId new_id)
+      | otherwise
+      = delVarEnv id_subst old_id
+
+    !new_in_scope = in_scope `extendInScopeSet` new_id
+
+seqId :: CoreId -> ()
+seqId id = seqType (varType id) `seq`
+           idInfo id `seq`
+           ()
+
+seqIds :: [CoreId] -> ()
+seqIds [] = ()
+seqIds (id:ids) = seqId id `seq` seqIds ids
+
+seqVar :: a -> ()
+seqVar b = b `seq` ()
+
+{- *********************************************************************
+*                                                                      *
+                Join points
+*                                                                      *
+********************************************************************* -}
+
+simplNonRecJoinBndr
+  :: SimplEnv
+  -> InId
+  -> OutType
+  -> SimplM (SimplEnv, OutId)
+simplNonRecJoinBndr env id res_ty = do
+  let (env1, id1) = simplJoinBndr res_ty env id
+  seqId id1 `seq` return (env1, id1)
+
+simplRecJoinBndrs
+  :: SimplEnv
+  -> [InId]
+  -> OutType
+  -> SimplM SimplEnv
+simplRecJoinBndrs env ids res_ty
+  = assert (all isJoinId ids) $ do
+      let (env1, ids1) = mapAccumL (simplJoinBndr res_ty) env ids
+      seqIds ids1 `seq` return env1
+
+simplJoinBndr :: OutType -> SimplEnv -> InId -> (SimplEnv, OutId)
+simplJoinBndr res_ty env id
+  = subst_id_bndr env id (adjustJoinPointType res_ty)
+
+adjustJoinPointType :: CoreType -> CoreId -> CoreId
+adjustJoinPointType new_res_ty join_id = panic "adjustJoinPointType"
+  -- = assert (isJoinId join_id) $
+  --   setVarType join_id new_join_ty
+  -- where
+  --   join_arity = isJoinArity join_id
+  --   orig_ty = varType join_id
+
+  --   new_join_ty = go join_arity orig_ty
+
+  --   go :: JoinArity -> CoreType -> CoreType
+  --   go n ty
+  --     | n == 0
+  --     = new_res_ty
+
+  --     | Just (arg_bndr, body_ty) <- splitPiTy_maybe ty
+  --     = let body_ty' = go (n - 1) body_ty
+  --       in case arg_bndr of
+  --            NamedTy b -> mkForAllTy b body_ty'
+  --            NamedKiCo b -> mkForAllKiCo b body_ty'
+  --            NamedKi b -> mkBigLamTy b body_ty'
+  --            AnonTy arg_ty -> mkFunTy fun_kind arg_ty body_ty'
+
+
+
+
 {- *********************************************************************
 *                                                                      *
                 Impedance matching to type substitution
@@ -417,3 +714,52 @@ getSubst SimplEnv{ seInScope = in_scope
 
 substTy :: HasDebugCallStack => SimplEnv -> CoreType -> CoreType
 substTy env ty = Subst.substTy (getSubst env) ty
+
+substKiCo :: HasDebugCallStack => SimplEnv -> CoreKindCoercion -> CoreKindCoercion
+substKiCo env co = Subst.substKiCo (getSubst env) co
+
+substTyCo :: HasDebugCallStack => SimplEnv -> CoreTypeCoercion -> CoreTypeCoercion
+substTyCo env co = panic "Subst.substTyCo (getSubst env) co"
+
+substMonoKi :: HasDebugCallStack => SimplEnv -> CoreMonoKind -> CoreMonoKind
+substMonoKi env ki = Subst.substMonoKi (getSubst env) ki
+
+substTyVarBndr :: SimplEnv -> CoreTyVar -> (SimplEnv, CoreTyVar)
+substTyVarBndr env tv
+  = case Subst.substTyVarBndr (getSubst env) tv of
+      (subst, tv') -> ( env { seInScope = termSubstInScope subst
+                           , seTCvSubst = tcv_env subst
+                           , seTvSubst = tv_env subst
+                           , seKCvSubst = kcv_env subst
+                           , seKvSubst = kv_env subst }
+                     , tv' )
+
+substKiCoVarBndr :: SimplEnv -> CoreKiCoVar -> (SimplEnv, CoreKiCoVar)
+substKiCoVarBndr env cv
+  = case Subst.substKiCoVarBndr (getSubst env) cv of
+      (subst, cv') -> ( env { seInScope = termSubstInScope subst
+                            , seKCvSubst = kcv_env subst
+                            , seKvSubst = kv_env subst }
+                      , cv' )
+
+substKiVarBndr :: SimplEnv -> CoreKiVar -> (SimplEnv, CoreKiVar)
+substKiVarBndr env kv
+  = case Subst.substKiVarBndr (getSubst env) kv of
+      (subst, kv') -> ( env { seInScope = termSubstInScope subst
+                            , seKvSubst = kv_env subst }
+                      , kv' )
+
+substIdType :: SimplEnv -> CoreId -> CoreId
+substIdType SimplEnv{ seInScope = in_scope
+                    , seTvSubst = tv_env
+                    , seKCvSubst = kcv_env
+                    , seKvSubst = kv_env } id
+  | (isEmptyVarEnv tv_env && isEmptyVarEnv kcv_env && isEmptyVarEnv kv_env)
+    || no_free_vars
+  = id
+  | otherwise
+  = updateVarType (substTyUnchecked subst) id
+  where
+    no_free_vars = noFreeVarsOfType old_ty
+    subst = mkCoreSubst in_scope emptyVarEnv emptyVarEnv tv_env kcv_env kv_env
+    old_ty = varType id
