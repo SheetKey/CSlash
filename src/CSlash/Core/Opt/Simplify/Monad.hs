@@ -8,6 +8,7 @@ import CSlash.Types.Var
 import CSlash.Types.Name
 import CSlash.Types.Var.Id
 import CSlash.Types.Var.Id.Info
+import CSlash.Core
 import CSlash.Core.Type
 import CSlash.Core.Kind
 import CSlash.Core.Opt.Stats
@@ -151,6 +152,17 @@ gets f = liftIOWithEnv (return . f)
 newId :: FastString -> (Type Zk) -> SimplM (Id Zk)
 newId fs ty = mkSysLocalM fs ty
 
+newJoinId :: [(CoreBndr, Maybe CoreMonoKind)] -> CoreType -> SimplM CoreId
+newJoinId bndrs body_ty = do
+  uniq <- getUniqueM
+  let name = mkSystemVarName uniq (fsLit "$j")
+      join_id_ty = mkLamTypes bndrs body_ty
+      arity = count (isRuntimeVar . fst) bndrs
+      join_arity = length bndrs
+      details = JoinId join_arity
+      id_info = vanillaIdInfo `setArityInfo` arity
+  return (mkLocalIdWithDetailsAndInfo details name join_id_ty id_info)
+
 {- *********************************************************************
 *                                                                      *
         Counting
@@ -165,3 +177,9 @@ tick t = SM $ \st_env sc -> panic "tick"
   -- let history_size = te_history_size (st_config st_env)
   --     sc' = doSimplTick history_size t sc
   -- in sc' `seq` return ((), sc'))
+
+checkedTick :: Tick -> SimplM ()
+checkedTick t = SM $ \st_env sc -> panic "checkedTick"
+
+freeTick :: Tick -> SimplM ()
+freeTick t = panic "freeTick"
