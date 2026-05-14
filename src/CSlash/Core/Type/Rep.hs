@@ -296,6 +296,11 @@ mkFunTys args fun_kis res_ty =
 mkForAllTy :: ForAllBinder (TyVar p) -> Type p -> Type p
 mkForAllTy = ForAllTy
 
+mkInfForAllTy :: TyVar p -> Type p -> Type p
+mkInfForAllTy tv ty = ForAllTy (Bndr tv Inferred) ty
+
+mkInfForAllTys :: [TyVar p] -> Type p -> Type p
+mkInfForAllTys tvs ty = foldr mkInfForAllTy ty tvs
 
 mkForAllKiCo :: KiCoVar p -> Type p -> Type p
 mkForAllKiCo = ForAllKiCo
