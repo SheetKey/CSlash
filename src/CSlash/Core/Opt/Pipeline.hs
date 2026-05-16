@@ -32,7 +32,7 @@ import CSlash.Core.Opt.Specialize   ( specProgram)
 import CSlash.Core.Opt.DmdAnal
 -- import GHC.Core.Opt.CprAnal      ( cprAnalProgram )
 -- import GHC.Core.Opt.CallArity    ( callArityAnalProgram )
--- import GHC.Core.Opt.Exitify      ( exitifyProgram )
+import CSlash.Core.Opt.Exitify ( exitifyProgram )
 -- import GHC.Core.Opt.WorkWrap     ( wwTopBinds )
 -- import GHC.Core.Opt.CallerCC     ( addCallerCostCentres )
 -- import GHC.Core.LateCC.TopLevelBinds (topLevelBindsCCMG)

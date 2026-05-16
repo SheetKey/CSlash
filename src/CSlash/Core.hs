@@ -279,6 +279,7 @@ type CoreBind = Bind CoreBndr CoreId
 type CoreAlt = Alt CoreBndr CoreId
 
 type CoreId = Id Zk
+type JoinId = CoreId
 type CoreTyCoVar = TyCoVar Zk
 type CoreTyVar = TyVar Zk
 type CoreKiCoVar = KiCoVar Zk

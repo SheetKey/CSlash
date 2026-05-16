@@ -132,6 +132,9 @@ dataNSUnique = mkUnique 'd' 0
 unknownNSUnique :: Unique
 unknownNSUnique = mkUnique 'u' 0
 
+initExitJoinUnique :: Unique
+initExitJoinUnique = mkUnique 's' 0
+
 -- renamed from mkPreludeTyConUnique
 mkWiredInTyConUnique :: Int -> Unique
 mkWiredInTyConUnique i = mkUniqueInt '3' (2*i)

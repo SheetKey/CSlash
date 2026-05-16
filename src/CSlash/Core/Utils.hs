@@ -467,6 +467,14 @@ exprIsTopLevelBindable expr ty = True -- TODO: check for ticked strings?
 *                                                                      *
 ********************************************************************* -}
 
+dVarSetsToVarSets :: DCoreVarSets -> CoreVarSets
+dVarSetsToVarSets (a, b, c, d, e)
+  = ( dVarSetToVarSet a
+    , dVarSetToVarSet b
+    , dVarSetToVarSet c
+    , dVarSetToVarSet d
+    , dVarSetToVarSet e )
+
 unionDCoreVarSets :: DCoreVarSets -> DCoreVarSets -> DCoreVarSets
 unionDCoreVarSets (id1, tcv1, tv1, kcv1, kv1) (id2, tcv2, tv2, kcv2, kv2)
   = ( unionDVarSet id1 id2
@@ -529,6 +537,19 @@ nonDetStrictFoldCoreVarSets do_id do_tcv do_tv do_kcv do_kv a (ids, tcvs, tvs, k
     flip (nonDetStrictFoldVarSet do_kv) kvs $
     a    
 
+bndrElemCoreVarSets :: CoreBndr -> CoreVarSets -> Bool
+bndrElemCoreVarSets (Core.Id b) (vs, _, _, _, _) = b `elemVarSet` vs
+bndrElemCoreVarSets (Tv b) (_, _, vs, _, _) = b `elemVarSet` vs
+bndrElemCoreVarSets (KCv b) (_, _, _, vs, _) = b `elemVarSet` vs
+bndrElemCoreVarSets (Kv b) (_, _, _, _, vs) = b `elemVarSet` vs
+
+delBndrCoreVarSets :: CoreVarSets -> CoreBndr -> CoreVarSets  
+delBndrCoreVarSets (ids, tcvs, tvs, kcvs, kvs) (Core.Id b)
+  = (ids `delVarSet` b, tcvs, tvs, kcvs, kvs)
+delBndrCoreVarSets (ids, tcvs, tvs, kcvs, kvs) (Tv b) = (ids, tcvs, tvs `delVarSet` b, kcvs, kvs)
+delBndrCoreVarSets (ids, tcvs, tvs, kcvs, kvs) (KCv b) = (ids, tcvs, tvs, kcvs `delVarSet` b, kvs)
+delBndrCoreVarSets (ids, tcvs, tvs, kcvs, kvs) (Kv b) = (ids, tcvs, tvs, kcvs, kvs `delVarSet` b)
+
 {- *********************************************************************
 *                                                                      *
               Type utilities
@@ -553,6 +574,10 @@ isEmptyTy ty
 extendInScopeSetBind :: InScopeSet CoreId -> CoreBind -> InScopeSet CoreId
 extendInScopeSetBind (InScope in_scope) binds
   = InScope $ foldBindersOfBindStrict extendVarSet in_scope binds
+
+extendInScopeSetBndrs :: InScopeSet CoreId -> [CoreBind] -> InScopeSet CoreId
+extendInScopeSetBndrs (InScope in_scope) binds
+   = InScope $ foldBindersOfBindsStrict extendVarSet in_scope binds
 
 {- *********************************************************************
 *                                                                      *

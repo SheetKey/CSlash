@@ -51,6 +51,9 @@ elemVarSet = elementOfUniqSet
 minusVarSet :: UniqSet a -> UniqSet a -> UniqSet a
 minusVarSet = minusUniqSet
 
+delVarSet :: Uniquable a => UniqSet a -> a -> UniqSet a
+delVarSet = delOneFromUniqSet
+
 delVarSetList :: Uniquable a => UniqSet a -> [a] -> UniqSet a
 delVarSetList = delListFromUniqSet
 

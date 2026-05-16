@@ -48,6 +48,9 @@ mkCoreLet (NonRec bndr rhs) body
 mkCoreLet bind body
   = Let bind body
 
+mkCoreLets :: [CoreBind] -> CoreExpr -> CoreExpr
+mkCoreLets binds body = foldr mkCoreLet body binds
+
 mkCoreLams :: [(lamB, Maybe CoreMonoKind)] -> Expr lamB letB -> Expr lamB letB
 mkCoreLams bndrs body = foldr (uncurry Lam) body bndrs 
 

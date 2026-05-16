@@ -432,6 +432,11 @@ transferPolyIdInfo old_id abstract_wrt new_id
 *                                                                      *
 ********************************************************************* -}
 
+idJoinArity :: JoinId -> JoinArity
+idJoinArity id = case idJoinPointHood id of
+  JoinPoint ar -> ar
+  NotJoinPoint -> pprPanic "idJoinArity" (ppr id)
+
 asJoinId :: HasPass p p' => Id p -> JoinArity -> Id p
 asJoinId id arity = warnPprTrace (not (isLocalId id))
                     "global id being marked as a join var" (ppr id) $

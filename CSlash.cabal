@@ -81,6 +81,7 @@ library
                     , CSlash.Core.Opt.Coercion
                     , CSlash.Core.Opt.ConstantFold
                     , CSlash.Core.Opt.DmdAnal
+                    , CSlash.Core.Opt.Exitify
                     , CSlash.Core.Opt.FloatOut
                     , CSlash.Core.Opt.Monad
                     , CSlash.Core.Opt.OccurAnal
@@ -437,6 +438,7 @@ library
                     , CSlash.Utils.Misc
                     , CSlash.Utils.Monad
                     , CSlash.Utils.Monad.Codensity
+                    , CSlash.Utils.Monad.State.Strict
                     , CSlash.Utils.Outputable
                     , CSlash.Utils.Panic
                     , CSlash.Utils.Panic.Plain
