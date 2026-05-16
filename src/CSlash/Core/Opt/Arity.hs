@@ -597,7 +597,9 @@ tryEtaReduce rec_ids bndrs body eval_sd
     ok_arg (Tv bndr, _) (Type arg_ty) co fun_ty
       | Just tv <- getTyVar_maybe arg_ty
       , bndr == tv = case splitForAllForAllTyBinder_maybe fun_ty of
-          Just (Bndr _ vis, _) -> panic "TODO: deal with vis coercions"
+          Just (Bndr _ vis, _) -> Just (fco, [])
+            where !fco = mkForAllCo tv vis coreTyLamForAllTyFlag kco co
+                  kco = mkReflKiCo (varKind tv)
           Nothing -> pprPanic "tryEtaReduce: type arg to non-forall type"
                      (text "fun:" <+> ppr bndr
                       $$ text "arg:" <+> ppr arg_ty
