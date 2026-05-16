@@ -1,3 +1,5 @@
+{-# LANGUAGE BangPatterns #-}
+
 module CSlash.Core.Opt.Arity where
 
 import Prelude hiding ((<>))
@@ -145,8 +147,15 @@ safeArityType at@(AT lams _)
           (IsExpensive, NoOneShotInfo) -> Just ar
           (ch, _) -> go (ar + 1) ch lams
 
+infixl 2 `trimArityType`
+trimArityType :: Arity -> ArityType -> ArityType
+trimArityType max_arity at@(AT lams _)
+  | lams `lengthAtMost` max_arity = at
+  | otherwise = AT (take max_arity lams) topDiv
+
+-- We Treat ped_bot at True!
 data ArityOpts = ArityOpts
-  -- { ao_ped_bod :: !Bool }
+  -- { ao_ped_bot :: !Bool } 
 
 exprEtaExpandArity :: HasDebugCallStack => ArityOpts -> CoreExpr -> Maybe SafeArityType
 exprEtaExpandArity opts e
@@ -169,7 +178,91 @@ findRhsArity
   -> CoreId
   -> CoreExpr
   -> (Bool, SafeArityType)
-findRhsArity = panic "findRhsArity"
+findRhsArity opts is_rec bndr rhs
+  | isJoinId bndr
+  = (False, join_arity_type)
+
+  | otherwise
+  = (arity_increased, non_join_arity_type)
+  where
+    old_arity = exprArity rhs
+
+    init_env :: ArityEnv
+    init_env = findRhsArityEnv opts (isJoinId bndr)
+
+    non_join_arity_type = case is_rec of
+                            Recursive -> go 0 botArityType
+                            NonRecursive -> step init_env
+
+    arity_increased = arityTypeArity non_join_arity_type > old_arity
+
+    join_arity_type = case is_rec of
+                        Recursive -> go 0 botArityType
+                        NonRecursive -> trimArityType ty_arity (cheapArityType rhs)
+
+    ty_arity = typeArity (varType bndr)
+    use_call_cards = useSiteCallCards bndr
+
+    step :: ArityEnv -> SafeArityType
+    step env = trimArityType ty_arity $
+               safeArityType $
+               combineWithCallCards env (arityType env rhs) use_call_cards
+
+    go :: Int -> SafeArityType -> SafeArityType
+    go !n cur_at@(AT lams div)
+      | not (isDeadEndDiv div)
+      , length lams <= old_arity
+      = cur_at
+      | next_at == cur_at
+      = cur_at
+      | otherwise
+      = warnPprTrace (debugIsOn && n > 2) "Exciting arity"
+        (nest 2 (ppr bndr <+> ppr cur_at <+> ppr next_at $$ ppr rhs)) $
+        go (n + 1) next_at
+      where
+        next_at = step (extendSigEnv init_env bndr cur_at)
+
+combineWithCallCards :: ArityEnv -> ArityType -> [Card] -> ArityType
+combineWithCallCards env at@(AT lams div) cards
+  | null lams = at
+  | otherwise = AT (zip_lams lams oss) div
+  where
+    oss = map card_to_oneshot cards
+
+    card_to_oneshot n
+      | n == C_11
+      = OneShotLam
+      | otherwise
+      = NoOneShotInfo
+
+    zip_lams :: [ATLamInfo] -> [OneShotInfo] -> [ATLamInfo]
+    zip_lams lams [] = lams
+    zip_lams [] oss
+      | isDeadEndDiv div = []
+      | otherwise = [ (IsExpensive, OneShotLam)
+                    | _ <- takeWhile isOneShotInfo oss ]
+    zip_lams ((ch, os1) : lams) (os2 : oss)
+      = (ch, os1 `bestOneShot` os2) : zip_lams lams oss
+
+useSiteCallCards :: CoreId -> [Card]
+useSiteCallCards bndr
+  = call_arity_one_shots `zip_cards` dmd_one_shots
+  where
+    call_arity_one_shots :: [Card]
+    call_arity_one_shots
+      | call_arity == 0 = []
+      | otherwise = C_1N : replicate (call_arity - 1) C_11
+
+    call_arity = idCallArity bndr
+
+    dmd_one_shots :: [Card]
+    dmd_one_shots = case idDemandInfo bndr of
+      BotDmd -> []
+      _ :* sd -> callCards sd
+
+    zip_cards (n1:ns1) (n2:ns2) = (n1 `glbCard` n2) : zip_cards ns1 ns2
+    zip_cards [] ns2 = ns2
+    zip_cards ns1 [] = ns1
 
 {- *********************************************************************
 *                                                                      *
@@ -199,6 +292,13 @@ findRhsArityEnv opts free_joins
   = AE { am_opts = opts
        , am_free_joins = free_joins
        , am_sigs = emptyVarEnv }
+
+modifySigEnv :: (IdEnv Zk ArityType -> IdEnv Zk ArityType) -> ArityEnv -> ArityEnv
+modifySigEnv f env@AE{ am_sigs = sigs } = env { am_sigs = f sigs }
+{-# INLINE modifySigEnv #-}
+
+extendSigEnv :: ArityEnv -> CoreId -> SafeArityType -> ArityEnv
+extendSigEnv env id ar_ty = modifySigEnv (\sigs -> extendVarEnv sigs id ar_ty) env
 
 arityType :: HasDebugCallStack => ArityEnv -> CoreExpr -> ArityType
 arityType _ _ = panic "arityType"
@@ -237,6 +337,20 @@ cheapArityType e = go e
         isDeadEndDiv div = AT lams div
       | exprIsTrivial arg = AT lams topDiv
       | otherwise = topArityType
+
+exprArity :: CoreExpr -> Arity
+exprArity e = go e
+  where
+    go (Var v) = idArity v
+    go (Lam (Core.Id _) _ e) = go e + 1
+    go (Lam _ _ e) = go e
+    go (Tick t e) | not (tickishIsCode t) = go e
+    go (Cast e _) = go e
+    go (App e (Type _)) = go e
+    go (App e (KiCo _)) = go e
+    go (App e (Kind _)) = go e
+    go (App f a) | exprIsTrivial a = (go f - 1) `max` 0
+    go _ = 0
 
 {- *********************************************************************
 *                                                                      *

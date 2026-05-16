@@ -279,6 +279,9 @@ idArity id = arityInfo (idInfo id)
 setIdArity :: Id p -> Arity -> Id p
 setIdArity id arity = modifyIdInfo (`setArityInfo` arity) id
 
+idCallArity :: Id p -> Arity
+idCallArity id = callArityInfo (idInfo id)
+
 isDeadEndId :: Id p -> Bool
 isDeadEndId id = isDeadEndSig (idDmdSig id)
 
