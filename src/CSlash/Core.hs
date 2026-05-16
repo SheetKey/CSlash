@@ -235,6 +235,33 @@ data CoreBndrP p
   | KCv (KiCoVar p)
   | Kv (KiVar p)
 
+instance Eq (CoreBndrP p) where
+  a == b = case a `cmpBndr` b of
+             EQ -> True
+             _ -> False
+
+instance Ord (CoreBndrP p) where
+  compare = cmpBndr
+
+cmpBndr :: CoreBndrP p -> CoreBndrP p -> Ordering
+cmpBndr a b = case bndrToTag a `compare` bndrToTag b of
+  GT -> GT
+  EQ -> cmpEqBndr a b
+  LT -> LT
+
+bndrToTag :: CoreBndrP p -> Int
+bndrToTag Id{} = 0
+bndrToTag Tv{} = 1
+bndrToTag KCv{} = 2
+bndrToTag Kv{} = 3
+
+cmpEqBndr :: CoreBndrP p -> CoreBndrP p -> Ordering
+cmpEqBndr (Id a) (Id b) = a `compare` b
+cmpEqBndr (Tv a) (Tv b) = a `compare` b
+cmpEqBndr (KCv a) (KCv b) = a `compare` b
+cmpEqBndr (Kv a) (Kv b) = a `compare` b
+cmpEqBndr _ _ = panic "cmpEqBndr"
+
 isId :: CoreBndrP p -> Bool
 isId (Id _) = True
 isId _ = False

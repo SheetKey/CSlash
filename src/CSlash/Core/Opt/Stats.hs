@@ -22,35 +22,43 @@ import CSlash.Utils.Panic
 
 isZeroSimplCount :: SimplCount -> Bool
 isZeroSimplCount (VerySimplCount n) = n == 0
-isZeroSimplCount SimplCount = panic "isZerosimplcount"
+isZeroSimplCount SimplCount{ ticks = n } = n == 0
 
 hasDetailedCounts :: SimplCount -> Bool
 hasDetailedCounts VerySimplCount{} = False
 hasDetailedCounts SimplCount{} = True
 
 doFreeSimplTick  :: Tick -> SimplCount -> SimplCount
-doFreeSimplTick tick sc@SimplCount = sc
+doFreeSimplTick tick sc@SimplCount{ details = dts }
+  = sc { details = dts `addTick` tick }
 doFreeSimplTick _ sc = sc
 
 doSimplTick :: Int -> Tick -> SimplCount -> SimplCount
-doSimplTick history_size tick sc@SimplCount = panic "doSimplTick"
+doSimplTick history_size tick sc@SimplCount{ ticks = tks, details = dts, n_log = nl, log1 = l1 }
+  | nl >= history_size = sc1 { n_log = 1, log1 = [tick], log2 = l1 }
+  | otherwise = sc1 { n_log = nl + 1, log1 = tick : l1 }
+  where
+    sc1 = sc { ticks = tks + 1, details = dts `addTick` tick }
 doSimplTick _ _ (VerySimplCount n) = VerySimplCount (n + 1)
+
+addTick :: TickCounts -> Tick -> TickCounts
+addTick fm tick = MapStrict.insertWith (+) tick 1 fm
 
 data SimplCount
   = VerySimplCount !Int
   | SimplCount
-    -- { ticks :: !Int
-    -- , details :: !TickCounts
-    -- , n_log :: !Int
-    -- , log1 :: [Tick]
-    -- , log2 :: [Tick]
-    -- }
+    { ticks :: !Int
+    , details :: !TickCounts
+    , n_log :: !Int
+    , log1 :: [Tick]
+    , log2 :: [Tick]
+    }
 
--- type TickCounts = Map Tick Int
+type TickCounts = Map Tick Int
 
 simplCountN :: SimplCount -> Int
 simplCountN (VerySimplCount n) = n
-simplCountN SimplCount = panic "simplcountn"
+simplCountN SimplCount{ ticks = n } = n
 
 pprSimplCount :: SimplCount -> SDoc
 pprSimplCount = panic "pprSimplCount"
@@ -58,15 +66,22 @@ pprSimplCount = panic "pprSimplCount"
 zeroSimplCount :: Bool -> SimplCount
 zeroSimplCount dump_simpl_stats
   | dump_simpl_stats
-  = SimplCount
+  = SimplCount { ticks = 0, details = Map.empty
+               , n_log = 0, log1 = [], log2 = [] }
   | otherwise
   = VerySimplCount 0
 
 plusSimplCount :: SimplCount -> SimplCount -> SimplCount 
-plusSimplCount SimplCount SimplCount = SimplCount
+plusSimplCount sc1@SimplCount{ ticks = tks1, details = dts1 }
+               sc2@SimplCount{ ticks = tks2, details = dts2 }
+  = log_base { ticks = tks1 + tks2
+             , details = MapStrict.unionWith (+) dts1 dts2 }
+  where
+    log_base | null (log1 sc2) = sc1
+             | null (log2 sc2) = sc2 { log2 = log1 sc1 }
+             | otherwise = sc2
 plusSimplCount (VerySimplCount n) (VerySimplCount m) = VerySimplCount (n + m)
-plusSimplCount lhr rhs =
-  panic "plusSimplCount"
+plusSimplCount lhr rhs = panic "plusSimplCount"
 
 data Tick
   = PreInlineUnconditionally (Id Zk)
@@ -85,3 +100,45 @@ data Tick
   | CaseElim (Id Zk)
 
   | SimplifierDone
+
+instance Eq Tick where
+  a == b = case a `cmpTick` b of
+             EQ -> True
+             _ -> False
+
+instance Ord Tick where
+  compare = cmpTick
+
+tickToTag :: Tick -> Int
+tickToTag PreInlineUnconditionally{} = 0
+tickToTag PostInlineUnconditionally{} = 1
+tickToTag UnfoldingDone{} = 3
+tickToTag RuleFired{} = 3     
+tickToTag LetFloatFromLet = 4          
+tickToTag EtaExpansion{} = 5    
+tickToTag EtaReduction{} = 6    
+tickToTag BetaReduction{} = 7
+tickToTag CaseOfCase{} = 8      
+tickToTag KnownBranch{} = 9
+tickToTag CaseElim{} = 11        
+tickToTag SimplifierDone = 16          
+
+cmpTick :: Tick -> Tick -> Ordering
+cmpTick a b = case tickToTag a `compare` tickToTag b of
+  GT -> GT
+  EQ -> cmpEqTick a b
+  LT -> LT
+
+cmpEqTick :: Tick -> Tick -> Ordering
+cmpEqTick (PreInlineUnconditionally a) (PreInlineUnconditionally b) = a `compare` b
+cmpEqTick (PostInlineUnconditionally a) (PostInlineUnconditionally b) = a `compare` b
+cmpEqTick (UnfoldingDone a) (UnfoldingDone b) = a `compare` b
+cmpEqTick (RuleFired a) (RuleFired b) = a `uniqCompareFS` b
+cmpEqTick (EtaExpansion a) (EtaExpansion b) = a `compare` b
+cmpEqTick (EtaReduction a) (EtaReduction b) = a `compare` b
+cmpEqTick (BetaReduction a _) (BetaReduction b _) = a `compare` b
+cmpEqTick (CaseOfCase a) (CaseOfCase b) = a `compare` b
+cmpEqTick (KnownBranch a) (KnownBranch b) = a `compare` b
+cmpEqTick (CaseElim a) (CaseElim b) = a `compare` b
+cmpEqTick _ _ = EQ
+

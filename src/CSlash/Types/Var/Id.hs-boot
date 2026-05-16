@@ -15,6 +15,7 @@ data Id p
 
 instance (Typeable p) => Data (Id p)
 instance Eq (Id p)
+instance Ord (Id p)
 instance IsVar (Id p) 
 instance IsPass p => Outputable (Id (CsPass p)) 
 instance Uniquable (Id p) 
