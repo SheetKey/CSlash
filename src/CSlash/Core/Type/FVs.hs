@@ -68,6 +68,9 @@ varsOfType ty = runTyKiVars (deep_ty ty)
 varsOfTypes :: HasPass p p' => [Type p] -> (TyVarSet p, KiCoVarSet p, KiVarSet p)
 varsOfTypes tys = runTyKiVars (deep_tys tys)
 
+varsOfTyCo :: HasPass p p' => TypeCoercion p -> (TyVarSet p, KiCoVarSet p, KiVarSet p)
+varsOfTyCo co = runTyKiVars (deep_tyco co)
+
 deep_ty :: HasPass p p' => Type p -> Endo (TyVarSet p, KiCoVarSet p, KiVarSet p)
 deep_ty = case foldTyCo deepTvFolder (emptyVarSet, emptyVarSet, emptyVarSet) of
   (f, _, _, _) -> f
@@ -75,6 +78,10 @@ deep_ty = case foldTyCo deepTvFolder (emptyVarSet, emptyVarSet, emptyVarSet) of
 deep_tys :: HasPass p p' => [Type p] -> Endo (TyVarSet p, KiCoVarSet p, KiVarSet p)
 deep_tys = case foldTyCo deepTvFolder (emptyVarSet, emptyVarSet, emptyVarSet) of
   (_, f, _, _) -> f
+
+deep_tyco :: HasPass p p' => TypeCoercion p -> Endo (TyVarSet p, KiCoVarSet p, KiVarSet p)
+deep_tyco = case foldTyCo deepTvFolder (emptyVarSet, emptyVarSet, emptyVarSet) of
+  (_, _, f, _) -> f
 
 deepTvFolder
   :: HasPass p p'

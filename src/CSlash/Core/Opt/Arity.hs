@@ -8,7 +8,8 @@ import CSlash.Cs.Pass
 
 import CSlash.Core as Core
 import CSlash.Core.Make
--- import CSlash.Core.FVs
+import CSlash.Core.FVs
+import CSlash.Core.Type.FVs
 import CSlash.Core.Utils
 import CSlash.Core.DataCon
 import CSlash.Core.TyCon     ( TyCon, tyConArity, isInjectiveTyCon )
@@ -547,13 +548,13 @@ tryEtaReduce rec_ids bndrs body eval_sd
       | all (not. isRuntimeVar . fst) remaining_bndrs
       , remaining_bndrs `ltLength` bndrs
       , ok_fun fun
-      , let used_vars = panic "case (exprFreeVars fun, varsOfTyCo co) of"
-              -- ((ids1, tcvs1, tvs1, kcvs1, kvs1), (tcvs2, tvs2, kcvs2 kvs2))
-              --   -> ( ids1
-              --      , tcvs1 `unionVarSet` tcvs2
-              --      , tvs1 `unionVarSet` tvs2
-              --      , kcvs1 `unionVarSet` kcvs2
-              --      , kvs1 `unionVarSet` kvs2 )
+      , let used_vars = case (exprFreeVars fun, varsOfTyCo co) of
+              ((ids1, tcvs1, tvs1, kcvs1, kvs1), (tvs2, kcvs2, kvs2))
+                -> ( ids1
+                   , tcvs1 --`unionVarSet` tcvs2
+                   , tvs1 `unionVarSet` tvs2
+                   , kcvs1 `unionVarSet` kcvs2
+                   , kvs1 `unionVarSet` kvs2 )
             reduced_bndrs = mkCoreBndrVarSets (fst <$> dropList remaining_bndrs bndrs)
       , used_vars `disjointCoreVarSets` reduced_bndrs
       = Just (mkCoreLams (reverse remaining_bndrs) (mkCast fun co))
