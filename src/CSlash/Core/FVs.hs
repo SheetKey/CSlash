@@ -121,8 +121,17 @@ exprFreeIds :: CoreExpr -> IdSet Zk
 exprFreeIds e = case fvVarAcc (exprLocalFVs e) of
   (_, ids, _, _, _, _, _, _, _, _) -> ids
 
+exprsFreeIds :: [CoreExpr] -> IdSet Zk
+exprsFreeIds es = case fvVarAcc (exprsLocalFVs es) of
+  (_, ids, _, _, _, _, _, _, _, _) -> ids
+
 exprLocalFVs :: CoreExpr -> CoreFV
 exprLocalFVs = filterFV isLocal . exprFVs
+  where isLocal (In1 id) = isLocalId id
+        isLocal _ = True
+
+exprsLocalFVs :: [CoreExpr] -> CoreFV
+exprsLocalFVs = filterFV isLocal . exprsFVs
   where isLocal (In1 id) = isLocalId id
         isLocal _ = True
 
@@ -526,7 +535,14 @@ rulesFVs from = mapUnionFV (ruleFVs from)
 rulesFreeVarsDSets :: [CoreRule] -> FVAnn
 rulesFreeVarsDSets rules = fvDVarSets $ rulesFVs BothSides rules
 
+rulesFreeIds :: [CoreRule] -> CoreIdSet
+rulesFreeIds rules = case fvVarSets (rulesFVs BothSides rules) of
+  (ids, _, _, _, _) -> ids
+
 rulesRhsFreeIds :: [CoreRule] -> CoreIdSet
 rulesRhsFreeIds rules
   = case fvVarSets (rulesFVs RhsOnly rules) of
       (ids, _, _, _, _) -> filterVarSet isLocalId ids
+
+mkRuleInfo :: [CoreRule] -> RuleInfo
+mkRuleInfo rules = RuleInfo rules (rulesFreeVarsDSets rules)

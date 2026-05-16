@@ -239,6 +239,10 @@ isId :: CoreBndrP p -> Bool
 isId (Id _) = True
 isId _ = False
 
+idBndr_maybe :: CoreBndrP p -> Maybe (Id p)
+idBndr_maybe (Id id) = Just id
+idBndr_maybe _ = Nothing
+
 type CoreExpr = Expr CoreBndr CoreId
 
 type CoreArg = Arg CoreBndr CoreId
@@ -650,6 +654,10 @@ ruleName = ru_name
 ruleModule :: CoreRule -> Maybe Module
 ruleModule Rule { ru_origin = orig } = Just orig
 ruleModule BuiltinRule{} = Nothing
+
+ruleActivation :: CoreRule -> Activation
+ruleActivation BuiltinRule{} = AlwaysActive
+ruleActivation Rule{ ru_act = act } = act
 
 ruleIdName :: CoreRule -> Name
 ruleIdName = ru_fn

@@ -90,6 +90,9 @@ nonDetStrictFoldVarSet = nonDetStrictFoldUniqSet
 unionVarSet :: UniqSet a -> UniqSet a -> UniqSet a
 unionVarSet = unionUniqSets
 
+mapUnionVarSet :: (b -> UniqSet a) -> [b] -> UniqSet a
+mapUnionVarSet get_set xs = foldr (unionVarSet . get_set) emptyVarSet xs
+
 unionVarSets :: [UniqSet a] -> UniqSet a
 unionVarSets = unionManyUniqSets
 

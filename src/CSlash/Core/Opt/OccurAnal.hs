@@ -58,22 +58,65 @@ occurAnalyzePgm
   -> CoreProgram
   -> CoreProgram
 occurAnalyzePgm this_mod active_unf active_rule imp_rules binds
-  -- | isEmptyDetails final_usage
-  -- = occ_anald_binds
-  | otherwise = panic "unfinished: need to deal with rules here now"
-  -- = warnPprTrace True "Glomming in" (hang (ppr this_mod <> colon) 2 (ppr final_usage))
-  --   (panic "occ_anald_glommed_binds Not possible")
-  -- where
-  --   init_env = initOccEnv { occ_rule_act = active_rule
-  --                         , occ_unf_act = active_unf }
+  | isEmptyDetails final_usage
+  = occ_anald_binds
+  | otherwise
+  = warnPprTrace True "Glomming in" (hang (ppr this_mod <> colon) 2 (ppr final_usage))
+    (panic "occ_anald_glommed_binds Not possible")
+  where
+    init_env = initOccEnv { occ_rule_act = active_rule
+                          , occ_unf_act = active_unf }
 
-  --   WUD final_usage occ_anald_binds = go binds init_env
+    WUD final_usage occ_anald_binds = go binds init_env
+    WUD _ occ_anald_glommed_binds = occAnalRecBind init_env TopLevel imp_rule_edges
+                                    (flattenBinds binds) initial_uds
 
-  --   go :: [CoreBind ] -> OccEnv -> WithUsageDetails [CoreBind]
-  --   go [] _ = WUD emptyDetails []
-  --   go (bind:binds) env = occAnalBind env TopLevel imp_rule_edges bind (go binds) (++)
+    initial_uds = addManyOccs emptyDetails (rulesFreeIds imp_rules)
 
-  --   initial_uds = addManyOccs emptyDetails 
+    imp_rule_edges :: ImpRuleEdges
+    imp_rule_edges = foldr (plusVarEnv_C (++)) emptyVarEnv
+                     [ mapVarEnv (const [(act, rhs_fvs)]) $
+                       getUniqSet $ exprsFreeIds args `delVarSetList` id_bndrs
+                     | Rule { ru_act = act, ru_bndrs = bndrs
+                            , ru_args = args, ru_rhs = rhs } <- imp_rules
+                     , let id_bndrs = mapMaybe idBndr_maybe bndrs
+                     , let rhs_fvs = exprFreeIds rhs `delVarSetList` id_bndrs
+                     ]
+
+    go :: [CoreBind ] -> OccEnv -> WithUsageDetails [CoreBind]
+    go [] _ = WUD emptyDetails []
+    go (bind:binds) env = occAnalBind env TopLevel
+                          imp_rule_edges bind (go binds) (++)
+
+{- *********************************************************************
+*                                                                      *
+                IMP-RULES
+         Local rules for imported functions
+*                                                                      *
+********************************************************************* -}
+
+type ImpRuleEdges = IdEnv Zk [(Activation, IdSet Zk)]
+
+noImpRuleEdges :: ImpRuleEdges
+noImpRuleEdges = emptyVarEnv
+
+lookupImpRules :: ImpRuleEdges -> CoreId -> [(Activation, IdSet Zk)]
+lookupImpRules imp_rule_edges bndr
+  = case lookupVarEnv imp_rule_edges bndr of
+      Nothing -> []
+      Just vs -> vs
+
+impRulesScopeUsage :: [(Activation, IdSet Zk)] -> UsageDetails
+impRulesScopeUsage imp_rules_info
+  = foldr add emptyDetails imp_rules_info
+  where add (_, vs) usage = addManyOccs usage vs
+
+impRulesActiveFvs :: (Activation -> Bool) -> IdSet Zk -> [(Activation, IdSet Zk)] -> IdSet Zk
+impRulesActiveFvs is_active bndr_set vs
+  = foldr add emptyVarSet vs `intersectVarSet` bndr_set
+  where add (act, vs) acc
+          | is_active act = vs `unionVarSet` acc
+          | otherwise = acc
 
 {- *********************************************************************
 *                                                                      *
@@ -84,20 +127,22 @@ occurAnalyzePgm this_mod active_unf active_rule imp_rules binds
 occAnalBind
   :: OccEnv
   -> TopLevelFlag
+  -> ImpRuleEdges
   -> CoreBind
   -> (OccEnv -> WithUsageDetails r)
   -> ([CoreBind] -> r -> r)
   -> WithUsageDetails r
-occAnalBind env lvl (Rec pairs) thing_inside combine
+occAnalBind env lvl ire (Rec pairs) thing_inside combine
   = addInScopeList env (map fst pairs) $ \env ->
     let WUD body_uds body' = thing_inside env
-        WUD bind_uds binds' = occAnalRecBind env lvl pairs body_uds
+        WUD bind_uds binds' = occAnalRecBind env lvl ire pairs body_uds
     in WUD bind_uds (combine binds' body')
 
-occAnalBind !env lvl (NonRec bndr rhs) thing_inside combine
+occAnalBind !env lvl ire (NonRec bndr rhs) thing_inside combine
   | mb_join@(JoinPoint {}) <- idJoinPointHood bndr
-  = let !(rhs_uds_s, bndr', rhs') = occAnalNonRecRhs env lvl mb_join bndr rhs
+  = let !(rhs_uds_s, bndr', rhs') = occAnalNonRecRhs env lvl ire mb_join bndr rhs
         rhs_uds = foldr1 orUDs rhs_uds_s
+        
         !(WUD body_uds (occ, body)) = occAnalNonRecBody env bndr' $ \env ->
                                       thing_inside (addJoinPoint env bndr' rhs_uds)
     in if isDeadOcc occ
@@ -109,7 +154,7 @@ occAnalBind !env lvl (NonRec bndr rhs) thing_inside combine
   = if isDeadOcc occ
     then WUD body_uds body
     else let (tagged_bndr, mb_join) = tagNonRecBinder lvl occ bndr
-             !(rhs_uds_s, final_bndr, rhs') = occAnalNonRecRhs env lvl mb_join tagged_bndr rhs
+             !(rhs_uds_s, final_bndr, rhs') = occAnalNonRecRhs env lvl ire mb_join tagged_bndr rhs
          in WUD (foldr andUDs body_uds rhs_uds_s)
                 (combine [NonRec final_bndr rhs'] body)
 
@@ -130,25 +175,49 @@ occAnalNonRecBody env bndr thing_inside
 occAnalNonRecRhs
   :: OccEnv
   -> TopLevelFlag
+  -> ImpRuleEdges
   -> JoinPointHood
   -> CoreId
   -> CoreExpr
   -> ([UsageDetails], CoreId, CoreExpr)
-occAnalNonRecRhs !env lvl mb_join bndr rhs
-  = ([adj_rhs_uds, adj_unf_uds], final_bndr, final_rhs)
+occAnalNonRecRhs !env lvl imp_rule_edges mb_join bndr rhs
+  | null rules, null imp_rule_infos
+  = ([adj_rhs_uds, adj_unf_uds], final_bndr_no_rules, final_rhs)
+  | otherwise
+  = (adj_rhs_uds : adj_unf_uds : adj_rule_uds, final_bndr_with_rules, final_rhs)
   where
     -- RHS
     rhs_env = mkRhsOccEnv env NonRecursive rhs_ctxt mb_join bndr rhs
     rhs_ctxt = mkNonRecRhsCtxt lvl bndr unf
 
     WUD adj_rhs_uds final_rhs = adjustNonRecRhs mb_join $ occAnalLamTail rhs_env rhs
-    final_bndr | noBinderSwaps env = bndr
-               | otherwise = bndr `setIdUnfolding` unf1
+
+    final_bndr_with_rules
+      | noBinderSwaps env = bndr
+      | otherwise = bndr
+                    `setIdSpecialization` mkRuleInfo rules'
+                    `setIdUnfolding` unf1
+
+    final_bndr_no_rules
+      | noBinderSwaps env = bndr
+      | otherwise = bndr `setIdUnfolding` unf1
 
     -- Unfolding
     unf = idUnfolding bndr
     WTUD unf_tuds unf1 = occAnalUnfolding rhs_env unf
     adj_unf_uds = adjustTailArity mb_join unf_tuds
+
+    -- Rules
+    rules = idCoreRules bndr
+    rules_w_uds = map (occAnalRule rhs_env) rules
+    rules' = map fstOf3 rules_w_uds
+    imp_rule_infos = lookupImpRules imp_rule_edges bndr
+    imp_rule_uds = [impRulesScopeUsage imp_rule_infos]
+
+    adj_rule_uds :: [UsageDetails]
+    adj_rule_uds = imp_rule_uds ++
+                   [ l `andUDs` adjustTailArity mb_join r
+                   | (_, l, r) <- rules_w_uds ]
 
 mkNonRecRhsCtxt :: TopLevelFlag -> Id Zk -> Unfolding -> OccEncl
 mkNonRecRhsCtxt lvl bndr unf
@@ -167,15 +236,16 @@ mkNonRecRhsCtxt lvl bndr unf
 occAnalRecBind
   :: OccEnv
   -> TopLevelFlag
+  -> ImpRuleEdges
   -> [(CoreId, CoreExpr)]
   -> UsageDetails
   -> WithUsageDetails [CoreBind]
-occAnalRecBind !rhs_env lvl pairs body_usage
+occAnalRecBind !rhs_env lvl imp_rule_edges pairs body_usage
   = foldr (occAnalRec rhs_env lvl) (WUD body_usage []) sccs
   where
     sccs = stronglyConnCompFromEdgedVerticesUniq nodes
 
-    nodes = map (makeNode rhs_env bndr_set) pairs
+    nodes = map (makeNode rhs_env imp_rule_edges bndr_set) pairs
 
     bndrs = map fst pairs
     bndr_set = mkVarSet bndrs
@@ -202,12 +272,18 @@ occAnalRec env lvl (CyclicSCC details_s) (WUD body_uds binds)
   | otherwise
   = WUD final_uds (Rec pairs : binds)
   where
+    all_simple = all nd_simple details_s
+
+    needed :: NodeDetails -> Bool
     needed (ND { nd_bndr = bndr }) = isExportedId bndr || bndr `elemVarEnv` body_env
     body_env = ud_env body_uds
 
     WUD final_uds loop_breaker_nodes = mkLoopBreakerNodes env lvl body_uds details_s
 
-    pairs = reOrderNodes 0 loop_breaker_nodes []
+    weak_fvs = mapUnionVarSet nd_weak_fvs details_s
+
+    pairs | all_simple = reOrderNodes 0 weak_fvs loop_breaker_nodes []
+          | otherwise = loopBreakNodes 0 weak_fvs loop_breaker_nodes []
 
 {- *********************************************************************
 *                                                                      *
@@ -219,10 +295,11 @@ type Binding = (Id Zk, CoreExpr)
 
 loopBreakNodes
   :: Int
+  -> IdSet Zk
   -> [LoopBreakerNode]
   -> [Binding]
   -> [Binding]
-loopBreakNodes depth nodes binds
+loopBreakNodes depth weak_fvs nodes binds
   = go (stronglyConnCompFromEdgedVerticesUniqR nodes)
   where
     go [] = binds
@@ -230,14 +307,14 @@ loopBreakNodes depth nodes binds
 
     loop_break_scc scc binds
       = case scc of
-          AcyclicSCC node -> nodeBinding mk_non_loop_breaker node : binds
-          CyclicSCC nodes -> reOrderNodes depth nodes binds
+          AcyclicSCC node -> nodeBinding (mk_non_loop_breaker weak_fvs) node : binds
+          CyclicSCC nodes -> reOrderNodes depth weak_fvs nodes binds
 
-reOrderNodes :: Int -> [LoopBreakerNode] -> [Binding] -> [Binding]
-reOrderNodes _ [] _ = panic "reOrderNodes"
-reOrderNodes _ [node] binds = nodeBinding mk_loop_breaker node : binds
-reOrderNodes depth (node : nodes) binds
-  = loopBreakNodes new_depth unchosen
+reOrderNodes :: Int -> IdSet Zk -> [LoopBreakerNode] -> [Binding] -> [Binding]
+reOrderNodes _ _ [] _ = panic "reOrderNodes"
+reOrderNodes _ _ [node] binds = nodeBinding mk_loop_breaker node : binds
+reOrderNodes depth weak_fvs (node : nodes) binds
+  = loopBreakNodes new_depth weak_fvs unchosen
     (map (nodeBinding mk_loop_breaker) chosen_nodes ++ binds)
   where
     (chosen_nodes, unchosen) = chooseLoopBreaker approximate_lb
@@ -258,8 +335,13 @@ mk_loop_breaker bndr = bndr `setIdOccInfo` occ'
     occ' = strongLoopBreaker { occ_tail = tail_info }
     tail_info = tailCallInfo (idOccInfo bndr)
 
-mk_non_loop_breaker :: CoreId -> CoreId
-mk_non_loop_breaker bndr = bndr
+mk_non_loop_breaker :: IdSet Zk -> CoreId -> CoreId
+mk_non_loop_breaker weak_fvs bndr
+  | bndr `elemVarSet` weak_fvs = setIdOccInfo bndr occ'
+  | otherwise = bndr
+  where
+    occ' = weakLoopBreaker { occ_tail = tail_info }
+    tail_info = tailCallInfo (idOccInfo bndr)
 
 chooseLoopBreaker
   :: Bool
@@ -296,6 +378,9 @@ data NodeDetails = ND
   { nd_bndr :: Id Zk
   , nd_rhs :: !(WithTailUsageDetails CoreExpr)
   , nd_inl :: IdSet Zk
+  , nd_simple :: Bool
+  , nd_weak_fvs :: IdSet Zk
+  , nd_active_rule_fvs :: IdSet Zk
   }
 
 instance Outputable NodeDetails where
@@ -303,6 +388,8 @@ instance Outputable NodeDetails where
            (sep [ text "bndr =" <+> ppr (nd_bndr nd)
                 , text "uds =" <+> ppr uds
                 , text "inl =" <+> ppr (nd_inl nd)
+                , text "simpl =" <+> ppr (nd_simple nd)
+                , text "active_rule_fvs =" <+> ppr (nd_active_rule_fvs nd)
                 ])
     where WTUD uds _ = nd_rhs nd
 
@@ -327,10 +414,11 @@ rank (r, _, _) = r
 
 makeNode
   :: OccEnv
+  -> ImpRuleEdges
   -> IdSet Zk
   -> (Id Zk, CoreExpr)
   -> LetrecNode
-makeNode !env bndr_set (bndr, rhs)
+makeNode !env imp_rule_edges bndr_set (bndr, rhs)
   = DigraphNode { node_payload = details
                 , node_key = varUnique bndr
                 , node_dependencies = nonDetKeysUniqSet scope_fvs }
@@ -338,26 +426,61 @@ makeNode !env bndr_set (bndr, rhs)
     details = ND { nd_bndr = bndr'
                  , nd_rhs = WTUD (TUD rhs_ja unadj_scope_uds) rhs'
                  , nd_inl = inl_fvs
+                 , nd_simple = null rules_w_uds && null imp_rule_info
+                 , nd_weak_fvs = weak_fvs
+                 , nd_active_rule_fvs = active_rule_fvs
                  }
 
     bndr' | noBinderSwaps env = bndr
-          | otherwise = bndr `setIdUnfolding` unf'
+          | otherwise = bndr
+                        `setIdUnfolding` unf'
+                        `setIdSpecialization` mkRuleInfo rules'
 
     unadj_inl_uds = unadj_rhs_uds `andUDs` adj_unf_uds
-    unadj_scope_uds = unadj_inl_uds
+    unadj_scope_uds = unadj_inl_uds `andUDs` adj_rule_uds
 
     scope_fvs = udFreeVars bndr_set unadj_scope_uds
 
     inl_fvs = udFreeVars bndr_set unadj_inl_uds
 
+    -- RHS
     rhs_env = mkRhsOccEnv env Recursive OccRhs (idJoinPointHood bndr) bndr rhs
 
-    WTUD ( TUD rhs_ja unadj_rhs_uds) rhs' = occAnalLamTail rhs_env rhs
+    WTUD (TUD rhs_ja unadj_rhs_uds) rhs' = occAnalLamTail rhs_env rhs
 
+    -- Unfolding
     unf = realIdUnfolding bndr
 
     WTUD unf_tuds unf' = occAnalUnfolding rhs_env unf
     adj_unf_uds = adjustTailArity (JoinPoint rhs_ja) unf_tuds
+
+    -- Imp-rules
+    is_active = occ_rule_act env
+    imp_rule_info = lookupImpRules imp_rule_edges bndr
+    imp_rule_uds = impRulesScopeUsage imp_rule_info
+    imp_rule_fvs = impRulesActiveFvs is_active bndr_set imp_rule_info
+
+    -- All rules
+    rules_w_uds :: [(CoreRule, UsageDetails, UsageDetails)]
+    rules_w_uds = [ (r, l, adjustTailArity (JoinPoint rhs_ja) rhs_wuds)
+                  | rule <- idCoreRules bndr
+                  , let (r, l, rhs_wuds) = occAnalRule rhs_env rule ]
+    rules' = map fstOf3 rules_w_uds
+  
+    adj_rule_uds = foldr add_rule_uds imp_rule_uds rules_w_uds
+    add_rule_uds (_, l, r) uds = l `andUDs` r `andUDs` uds
+
+    -- active_rule_fvs
+    active_rule_fvs = foldr add_active_rule imp_rule_fvs rules_w_uds
+    add_active_rule (rule, _, rhs_uds) fvs
+      | is_active (ruleActivation rule)
+      = udFreeVars bndr_set rhs_uds `unionVarSet` fvs
+      | otherwise
+      = fvs
+
+    -- weak_fvs
+    weak_fvs = foldr add_rule emptyVarSet rules_w_uds
+    add_rule (_, _, rhs_uds) fvs = udFreeVars bndr_set rhs_uds `unionVarSet` fvs
 
 mkLoopBreakerNodes
   :: OccEnv
@@ -373,10 +496,17 @@ mkLoopBreakerNodes !env lvl body_uds details_s
     mk_lb_node nd@(ND { nd_bndr = old_bndr, nd_inl = inl_fvs, nd_rhs = WTUD _ rhs }) new_bndr
       = DigraphNode { node_payload = simple_nd
                     , node_key = varUnique old_bndr
-                    , node_dependencies = nonDetKeysUniqSet inl_fvs }
+                    , node_dependencies = nonDetKeysUniqSet lb_deps }
       where
         simple_nd = SND { snd_bndr = new_bndr, snd_rhs = rhs, snd_score = score }
         score = nodeScore env new_bndr inl_fvs nd
+        lb_deps = extendFvs_ rule_fv_env inl_fvs
+
+    rule_fv_env :: IdEnv Zk (IdSet Zk)
+    rule_fv_env = transClosureFV $ mkVarEnv $
+                  [ (b, rule_fvs)
+                  | ND { nd_bndr = b, nd_active_rule_fvs = rule_fvs } <- details_s
+                  , not (isEmptyVarSet rule_fvs) ]
 
 nodeScore
   :: OccEnv
@@ -562,11 +692,38 @@ occAnalUnfolding !env unf
 
       _ -> WTUD (TUD 0 emptyDetails) unf
 
+occAnalRule
+  :: OccEnv
+  -> CoreRule
+  -> (CoreRule, UsageDetails, TailUsageDetails)
+occAnalRule env rule@Rule{ ru_bndrs = bndrs, ru_args = args, ru_rhs = rhs }
+  = (rule', lhs_uds', TUD rhs_ja rhs_uds')
+  where
+    rule' = rule { ru_args = args', ru_rhs = rhs' }
+    id_bndrs = mapMaybe idBndr_maybe bndrs
+
+    WUD lhs_uds args' = addInScopeList env id_bndrs $ \env -> occAnalList env args
+
+    lhs_uds' = markAllManyNonTail lhs_uds
+    WUD rhs_uds rhs' = addInScopeList env id_bndrs $ \env -> occAnal env rhs
+
+    rhs_uds' = markAllMany rhs_uds
+    rhs_ja = length args
+                                                     
+occAnalRule _ other_rule = (other_rule, emptyDetails, TUD 0 emptyDetails)
+
 {- *********************************************************************
 *                                                                      *
                 Expressions
 *                                                                      *
 ********************************************************************* -}
+
+occAnalList :: OccEnv -> [CoreExpr] -> WithUsageDetails [CoreExpr]
+occAnalList !_ [] = WUD emptyDetails []
+occAnalList env (e:es)
+  = let WUD uds1 e' = occAnal env e
+        WUD uds2 es' = occAnalList env es
+    in WUD (uds1 `andUDs` uds2) (e' : es')
 
 occAnal :: OccEnv -> CoreExpr -> WithUsageDetails CoreExpr
 
@@ -670,6 +827,7 @@ data OccEnv = OccEnv
   { occ_encl :: !OccEncl
   , occ_one_shots :: !OneShots
   , occ_unf_act :: Id Zk -> Bool
+  , occ_rule_act :: Activation -> Bool
   , occ_bs_env :: !(VarEnv InId (OutId, Maybe (TypeCoercion Zk)))
   , occ_bs_rng :: !(IdSet Zk)
   , occ_join_points :: !JoinPointInfo
@@ -693,6 +851,7 @@ initOccEnv :: OccEnv
 initOccEnv = OccEnv { occ_encl = OccVanilla
                     , occ_one_shots = []
                     , occ_unf_act = \_ -> True
+                    , occ_rule_act = \_ -> True
                     , occ_join_points = emptyVarEnv
                     , occ_bs_env = emptyVarEnv
                     , occ_bs_rng = emptyVarSet }
@@ -834,6 +993,33 @@ mkZeroedForm (UD { ud_env = rhs_occs })
     do_one (ManyOccL {}) = Nothing
     do_one occ@(OneOccL {}) = Just (occ { lo_n_br = 0 })
 
+transClosureFV :: IdEnv Zk (IdSet Zk) -> IdEnv Zk (IdSet Zk)
+transClosureFV env
+  | no_change = env
+  | otherwise = transClosureFV (listToUFM_Directly new_fv_list)
+  where
+    (no_change, new_fv_list) = mapAccumL bump True (nonDetUFMToList env)
+
+    bump no_change (b, fvs)
+      | no_change_here = (no_change, (b, fvs))
+      | otherwise = (False, (b, new_fvs))
+      where
+        (new_fvs, no_change_here) = extendFvs env fvs
+
+extendFvs_ :: IdEnv Zk (IdSet Zk) -> IdSet Zk -> IdSet Zk
+extendFvs_ env s = fst (extendFvs env s)
+
+extendFvs :: IdEnv Zk (IdSet Zk) -> IdSet Zk -> (IdSet Zk, Bool)
+extendFvs env s
+  | isNullUFM env
+  = (s, True)
+  | otherwise
+  = (s `unionVarSet` extras, extras `subVarSet` s)
+  where
+    extras :: IdSet Zk
+    extras = nonDetStrictFoldUFM unionVarSet emptyVarSet $
+             intersectUFM_C (\x _ -> x) env (getUniqSet s)
+
 {- *********************************************************************
 *                                                                      *
                     Binder swap
@@ -927,6 +1113,16 @@ mkOneOcc !env id int_cxt arity
                   , lo_int_cxt = int_cxt
                   , lo_tail = AlwaysTailCalled arity }
 
+add_many_occ :: CoreId -> OccInfoEnv -> OccInfoEnv
+add_many_occ v env = extendVarEnv env v (ManyOccL NoTailCallInfo)
+
+addManyOccs :: UsageDetails -> IdSet Zk -> UsageDetails
+addManyOccs uds var_set
+  | isEmptyVarSet var_set = uds
+  | otherwise = uds { ud_env = add_to (ud_env uds) }
+  where
+    add_to env = nonDetStrictFoldUniqSet add_many_occ env var_set
+
 emptyDetails :: UsageDetails
 emptyDetails = mkSimpleDetails emptyVarEnv
 
@@ -954,6 +1150,9 @@ delBndrsFromUDs bndrs (UD { ud_env = env
 
 markAllMany :: UsageDetails -> UsageDetails
 markAllMany ud@(UD { ud_env = env }) = ud { ud_z_many = env }
+
+markAllManyNonTail :: UsageDetails -> UsageDetails
+markAllManyNonTail = markAllMany . markAllNonTail
 
 markAllInsideLam :: UsageDetails -> UsageDetails
 markAllInsideLam ud@(UD { ud_env = env }) = ud { ud_z_in_lam = env }
