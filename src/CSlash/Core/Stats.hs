@@ -106,7 +106,36 @@ kiCoStats :: KindCoercion Zk -> CoreStats
 kiCoStats co = zeroCS { cs_ki_co = 0 {-kiCoercionSize co-} }
 
 coreBindsSize :: [CoreBind] -> Int
-coreBindsSize = panic "coreBindsSize"
+coreBindsSize bs = sum (map bindSize bs)
 
 exprSize :: CoreExpr -> Int
-exprSize = panic "exprSize"
+exprSize Var{} = 1
+exprSize Lit{} = 1
+exprSize (App f a) = exprSize f + exprSize a
+exprSize (Lam b _ e) = bndrSize b + 1 + exprSize e
+exprSize (Let b e) = bindSize b + exprSize e
+exprSize (Case e b _ as) = exprSize e + bndrSize b + 1 + sum (map altSize as)
+exprSize (Cast e _) = exprSize e + 1
+exprSize (Tick n e) = tickSize n + exprSize e
+exprSize Type{} = 1
+exprSize KiCo{} = 1
+exprSize Kind{} = 1
+
+tickSize :: CoreTickish -> Int
+tickSize CpcTick{} = 1
+
+bndrSize :: a -> Int
+bndrSize _ = 1
+
+bndrsSize :: [a] -> Int
+bndrsSize = sum . map bndrSize
+
+bindSize :: CoreBind -> Int
+bindSize (NonRec b e) = bndrSize b + exprSize e
+bindSize (Rec prs) = sum (map pairSize prs)
+
+pairSize :: (CoreId, CoreExpr) -> Int
+pairSize (b, e) = bndrSize b + exprSize e
+
+altSize :: CoreAlt -> Int
+altSize (Alt _ bs e) = bndrsSize bs + exprSize e
