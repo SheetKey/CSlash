@@ -173,13 +173,45 @@ getSimplCount :: SimplM SimplCount
 getSimplCount = SM $ \_ sc -> return (sc, sc)
 
 tick :: Tick -> SimplM ()
-tick t = SM $ \st_env sc -> panic "tick"
-  -- let history_size = te_history_size (st_config st_env)
-  --     sc' = doSimplTick history_size t sc
-  -- in sc' `seq` return ((), sc'))
+tick t = SM $ \st_env sc -> 
+  let history_size = te_history_size (st_config st_env)
+      sc' = doSimplTick history_size t sc
+  in sc' `seq` return ((), sc')
 
 checkedTick :: Tick -> SimplM ()
-checkedTick t = SM $ \st_env sc -> panic "checkedTick"
+checkedTick t = SM $ \st_env sc ->
+  if st_max_ticks st_env <= mkIntWithInf (simplCountN sc)
+  then throwCsExceptionIO $ panic "checkedTick"--PprProgamError "Simplifier ticks exhaused" (msg sc)
+  else let history_size = te_history_size (st_config st_env)
+           sc' = doSimplTick history_size t sc
+       in sc' `seq` return ((), sc')
+  where
+    msg sc = vcat
+      [ text "When trying" <+> panic "ppr t"
+      , text "To increase the limit, use -fsimpl-tick-factor=N (default 100)."
+      , space
+      , text "In addition try adjusting -funfolding-case-threshold=N and"
+      , text "-funfolding-case-scaling=N for the module in question."
+      , text "Using threshold=1 and scaling=5 should break most inlining loops."
+      , space
+      , text "If you need to increase the tick factor substantially, while also"
+      , text "adjusting unfolding parameters please file a bug report and"
+      , text "indicate the factor you needed."
+      , space
+      , text "If CSlash was unable to complete compilation even"
+               <+> text "with a very large factor"
+      , text "(a thousand or more), please consult the"
+                <+> doubleQuotes (text "Known bugs or infelicities")
+      , text "section in the Users Guide before filing a report. There are a"
+      , text "few situations unlikely to occur in practical programs for which"
+      , text "simplifier non-termination has been judged acceptable."
+      , space
+      , pp_details sc
+      , pprSimplCount sc ]
+    pp_details sc
+      | hasDetailedCounts sc = empty
+      | otherwise = text "To see detailed counts use -ddump-simpl-stats"
 
 freeTick :: Tick -> SimplM ()
-freeTick t = panic "freeTick"
+freeTick t = SM $ \_ sc -> let sc' = doFreeSimplTick t sc
+                           in sc' `seq` return ((), sc')

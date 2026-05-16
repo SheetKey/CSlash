@@ -24,6 +24,18 @@ isZeroSimplCount :: SimplCount -> Bool
 isZeroSimplCount (VerySimplCount n) = n == 0
 isZeroSimplCount SimplCount = panic "isZerosimplcount"
 
+hasDetailedCounts :: SimplCount -> Bool
+hasDetailedCounts VerySimplCount{} = False
+hasDetailedCounts SimplCount{} = True
+
+doFreeSimplTick  :: Tick -> SimplCount -> SimplCount
+doFreeSimplTick tick sc@SimplCount = sc
+doFreeSimplTick _ sc = sc
+
+doSimplTick :: Int -> Tick -> SimplCount -> SimplCount
+doSimplTick history_size tick sc@SimplCount = panic "doSimplTick"
+doSimplTick _ _ (VerySimplCount n) = VerySimplCount (n + 1)
+
 data SimplCount
   = VerySimplCount !Int
   | SimplCount
