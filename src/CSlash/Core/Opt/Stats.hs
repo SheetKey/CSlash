@@ -3,6 +3,7 @@ module CSlash.Core.Opt.Stats where
 import CSlash.Cs.Pass
 
 import CSlash.Core
+import CSlash.Core.Ppr ()
 import CSlash.Types.Var
 import CSlash.Types.Error
 import CSlash.Core.Kind (MonoKind)
@@ -19,6 +20,9 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 import qualified Data.Map.Strict as MapStrict
 import CSlash.Utils.Panic
+
+getVerboseSimplStats :: (Bool -> SDoc) -> SDoc
+getVerboseSimplStats = getPprDebug
 
 isZeroSimplCount :: SimplCount -> Bool
 isZeroSimplCount (VerySimplCount n) = n == 0
@@ -61,7 +65,17 @@ simplCountN (VerySimplCount n) = n
 simplCountN SimplCount{ ticks = n } = n
 
 pprSimplCount :: SimplCount -> SDoc
-pprSimplCount = panic "pprSimplCount"
+pprSimplCount (VerySimplCount n) = text "Total ticks:" <+> int n
+pprSimplCount SimplCount{ ticks = tks, details = dts, log1 = l1, log2 = l2 }
+  = vcat [ text "Total ticks:    " <+> int tks
+         , blankLine
+         , pprTickCounts dts
+         , getVerboseSimplStats $ \dbg -> if dbg
+           then vcat [ blankLine
+                     , text "Log (most recent first)"
+                     , nest 4 (vcat (map ppr l1) $$ vcat (map ppr l2)) ]
+           else Outputable.empty
+         ]
 
 zeroSimplCount :: Bool -> SimplCount
 zeroSimplCount dump_simpl_stats
@@ -83,6 +97,19 @@ plusSimplCount sc1@SimplCount{ ticks = tks1, details = dts1 }
 plusSimplCount (VerySimplCount n) (VerySimplCount m) = VerySimplCount (n + m)
 plusSimplCount lhr rhs = panic "plusSimplCount"
 
+pprTickCounts :: Map Tick Int -> SDoc
+pprTickCounts counts
+  = vcat (map pprTickGroup groups)
+  where
+    groups :: [NonEmpty (Tick, Int)]
+    groups = NE.groupWith (tickToTag . fst) (Map.toList counts)
+
+pprTickGroup :: NonEmpty (Tick, Int) -> SDoc
+pprTickGroup group@((tick1, _) :| _)
+  = hang (int (sum (fmap snd group)) <+> pprTickType tick1)
+    2 (vcat [ int n <+> pprTickCts tick
+            | (tick, n) <- sortOn (Down . snd) (NE.toList group) ])
+
 data Tick
   = PreInlineUnconditionally (Id Zk)
   | PostInlineUnconditionally (Id Zk)
@@ -100,6 +127,9 @@ data Tick
   | CaseElim (Id Zk)
 
   | SimplifierDone
+
+instance Outputable Tick where
+  ppr tick = pprTickType tick <+> pprTickCts tick
 
 instance Eq Tick where
   a == b = case a `cmpTick` b of
@@ -122,6 +152,34 @@ tickToTag CaseOfCase{} = 8
 tickToTag KnownBranch{} = 9
 tickToTag CaseElim{} = 11        
 tickToTag SimplifierDone = 16          
+
+pprTickType :: Tick -> SDoc
+pprTickType PreInlineUnconditionally{} = text "PreInlineUnconditionally"
+pprTickType PostInlineUnconditionally{} = text "PostInlineUnconditinaly"
+pprTickType UnfoldingDone{} = text "UnfoldingDone"
+pprTickType RuleFired{} = text "RuleFired"
+pprTickType LetFloatFromLet = text "LetFloatFromLet"
+pprTickType EtaExpansion{} = text "EtaExpansion"
+pprTickType EtaReduction{} = text "EtaReduction"
+pprTickType BetaReduction{} = text "BetaReduction"
+pprTickType CaseOfCase{} = text "CaseOfCase"
+pprTickType KnownBranch{} = text "KnownBranch"
+pprTickType CaseElim{} = text "CaseElim"
+pprTickType SimplifierDone = text "SimplifierDone"
+
+pprTickCts :: Tick -> SDoc
+pprTickCts (PreInlineUnconditionally v) = ppr v
+pprTickCts (PostInlineUnconditionally v) = ppr v
+pprTickCts (UnfoldingDone v) = ppr v
+pprTickCts (RuleFired v) = ppr v
+pprTickCts LetFloatFromLet = Outputable.empty
+pprTickCts (EtaExpansion v) = ppr v
+pprTickCts (EtaReduction v) = ppr v
+pprTickCts (BetaReduction v _) = ppr v
+pprTickCts (CaseOfCase v) = ppr v
+pprTickCts (KnownBranch v) = ppr v
+pprTickCts (CaseElim v) = ppr v
+pprTickCts SimplifierDone = Outputable.empty
 
 cmpTick :: Tick -> Tick -> Ordering
 cmpTick a b = case tickToTag a `compare` tickToTag b of
