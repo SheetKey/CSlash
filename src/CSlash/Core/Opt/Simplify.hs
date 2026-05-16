@@ -84,7 +84,14 @@ simplifyPgm logger unit_env name_ppr_ctx opts guts@(ModGuts { mg_module = this_m
   = do (termination_msg, it_count, counts_out, guts')
          <- do_iteration 1 [] binds local_rules
 
-       panic "simplifyPgm unfinished"
+       when (logHasDumpFlag logger Opt_D_verbose_core2core
+             && logHasDumpFlag logger Opt_D_dump_simpl_stats) $
+         logDumpMsg logger "Simplifier statistics for following pass"
+         (vcat [ text termination_msg <+> text "after" <+> ppr it_count <+> text "iterations"
+               , blankLine
+               , pprSimplCount counts_out ])
+
+       return (counts_out, guts')
 
   where
     dump_core_sizes = so_dump_core_sizes opts
