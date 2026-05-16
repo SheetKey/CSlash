@@ -492,6 +492,10 @@ nopSig = DmdSig nopDmdType
 isDeadEndSig :: DmdSig -> Bool
 isDeadEndSig (DmdSig (DmdType env _)) = isDeadEndDiv (de_div env)
 
+isDeadEndAppSig :: DmdSig -> Int -> Bool
+isDeadEndAppSig (DmdSig (DmdType env ds)) n
+  = isDeadEndDiv (de_div env) && not (lengthExceeds ds n)
+
 prependArgsDmdSig :: Int -> DmdSig -> DmdSig
 prependArgsDmdSig new_args sig@(DmdSig dmd_ty@(DmdType env dmds))
   | new_args == 0 = sig

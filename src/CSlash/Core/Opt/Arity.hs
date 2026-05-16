@@ -105,6 +105,9 @@ type SafeArityType = ArityType
 data Cost = IsCheap | IsExpensive
   deriving Eq
 
+allCosts :: (a -> Cost) -> [a] -> Cost
+allCosts f xs = foldr (addCost . f) IsCheap xs
+
 addCost :: Cost -> Cost -> Cost
 addCost IsCheap IsCheap = IsCheap
 addCost _ _ = IsExpensive
@@ -276,6 +279,42 @@ arityLam id (AT oss div) = AT ((IsCheap, one_shot) : oss) div
     one_shot | isDeadEndDiv div = OneShotLam
              | otherwise = idOneShotInfo id
 
+floatIn :: Cost -> ArityType -> ArityType
+floatIn ch at@(AT lams div)
+  = case lams of
+      [] -> at
+      (IsExpensive, _) : _ -> at
+      (_, os) : lams -> AT ((ch, os) : lams) div
+
+addWork :: ArityType -> ArityType
+addWork at@(AT lams div)
+  = case lams of
+      [] -> at
+      lam : lams' -> AT (add_work lam : lams') div
+
+add_work :: ATLamInfo -> ATLamInfo
+add_work (_, os) = (IsExpensive, os)
+
+arityApp :: ArityType -> Cost -> ArityType
+arityApp (AT ((ch1, _) : oss) div) ch2 = floatIn (ch1 `addCost` ch2) (AT oss div)
+arityApp at _ = at
+
+andArityType :: ArityEnv -> ArityType -> ArityType -> ArityType
+andArityType env (AT (lam1 : lams1) div1) (AT (lam2 : lams2) div2)
+  | AT lams' div' <- andArityType env (AT lams1 div1) (AT lams2 div2)
+  = AT ((lam1 `and_lam` lam2) : lams') div'
+  where
+    and_lam (ch1, os1) (ch2, os2) = (ch1 `addCost` ch2, os1 `bestOneShot` os2)
+andArityType env (AT [] div1) at2 = andWithTail env div1 at2
+andArityType env at1 (AT [] div2) = andWithTail env div2 at1
+
+andWithTail :: ArityEnv -> Divergence -> ArityType -> ArityType
+andWithTail env div1 at2@(AT lams2 _)
+  | isDeadEndDiv div1
+  = at2
+  | otherwise
+  = AT [] topDiv
+
 data ArityEnv = AE
   { am_opts :: !ArityOpts
   , am_sigs :: !(IdEnv Zk SafeArityType)
@@ -293,15 +332,107 @@ findRhsArityEnv opts free_joins
        , am_free_joins = free_joins
        , am_sigs = emptyVarEnv }
 
+freeJoinsOK :: ArityEnv -> Bool
+freeJoinsOK AE{ am_free_joins = free_joins } = free_joins
+
 modifySigEnv :: (IdEnv Zk ArityType -> IdEnv Zk ArityType) -> ArityEnv -> ArityEnv
 modifySigEnv f env@AE{ am_sigs = sigs } = env { am_sigs = f sigs }
 {-# INLINE modifySigEnv #-}
 
+del_sig_env :: CoreId -> ArityEnv -> ArityEnv
+del_sig_env id = modifySigEnv (\sigs -> delVarEnv sigs id)
+{-# INLINE del_sig_env #-}
+
+del_sig_env_list :: [CoreId] -> ArityEnv -> ArityEnv
+del_sig_env_list id = modifySigEnv (\sigs -> delVarEnvList sigs id)
+{-# INLINE del_sig_env_list #-}
+
 extendSigEnv :: ArityEnv -> CoreId -> SafeArityType -> ArityEnv
 extendSigEnv env id ar_ty = modifySigEnv (\sigs -> extendVarEnv sigs id ar_ty) env
 
+delInScope :: ArityEnv -> CoreId -> ArityEnv
+delInScope env id = del_sig_env id env
+
+delInScopeList :: ArityEnv -> [CoreId] -> ArityEnv
+delInScopeList env ids = del_sig_env_list ids env
+
+lookupSigEnv :: ArityEnv -> CoreId -> Maybe SafeArityType
+lookupSigEnv AE{ am_sigs = sigs } id = lookupVarEnv sigs id
+
+exprCost :: ArityEnv -> CoreExpr -> Maybe CoreType -> Cost
+exprCost env e mb_ty
+  | myExprIsCheap env e mb_ty = IsCheap
+  | otherwise = IsExpensive
+
+myExprIsCheap :: ArityEnv -> CoreExpr -> Maybe CoreType -> Bool
+myExprIsCheap AE{ am_opts = opts, am_sigs = sigs } e mb_ty
+  = cheap_fun e
+  where
+    cheap_fun e = exprIsCheapX (myIsCheapApp sigs) False e
+
+myIsCheapApp :: IdEnv Zk SafeArityType -> CheapAppFun
+myIsCheapApp sigs fn n_val_args = case lookupVarEnv sigs fn of
+  Nothing -> isCheapApp fn n_val_args
+  Just (AT lams div)
+    | isDeadEndDiv div -> True
+    | n_val_args == 0 -> True
+    | n_val_args < length lams -> True
+    | otherwise -> False
+
 arityType :: HasDebugCallStack => ArityEnv -> CoreExpr -> ArityType
-arityType _ _ = panic "arityType"
+arityType env (Var v)
+  | Just at <- lookupSigEnv env v
+  = at
+  | otherwise
+  = assertPpr (freeJoinsOK env || not (isJoinId v)) (ppr v)
+    idArityType v
+    
+arityType env (Cast e _) = arityType env e
+
+arityType env (Lam x _ e)
+  | Core.Id b <- x = arityLam b (arityType (delInScope env b) e)
+  | otherwise = arityType env e
+
+arityType env (App fun (Type _)) = arityType env fun
+arityType env (App fun (KiCo _)) = arityType env fun
+arityType env (App fun (Kind _)) = arityType env fun
+arityType env (App fun arg)
+  = arityApp fun_at arg_cost
+  where
+    fun_at = arityType env fun
+    arg_cost = exprCost env arg Nothing
+
+arityType env (Case scrut bndr _ alts)
+  | exprIsDeadEnd scrut || null alts
+  = botArityType
+  | exprOkForSpeculation scrut
+  = alts_type
+  | otherwise
+  = addWork alts_type
+  where
+    env' = delInScope env bndr
+    arity_type_alt (Alt _ bndrs rhs) = arityType (delInScopeList env' bndrs) rhs
+    alts_type = foldr1 (andArityType env) (map arity_type_alt alts)
+
+arityType env (Let (NonRec b rhs) e)
+  = floatIn rhs_cost (arityType env' e)
+  where
+    rhs_cost = exprCost env rhs (Just (varType b))
+    env' = extendSigEnv env b (safeArityType (arityType env rhs))
+
+arityType env (Let (Rec prs) e)
+  = floatIn (allCosts bind_cost prs) (arityType env' e)
+  where
+    bind_cost :: (CoreId, CoreExpr) -> Cost
+    bind_cost (b, e) = exprCost env' e (Just (varType b))
+    env' = foldl extend_rec env prs
+    extend_rec :: ArityEnv -> (CoreId, CoreExpr) -> ArityEnv
+    extend_rec env (b, _) = extendSigEnv env b $ idArityType b
+
+arityType env (Tick t e)
+  | not (tickishIsCode t) = arityType env e
+
+arityType _ _ = topArityType
 
 idArityType :: CoreId -> ArityType
 idArityType v
@@ -351,6 +482,26 @@ exprArity e = go e
     go (App e (Kind _)) = go e
     go (App f a) | exprIsTrivial a = (go f - 1) `max` 0
     go _ = 0
+
+exprIsDeadEnd :: CoreExpr -> Bool
+exprIsDeadEnd e = go 0 e
+  where
+    go :: Arity -> CoreExpr -> Bool
+    go _ Lit{} = False
+    go _ Type{} = False
+    go _ KiCo{} = False
+    go _ Kind{} = False
+    go n (App e a) | isValArg a = go (n + 1) e
+                   | otherwise = go n e
+    go n (Tick _ e) = go n e
+    go n (Cast e _) = go n e
+    go n (Let _ e) = go n e
+    go n (Lam v _ e) | isRuntimeVar v = False
+                     | otherwise = go n e
+    go _ (Case _ _ _ alts) = null alts
+    go n (Var v) | isDeadEndAppSig (idDmdSig v) n = True
+                 | isEmptyTy (varType v) = True
+                 | otherwise = False
 
 {- *********************************************************************
 *                                                                      *
