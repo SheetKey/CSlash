@@ -628,7 +628,7 @@ simplType env ty = seqType new_ty `seq` return new_ty
   where new_ty = substTy env ty
 
 simplKind :: SimplEnv -> InMonoKind -> SimplM OutMonoKind
-simplKind env ki = panic "seqMonoKind new_ki `seq` return new_ki"
+simplKind env ki = seqMonoKind new_ki `seq` return new_ki
   where new_ki = substMonoKi env ki
 
 simplKiCoF

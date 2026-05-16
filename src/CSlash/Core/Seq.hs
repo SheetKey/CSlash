@@ -9,7 +9,7 @@ import CSlash.Types.Tickish
 import CSlash.Types.Var.Set( seqDVarSet )
 import CSlash.Types.Var( varType, varKind )
 import CSlash.Core.Type( seqType, seqTyCo )
-import CSlash.Core.Kind( seqKind, seqKiCo )
+import CSlash.Core.Kind( seqMonoKind, seqKiCo )
 import CSlash.Types.Var.Id( idInfo )
 
 megaSeqIdInfo :: IdInfo -> ()
@@ -37,10 +37,10 @@ seqExpr (Cast e co) = seqExpr e `seq` seqTyCo co
 seqExpr (Tick n e) = seqTickish n `seq` seqExpr e
 seqExpr (Type t) = seqType t
 seqExpr (KiCo co) = seqKiCo co
-seqExpr (Kind ki) = seqKind ki
+seqExpr (Kind ki) = seqMonoKind ki
 
 seqMKind :: Maybe CoreMonoKind -> ()
-seqMKind (Just ki) = seqKind ki
+seqMKind (Just ki) = seqMonoKind ki
 seqMKind Nothing = ()
 
 seqTickish :: CoreTickish -> ()
@@ -48,8 +48,8 @@ seqTickish CpcTick{} = ()
 
 seqCoreBndr :: CoreBndr -> ()
 seqCoreBndr (Core.Id id) = seqType (varType id) `seq` megaSeqIdInfo (idInfo id)
-seqCoreBndr (Tv tv) = seqKind (varKind tv)
-seqCoreBndr (KCv kcv) = seqKind (varKind kcv)
+seqCoreBndr (Tv tv) = seqMonoKind (varKind tv)
+seqCoreBndr (KCv kcv) = seqMonoKind (varKind kcv)
 seqCoreBndr (Kv _) = ()
 
 seqLetBndr :: CoreId -> ()
