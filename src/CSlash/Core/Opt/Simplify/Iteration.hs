@@ -555,7 +555,12 @@ simplExprF1 env (App fun arg) cont
                     ApplyToTy { sc_arg_ty = arg'
                               , sc_hole_ty = hole'
                               , sc_cont = cont }
-    KiCo co -> panic "simplExprF1 App KiCo"
+    KiCo co -> do arg' <- simplKiCo env co
+                  let hole' = substTy env (exprType fun)
+                  simplExprF env fun $
+                    ApplyToKiCo { sc_arg_kico = arg'
+                                , sc_hole_ty = hole'
+                                , sc_cont = cont }
     Kind ki -> do arg' <- simplKind env ki
                   let hole' = substTy env (exprType fun)
                   simplExprF env fun $
