@@ -410,6 +410,11 @@ isTupleTyCon (TyCon { tyConDetails = details })
   | AlgTyCon { algTcRhs = TupleTyCon {} } <- details = True
   | otherwise = False
 
+isSumTyCon :: TyCon p -> Bool
+isSumTyCon TyCon{ tyConDetails = details }
+  | AlgTyCon { algTcRhs = SumTyCon{} } <- details = True
+  | otherwise = False
+
 isConcreteTyCon :: TyCon p -> Bool
 isConcreteTyCon tc@(TyCon { tyConDetails = details })
   = case details of

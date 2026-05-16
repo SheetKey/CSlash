@@ -243,8 +243,8 @@ idJoinPointHood id = case idDetails id of
 
 hasNoBinding :: Id p -> Bool
 hasNoBinding id = case idDetails id of
-  DataConId dc -> panic "isTupleDataCon dc"
-                  --  || isSumDataCon dc
+  DataConId dc -> isTupleDataCon dc
+                  || isSumDataCon dc
   VanillaId -> rest
   TickBoxOpId _ -> rest
   JoinId _ -> rest 

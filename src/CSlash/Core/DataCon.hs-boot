@@ -25,3 +25,6 @@ instance OutputableBndr (DataCon p)
 
 dataConFullSig :: DataCon p -> Type Zk
 dataConArity :: DataCon p -> Arity
+
+isTupleDataCon :: DataCon p -> Bool
+isSumDataCon :: DataCon p -> Bool
