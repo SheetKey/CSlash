@@ -25,7 +25,7 @@ import CSlash.Core.Opt.Stats
 import CSlash.Core.Opt.Pipeline.Types
 import CSlash.Core.Opt.FloatIn      ( floatInwards )
 import CSlash.Core.Opt.FloatOut     ( floatOutwards )
--- import GHC.Core.Opt.LiberateCase ( liberateCase )
+import CSlash.Core.Opt.LiberateCase ( liberateCase )
 -- import GHC.Core.Opt.StaticArgs   ( doStaticArgs )
 import CSlash.Core.Opt.Specialize   ( specProgram)
 -- import GHC.Core.Opt.SpecConstr   ( specConstrProgram)
