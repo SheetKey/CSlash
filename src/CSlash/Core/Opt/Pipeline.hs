@@ -31,7 +31,7 @@ import CSlash.Core.Opt.Specialize   ( specProgram)
 -- import GHC.Core.Opt.SpecConstr   ( specConstrProgram)
 import CSlash.Core.Opt.DmdAnal
 -- import GHC.Core.Opt.CprAnal      ( cprAnalProgram )
--- import GHC.Core.Opt.CallArity    ( callArityAnalProgram )
+import CSlash.Core.Opt.CallArity    ( callArityAnalProgram )
 import CSlash.Core.Opt.Exitify ( exitifyProgram )
 -- import GHC.Core.Opt.WorkWrap     ( wwTopBinds )
 -- import GHC.Core.Opt.CallerCC     ( addCallerCostCentres )

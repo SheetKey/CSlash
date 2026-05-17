@@ -6,6 +6,7 @@ import CSlash.Types.Name.Occurrence
 import CSlash.Types.Name
 import CSlash.Types.Var as Var
 import CSlash.Types.Var.Set
+import CSlash.Data.Graph.UnVar 
 import CSlash.Types.Unique.Set
 import CSlash.Types.Unique.FM
 import CSlash.Types.Unique.DFM
@@ -273,6 +274,9 @@ extendVarEnv = addToUFM
 
 extendVarEnvList :: Uniquable v => VarEnv v a -> [(v, a)] -> VarEnv v a
 extendVarEnvList = addListToUFM
+
+varEnvDomain :: VarEnv v elt -> UnVarSet
+varEnvDomain = domUFMUnVarSet
 
 plusVarEnv_C :: (a -> a -> a) -> VarEnv v a -> VarEnv v a -> VarEnv v a
 plusVarEnv_C = plusUFM_C

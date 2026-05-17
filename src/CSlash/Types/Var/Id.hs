@@ -260,6 +260,7 @@ zapJoinId jid
       JoinId _ -> VanillaId -- TODO: should we add 'WorkerLikeId'??
       _ -> panic "impossible"
 
+infixl 1 `asJoinId_maybe`
 asJoinId_maybe :: HasPass p p' => Id p -> JoinPointHood -> Id p
 asJoinId_maybe id (JoinPoint arity) = asJoinId id arity
 asJoinId_maybe id NotJoinPoint = zapJoinId id
@@ -276,11 +277,16 @@ asJoinId_maybe id NotJoinPoint = zapJoinId id
 idArity :: Id p -> Arity
 idArity id = arityInfo (idInfo id)
 
+infixl 1 `setIdArity`
 setIdArity :: Id p -> Arity -> Id p
 setIdArity id arity = modifyIdInfo (`setArityInfo` arity) id
 
 idCallArity :: Id p -> Arity
 idCallArity id = callArityInfo (idInfo id)
+
+infixl 1 `setIdCallArity`
+setIdCallArity :: Id p -> Arity -> Id p
+setIdCallArity id arity = modifyIdInfo (`setCallArityInfo` arity) id
 
 isDeadEndId :: Id p -> Bool
 isDeadEndId id = isDeadEndSig (idDmdSig id)
@@ -288,6 +294,7 @@ isDeadEndId id = isDeadEndSig (idDmdSig id)
 idDmdSig :: Id p -> DmdSig
 idDmdSig id = dmdSigInfo (idInfo id)
 
+infixl 1 `setIdDmdSig`
 setIdDmdSig :: Id p -> DmdSig -> Id p
 setIdDmdSig id sig = modifyIdInfo (`setDmdSigInfo` sig) id
 
@@ -313,12 +320,14 @@ whenActiveUnfoldingFun is_active id
 realIdUnfolding :: Id p -> Unfolding
 realIdUnfolding id = realUnfoldingInfo (idInfo id)
 
+infixl 1 `setIdUnfolding`
 setIdUnfolding :: Id p -> Unfolding -> Id p
 setIdUnfolding id unfolding = modifyIdInfo (`setUnfoldingInfo` unfolding) id
 
 idDemandInfo :: Id p -> Demand
 idDemandInfo id = demandInfo (idInfo id)
 
+infixl 1 `setIdDemandInfo`
 setIdDemandInfo :: Id p -> Demand -> Id p
 setIdDemandInfo id dmd = modifyIdInfo (`setDemandInfo` dmd) id
 
@@ -342,12 +351,14 @@ idCoreRules id = ruleInfoRules (idSpecialization id)
 idHasRules :: Id p -> Bool
 idHasRules id = not (isEmptyRuleInfo (idSpecialization id))
 
+infixl 1 `setIdSpecialization`
 setIdSpecialization :: Id p -> RuleInfo -> Id p
 setIdSpecialization id spec_info = modifyIdInfo (`setRuleInfo` spec_info) id
 
 ---------------------------------
 -- Occurrence INFO
 
+infixl 1 `setIdOccInfo`
 setIdOccInfo :: Id p -> OccInfo -> Id p
 setIdOccInfo id occ_info = modifyIdInfo (`setOccInfo` occ_info) id
 
@@ -357,6 +368,7 @@ setIdOccInfo id occ_info = modifyIdInfo (`setOccInfo` occ_info) id
 idInlinePragma :: Id p -> InlinePragma
 idInlinePragma id = inlinePragInfo (idInfo id)
 
+infixl 1 `setInlinePragma`
 setInlinePragma :: Id p -> InlinePragma -> Id p
 setInlinePragma id prag = modifyIdInfo (`setInlinePragInfo` prag) id
 
@@ -373,6 +385,7 @@ isConLikeId id = isConLike (idRuleMatchInfo id)
 idInlineActivation :: Id p -> Activation
 idInlineActivation id = inlinePragmaActivation (idInlinePragma id)
 
+infixl 1 `setInlineActivation`
 setInlineActivation :: Id p -> Activation -> Id p
 setInlineActivation id act = modifyInlinePragma id (\prag -> setInlinePragmaActivation prag act)
 
@@ -385,6 +398,7 @@ idOneShotInfo id = oneShotInfo (idInfo id)
 setOneShotLambda :: Id p -> Id p
 setOneShotLambda id = modifyIdInfo (`setOneShotInfo` OneShotLam) id
 
+infixl 1 `setIdOneShotInfo`
 setIdOneShotInfo :: Id p -> OneShotInfo -> Id p
 setIdOneShotInfo id one_shot = modifyIdInfo (`setOneShotInfo` one_shot) id
 
@@ -455,6 +469,7 @@ idJoinArity id = case idJoinPointHood id of
   JoinPoint ar -> ar
   NotJoinPoint -> pprPanic "idJoinArity" (ppr id)
 
+infixl 1 `asJoinId`
 asJoinId :: HasPass p p' => Id p -> JoinArity -> Id p
 asJoinId id arity = warnPprTrace (not (isLocalId id))
                     "global id being marked as a join var" (ppr id) $

@@ -3,7 +3,7 @@ module CSlash.Data.Graph.UnVar where
 import CSlash.Cs.Pass
 
 import CSlash.Types.Unique.FM( UniqFM, ufmToSet_Directly )
-import CSlash.Types.Var.Id
+import CSlash.Types.Var
 import CSlash.Utils.Outputable
 import CSlash.Types.Unique
 

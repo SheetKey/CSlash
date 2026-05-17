@@ -76,6 +76,7 @@ library
                     , CSlash.Core.Map.Kind
                     , CSlash.Core.Map.Type
                     , CSlash.Core.Opt.Arity
+                    , CSlash.Core.Opt.CallArity
                     , CSlash.Core.Opt.CallerCC
                     , CSlash.Core.Opt.CallerCC.Types
                     , CSlash.Core.Opt.Coercion
