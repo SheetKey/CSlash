@@ -23,7 +23,7 @@ import CSlash.Core.Opt.Simplify ( {-simplifyExpr,-} simplifyPgm )
 import CSlash.Core.Opt.Monad
 import CSlash.Core.Opt.Stats
 import CSlash.Core.Opt.Pipeline.Types
--- import GHC.Core.Opt.FloatIn      ( floatInwards )
+import CSlash.Core.Opt.FloatIn      ( floatInwards )
 import CSlash.Core.Opt.FloatOut     ( floatOutwards )
 -- import GHC.Core.Opt.LiberateCase ( liberateCase )
 -- import GHC.Core.Opt.StaticArgs   ( doStaticArgs )

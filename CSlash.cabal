@@ -82,6 +82,7 @@ library
                     , CSlash.Core.Opt.ConstantFold
                     , CSlash.Core.Opt.DmdAnal
                     , CSlash.Core.Opt.Exitify
+                    , CSlash.Core.Opt.FloatIn
                     , CSlash.Core.Opt.FloatOut
                     , CSlash.Core.Opt.Monad
                     , CSlash.Core.Opt.OccurAnal

@@ -251,6 +251,7 @@ type FVAnn = (DCoreIdSet, DCoreTyCoVarSet, DCoreTyVarSet, DCoreKiCoVarSet, DCore
 type CoreBindWithFVs = AnnBind CoreBndr CoreId FVAnn
 
 type CoreExprWithFVs = AnnExpr CoreBndr CoreId FVAnn
+type CoreExprWithFVs' = AnnExpr' CoreBndr CoreId FVAnn
 
 type CoreAltWithFVs = AnnAlt CoreBndr CoreId FVAnn
 

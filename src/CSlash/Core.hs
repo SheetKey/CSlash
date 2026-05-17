@@ -541,6 +541,18 @@ collectAnnArgs expr
     go (_, AnnApp f a) as = go f (a:as)
     go e as = (e, as)
 
+collectAnnArgsTicks
+  :: (CoreTickish -> Bool)
+  -> AnnExpr b1 b2 a
+  -> (AnnExpr b1 b2 a, [AnnExpr b1 b2 a], [CoreTickish])
+collectAnnArgsTicks tickishOk expr
+  = go expr [] []
+  where
+    go (_, AnnApp f a) as ts = go f (a : as) ts
+    go (_, AnnTick t e) as ts
+      | tickishOk t = go e as (t : ts)
+    go e as ts = (e, as, reverse  ts)
+
 collectAnnBndrs :: AnnExpr b1 b2 a -> ([(b1, Maybe CoreMonoKind)], AnnExpr b1 b2 a)
 collectAnnBndrs e = collect [] e
   where

@@ -146,6 +146,12 @@ unionDVarSet = unionUniqDSets
 unionDVarSets :: Uniquable a => [UniqDSet a] -> UniqDSet a
 unionDVarSets = unionManyUniqDSets
 
+intersectsDVarSet :: UniqDSet a -> UniqDSet a -> Bool
+intersectsDVarSet s1 s2 = not (s1 `disjointDVarSet` s2)
+
+disjointDVarSet :: UniqDSet a -> UniqDSet a -> Bool
+disjointDVarSet s1 s2 = disjointUDFM (getUniqDSet s1) (getUniqDSet s2)
+
 delDVarSet :: Uniquable a => UniqDSet a -> a -> UniqDSet a
 delDVarSet = delOneFromUniqDSet
 

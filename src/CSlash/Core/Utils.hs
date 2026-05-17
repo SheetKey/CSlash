@@ -308,6 +308,34 @@ getIdFromTrivialExpr_maybe e = trivial_expr_fold Just (const Nothing) Nothing No
 
 {- *********************************************************************
 *                                                                      *
+             exprIsDupable
+*                                                                      *
+********************************************************************* -}
+
+-- TODO: we need to check that we aren't duping a linear/affine thing!
+exprIsDupable :: Platform -> CoreExpr -> Bool
+exprIsDupable platform e
+  = isJust (go dupAppSize e)
+  where
+    go :: Int -> CoreExpr -> Maybe Int
+    go n Type{} = Just n
+    go n KiCo{} = Just n
+    go n Kind{} = Just n
+    go n Var{} = decrement n
+    go n (Tick _ e) = go n e
+    go n (App f a) | Just n' <- go n a = go n' f
+    go n (Lit lit) | panic "litIsDupable platform lit" = decrement n
+    go _ _ = Nothing
+
+    decrement :: Int -> Maybe Int
+    decrement 0 = Nothing
+    decrement n = Just (n - 1)
+
+dupAppSize :: Int
+dupAppSize = 8
+
+{- *********************************************************************
+*                                                                      *
              exprIsCheap, exprIsExpandable
 *                                                                      *
 ********************************************************************* -}
@@ -483,8 +511,25 @@ unionDCoreVarSets (id1, tcv1, tv1, kcv1, kv1) (id2, tcv2, tv2, kcv2, kv2)
     , unionDVarSet kcv1 kcv2
     , unionDVarSet kv1 kv2 )
 
+unionListDCoreVarSets :: [DCoreVarSets] -> DCoreVarSets 
+unionListDCoreVarSets = foldr unionDCoreVarSets emptyDCoreVarSets
+
+intersectsDCoreVarSet :: DCoreVarSets -> DCoreVarSets -> Bool
+intersectsDCoreVarSet (id1, tcv1, tv1, kcv1, kv1) (id2, tcv2, tv2, kcv2, kv2)
+  = intersectsDVarSet id1 id2 ||
+    intersectsDVarSet tcv1 tcv2 ||
+    intersectsDVarSet tv1 tv2 ||
+    intersectsDVarSet kcv1 kcv2 ||
+    intersectsDVarSet kv1 kv2
+
 emptyCoreVarSets :: CoreVarSets
 emptyCoreVarSets = (emptyVarSet, emptyVarSet, emptyVarSet, emptyVarSet, emptyVarSet)
+
+emptyDCoreVarSets :: DCoreVarSets
+emptyDCoreVarSets = (emptyDVarSet, emptyDVarSet, emptyDVarSet, emptyDVarSet, emptyDVarSet)
+
+unitDCoreVarSets :: CoreId -> DCoreVarSets
+unitDCoreVarSets id = (unitDVarSet id, emptyDVarSet, emptyDVarSet, emptyDVarSet, emptyDVarSet)
 
 mkCoreBndrVarSets :: [CoreBndr] -> CoreVarSets
 mkCoreBndrVarSets bndrs
@@ -511,6 +556,10 @@ disjointCoreVarSets (ids1, tcvs1, tvs1, kcvs1, kvs1) (ids2, tcvs2, tvs2, kcvs2, 
 mapUnionCoreVarSets :: (a -> CoreVarSets) -> [a] -> CoreVarSets
 mapUnionCoreVarSets get_sets xs
   = foldr (unionCoreVarSets . get_sets) emptyCoreVarSets xs
+
+mapUnionDCoreVarSets :: (a -> DCoreVarSets) -> [a] -> DCoreVarSets
+mapUnionDCoreVarSets get_sets xs
+  = foldr (unionDCoreVarSets . get_sets) emptyDCoreVarSets xs
 
 unionCoreVarSets :: CoreVarSets -> CoreVarSets -> CoreVarSets
 unionCoreVarSets (ids1, tcvs1, tvs1, kcvs1, kvs1) (ids2, tcvs2, tvs2, kcvs2, kvs2)
@@ -549,6 +598,30 @@ delBndrCoreVarSets (ids, tcvs, tvs, kcvs, kvs) (Core.Id b)
 delBndrCoreVarSets (ids, tcvs, tvs, kcvs, kvs) (Tv b) = (ids, tcvs, tvs `delVarSet` b, kcvs, kvs)
 delBndrCoreVarSets (ids, tcvs, tvs, kcvs, kvs) (KCv b) = (ids, tcvs, tvs, kcvs `delVarSet` b, kvs)
 delBndrCoreVarSets (ids, tcvs, tvs, kcvs, kvs) (Kv b) = (ids, tcvs, tvs, kcvs, kvs `delVarSet` b)
+
+delDCoreVarSet :: DCoreVarSets -> CoreId -> DCoreVarSets
+delDCoreVarSet (ids, tcvs, tvs, kcvs, kvs) id
+  = (ids `delDVarSet` id, tcvs, tvs, kcvs, kvs)
+
+mkDCoreVarSets :: [CoreId] -> DCoreVarSets
+mkDCoreVarSets ids = (mkDVarSet ids, emptyDVarSet, emptyDVarSet, emptyDVarSet, emptyDVarSet)
+
+mkDCoreVarSetsDIdSet :: DIdSet Zk -> DCoreVarSets
+mkDCoreVarSetsDIdSet ids = (ids, emptyDVarSet, emptyDVarSet, emptyDVarSet, emptyDVarSet)
+
+mkDCoreVarSetsBndrs :: [CoreBndr] -> DCoreVarSets
+mkDCoreVarSetsBndrs bndrs
+  = go bndrs emptyDCoreVarSets
+  where
+    go [] acc = acc
+    go (Core.Id id : bndrs) (ids, tcvs, tvs, kcvs, kvs)
+      = go bndrs (extendDVarSet ids id, tcvs, tvs, kcvs, kvs)
+    go (Tv tv : bndrs) (ids, tcvs, tvs, kcvs, kvs)
+      = go bndrs (ids, tcvs, extendDVarSet tvs tv, kcvs, kvs)
+    go (KCv kcv : bndrs) (ids, tcvs, tvs, kcvs, kvs)
+      = go bndrs (ids, tcvs, tvs, extendDVarSet kcvs kcv, kvs)
+    go (Kv kv : bndrs) (ids, tcvs, tvs, kcvs, kvs)
+      = go bndrs (ids, tcvs, tvs, kcvs, extendDVarSet kvs kv)
 
 {- *********************************************************************
 *                                                                      *
