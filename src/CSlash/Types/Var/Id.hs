@@ -339,6 +339,9 @@ idSpecialization id = ruleInfo (idInfo id)
 idCoreRules :: Id p -> [CoreRule]
 idCoreRules id = ruleInfoRules (idSpecialization id)
 
+idHasRules :: Id p -> Bool
+idHasRules id = not (isEmptyRuleInfo (idSpecialization id))
+
 setIdSpecialization :: Id p -> RuleInfo -> Id p
 setIdSpecialization id spec_info = modifyIdInfo (`setRuleInfo` spec_info) id
 
@@ -357,6 +360,10 @@ idInlinePragma id = inlinePragInfo (idInfo id)
 setInlinePragma :: Id p -> InlinePragma -> Id p
 setInlinePragma id prag = modifyIdInfo (`setInlinePragInfo` prag) id
 
+modifyInlinePragma :: Id p -> (InlinePragma -> InlinePragma) -> Id p
+modifyInlinePragma id fn =
+  modifyIdInfo (\info -> info `setInlinePragInfo` (fn (inlinePragInfo info))) id
+
 idRuleMatchInfo :: Id p -> RuleMatchInfo
 idRuleMatchInfo id = inlinePragmaRuleMatchInfo (idInlinePragma id)
 
@@ -365,6 +372,9 @@ isConLikeId id = isConLike (idRuleMatchInfo id)
 
 idInlineActivation :: Id p -> Activation
 idInlineActivation id = inlinePragmaActivation (idInlinePragma id)
+
+setInlineActivation :: Id p -> Activation -> Id p
+setInlineActivation id act = modifyInlinePragma id (\prag -> setInlinePragmaActivation prag act)
 
 ---------------------------------
 -- ONE-SHOT LAMBDAS
@@ -398,8 +408,16 @@ zapFragileIdInfo = zapInfo zapFragileInfo
 zapIdTailCallInfo :: Id p -> Id p
 zapIdTailCallInfo = zapInfo zapTailCallInfo
 
+zapStableUnfolding :: Id p -> Id p
+zapStableUnfolding id
+  | isStableUnfolding (realIdUnfolding id) = setIdUnfolding id NoUnfolding
+  | otherwise = id
+
 floatifyIdDemandInfo :: Id p -> Id p
 floatifyIdDemandInfo = zapInfo floatifyDemandInfo
+
+zapIdUsageInfo :: Id p -> Id p
+zapIdUsageInfo = zapInfo zapUsageInfo
 
 transferPolyIdInfo
   :: CoreId

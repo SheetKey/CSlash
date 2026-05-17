@@ -224,6 +224,12 @@ stripTicksTopT p = go []
   where go ts (Tick t e) | p t = go (t:ts) e
         go ts _                = ts
 
+stripTicksE :: (CoreTickish -> Bool) -> Expr b1 b2 -> Expr b1 b2
+stripTicksE = panic "stripTicksE"
+
+stripTicksT :: (CoreTickish -> Bool) -> Expr b1 b2 -> [CoreTickish]
+stripTicksT = panic "stripTicksT"
+
 {- *********************************************************************
 *                                                                      *
              Other expression construction

@@ -278,6 +278,9 @@ floatifyDemandInfo :: IdInfo -> Maybe IdInfo
 floatifyDemandInfo info@(IdInfo { demandInfo = dmd })
   = Just (info { demandInfo = floatifyDmd dmd })
 
+zapUsageInfo :: IdInfo -> Maybe IdInfo
+zapUsageInfo info = Just (info { demandInfo = zapUsageDemand (demandInfo info) })
+
 zapFragileInfo :: IdInfo -> Maybe IdInfo
 zapFragileInfo info@IdInfo{ occInfo = occ, realUnfoldingInfo = unf }
   = new_unf `seq`

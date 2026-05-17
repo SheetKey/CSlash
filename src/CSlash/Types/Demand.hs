@@ -637,6 +637,35 @@ zapDmdEnv (DE _ div) = mkEmptyDmdEnv div
 zapDmdEnvSig :: DmdSig -> DmdSig
 zapDmdEnvSig (DmdSig (DmdType env ds)) = DmdSig (DmdType (zapDmdEnv env) ds)
 
+zapUsageDemand :: Demand -> Demand
+zapUsageDemand = kill_usage $ KillFlags
+  { kf_abs = True
+  , kf_used_once = True
+  , kf_called_once = True
+  }
+
+data KillFlags = KillFlags
+  { kf_abs :: Bool
+  , kf_used_once :: Bool
+  , kf_called_once :: Bool
+  }
+
+kill_usage :: KillFlags -> Demand -> Demand
+kill_usage _ BotDmd = BotDmd
+kill_usage kfs (n :* sd) = kill_usage_card kfs n :* kill_usage_sd kfs sd
+
+kill_usage_card :: KillFlags -> Card -> Card
+kill_usage_card kfs C_10 | kf_abs kfs = C_1N
+kill_usage_card kfs C_11 | kf_used_once kfs = C_1N
+kill_usage_card _ n = n
+
+kill_usage_sd :: KillFlags -> SubDemand -> SubDemand
+kill_usage_sd kfs (Call n sd)
+  | kf_called_once kfs = mkCall (lubCard C_1N n) (kill_usage_sd kfs sd)
+  | otherwise = mkCall n (kill_usage_sd kfs sd)
+kill_usage_sd kfs (Prod ds) = mkProd (map (kill_usage kfs) ds)
+kill_usage_sd _ sd = sd
+
 {- *********************************************************************
 *                                                                      *
         Sequencing demands

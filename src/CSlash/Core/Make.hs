@@ -42,6 +42,16 @@ import Data.Char (ord)
 *                                                                      *
 **********************************************************************-}
 
+mkConApp :: CoreDataCon -> [CoreArg] -> CoreExpr 
+mkConApp con args = mkCoreApps (Var (dataConId con)) args
+
+mkAltExpr :: AltCon -> [CoreId] -> [CoreType] -> CoreExpr
+mkAltExpr (DataAlt con) args inst_tys
+  = mkConApp con (tysToCoreExprs inst_tys ++ varsToCoreExprs args)
+mkAltExpr (LitAlt lit) [] [] = Lit lit
+mkAltExpr (LitAlt _) _ _ = panic "mkAltExpr LitAlt"
+mkAltExpr DEFAULT _ _ = panic "mkAltExpr DEFAULT"
+
 mkCoreLet :: CoreBind -> CoreExpr -> CoreExpr
 mkCoreLet (NonRec bndr rhs) body
   = bindNonRec bndr rhs body

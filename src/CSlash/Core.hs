@@ -163,6 +163,10 @@ isStableUnfolding :: Unfolding -> Bool
 isStableUnfolding (CoreUnfolding { uf_src = src }) = isStableSource src
 isStableUnfolding _ = False
 
+isStableUserUnfolding :: Unfolding -> Bool
+isStableUserUnfolding CoreUnfolding{ uf_src = src } = isStableUserSource src
+isStableUserUnfolding _ = False
+
 isInlineUnfolding :: Unfolding -> Bool
 isInlineUnfolding CoreUnfolding{ uf_src = src, uf_guidance = guidance }
   | isStableSource src
@@ -348,7 +352,7 @@ mkBndrApps :: Expr b1 b2 -> [CoreBndr] -> Expr b1 b2
 mkBndrApps f vars = foldl' (\e a -> App e (bndrToCoreExpr a)) f vars
 
 mkTyApps :: Expr b1 b2 -> [CoreType] -> Expr b1 b2
-mkTyApps f args = foldl' (\e a -> App e (Type a)) f args
+mkTyApps f args = foldl' (\e a -> App e (tyToCoreExpr a)) f args
 
 mkKiCoApps :: Expr b1 b2 -> [CoreKindCoercion] -> Expr b1 b2
 mkKiCoApps f args = foldl' (\e a -> App e (KiCo a)) f args
@@ -393,6 +397,14 @@ varToCoreExpr = Var
 
 varsToCoreExprs :: [CoreId] -> [Expr b1 b2]
 varsToCoreExprs vs = map varToCoreExpr vs
+
+tyToCoreExpr :: CoreType -> Expr b1 b2
+tyToCoreExpr (Embed ki) = Kind ki
+tyToCoreExpr (KindCoercion co) = KiCo co
+tyToCoreExpr ty = Type ty
+
+tysToCoreExprs :: [CoreType] -> [Expr b1 b2]
+tysToCoreExprs = map tyToCoreExpr
 
 {- *********************************************************************
 *                                                                      *

@@ -80,6 +80,7 @@ library
                     , CSlash.Core.Opt.CallerCC.Types
                     , CSlash.Core.Opt.Coercion
                     , CSlash.Core.Opt.ConstantFold
+                    , CSlash.Core.Opt.CSE
                     , CSlash.Core.Opt.DmdAnal
                     , CSlash.Core.Opt.Exitify
                     , CSlash.Core.Opt.FloatIn

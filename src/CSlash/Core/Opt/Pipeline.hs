@@ -13,7 +13,7 @@ import CSlash.Driver.Config.Core.Rules ( initRuleOpts )
 import CSlash.Platform.Ways  ( hasWay, Way(WayProf) )
 
 import CSlash.Core
--- import GHC.Core.Opt.CSE  ( cseProgram )
+import CSlash.Core.Opt.CSE  ( cseProgram )
 import CSlash.Core.Rules   ( RuleBase, mkRuleBase{-, ruleCheckProgram, getRules-} )
 import CSlash.Core.Ppr     ( pprCoreBindings )
 import CSlash.Core.Utils   ( dumpIdInfoOfProgram )

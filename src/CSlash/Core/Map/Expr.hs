@@ -39,6 +39,9 @@ data CoreMapX a = CM
 instance Eq (DeBruijn CoreExpr) where
   (==) = panic "eqDeBruijnExpr"
 
+eqCoreExpr :: CoreExpr -> CoreExpr -> Bool
+eqCoreExpr e1 e2 = panic "eqCoreExpr"
+
 instance Outputable a => Outputable (CoreMap a) where
   ppr m = text "CoreMap elts" <+> ppr (foldTM (:) m [])
 
@@ -53,6 +56,12 @@ instance TrieMap CoreMap where
   alterTM k f (CoreMap m) = CoreMap (alterTM (deBruijnize k) f m)
   foldTM k (CoreMap m) = foldTM k m
   filterTM f (CoreMap m) = CoreMap (filterTM f m)
+
+lookupCoreMap :: CoreMap a -> CoreExpr -> Maybe a
+lookupCoreMap cm e = lookupTM e cm
+
+extendCoreMap :: CoreMap a -> CoreExpr -> a -> CoreMap a
+extendCoreMap m e v = alterTM e (\_ -> Just v) m
 
 emptyCoreMap :: CoreMap a
 emptyCoreMap = emptyTM
