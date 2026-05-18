@@ -458,6 +458,16 @@ tyConSingleAlgDataCon_maybe :: TyCon p -> Maybe (DataCon Zk)
 tyConSingleAlgDataCon_maybe tycon
   = tyConSingleDataCon_maybe tycon -- todo: check for newtypes
 
+tyConFamilySize :: TyCon p -> Int
+tyConFamilySize tc@TyCon{ tyConDetails = details }
+  | AlgTyCon { algTcRhs = rhs } <- details
+  = case rhs of
+      DataTyCon { data_cons_size = size } -> size
+      TupleTyCon {} -> 1
+      SumTyCon { data_cons_size = size } -> size
+      _ -> pprPanic "tyConFamilySize 2" (ppr tc)
+  | otherwise = pprPanic "tyConFamilySize 2" (ppr tc)
+
 synTyConDefn_maybe :: TyCon p -> Maybe (Type Zk)
 synTyConDefn_maybe (TyCon { tyConDetails = details })
   | SynonymTyCon {synTcRhs = ty} <- details

@@ -46,6 +46,13 @@ import Data.List.NonEmpty ( nonEmpty )
 import qualified Data.List.NonEmpty as NE
 import Data.Maybe( isJust )
 
+manifestArity :: CoreExpr -> Arity
+manifestArity (Lam v _ e) | isRuntimeVar v = 1 + manifestArity e
+                          | otherwise = manifestArity e
+manifestArity (Tick t e) | not (tickishIsCode t) = manifestArity e
+manifestArity (Cast e _) = manifestArity e
+manifestArity _ = 0
+
 joinRhsArity :: CoreExpr -> JoinArity
 joinRhsArity (Lam _ _ e) = 1 + joinRhsArity e
 joinRhsArity _ = 0

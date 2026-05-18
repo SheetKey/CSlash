@@ -209,6 +209,10 @@ isDataConId id = case idDetails id of
                    DataConId {} -> True
                    _ -> False
 
+isFCallId :: Id p -> Bool
+isFCallId id = case idDetails id of
+  _ -> False
+
 isDataConId_maybe :: Id p -> Maybe (DataCon Zk)
 isDataConId_maybe id = case idDetails id of
                          DataConId con -> Just con

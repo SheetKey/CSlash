@@ -274,6 +274,10 @@ mkSingleAltCase scrut case_bndr con bndrs body
 *                                                                      *
 ********************************************************************* -}
 
+addDefault :: [Alt a b] -> Maybe (Expr a b) -> [Alt a b]
+addDefault alts Nothing = alts
+addDefault alts (Just rhs) = Alt DEFAULT [] rhs : alts
+
 findAlt :: AltCon -> [Alt a b] -> Maybe (Alt a b)
 findAlt con alts = case alts of
   (deflt@(Alt DEFAULT _ _) : alts) -> go alts (Just deflt)
@@ -445,6 +449,17 @@ exprOkForSpeculation = panic "unfinished"
 
 exprOkToDiscard :: CoreExpr -> Bool
 exprOkToDiscard = panic "unfinished"
+ 
+altsAreExhaustive :: [Alt b1 b2] -> Bool
+altsAreExhaustive [] = True
+altsAreExhaustive (Alt con1 _ _ : alts)
+  = case con1 of
+  DEFAULT -> True
+  LitAlt{} -> False
+  DataAlt c -> alts `lengthIs` (tyConFamilySize (dataConTyCon c) - 1)
+
+etaExpansionTick :: CoreId -> GenTickish pass -> Bool
+etaExpansionTick id t = hasNoBinding id && (tickishFloatable t || isProfTick t)
 
 {- *********************************************************************
 *                                                                      *

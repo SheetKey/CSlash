@@ -230,6 +230,9 @@ plusSubDmd _ _ = topSubDmd
 isStrUsedDmd :: Demand -> Bool
 isStrUsedDmd (n :* _) = not (isAbs n)
 
+evalDmd :: Demand
+evalDmd = C_1N :* topSubDmd
+
 floatifyDmd :: Demand -> Demand
 floatifyDmd = multDmd C_1N
 

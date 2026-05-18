@@ -85,7 +85,7 @@ import CSlash.Core.TyCon
 -- import GHC.Core.LateCC
 -- import GHC.Core.LateCC.Types
 
--- import GHC.CoreToStg.Prep
+import CSlash.CoreToLlvm.Prep
 -- import GHC.CoreToStg    ( coreToStg )
 
 import CSlash.Parser.Errors.Types

@@ -123,6 +123,8 @@ library
                     , CSlash.Core.UsageEnv
                     , CSlash.Core.Utils
 
+                    , CSlash.CoreToLlvm.Prep
+
                     , CSlash.Cs
                     , CSlash.Cs.Binds
                     , CSlash.Cs.Decls

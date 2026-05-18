@@ -470,6 +470,12 @@ collectArgs expr = go expr []
     go (App f a) as = go f (a:as)
     go e as = (e, as)
 
+wrapLamBody :: (CoreExpr -> CoreExpr) -> CoreExpr -> CoreExpr
+wrapLamBody f expr = go expr
+  where
+    go (Lam v k body) = Lam v k $ go body
+    go expr = f expr
+
 collectArgsTicks :: (CoreTickish -> Bool) -> Expr b1 b2 -> (Expr b1 b2, [Arg b1 b2], [CoreTickish])
 collectArgsTicks skipTick expr = go expr [] []
   where go (App f a) as ts = go f (a:as) ts

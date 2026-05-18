@@ -74,8 +74,12 @@ mkNoScope CpcTick{} = panic "mkNoScope: Undefined split!"
 tickishIsCode :: GenTickish pass -> Bool
 tickishIsCode CpcTick{} = True
 
+isProfTick :: GenTickish pass -> Bool
+isProfTick CpcTick{} = False
+
 data TickishPlacement
   = PlaceRuntime
+  | PlaceNonLam
   deriving (Eq, Show)
 
 instance Outputable TickishPlacement where

@@ -196,6 +196,10 @@ extendTermSubstInScopeId :: CoreSubst -> CoreId -> CoreSubst
 extendTermSubstInScopeId Subst{..} id
   = Subst { id_in_scope = id_in_scope `extendInScopeSet` id, .. }
 
+extendTermSubstInScopeListId :: CoreSubst -> [CoreId] -> CoreSubst
+extendTermSubstInScopeListId subst@Subst{ id_in_scope = in_scope } vs
+  = subst { id_in_scope = in_scope `extendInScopeSetList` vs }
+
 extendTermSubstInScopeBndrs :: CoreSubst -> [CoreBind] -> CoreSubst
 extendTermSubstInScopeBndrs = foldBindersOfBindsStrict extendTermSubstInScopeId
 
@@ -367,6 +371,18 @@ isEmptySubstKi :: Subst p p' -> Bool
 isEmptySubstKi Subst { kv_env = kv_env }
   = isEmptyVarEnv kv_env
 
+extendTvSubstInScope :: Subst p p' -> TyVar p' -> Subst p p'
+extendTvSubstInScope Subst{ tv_in_scope = is, .. } v
+  = Subst { tv_in_scope = is `extendInScopeSet` v, .. }
+
+extendKCvSubstInScope :: Subst p p' -> KiCoVar p' -> Subst p p'
+extendKCvSubstInScope Subst{ kcv_in_scope = is, .. } v
+  = Subst { kcv_in_scope = is `extendInScopeSet` v, .. }
+
+extendKvSubstInScope :: Subst p p' -> KiVar p' -> Subst p p'
+extendKvSubstInScope Subst{ kv_in_scope = is, .. } v
+  = Subst { kv_in_scope = is `extendInScopeSet` v, .. }
+
 extendTvSubstInScopeSet :: Subst p p' -> TyVarSet p' -> Subst p p'
 extendTvSubstInScopeSet (Subst { tv_in_scope = is, .. }) vs
   = Subst { tv_in_scope = is `extendInScopeSetSet` vs, .. }
@@ -409,6 +425,10 @@ extendSubst subst var arg
 extendSubstList :: CoreSubst -> [(CoreBndr, CoreArg)] -> CoreSubst
 extendSubstList subst [] = subst
 extendSubstList subst ((var, rhs):prs) = extendSubstList (extendSubst subst var rhs) prs
+
+extendIdSubstList :: CoreSubst -> [(CoreId, CoreExpr)] -> CoreSubst
+extendIdSubstList subst [] = subst
+extendIdSubstList subst ((var, rhs):prs) = extendIdSubstList (extendIdSubst subst var rhs) prs
 
 extendIdSubst :: CoreSubst -> Id Zk -> CoreExpr -> CoreSubst
 extendIdSubst (Subst { id_env = ids, .. }) id expr
