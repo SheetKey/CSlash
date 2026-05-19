@@ -32,7 +32,7 @@ import CSlash.Driver.Config.Parser   (initParserOpts)
 import CSlash.Driver.LlvmConfigCache  (initLlvmConfigCache)
 -- import GHC.Driver.Config.StgToJS  (initStgToJSConfig)
 import CSlash.Driver.Config.Diagnostic
--- import GHC.Driver.Config.Tidy
+import CSlash.Driver.Config.Tidy
 -- import GHC.Driver.Hooks
 -- import GHC.Driver.GenerateCgIPEStub (generateCgIPEStub, lookupEstimatedTicks)
 
@@ -536,7 +536,10 @@ csDesugarAndSimplify summary (FrontendTypecheck tc_result) tc_warnings mb_old_ha
     Just desugared_guts
       | backendGeneratesCode bcknd -> do
           simplified_guts <- csSimplify' desugared_guts
-          panic "unfinished"
+
+          (cg_guts, details) <- liftIO $ csTidy cs_env simplified_guts
+
+          panic "unfinished1"
 
       | gopt Opt_WriteIfSimplifiedCore dflags -> do
           panic "unfinished"
@@ -602,6 +605,23 @@ csSimplify' :: ModGuts -> Cs ModGuts
 csSimplify' ds_result = do
   cs_env <- getCsEnv
   {-# SCC "Core2Core" #-} liftIO $ core2core cs_env ds_result
+
+--------------------------------------------------------------
+-- Tidy
+--------------------------------------------------------------
+
+csTidy :: CsEnv -> ModGuts -> IO (CgGuts, ModDetails)
+csTidy cs_env guts = do
+  let logger = cs_logger cs_env
+      this_mod = mg_module guts
+
+  opts <- initTidyOpts cs_env
+  (cgguts, details) <- withTiming logger
+                       (text "CoreTidy" <+> brackets (ppr this_mod))
+                       (const ())
+                       $! {-# SCC "CoreTidy" #-} tidyProgram opts guts
+
+  panic "csTidy"
 
 {- *********************************************************************
 *                                                                      *
