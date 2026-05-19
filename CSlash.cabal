@@ -194,6 +194,7 @@ library
                     , CSlash.Driver.Config.Finder
                     , CSlash.Driver.Config.Logger
                     , CSlash.Driver.Config.Parser
+                    , CSlash.Driver.Config.Tidy
                     , CSlash.Driver.DynFlags
                     , CSlash.Driver.Env
                     , CSlash.Driver.Env.KnotVars
@@ -230,6 +231,7 @@ library
                     , CSlash.Iface.Recomp.Flags
                     , CSlash.Iface.Rename
                     , CSlash.Iface.Syntax
+                    , CSlash.Iface.Tidy
                     , CSlash.Iface.Type
 
                     , CSlash.IfaceToCore
