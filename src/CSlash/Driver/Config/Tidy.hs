@@ -26,10 +26,10 @@ initTidyOpts cs_env = do
     , opt_unfolding_opts = unfoldingOpts dflags
     , opt_expose_unfoldings = if | gopt Opt_OmitInterfacePragmas dflags -> ExposeNone
                                  | gopt Opt_ExposeAllUnfoldings dflags -> ExposeAll
-                                 | panic "gopt Opt_ExposeOverloadedUnfoldings dflags" -> ExposeOverloaded
+                                 | gopt Opt_ExposeOverloadedUnfoldings dflags -> ExposeOverloaded
                                  | otherwise -> ExposeSome
     , opt_expose_rules = not (gopt Opt_OmitInterfacePragmas dflags)
     , opt_trim_ids = gopt Opt_OmitInterfacePragmas dflags
-    , opt_keep_auto_rules = panic "gopt Opt_KeepAutoRules dflags"
+    , opt_keep_auto_rules = gopt Opt_KeepAutoRules dflags
     }
 
