@@ -540,6 +540,10 @@ rulesFreeIds :: [CoreRule] -> CoreIdSet
 rulesFreeIds rules = case fvVarSets (rulesFVs BothSides rules) of
   (ids, _, _, _, _) -> ids
 
+ruleRhsFreeIds :: CoreRule -> CoreIdSet
+ruleRhsFreeIds rule = case fvVarSets (ruleFVs RhsOnly rule) of
+  (ids, _, _, _, _) -> ids
+
 rulesRhsFreeIds :: [CoreRule] -> CoreIdSet
 rulesRhsFreeIds rules
   = case fvVarSets (rulesFVs RhsOnly rules) of

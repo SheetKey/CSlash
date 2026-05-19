@@ -64,7 +64,7 @@ import CSlash.CsToCore
 -- import GHC.Iface.Load   ( ifaceStats, writeIface )
 -- import GHC.Iface.Make
 import CSlash.Iface.Recomp
--- import GHC.Iface.Tidy
+import CSlash.Iface.Tidy
 -- import GHC.Iface.Ext.Ast    ( mkHieFile )
 -- import GHC.Iface.Ext.Types  ( getAsts, hie_asts, hie_module )
 -- import GHC.Iface.Ext.Binary ( readHieFile, writeHieFile , hie_file_result)
