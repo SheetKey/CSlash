@@ -1,3 +1,5 @@
+{-# LANGUAGE BangPatterns #-}
+
 module CSlash.Iface.Tidy where
 
 import CSlash.Cs.Pass
@@ -176,4 +178,42 @@ tidyTopName
   -> TidyOccEnv
   -> CoreId
   -> IO (TidyOccEnv, Name)
-tidyTopName = panic "tidyTopName"
+tidyTopName mod name_cache maybe_ref occ_env id
+  | global && internal
+  = return (occ_env, localiseName name)
+
+  | global && external
+  = return (occ_env, name)
+
+  | local && internal
+  = do uniq <- takeUniqFromNameCache name_cache
+       let new_local_name = occ' `seq` mkInternalName uniq occ' loc
+       return (occ_env', new_local_name)
+
+  | local && external
+  = do new_external_name <- allocateGlobalBinder name_cache mod occ' loc
+       return (occ_env', new_external_name)
+
+  | otherwise
+  = panic "tidyTopName"
+  where
+    !name = varName id
+    external = isJust maybe_ref
+    global = isExternalName name
+    local = not global
+    internal = not external
+    !loc = nameSrcSpan name
+
+    old_occ = nameOccName name
+    new_occ | Just ref <- maybe_ref
+            , ref /= id
+            = mkOccName (occNameSpace old_occ) $
+              let ref_str = occNameString (getOccName ref)
+                  occ_str = occNameString old_occ
+              in if isSystemName name
+                 then ref_str
+                 else ref_str ++ '_' : occ_str
+            | otherwise
+            = old_occ
+
+    (occ_env', occ') = tidyOccName occ_env new_occ
