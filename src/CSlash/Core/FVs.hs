@@ -350,6 +350,10 @@ idRuleFVs id
 idUnfoldingFVs :: CoreId -> CoreFV
 idUnfoldingFVs id = stableUnfoldingFVs (realIdUnfolding id) `orElse` emptyFV
 
+idUnfoldingIds :: CoreId -> CoreIdSet
+idUnfoldingIds id = case fvVarSets (idUnfoldingFVs id) of
+  (ids, _, _, _, _) -> ids
+
 bndrRuleAndUnfoldingIds :: CoreId -> IdSet Zk
 bndrRuleAndUnfoldingIds id = case fvVarSets $ bndrRuleAndUnfoldingFVs id of
   (ids, _, _, _, _) -> ids
@@ -536,6 +540,10 @@ rulesFVs from = mapUnionFV (ruleFVs from)
 rulesFreeVarsDSets :: [CoreRule] -> FVAnn
 rulesFreeVarsDSets rules = fvDVarSets $ rulesFVs BothSides rules
 
+ruleFreeIds :: CoreRule -> CoreIdSet
+ruleFreeIds rule = case fvVarSets (ruleFVs BothSides rule) of
+  (ids, _, _, _, _) -> ids
+
 rulesFreeIds :: [CoreRule] -> CoreIdSet
 rulesFreeIds rules = case fvVarSets (rulesFVs BothSides rules) of
   (ids, _, _, _, _) -> ids
@@ -548,6 +556,10 @@ rulesRhsFreeIds :: [CoreRule] -> CoreIdSet
 rulesRhsFreeIds rules
   = case fvVarSets (rulesFVs RhsOnly rules) of
       (ids, _, _, _, _) -> filterVarSet isLocalId ids
+
+ruleLhsFreeIdsList :: CoreRule -> [CoreId]
+ruleLhsFreeIdsList rule = case fvVarAcc (ruleFVs LhsOnly rule) of
+  (ids, _, _, _, _, _, _, _, _, _) -> ids
 
 mkRuleInfo :: [CoreRule] -> RuleInfo
 mkRuleInfo rules = RuleInfo rules (rulesFreeVarsDSets rules)

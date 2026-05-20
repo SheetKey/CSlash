@@ -702,6 +702,14 @@ data InScopeEnv = ISE TermSubstInScope IdUnfoldingFun
 
 type IdUnfoldingFun = CoreId -> Unfolding
 
+isBuiltinRule :: CoreRule -> Bool
+isBuiltinRule BuiltinRule{} = True
+isBuiltinRule _ = False
+
+isAutoRule :: CoreRule -> Bool
+isAutoRule BuiltinRule{} = False
+isAutoRule Rule{} = True -- TODO: fix if add non-auto rules
+
 ruleArity :: CoreRule -> Int
 ruleArity BuiltinRule = panic "BuiltinRule"
 ruleArity Rule{ ru_args = args } = length args

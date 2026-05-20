@@ -87,6 +87,7 @@ tidyProgram opts ModGuts{ mg_module = mod
   = do let all_binds = binds
 
        (unfold_env, tidy_occ_env) <- chooseExternalIds opts mod all_binds imp_rules
+       let (trimmed_binds, trimmed_rules) = findExternalRules opts all_binds imp_rules unfold_env
 
        panic "tidyProgram"
 
@@ -159,11 +160,79 @@ chooseExternalIds opts mod binds imp_id_rules = do
 addExternal :: TidyOpts -> CoreId -> ([CoreId], Bool)
 addExternal opts id
   | ExposeNone <- opt_expose_unfoldings opts
-  , panic "not (isCompulsoryUnfolding unfolding)"
+  , not (isCompulsoryUnfolding unfolding)
   = ([], False)
 
   | otherwise
   = panic "(new_needed_ids, show_unfold)"
+
+  where
+    idinfo = idInfo id
+    unfolding = realUnfoldingInfo idinfo
+
+{- *********************************************************************
+*                                                                      *
+               findExternalRules
+*                                                                      *
+********************************************************************* -}
+
+findExternalRules
+  :: TidyOpts
+  -> [CoreBind]
+  -> [CoreRule]
+  -> UnfoldEnv
+  -> ([CoreBind], [CoreRule])
+findExternalRules opts binds imp_id_rules unfold_env
+  = (trimmed_binds, filter keep_rule all_rules)
+  where
+    imp_rules | opt_expose_rules opts = filter expose_rule imp_id_rules
+              | otherwise = []
+
+    imp_user_rule_fvs = mapUnionVarSet user_rule_rhs_fvs imp_rules
+
+    user_rule_rhs_fvs rule
+      | isAutoRule rule && not (opt_keep_auto_rules opts)
+      = emptyVarSet
+      | otherwise
+      = ruleRhsFreeIds rule
+
+    (trimmed_binds, local_bndrs, _, all_rules) = trim_binds binds
+
+    keep_rule rule = ruleFreeIds rule `subVarSet` local_bndrs
+
+    expose_rule rule = all is_external_id (ruleLhsFreeIdsList rule)
+
+    is_external_id id = case lookupVarEnv unfold_env id of
+      Just (name, _) -> isExternalName name && not (isImplicitId id)
+      Nothing -> False
+
+    trim_binds :: [CoreBind] -> ([CoreBind], CoreIdSet, CoreIdSet, [CoreRule])
+    trim_binds [] = ([], emptyVarSet, imp_user_rule_fvs, imp_rules)
+    trim_binds (bind:binds)
+      | any needed bndrs
+      = (bind : binds', bndr_set', needed_fvs', local_rules ++ rules)
+      | otherwise
+      = stuff
+      where
+        stuff@(binds', bndr_set, needed_fvs, rules) = trim_binds binds
+
+        needed bndr = isExportedId bndr || bndr `elemVarSet` needed_fvs
+
+        bndrs = bindersOf bind
+        rhss = rhssOfBind bind
+        bndr_set' = bndr_set `extendVarSetList` bndrs
+
+        needed_fvs' = needed_fvs `unionVarSet`
+                      mapUnionVarSet idUnfoldingIds bndrs `unionVarSet`
+                      mapUnionVarSet exprFreeIds rhss `unionVarSet`
+                      mapUnionVarSet user_rule_rhs_fvs local_rules
+
+        local_rules = [ rule
+                      | opt_expose_rules opts
+                      , id <- bndrs
+                      , is_external_id id
+                      , rule <- idCoreRules id
+                      , expose_rule rule ]
 
 {- *********************************************************************
 *                                                                      *

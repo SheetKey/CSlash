@@ -255,6 +255,14 @@ hasNoBinding id = case idDetails id of
   where
     rest = isCompulsoryUnfolding (realIdUnfolding id)
 
+isImplicitId :: Id p -> Bool
+isImplicitId id = case idDetails id of
+  DataConId{} -> True
+  
+  VanillaId -> False
+  TickBoxOpId{} -> False
+  JoinId{} -> False
+
 zapJoinId :: Id p -> Id p
 zapJoinId jid
   | isJoinId jid = zapIdTailCallInfo (newIdDetails `seq` jid `setIdDetails` newIdDetails)
