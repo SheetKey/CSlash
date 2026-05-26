@@ -628,7 +628,6 @@ csGenHardCode cs_env cgguts location output_filename = do
   when (gopt Opt_ProfLateCcs dflags) (panic "ProfLateCcs")
   when (gopt Opt_ProfLateOverloadedCcs dflags) (panic "ProfLateOverloadedCcs")
   when (gopt Opt_ProfLateoverloadedCallsCCs dflags) (panic "ProfLateoverloadedCallsCCs")
-  when (gopt Opt_ProfCountEntries dflags) (panic "ProfCountEntries")
 
   -- addLateCostCenters
 
