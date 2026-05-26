@@ -283,6 +283,12 @@ pprOccEnv ppr_elt (MkOccEnv env) = brackets $ fsep $ punctuate comma $
   | (uq, elts) <- nonDetUFMToList env
   , elt <- nonDetEltsUFM elts ]
 
+instance NFData a => NFData (OccEnv a) where
+  rnf = forceOccEnv rnf
+
+forceOccEnv :: (a -> ()) -> OccEnv a -> ()
+forceOccEnv nf (MkOccEnv fs) = seqEltsUFM (seqEltsUFM nf) fs
+
 --------------------------------------------------------------------------------
 
 newtype OccSet = OccSet (FastStringEnv (UniqSet NameSpace))

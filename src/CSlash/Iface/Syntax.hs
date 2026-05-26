@@ -287,3 +287,59 @@ instance Binary IfaceTopBndrInfo
 instance Binary IfaceMaybeRhs
 
 instance Binary IfaceCompleteMatch
+
+{- *********************************************************************
+*                                                                      *
+                NFData instances
+*                                                                      *
+********************************************************************* -}
+
+-- instance NFData IfaceImport
+
+instance NFData IfaceDecl where
+  rnf = panic "rnf"
+
+instance NFData IfaceConDecls where
+  rnf = panic "rnf"
+
+instance NFData IfaceConDecl where
+  rnf = panic "rnf"
+
+instance NFData IfaceIdDetails where
+  rnf = panic "rnf"
+
+instance NFData IfaceInfoItem where
+  rnf = panic "rnf"
+
+instance NFData IfGuidance where
+  rnf = panic "rnf"
+
+instance NFData IfaceUnfolding where
+  rnf = panic "rnf"
+
+instance NFData IfaceExpr where
+  rnf = panic "rnf"
+
+instance (NFData b, NFData a) => NFData (IfaceBindingX a b) where
+  rnf = panic "rnf"
+
+instance NFData IfaceTopBndrInfo where
+  rnf = panic "rnf"
+
+instance NFData IfaceMaybeRhs where
+  rnf = panic "rnf"
+
+instance NFData IfaceCompleteMatch where
+  rnf = panic "rnf"
+
+instance NFData IfaceWarnings where
+  rnf = panic "rnf"
+
+instance NFData IfaceWarningTxt where
+  rnf = panic "rnf"
+
+instance NFData IfaceStringLiteral where
+  rnf = panic "rnf"
+
+instance NFData IfaceAnnotation where
+  rnf = panic "rnf"

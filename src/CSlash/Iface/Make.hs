@@ -79,5 +79,43 @@ import Data.IORef
 *                                                                      *
 ********************************************************************* -}
 
+mkPartialIface
+  :: CsEnv
+  -> CoreProgram
+  -> ModDetails
+  -> ModSummary
+  -> ModGuts
+  -> PartialModIface
+mkPartialIface cs_env core_prog mod_details mod_summary 
+  ModGuts{ mg_module = this_mod
+         , mg_cs_src = cs_src
+         , mg_usages = usages
+         , mg_deps = deps
+         , mg_rdr_env = rdr_env
+         , mg_fix_env = fix_env
+         , mg_pc_info = pc_info
+         }
+  = mkIface_ cs_env this_mod core_prog cs_src deps rdr_env fix_env pc_info usages
+    mod_summary mod_details
+
 mkFullIface :: CsEnv -> PartialModIface -> Maybe a -> Maybe a -> IO ModIface
 mkFullIface = panic "mkFullIface"
+
+mkIface_
+  :: CsEnv
+  -> Module
+  -> CoreProgram
+  -> CsSource
+  -> Dependencies
+  -> GlobalRdrEnv
+  -> NameEnv FixItem
+  -> PcInfo
+  -> [Usage]
+  -> ModSummary
+  -> ModDetails
+  -> PartialModIface
+mkIface_ cs_env this_mod core_prod cs_src deps rdr_env fix_env pc_info usages mod_summary
+  ModDetails{ {-md_rules = rules -} md_types = type_env
+            , md_exports = exports
+            , md_complete_matches = complete_matches }
+  = emptyPartialModIface this_mod -- MAJOR IFACE TODO  

@@ -1,3 +1,5 @@
+{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
@@ -230,6 +232,37 @@ mkIfaceHashCache pairs
 
 emptyIfaceHashCache :: OccName -> Maybe (OccName, Fingerprint)
 emptyIfaceHashCache _ = Nothing
+
+instance ( NFData (IfaceBackendExts (phase :: ModIfacePhase))
+         , NFData (IfaceDeclExts (phase :: ModIfacePhase)))
+         => NFData (ModIface_ phase) where
+  rnf PrivateModIface{ .. }
+    = rnf mi_module_
+      `seq` mi_cs_src_
+      `seq` mi_deps_ 
+      `seq` mi_usages_ 
+      `seq` mi_exports_ 
+      `seq` mi_fixities_
+      `seq` rnf mi_anns_ 
+      `seq` rnf mi_decls_ 
+      `seq` rnf mi_extra_decls_
+      `seq` rnf mi_pc_ 
+      `seq` rnf mi_complete_matches_
+      `seq` mi_final_exts_
+      `seq` rnf mi_src_hash_
+      `seq` mi_hi_bytes_
+      `seq` ()
+
+instance NFData ModIfaceBackend where
+  rnf ModIfaceBackend{..}
+    = rnf mi_iface_hash
+      `seq` rnf mi_mod_hash 
+      `seq` rnf mi_flag_hash
+      `seq` rnf mi_opt_hash 
+      `seq` rnf mi_pc_hash
+      `seq` rnf mi_exp_hash 
+      `seq` rnf mi_fix_fn 
+      `seq` rnf mi_hash_fn 
 
 set_mi_module :: Module -> ModIface_ phase -> ModIface_ phase
 set_mi_module val iface = clear_mi_hi_bytes $ iface { mi_module_ = val }

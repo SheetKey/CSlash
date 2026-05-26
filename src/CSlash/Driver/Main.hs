@@ -62,7 +62,7 @@ import CSlash.CsToCore
 -- import GHC.IfaceToCore  ( typecheckIface, typecheckWholeCoreBindings )
 
 -- import GHC.Iface.Load   ( ifaceStats, writeIface )
--- import GHC.Iface.Make
+import CSlash.Iface.Make
 import CSlash.Iface.Recomp
 import CSlash.Iface.Tidy
 -- import GHC.Iface.Ext.Ast    ( mkHieFile )
@@ -539,7 +539,14 @@ csDesugarAndSimplify summary (FrontendTypecheck tc_result) tc_warnings mb_old_ha
 
           (cg_guts, details) <- liftIO $ csTidy cs_env simplified_guts
 
-          panic "unfinished1"
+          let !partial_iface = {-# SCC "CSlash.Driver.Main.mkPartialIface" #-}
+                force (mkPartialIface cs_env (cg_binds cg_guts) details summary simplified_guts)
+
+          return CsRecomp { cs_guts = cg_guts
+                          , cs_mod_location = ms_location summary
+                          , cs_partial_iface = partial_iface
+                          , cs_old_iface_hash = mb_old_hash
+                          }
 
       | gopt Opt_WriteIfSimplifiedCore dflags -> do
           panic "unfinished"
