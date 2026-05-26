@@ -191,6 +191,7 @@ library
                     , CSlash.Driver.Config.Core.Rules
                     , CSlash.Driver.Config.Core.Opt.Arity
                     , CSlash.Driver.Config.Core.Opt.Simplify
+                    , CSlash.Driver.Config.CoreToLlvm.Prep
                     , CSlash.Driver.Config.Diagnostic
                     , CSlash.Driver.Config.Finder
                     , CSlash.Driver.Config.Logger

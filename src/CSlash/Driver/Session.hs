@@ -12,6 +12,7 @@ module CSlash.Driver.Session
   , gopt
   , wopt
   , setDynamicNow
+  , needSourceNotes
   , DynFlags(..)
   , ParMakeCount(..)
   , outputFile, objectSuf, ways
@@ -25,6 +26,8 @@ module CSlash.Driver.Session
   , positionIndependent
   , optimisationFlags
   , setFlagsFromEnvFile
+
+  , targetProfile
 
   , Settings(..)
   , CsNameVersion(..)
@@ -1197,6 +1200,7 @@ fFlagsDeps =
   , flagSpec "num-constant-folding"             Opt_NumConstantFolding
   , flagSpec "core-constant-folding"            Opt_CoreConstantFolding
   , flagSpec "fast-pap-calls"                   Opt_FastPAPCalls
+  , flagSpec "spec-eval"                        Opt_SpecEval
   , flagSpec "show-warning-groups"              Opt_ShowWarnGroups
   , flagSpec "hide-source-paths"                Opt_HideSourcePaths
   , flagSpec "show-loaded-modules"              Opt_ShowLoadedModules
@@ -1697,6 +1701,12 @@ setUnsafeGlobalDynFlags dflags = do
   writeIORef v_unsafeHasPprDebug (hasPprDebug dflags)
   writeIORef v_unsafeHasNoDebugOutput (hasNoDebugOutput dflags)
   writeIORef v_unsafeHasNoStateHack (hasNoStateHack dflags)
+
+-- -----------------------------------------------------------------------------
+needSourceNotes :: DynFlags -> Bool
+needSourceNotes dflags = debugLevel dflags > 0
+                         --  || gopt Opt_InfoTableMap dflags
+                         || gopt Opt_ProfLateoverloadedCallsCCs dflags
 
 -- -----------------------------------------------------------------------------
 -- Linker/compiler information

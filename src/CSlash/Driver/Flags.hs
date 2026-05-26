@@ -183,6 +183,7 @@ data GeneralFlag
   | Opt_NumConstantFolding
   | Opt_CoreConstantFolding
   | Opt_FastPAPCalls
+  | Opt_SpecEval
 
   -- Inference flags
   | Opt_DoTagInferenceChecks
@@ -360,6 +361,7 @@ optimisationFlags = EnumSet.fromList
   , Opt_WeightlessBlocklayout
   , Opt_CprAnal
   , Opt_SolveConstantDicts
+  , Opt_SpecEval
   ]
 
 data WarningFlag =

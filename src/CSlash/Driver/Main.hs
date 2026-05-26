@@ -22,7 +22,7 @@ import CSlash.Driver.Errors.Types
 import CSlash.Driver.Config.Core.Lint ( endPassCsEnvIO )
 -- import GHC.Driver.Config.Core.Lint.Interactive ( lintInteractiveExpr )
 -- import GHC.Driver.Config.CoreToStg
--- import GHC.Driver.Config.CoreToStg.Prep
+import CSlash.Driver.Config.CoreToLlvm.Prep
 import CSlash.Driver.Config.Logger   (initLogFlags)
 import CSlash.Driver.Config.Parser   (initParserOpts)
 -- import GHC.Driver.Config.Stg.Ppr  (initStgPprOpts)
@@ -609,6 +609,52 @@ csSimplify' :: ModGuts -> Cs ModGuts
 csSimplify' ds_result = do
   cs_env <- getCsEnv
   {-# SCC "Core2Core" #-} liftIO $ core2core cs_env ds_result
+
+--------------------------------------------------------------
+-- BackEnd combinators
+--------------------------------------------------------------
+
+csGenHardCode :: CsEnv -> CgGuts -> ModLocation -> FilePath -> IO FilePath
+csGenHardCode cs_env cgguts location output_filename = do
+  let CgGuts { cg_module = this_mod
+             , cg_binds = core_binds
+             , cg_dep_pkgs = dependencies
+             } = cgguts
+
+      dflags = cs_dflags cs_env
+      logger = cs_logger cs_env
+
+  when (gopt Opt_ProfLateInlineCcs dflags) (panic "ProfLateInlineCcs")
+  when (gopt Opt_ProfLateCcs dflags) (panic "ProfLateCcs")
+  when (gopt Opt_ProfLateOverloadedCcs dflags) (panic "ProfLateOverloadedCcs")
+  when (gopt Opt_ProfLateoverloadedCallsCCs dflags) (panic "ProfLateoverloadedCallsCCs")
+  when (gopt Opt_ProfCountEntries dflags) (panic "ProfCountEntries")
+
+  -- addLateCostCenters
+
+  let late_cc_binds = core_binds
+
+  when (dopt Opt_D_dump_late_cc dflags || dopt Opt_D_verbose_core2core dflags) $
+    putDumpFileMaybe logger Opt_D_dump_late_cc "LateCC" FormatCore
+    (vcat (map ppr late_cc_binds))
+
+  let late_binds = late_cc_binds
+
+  let tmpfs = cs_tmpfs cs_env
+      llvm_config = cs_llvm_config cs_env
+      profile = targetProfile dflags
+
+  -------------------
+  -- PREPARE FOR CODE GENERATION
+  (prepd_binds) <- {-# SCC "CorePrep" #-} do
+    cp_cfg <- initCorePrepConfig cs_env
+    corePrepPgm
+      (cs_logger cs_env)
+      cp_cfg
+      (initCorePrepPgmConfig (cs_dflags cs_env))
+      this_mod location late_binds
+
+  panic "csGenHardCode unfinished"
 
 --------------------------------------------------------------
 -- Tidy

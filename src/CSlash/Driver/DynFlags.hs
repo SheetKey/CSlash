@@ -710,6 +710,8 @@ optLevelFlags
     , ([2], Opt_LiberateCase)
     , ([2], Opt_SpecConstr)
     , ([2], Opt_FastPAPCalls)
+
+    , ([0,1,2], Opt_SpecEval)
     ]
 
 type TurnOnFlag = Bool
