@@ -61,11 +61,11 @@ import Control.Monad    ( guard )
 {-
 Note [CSlash plumbind for rules]
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-Differences from GHC:
+Comparisson to GHC:
 * We do need mg_rules in ModGuts:
   - We specialize imported functions, and put these auto-rules in the mg_rules
   - As of now, specialization is the first time we inhabit mg_rules
-* We do not need md_rules in the HPT.
+* We may need md_rules in the HPT.
 * eps_rule_base todo
 -}
 

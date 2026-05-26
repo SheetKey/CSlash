@@ -43,3 +43,10 @@ typeEnvTyCons env = [tc | ATyCon tc <- typeEnvElts env]
 
 typeEnvDataCons :: TypeEnv -> [DataCon Zk]
 typeEnvDataCons env = [dc | AConLike (RealDataCon dc) <- typeEnvElts env]
+
+mkTypeEnv :: [TyThing Zk] -> TypeEnv
+mkTypeEnv things = extendTypeEnvList emptyTypeEnv things
+
+typeEnvFromEntities :: [Id Zk] -> TypeEnv
+typeEnvFromEntities ids =
+  mkTypeEnv (map AnId ids)

@@ -51,12 +51,11 @@ data ModGuts = ModGuts
 
 data CgGuts = CgGuts
   { cg_module :: !Module
-  , cg_tycons :: [TyCon Zk]
+  -- , cg_tycons :: [TyCon Zk] -- Only used for user defined alg tycons
   , cg_binds :: CoreProgram
   --, cg_ccs :: [CostCentre]
   --, cg_foreign :: !ForeignStubs
   --, cg_foreign_files :: ![(ForeignSrcLang, FilePath)]
   , cg_dep_pkgs :: !(Set UnitId)
-  , cg_pc_info :: !PcInfo
-  , cg_spt :: [SptEntry]
+  -- , cg_spt_entries :: [SptEntry] -- Static pointer table
   }

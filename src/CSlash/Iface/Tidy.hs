@@ -92,9 +92,46 @@ tidyProgram opts ModGuts{ mg_module = mod
        (unfold_env, tidy_occ_env) <- chooseExternalIds opts mod all_binds imp_rules
        let (trimmed_binds, trimmed_rules) = findExternalRules opts all_binds imp_rules unfold_env
 
+       massertPpr (null trimmed_rules) (text "tidyProgram has exported rules")
+
        (tidy_env, tidy_binds) <- tidyTopBinds unfold_env tidy_occ_env trimmed_binds
 
-       panic "tidyProgram"
+       let final_ids = [ trimId (opt_trim_ids opts) id
+                       | id <- bindersOfBinds tidy_binds
+                       , isExternalName (varName id)
+                       , not (isWiredIn id)
+                       ]
+
+           tidy_type_env = typeEnvFromEntities final_ids
+           tidy_rules = tidyRules tidy_env trimmed_rules
+
+           all_tidy_binds = tidy_binds
+
+           local_ccs
+             | opt_collect_ccs opts
+             = panic "collectCostCentres mod all_tidy_binds tidy_rules"
+             | otherwise
+             = S.empty
+
+       return ( CgGuts { cg_module = mod
+                       , cg_binds = all_tidy_binds
+                       --, cg_ccs = local_ccs
+                       , cg_dep_pkgs = dep_direct_pkgs deps
+                       }
+              , ModDetails { md_types = tidy_type_env
+                           -- , md_rules = tidy_rules
+                           , md_exports = exports
+                           , md_complete_matches = complete_matches
+                           }
+              ) 
+
+trimId :: Bool -> CoreId -> CoreId
+trimId do_trim id
+  | do_trim, not (isImplicitId id)
+  = id `setIdInfo` vanillaIdInfo
+       `setIdUnfolding` idUnfolding id
+  | otherwise
+  = id
 
 {- *********************************************************************
 *                                                                      *

@@ -8,6 +8,7 @@ import CSlash.Types.TypeEnv
 data ModDetails = ModDetails
   { md_exports :: [AvailInfo]
   , md_types :: !TypeEnv
+  -- , md_rules :: ![CoreRule]
   , md_complete_matches :: [CompleteMatch]
   }
 
