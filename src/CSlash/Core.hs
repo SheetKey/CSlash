@@ -11,6 +11,7 @@ import Prelude hiding ((<>))
 import CSlash.Cs.Pass
 import CSlash.Types.Var
 import CSlash.Types.Var.Set
+import CSlash.Types.Var.Env
 import CSlash.Core.Type
 import CSlash.Core.Kind
 import {-# SOURCE #-} CSlash.Core.Subst
@@ -296,6 +297,21 @@ type CoreDataCon = DataCon Zk
 
 type CoreVarSets = (IdSet Zk, TyCoVarSet Zk, TyVarSet Zk, KiCoVarSet Zk, KiVarSet Zk)
 type DCoreVarSets = (DIdSet Zk, DTyCoVarSet Zk, DTyVarSet Zk, DKiCoVarSet Zk, DKiVarSet Zk)
+
+type CoreTidyEnv = ( TidyOccEnv
+                   , VarEnv CoreId CoreId
+                   , VarEnv CoreTyCoVar CoreTyCoVar
+                   , VarEnv CoreTyVar CoreTyVar
+                   , VarEnv CoreKiCoVar CoreKiCoVar
+                   , VarEnv CoreKiVar CoreKiVar )
+
+toTypeEnv :: CoreTidyEnv -> TidyEnv Zk
+toTypeEnv (occ_env, _, _, tv, kcv, kv) = (occ_env, tv, kcv, kv)
+
+withTypeBndr :: CoreTidyEnv -> (TidyEnv Zk -> (TidyEnv Zk, a)) -> (CoreTidyEnv, a)
+withTypeBndr (occ_env, id, tcv, tv, kcv, kv) f
+  = let ((occ_env', tv', kcv', kv'), a) = f (occ_env, tv, kcv, kv)
+    in ((occ_env', id, tcv, tv', kcv', kv'), a)
 
 type CoreTypeCoercion = TypeCoercion Zk
 type CoreKindCoercion = KindCoercion Zk

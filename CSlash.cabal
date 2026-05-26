@@ -109,6 +109,7 @@ library
                     , CSlash.Core.SimpleOpt
                     , CSlash.Core.Subst
                     , CSlash.Core.Stats
+                    , CSlash.Core.Tidy
                     , CSlash.Core.TyCon
                     , CSlash.Core.TyCon.Set
                     , CSlash.Core.Type

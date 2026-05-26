@@ -492,6 +492,9 @@ splitDmdSig (DmdSig (DmdType env dmds)) = (dmds, de_div env)
 nopSig :: DmdSig
 nopSig = DmdSig nopDmdType
 
+isNopSig :: DmdSig -> Bool
+isNopSig (DmdSig ty) = ty == nopDmdType
+
 isDeadEndSig :: DmdSig -> Bool
 isDeadEndSig (DmdSig (DmdType env _)) = isDeadEndDiv (de_div env)
 

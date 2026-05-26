@@ -1,5 +1,7 @@
 {-# LANGUAGE BangPatterns #-}
 
+{-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
+
 module CSlash.Iface.Tidy where
 
 import CSlash.Cs.Pass
@@ -12,10 +14,11 @@ import CSlash.Core.Unfold
 import CSlash.Core.Utils
 -- import CSlash.Core.Unfold.Make
 import CSlash.Core.FVs
--- import CSlash.Core.Tidy
+import CSlash.Core.Tidy
 import CSlash.Core.Seq         ( seqBinds )
-import CSlash.Core.Opt.Arity   ( exprArity, typeArity{-, exprBotStrictness_maybe-} )
+import CSlash.Core.Opt.Arity   ( exprArity, typeArity, exprBotStrictness_maybe )
 import CSlash.Core.Type
+import CSlash.Core.Type.Tidy
 import CSlash.Core.DataCon
 import CSlash.Core.TyCon
 import CSlash.Core.Opt.OccurAnal ( occurAnalyzeExpr )
@@ -36,7 +39,7 @@ import CSlash.Types.Var
 import CSlash.Types.Var.Id
 -- import CSlash.Types.Var.Id.Make ( mkDictSelRhs )
 import CSlash.Types.Var.Id.Info
-import CSlash.Types.Demand  ( isDeadEndAppSig, {-isNopSig,-} nopSig, isDeadEndSig )
+import CSlash.Types.Demand  ( isDeadEndAppSig, isNopSig, nopSig, isDeadEndSig )
 import CSlash.Types.Basic
 import CSlash.Types.Name hiding (varName)
 import CSlash.Types.Name.Set
@@ -88,6 +91,8 @@ tidyProgram opts ModGuts{ mg_module = mod
 
        (unfold_env, tidy_occ_env) <- chooseExternalIds opts mod all_binds imp_rules
        let (trimmed_binds, trimmed_rules) = findExternalRules opts all_binds imp_rules unfold_env
+
+       (tidy_env, tidy_binds) <- tidyTopBinds unfold_env tidy_occ_env trimmed_binds
 
        panic "tidyProgram"
 
@@ -286,3 +291,128 @@ tidyTopName mod name_cache maybe_ref occ_env id
             = old_occ
 
     (occ_env', occ') = tidyOccName occ_env new_occ
+
+{- *********************************************************************
+*                                                                      *
+            Step 2: top-level tidying
+*                                                                      *
+********************************************************************* -}
+
+tidyTopBinds
+  :: UnfoldEnv
+  -> TidyOccEnv
+  -> CoreProgram
+  -> IO (CoreTidyEnv, CoreProgram)
+tidyTopBinds unfold_env init_occ_env binds = do
+  let result = tidy init_env binds
+  seqBinds (snd result) `seq` return result
+  where
+    init_env = (init_occ_env, emptyVarEnv, emptyVarEnv, emptyVarEnv, emptyVarEnv, emptyVarEnv)
+
+    tidy = mapAccumL (tidyTopBind unfold_env)
+
+tidyTopBind
+  :: UnfoldEnv
+  -> CoreTidyEnv
+  -> CoreBind
+  -> (CoreTidyEnv, CoreBind)
+tidyTopBind unfold_env (occ_env, ids1, tcvs, tvs, kcvs, kvs) (NonRec bndr rhs)
+  = (tidy_env2, NonRec bndr' rhs')
+  where
+    (bndr', rhs') = tidyTopPair unfold_env tidy_env2 (bndr, rhs)
+    ids2 = extendVarEnv ids1 bndr bndr'
+    tidy_env2 = (occ_env, ids2, tcvs, tvs, kcvs, kvs)
+
+tidyTopBind unfold_env (occ_env, ids1, tcvs, tvs, kcvs, kvs) (Rec prs)
+  = (tidy_env2, Rec prs')
+  where
+    prs' = map (tidyTopPair unfold_env tidy_env2) prs
+    ids2 = extendVarEnvList ids1 (map fst prs `zip` map fst prs')
+    tidy_env2 = (occ_env, ids2, tcvs, tvs, kcvs, kvs)
+
+tidyTopPair
+  :: UnfoldEnv
+  -> CoreTidyEnv
+  -> (CoreId, CoreExpr)
+  -> (CoreId, CoreExpr)
+tidyTopPair unfold_env rhs_tidy_env (bndr, rhs)
+  = (bndr1, rhs1)
+  where
+    Just (name', show_unfold) = lookupVarEnv unfold_env bndr
+    bndr1 = mkGlobalId details name' ty' idinfo'
+    details = idDetails bndr
+    ty' = tidyTopType (varType bndr)
+    rhs1 = tidyExpr rhs_tidy_env rhs
+    idinfo' = tidyTopIdInfo rhs_tidy_env name' ty' rhs rhs1 (idInfo bndr) show_unfold
+
+tidyTopIdInfo
+  :: CoreTidyEnv
+  -> Name
+  -> CoreType
+  -> CoreExpr
+  -> CoreExpr
+  -> IdInfo
+  -> Bool
+  -> IdInfo
+tidyTopIdInfo rhs_tidy_env name rhs_ty orig_rhs tidy_rhs idinfo show_unfold
+  | not is_external
+  = vanillaIdInfo
+    `setArityInfo` arity
+    `setDmdSigInfo` final_sig
+    `setUnfoldingInfo` minimal_unfold_info
+
+  | otherwise
+  = vanillaIdInfo
+    `setArityInfo` arity
+    `setDmdSigInfo` final_sig
+    `setOccInfo` robust_occ_info
+    `setInlinePragInfo` inlinePragInfo idinfo
+    `setUnfoldingInfo` unfold_info
+
+  where
+    is_external = isExternalName name
+
+    -- OccInfo
+    robust_occ_info = zapFragileOcc (occInfo idinfo)
+
+    -- Demand
+    mb_bot_str = exprBotStrictness_maybe orig_rhs
+
+    sig = dmdSigInfo idinfo
+    final_sig
+      | not (isNopSig sig)
+      = warnPprTrace (_bottom_hidden sig) "tidyTopIdInfo" (ppr name) sig
+      | Just (_, bot_str_sig) <- mb_bot_str
+      = bot_str_sig
+      | otherwise
+      = nopSig
+
+    _bottom_hidden id_sig
+      = case mb_bot_str of
+          Nothing -> False
+          Just (arity, _) -> not (isDeadEndAppSig id_sig arity)
+
+    -- Unfolding
+    unf_info = realUnfoldingInfo idinfo
+    !minimal_unfold_info = trimUnfolding unf_info
+
+    !unfold_info
+      | isCompulsoryUnfolding unf_info || show_unfold
+      = tidyTopUnfolding rhs_tidy_env tidy_rhs unf_info
+      | otherwise
+      = minimal_unfold_info
+
+    -- Arity
+    arity = exprArity orig_rhs `min` typeArity rhs_ty
+
+tidyTopUnfolding :: CoreTidyEnv -> CoreExpr -> Unfolding -> Unfolding
+tidyTopUnfolding _ _ NoUnfolding = NoUnfolding
+tidyTopUnfolding _ _ OtherCon{} = evaldUnfolding
+tidyTopUnfolding tidy_env tidy_rhs unf@CoreUnfolding{ uf_tmpl = unf_rhs, uf_src = src }
+  = unf { uf_tmpl = tidy_unf_rhs }
+  where
+    tidy_unf_rhs
+      | isStableSource src
+      = tidyExpr tidy_env unf_rhs
+      | otherwise
+      = occurAnalyzeExpr tidy_rhs

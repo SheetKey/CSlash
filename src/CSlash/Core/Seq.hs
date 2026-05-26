@@ -73,3 +73,13 @@ seqPairs ((b, e) : prs) = seqLetBndr b `seq` seqExpr e `seq` seqPairs prs
 seqAlts :: [CoreAlt] -> ()
 seqAlts [] = ()
 seqAlts (Alt c bs e : alts) = c `seq` seqLetBndrs bs `seq` seqExpr e `seq` seqAlts alts
+
+seqUnfolding :: Unfolding -> ()
+seqUnfolding CoreUnfolding{ uf_tmpl = e, uf_is_top = top
+                          , uf_cache = cache, uf_guidance = g }
+  = seqExpr e `seq` top `seq` cache `seq` seqGuidance g
+seqUnfolding _ = ()
+
+seqGuidance :: UnfoldingGuidance -> ()
+seqGuidance (UnfIfGoodArgs ns n b) = n `seq` sum ns `seq` b `seq` ()
+seqGuidance _ = ()
