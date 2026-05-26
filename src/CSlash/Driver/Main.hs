@@ -19,7 +19,7 @@ import CSlash.Driver.Errors.Types
 -- import CSlash.Driver.CodeOutput
 -- import GHC.Driver.Config.Cmm.Parser (initCmmParserConfig)
 -- import GHC.Driver.Config.Core.Opt.Simplify ( initSimplifyExprOpts )
--- import GHC.Driver.Config.Core.Lint ( endPassHscEnvIO )
+import CSlash.Driver.Config.Core.Lint ( endPassCsEnvIO )
 -- import GHC.Driver.Config.Core.Lint.Interactive ( lintInteractiveExpr )
 -- import GHC.Driver.Config.CoreToStg
 -- import GHC.Driver.Config.CoreToStg.Prep
@@ -80,8 +80,8 @@ import CSlash.Core.Opt.Pipeline.Types      ( CoreToDo (..))
 import CSlash.Core.TyCon
 -- import GHC.Core.InstEnv
 -- import GHC.Core.FamInstEnv
--- import GHC.Core.Rules
--- import GHC.Core.Stats
+import CSlash.Core.Rules
+import CSlash.Core.Stats
 -- import GHC.Core.LateCC
 -- import GHC.Core.LateCC.Types
 
@@ -142,7 +142,7 @@ import CSlash.Types.SrcLoc
 import CSlash.Types.Name
 import CSlash.Types.Name.Cache ( initNameCache )
 import CSlash.Types.Name.Reader
--- import GHC.Types.Name.Ppr
+import CSlash.Types.Name.Ppr
 import CSlash.Types.TyThing
 -- import GHC.Types.PcInfo
 import CSlash.Types.Unique.Supply (uniqFromTag)
@@ -621,7 +621,29 @@ csTidy cs_env guts = do
                        (const ())
                        $! {-# SCC "CoreTidy" #-} tidyProgram opts guts
 
-  panic "csTidy"
+  let tidy_rules = [] -- md_rules details
+      all_tidy_binds = cg_binds cgguts
+      name_ppr_ctx = mkNamePprCtx (cs_unit_env cs_env) (mg_rdr_env guts)
+  endPassCsEnvIO cs_env name_ppr_ctx CoreTidy all_tidy_binds tidy_rules
+
+  unless (logHasDumpFlag logger Opt_D_dump_simpl) $
+    putDumpFileMaybe logger Opt_D_dump_rules
+    "Tidy Core rules"
+    FormatText
+    (panic "pprRulesForUser tidy_rules")
+
+  let cs = coreBindsStats all_tidy_binds
+  putDumpFileMaybe logger Opt_D_dump_core_stats "Core Stats"
+    FormatText
+    (text "Tidy size (terms, types, kinds, coercions)"
+     <+> ppr (moduleName this_mod) <> colon
+     <+> int (cs_tm cs)
+     <+> int (cs_ty cs)
+     <+> int (cs_ki cs)
+     <+> int (cs_ty_co cs)
+     <+> int (cs_ki_co cs))
+
+  pure (cgguts, details)
 
 {- *********************************************************************
 *                                                                      *

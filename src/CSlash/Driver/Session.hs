@@ -717,6 +717,8 @@ dynamic_flags_deps =
         (setDumpFlag Opt_D_dump_hie)
   , make_ord_flag defCsFlag "ddump-types"
         (setDumpFlag Opt_D_dump_types)
+  , make_ord_flag defCsFlag "ddump-rules"
+        (setDumpFlag Opt_D_dump_rules)
   , make_ord_flag defCsFlag "ddump-cse"
         (setDumpFlag Opt_D_dump_cse)
   , make_ord_flag defCsFlag "ddump-float-out"
