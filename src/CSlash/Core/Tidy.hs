@@ -46,7 +46,7 @@ tidyBind env (Rec prs) =
 tidyExpr :: CoreTidyEnv -> CoreExpr -> CoreExpr
 tidyExpr env (Var v) = Var (tidyVarOcc env v)
 tidyExpr env (Type ty) = Type (tidyType (toTypeEnv env) ty)
-tidyExpr env (KiCo co) = panic "tidy KiCo"
+tidyExpr env (KiCo co) = KiCo (tidyKiCo (toTypeEnv env) co)
 tidyExpr env (Kind ki) = Kind (tidyMonoKind (toTypeEnv env) ki)
 tidyExpr _ (Lit lit) = Lit lit
 tidyExpr env (App f a) = App (tidyExpr env f) (tidyExpr env a)

@@ -129,6 +129,20 @@ tidyFreeKiCoVarX env@(_, _, subst, _) kcv = case lookupVarEnv subst kcv of
                                               Nothing -> tidyKiCoVarBndr env kcv
 
 ----------------
+tidyKiCoVarOcc :: TidyEnv p -> KiCoVar p -> KiCoVar p
+tidyKiCoVarOcc env@(_, _, subst, _) kcv
+  = case lookupVarEnv subst kcv of
+      Nothing -> updateVarKind (tidyMonoKind env) kcv
+      Just kcv' -> kcv'
+
+tidyTcKiCoVarOcc :: TidyEnv Tc -> TcKiCoVar -> TcKiCoVar
+tidyTcKiCoVarOcc env@(_, _, subst, _) cv = case lookupVarEnv subst (TcCoVar cv) of
+  Just cv -> case cv of
+               TcCoVar tccv -> tccv
+               _ -> pprPanic "tidyTcKiCoVarOcc" (ppr env $$ ppr cv)
+  Nothing -> updateVarKind (tidyMonoKind env) cv
+
+----------------
 tidyFreeKiVars :: TidyEnv p -> [KiVar p] -> TidyEnv p
 tidyFreeKiVars tidy_env vars = fst (tidyFreeKiVarsX tidy_env vars)
 
@@ -197,6 +211,28 @@ tidyOpenType env ty = snd (tidyOpenTypeX env ty)
 
 tidyTopType :: Type p -> Type p
 tidyTopType ty = tidyType emptyTidyEnv ty
+
+tidyKiCo :: TidyEnv p -> KindCoercion p -> KindCoercion p
+tidyKiCo env co
+  = go co
+  where
+    go (Refl ki) = Refl $! tidyMonoKind env ki
+    go BI_U_A = BI_U_A
+    go BI_A_L = BI_A_L
+    go (BI_U_LTEQ ki) = BI_U_LTEQ $! tidyMonoKind env ki
+    go (BI_LTEQ_L ki) = BI_LTEQ_L $! tidyMonoKind env ki
+    go (LiftEq co) = LiftEq $! go co
+    go (LiftLT co) = LiftLT $! go co
+    go (FunCo afl afr co1 co2) = (FunCo afl afr $! go co1) $! go co2
+    go (KiCoVarCo cv) = KiCoVarCo $! go_cv cv
+    go (SymCo co) = SymCo $! go co
+    go (TransCo co1 co2) = (TransCo $! go co1) $! go co2
+    go (SelCo d co) = SelCo d $! go co
+    go (HoleCo h) = HoleCo $! go_hole env h
+
+    go_cv cv = tidyKiCoVarOcc env cv
+
+    go_hole env (KindCoercionHole cv r) = (KindCoercionHole $! tidyTcKiCoVarOcc env cv) r
 
 tidyOpenMonoKinds :: TidyEnv p -> [MonoKind p] -> (TidyEnv p, [MonoKind p])
 tidyOpenMonoKinds env kis = (env', tidyMonoKinds (trimmed_occ_env, tenv, kcenv, var_env) kis)
