@@ -553,9 +553,6 @@ csDesugarAndSimplify summary (FrontendTypecheck tc_result) tc_warnings mb_old_ha
 
     _ -> do panic "unfinished"
                             
-
-  panic "csDesugarAndSimplify"
-
 --------------------------------------------------------------
 -- NoRecomp handlers
 --------------------------------------------------------------
