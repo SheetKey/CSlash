@@ -173,7 +173,7 @@ cpeBind top_lvl env (Rec pairs)
        let env' = enterRecGroupRHSs env bndrs1
        stuff <- zipWithM (cpePair top_lvl Recursive topDmd env') bndrs1 rhss
        let (zipManyFloats -> floats, rhss1) = unzip stuff
-           is_lit (Float (NonRec _ rhs) TopLvlFloatable) = panic "exprIsTickedString rhs"
+           is_lit (Float (NonRec _ rhs) TopLvlFloatable) = exprIsTickedString rhs
            is_lit _ = False
            (string_floats, top) = partitionOL is_lit (fs_binds floats)
            floats' = floats { fs_binds = top }
@@ -629,7 +629,7 @@ mkCaseFloat :: CoreId -> CpeRhs -> FloatingBind
 mkCaseFloat bndr scrut = Float (NonRec bndr scrut) info
   where
     info
-      | panic "exprIsTickedString scrut" = TopLvlFloatable
+      | exprIsTickedString scrut = TopLvlFloatable
       | otherwise = StrictContextFloatable
 
 mkNonRecFloat :: CorePrepEnv -> CoreId -> CpeRhs -> FloatingBind
@@ -638,7 +638,7 @@ mkNonRecFloat env bndr rhs
   where
     info
       | is_data_con bndr = TopLvlFloatable
-      | panic "exprIsTickedString rhs" = TopLvlFloatable
+      | exprIsTickedString rhs = TopLvlFloatable
       | otherwise = StrictContextFloatable
 
     is_data_con = isJust . isDataConId_maybe

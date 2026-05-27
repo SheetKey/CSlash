@@ -511,6 +511,16 @@ exprIsHNFlike is_con is_con_unf e = is_hnf_like e
 exprIsTopLevelBindable :: CoreExpr -> CoreType -> Bool
 exprIsTopLevelBindable expr ty = True -- TODO: check for ticked strings?
 
+exprIsTickedString :: CoreExpr -> Bool
+exprIsTickedString = isJust . exprIsTickedString_maybe
+
+exprIsTickedString_maybe :: CoreExpr -> Maybe ByteString
+exprIsTickedString_maybe Lit{} = panic "exprIsTickedString Lit"
+exprIsTickedString_maybe (Tick t e)
+  --TODO: | tickishPlace t == PlaceCostCstCentre
+  = exprIsTickedString_maybe e
+exprIsTickedString_maybe _ = Nothing
+
 {- *********************************************************************
 *                                                                      *
              CoreVarSets

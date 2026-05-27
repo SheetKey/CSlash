@@ -4,8 +4,7 @@ import CSlash.Core.Subst
 import CSlash.Types.Var.Env ( mkInScopeSet )
 import CSlash.Types.Var
 import CSlash.Types.Var.Id
-import CSlash.Core.Utils   ( {-, exprIsTickedString
-                           ,-} stripTicksE, stripTicksT, mkTicks )
+import CSlash.Core.Utils   (exprIsTickedString, stripTicksE, stripTicksT, mkTicks )
 import CSlash.Core.Make (mkAltExpr, mkCoreLams)       
 import CSlash.Core.FVs     ( exprFreeVars )
 import CSlash.Core.Type    ( tyConAppArgs )
@@ -66,7 +65,7 @@ cseBind toplevel env (Rec pairs)
 
 cse_bind :: TopLevelFlag -> CSEnv -> CSEnv -> (InId, InExpr) -> OutId -> (CSEnv, (OutId, OutExpr))
 cse_bind toplevel env_rhs env_body (in_id, in_rhs) out_id
-  | isTopLevel toplevel, panic "exprIsTickedString in_rhs"
+  | isTopLevel toplevel, exprIsTickedString in_rhs
   = (env_body', (out_id', in_rhs))
 
   | JoinPoint arity <- idJoinPointHood out_id

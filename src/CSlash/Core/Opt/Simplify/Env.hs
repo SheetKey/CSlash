@@ -425,7 +425,7 @@ unitLetFloat bind = assert (all (not . isJoinId) (bindersOf bind)) $
   where
     flag Rec{} = panic "what to do"
     flag (NonRec bndr rhs)
-      | panic "exprIsTickedString rhs" = FltStringLit
+      | exprIsTickedString rhs = FltStringLit
       | exprOkForSpeculation rhs = FltOkSpec
       | otherwise = FltCareful
 
