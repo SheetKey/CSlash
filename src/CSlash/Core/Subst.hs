@@ -78,6 +78,12 @@ fromZkKind ki = let subst = mkEmptySubst (emptyVarSet, emptyVarSet, varsOfKind k
 --   SubstP Zk p' = ()
 --   SubstP Tc p' = p' ~ Tc
 
+-- TODO:
+-- We can probably remove the in-scope sets. OR We need to start checking them
+-- if a var isn't in the subst env.
+-- That is: in substTyVar (and similar) we should check tv_env.
+-- If 'Nothing' then we lookup the tv in the tv_in_scope \by unique\!
+-- This would be a big change either way. But right now in_scope is not really used.
 data Subst p p' = Subst
   { id_in_scope :: InScopeSet (Id p')
   , id_env :: IdSubstEnv p p'
