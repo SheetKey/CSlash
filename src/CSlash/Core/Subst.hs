@@ -736,8 +736,8 @@ subst_ty subst ty = go ty
     go co@(KindCoercion kco) = KindCoercion $! subst_kco subst kco
 
 substTyVar :: HasPass p' pass => Subst p p' -> TyVar p -> Type p'
-substTyVar (Subst { tv_env = tenv }) tv
-  = lookupVarEnv tenv tv `orElse` pprPanic "substTyVar" (ppr tv $$ ppr tenv)
+substTyVar (Subst { tv_env = tenv, tv_in_scope = in_scope }) tv
+  = lookupVarEnv tenv tv `orElse` pprPanic "substTyVar" (ppr tv $$ ppr tenv $$ ppr in_scope)
 
 substTyVarBndr
   :: (HasDebugCallStack, HasPass p' pass, SubstP p p')
