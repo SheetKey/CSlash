@@ -280,13 +280,18 @@ mkEmptySubst (dom_tvs, dom_kcvs, dom_kvs) rng_fvs
 mkEmptyTermSubst
   :: (IdSet Zk, TyCoVarSet Zk, TyVarSet Zk, KiCoVarSet Zk, KiVarSet Zk)
   -> CoreSubst
-mkEmptyTermSubst fvs
+mkEmptyTermSubst fvs@(ids, tcvs, tvs, kcvs, kvs)
   = let (id, tcv, tv, kcv, kv) = mkTermInScopeSets fvs
-    in Subst { id_in_scope = id, id_env = emptyVarEnv
-             , tcv_in_scope = tcv, tcv_env = emptyVarEnv
-             , tv_in_scope = tv, tv_env = emptyVarEnv
-             , kcv_in_scope = kcv, kcv_env = emptyVarEnv
-             , kv_in_scope = kv, kv_env = emptyVarEnv }
+        idl = nonDetStrictFoldVarSet (\v vs -> (v, Var v) : vs) [] ids
+        tcvl = nonDetStrictFoldVarSet (\v vs -> (v, TyCoVarCo v) : vs) [] tcvs
+        tvl = nonDetStrictFoldVarSet (\v vs -> (v, TyVarTy v) : vs) [] tvs
+        kcvl = nonDetStrictFoldVarSet (\v vs -> (v, KiCoVarCo v) : vs) [] kcvs
+        kvl = nonDetStrictFoldVarSet (\v vs -> (v, KiVarKi v) : vs) [] kvs
+    in Subst { id_in_scope = id, id_env = mkVarEnv idl
+             , tcv_in_scope = tcv, tcv_env = mkVarEnv tcvl
+             , tv_in_scope = tv, tv_env = mkVarEnv tvl
+             , kcv_in_scope = kcv, kcv_env = mkVarEnv kcvl
+             , kv_in_scope = kv, kv_env = mkVarEnv kvl }
 
 mkEmptyTermSubstIS :: TermSubstInScope -> CoreSubst
 mkEmptyTermSubstIS (id, tcv, tv, kcv, kv) =
