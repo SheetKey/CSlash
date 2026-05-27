@@ -654,8 +654,11 @@ wrapBinds floats body = foldrOL mk_bind body (getFloats floats)
 deFloatTop :: Floats -> [CoreBind]
 deFloatTop floats = foldrOL get [] (getFloats floats)
   where
-    get (Float b TopLvlFloatable) bs = get_bind b : bs
+    get (Float b _{-this should be TopLevelFloatable-}) bs = get_bind b : bs
     get b _ = pprPanic "deFloatTop" (ppr b)
+    -- TODO: we need to fix how things get floated about!
+      -- may need to consider function types (rather than lifted/unlifted)
+      -- and also unrestricted kinds
 
     get_bind (NonRec x e) = NonRec x (occurAnalyzeExpr e)
     get_bind (Rec xes) = Rec [(x, occurAnalyzeExpr e) | (x, e) <- xes]
