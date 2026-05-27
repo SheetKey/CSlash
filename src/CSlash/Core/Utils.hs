@@ -78,7 +78,7 @@ exprType (Cast _ co) = tycoercionRType co
 exprType (Tick _ e) = exprType e
 exprType (Lam bndr mki expr) = mkLamType bndr mki (exprType expr)
 exprType e@(App _ _) = case collectArgs e of
-                        (fun, args) -> applyTypeToArgs (exprType fun) args
+                        (fun, args) -> applyTypeToArgs (pprCoreExpr e) (exprType fun) args
 exprType (Type ty) = pprPanic "exprType" (ppr ty)
 exprType (KiCo kco) = pprPanic "exprType" (ppr kco)
 exprType (Kind ki) = pprPanic "exprType" (ppr ki)
@@ -96,8 +96,8 @@ mkLamType bndr ki body = pprPanic "mkLamType bad CsLam"
                                 , text "maybe fun ki" <+> ppr ki
                                 , text "body" <+> ppr body ]
 
-applyTypeToArgs :: HasDebugCallStack => CoreType -> [CoreExpr] -> CoreType 
-applyTypeToArgs op_ty args = go op_ty args
+applyTypeToArgs :: HasDebugCallStack => SDoc -> CoreType -> [CoreExpr] -> CoreType 
+applyTypeToArgs pp_e op_ty args = go op_ty args
   where
     go op_ty [] = op_ty
     go op_ty (Type ty : args) = go_ty_args op_ty [ty] args
@@ -115,13 +115,14 @@ applyTypeToArgs op_ty args = go op_ty args
       = go_ty_args op_ty (Embed ki : rev_tys) args
     go_ty_args op_ty rev_tys args = go (piResultTys op_ty (reverse rev_tys)) args
 
-    panic_msg as = vcat [ text "Type:" <+> ppr op_ty
+    panic_msg as = vcat [ text "Expression:" <+> pp_e
+                        , text "Type:" <+> ppr op_ty
                         , text "Args:" <+> ppr args
                         , text "Args':" <+> ppr as ]
 
-mkCastMCo :: CoreExpr -> Maybe (TypeCoercion Zk) -> CoreExpr
-mkCastMCo e Nothing = e
-mkCastMCo e (Just co) = Cast e co
+mkCastMCo :: CoreExpr -> MTypeCoercion Zk -> CoreExpr
+mkCastMCo e MRefl = e
+mkCastMCo e (MCo co) = Cast e co
 
 {- *********************************************************************
 *                                                                      *

@@ -828,7 +828,7 @@ data OccEnv = OccEnv
   , occ_one_shots :: !OneShots
   , occ_unf_act :: Id Zk -> Bool
   , occ_rule_act :: Activation -> Bool
-  , occ_bs_env :: !(VarEnv InId (OutId, Maybe (TypeCoercion Zk)))
+  , occ_bs_env :: !(VarEnv InId (OutId, MTypeCoercion Zk))
   , occ_bs_rng :: !(IdSet Zk)
   , occ_join_points :: !JoinPointInfo
   }

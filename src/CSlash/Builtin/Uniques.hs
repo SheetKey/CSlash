@@ -114,6 +114,9 @@ mkFunKiVarUnique i = mkUniqueInt '2' i
 mkWiredInMiscIdUnique :: Int -> Unique
 mkWiredInMiscIdUnique i = mkUniqueInt '0' i
 
+mkBuiltinUnique :: Int -> Unique
+mkBuiltinUnique i = mkUniqueInt 'B' i
+
 varNSUnique :: Unique
 varNSUnique = mkUnique 'i' 0
 

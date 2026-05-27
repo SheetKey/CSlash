@@ -182,6 +182,16 @@ extendTermSubstInScopeSet :: TermSubstInScope -> Id Zk -> TermSubstInScope
 extendTermSubstInScopeSet (ids, tcvs, tvs, kcvs, kvs) id
   = (extendInScopeSet ids id, tcvs, tvs, kcvs, kvs)
 
+extendTermSubstInScopeBndr :: TermSubstInScope -> CoreBndr -> TermSubstInScope
+extendTermSubstInScopeBndr (ids, tcvs, tvs, kcvs, kvs) (Core.Id v)
+  = (ids `extendInScopeSet` v, tcvs, tvs, kcvs, kvs)
+extendTermSubstInScopeBndr (ids, tcvs, tvs, kcvs, kvs) (Tv v)
+  = (ids, tcvs, tvs `extendInScopeSet` v, kcvs, kvs)
+extendTermSubstInScopeBndr (ids, tcvs, tvs, kcvs, kvs) (KCv v)
+  = (ids, tcvs, tvs, kcvs `extendInScopeSet` v, kvs)
+extendTermSubstInScopeBndr (ids, tcvs, tvs, kcvs, kvs) (Kv v)
+  = (ids, tcvs, tvs, kcvs, kvs `extendInScopeSet` v)
+
 extendTermSubstInScope :: CoreSubst -> CoreBndr -> CoreSubst
 extendTermSubstInScope Subst{..} (Core.Id id)
   = Subst { id_in_scope = id_in_scope `extendInScopeSet` id, .. }
@@ -233,6 +243,13 @@ emptySubst = Subst { id_in_scope = emptyInScopeSet
                    , kcv_env = emptyVarEnv
                    , kv_in_scope = emptyInScopeSet
                    , kv_env = emptyVarEnv }
+
+getTermSubstInScope :: CoreSubst -> TermSubstInScope
+getTermSubstInScope Subst{..} = ( id_in_scope
+                                , tcv_in_scope
+                                , tv_in_scope
+                                , kcv_in_scope
+                                , kv_in_scope )
 
 -- Takes the free vars in the domain and range.
 -- Uses range fvs as initial in scope set.
@@ -982,6 +999,11 @@ substDCoreVarSets subst@Subst{..} (ids, tcvs, tvs, kcvs, kvs)
 *                                                                      *
 ********************************************************************* -}
 
+substExprSC :: HasDebugCallStack => CoreSubst -> CoreExpr -> CoreExpr
+substExprSC subst orig_expr
+  | isEmptySubst subst = orig_expr
+  | otherwise = substExpr subst orig_expr
+
 substExpr :: HasDebugCallStack => CoreSubst -> CoreExpr -> CoreExpr
 substExpr subst expr
   = go expr
@@ -1006,6 +1028,22 @@ substExpr subst expr
 
     go_alt subst (Alt con bndrs rhs) = Alt con bndrs' (substExpr subst' rhs)
       where (subst', bndrs') = substLetBndrs subst bndrs
+
+substBindSC :: HasDebugCallStack => CoreSubst -> CoreBind -> (CoreSubst, CoreBind)
+substBindSC subst bind
+  | not (isEmptySubst subst)
+  = substBind subst bind
+  | otherwise
+  = case bind of
+      NonRec bndr rhs -> (subst', NonRec bndr' rhs)
+        where
+          (subst', bndr') = substLetBndr subst bndr
+      Rec pairs -> (subst', Rec (bndrs' `zip` rhss'))
+        where
+          (bndrs, rhss) = unzip pairs
+          (subst', bndrs') = substLetRecBndrs subst bndrs
+          rhss' | isEmptySubst subst' = rhss
+                | otherwise = map (substExpr subst') rhss
 
 substBind :: HasDebugCallStack => CoreSubst -> CoreBind -> (CoreSubst, CoreBind)
 substBind subst (NonRec bndr rhs)

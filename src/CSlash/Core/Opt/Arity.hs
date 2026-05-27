@@ -18,7 +18,7 @@ import CSlash.Core.TyCon     ( TyCon, tyConArity, isInjectiveTyCon )
 import CSlash.Core.Subst
 import CSlash.Core.Type
 import CSlash.Core.Kind
-import CSlash.Core.Type.Compare( eqType )
+import CSlash.Core.Type.Compare
 
 import CSlash.Types.Demand
 -- import CSlash.Types.Cpr( CprSig, mkCprSig, botCpr )
@@ -518,13 +518,163 @@ exprIsDeadEnd e = go 0 e
 ********************************************************************* -}
 
 etaExpand :: Arity -> CoreExpr -> CoreExpr
-etaExpand n orig_expr = panic "exa_expand in_scope (replicate n NoOneShotInfo) orig_expr"
-  -- where
-  --   in_scope = {-# SCC "eta_expand:in-scopeX" #-}
-  --              panic "mkTermInScopeSets (exprFreeVars orig_expr)"
+etaExpand n orig_expr = eta_expand in_scope (replicate n NoOneShotInfo) orig_expr
+  where
+    in_scope = {-# SCC "eta_expand:in-scopeX" #-}
+               mkTermInScopeSets (exprFreeVars orig_expr)
 
 etaExpandAT :: TermSubstInScope -> SafeArityType -> CoreExpr -> CoreExpr
 etaExpandAT in_scope at orig_expr = panic "etaExpandAT"
+
+eta_expand :: TermSubstInScope -> [OneShotInfo] -> CoreExpr -> CoreExpr
+eta_expand  in_scope one_shots (Cast expr co)
+  = mkCast (eta_expand in_scope one_shots expr) co
+  
+eta_expand in_scope one_shots orig_expr
+  = go in_scope one_shots [] orig_expr
+  where
+    go _ [] _ _ = orig_expr
+
+    go in_scope oss@(_ : oss1) vs (Lam v k body)
+      | isNonRuntimeVar v = go (in_scope `extendTermSubstInScopeBndr` v) oss ((v, k):vs) body
+      | otherwise = go (in_scope `extendTermSubstInScopeBndr` v) oss1 ((v, k):vs) body
+
+    go in_scope oss rev_vs expr
+      = retick $
+        etaInfoAbs top_eis $
+        etaInfoApp in_scope' sexpr eis
+      where
+        (in_scope', eis@(EI eta_bndrs mco))
+          = mkEtaWW oss (ppr orig_expr) in_scope (exprType expr)
+        top_bndrs = reverse rev_vs
+        top_eis = EI (top_bndrs ++ eta_bndrs) (panic "mkPiMCos top_bndrs mco")
+
+        (expr', args) = collectArgs expr
+        (ticks, expr'') = stripTicksTop tickishFloatable expr'
+        sexpr = mkCoreApps expr'' args
+        retick expr = foldr mkTick expr ticks
+
+{- *********************************************************************
+*                                                                      *
+              The EtaInfo mechanism
+          mkEtaWW, etaInfoAbs, etaInfoApp
+*                                                                      *
+********************************************************************* -}
+
+data EtaInfo = EI [(CoreBndr, Maybe CoreMonoKind)] (MTypeCoercion Zk)
+
+instance Outputable EtaInfo where
+  ppr (EI vs mco) = text "EI" <+> ppr vs <+> parens (ppr mco)
+
+etaInfoApp :: TermSubstInScope -> CoreExpr -> EtaInfo -> CoreExpr
+etaInfoApp in_scope expr eis
+  = go (mkEmptyTermSubstIS in_scope) expr eis
+  where
+    go :: CoreSubst -> CoreExpr -> EtaInfo -> CoreExpr
+    go subst (Tick t e) eis
+      = Tick (substTickish subst t) (go subst e eis)
+      
+    go subst (Cast e co) (EI bs mco)
+      = go subst e (EI bs mco')
+      where
+        mco' = panic "checkReflexiveMCo"
+        
+    go subst (Case e b ty alts) eis
+      = Case (substExprSC subst e) b1 ty' alts'
+      where
+        (subst1, b1) = substLetBndr subst b
+        alts' = map subst_alt alts
+        ty' = etaInfoAppTy (substTyUnchecked subst ty) eis
+        subst_alt (Alt con bs rhs) = Alt con bs' (go subst2 rhs eis)
+          where
+            (subst2, bs') = substLetBndrs subst1 bs
+
+    go subst (Let b e) eis
+      | not (isJoinBind b)
+      = Let b' (go subst' e eis)
+      where
+        (subst', b') = substBindSC subst b
+
+    go subst (Lam v k e) (EI ((b, _):bs) mco)
+      | Just (arg, mco') <- pushMCoArg mco (bndrToCoreExpr b)
+      = go (extendSubst subst v arg) e (EI bs mco')
+
+    go subst e (EI bs mco)
+      = substExprSC subst e
+        `mkCastMCo` checkReflexiveMCo mco
+        `mkBndrApps` map fst bs
+
+etaInfoAppTy :: CoreType -> EtaInfo -> CoreType
+etaInfoAppTy ty (EI bs mco)
+  = applyTypeToArgs (text "etaInfoAppTy") ty1 (map (bndrToCoreExpr . fst) bs)
+  where
+    ty1 = case mco of
+      MRefl -> ty
+      MCo co -> tycoercionRType co
+
+etaInfoAbs :: EtaInfo -> CoreExpr -> CoreExpr
+etaInfoAbs (EI bs mco) expr = (mkCoreLams bs expr) `mkCastMCo` mkSymMCo mco
+
+mkEtaWW :: [OneShotInfo] -> SDoc -> TermSubstInScope -> CoreType -> (TermSubstInScope, EtaInfo)
+mkEtaWW orig_oss ppr_orig_expr in_scope orig_ty
+  = go 0 orig_oss empty_subst orig_ty
+  where
+    empty_subst = mkEmptyTermSubstIS in_scope
+
+    go :: Int -> [OneShotInfo] -> CoreSubst -> CoreType -> (TermSubstInScope, EtaInfo)
+    go _ [] subst _
+       ----------- Done!  No more expansion needed
+      = (getTermSubstInScope subst, EI [] MRefl)
+    go n oss@(one_shot : oss1) subst ty
+      ----------- Forall kinds (forall a. ty)
+      | Just (kv, ty') <- splitForAllForAllKiBinder_maybe ty
+      = let (subst', kv') = substKiVarBndr subst kv
+            (in_scope, EI bs mco) = go n oss subst' ty'
+        in (in_scope, EI ((Kv kv', Nothing) : bs) (mkEtaForAllKiMCo kv' ty' mco))
+      ----------- Forall kicos (forall a. ty)
+      | Just (kcv, ty') <- splitForAllForAllKiCoBinder_maybe ty
+      = let (subst', kcv') = substKiCoVarBndr subst kcv
+            (in_scope, EI bs mco) = go n oss subst' ty'
+        in (in_scope, EI ((KCv kcv', Nothing) : bs) (mkEtaForAllKiCoMCo kcv' ty' mco))
+      ----------- Forall types (forall a. ty)
+      | Just (Bndr tv vis, ty') <- splitForAllForAllTyBinder_maybe ty
+      = let (subst', tv') = substTyVarBndr subst tv
+            (in_scope, EI bs mco) = go n oss subst' ty'
+        in (in_scope, EI ((Tv tv', Nothing) : bs) (mkEtaForAllTyMCo (Bndr tv' vis) ty' mco))
+
+      ----------- Function types (t1 -> t2)
+      | Just (arg_ty, fun_ki, res_ty) <- splitFunTy_maybe ty
+      = let (subst', eta_id) = freshEtaId n subst arg_ty
+            eta_id' = eta_id `setIdOneShotInfo` one_shot
+            (in_scope, EI bs mco) = go (n + 1) oss1 subst' res_ty
+        in (in_scope, EI ((Core.Id eta_id', Just (BIKi LKd)) : bs)
+                         (panic "mkFunResMCo eta_id' mco"))
+                                         -- TODO: check fun kind
+      -- Not enough arrows to expand
+      | otherwise
+      = warnPprTrace True "mkEtaWW" ((ppr orig_oss <+> ppr orig_ty) $$ ppr_orig_expr)
+        (getTermSubstInScope subst, EI [] MRefl)
+        
+mkEtaForAllTyMCo :: ForAllBinder CoreTyVar -> CoreType -> MTypeCoercion Zk -> MTypeCoercion Zk
+mkEtaForAllTyMCo (Bndr tv vis) ty mco
+  = case mco of
+      MRefl | vis == coreTyLamForAllTyFlag -> MRefl
+            | otherwise -> mk_fco (mkReflTyCo ty)
+      MCo co -> mk_fco co
+  where
+    mk_fco co = MCo (mkForAllCo tv vis coreTyLamForAllTyFlag (mkReflKiCo (varKind tv)) co)
+
+mkEtaForAllKiMCo :: CoreKiVar -> CoreType -> MTypeCoercion Zk -> MTypeCoercion Zk
+mkEtaForAllKiMCo kv ty mco
+  = case mco of
+      MRefl -> MRefl
+      MCo co -> panic "mkEtaForAllKiMCo"
+
+mkEtaForAllKiCoMCo :: CoreKiCoVar -> CoreType -> MTypeCoercion Zk -> MTypeCoercion Zk
+mkEtaForAllKiCoMCo kcv ty mco
+  = case mco of
+      MRefl -> MRefl
+      MCo co -> panic "mkEtaForAllKiCoMCo"
 
 {- *********************************************************************
 *                                                                      *
@@ -657,6 +807,12 @@ pushCoArgs co (arg:args) = do panic "pushCoArgs"
 --        let arg_mco' = checkReflexiveMCo arg_mco
 --        return (arg `mkCastMCo` arg_mco', m_co')
 
+pushMCoArg :: MTypeCoercion Zk -> CoreArg -> Maybe (CoreArg, MTypeCoercion Zk)
+pushMCoArg MRefl arg = Just (arg, MRefl)
+pushMCoArg (MCo co) arg = pushCoArg co arg
+
+pushCoArg :: CoreTypeCoercion -> CoreArg -> Maybe (CoreArg, MTypeCoercion Zk)
+pushCoArg co arg = panic "pushCoArg"
 
 pushCoDataCon
   :: DataCon Zk
@@ -702,3 +858,12 @@ etaExpandToJoinPointRule join_arity rule@Rule{ ru_bndrs = bndrs, ru_rhs = rhs, r
 etaBodyForJoinPoint :: Int -> CoreExpr -> ([(CoreBndr, Maybe CoreMonoKind)], CoreExpr) 
 etaBodyForJoinPoint need_args body
   = panic "etaBodyForJoinPoint"
+
+freshEtaId :: Int -> CoreSubst -> CoreType -> (CoreSubst, CoreId)
+freshEtaId n subst ty
+  = (subst', eta_id')
+  where
+    ty' = substTyUnchecked subst ty
+    eta_id' = uniqAway (id_in_scope subst) $
+              mkSysLocal (fsLit "eta") (mkBuiltinUnique n) ty'
+    subst' = extendTermSubstInScopeId subst eta_id'

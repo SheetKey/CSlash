@@ -727,6 +727,18 @@ splitForAllForAllTyBinder_maybe ty
   | ForAllTy b inner_ty <- coreFullView ty = Just (b, inner_ty)
   | otherwise = Nothing
 
+splitForAllForAllKiBinder_maybe
+  :: HasPass p pass => Type p -> Maybe (KiVar p, Type p)
+splitForAllForAllKiBinder_maybe ty
+  | BigTyLamTy b inner_ty <- coreFullView ty = Just (b, inner_ty)
+  | otherwise = Nothing
+
+splitForAllForAllKiCoBinder_maybe
+  :: HasPass p pass => Type p -> Maybe (KiCoVar p, Type p)
+splitForAllForAllKiCoBinder_maybe ty
+  | ForAllKiCo b inner_ty <- coreFullView ty = Just (b, inner_ty)
+  | otherwise = Nothing
+
 splitForAllInvisTyBinders :: HasPass p pass => Type p -> ([TyVar p], Type p)
 splitForAllInvisTyBinders ty = split ty ty []
   where
@@ -1065,3 +1077,13 @@ castCoercionKind1 g t1 t2 h
       TyRefl {} -> mkReflTyCo (mkCastTy t2 h)
       GRefl _ kco -> mkGReflCo (mkCastTy t1 h) (mkSymKiCo h `mkTransKiCo` kco `mkTransKiCo` h)
       _ -> castCoercionKind2 g t1 t2 h h
+
+{- *********************************************************************
+*                                                                      *
+              MCoercion
+*                                                                      *
+********************************************************************* -}
+
+mkSymMCo :: MTypeCoercion p -> MTypeCoercion p
+mkSymMCo MRefl = MRefl
+mkSymMCo (MCo co) = MCo (mkSymTyCo co)

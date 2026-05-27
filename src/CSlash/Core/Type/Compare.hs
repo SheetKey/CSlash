@@ -145,7 +145,7 @@ hasCasts (AppTy t1 t2) = hasCasts t1 || hasCasts t2
 hasCasts (ForAllTy _ ty) = hasCasts ty
 hasCasts _ = False
 
--- BELONGS ELSEWHERE
+-- BELOW THIS LINE BELONGS ELSEWHERE
 
 isReflexiveTyCo :: HasPass p pass => TypeCoercion p -> Bool
 isReflexiveTyCo = isJust . isReflexiveTyCo_maybe
@@ -159,3 +159,15 @@ isReflexiveTyCo_maybe co
   | otherwise
   = Nothing
   where (Pair ty1 ty2) = tycoercionTypes co
+
+{- *********************************************************************
+*                                                                      *
+              MCoercion
+*                                                                      *
+********************************************************************* -}
+
+checkReflexiveMCo :: HasPass p pass => MTypeCoercion p -> MTypeCoercion p
+checkReflexiveMCo MRefl = MRefl
+checkReflexiveMCo (MCo co)
+  | isReflexiveTyCo co = MRefl
+  | otherwise = MCo co
