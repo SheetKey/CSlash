@@ -1087,3 +1087,11 @@ castCoercionKind1 g t1 t2 h
 mkSymMCo :: MTypeCoercion p -> MTypeCoercion p
 mkSymMCo MRefl = MRefl
 mkSymMCo (MCo co) = MCo (mkSymTyCo co)
+
+mkPiMCos :: [a] -> MTypeCoercion p -> MTypeCoercion p
+mkPiMCos _ MRefl = MRefl
+mkPiMCos _ _ = panic "mkPiMCos"
+
+mkFunResMCo :: a -> MTypeCoercion p -> MTypeCoercion p
+mkFunResMCo _ MRefl = MRefl
+mkFunResMCo _ _ = panic "mkFunResMCo"

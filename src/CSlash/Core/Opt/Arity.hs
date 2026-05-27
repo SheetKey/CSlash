@@ -547,7 +547,7 @@ eta_expand in_scope one_shots orig_expr
         (in_scope', eis@(EI eta_bndrs mco))
           = mkEtaWW oss (ppr orig_expr) in_scope (exprType expr)
         top_bndrs = reverse rev_vs
-        top_eis = EI (top_bndrs ++ eta_bndrs) (panic "mkPiMCos top_bndrs mco")
+        top_eis = EI (top_bndrs ++ eta_bndrs) (mkPiMCos (map fst top_bndrs) mco)
 
         (expr', args) = collectArgs expr
         (ticks, expr'') = stripTicksTop tickishFloatable expr'
@@ -648,7 +648,7 @@ mkEtaWW orig_oss ppr_orig_expr in_scope orig_ty
             eta_id' = eta_id `setIdOneShotInfo` one_shot
             (in_scope, EI bs mco) = go (n + 1) oss1 subst' res_ty
         in (in_scope, EI ((Core.Id eta_id', Just (BIKi LKd)) : bs)
-                         (panic "mkFunResMCo eta_id' mco"))
+                         (mkFunResMCo eta_id' mco))
                                          -- TODO: check fun kind
       -- Not enough arrows to expand
       | otherwise
