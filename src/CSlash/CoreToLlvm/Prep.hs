@@ -793,24 +793,18 @@ cpCloneLamBndr env@CPE{ cpe_subst = subst } (C.Id bndr, Just ki) = do
       = return bndr
 
 cpCloneLamBndr env@CPE{ cpe_subst = subst } it@(Tv bndr, Nothing) =
-  if isEmptySubstTy subst
-  then return (env { cpe_subst = extendTvSubstInScope subst bndr }, it)
-  else let bndr1 = updateVarKind (substMonoKi subst) bndr
-           subst1 = extendTvSubstWithClone subst bndr bndr1
-       in return (env { cpe_subst = subst1 }, (Tv bndr1, Nothing))  
+  let bndr1 = updateVarKind (substMonoKi subst) bndr
+      subst1 = extendTvSubstWithClone subst bndr bndr1
+  in return (env { cpe_subst = subst1 }, (Tv bndr1, Nothing))  
 
-cpCloneLamBndr env@CPE{ cpe_subst = subst } it@(KCv bndr, Nothing) = do
-  if isEmptySubstKiCo subst
-  then return (env { cpe_subst = extendKCvSubstInScope subst bndr }, it)
-  else let bndr1 = updateVarKind (substMonoKi subst) bndr
-           subst1 = extendKCvSubstWithClone subst bndr bndr1
-       in return (env { cpe_subst = subst1 }, (KCv bndr1, Nothing))  
+cpCloneLamBndr env@CPE{ cpe_subst = subst } it@(KCv bndr, Nothing) = 
+  let bndr1 = updateVarKind (substMonoKi subst) bndr
+      subst1 = extendKCvSubstWithClone subst bndr bndr1
+  in return (env { cpe_subst = subst1 }, (KCv bndr1, Nothing))  
 
-cpCloneLamBndr env@CPE{ cpe_subst = subst } it@(Kv bndr, Nothing) = do
-  if isEmptySubstKi subst
-  then return (env { cpe_subst = extendKvSubstInScope subst bndr }, it)
-  else let subst1 = extendKvSubstWithClone subst bndr bndr
-       in return (env { cpe_subst = subst1 }, (Kv bndr, Nothing))  
+cpCloneLamBndr env@CPE{ cpe_subst = subst } it@(Kv bndr, Nothing) = 
+  let subst1 = extendKvSubstWithClone subst bndr bndr
+  in return (env { cpe_subst = subst1 }, (Kv bndr, Nothing))  
 
 cpCloneLamBndr _ _ = panic "cpCloneLamBndr ki mismatch"
 
