@@ -653,7 +653,12 @@ csGenHardCode cs_env cgguts location output_filename = do
       (initCorePrepPgmConfig (cs_dflags cs_env))
       this_mod location late_binds
 
-  panic "csGenHardCode unfinished"
+  ------------------  Code generation ------------------
+  withTiming logger (text "CodeGen" <+> brackets (ppr this_mod)) (const ()) $ do
+    output_filename <- {-# SCC "codeOutput" #-}
+      
+
+      panic "csGenHardCode unfinished"
 
 --------------------------------------------------------------
 -- Tidy
