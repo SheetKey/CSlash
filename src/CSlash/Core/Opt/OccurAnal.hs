@@ -10,7 +10,8 @@ import CSlash.Cs.Pass
 
 import CSlash.Core as Core
 import CSlash.Core.FVs
-import CSlash.Core.Utils   ( exprIsTrivial, {-isDefaultAlt,-} isExpandableApp,
+import CSlash.Core.Make
+import CSlash.Core.Utils   ( exprIsTrivial, isDefaultAlt, isExpandableApp,
                              mkCastMCo, mkTicks )
 import CSlash.Core.Opt.Arity   ( joinRhsArity, isOneShotBndr )
 -- import GHC.Core.Coercion
@@ -751,7 +752,33 @@ occAnal env app@(App _ _) = occAnalApp env (collectArgsTicks tickishFloatable ap
 occAnal env expr@(Lam {})
   = adjustNonRecRhs NotJoinPoint $ occAnalLamTail env expr
 
-occAnal env _ = panic "unfinished"
+occAnal env (Case scrut bndr ty alts)
+  = let WUD scrut_usage scrut' = occAnal (setScrutCtxt env alts) scrut
+        WUD alts_usage (tagged_bndr, alts')
+          = addInScopeOne env bndr $ \env ->
+            let alt_env = addBndrSwap scrut' bndr $ setTailCtxt env
+                WUD alts_usage alts' = do_alts alt_env alts
+                tagged_bndr = tagLamIdBinder alts_usage bndr
+            in WUD alts_usage (tagged_bndr, alts')
+
+        total_usage = markAllNonTail scrut_usage `andUDs` alts_usage
+    in WUD total_usage (Case scrut' tagged_bndr ty alts')
+  where
+    do_alts :: OccEnv -> [CoreAlt] -> WithUsageDetails [CoreAlt]
+    do_alts _ [] = WUD emptyDetails []
+    do_alts env (alt:alts) = WUD (uds1 `orUDs` uds2) (alt':alts')
+      where
+        WUD uds1 alt' = do_alt env alt
+        WUD uds2 alts' = do_alts env alts
+
+    do_alt !env (Alt con bndrs rhs)
+      = addInScopeList env bndrs $ \env ->
+        let WUD rhs_usage rhs' = occAnal env rhs
+            tagged_bndrs = tagLamIdBinders rhs_usage bndrs
+        in WUD rhs_usage (Alt con tagged_bndrs rhs')
+
+occAnal env (Let bind body)
+  = occAnalBind env NotTopLevel noImpRuleEdges bind (\env -> occAnal env body) mkCoreLets
 
 occAnalArgs :: OccEnv -> CoreExpr -> [CoreExpr] -> [OneShots] -> WithUsageDetails CoreExpr
 occAnalArgs !env fun args !one_shots = go emptyDetails fun args one_shots
@@ -829,7 +856,7 @@ data OccEnv = OccEnv
   , occ_unf_act :: Id Zk -> Bool
   , occ_rule_act :: Activation -> Bool
   , occ_bs_env :: !(VarEnv InId (OutId, MTypeCoercion Zk))
-  , occ_bs_rng :: !(IdSet Zk)
+  , occ_bs_rng :: !(IdSet Zk) -- TODO: May need to contain all types of vars
   , occ_join_points :: !JoinPointInfo
   }
 
@@ -859,10 +886,24 @@ initOccEnv = OccEnv { occ_encl = OccVanilla
 noBinderSwaps :: OccEnv -> Bool
 noBinderSwaps (OccEnv { occ_bs_env = bs_env }) = isEmptyVarEnv bs_env
 
+setScrutCtxt :: OccEnv -> [CoreAlt] -> OccEnv
+setScrutCtxt !env alts
+  = setNonTailCtxt encl env
+  where
+    encl | interesting_alts = OccScrut
+         | otherwise = OccVanilla
+    interesting_alts = case alts of
+      [] -> False
+      [alt] -> not (isDefaultAlt alt)
+      _ -> True
+
 setNonTailCtxt :: OccEncl -> OccEnv -> OccEnv
 setNonTailCtxt ctxt !env = env { occ_encl = ctxt
                                , occ_one_shots = []
                                , occ_join_points = zapJoinPointInfo (occ_join_points env) }
+
+setTailCtxt :: OccEnv -> OccEnv 
+setTailCtxt !env = env { occ_encl = OccVanilla }
 
 mkRhsOccEnv :: OccEnv -> RecFlag -> OccEncl -> JoinPointHood -> CoreId -> CoreExpr -> OccEnv
 mkRhsOccEnv env@(OccEnv { occ_one_shots = ctxt_one_shots, occ_join_points = ctxt_join_points })
@@ -1028,11 +1069,22 @@ extendFvs env s
 
 data BinderSwapDecision
   = NoBinderSwap
-  | DoBinderSwap OutId (Maybe CoreTypeCoercion)
+  | DoBinderSwap OutId (MTypeCoercion Zk)
+
+addBndrSwap :: OutExpr -> CoreId -> OccEnv -> OccEnv
+addBndrSwap scrut case_bndr env@OccEnv{ occ_bs_env = swap_env, occ_bs_rng = rng_vars }
+  | DoBinderSwap scrut_var mco <- scrutOkForBinderSwap scrut
+  , scrut_var /= case_bndr
+  = env { occ_bs_env = extendVarEnv swap_env scrut_var (case_bndr', mco)
+        , occ_bs_rng = rng_vars `extendVarSet` case_bndr' }
+  | otherwise
+  = env
+  where
+    case_bndr' = zapIdOccInfo case_bndr
 
 scrutOkForBinderSwap :: OutExpr -> BinderSwapDecision
-scrutOkForBinderSwap (Var v) = DoBinderSwap v Nothing
-scrutOkForBinderSwap (Cast (Var v) co) = DoBinderSwap v (Just (mkSymTyCo co))
+scrutOkForBinderSwap (Var v) = DoBinderSwap v MRefl
+scrutOkForBinderSwap (Cast (Var v) co) = DoBinderSwap v (MCo (mkSymTyCo co))
 scrutOkForBinderSwap (Tick _ e) = scrutOkForBinderSwap e
 scrutOkForBinderSwap _ = NoBinderSwap
 
@@ -1255,6 +1307,13 @@ tagLamBinder :: UsageDetails -> CoreBndr -> CoreBndr
 tagLamBinder usage (Core.Id bndr) = Core.Id $ setBinderOcc (markNonTail occ) bndr
   where occ = lookupOccInfo usage bndr
 tagLamBinder _ bndr = bndr
+
+tagLamIdBinder :: UsageDetails -> CoreId -> CoreId
+tagLamIdBinder usage bndr = setBinderOcc (markNonTail occ) bndr
+  where occ = lookupOccInfo usage bndr
+
+tagLamIdBinders :: UsageDetails -> [CoreId] -> [CoreId]
+tagLamIdBinders usage binders = map (tagLamIdBinder usage) binders
 
 tagNonRecBinder
   :: TopLevelFlag

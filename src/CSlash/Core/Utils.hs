@@ -279,6 +279,10 @@ addDefault :: [Alt a b] -> Maybe (Expr a b) -> [Alt a b]
 addDefault alts Nothing = alts
 addDefault alts (Just rhs) = Alt DEFAULT [] rhs : alts
 
+isDefaultAlt :: Alt a b -> Bool
+isDefaultAlt (Alt DEFAULT _ _) = True
+isDefaultAlt _ = False
+
 findAlt :: AltCon -> [Alt a b] -> Maybe (Alt a b)
 findAlt con alts = case alts of
   (deflt@(Alt DEFAULT _ _) : alts) -> go alts (Just deflt)
