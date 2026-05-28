@@ -721,18 +721,25 @@ splitForAllForAllTyBinders ty = split ty ty []
     split orig_ty _ bs = (reverse bs, orig_ty)
 {-# INLINE splitForAllForAllTyBinders #-}
 
+splitForAllTyVar_maybe :: HasPass p pass => Type p -> Maybe (TyVar p, Type p)
+splitForAllTyVar_maybe ty
+  | ForAllTy (Bndr tv _) inner_ty <- coreFullView ty = Just (tv, inner_ty)
+  | otherwise = Nothing
+
 splitForAllForAllTyBinder_maybe
   :: HasPass p pass => Type p -> Maybe (ForAllBinder (TyVar p), Type p)
 splitForAllForAllTyBinder_maybe ty
   | ForAllTy b inner_ty <- coreFullView ty = Just (b, inner_ty)
   | otherwise = Nothing
 
+-- TODO: Rename 'splitForAllKiVar_maybe'
 splitForAllForAllKiBinder_maybe
   :: HasPass p pass => Type p -> Maybe (KiVar p, Type p)
 splitForAllForAllKiBinder_maybe ty
   | BigTyLamTy b inner_ty <- coreFullView ty = Just (b, inner_ty)
   | otherwise = Nothing
 
+-- TODO: Rename
 splitForAllForAllKiCoBinder_maybe
   :: HasPass p pass => Type p -> Maybe (KiCoVar p, Type p)
 splitForAllForAllKiCoBinder_maybe ty
@@ -1095,3 +1102,36 @@ mkPiMCos _ _ = panic "mkPiMCos"
 mkFunResMCo :: a -> MTypeCoercion p -> MTypeCoercion p
 mkFunResMCo _ MRefl = MRefl
 mkFunResMCo _ _ = panic "mkFunResMCo"
+
+{- *********************************************************************
+*                                                                      *
+              Join points
+*                                                                      *
+********************************************************************* -}
+
+-- See GHC [The polymorphism rule of join points]
+isValidJoinPointType :: JoinArity -> Type Zk -> Bool
+isValidJoinPointType arity ty
+  = valid_under (emptyVarSet, emptyVarSet, emptyVarSet) arity ty
+  where
+    valid_under
+      :: (VarSet (TyVar Zk), VarSet (KiCoVar Zk), VarSet (KiVar Zk))
+      -> JoinArity
+      -> Type Zk
+      -> Bool
+    valid_under (tvs, kcvs, kvs) arity ty
+      | arity == 0
+      = let (tvs1, kcvs1, kvs1) = varsOfType ty
+        in tvs `disjointVarSet` tvs1 &&
+           kcvs `disjointVarSet` kcvs1 &&
+           kvs `disjointVarSet` kvs1
+      | Just (k, ty') <- splitForAllForAllKiBinder_maybe ty
+      = valid_under (tvs, kcvs, kvs `extendVarSet` k) (arity - 1) ty'
+      | Just (c, ty') <- splitForAllForAllKiCoBinder_maybe ty
+      = valid_under (tvs, kcvs `extendVarSet` c, kvs) (arity - 1) ty'
+      | Just (t, ty') <- splitForAllTyVar_maybe ty
+      = valid_under (tvs `extendVarSet` t, kcvs, kvs) (arity - 1) ty'
+      | Just (_, _, res_ty) <- splitFunTy_maybe ty
+      = valid_under (tvs, kcvs, kvs) (arity - 1) res_ty
+      | otherwise
+      = False

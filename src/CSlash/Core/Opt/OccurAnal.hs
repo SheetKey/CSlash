@@ -1391,7 +1391,7 @@ okForJoinPoint lvl bndr tail_call_info
       | NotTopLevel <- lvl
       , AlwaysTailCalled arity <- tail_call_info
       , ok_unfolding arity (realIdUnfolding bndr)
-      , panic "isValidJoinPointType arity (varType bndr)"
+      , isValidJoinPointType arity (varType bndr)
       = True
       | otherwise
       = False
@@ -1414,7 +1414,7 @@ okForJoinPoint lvl bndr tail_call_info
              , case tail_call_info of
                  AlwaysTailCalled arity ->
                    vcat [ text "ok_unf:" <+> ppr (ok_unfolding arity (realIdUnfolding bndr))
-                        , text "ok_type:" <+> panic "ppr (isValidJoinPointType arity (varType bndr))" ]
+                        , text "ok_type:" <+> ppr (isValidJoinPointType arity (varType bndr)) ]
                  _ -> empty ]
 
 {- *********************************************************************
