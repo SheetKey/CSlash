@@ -825,6 +825,8 @@ splitPiTys :: HasPass p pass => Type p -> ([PiTyBinder p], Type p)
 splitPiTys ty = split ty ty []
   where
     split _ (ForAllTy b res) bs = split res res (NamedTy b : bs)
+    split _ (ForAllKiCo bndr res) bs = split res res (NamedKiCo bndr : bs)
+    split _ (BigTyLamTy bndr res) bs = split res res (NamedKi bndr : bs)
     split _ (FunTy { ft_arg = arg, ft_res = res }) bs = split res res (AnonTy arg : bs)
     split orig_ty ty bs | Just ty' <- coreView ty = split orig_ty ty' bs
     split orig_ty _ bs = (reverse bs, orig_ty)

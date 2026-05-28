@@ -450,11 +450,73 @@ isExpandableApp fn n_val_args
 ********************************************************************* -}
 
 exprOkForSpeculation :: CoreExpr -> Bool
-exprOkForSpeculation = panic "unfinished"
+exprOkForSpeculation = expr_ok fun_always_ok panic
 
 exprOkToDiscard :: CoreExpr -> Bool
 exprOkToDiscard = panic "unfinished"
- 
+
+fun_always_ok :: CoreId -> Bool
+fun_always_ok _ = True
+
+-- TODO: a should be 'PrimOp'
+expr_ok :: (CoreId -> Bool) -> (a -> Bool) -> CoreExpr -> Bool
+expr_ok _ _ Lit{} = True
+expr_ok _ _ Type{} = True
+expr_ok _ _ KiCo{} = True
+expr_ok _ _ Kind{} = True
+
+expr_ok fun_ok primop_ok (Var v) = app_ok fun_ok primop_ok v []
+expr_ok fun_ok primop_ok (Cast e _) = expr_ok fun_ok primop_ok e
+expr_ok fun_ok primop_ok (Lam b k e)
+  | isNonRuntimeVar b = expr_ok fun_ok primop_ok e
+  | otherwise = True
+  
+expr_ok fun_ok primop_ok (Tick tickish e)
+  | tickishCounts tickish = False
+  | otherwise = expr_ok fun_ok primop_ok e
+
+expr_ok _ _ Let{} = False
+
+expr_ok fun_ok primop_ok (Case scrut bndr _ alts)
+  = expr_ok fun_ok primop_ok scrut
+    && all (\(Alt _ _ rhs) -> expr_ok fun_ok primop_ok rhs) alts
+    && altsAreExhaustive alts
+
+expr_ok fun_ok primop_ok other_expr
+  = let (expr, args) = collectArgs other_expr
+    in case stripTicksTopE (not . tickishCounts) expr of
+         Var f -> app_ok fun_ok primop_ok f args
+         Lit lit -> panic "expr_ok Lit"
+         _ -> False
+
+-- TODO: a should be 'PrimOp'
+app_ok :: (CoreId -> Bool) -> (a -> Bool) -> CoreId -> [CoreExpr] -> Bool
+app_ok fun_ok primop_ok fun args
+  | not (fun_ok fun)
+  = False
+  | idArity fun > n_val_args
+  = args_ok
+  | otherwise
+  = case idDetails fun of
+      DataConId{} -> args_ok
+      VanillaId -> rest
+      TickBoxOpId{} -> rest
+      JoinId{} -> rest
+  where
+    rest = assertPpr (n_val_args == 0) (ppr fun $$ ppr args) True
+
+    fun_ty = varType fun
+    n_val_args = valArgCount args
+    (arg_tys, _) = splitPiTys fun_ty
+
+    args_ok = and (zipWith arg_ok arg_tys args)
+
+    arg_ok :: PiTyBinder Zk -> CoreExpr -> Bool
+    arg_ok NamedTy{} _ = True
+    arg_ok NamedKiCo{} _ = True
+    arg_ok NamedKi{} _ = True
+    arg_ok (AnonTy ty) arg = expr_ok fun_ok primop_ok arg
+
 altsAreExhaustive :: [Alt b1 b2] -> Bool
 altsAreExhaustive [] = True
 altsAreExhaustive (Alt con1 _ _ : alts)
