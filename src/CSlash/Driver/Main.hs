@@ -657,8 +657,9 @@ csGenHardCode cs_env cgguts location output_filename = do
   withTiming logger (text "CodeGen" <+> brackets (ppr this_mod)) (const ()) $ do
     output_filename <- {-# SCC "codeOutput" #-}
       
-
       panic "csGenHardCode unfinished"
+
+    panic "csGenHardCode unfinished"
 
 --------------------------------------------------------------
 -- Tidy
