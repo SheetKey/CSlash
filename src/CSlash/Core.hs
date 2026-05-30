@@ -486,6 +486,16 @@ collectArgs expr = go expr []
     go (App f a) as = go f (a:as)
     go e as = (e, as)
 
+collectFunSimple :: Expr b1 b2 -> Expr b1 b2
+collectFunSimple expr
+  = go expr
+  where
+    go expr' = case expr' of
+      App f _ -> go f
+      Tick _ e -> go e
+      Cast e _ -> go e
+      e -> e
+
 wrapLamBody :: (CoreExpr -> CoreExpr) -> CoreExpr -> CoreExpr
 wrapLamBody f expr = go expr
   where

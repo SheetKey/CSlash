@@ -57,7 +57,7 @@ bindingKindUsage ki = case splitInvisFunKis ki of
 
 data UsageEnv = UsageEnv !(NameEnv Usage)
 
-singleUsageUE :: Id Tc -> UsageEnv
+singleUsageUE :: Id p -> UsageEnv
 singleUsageUE x | isExternalName n = emptyUE
                 | otherwise = UsageEnv (unitNameEnv n One)
   where n = getName x
@@ -85,6 +85,9 @@ lookupUE :: NamedThing n => UsageEnv -> n -> Usage
 lookupUE (UsageEnv e) x = case lookupNameEnv e (getName x) of
                             Just u -> u
                             Nothing -> Zero
+
+popUE :: NamedThing n => UsageEnv -> n -> (Usage, UsageEnv)
+popUE ue x = (lookupUE ue x, deleteUE ue x)
 
 instance Outputable UsageEnv where
   ppr (UsageEnv ne) = text "UsageEnv:" <+> ppr ne

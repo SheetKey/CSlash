@@ -31,6 +31,11 @@ import CSlash.Unit.Module
 
 import qualified Data.Data as Data
 
+type CoreTyCon = TyCon Zk
+
+coreTyConKind :: CoreTyCon -> Kind Zk
+coreTyConKind = tyConKind . tyConDetails
+
 {- *********************************************************************
 *                                                                      *
                     TyConBinder
