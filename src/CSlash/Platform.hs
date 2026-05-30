@@ -1,18 +1,10 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module CSlash.Platform
-  ( Platform(..)
-  , PlatformWordSize(..)
-  , platformArch
-  , platformOS
-  , ArchOS(..)
-  , Arch(..)
-  , OS(..)
+  ( module CSlash.Platform
+  , module CSlash.Platform.ArchOS
+  , module CSlash.Platform.Constants
   , ByteOrder(..)
-  , target32Bit
-  , osElfTarget
-  , PlatformMisc(..)
-  , PlatformConstants(..)
   ) where
 
 import GHC.Read
@@ -63,6 +55,12 @@ instance Read PlatformWordSize where
       4 -> return PW4
       8 -> return PW8
       other -> fail ("Invalid PlatformWordSize: " ++ show other)
+
+platformWordSizeInBytes :: Platform -> Int
+platformWordSizeInBytes p =
+    case platformWordSize p of
+      PW4 -> 4
+      PW8 -> 8
 
 platformArch :: Platform -> Arch
 platformArch platform = case platformArchOS platform of

@@ -259,6 +259,7 @@ library
                     , CSlash.Linker.Unit
 
                     , CSlash.Llvm.Config
+                    , CSlash.Llvm.Types
 
                     , CSlash.Parser
                     , CSlash.Parser.Annotation
