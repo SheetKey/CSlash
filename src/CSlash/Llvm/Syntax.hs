@@ -65,7 +65,7 @@ data LlvmStatement
   | Branch LlvmVar
   | BranchIf LlvmVar LlvmVar LlvmVar
   | Comment [LMString]
-  | MkLable LlvmBlockId
+  | MkLabel LlvmBlockId
   | Store LlvmVar LlvmVar LMAlign [MetaAnnot]
   | Switch LlvmVar LlvmVar [(LlvmVar, LlvmVar)]
   | Return (Maybe LlvmVar)
@@ -85,7 +85,7 @@ data LlvmExpression
   | GetElemPtr Bool LlvmVar [LlvmVar]
   | Cast LlvmCastOp LlvmVar LlvmType
   | AtomicRMW LlvmAtomicOp LlvmVar LlvmVar LlvmSyncOrdering
-  | CmpXChg LlvmVar LlvmVar LlvmVar LlvmSyncOrdering
+  | CmpXChg LlvmVar LlvmVar LlvmVar LlvmSyncOrdering LlvmSyncOrdering
   | Call LlvmCallType LlvmVar [LlvmVar] [LlvmFuncAttr]
   | CallM LlvmCallType LlvmVar [MetaExpr] [LlvmFuncAttr]
   | Phi LlvmType [(LlvmVar, LlvmVar)]

@@ -76,6 +76,10 @@ target32Bit p =
     PW4 -> True
     PW8 -> False
   
+data BmiVersion
+   = BMI1
+   | BMI2
+   deriving (Eq, Ord)
 
 data PlatformMisc = PlatformMisc
   { platformMisc_targetPlatformString :: String

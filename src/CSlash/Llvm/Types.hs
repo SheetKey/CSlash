@@ -120,7 +120,7 @@ data LlvmLit
 data LlvmStatic
   = LMComment LMString
   | LMStaticLit LlvmLit
-  | LMUinitType LlvmType
+  | LMUninitType LlvmType
   | LMStaticStr LMString LlvmType
   | LMStaticArray [LlvmStatic] LlvmType
   | LMStaticStructP [LlvmStatic] LlvmType
@@ -146,7 +146,7 @@ getLitType (LMNullLit t) = t
 
 getStatType :: LlvmStatic -> LlvmType
 getStatType (LMStaticLit l) = getLitType l
-getStatType (LMUinitType t) = t
+getStatType (LMUninitType t) = t
 getStatType (LMStaticStr _ t) = t
 getStatType (LMStaticArray _ t) = t
 getStatType (LMStaticStructP _ t) = t
@@ -499,16 +499,16 @@ ppDouble platform d
 {-# SPECIALIZE ppDouble :: Platform -> Double -> SDoc #-}
 {-# SPECIALIZE ppDouble :: Platform -> Double -> HLine #-}
 
-narrowFP :: Double -> Float
-{-# NOINLINE narrowFP #-}
-narrowFP = double2Float
+narrowFp :: Double -> Float
+{-# NOINLINE narrowFp #-}
+narrowFp = double2Float
 
-widenFP :: Float -> Double
-{-# NOINLINE widenFP #-}
-widenFP = float2Double
+widenFp :: Float -> Double
+{-# NOINLINE widenFp #-}
+widenFp = float2Double
 
 ppFloat :: IsLine doc => Platform -> Float -> doc
-ppFloat platform = ppDouble platform . widenFP
+ppFloat platform = ppDouble platform . widenFp
 {-# SPECIALIZE ppFloat :: Platform -> Float -> SDoc #-}
 {-# SPECIALIZE ppFloat :: Platform -> Float -> HLine #-}
 

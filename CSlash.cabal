@@ -260,6 +260,7 @@ library
 
                     , CSlash.Llvm.Config
                     , CSlash.Llvm.MetaData
+                    , CSlash.Llvm.Ppr
                     , CSlash.Llvm.Syntax
                     , CSlash.Llvm.Types
 
