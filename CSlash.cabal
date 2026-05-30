@@ -259,6 +259,7 @@ library
                     , CSlash.Linker.Unit
 
                     , CSlash.Llvm.Config
+                    , CSlash.Llvm.MetaData
                     , CSlash.Llvm.Types
 
                     , CSlash.Parser
