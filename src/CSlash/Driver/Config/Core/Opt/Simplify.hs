@@ -52,8 +52,8 @@ initSimplMode dflags phase name = SimplMode
   }
 
 initGentleSimplMode :: DynFlags -> SimplMode
-initGentleSimplMode dflags = --(initSimplMode dflags InitialPhase "Gentle")
-  panic "{ sm_case_case = False }"
+initGentleSimplMode dflags = (initSimplMode dflags InitialPhase "Gentle")
+  { sm_case_case = False }
 
 floatEnable :: DynFlags -> FloatEnable
 floatEnable dflags = case (gopt Opt_LocalFloatOut dflags, gopt Opt_LocalFloatOutTopLevel dflags) of
