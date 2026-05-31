@@ -5,7 +5,7 @@ module CSlash.Core.Opt.Pipeline where
 import CSlash.Driver.DynFlags
 import CSlash.Driver.Env
 import CSlash.Driver.Config.Core.Lint ( endPass )
--- import GHC.Driver.Config.Core.Opt.LiberateCase ( initLiberateCaseOpts )
+import CSlash.Driver.Config.Core.Opt.LiberateCase ( initLiberateCaseOpts )
 import CSlash.Driver.Config.Core.Opt.Simplify
   ( initSimplifyOpts, initSimplMode, initGentleSimplMode )
 -- import GHC.Driver.Config.Core.Opt.WorkWrap ( initWorkWrapOpts )
@@ -244,13 +244,13 @@ doCorePass pass guts = do
                            liftIOWithCount $ simplifyPgm logger (cs_unit_env cs_env) name_ppr_ctx opts guts
 
     CoreCSE -> {-# SCC "CommonSubExpr" #-}
-               panic "updateBinds cseProgram"
+               updateBinds cseProgram
 
     CoreLiberateCase -> {-# SCC "LiberateCase" #-}
-                        panic "updateBinds (liberateCase (initLiberateCaseOpts dflags))"
+                        updateBinds (liberateCase (initLiberateCaseOpts dflags))
 
     CoreDoFloatInwards -> {-# SCC "FloatInwards" #-}
-                          panic "updateBinds (floatInwards platform)"
+                          updateBinds (floatInwards platform)
 
     CoreDoFloatOutwards f -> {-# SCC "FloatOutwards" #-}
                              updateBindsM (liftIO . floatOutwards logger f us)
@@ -259,10 +259,10 @@ doCorePass pass guts = do
                         panic "updateBinds (doStaticArgs us)"
 
     CoreDoCallArity -> {-# SCC "CallArity" #-}
-                       panic "updateBinds callArityAnalProgram"
+                       updateBinds callArityAnalProgram
 
     CoreDoExitify -> {-# SCC "Exitify" #-}
-                     panic "updateBinds exitifyProgram"
+                     updateBinds exitifyProgram
 
     CoreDoDemand -> {-# SCC "DmdAnal" #-}
                     updateBindsM (liftIO . dmdAnal logger dflags (mg_rules guts))
