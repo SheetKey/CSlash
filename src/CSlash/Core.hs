@@ -754,5 +754,8 @@ ruleActivation Rule{ ru_act = act } = act
 ruleIdName :: CoreRule -> Name
 ruleIdName = ru_fn
 
+isLocalRule :: CoreRule -> Bool
+isLocalRule = ru_local
+
 setRuleIdName :: Name -> CoreRule -> CoreRule
 setRuleIdName nm ru = ru { ru_fn = nm }

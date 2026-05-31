@@ -175,6 +175,13 @@ addIdSpecializations id rules
   = setIdSpecialization id $
     extendRuleInfo (idSpecialization id) rules
 
+addRulesToId :: RuleBase -> CoreId -> CoreId
+addRulesToId rule_base bndr
+  | Just rules <- lookupNameEnv rule_base (varName bndr)
+  = bndr `addIdSpecializations` rules
+  | otherwise
+  = bndr
+
 {- *********************************************************************
 *                                                                      *
                         RuleBase
@@ -221,6 +228,10 @@ updExternalPackageRules rule_env eps_rules
 updLocalRules :: RuleEnv -> [CoreRule] -> RuleEnv
 updLocalRules rule_env local_rules
   = rule_env { re_local_rules = mkRuleBase local_rules }
+
+addLocalRules :: RuleEnv -> [CoreRule] -> RuleEnv
+addLocalRules rule_env rules
+  = rule_env { re_local_rules = extendRuleBaseList (re_local_rules rule_env) rules }
 
 getRules :: RuleEnv -> CoreId -> [CoreRule]
 getRules RuleEnv{ re_local_rules = local_rule_base

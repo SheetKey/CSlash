@@ -1070,6 +1070,8 @@ wWarningFlagsDeps = [minBound..maxBound] >>= \x -> case x of
   Opt_WarnOrphans -> warnSpec x
   Opt_WarnOverflowedLiterals -> warnSpec x
   Opt_WarnOverlappingPatterns -> warnSpec x
+  Opt_WarnMissedSpecs -> warnSpec x
+  Opt_WarnAllMissedSpecs -> warnSpec x
   Opt_WarnTabs -> warnSpec x
   Opt_WarnTypeDefaults -> warnSpec x
   Opt_WarnTypedHoles -> warnSpec x

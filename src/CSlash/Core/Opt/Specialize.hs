@@ -88,13 +88,125 @@ specProgram guts@ModGuts { mg_module = this_mod, mg_rules = local_rules, mg_bind
 
   (binds', uds) <- runSpecM (go binds)
 
-  panic "specProgram unfinished"
+  (spec_rules, spec_binds) <- specImports top_env uds
+
+  return (guts { mg_binds = spec_binds ++ binds'
+               , mg_rules = spec_rules ++ local_rules })
 
 {- *********************************************************************
 *                                                                      *
                    Specialising imported functions
 *                                                                      *
 ********************************************************************* -}
+
+specImports :: SpecEnv -> UsageDetails -> CoreM ([CoreRule], [CoreBind])
+specImports top_env MkUD{ ud_calls = calls }
+  | not $ gopt Opt_CrossModuleSpecialise (se_dflags top_env)
+  = return ([], [])
+
+  | otherwise
+  = do (_, spec_rules, spec_binds) <- spec_imports top_env [] calls
+
+       let (rules_for_locals, rules_for_imps) = partition isLocalRule spec_rules
+           local_rule_base = extendRuleBaseList emptyRuleBase rules_for_locals
+           final_binds
+             | null spec_binds = []
+             | otherwise = [ Rec $ mapFst (addRulesToId local_rule_base)
+                             $ flattenBinds spec_binds ]
+
+       return (rules_for_imps, final_binds)
+
+spec_imports
+  :: SpecEnv
+  -> [CoreId]
+  -> CallDetails
+  -> CoreM (SpecEnv, [CoreRule], [CoreBind])
+spec_imports env callers calls = do
+  let import_calls = dVarEnvElts calls
+  go env import_calls
+  where
+    go :: SpecEnv -> [CallInfoSet] -> CoreM (SpecEnv, [CoreRule], [CoreBind])
+    go env [] = return (env, [], [])
+    go env (cis : other_calls) = do
+      (env, rules1, spec_binds1) <- spec_import env callers cis
+      (env, rules2, spec_binds2) <- go env other_calls
+      return (env, rules1 ++ rules2, spec_binds1 ++ spec_binds2)
+
+spec_import
+  :: SpecEnv
+  -> [CoreId]
+  -> CallInfoSet
+  -> CoreM (SpecEnv, [CoreRule], [CoreBind])
+spec_import env callers cis@(CIS fn _)
+  | isIn "specImport" fn callers
+  = return (env, [], [])
+
+  | null good_calls
+  = return (env, [], [])
+
+  | Just rhs <- canSpecImport dflags fn
+  = do eps_rules <- getExternalRuleBase
+       let rule_env = se_rules env `updExternalPackageRules` eps_rules
+
+       (rules1, spec_pairs, MkUD{ ud_calls = new_calls })
+         <- runSpecM $ specCalls True env (getRules rule_env fn) good_calls fn rhs
+
+       let spec_binds1 = [NonRec b r | (b, r) <- spec_pairs]
+
+           new_subst = se_subst env `Core.extendTermSubstInScopeListId` map fst spec_pairs
+           new_env = env { se_rules = rule_env `addLocalRules` rules1
+                         , se_subst = new_subst }
+
+       (env, rules2, spec_binds2)
+         <- spec_imports new_env (fn:callers) new_calls
+
+       let final_binds = spec_binds2 ++ spec_binds1
+
+       return (env, rules2 ++ rules1, final_binds)
+
+  | otherwise
+  = do tryWarnMissingSpecs dflags callers fn good_calls
+       return (env, [], [])
+
+  where
+    dflags = se_dflags env
+    good_calls = filterCalls cis
+
+canSpecImport :: DynFlags -> CoreId -> Maybe CoreExpr
+canSpecImport dflags fn
+  | isDataConId fn -- TODO: maybe ok to spec since all ours are workers?
+  = Nothing
+  | CoreUnfolding { uf_tmpl = rhs } <- unf
+  , isAnyInlinePragma (idInlinePragma fn)
+  = Just rhs
+  | gopt Opt_SpecialiseAggressively dflags
+  = maybeUnfoldingTemplate unf
+  | otherwise
+  = Nothing
+  where
+    unf = realIdUnfolding fn
+
+tryWarnMissingSpecs :: DynFlags -> [CoreId] -> CoreId -> [CallInfo] -> CoreM ()
+tryWarnMissingSpecs dflags callers fn calls_for_fn
+  | wopt Opt_WarnMissedSpecs dflags
+    && not (null callers)
+    && allCallersInlined
+  = doWarn $ WarningWithFlag Opt_WarnMissedSpecs
+  | wopt Opt_WarnAllMissedSpecs dflags
+  = doWarn $ WarningWithFlag Opt_WarnAllMissedSpecs
+  | otherwise
+  = return ()
+  where
+    allCallersInlined = all (isAnyInlinePragma . idInlinePragma) callers
+    diag_opts = initDiagOpts dflags
+    doWarn reason = msg
+      (mkMCDiagnostic diag_opts reason Nothing)
+      (vcat [ hang (text "Could not specialize imported function" <+> quotes (ppr fn))
+              2 (vcat [ text "when specializing" <+> quotes (ppr caller)
+                      | caller <- callers ])
+            , whenPprDebug (text "calls:" <+> vcat (map (pprCallInfo fn) calls_for_fn))
+            , text "Probable fix: add INLINABLE pragma on" <+> quotes (ppr fn) ])
+                   
 
 {- *********************************************************************
 *                                                                      *
@@ -531,6 +643,9 @@ data CallInfoSet = CIS CoreId (Bag CallInfo)
 data CallInfo = CI
   { ci_key :: [SpecArg]
   }
+
+pprCallInfo :: CoreId -> CallInfo -> SDoc
+pprCallInfo fn CI{ ci_key = key } = ppr fn <+> ppr key
 
 unionCalls :: CallDetails -> CallDetails -> CallDetails 
 unionCalls c1 c2 = plusDVarEnv_C unionCallInfoSet c1 c2

@@ -186,6 +186,9 @@ getExternalRuleBase = eps_rule_base <$> get_eps
 getNamePprCtx :: CoreM NamePprCtx
 getNamePprCtx = read cr_name_ppr_ctx
 
+getSrcSpanM :: CoreM SrcSpan
+getSrcSpanM = read cr_loc
+
 addSimplCount :: SimplCount -> CoreM ()
 addSimplCount count = write (CoreWriter { cw_simpl_count = count })
 
@@ -202,3 +205,23 @@ get_eps :: CoreM ExternalPackageState
 get_eps = do
   cs_env <- getCsEnv
   liftIO $ csEPS cs_env
+
+{- *********************************************************************
+*                                                                      *
+                Direct screen output
+*                                                                      *
+********************************************************************* -}
+
+msg :: MessageClass -> SDoc -> CoreM ()
+msg msg_class doc = do
+  logger <- getLogger
+  loc <- getSrcSpanM
+  name_ppr_ctx <- getNamePprCtx
+  let sty = case msg_class of
+              MCDiagnostic{} -> err_sty
+              MCDump -> dump_sty
+              _ -> user_sty
+      err_sty = mkErrStyle name_ppr_ctx
+      user_sty = mkUserStyle name_ppr_ctx AllTheWay
+      dump_sty = mkDumpStyle name_ppr_ctx
+  liftIO $ logMsg logger msg_class loc (withPprStyle sty doc)

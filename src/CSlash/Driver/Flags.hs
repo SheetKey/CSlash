@@ -395,6 +395,8 @@ data WarningFlag =
    | Opt_WarnIdentities
    | Opt_WarnTabs
    | Opt_WarnDodgyForeignImports
+   | Opt_WarnMissedSpecs
+   | Opt_WarnAllMissedSpecs
    | Opt_WarnUnsupportedLlvmVersion
    | Opt_WarnInlineRuleShadowing
    | Opt_WarnTypedHoles
@@ -448,6 +450,8 @@ warnFlagNames wflag = case wflag of
   Opt_WarnOrphans                                 -> "orphans" :| []
   Opt_WarnOverflowedLiterals                      -> "overflowed-literals" :| []
   Opt_WarnOverlappingPatterns                     -> "overlapping-patterns" :| []
+  Opt_WarnMissedSpecs                             -> "missed-specializations" :| []
+  Opt_WarnAllMissedSpecs                          -> "all-missed-specializations" :| []
   Opt_WarnTabs                                    -> "tabs" :| []
   Opt_WarnTypeDefaults                            -> "type-defaults" :| []
   Opt_WarnTypedHoles                              -> "typed-holes" :| []
