@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE BangPatterns #-}
 
 {-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
@@ -9,7 +10,7 @@ import CSlash.Cs.Pass
 import CSlash.Tc.Types
 import CSlash.Tc.Utils.Env
 
-import CSlash.Core
+import CSlash.Core as C
 import CSlash.Core.Unfold
 import CSlash.Core.Utils
 -- import CSlash.Core.Unfold.Make
@@ -206,11 +207,117 @@ addExternal opts id
   = ([], False)
 
   | otherwise
-  = panic "(new_needed_ids, show_unfold)"
+  = (new_needed_ids, show_unfold)
 
   where
+    new_needed_ids = bndrFvsInOrder show_unfold id
     idinfo = idInfo id
     unfolding = realUnfoldingInfo idinfo
+    show_unfold = show_unfolding unfolding
+    never_active = isNeverActive (inlinePragmaActivation (inlinePragInfo idinfo))
+    loop_breaker = isStrongLoopBreaker (occInfo idinfo)
+
+    bottoming_fn = isDeadEndSig (dmdSigInfo idinfo)
+
+    show_unfolding CoreUnfolding{ uf_src = src, uf_guidance = guidance }
+      = stable || profitable || explicitly_requested
+      where
+        stable = isStableSource src
+
+        profitable
+          | never_active = False
+          | loop_breaker = False
+          | otherwise = case guidance of
+                          UnfWhen{} -> True
+                          UnfIfGoodArgs{} -> not bottoming_fn
+                          UnfNever -> False
+
+        explicitly_requested = case opt_expose_unfoldings opts of
+          ExposeAll -> True
+          ExposeOverloaded -> not bottoming_fn && False --isOverloaded id
+          ExposeSome -> False
+          ExposeNone -> False
+    show_unfolding _ = False
+
+{- *********************************************************************
+*                                                                      *
+               Deterministic free variables
+*                                                                      *
+********************************************************************* -}
+
+bndrFvsInOrder :: Bool -> CoreId -> [CoreId]
+bndrFvsInOrder show_unfold id
+  = run (dffvLetBndr show_unfold id)
+
+run :: DFFV () -> [CoreId]
+run (DFFV m) = case m emptyVarSet (emptyVarSet, []) of
+  ((_, ids), _) -> ids
+
+newtype DFFV a = DFFV (CoreIdSet -> (CoreIdSet, [CoreId]) -> ((CoreIdSet, [CoreId]), a))
+  deriving Functor
+
+instance Applicative DFFV where
+  pure a = DFFV $ \_ st -> (st, a)
+  (<*>) = ap
+
+instance Monad DFFV where
+  (DFFV m) >>= k = DFFV $ \env st -> case m env st of
+    (st', a) -> case k a of
+      DFFV f -> f env st'
+
+extendScope :: CoreId -> DFFV a -> DFFV a
+extendScope v (DFFV f) = DFFV (\env st -> f (extendVarSet env v) st)
+
+extendScopeList :: [CoreId] -> DFFV a -> DFFV a
+extendScopeList vs (DFFV f) = DFFV (\env st -> f (extendVarSetList env vs) st)
+
+insert :: CoreId -> DFFV ()
+insert v = DFFV $ \ env (set, ids) ->
+           let keep_me = isLocalId v &&
+                         not (v `elemVarSet` env) &&
+                         not (v `elemVarSet` set)
+           in if keep_me
+              then ((extendVarSet set v, v:ids), ())
+              else ((set, ids), ())
+
+dffvExpr :: CoreExpr -> DFFV ()
+dffvExpr (Var v) = insert v
+dffvExpr (App e1 e2) = dffvExpr e1 >> dffvExpr e2
+dffvExpr (Lam (C.Id v) _ e) = extendScope v (dffvExpr e)
+dffvExpr (Lam _ _ e) = dffvExpr e
+-- dffvExpr (Tick (Breakpoint TODO
+dffvExpr (Tick _ e) = dffvExpr e
+dffvExpr (Cast e _) = dffvExpr e
+dffvExpr (Let (NonRec x r) e) = dffvBind (x, r) >> extendScope x (dffvExpr e)
+dffvExpr (Let (Rec prs) e) = extendScopeList (map fst prs) (mapM_ dffvBind prs >> dffvExpr e)
+dffvExpr (Case e b _ as) = dffvExpr e >> extendScope b (mapM_ dffvAlt as)
+dffvExpr _ = return ()
+
+dffvAlt :: CoreAlt -> DFFV ()
+dffvAlt (Alt _ xs r) = extendScopeList xs (dffvExpr r)
+
+dffvBind :: (CoreId, CoreExpr) -> DFFV ()
+dffvBind (x, r) = dffvLetBndr False x >> dffvExpr r
+
+dffvLetBndr :: Bool -> CoreId -> DFFV ()
+dffvLetBndr vanilla_unfold id = do
+  go_unf (realUnfoldingInfo idinfo)
+  mapM_ go_rule (ruleInfoRules (ruleInfo idinfo))
+  where
+    idinfo = idInfo id
+
+    go_unf CoreUnfolding{ uf_tmpl = rhs, uf_src = src }
+      | isStableSource src = dffvExpr rhs
+      | vanilla_unfold = dffvExpr rhs
+      | otherwise = return ()
+    go_unf _ = return ()
+ 
+    go_rule BuiltinRule{} = return ()
+    go_rule Rule{ ru_bndrs = bndrs, ru_rhs = rhs }
+      = extendScopeList (mapMaybe id_bndr_maybe bndrs) (dffvExpr rhs)
+
+    id_bndr_maybe (C.Id id) = Just id
+    id_bndr_maybe _ = Nothing
 
 {- *********************************************************************
 *                                                                      *
