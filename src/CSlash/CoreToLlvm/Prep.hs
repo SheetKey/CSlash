@@ -682,7 +682,7 @@ wantFloatTop fs
   | otherwise = FloatNone
 
 wantFloatLocal :: RecFlag -> Demand -> Floats -> CpeRhs -> FloatDecision
-wantFloatLocal _ _ _ _ = FloatAll
+wantFloatLocal _ _ _ _ = FloatAll -- always 'rhs_is_unlifted'
   
 {- *********************************************************************
 *                                                                      *
