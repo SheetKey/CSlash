@@ -1,4 +1,4 @@
-module CSlash.Driver.Config.CoreToLlvm.Prep where
+module CSlash.Driver.Config.CoreToStg.Prep where
 
 import CSlash.Core.Opt.Pipeline.Types ( CoreToDo(..) )
 import CSlash.Driver.Env
@@ -8,7 +8,7 @@ import CSlash.Driver.Config.Core.Opt.Arity
 import CSlash.Types.Var
 import CSlash.Utils.Outputable ( alwaysQualify )
 
-import CSlash.CoreToLlvm.Prep
+import CSlash.CoreToStg.Prep
 
 initCorePrepConfig :: CsEnv -> IO CorePrepConfig
 initCorePrepConfig cs_env = do

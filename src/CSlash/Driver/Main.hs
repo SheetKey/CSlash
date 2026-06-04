@@ -21,8 +21,8 @@ import CSlash.Driver.Errors.Types
 -- import GHC.Driver.Config.Core.Opt.Simplify ( initSimplifyExprOpts )
 import CSlash.Driver.Config.Core.Lint ( endPassCsEnvIO )
 -- import GHC.Driver.Config.Core.Lint.Interactive ( lintInteractiveExpr )
--- import GHC.Driver.Config.CoreToStg
-import CSlash.Driver.Config.CoreToLlvm.Prep
+import CSlash.Driver.Config.CoreToStg
+import CSlash.Driver.Config.CoreToStg.Prep
 import CSlash.Driver.Config.Logger   (initLogFlags)
 import CSlash.Driver.Config.Parser   (initParserOpts)
 -- import GHC.Driver.Config.Stg.Ppr  (initStgPprOpts)
@@ -85,7 +85,7 @@ import CSlash.Core.Stats
 -- import GHC.Core.LateCC
 -- import GHC.Core.LateCC.Types
 
-import CSlash.CoreToLlvm.Prep
+import CSlash.CoreToStg.Prep
 -- import GHC.CoreToStg    ( coreToStg )
 
 import CSlash.Parser.Errors.Types
@@ -653,6 +653,14 @@ csGenHardCode cs_env cgguts location output_filename = do
       (initCorePrepPgmConfig (cs_dflags cs_env))
       this_mod location late_binds
 
+  ------------------  Convert to STG -------------------
+  (stg_binds_with_deps)
+    <- {-# SCC "CoreToSrg" #-}
+       withTiming logger (text "CoreToStg" <+> brackets (ppr this_mod))
+       (\(a, b, (), tag_env) -> a `setList` b `seq` c `seqList` d `seqList`
+                                (seqEltsUFM (seqTagSig) tag_env))
+       (myCoreToStg logger dflags this_mod location prepd_binds)
+
   ------------------  Code generation ------------------
   withTiming logger (text "CodeGen" <+> brackets (ppr this_mod)) (const ()) $ do
     output_filename <- {-# SCC "codeOutput" #-}
@@ -660,6 +668,18 @@ csGenHardCode cs_env cgguts location output_filename = do
       panic "csGenHardCode unfinished"
 
     panic "csGenHardCode unfinished"
+
+myCoreToStg
+  :: Logger
+  -> DynFlags
+  -> Module
+  -> ModLocation
+  -> CoreProgram
+  -> IO [CgStgTopBinding, CoreIdSet]
+myCoreToStg logger dflags this_mod ml prepd_binds = do
+  let (stg_binds) = {-# SCC "Core2Stg" #-}
+                    coreToStg (initCoreToStgOpts dflags) this_mod ml prepd_binds
+  panic "myCoreToStg"
 
 --------------------------------------------------------------
 -- Tidy

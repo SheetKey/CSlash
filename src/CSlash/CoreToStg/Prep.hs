@@ -3,7 +3,7 @@
 
 {-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
 
-module CSlash.CoreToLlvm.Prep where
+module CSlash.CoreToStg.Prep where
 
 {-
 Our core prep phase is similar to GHC, but differs in a number of ways.

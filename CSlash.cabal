@@ -124,7 +124,8 @@ library
                     , CSlash.Core.UsageEnv
                     , CSlash.Core.Utils
 
-                    , CSlash.CoreToLlvm.Prep
+                    , CSlash.CoreToStg
+                    , CSlash.CoreToStg.Prep
 
                     , CSlash.Cs
                     , CSlash.Cs.Binds
@@ -192,7 +193,8 @@ library
                     , CSlash.Driver.Config.Core.Opt.Arity
                     , CSlash.Driver.Config.Core.Opt.LiberateCase
                     , CSlash.Driver.Config.Core.Opt.Simplify
-                    , CSlash.Driver.Config.CoreToLlvm.Prep
+                    , CSlash.Driver.Config.CoreToStg
+                    , CSlash.Driver.Config.CoreToStg.Prep
                     , CSlash.Driver.Config.Diagnostic
                     , CSlash.Driver.Config.Finder
                     , CSlash.Driver.Config.Logger
