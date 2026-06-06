@@ -306,6 +306,10 @@ library
 
                     , CSlash.Stack
 
+                    , CSlash.Stg.Lift.Types
+                    , CSlash.Stg.Make
+                    , CSlash.Stg.Syntax
+
                     , CSlash.SysTools
                     , CSlash.SysTools.BaseDir
                     , CSlash.SysTools.Process

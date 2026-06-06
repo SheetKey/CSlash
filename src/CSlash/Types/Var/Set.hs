@@ -125,6 +125,12 @@ type DTcTyVarSet = DVarSet TcTyVar
 
 type DTyCoVarSet p = DVarSet (TyCoVar p)
 
+type DCoreIdSet = DIdSet Zk
+type DCoreTyCoVarSet = DTyCoVarSet Zk
+type DCoreTyVarSet = DTyVarSet Zk
+type DCoreKiCoVarSet = DKiCoVarSet Zk
+type DCoreKiVarSet = DKiVarSet Zk
+
 emptyDVarSet :: UniqDSet a
 emptyDVarSet = emptyUniqDSet
 

@@ -57,7 +57,7 @@ module CSlash.Utils.Outputable (
   pprDebugAndThen,
 
   pprInfixVar, pprPrefixVar,
-  pprCsChar, pprCsString, 
+  pprCsChar, pprCsString, pprCsBytes,
 
   primFloatSuffix, primCharSuffix, primDoubleSuffix,
   primInt8Suffix, primWord8Suffix,
@@ -119,6 +119,8 @@ import CSlash.Utils.Panic.Plain (assert)
 import CSlash.Utils.GlobalVars ( unsafeHasPprDebug )
 import CSlash.Utils.Misc (lastMaybe)
 
+import Data.ByteString (ByteString)
+import qualified Data.ByteString as BS
 import Data.Char
 import qualified Data.Map as M
 import Data.Int
@@ -949,6 +951,13 @@ pprCsChar c | c > '\x10ffff' = char '\\' <> text (show (fromIntegral (ord c) :: 
 
 pprCsString :: FastString -> SDoc
 pprCsString fs = vcat (map text (showMultiLineString (unpackFS fs)))
+
+pprCsBytes :: ByteString -> SDoc
+pprCsBytes bs = let escaped = concatMap escape $ BS.unpack bs
+                in vcat (map text (showMultiLineString escaped)) <> char '#'
+  where escape :: Word8 -> String
+        escape w = let c = chr (fromIntegral w)
+                   in if isAscii c then [c] else '\\' : show w
 
 primCharSuffix, primFloatSuffix, primDoubleSuffix,
   primIntSuffix, primWordSuffix,

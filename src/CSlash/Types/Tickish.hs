@@ -15,9 +15,11 @@ import CSlash.Utils.Panic
 import Data.Data
 
 data TickishPass
-  = TickishPassCs
+  = TickishPassCore
+  | TickishPassStg
 
-type CoreTickish = GenTickish 'TickishPassCs
+type CoreTickish = GenTickish 'TickishPassCore
+type StgTickish = GenTickish 'TickishPassStg
 
 data GenTickish (pass :: TickishPass)
   = CpcTick -- CSlash program coverage tick
@@ -25,9 +27,11 @@ data GenTickish (pass :: TickishPass)
     , tickId :: !Int
     }
 
-deriving instance Eq (GenTickish 'TickishPassCs)
-deriving instance Ord (GenTickish 'TickishPassCs)
-deriving instance Data (GenTickish 'TickishPassCs)
+deriving instance Eq (GenTickish 'TickishPassCore)
+deriving instance Ord (GenTickish 'TickishPassCore)
+deriving instance Data (GenTickish 'TickishPassCore)
+
+deriving instance Data (GenTickish 'TickishPassStg)
 
 -- FOUND IN GHC Core.Ppr
 instance Outputable (GenTickish pass) where

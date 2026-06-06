@@ -240,12 +240,6 @@ fvsOfTyCoVar v fv_cand in_scope acc
 *                                                                      *
 ********************************************************************* -}
 
-type DCoreIdSet = DIdSet Zk
-type DCoreTyCoVarSet = DTyCoVarSet Zk
-type DCoreTyVarSet = DTyVarSet Zk
-type DCoreKiCoVarSet = DKiCoVarSet Zk
-type DCoreKiVarSet = DKiVarSet Zk
-
 type FVAnn = (DCoreIdSet, DCoreTyCoVarSet, DCoreTyVarSet, DCoreKiCoVarSet, DCoreKiVarSet)
 
 type CoreBindWithFVs = AnnBind CoreBndr CoreId FVAnn
