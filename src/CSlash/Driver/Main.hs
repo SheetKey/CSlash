@@ -25,7 +25,7 @@ import CSlash.Driver.Config.CoreToStg
 import CSlash.Driver.Config.CoreToStg.Prep
 import CSlash.Driver.Config.Logger   (initLogFlags)
 import CSlash.Driver.Config.Parser   (initParserOpts)
--- import GHC.Driver.Config.Stg.Ppr  (initStgPprOpts)
+-- import CSlash.Driver.Config.Stg.Ppr  (initStgPprOpts)
 -- import GHC.Driver.Config.Stg.Pipeline (initStgPipelineOpts)
 -- import GHC.Driver.Config.StgToCmm  (initStgToCmmConfig)
 -- import GHC.Driver.Config.Cmm       (initCmmConfig)
@@ -52,12 +52,6 @@ import CSlash.Cs.Dump
 import CSlash.Cs.Stats         ( ppSourceStats )
 
 import CSlash.CsToCore
-
--- import GHC.StgToByteCode    ( byteCodeGen )
--- import GHC.StgToJS          ( stgToJS )
--- import GHC.StgToJS.Ids
--- import GHC.StgToJS.Types
--- import GHC.JS.Syntax
 
 -- import GHC.IfaceToCore  ( typecheckIface, typecheckWholeCoreBindings )
 
@@ -86,7 +80,7 @@ import CSlash.Core.Stats
 -- import GHC.Core.LateCC.Types
 
 import CSlash.CoreToStg.Prep
--- import GHC.CoreToStg    ( coreToStg )
+import CSlash.CoreToStg ( coreToStg )
 
 import CSlash.Parser.Errors.Types
 import CSlash.Parser
@@ -97,7 +91,7 @@ import CSlash.Tc.Utils.Monad
 -- import GHC.Tc.Utils.TcType
 -- import GHC.Tc.Zonk.Env ( ZonkFlexi (DefaultFlexi) )
 
--- import GHC.Stg.Syntax
+import CSlash.Stg.Syntax
 -- import GHC.Stg.Pipeline ( stg2stg, StgCgInfos )
 
 import CSlash.Builtin.Utils
@@ -657,8 +651,7 @@ csGenHardCode cs_env cgguts location output_filename = do
   (stg_binds_with_deps)
     <- {-# SCC "CoreToSrg" #-}
        withTiming logger (text "CoreToStg" <+> brackets (ppr this_mod))
-       (\(a, b, (), tag_env) -> a `setList` b `seq` c `seqList` d `seqList`
-                                (seqEltsUFM (seqTagSig) tag_env))
+       (\(a) -> a `seqList` ())
        (myCoreToStg logger dflags this_mod location prepd_binds)
 
   ------------------  Code generation ------------------
@@ -675,10 +668,15 @@ myCoreToStg
   -> Module
   -> ModLocation
   -> CoreProgram
-  -> IO [CgStgTopBinding, CoreIdSet]
+  -> IO [(CgStgTopBinding, CoreIdSet)]
 myCoreToStg logger dflags this_mod ml prepd_binds = do
   let (stg_binds) = {-# SCC "Core2Stg" #-}
                     coreToStg (initCoreToStgOpts dflags) this_mod ml prepd_binds
+
+  (stg_binds_with_fvs)
+    <- {-# SCC "Stg2Stg" #-}
+       stg2stg logger (initStgPipelineOpts dflags) this_mod stg_binds
+
   panic "myCoreToStg"
 
 --------------------------------------------------------------

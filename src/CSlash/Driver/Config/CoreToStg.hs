@@ -1,6 +1,6 @@
 module CSlash.Driver.Config.CoreToStg where
 
-import CSlash.Driver.Config.Stg.Debug
+-- import CSlash.Driver.Config.Stg.Debug
 import CSlash.Driver.DynFlags
 
 import CSlash.CoreToStg

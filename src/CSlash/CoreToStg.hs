@@ -1,8 +1,10 @@
+{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE BangPatterns #-}
 
 module CSlash.CoreToStg (CoreToStgOpts(..), coreToStg) where
 
 import CSlash.Core
+import CSlash.Core.Make
 import CSlash.Core.Utils
 import CSlash.Core.Opt.Arity ( manifestArity )
 import CSlash.Core.Type
@@ -10,12 +12,13 @@ import CSlash.Core.TyCon
 import CSlash.Core.DataCon
 
 import CSlash.Stg.Syntax
-import CSlash.Stg.Debug
+-- import CSlash.Stg.Debug
 import CSlash.Stg.Make
-import CSlash.Stg.Utils (allowTopLevelConApp)
+-- import CSlash.Stg.Utils (allowTopLevelConApp)
 
 import CSlash.Types.RepType
 --import GHC.Types.Id.Make ( coercionTokenId )
+import CSlash.Types.Var
 import CSlash.Types.Var.Id
 import CSlash.Types.Var.Id.Info
 -- import CSlash.Types.CostCentre
@@ -36,8 +39,10 @@ import CSlash.Utils.Outputable
 import CSlash.Utils.Monad
 import CSlash.Utils.Misc (HasDebugCallStack)
 import CSlash.Utils.Panic
+import CSlash.Utils.Trace
 
 import Control.Monad (ap)
+import Data.Maybe (mapMaybe)
 
 coreToStg
   :: CoreToStgOpts
@@ -75,7 +80,7 @@ coreTopBindToStg _ _ env (NonRec id e)
   | Just str <- exprIsTickedString_maybe e
   = let env' = extendVarEnv env id how_bound
         how_bound = LetBound TopLet 0
-    in (env', StgTopStringLet id str)
+    in (env', StgTopStringLit id str)
     
 coreTopBindToStg opts@CoreToStgOpts{ coreToStg_platform = platform } this_mod env (NonRec id rhs)
   = let env' = extendVarEnv env id how_bound
@@ -92,7 +97,7 @@ coreTopBindToStg opts@CoreToStgOpts{ coreToStg_platform = platform } this_mod en
                      | (b, rhs) <- pairs ]
         env' = extendVarEnvList env extra_env'
 
-        stg_rhss = initCts platform env' $ mapAccumLM (coreToTopStgRhs opts this_mos) pairs
+        stg_rhss = initCts platform env' $ mapM (coreToTopStgRhs opts this_mod) pairs
         bind = StgTopBind $ StgRec stg_rhss
     in (env', bind)
 
@@ -103,14 +108,14 @@ coreToTopStgRhs
   -> CtsM (CoreId, StgRhs)
 coreToTopStgRhs opts this_mod (bndr, rhs) = do
   new_rhs <- coreToMkStgRhs bndr rhs
-  let stg_rhs = mkTopStgRhs (allowTopLevelConApp (coreToStg_platform opts)
+  let stg_rhs = mkTopStgRhs (panic "allowTopLevelConApp (coreToStg_platform opts)"
                              (coreToStg_ExternalDynamicRefs opts))
                 this_mod bndr new_rhs
       stg_arity = stgRhsArity stg_rhs
   pure (bndr, assertPpr (arity_ok stg_arity) (mk_arity_msg stg_arity) stg_rhs)
   where
     arity_ok stg_arity
-      | isExternalName (idName bndr) = id_arity == stg_arity
+      | isExternalName (varName bndr) = id_arity == stg_arity
       | otherwise = True
 
     id_arity = idArity bndr
@@ -139,7 +144,7 @@ coreToStgExpr expr@Lam{}
          _ -> pprPanic "coreToStgExpr" $ text "Unexpected value lambda:" $$ ppr expr
 coreToStgExpr (Tick tick expr) = panic "coreToStgExpr Tick"
 coreToStgExpr (Cast expr _) = coreToStgExpr expr
-coreToStgExpr (Cast scrut bndr _ alts)
+coreToStgExpr (Case scrut bndr _ alts)
   | null alts
   = panic "coreToStgExpr empty case"
   | otherwise
@@ -159,29 +164,29 @@ coreToStgExpr e = pprPanic "coreToStgExpr" (ppr e)
 
 mkStgAltType :: CoreId -> [CoreAlt] -> AltType
 mkStgAltType bndr alts
-  | isTupleType bndr_ty || isSumType bndr_ty
-  = panic "mkStgAltType"
-  | otherwise
+  -- | isTupleType bndr_ty || isSumType bndr_ty
+  -- = panic "mkStgAltType"
+  -- | otherwise
   = panic "mkStgAltType"
 
 -- ---------------------------------------------------------------------------
 -- Applications
 -- ---------------------------------------------------------------------------
-coreToStgApp :: CoreId -> [CooreArg] -> [CoreTickish] -> CtsM StgExpr
+coreToStgApp :: CoreId -> [CoreArg] -> [CoreTickish] -> CtsM StgExpr
 coreToStgApp f args ticks = do
   (args', ticks') <- coreToStgArgs args
   how_bound <- lookupVarCts f
 
   let n_val_args = valArgCount args
-      f_arity = stgArity f how_boudn
+      f_arity = stgArity f how_bound
       saturated = f_arity <= n_val_args
 
       res_ty = exprType (mkCoreApps (Var f) args)
       app = case idDetails f of
               DataConId dc
                 | saturated -> if isSumDataCon dc
-                               then StgConApp dc NoNumber args' (panic "what?")
-                               else StgConApp dc NoNumber args' []
+                               then StgConApp dc NoNumber args' 
+                               else StgConApp dc NoNumber args' 
 
               -- PrimOpId TODO
 
@@ -220,7 +225,7 @@ coreToStgArgs (arg : args) = do
       -- stg_arg+rep = 
       bad_args = not (panic "bad_args")
 
-  massertPpr (lenght ticks' <= 1) (text "More than one Tick in trivial arg:" <+> ppr arg)
+  massertPpr (length ticks' <= 1) (text "More than one Tick in trivial arg:" <+> ppr arg)
   warnPprTraceM bad_args "Dangerous-looking argument. Shouldn't happen" (ppr arg)
 
   return (arg' : stg_args, ticks' ++ ticks)
@@ -315,8 +320,8 @@ getPlatform :: CtsM Platform
 getPlatform = CtsM const
 
 extendVarEnvCts :: [(CoreId, HowBound)] -> CtsM a -> CtsM a
-extendVarEnvCts ids_w_howboudn expr
-  = CstM $ \platform env -> unCtsM expr platform (extendVarEnvList env ids_w_howbound)
+extendVarEnvCts ids_w_howbound expr
+  = CtsM $ \platform env -> unCtsM expr platform (extendVarEnvList env ids_w_howbound)
 
 lookupVarCts :: CoreId -> CtsM HowBound
 lookupVarCts v = CtsM $ \_ env -> lookupBinding env v

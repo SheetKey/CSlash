@@ -22,6 +22,9 @@ warnPprTrace False _ _ x = x
 warnPprTrace True s msg x = pprDebugAndThen traceSDocContext trace (text "WARNING:")
                             (text s $$ msg $$ withFrozenCallStack traceCallStackDoc) x
 
+warnPprTraceM :: (Applicative f, HasCallStack) => Bool -> String -> SDoc -> f ()
+warnPprTraceM b s doc = withFrozenCallStack warnPprTrace b s doc (pure ())
+
 traceCallStackDoc :: HasCallStack => SDoc
 traceCallStackDoc = hang (text "Call stack:")
                          4 (vcat $ map text $ lines (prettyCallStack callStack))
