@@ -161,6 +161,9 @@ disjointDVarSet s1 s2 = disjointUDFM (getUniqDSet s1) (getUniqDSet s2)
 delDVarSet :: Uniquable a => UniqDSet a -> a -> UniqDSet a
 delDVarSet = delOneFromUniqDSet
 
+dVarSetMinusVarSet :: UniqDSet a -> UniqSet a -> UniqDSet a
+dVarSetMinusVarSet = uniqDSetMinusUniqSet
+
 seqDVarSet :: DVarSet a -> ()
 seqDVarSet s = s `seq` ()
 

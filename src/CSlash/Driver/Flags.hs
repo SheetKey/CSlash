@@ -48,6 +48,10 @@ data DumpFlag
   | Opt_D_dump_spec_constr
   | Opt_D_dump_prep
   | Opt_D_dump_late_cc
+  | Opt_D_dump_stg_from_core
+  | Opt_D_dump_stg_unarised
+  | Opt_D_dump_stg_cg
+  | Opt_D_dump_stg_final
   | Opt_D_dump_call_arity
   | Opt_D_dump_exitify
   | Opt_D_dump_dmdanal
@@ -75,6 +79,7 @@ data DumpFlag
   | Opt_D_dump_ticked
   | Opt_D_dump_rtti
   | Opt_D_source_stats
+  | Opt_D_verbose_stg2stg
   | Opt_D_dump_hi
   | Opt_D_dump_hi_diffs
   | Opt_D_dump_mod_cycles             
@@ -109,6 +114,7 @@ enabledIfVerbose Opt_D_dump_rn                     = False
 enabledIfVerbose Opt_D_dump_rn_stats               = False
 enabledIfVerbose Opt_D_dump_hi_diffs               = False
 enabledIfVerbose Opt_D_verbose_core2core           = False
+enabledIfVerbose Opt_D_verbose_stg2stg             = False
 enabledIfVerbose Opt_D_dump_simpl_trace            = False
 enabledIfVerbose Opt_D_dump_rtti                   = False
 enabledIfVerbose Opt_D_dump_inlinings              = False
@@ -130,6 +136,7 @@ data GeneralFlag
   | Opt_DumpWithWays                   -- ^ Use foo.ways.<dumpFlag> instead of foo.<dumpFlag>
   | Opt_D_dump_minimal_imports
   | Opt_DoCoreLinting
+  | Opt_DoStgLinting
   | Opt_DoBoundsChecking
 
   | Opt_WarnIsError                    -- -Werror; makes warnings fatal
@@ -158,6 +165,7 @@ data GeneralFlag
   | Opt_InlineGenericsAggressively
   | Opt_StaticArgumentTransformation
   | Opt_CSE
+  | Opt_StgCSE
   | Opt_LiberateCase
   | Opt_SpecConstr
   | Opt_SpecConstrKeen
@@ -218,6 +226,7 @@ data GeneralFlag
   | Opt_EagerBlackHoling
   | Opt_NoCsMain
   | Opt_SplitSections
+  | Opt_StgStats
   | Opt_HideAllPackages
   | Opt_HideAllPluginPackages
   | Opt_PrintBindResult
@@ -346,6 +355,7 @@ optimisationFlags = EnumSet.fromList
   , Opt_CrossModuleSpecialise
   , Opt_StaticArgumentTransformation
   , Opt_CSE
+  , Opt_StgCSE
   , Opt_LiberateCase
   , Opt_SpecConstr
   , Opt_SpecConstrKeen

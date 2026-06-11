@@ -120,6 +120,9 @@ data GenStgRhs pass
 data NoExtFieldSilent = NoExtFieldSilent
   deriving (Data, Eq, Ord)
 
+instance Outputable NoExtFieldSilent where
+  ppr _ = empty
+
 noExtFieldSilent :: NoExtFieldSilent
 noExtFieldSilent = NoExtFieldSilent
 
@@ -166,7 +169,7 @@ type LlStgRhs = GenStgRhs 'LiftLams
 type LlStgAlt = GenStgAlt 'LiftLams
 
 type CgStgTopBinding = GenStgTopBinding 'CodeGen
-type CgStgBinding = GenStgTopBinding 'CodeGen
+type CgStgBinding = GenStgBinding 'CodeGen
 type CgStgExpr = GenStgExpr 'CodeGen
 type CgStgRhs = GenStgRhs 'CodeGen
 type CgStgAlt = GenStgAlt 'CodeGen

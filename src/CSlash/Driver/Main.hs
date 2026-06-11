@@ -26,7 +26,7 @@ import CSlash.Driver.Config.CoreToStg.Prep
 import CSlash.Driver.Config.Logger   (initLogFlags)
 import CSlash.Driver.Config.Parser   (initParserOpts)
 -- import CSlash.Driver.Config.Stg.Ppr  (initStgPprOpts)
--- import GHC.Driver.Config.Stg.Pipeline (initStgPipelineOpts)
+import CSlash.Driver.Config.Stg.Pipeline (initStgPipelineOpts)
 -- import GHC.Driver.Config.StgToCmm  (initStgToCmmConfig)
 -- import GHC.Driver.Config.Cmm       (initCmmConfig)
 import CSlash.Driver.LlvmConfigCache  (initLlvmConfigCache)
@@ -92,7 +92,7 @@ import CSlash.Tc.Utils.Monad
 -- import GHC.Tc.Zonk.Env ( ZonkFlexi (DefaultFlexi) )
 
 import CSlash.Stg.Syntax
--- import GHC.Stg.Pipeline ( stg2stg, StgCgInfos )
+import CSlash.Stg.Pipeline ( stg2stg{-, StgCgInfos-} )
 
 import CSlash.Builtin.Utils
 import CSlash.Builtin.Names

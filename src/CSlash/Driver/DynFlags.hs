@@ -692,6 +692,8 @@ optLevelFlags
     , ([1,2], Opt_Exitification)
     , ([1,2], Opt_CaseMerge)
     , ([1,2], Opt_CaseFolding)
+    , ([1,2], Opt_CSE)
+    , ([1,2], Opt_StgCSE)
 
     , ([1,2], Opt_EnableRewriteRules)
 

@@ -199,6 +199,9 @@ library
                     , CSlash.Driver.Config.Finder
                     , CSlash.Driver.Config.Logger
                     , CSlash.Driver.Config.Parser
+                    , CSlash.Driver.Config.Stg.Lift
+                    , CSlash.Driver.Config.Stg.Pipeline
+                    , CSlash.Driver.Config.Stg.Ppr
                     , CSlash.Driver.Config.Tidy
                     , CSlash.Driver.DynFlags
                     , CSlash.Driver.Env
@@ -306,9 +309,17 @@ library
 
                     , CSlash.Stack
 
+                    , CSlash.Stg.FVs
+                    , CSlash.Stg.Lift
+                    , CSlash.Stg.Lift.Analysis
+                    , CSlash.Stg.Lift.Config
+                    , CSlash.Stg.Lift.Monad
                     , CSlash.Stg.Lift.Types
                     , CSlash.Stg.Make
+                    , CSlash.Stg.Pipeline
+                    , CSlash.Stg.Subst
                     , CSlash.Stg.Syntax
+                    , CSlash.Stg.Utils
 
                     , CSlash.SysTools
                     , CSlash.SysTools.BaseDir

@@ -12,6 +12,7 @@ module CSlash.Driver.Session
   , gopt
   , wopt
   , setDynamicNow
+  , sccProfilingEnabled
   , needSourceNotes
   , DynFlags(..)
   , ParMakeCount(..)
@@ -79,7 +80,7 @@ module CSlash.Driver.Session
 
 import CSlash.Platform
 import CSlash.Platform.Ways
--- import CSlash.Platform.Profile
+import CSlash.Platform.Profile
 
 import CSlash.Unit.Types
 import CSlash.Unit.Parser
@@ -654,7 +655,10 @@ dynamic_flags_deps =
       (NoArg (upd (\d -> d { useErrorLinks = Never })))
 
   , make_ord_flag defCsFlag "dsuppress-all"
-      (NoArg $ do setGeneralFlag Opt_SuppressModulePrefixes
+      (NoArg $ do setGeneralFlag Opt_SuppressCoercions
+                  setGeneralFlag Opt_SuppressCoercionTypes
+                  setGeneralFlag Opt_SuppressModulePrefixes
+                  setGeneralFlag Opt_SuppressTypeApplications
                   setGeneralFlag Opt_SuppressIdInfo
                   setGeneralFlag Opt_SuppressTicks
                   setGeneralFlag Opt_SuppressTypeSignatures
@@ -662,6 +666,9 @@ dynamic_flags_deps =
                   setGeneralFlag Opt_SuppressTimestamps)
 
     -- Debugging ------------------------------------------------------------
+  , make_ord_flag defCsFlag "dstg-stats"
+        (NoArg (setGeneralFlag Opt_StgStats))
+
   , make_ord_flag defCsFlag "ddump-core-stats"
         (setDumpFlag Opt_D_dump_core_stats)
   , make_ord_flag defCsFlag "ddump-llvm"
@@ -700,6 +707,14 @@ dynamic_flags_deps =
         (setDumpFlag Opt_D_dump_prep)
   , make_ord_flag defCsFlag "ddump-late-cc"
         (setDumpFlag Opt_D_dump_late_cc)
+  , make_ord_flag defCsFlag "ddump-stg-from-core"
+        (setDumpFlag Opt_D_dump_stg_from_core)
+  , make_ord_flag defCsFlag "ddump-stg-unarised"
+        (setDumpFlag Opt_D_dump_stg_unarised)
+  , make_ord_flag defCsFlag "ddump-stg-final"
+        (setDumpFlag Opt_D_dump_stg_final)
+  , make_ord_flag defCsFlag "ddump-stg-cg"
+        (setDumpFlag Opt_D_dump_stg_cg)
   , make_ord_flag defCsFlag "ddump-call-arity"
         (setDumpFlag Opt_D_dump_call_arity)
   , make_ord_flag defCsFlag "ddump-exitify"
@@ -754,6 +769,8 @@ dynamic_flags_deps =
         (setDumpFlag Opt_D_source_stats)
   , make_ord_flag defCsFlag "dverbose-core2core"
         (NoArg $ setVerbosity (Just 2) >> setDumpFlag' Opt_D_verbose_core2core)
+  , make_ord_flag defCsFlag "dverbose-stg2stg"
+        (setDumpFlag Opt_D_verbose_stg2stg)
   , make_ord_flag defCsFlag "ddump-hi"
         (setDumpFlag Opt_D_dump_hi)
   , make_ord_flag defCsFlag "ddump-minimal-imports"
@@ -1705,6 +1722,9 @@ setUnsafeGlobalDynFlags dflags = do
   writeIORef v_unsafeHasNoStateHack (hasNoStateHack dflags)
 
 -- -----------------------------------------------------------------------------
+sccProfilingEnabled :: DynFlags -> Bool
+sccProfilingEnabled dflags = profileIsProfiling (targetProfile dflags)
+
 needSourceNotes :: DynFlags -> Bool
 needSourceNotes dflags = debugLevel dflags > 0
                          --  || gopt Opt_InfoTableMap dflags

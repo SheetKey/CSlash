@@ -9,6 +9,10 @@ data Profile = Profile
   }
   deriving (Eq, Ord, Show, Read)
 
+profileIsProfiling :: Profile -> Bool
+{-# INLINE profileIsProfiling #-}
+profileIsProfiling profile = profileWays profile `hasWay` WayProf
+
 profileBuildTag :: Profile -> String
 profileBuildTag profile
   | platformUnregisterised platform = 'u':wayTag
