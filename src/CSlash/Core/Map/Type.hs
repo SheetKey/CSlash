@@ -1,3 +1,4 @@
+{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE BangPatterns #-}
@@ -56,6 +57,15 @@ instance Eq (DeBruijn (TypeCoercion Zk)) where
 *                                                                      *
 ********************************************************************** -}
 
+type MonoKindMapG = GenMap MonoKindMapX
+
+data MonoKindMapX a = MKM
+
+instance Functor MonoKindMapX
+
+instance TrieMap MonoKindMapX where
+  type Key MonoKindMapX = DeBruijn CoreMonoKind
+
 instance Eq (DeBruijn (MonoKind Zk)) where
   (==) = eqDeBruijnMonoKind
 
@@ -105,6 +115,11 @@ data TypeMapX a = TM
   -- , tm_app :: TypeMapG (TypeMapG a)
   -- , tm_tycon :: DNameEnv a
   -- , tm_forall :: TypeMapG (BndrMap a)
+
+instance Functor TypeMapX
+
+instance TrieMap TypeMapX where
+  type Key TypeMapX = DeBruijn CoreType
 
 instance Eq (DeBruijn (Type Zk)) where
   (==) = eqDeBruijnType
@@ -289,3 +304,70 @@ instance Eq (DeBruijn a) => Eq (DeBruijn (Maybe a)) where
   D _ Nothing == D _ Nothing = True
   D env (Just x) == D env' (Just x') = D env x == D env' x'
   _ == _ = False
+
+data BndrMap a = BndrMap (TypeMapG a)
+
+instance Functor BndrMap where
+  fmap f = \(BndrMap tm) -> BndrMap (fmap f tm)
+  {-# INLINE fmap #-}
+
+instance TrieMap BndrMap where
+  type Key BndrMap = CoreId
+  emptyTM = BndrMap emptyTM
+  lookupTM = lkIdBndr emptyCME
+  alterTM = xtIdBndr emptyCME
+  foldTM = fdBndrMap
+  filterTM = ftBndrMap
+
+fdBndrMap :: (a -> b -> b) -> BndrMap a -> b -> b
+fdBndrMap f (BndrMap tm) = foldTM f tm 
+
+lkIdBndr :: CmEnv -> CoreId -> BndrMap a -> Maybe a
+lkIdBndr env v (BndrMap tymap) = lkG (D env (varType v)) tymap
+
+xtIdBndr :: CmEnv -> CoreId -> XT a -> BndrMap a -> BndrMap a
+xtIdBndr env v xt (BndrMap tymap) = BndrMap (xtG (D env (varType v)) xt tymap)
+
+ftBndrMap :: (a -> Bool) -> BndrMap a -> BndrMap a
+ftBndrMap f (BndrMap tm) = BndrMap (filterTM f tm)
+
+data LamBndrMap a
+  = LamBndrMap (MaybeMap (EitherMap TypeMapG MonoKindMapG) (MaybeMap MonoKindMapG a))
+
+instance Functor LamBndrMap where
+  fmap f = \(LamBndrMap tm) -> LamBndrMap (fmap (fmap f) tm)
+  {-# INLINE fmap #-}
+
+instance TrieMap LamBndrMap where
+  type Key LamBndrMap = (CoreBndr, Maybe CoreMonoKind)
+  emptyTM = LamBndrMap emptyTM
+  lookupTM = lkLamBndr emptyCME
+  alterTM = xtLamBndr emptyCME
+  foldTM = fdLamBndrMap
+  filterTM = ftLamBndrMap
+
+fdLamBndrMap :: (a -> b -> b) -> LamBndrMap a -> b -> b
+fdLamBndrMap f (LamBndrMap tm) = foldTM (foldTM f) tm
+
+lkLamBndr :: CmEnv -> (CoreBndr, Maybe CoreMonoKind) -> LamBndrMap a -> Maybe a
+lkLamBndr env (v, k) (LamBndrMap map) = do
+  let key = case v of
+              C.Id v -> Just (Left (D env (varType v)))
+              Tv v -> Just (Right (D env (varKind v)))
+              KCv v -> Just (Right (D env (varKind v)))
+              Kv _ -> Nothing
+  multmap <- lookupTM key map
+  lookupTM (D env <$> k) multmap
+
+xtLamBndr :: CmEnv -> (CoreBndr, Maybe CoreMonoKind) -> XT a -> LamBndrMap a -> LamBndrMap a
+xtLamBndr env (v, k) xt (LamBndrMap mm) =
+  let key1 = case v of
+              C.Id v -> Just (Left (D env (varType v)))
+              Tv v -> Just (Right (D env (varKind v)))
+              KCv v -> Just (Right (D env (varKind v)))
+              Kv _ -> Nothing
+      key2 = D env <$> k
+  in LamBndrMap (mm |> alterTM key1 |>> (alterTM key2 xt))
+
+ftLamBndrMap :: (a -> Bool) -> LamBndrMap a -> LamBndrMap a
+ftLamBndrMap f (LamBndrMap mm) = LamBndrMap (fmap (filterTM f) mm)
