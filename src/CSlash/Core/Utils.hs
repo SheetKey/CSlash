@@ -226,10 +226,39 @@ stripTicksTopT p = go []
         go ts _                = ts
 
 stripTicksE :: (CoreTickish -> Bool) -> Expr b1 b2 -> Expr b1 b2
-stripTicksE = panic "stripTicksE"
+stripTicksE p expr = go expr
+  where
+    go (App e a) = App (go e) (go a)
+    go (Lam b k e) = Lam b k (go e)
+    go (Let b e) = Let (go_bs b) (go e)
+    go (Case e b t as) = Case (go e) b t (map go_a as)
+    go (Cast e c) = Cast (go e) c
+    go (Tick t e)
+      | p t = go e
+      | otherwise = Tick t (go e)
+    go other = other
+
+    go_bs (NonRec b e) = NonRec b (go e)
+    go_bs (Rec bs) = Rec (map go_b bs)
+    go_b (b, e) = (b, go e)
+    go_a (Alt c bs e) = Alt c bs (go e)
 
 stripTicksT :: (CoreTickish -> Bool) -> Expr b1 b2 -> [CoreTickish]
-stripTicksT = panic "stripTicksT"
+stripTicksT p expr = fromOL $ go expr
+  where
+    go (App e a) = go e `appOL` go a
+    go (Lam _ _ e) = go e
+    go (Let b e) = go_bs b `appOL` go e
+    go (Case e _ _ as) = go e `appOL` concatOL (map go_a as)
+    go (Tick t e)
+      | p t = t `consOL` go e
+      | otherwise = go e
+    go _ = nilOL
+
+    go_bs (NonRec _ e) = go e
+    go_bs (Rec bs) = concatOL (map go_b bs)
+    go_b (_, e) = go e
+    go_a (Alt _ _ e) = go e
 
 {- *********************************************************************
 *                                                                      *
