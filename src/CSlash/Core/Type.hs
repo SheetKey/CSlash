@@ -559,6 +559,12 @@ tycoercionRType
   => TypeCoercion p -> Type p
 tycoercionRType co = ty_coercion_lr_type CRight co
 
+tycoercionType
+  :: (HasDebugCallStack, HasPass p pass)
+  => TypeCoercion p -> Type p
+tycoercionType co = case tycoercionTypes co of
+  Pair ty1 ty2 -> mkTyEqPred ty1 ty2
+
 ty_coercion_lr_type
   :: forall p pass. (HasDebugCallStack, HasPass p pass)
   => LeftOrRight -> TypeCoercion p -> Type p
