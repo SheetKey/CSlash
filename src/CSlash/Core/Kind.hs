@@ -69,7 +69,7 @@ data KiPredCon
   = LTKi
   | LTEQKi
   | EQKi
-  deriving (Show, Eq, Data.Data)
+  deriving (Show, Eq, Ord, Data.Data)
 
 -- Checks if a value with infered mult w1 is DEFINITELY allowed where a value of w2 is expected.
 submult :: BuiltInKi -> MonoKind kv -> Bool
@@ -243,7 +243,7 @@ debug_ppr_ki_co _ _ = panic "debug_ppr_ki_co"
 data FunKiFlag
   = FKF_K_K -- Kind -> Kind
   | FKF_C_K -- Constraint -> Kind
-  deriving (Eq, Data.Data)
+  deriving (Eq, Ord, Data.Data)
 
 instance Outputable FunKiFlag where
   ppr FKF_K_K = text "[->]"
