@@ -26,6 +26,13 @@ bindersOf :: BinderP a ~ CoreId => GenStgBinding a -> [CoreId]
 bindersOf (StgNonRec binder _) = [binder]
 bindersOf (StgRec pairs) = fst <$> pairs
 
+stripStgTicksTop :: (StgTickish -> Bool) -> GenStgExpr p -> ([StgTickish], GenStgExpr p)
+stripStgTicksTop p = go []
+  where
+    go ts (StgTick t e) | p t = go (t : ts) e
+    go [] other = ([], other)
+    go ts other = (reverse ts, other)
+
 allowTopLevelConApp
   :: Platform
   -> Bool

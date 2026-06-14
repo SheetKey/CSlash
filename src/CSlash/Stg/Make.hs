@@ -8,7 +8,7 @@ import CSlash.Core.DataCon
 import CSlash.Core.Type (Type)
 
 import CSlash.Stg.Syntax
--- import CSlash.Stg.Utils (stripStgTicksTop)
+import CSlash.Stg.Utils (stripStgTicksTop)
 
 import CSlash.Types.Var.Id
 import CSlash.Types.Name
@@ -47,20 +47,19 @@ mkStgRhs bndr mk_rhs@(MkStgRhs bndrs rhs ty is_join)
 
 mkStgRhsCon_maybe :: MkStgRhs -> Maybe StgRhs
 mkStgRhsCon_maybe (MkStgRhs bndrs rhs ty is_join)
-  -- | [] <- bndrs
-  -- , not is_join
-  -- , (ticks, StgConApp con mn args _) <- panic "stripStgTicksTop (not . tickishIsCode) rhs"
-  -- = Just (StgRhsCon con mn ticks args ty)
-  -- | otherwise
-  -- = Nothing
-  = panic "unfinished"
+  | [] <- bndrs
+  , not is_join
+  , (ticks, StgConApp con mn args) <- stripStgTicksTop (not . tickishIsCode) rhs
+  = Just (StgRhsCon con mn ticks args ty)
+  | otherwise
+  = Nothing
+
 mkTopStgRhsCon_maybe :: (CoreDataCon -> [StgArg] -> Bool) -> MkStgRhs -> Maybe StgRhs
 mkTopStgRhsCon_maybe allow_static_con_app (MkStgRhs bndrs rhs ty is_join)
-  -- | [] <- bndrs
-  -- , not is_join
-  -- , (ticks, StgConApp con mn args _) <- panic "stripStgTicksTops (not . tickishIsCode) rhs"
-  -- , allow_static_con_app con args
-  -- = Just (StgRhsCon con mn ticks args ty)
-  -- | otherwise
-  -- = Nothing
-  = panic "unfinished"
+  | [] <- bndrs
+  , not is_join
+  , (ticks, StgConApp con mn args) <- stripStgTicksTop (not . tickishIsCode) rhs
+  , allow_static_con_app con args
+  = Just (StgRhsCon con mn ticks args ty)
+  | otherwise
+  = Nothing
