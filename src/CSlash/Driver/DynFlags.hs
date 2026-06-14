@@ -794,6 +794,7 @@ initSDocContext dflags style = SDC
   , sdocSuppressUnfoldings          = gopt Opt_SuppressUnfoldings dflags
   , sdocSuppressUniques             = gopt Opt_SuppressUniques dflags
   , sdocSuppressModulePrefixes      = gopt Opt_SuppressModulePrefixes dflags
+  , sdocSuppressStgExts             = gopt Opt_SuppressStgExts dflags
   , sdocErrorSpans                  = gopt Opt_ErrorSpans dflags
   , sdocPrintTypeAbbreviations      = True
   , sdocUnitIdForUser               = ftext

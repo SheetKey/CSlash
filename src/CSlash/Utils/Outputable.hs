@@ -320,6 +320,7 @@ data SDocContext = SDC
   , sdocSuppressUnfoldings          :: !Bool
   , sdocSuppressUniques             :: !Bool
   , sdocSuppressModulePrefixes      :: !Bool
+  , sdocSuppressStgExts             :: !Bool
   , sdocErrorSpans                  :: !Bool
   , sdocPrintTypeAbbreviations      :: !Bool
   , sdocUnitIdForUser               :: !(FastString -> SDoc)
@@ -355,6 +356,7 @@ defaultSDocContext = SDC
   , sdocSuppressUnfoldings          = False
   , sdocSuppressUniques             = False
   , sdocSuppressModulePrefixes      = False
+  , sdocSuppressStgExts             = False
   , sdocErrorSpans                  = False
   -- , sdocStarIsType                  = False
   -- , sdocLinearTypes                 = False

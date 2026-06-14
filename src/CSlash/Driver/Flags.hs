@@ -315,6 +315,7 @@ data GeneralFlag
   -- Except for uniques, as some simplifier phases introduce new
   -- variables that have otherwise identical names.
   | Opt_SuppressUniques
+  | Opt_SuppressStgExts
   | Opt_SuppressTicks
   | Opt_SuppressTimestamps -- ^ Suppress timestamps in dumps
   | Opt_SuppressCoreSizes  -- ^ Suppress per binding Core size stats in dumps

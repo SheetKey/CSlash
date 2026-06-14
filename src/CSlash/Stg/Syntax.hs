@@ -352,7 +352,7 @@ instance Outputable AltType where
 pprStgRhs :: OutputablePass pass => StgPprOpts -> GenStgRhs pass -> SDoc
 pprStgRhs opts rhs = case rhs of
   StgRhsClosure ext args body _
-    -> hang (hsep [ panic "ppUnlessOption sdocSuppressStgExts (ppr ext)"
+    -> hang (hsep [ ppUnlessOption sdocSuppressStgExts (ppr ext)
                   , char '\\', brackets (interppSP args) ])
        4 (pprStgExpr opts body)
 

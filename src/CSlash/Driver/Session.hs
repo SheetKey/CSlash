@@ -661,6 +661,7 @@ dynamic_flags_deps =
                   setGeneralFlag Opt_SuppressTypeApplications
                   setGeneralFlag Opt_SuppressIdInfo
                   setGeneralFlag Opt_SuppressTicks
+                  setGeneralFlag Opt_SuppressStgExts
                   setGeneralFlag Opt_SuppressTypeSignatures
                   setGeneralFlag Opt_SuppressCoreSizes
                   setGeneralFlag Opt_SuppressTimestamps)
@@ -1121,6 +1122,7 @@ dFlagsDeps =
   [ flagSpec "ppr-case-as-let" Opt_PprCaseAsLet
   , flagSpec "suppress-ticks"             Opt_SuppressTicks
   , flagSpec "suppress-idinfo"            Opt_SuppressIdInfo
+  , flagSpec "suppress-stg-exts"          Opt_SuppressStgExts
   , flagSpec "suppress-unfoldings"        Opt_SuppressUnfoldings
   , flagSpec "suppress-module-prefixes"   Opt_SuppressModulePrefixes
   , flagSpec "suppress-timestamps"        Opt_SuppressTimestamps
