@@ -1,6 +1,8 @@
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE BangPatterns #-}
 
+{-# OPTIONS_GHC -Werror=unused-local-binds #-}
+
 module CSlash.Core.Opt.Simplify.Iteration where
 
 import CSlash.Driver.Flags
@@ -712,10 +714,10 @@ simplTick env tickish expr cont
       where (inc, outc) = splitCont tail
     splitCont other = (mkBoringStop (contHoleType other), other)
 
-    getDoneId (DoneId id) = Just id
-    getDoneId (DoneEx (Var id) _) = Just id
-    getDoneId (DoneEx e _) = getIdFromTrivialExpr_maybe e
-    getDoneId other = pprPanic "getDoneId" (ppr other)
+    -- getDoneId (DoneId id) = Just id
+    -- getDoneId (DoneEx (Var id) _) = Just id
+    -- getDoneId (DoneEx e _) = getIdFromTrivialExpr_maybe e
+    -- getDoneId other = pprPanic "getDoneId" (ppr other)
 
 
 {- *********************************************************************
@@ -1385,7 +1387,7 @@ simplAlt
 simplAlt env _ impss_deflt_cons case_bndr bndr_swap cont (Alt DEFAULT bndrs rhs)
   = assert (null bndrs) $ do
       let env' = addDefaultUnfoldings env case_bndr bndr_swap impss_deflt_cons
-      rhs' <- simplExprC env rhs cont
+      rhs' <- simplExprC env' rhs cont
       return (Alt DEFAULT [] rhs')
 
 simplAlt env _ _ case_bndr bndr_swap cont (Alt (LitAlt lit) bndrs rhs) = panic "simplAlt Lit"

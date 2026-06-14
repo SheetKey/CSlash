@@ -1,3 +1,5 @@
+{-# OPTIONS_GHC -Werror=unused-local-binds #-}
+
 module CSlash.Core.Opt.Simplify.Inline where
 
 import CSlash.Driver.Flags

@@ -1,5 +1,7 @@
 {-# LANGUAGE PatternSynonyms #-}
 
+{-# OPTIONS_GHC -Werror=unused-local-binds #-}
+
 module CSlash.Core.Opt.Simplify.Monad where
 
 import CSlash.Cs.Pass
@@ -181,7 +183,7 @@ tick t = SM $ \st_env sc ->
 checkedTick :: Tick -> SimplM ()
 checkedTick t = SM $ \st_env sc ->
   if st_max_ticks st_env <= mkIntWithInf (simplCountN sc)
-  then throwCsExceptionIO $ panic "checkedTick"--PprProgamError "Simplifier ticks exhaused" (msg sc)
+  then throwCsExceptionIO $ PprProgramError "Simplifier ticks exhaused" (msg sc)
   else let history_size = te_history_size (st_config st_env)
            sc' = doSimplTick history_size t sc
        in sc' `seq` return ((), sc')

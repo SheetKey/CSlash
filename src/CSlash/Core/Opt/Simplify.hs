@@ -1,5 +1,7 @@
 {-# LANGUAGE BangPatterns #-}
 
+{-# OPTIONS_GHC -Werror=unused-local-binds #-}
+
 module CSlash.Core.Opt.Simplify where
 
 import Prelude hiding ((<>))

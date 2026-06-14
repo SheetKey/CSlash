@@ -2,6 +2,8 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE BangPatterns #-}
 
+{-# OPTIONS_GHC -Werror=unused-local-binds #-}
+
 module CSlash.Core.Opt.Simplify.Utils where
 
 import Prelude hiding ((<>))
