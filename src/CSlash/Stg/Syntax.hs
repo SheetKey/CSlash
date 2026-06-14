@@ -288,7 +288,8 @@ pprIdWithRep :: CoreId -> SDoc
 pprIdWithRep v = ppr v <> pprTypeRep (varType v)
 
 pprTypeRep :: CoreType -> SDoc
-pprTypeRep ty = panic "pprTypeRep"
+pprTypeRep ty = ppUnlessOption sdocSuppressStgReps $
+  panic "pprTypeRep"
 
 instance Outputable StgArg where
   ppr = pprStgArg

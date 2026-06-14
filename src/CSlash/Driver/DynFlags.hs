@@ -669,6 +669,7 @@ defaultFlags settings
     , Opt_RPath
     , Opt_DumpWithWays
     , Opt_ShowErrorContext
+    , Opt_SuppressStgReps
     , Opt_SpecialiseIncoherents
     ]
     ++ [f | (ns, f) <- optLevelFlags, 0 `elem` ns]
@@ -795,6 +796,7 @@ initSDocContext dflags style = SDC
   , sdocSuppressUniques             = gopt Opt_SuppressUniques dflags
   , sdocSuppressModulePrefixes      = gopt Opt_SuppressModulePrefixes dflags
   , sdocSuppressStgExts             = gopt Opt_SuppressStgExts dflags
+  , sdocSuppressStgReps             = gopt Opt_SuppressStgReps dflags
   , sdocErrorSpans                  = gopt Opt_ErrorSpans dflags
   , sdocPrintTypeAbbreviations      = True
   , sdocUnitIdForUser               = ftext
