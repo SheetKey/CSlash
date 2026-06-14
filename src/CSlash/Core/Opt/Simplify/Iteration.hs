@@ -879,6 +879,14 @@ simpl_lam env bndr ki body ApplyToKiCo{ sc_arg_kico = arg_kico, sc_cont = cont }
   | otherwise
   = panic "simpl_lam mismatch"
 
+-- Kind beta-reduction
+simpl_lam env bndr ki body ApplyToKi{ sc_arg_ki = arg_ki, sc_cont = cont }
+  | Kv kv <- bndr
+  = do tick (BetaReduction bndr ki)
+       simplLam (extendKvSubst env kv arg_ki) body cont
+  | otherwise
+  = panic "simpl_lam mismatch"
+
 -- Value beta-reduction
 simpl_lam env bndr ki body ApplyToVal{ sc_arg = arg, sc_env = arg_se
                                             , sc_cont = cont, sc_dup = dup
