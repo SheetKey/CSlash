@@ -1,3 +1,4 @@
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -36,6 +37,21 @@ newtype CoreMap a = CoreMap (CoreMapG a)
 type CoreMapG = GenMap CoreMapX
 
 data CoreMapX a = CM
+  { cm_id :: VarMap CoreId a
+  , cm_lit :: LiteralMap a
+  , cm_kco :: KindCoercionMapG a
+  , cm_type :: TypeMapG a
+  , cm_kind :: MonoKindMapG a
+  , cm_cast :: CoreMapG (TypeCoercionMapG a)
+  , cm_tick :: CoreMapG (TickishMap a)
+  , cm_app :: CoreMapG (CoreMapG a)
+  , cm_lam :: CoreMapG (LamBndrMap a)
+  , cm_letn :: CoreMapG (CoreMapG (BndrMap a))
+  , cm_letr :: ListMap CoreMapG (CoreMapG (ListMap BndrMap a))
+  , cm_case :: CoreMapG (ListMap AltMap a)
+  }
+
+type LiteralMap a = Map.Map Literal a
 
 instance Eq (DeBruijn CoreExpr) where
   (==) = eqDeBruijnExpr
@@ -126,9 +142,33 @@ emptyCoreMap = emptyTM
 
 emptyE :: CoreMapX a
 emptyE = CM
+  { cm_id = emptyTM
+  , cm_lit = emptyTM
+  , cm_kco = emptyTM
+  , cm_type = emptyTM
+  , cm_kind = emptyTM
+  , cm_cast = emptyTM
+  , cm_app = emptyTM
+  , cm_lam = emptyTM
+  , cm_letn = emptyTM
+  , cm_letr = emptyTM
+  , cm_case = emptyTM
+  , cm_tick = emptyTM }
 
 instance Functor CoreMapX where
-  fmap f CM = CM
+  fmap f CM {..} = CM
+    { cm_id = fmap f cm_id
+    , cm_lit = fmap f cm_lit
+    , cm_kco = fmap f cm_kco
+    , cm_type = fmap f cm_type
+    , cm_kind = fmap f cm_kind
+    , cm_cast = fmap (fmap f) cm_cast
+    , cm_app = fmap (fmap f) cm_app
+    , cm_lam = fmap (fmap f) cm_lam
+    , cm_letn = fmap (fmap (fmap f)) cm_letn
+    , cm_letr = fmap (fmap (fmap f)) cm_letr
+    , cm_case = fmap (fmap f) cm_case
+    , cm_tick = fmap (fmap f) cm_tick }
 
 instance TrieMap CoreMapX where
   type Key CoreMapX = DeBruijn CoreExpr
@@ -139,16 +179,115 @@ instance TrieMap CoreMapX where
   filterTM = ftE
 
 ftE :: (a -> Bool) -> CoreMapX a -> CoreMapX a
-ftE f CM = CM
+ftE f CM {..} = CM
+  { cm_id = filterTM f cm_id
+  , cm_lit = filterTM f cm_lit
+  , cm_kco = filterTM f cm_kco
+  , cm_type = filterTM f cm_type
+  , cm_kind = filterTM f cm_kind
+  , cm_cast = fmap (filterTM f) cm_cast
+  , cm_app = fmap (filterTM f) cm_app
+  , cm_lam = fmap (filterTM f) cm_lam
+  , cm_letn = fmap (fmap (filterTM f)) cm_letn
+  , cm_letr = fmap (fmap (filterTM f)) cm_letr
+  , cm_case = fmap (filterTM f) cm_case
+  , cm_tick = fmap (filterTM f) cm_tick }
 
 fdE :: (a -> b -> b) -> CoreMapX a -> b -> b
-fdE k m = panic "fdE"
+fdE k CM {..} =
+  foldTM k cm_id
+  . foldTM k cm_lit
+  . foldTM k cm_kco
+  . foldTM k cm_type
+  . foldTM k cm_kind
+  . foldTM (foldTM k) cm_cast
+  . foldTM (foldTM k) cm_tick
+  . foldTM (foldTM k) cm_app
+  . foldTM (foldTM k) cm_lam
+  . foldTM (foldTM (foldTM k)) cm_letn
+  . foldTM (foldTM (foldTM k)) cm_letr
+  . foldTM (foldTM k) cm_case
+  
 
 lkE :: DeBruijn CoreExpr -> CoreMapX a -> Maybe a
-lkE (D env expr) cm = panic "lkE"
+lkE (D env expr) cm = go expr cm
+  where
+    go (Var v) = cm_id >.> lkVar lookupCME env v
+    go (Lit l) = cm_lit >.> lookupTM l
+    go (Type t) = cm_type >.> lkG (D env t)
+    go (KiCo c) = cm_kco >.> lkG (D env c)
+    go (Kind k) = cm_kind >.> lkG (D env k)
+    go (Cast e c) = cm_cast >.> lkG (D env e) >=> lkG (D env c)
+    go (Tick tickish e) = cm_tick >.> lkG (D env e) >=> lkTickish tickish
+    go (App e1 e2) = cm_app >.> lkG (D env e2) >=> lkG (D env e1)
+    go (Lam v k e) = cm_lam >.> lkG (D (extendCMEB env v) e)
+                     >=> lkLamBndr env (v, k)
+    go (Let (NonRec b r) e) = cm_letn >.> lkG (D env r)
+                              >=> lkG (D (extendCME env b) e)
+                              >=> lkIdBndr env b
+    go (Let (Rec prs) e) = let (bndrs, rhss) = unzip prs
+                               env1 = extendCMEs env bndrs
+                           in cm_letr >.> lkList (lkG . D env1) rhss
+                              >=> lkG (D env1 e)
+                              >=> lkList (lkIdBndr env1) bndrs
+    go (Case e b ty as)
+      | null as = panic "empty case"
+      | otherwise = cm_case >.> lkG (D env e) >=> lkList (lkA (extendCME env b)) as
 
 xtE :: DeBruijn CoreExpr -> XT a -> CoreMapX a -> CoreMapX a
-xtE = panic "xtE"
+xtE (D env (Var v)) f m = m { cm_id = cm_id m |> xtVar lookupCME env v f }
+xtE (D env (Type t)) f m = m { cm_type = cm_type m |> xtG (D env t) f }
+xtE (D env (KiCo c)) f m = m { cm_kco = cm_kco m |> xtG (D env c) f }
+xtE (D env (Kind k)) f m = m { cm_kind = cm_kind m |> xtG (D env k) f }
+xtE (D _ (Lit l)) f m = m { cm_lit = cm_lit m |> alterTM l f }
+xtE (D env (Cast e c)) f m = m { cm_cast = cm_cast m |> xtG (D env e) |>> xtG (D env c) f }
+xtE (D env (Tick t e)) f m = m { cm_tick = cm_tick m|> xtG (D env e) |>> xtTickish t f }
+xtE (D env (App e1 e2)) f m = m { cm_app = cm_app m |> xtG (D env e2) |>> xtG (D env e1) f }
+xtE (D env (Lam v k e)) f m = m { cm_lam = cm_lam m |> xtG (D (extendCMEB env v) e)
+                                          |>> xtLamBndr env (v, k) f }
+xtE (D env (Let (NonRec b r) e)) f m = m { cm_letn = cm_letn m
+                                                     |> xtG (D (extendCME env b) e)
+                                                     |>> xtG (D env r)
+                                                     |>> xtIdBndr env b f }
+xtE (D env (Let (Rec prs) e)) f m = m { cm_letr = let (bndrs, rhss) = unzip prs
+                                                      env1 = extendCMEs env bndrs
+                                                  in cm_letr m
+                                                     |> xtList (xtG . D env1) rhss
+                                                     |>> xtG (D env1 e)
+                                                     |>> xtList (xtIdBndr env1) bndrs f }
+xtE (D env (Case e b ty as)) f m
+  | null as = panic "empty case"
+  | otherwise = m { cm_case = cm_case m |> xtG (D env e)
+                              |>> let env1 = extendCME env b in xtList (xtA env1) as f }
+
+type TickishMap a = Map.Map CoreTickish a
+
+lkTickish :: CoreTickish -> TickishMap a -> Maybe a
+lkTickish = lookupTM
+
+xtTickish :: CoreTickish -> XT a -> TickishMap a -> TickishMap a
+xtTickish = alterTM
+
+data AltMap a = AM
+  { am_deflt :: CoreMapG a
+  , am_data :: DNameEnv (CoreMapG a)
+  , am_lit :: LiteralMap (CoreMapG a) }
+
+instance Functor AltMap where
+  fmap f AM {..} = AM
+    { am_deflt = fmap f am_deflt
+    , am_data = fmap (fmap f) am_data
+    , am_lit = fmap (fmap f) am_lit }
+
+instance TrieMap AltMap where
+  type Key AltMap = CoreAlt
+  emptyTM = AM { am_deflt = emptyTM
+               , am_data = emptyDNameEnv
+               , am_lit = emptyTM }
+  lookupTM = lkA emptyCME
+  alterTM = xtA emptyCME
+  foldTM = fdA
+  filterTM = ftA
 
 instance Eq (DeBruijn CoreAlt) where
   D env1 a1 == D env2 a2 = go a1 a2
@@ -160,3 +299,25 @@ instance Eq (DeBruijn CoreAlt) where
         = dc1 == dc2 &&
           D (extendCMEs env1 bs1) rhs1 == D (extendCMEs env2 bs2) rhs2
       go _ _ = False
+
+ftA :: (a -> Bool) -> AltMap a -> AltMap a
+ftA f AM {..} = AM
+  { am_deflt = filterTM f am_deflt
+  , am_data = fmap (filterTM f) am_data
+  , am_lit = fmap (filterTM f) am_lit }
+
+lkA :: CmEnv -> CoreAlt -> AltMap a -> Maybe a
+lkA env (Alt DEFAULT _ rhs) = am_deflt >.> lkG (D env rhs)
+lkA env (Alt (LitAlt lit) _ rhs) = am_lit >.> lookupTM lit >=> lkG (D env rhs)
+lkA env (Alt (DataAlt dc) bs rhs) = am_data >.> lkDNamed dc >=> lkG (D (extendCMEs env bs) rhs)
+
+xtA :: CmEnv -> CoreAlt -> XT a -> AltMap a -> AltMap a
+xtA env (Alt DEFAULT _ rhs) f m = m { am_deflt = am_deflt m |> xtG (D env rhs) f }
+xtA env (Alt (LitAlt l) _ rhs) f m = m { am_lit = am_lit m |> alterTM l |>> xtG (D env rhs) f }
+xtA env (Alt (DataAlt d) bs rhs) f m
+  = m { am_data = am_data m |> xtDNamed d |>> xtG (D (extendCMEs env bs) rhs) f }
+
+fdA :: (a -> b -> b) -> AltMap a -> b -> b
+fdA k AM {..} = foldTM k am_deflt
+                . foldTM (foldTM k) am_data
+                . foldTM (foldTM k) am_lit
