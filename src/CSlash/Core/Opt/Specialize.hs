@@ -1,6 +1,8 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE RecordWildCards #-}
 
+{-# OPTIONS_GHC -Werror=unused-local-binds #-}
+
 module CSlash.Core.Opt.Specialize where
 
 import Prelude hiding ((<>))
@@ -14,7 +16,7 @@ import CSlash.Driver.Config.Core.Rules ( initRuleOpts )
 
 import CSlash.Core.Type
 import CSlash.Core.Kind
--- import CSlash.Core.SimpleOpt( defaultSimpleOpts, simpleOptExprWith )
+import CSlash.Core.SimpleOpt( defaultSimpleOpts, simpleOptExprWith )
 import CSlash.Core.Predicate
 import CSlash.Core.Opt.Monad
 import qualified CSlash.Core.Subst as Core
@@ -249,7 +251,7 @@ specExpr env expr@(App {}) = do
   let (fun_in, args_in) = collectArgs expr
   (args_out, uds_args) <- mapAndCombineSM (specExpr env) args_in
   let env_args = env
-      (fun_in', args_out') = (fun_in, args_out)
+      (fun_in', args_out') = fireRewriteRules env_args fun_in args_out
   (fun_out', uds_fun) <- specExpr env fun_in'
   let uds_call = mkCallUDs env fun_out' args_out'
   return (fun_out' `mkCoreApps` args_out', uds_fun `thenUDs` uds_call `thenUDs` uds_args)
@@ -268,6 +270,16 @@ specExpr env (Case scrut case_bndr ty alts) = do
 specExpr env (Let bind body) = do
   (binds', body', uds) <- specBind NotTopLevel env bind $ \body_env -> specExpr body_env body
   return (foldr Let body' binds', uds)
+
+fireRewriteRules :: SpecEnv -> InExpr -> [OutExpr] -> (InExpr, [OutExpr])
+fireRewriteRules env (Var f) args
+  | Just (rule, expr) <- specLookupRule env f args InitialPhase (getRules (se_rules env) f)
+  = let rest_args = drop (ruleArity rule) args
+        zapped_subst = Core.zapSubst (se_subst env)
+        expr' = simpleOptExprWith defaultSimpleOpts zapped_subst expr
+        (fun, args) = collectArgs expr'
+    in fireRewriteRules env fun (args ++ rest_args)
+fireRewriteRules _ fun args = (fun, args)
 
 specLam :: SpecEnv -> [(OutBndr, Maybe CoreMonoKind)] -> InExpr -> SpecM (OutExpr, UsageDetails)
 specLam env bndrs body
@@ -413,9 +425,9 @@ specCalls spec_imp env existing_rules calls_for_me fn rhs
   where
     trace_doc = panic "sep [ ppr rhs_bndrs, ppr (idInlineActivation fn) ]"
 
-    fn_type = varType fn
+    -- fn_type = varType fn
     fn_arity = idArity fn
-    fn_unf = realIdUnfolding fn
+    -- fn_unf = realIdUnfolding fn
     inl_prag = idInlinePragma fn
     inl_act = inlinePragmaActivation inl_prag
     is_local = isLocalId fn
@@ -431,13 +443,6 @@ specCalls spec_imp env existing_rules calls_for_me fn rhs
     spec_call :: SpecInfo -> CallInfo -> SpecM SpecInfo
     spec_call spec_acc@(rules_acc, pairs_acc, uds_acc) CI{ ci_key = call_args } = do
       let all_call_args = call_args
-
-          saturating_call_args = call_args ++ map mk_extra_arg (dropList call_args rhs_bndrs)
-
-          mk_extra_arg C.Id{} = UnspecArg
-          mk_extra_arg Tv{} = UnspecType
-          mk_extra_arg KCv{} = UnspecKiCo
-          mk_extra_arg Kv{} = UnspecKind
 
       (rhs_env2
         , leftover_bndrs
@@ -460,8 +465,8 @@ specCalls spec_imp env existing_rules calls_for_me fn rhs
 
                     join_arity_decr = length rule_lhs_args - length spec_bndrs
 
-                    simpl_opts = initSimpleOpts dflags
-                    wrap_unf_body body = body `mkCoreApps` spec_args
+                    -- simpl_opts = initSimpleOpts dflags
+                    -- wrap_unf_body body = body `mkCoreApps` spec_args
                     spec_unf = panic "specUnfolding simpl_opts spec_bndrs"
                                -- wrap_unf_body rule_lhs_args fn_unf
 
@@ -591,14 +596,26 @@ specHeader env (bndr@(KCv{}, Nothing) : bndrs) (UnspecKiCo : args) = do
        , bndrToCoreExpr (fst bndr') : spec_args
        )
 
+specHeader env (bndr@(Kv{}, Nothing) : bndrs) (UnspecKind : args) = do
+  let (env', bndr') = substLamBndr env bndr
+  (env'', leftover_bndrs, rule_bs, rule_es, bs', spec_args)
+    <- specHeader env' bndrs args
+  pure ( env''
+       , leftover_bndrs
+       , fst bndr' : rule_bs
+       , bndrToCoreExpr (fst bndr') : rule_es
+       , bndr' : bs'
+       , bndrToCoreExpr (fst bndr') : spec_args
+       )
+
 specHeader env ((C.Id b, k@Just{}) : bndrs) (UnspecArg : args) = do
   let (env', bndr') = substLamBndr env (C.Id (zapIdOccInfo b), k)
   (env'', leftover_bndrs, rule_bs, rule_es, bs', spec_args)
     <- specHeader env' bndrs args
 
-  let bndr_ty = case bndr' of
-                  (C.Id b, _) -> varType b
-                  _ -> panic "unreachable"
+  let -- bndr_ty = case bndr' of
+      --             (C.Id b, _) -> varType b
+      --             _ -> panic "unreachable"
 
       (mb_spec_bndr, spec_arg)
         | isDeadBinder b

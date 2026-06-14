@@ -6,6 +6,8 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE BangPatterns #-}
 
+{-# OPTIONS_GHC -Werror=unused-local-binds #-}
+
 module CSlash.Core.Subst where
 
 import Prelude hiding ((<>))
@@ -697,8 +699,8 @@ subst_kco subst co = go co
     go (SelCo d co) = mkSelCo d $! go co
     go (HoleCo h) = panic "HoleCo $! go_hole h"
 
-    go_hole h@(KindCoercionHole { kch_co_var = cv })
-      = panic "h { kch_co_var = updateVarKind go_mki cv }"
+    -- go_hole h@(KindCoercionHole { kch_co_var = cv })
+    --   = panic "h { kch_co_var = updateVarKind go_mki cv }"
 
 substKiCoVar :: Subst p p' -> KiCoVar p -> KindCoercion p'
 substKiCoVar (Subst { kcv_env = env }) kcv
