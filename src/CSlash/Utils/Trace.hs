@@ -15,6 +15,9 @@ pprTrace str doc x
   --  | unsafeHasNoDebugOutput = x
   | otherwise = pprDebugAndThen traceSDocContext trace (text str) doc x
 
+pprTraceM :: Applicative f => String -> SDoc -> f ()
+pprTraceM str doc = pprTrace str doc (pure ())
+
 warnPprTrace :: HasCallStack => Bool -> String -> SDoc -> a -> a
 warnPprTrace _ _ _ x | not debugIsOn = x
 warnPprTrace _ _ _ x | unsafeHasNoDebugOutput = x
