@@ -312,7 +312,7 @@ cpeRhsE env (Case scrut bndr ty alts) = do
 cpeBodyNF :: CorePrepEnv -> CoreExpr -> UniqSM CpeBody
 cpeBodyNF env expr = do
   (floats, body) <- cpeBody env expr
-  return (wrapBinds floats expr)
+  return (wrapBinds floats body)
 
 cpeBody :: CorePrepEnv -> CoreExpr -> UniqSM (Floats, CpeBody)
 cpeBody env expr = do
@@ -343,6 +343,11 @@ data ArgInfo
   = AIApp CoreArg
   | AICast CoreTypeCoercion
   | AITick CoreTickish
+
+instance Outputable ArgInfo where
+  ppr (AIApp arg) = text "app" <+> ppr arg
+  ppr (AICast co) = text "cast" <+> ppr co
+  ppr (AITick tick) = text "tick" <+> ppr tick
 
 cpeApp :: CorePrepEnv -> CoreExpr -> UniqSM (Floats, CpeRhs)
 cpeApp top_env expr = do
