@@ -54,6 +54,13 @@ data SimpleOpts = SimpleOpts
   , so_eta_red :: !Bool
   }
 
+defaultSimpleOpts :: SimpleOpts 
+defaultSimpleOpts = SimpleOpts
+  { so_uf_opts = defaultUnfoldingOpts
+  , so_co_opts = OptCoercionOpts False
+  , so_eta_red = False
+  }
+
 simpleOptExpr :: HasDebugCallStack => SimpleOpts -> CoreExpr -> CoreExpr
 simpleOptExpr opts expr = simpleOptExprWith opts init_subst expr
   where
