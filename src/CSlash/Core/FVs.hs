@@ -2,6 +2,8 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE FlexibleInstances #-}
 
+{-# OPTIONS_GHC -Werror=unused-local-binds #-}
+
 module CSlash.Core.FVs where
 
 import CSlash.Cs.Pass
