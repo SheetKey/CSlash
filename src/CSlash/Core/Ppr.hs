@@ -169,9 +169,9 @@ ppr_expr add_par expr@(Lam {})
   --            <+> text "\\" <+> sep (map (pprBndr LambdaBind) ids) <+> arrow)
   --      2 (pprCoreExpr body)
   = let (bndrs_kis, body) = collectBinders expr
-        bndrs = fst <$> bndrs_kis
+        -- bndrs = fst <$> bndrs_kis
     in add_par $
-       hang (text "\\" <+> sep (map (pprBndr LambdaBind) bndrs) <+> arrow)
+       hang (text "\\" <+> sep (map (\(b, k) -> pprBndr LambdaBind b <> brackets (ppr k)) bndrs_kis) <+> arrow)
        2 (pprCoreExpr body)
 
 ppr_expr add_par expr@(App {})
