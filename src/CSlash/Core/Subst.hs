@@ -587,20 +587,22 @@ substMonoKis
 substMonoKis subst kis = checkValidSubst subst $
                          map (subst_mono_ki subst) kis
 
-substKiUnchecked :: (HasPass p' pass, SubstP p p') => Subst p p' -> Kind p -> Kind p'
+substKiUnchecked
+  :: (HasDebugCallStack, HasPass p' pass, SubstP p p') => Subst p p' -> Kind p -> Kind p'
 substKiUnchecked subst ki = subst_ki subst ki
 
-substMonoKiUnchecked :: (HasPass p' pass, SubstP p p') => Subst p p' -> MonoKind p -> MonoKind p'
+substMonoKiUnchecked
+  :: (HasDebugCallStack, HasPass p' pass, SubstP p p') => Subst p p' -> MonoKind p -> MonoKind p'
 substMonoKiUnchecked subst ki = subst_mono_ki subst ki
 
-subst_ki :: (HasPass p' pass, SubstP p p') => Subst p p' -> Kind p -> Kind p'
+subst_ki :: (HasDebugCallStack, HasPass p' pass, SubstP p p') => Subst p p' -> Kind p -> Kind p'
 subst_ki subst ki = go ki
   where
     go (Mono ki) = Mono $! subst_mono_ki subst ki
     go (ForAllKi kv ki) = case substKiVarBndr subst kv of
                             (subst', kv') -> (ForAllKi $! kv') $! (subst_ki subst' ki)
 
-subst_mono_ki :: HasPass p' pass => Subst p p' -> MonoKind p -> MonoKind p'
+subst_mono_ki :: (HasDebugCallStack, HasPass p' pass) => Subst p p' -> MonoKind p -> MonoKind p'
 subst_mono_ki subst ki = go ki
   where
     go (KiVarKi kv) = substKiVar subst kv
@@ -614,7 +616,7 @@ subst_mono_ki subst ki = go ki
             !k2' = go k2
       in (mkKiPredApp $! pred) k1' k2'
 
-substKiVar :: HasPass p' pass => Subst p p' -> KiVar p -> MonoKind p'
+substKiVar :: (HasDebugCallStack, HasPass p' pass) => Subst p p' -> KiVar p -> MonoKind p'
 substKiVar subst@(Subst { kv_env = env }) kv
   = lookupVarEnv env kv `orElse` pprPanic "substKiVar" (ppr kv $$ ppr subst)
 

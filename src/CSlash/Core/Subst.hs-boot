@@ -55,6 +55,6 @@ substTyUnchecked :: (HasPass p' pass, SubstP p p') => Subst p p' -> Type p -> Ty
 
 isEmptySubst :: Subst p p' -> Bool
 
-substMonoKiUnchecked :: (HasPass p' pass, SubstP p p') => Subst p p' -> MonoKind p -> MonoKind p'
+substMonoKiUnchecked :: (HasDebugCallStack, HasPass p' pass, SubstP p p') => Subst p p' -> MonoKind p -> MonoKind p'
 
 fromZkKind :: HasPass p pass => Kind Zk -> Kind p
