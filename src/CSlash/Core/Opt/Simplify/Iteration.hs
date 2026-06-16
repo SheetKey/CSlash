@@ -1874,8 +1874,7 @@ simplRules env mb_new_id rules bind_cxt
                         , ru_fn = fn_name
                         , ru_rhs = rhs
                         , ru_act = act }
-      = do (env', bndrs_as) <- simplBinders env (bndrs `zip` (repeat ()))
-           let bndrs' = fst <$> bndrs_as
+      = do (env', bndrs') <- simplRuleBinders env bndrs
            let rhs_ty = substTy env' (exprType rhs)
                rhs_cont = case bind_cxt of
                             BC_Let{} -> mkBoringStop rhs_ty

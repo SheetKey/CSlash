@@ -1,4 +1,5 @@
 {-# LANGUAGE BangPatterns #-}
+
 {-# OPTIONS_GHC -Werror=unused-local-binds #-}
 
 module CSlash.Core.Opt.Simplify.Env where
@@ -15,7 +16,8 @@ import CSlash.Core.Utils
 import CSlash.Core.Unfold
 import CSlash.Core.Subst hiding
   ( substIdBndr, substIdType
-  , substTyVarBndr, substKiCoVarBndr, substKiVarBndr)
+  , substTyVarBndr, substKiCoVarBndr, substKiVarBndr
+  , substMonoKi )
 import qualified CSlash.Core.Subst as Subst
 import CSlash.Core.Kind
 import CSlash.Core.Make ( mkWildValBinder, mkCoreLet )
@@ -573,23 +575,55 @@ lookupRecBndr SimplEnv{ seInScope = in_scope, seIdSubst = ids } v
 *                                                                      *
 ********************************************************************* -}
 
-simplBinders :: SimplEnv -> [(InBndr, a)] -> SimplM (SimplEnv, [(OutBndr, a)])
+simplBinders
+  :: SimplEnv
+  -> [(InBndr, Maybe InMonoKind)]
+  -> SimplM (SimplEnv, [(OutBndr, Maybe OutMonoKind)])
 simplBinders !env bndrs = mapAccumLM simplBinder env bndrs
 
 simplIdBinders :: SimplEnv -> [InId] -> SimplM (SimplEnv, [OutId])
 simplIdBinders !env bndrs = mapAccumLM simplIdBinder env bndrs
 
--- TODO: I may have to substitute into the kind as well. (Change 'a' to 'Maybe CoreMonoKind')
-simplBinder :: SimplEnv -> (InBndr, a) -> SimplM (SimplEnv, (OutBndr, a))
-simplBinder !env (var, a) = case var of
-  C.Id bndr -> do let (env', id) = substIdBndr env bndr
-                  seqId id `seq` return (env', (C.Id id, a))
-  Tv bndr -> do let (env', tv) = substTyVarBndr env bndr
-                seqVar tv `seq` return (env', (Tv tv, a))
-  KCv bndr -> do let (env', kcv) = substKiCoVarBndr env bndr
-                 seqVar kcv `seq` return (env', (KCv kcv, a))
-  Kv bndr -> do let (env', kv) = substKiVarBndr env bndr
-                seqVar kv `seq` return (env', (Kv kv, a))  
+simplRuleBinders :: SimplEnv -> [InBndr] -> SimplM (SimplEnv, [OutBndr])
+simplRuleBinders !env bndrs = mapAccumLM simplRuleBinder env bndrs
+
+simplBinder
+  :: SimplEnv
+  -> (InBndr, Maybe InMonoKind)
+  -> SimplM (SimplEnv, (OutBndr, Maybe OutMonoKind))
+simplBinder !env var_ki = case var_ki of
+  (C.Id bndr, Just ki) -> do
+    let ki' = substMonoKi env ki
+        (env', id) = substIdBndr env bndr
+    seqId id `seq` return (env', (C.Id id, Just ki'))
+  (Tv bndr, Nothing) -> do
+    let (env', tv) = substTyVarBndr env bndr
+    seqVar tv `seq` return (env', (Tv tv, Nothing))
+  (KCv bndr, Nothing) -> do
+    let (env', kcv) = substKiCoVarBndr env bndr
+    seqVar kcv `seq` return (env', (KCv kcv, Nothing))
+  (Kv bndr, Nothing) -> do
+    let (env', kv) = substKiVarBndr env bndr
+    seqVar kv `seq` return (env', (Kv kv, Nothing))
+  _ -> pprPanic "simplBinder" (ppr var_ki)
+
+simplRuleBinder
+  :: SimplEnv
+  -> InBndr
+  -> SimplM (SimplEnv, OutBndr)
+simplRuleBinder !env var = case var of
+  C.Id bndr -> do
+    let (env', id) = substIdBndr env bndr
+    seqId id `seq` return (env', C.Id id)
+  Tv bndr -> do
+    let (env', tv) = substTyVarBndr env bndr
+    seqVar tv `seq` return (env', Tv tv)
+  KCv bndr -> do
+    let (env', kcv) = substKiCoVarBndr env bndr
+    seqVar kcv `seq` return (env', KCv kcv)
+  Kv bndr -> do
+    let (env', kv) = substKiVarBndr env bndr
+    seqVar kv `seq` return (env', Kv kv)
 
 simplIdBinder :: SimplEnv -> InId -> SimplM (SimplEnv, OutId)
 simplIdBinder !env bndr
