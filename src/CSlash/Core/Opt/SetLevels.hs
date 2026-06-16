@@ -153,7 +153,7 @@ lvlExpr
   -> LvlM LevelledExpr
 lvlExpr env (_, AnnType ty) = return (Type (substTyUnchecked (le_subst env) ty))
 lvlExpr env (_, AnnKiCo co) = return (KiCo (substKiCo (le_subst env) co))
-lvlExpr env (_, AnnKind ki) = return (Kind (substMonoKi (le_subst env) ki))
+lvlExpr env (_, AnnKind ki) = return (Kind (substMonoKiUnchecked (le_subst env) ki))
 lvlExpr env (_, AnnVar v) = return (lookupVar env v)
 lvlExpr _ (_, AnnLit lit) = return (Lit lit)
 lvlExpr env (_, AnnCast expr (_, co)) = do
@@ -270,6 +270,7 @@ lvlMFE
   -> CoreExprWithFVs
   -> LvlM LevelledExpr
 lvlMFE env _ (_, AnnType ty) = return (Type (substTyUnchecked (le_subst env) ty))
+lvlMFE env _ (_, AnnKiCo co) = return (KiCo (substKiCo (le_subst env) co))
 lvlMFE env _ (_, AnnKind ki) = return (Kind (substMonoKiUnchecked (le_subst env) ki))
 
 lvlMFE env strict_ctxt (_, AnnTick t e) = do
