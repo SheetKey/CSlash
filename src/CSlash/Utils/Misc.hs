@@ -1,9 +1,12 @@
+{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE CPP #-}
+
 module CSlash.Utils.Misc
   ( module X
   , module CSlash.Utils.Misc
   ) where
 
-import GHC.Utils.Misc as X
+import GHC.Utils.Misc as X hiding (HasDebugCallStack)
 
 import CSlash.Utils.Panic.Plain
 
@@ -18,3 +21,9 @@ foldr2 f c = go
 infixr 9 <.$>
 (<.$>) :: Functor m => (b -> c) -> (a -> m b) -> a -> m c
 (f <.$> g) a = f <$> g a
+
+#if defined(DEBUG)
+type HasDebugCallStack = HasCallStack
+#else
+type HasDebugCallStack = (() :: Constraint)
+#endif

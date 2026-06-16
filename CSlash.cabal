@@ -502,6 +502,8 @@ library
     build-tool-depends:   alex:alex 
                         , happy:happy
 
+    cpp-options:      -DDEBUG
+
     hs-source-dirs:   src
     default-language: Haskell2010
     ghc-options:      -W
