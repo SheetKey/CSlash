@@ -771,8 +771,19 @@ isEmptyTy ty
 *                                                                      *
 ********************************************************************* -}
 
-extendInScopeSetBind :: InScopeSet CoreId -> CoreBind -> InScopeSet CoreId
-extendInScopeSetBind (InScope in_scope) binds
+type TermSubstInScope' = ( InScopeSet (Id Zk)
+                        , InScopeSet (TyCoVar Zk)
+                        , InScopeSet (TyVar Zk)
+                        , InScopeSet (KiCoVar Zk)
+                        , InScopeSet (KiVar Zk) )
+
+extendInScopeSetBind :: TermSubstInScope' -> CoreBind -> TermSubstInScope'
+extendInScopeSetBind (ids, tcvs, tvs, kcvs, kvs) binds
+  = ( extendIdInScopeSetBind ids binds
+    , tcvs, tvs, kcvs, kvs )
+
+extendIdInScopeSetBind :: InScopeSet CoreId -> CoreBind -> InScopeSet CoreId
+extendIdInScopeSetBind (InScope in_scope) binds
   = InScope $ foldBindersOfBindStrict extendVarSet in_scope binds
 
 extendInScopeSetBndrs :: InScopeSet CoreId -> [CoreBind] -> InScopeSet CoreId

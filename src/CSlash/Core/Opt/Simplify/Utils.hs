@@ -834,8 +834,7 @@ abstractFloats uf_opts top_lvl main_tkcvs floats body
 
     is_top_lvl = isTopLevel top_lvl
     body_floats = letFloatBinds (sfLetFloats floats)
-    empty_subst = Subst.mkEmptyTermSubstIS (sfInScope floats, emptyInScopeSet, emptyInScopeSet
-                                           , emptyInScopeSet, emptyInScopeSet)
+    empty_subst = Subst.mkEmptyTermSubstIS (sfInScope floats)
 
     to_sccs :: OutBind -> [SCC (CoreId, CoreExpr, CoreVarSets)]
     to_sccs (NonRec id e) = [AcyclicSCC (id, e, emptyCoreVarSets)]

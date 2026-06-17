@@ -505,7 +505,7 @@ addLetBndrInfo new_bndr new_arity_type new_unf
 *                                                                      *
 ********************************************************************* -}
 
-simplExpr :: SimplEnv -> CoreExpr -> SimplM CoreExpr 
+simplExpr :: HasDebugCallStack => SimplEnv -> CoreExpr -> SimplM CoreExpr 
 simplExpr !env (Type ty) = do
   ty' <- simplType env ty
   return (Type ty')
@@ -630,7 +630,7 @@ simplJoinRhs env bndr expr cont
   | otherwise
   = pprPanic "simplJoinRhs" (ppr bndr)
 
-simplType :: SimplEnv -> InType -> SimplM OutType
+simplType :: HasDebugCallStack => SimplEnv -> InType -> SimplM OutType
 simplType env ty = seqType new_ty `seq` return new_ty
   where new_ty = substTy env ty
 

@@ -176,7 +176,7 @@ data FloatEnable
 data SimplFloats = SimplFloats
   { sfLetFloats :: LetFloats
   , sfJoinFloats :: JoinFloats
-  , sfInScope :: InScopeSet CoreId
+  , sfInScope :: TermSubstInScope
   }
 
 instance Outputable SimplFloats where
@@ -190,8 +190,7 @@ emptyFloats :: SimplEnv -> SimplFloats
 emptyFloats env = SimplFloats
   { sfLetFloats = emptyLetFloats
   , sfJoinFloats = emptyJoinFloats
-  , sfInScope = case seInScope env of
-                  (ids, _, _, _, _) -> ids
+  , sfInScope = seInScope env
   }
 
 isEmptyFloats :: SimplFloats -> Bool
@@ -302,11 +301,7 @@ setInScopeFromE rhs_env here_env = rhs_env { seInScope = seInScope here_env }
 
 setInScopeFromF :: SimplEnv -> SimplFloats -> SimplEnv
 setInScopeFromF env floats
-  = env { seInScope = ( sfInScope floats
-                      , emptyInScopeSet
-                      , emptyInScopeSet
-                      , emptyInScopeSet
-                      , emptyInScopeSet ) }
+  = env { seInScope = sfInScope floats }
 
 addNewInScopeIds :: SimplEnv -> [CoreId] -> SimplEnv
 addNewInScopeIds env@SimplEnv{ seInScope = (in_scope, tcvs, tvs, kcvs, kvs)
@@ -442,14 +437,12 @@ mkFloatBind env bind = (floats, env { seInScope = in_scope' })
       | isJoinBind bind
       = SimplFloats { sfLetFloats = emptyLetFloats
                     , sfJoinFloats = unitJoinFloat bind
-                    , sfInScope = id_in_scope' }
+                    , sfInScope = in_scope' }
       | otherwise
       = SimplFloats { sfLetFloats = unitLetFloat bind
                     , sfJoinFloats = emptyJoinFloats
-                    , sfInScope = id_in_scope' }
-    !in_scope'@(id_in_scope', _, _, _, _) = case seInScope env of
-      (ids, tcvs, tvs, kcvs, kvs)
-        -> (ids `extendInScopeSetBind` bind, tcvs, tvs, kcvs, kvs)
+                    , sfInScope = in_scope' }
+    !in_scope' = seInScope env `extendInScopeSetBind` bind
 
 extendFloats :: SimplFloats -> OutBind -> SimplFloats 
 extendFloats SimplFloats{ sfLetFloats = floats
@@ -473,7 +466,7 @@ addLetFloats floats let_floats
   = floats { sfLetFloats = sfLetFloats floats `addLetFlts` let_floats
            , sfInScope = sfInScope floats `extendInScopeFromLF` let_floats }
 
-extendInScopeFromLF :: InScopeSet CoreId -> LetFloats -> InScopeSet CoreId
+extendInScopeFromLF :: TermSubstInScope -> LetFloats -> TermSubstInScope
 extendInScopeFromLF in_scope (LetFloats binds _)
   = foldlOL extendInScopeSetBind in_scope binds
 
@@ -515,8 +508,7 @@ mkRecFloats floats@SimplFloats{ sfLetFloats = LetFloats bs _
 
 wrapFloats :: SimplFloats -> OutExpr -> OutExpr
 wrapFloats floats@SimplFloats{ sfLetFloats = LetFloats bs flag
-                             , sfJoinFloats = jbs
-                             , sfInScope = in_scope } body
+                             , sfJoinFloats = jbs } body
   = foldrOL mk_let (wrapJoinFloats jbs body) bs
   where mk_let | FltCareful <- flag = mkCoreLet
                | otherwise = Let

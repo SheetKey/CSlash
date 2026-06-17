@@ -63,7 +63,7 @@ exitifyProgram binds = map goTopLvl binds
       | otherwise = Let (Rec pairs') body'
       where
         is_join_rec = any (isJoinId . fst) pairs
-        in_scope' = in_scope `extendInScopeSetBind` (Rec pairs)
+        in_scope' = in_scope `extendIdInScopeSetBind` (Rec pairs)
         pairs' = mapSnd (go in_scope') pairs
         body' = go in_scope' body
 
