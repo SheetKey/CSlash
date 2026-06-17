@@ -54,6 +54,8 @@ library
                     , CSlash.BaseDir
 
                     , CSlash.Builtin.Names
+                    , CSlash.Builtin.PrimOps
+                    , CSlash.Builtin.PrimOps.Casts
                     , CSlash.Builtin.Types
                     , CSlash.Builtin.Types.Prim
                     , CSlash.Builtin.Uniques
@@ -319,6 +321,7 @@ library
                     , CSlash.Stg.Pipeline
                     , CSlash.Stg.Subst
                     , CSlash.Stg.Syntax
+                    , CSlash.Stg.Unarise
                     , CSlash.Stg.Utils
 
                     , CSlash.SysTools

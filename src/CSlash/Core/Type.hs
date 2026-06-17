@@ -1113,6 +1113,26 @@ mkFunResMCo _ _ = panic "mkFunResMCo"
 
 {- *********************************************************************
 *                                                                      *
+              Sum/Tuple
+*                                                                      *
+********************************************************************* -}
+
+isTupleType :: Type Zk -> Bool
+isTupleType ty
+  | Just tc <- tyConAppTyCon_maybe ty
+  = isTupleTyCon tc
+  | otherwise
+  = False
+
+isSumType :: Type Zk -> Bool
+isSumType ty
+  | Just tc <- tyConAppTyCon_maybe ty
+  = isSumTyCon tc
+  | otherwise
+  = False
+
+{- *********************************************************************
+*                                                                      *
               Join points
 *                                                                      *
 ********************************************************************* -}

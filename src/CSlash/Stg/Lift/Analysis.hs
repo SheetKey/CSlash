@@ -48,7 +48,8 @@ tagSkeletonTopBind bind = bind'
 
 tagSkeletonExpr :: CgStgExpr -> (Skeleton, CoreIdSet, LlStgExpr)
 tagSkeletonExpr (StgLit lit) = (NilSk, emptyVarSet, StgLit lit)
-tagSkeletonExpr (StgConApp con mn args) = (NilSk, mkArgOccs args, StgConApp con mn args)
+tagSkeletonExpr (StgConApp con mn args tys) = (NilSk, mkArgOccs args, StgConApp con mn args tys)
+tagSkeletonExpr (StgOpApp op args ty) = (NilSk, mkArgOccs args, StgOpApp op args ty)
 tagSkeletonExpr (StgApp f args) = (NilSk, arg_occs, StgApp f args)
   where arg_occs | null args = unitVarSet f
                  | otherwise = mkArgOccs args
@@ -122,8 +123,8 @@ tagSkeletonBinding is_lne body_skel body_arg_occs (StgRec pairs)
 tagSkeletonRhs :: CoreId -> CgStgRhs -> (Skeleton, CoreIdSet, LlStgRhs)
 tagSkeletonRhs _ (StgRhsCon dc mn ts args ty)
   = (NilSk, mkArgOccs args, StgRhsCon dc mn ts args ty)
-tagSkeletonRhs bndr (StgRhsClosure fvs bndrs body ty)
-  = (rhs_skel, body_arg_occs, StgRhsClosure fvs bndrs' body' ty)
+tagSkeletonRhs bndr (StgRhsClosure fvs is_join bndrs body ty)
+  = (rhs_skel, body_arg_occs, StgRhsClosure fvs is_join bndrs' body' ty)
   where
     bndrs' = map BoringBinder bndrs
     (body_skel, body_arg_occs, body') = tagSkeletonExpr body
@@ -185,7 +186,7 @@ goodToLift cfg top_lvl rec_flag expander pairs scope = decide
 
     any_memoized = any is_memoized_rhs rhss
     is_memoized_rhs StgRhsCon{} = True
-    is_memoized_rhs (StgRhsClosure _ _ _ _) = False
+    is_memoized_rhs (StgRhsClosure _ _ _ _ _) = False
 
     arg_occs = or (mapMaybe (binderInfoOccursAsArg . fst) pairs)
 

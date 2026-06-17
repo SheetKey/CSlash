@@ -38,19 +38,22 @@ import CSlash.Data.FastString
 *                                                                      *
 ********************************************************************* -}
 
-wiredInIds :: [Id p]
+wiredInIds :: [Id Zk]
 wiredInIds
   = magicIds
   ++ csPrimIds
   ++ errorIds
 
-magicIds :: [Id p]
+magicIds :: [Id Zk]
 magicIds = []
 
-csPrimIds :: [Id p]
-csPrimIds = []
+csPrimIds :: [Id Zk]
+csPrimIds =
+  [
+    voidPrimId
+  ]
 
-errorIds :: [Id p]
+errorIds :: [Id Zk]
 errorIds = []
 
 {- *********************************************************************
@@ -81,10 +84,10 @@ mkDataConId wkr_name data_con
 ********************************************************************* -}
 
 leftSectionName :: Name
-leftSectionName = panic "leftTySectionName"
+leftSectionName = panic "leftSectionName"
 
 rightSectionName :: Name
-rightSectionName = panic "rightTySectionName"
+rightSectionName = panic "rightSectionName"
 
 leftTySectionName :: Name
 leftTySectionName = panic "leftTySectionName"
@@ -92,6 +95,12 @@ leftTySectionName = panic "leftTySectionName"
 rightTySectionName :: Name
 rightTySectionName = panic "rightTySectionName"
 
+voidPrimId :: CoreId
+voidPrimId = panic "voidPrimId"
+
 -- TODO: Should builtins be functions of kinds? Rather than be exprs/types which require kind args.
 unitExpr :: CoreExpr
 unitExpr = panic "unitExpr"
+
+voidArgId :: CoreId
+voidArgId = mkSysLocal (fsLit "void") voidArgIdKey (mkTyConApp unitTyCon [Embed (BIKi UKd)])

@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -546,3 +547,23 @@ instance (Data.Typeable p) => Data.Data (TyCon p) where
   toConstr _ = abstractConstr "TyCon"
   gunfold _ _ = error "gunfold"
   dataTypeOf _ = mkNoRepType "TyCon"
+
+{- *********************************************************************
+*                                                                      *
+                 PrimRep
+*                                                                      *
+********************************************************************* -}
+
+data PrimRep
+  = IntRep Int
+  | UIntRep Int
+  | AddrRep
+  | FloatRep
+  | DoubleRep
+  deriving (Data.Data, Eq, Ord, Show)
+
+data PrimOrVoidRep = VoidRep | NVRep PrimRep
+  deriving (Data.Data, Eq, Ord, Show)
+
+instance Outputable PrimRep where
+  ppr r = text (show r)

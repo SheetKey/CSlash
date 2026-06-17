@@ -18,7 +18,7 @@ import CSlash.Stg.Lift.Types
 
 import CSlash.Core ( AltCon, CoreId, CoreType, CoreDataCon )
 import CSlash.Core.DataCon
--- import CSlash.Core.TyCon ( PrimRep(..), PrimOrVoidRep(..), TyCon )
+import CSlash.Core.TyCon ( PrimRep(..){-, PrimOrVoidRep(..)-}, TyCon )
 import CSlash.Core.Type ( Type )
 import CSlash.Core.Ppr ({- instances -})
 
@@ -28,12 +28,12 @@ import CSlash.Types.Var.Id
 import CSlash.Types.Tickish ( StgTickish )
 import CSlash.Types.Var.Set
 import CSlash.Types.Literal ( Literal, literalType )
--- import CSlash.Types.RepType ( typePrimRep, typePrimRep1, typePrimRepU, typePrimRep_maybe )
+import CSlash.Types.RepType ( typePrimRep, typePrimRep1, typePrimRepU, typePrimRep_maybe )
 
 import CSlash.Utils.Outputable
 import CSlash.Utils.Panic.Plain
 
--- import CSlash.Builtin.PrimOps ( PrimOp, PrimCall )
+import CSlash.Builtin.PrimOps ( PrimOp{-, PrimCall-} )
 
 import Data.ByteString ( ByteString )
 import Data.Data ( Data )
@@ -67,6 +67,12 @@ stgArgType :: StgArg -> CoreType
 stgArgType (StgVarArg v) = varType v
 stgArgType (StgLitArg lit) = literalType lit
 
+stgArgRep :: StgArg -> [PrimRep]
+stgArgRep = typePrimRep . stgArgType
+
+stgArgRepU :: StgArg -> PrimRep
+stgArgRepU ty = typePrimRepU (stgArgType ty)
+
 {- *********************************************************************
 *                                                                      *
 STG expressions
@@ -84,9 +90,9 @@ data GenStgExpr pass
 
   | StgLit Literal
 
-  | StgConApp CoreDataCon ConstructorNumber [StgArg]
+  | StgConApp CoreDataCon ConstructorNumber [StgArg] [[PrimRep]]
 
-  -- | StgOpApp StgOp [StgArg] CoreType
+  | StgOpApp StgOp [StgArg] CoreType
   
   | StgCase (GenStgExpr pass) (BinderP pass) AltType [GenStgAlt pass]
 
@@ -106,6 +112,7 @@ STG right-hand sides
 data GenStgRhs pass
   = StgRhsClosure
     (XRhsClosure pass)
+    !Bool -- True <=> join point
     [BinderP pass]
     (GenStgExpr pass)
     CoreType
@@ -127,11 +134,11 @@ noExtFieldSilent :: NoExtFieldSilent
 noExtFieldSilent = NoExtFieldSilent
 
 stgRhsArity :: StgRhs -> Int
-stgRhsArity (StgRhsClosure _ bndrs _ _) = length bndrs
+stgRhsArity (StgRhsClosure _ _ bndrs _ _) = length bndrs
 stgRhsArity StgRhsCon{} = 0
 
 freeVarsOfRhs :: (XRhsClosure pass ~ DCoreIdSet) => GenStgRhs pass -> DCoreIdSet
-freeVarsOfRhs (StgRhsClosure fvs _ _ _) = fvs
+freeVarsOfRhs (StgRhsClosure fvs _ _ _ _) = fvs
 freeVarsOfRhs (StgRhsCon _ _ _ args _) = mkDVarSet [ id | StgVarArg id <- args ]
 
 {- *********************************************************************
@@ -148,7 +155,7 @@ data GenStgAlt pass = GenStgAlt
 
 data AltType
   = MultiValAlt Int
-  | PrimAlt
+  | PrimAlt PrimRep
 
 {- *********************************************************************
 *                                                                      *
@@ -225,6 +232,7 @@ StgOp
 ********************************************************************* -}
 
 data StgOp
+  = StgPrimOp PrimOp
 
 {- *********************************************************************
 *                                                                      *
@@ -305,7 +313,8 @@ pprStgExpr :: OutputablePass pass => StgPprOpts -> GenStgExpr pass -> SDoc
 pprStgExpr opts e = case e of
   StgLit lit -> ppr lit
   StgApp func args -> hang (ppr func) 4 (interppSP args)
-  StgConApp con n args -> hsep [ ppr con, ppr n, brackets (interppSP args) ]
+  StgConApp con n args _ -> hsep [ ppr con, ppr n, brackets (interppSP args) ]
+  StgOpApp op args _ -> hsep [ pprStgOp op, brackets (interppSP args) ]
 
   StgLet ext bind expr@StgLet{} ->
     (sep [hang (text "let" <+> ppr ext <+> text "{")
@@ -344,17 +353,21 @@ pprStgAlt opts indent GenStgAlt{ alt_con, alt_bndrs, alt_rhs }
                           , sep (map (pprBndr CasePatBind) alt_bndrs)
                           , text "->" ]
 
-instance Outputable StgOp
+pprStgOp :: StgOp -> SDoc
+pprStgOp = panic "pprStgOp"
+
+instance Outputable StgOp where
+  ppr = pprStgOp
 
 instance Outputable AltType where
   ppr (MultiValAlt n) = text "MultiAlt" <+> ppr n
-  ppr (PrimAlt) = text "Prim"
+  ppr (PrimAlt tc) = text "Prim" <+> ppr tc
 
 pprStgRhs :: OutputablePass pass => StgPprOpts -> GenStgRhs pass -> SDoc
 pprStgRhs opts rhs = case rhs of
-  StgRhsClosure ext args body _
+  StgRhsClosure ext is_join args body _
     -> hang (hsep [ ppUnlessOption sdocSuppressStgExts (ppr ext)
-                  , char '\\', brackets (interppSP args) ])
+                  , char '\\' <> if is_join then char 'j' else empty, brackets (interppSP args) ])
        4 (pprStgExpr opts body)
 
   StgRhsCon con mid _ args _

@@ -96,7 +96,7 @@ collectFloats = go (0 :: Int) []
     is_rec _ = False
 
 removeRhsCCCs :: GenStgRhs pass -> GenStgRhs pass
-removeRhsCCCs (StgRhsClosure ext bndrs body ty) = StgRhsClosure ext bndrs body ty
+removeRhsCCCs (StgRhsClosure ext is_join bndrs body ty) = StgRhsClosure ext is_join bndrs body ty
 removeRhsCCCs (StgRhsCon con mu ts args ty) = StgRhsCon con mu ts args ty
 removeRhsCCCs rhs = rhs
 

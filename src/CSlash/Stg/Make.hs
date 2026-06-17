@@ -33,23 +33,23 @@ mkTopStgRhs allow_toplevel_con_app this_mod bndr mk_rhs@(MkStgRhs bndrs rhs ty _
   = rhs_con
 
   | not (null bndrs)
-  = StgRhsClosure noExtFieldSilent bndrs rhs ty
+  = StgRhsClosure noExtFieldSilent False bndrs rhs ty
 
   | otherwise
-  = StgRhsClosure noExtFieldSilent [] rhs ty
+  = StgRhsClosure noExtFieldSilent False [] rhs ty
 
 mkStgRhs :: CoreId -> MkStgRhs -> StgRhs
 mkStgRhs bndr mk_rhs@(MkStgRhs bndrs rhs ty is_join)
   | Just rhs_con <- mkStgRhsCon_maybe mk_rhs
   = rhs_con
   | otherwise
-  = StgRhsClosure noExtFieldSilent bndrs rhs ty
+  = StgRhsClosure noExtFieldSilent is_join bndrs rhs ty
 
 mkStgRhsCon_maybe :: MkStgRhs -> Maybe StgRhs
 mkStgRhsCon_maybe (MkStgRhs bndrs rhs ty is_join)
   | [] <- bndrs
   , not is_join
-  , (ticks, StgConApp con mn args) <- stripStgTicksTop (not . tickishIsCode) rhs
+  , (ticks, StgConApp con mn args _) <- stripStgTicksTop (not . tickishIsCode) rhs
   = Just (StgRhsCon con mn ticks args ty)
   | otherwise
   = Nothing
@@ -58,7 +58,7 @@ mkTopStgRhsCon_maybe :: (CoreDataCon -> [StgArg] -> Bool) -> MkStgRhs -> Maybe S
 mkTopStgRhsCon_maybe allow_static_con_app (MkStgRhs bndrs rhs ty is_join)
   | [] <- bndrs
   , not is_join
-  , (ticks, StgConApp con mn args) <- stripStgTicksTop (not . tickishIsCode) rhs
+  , (ticks, StgConApp con mn args _) <- stripStgTicksTop (not . tickishIsCode) rhs
   , allow_static_con_app con args
   = Just (StgRhsCon con mn ticks args ty)
   | otherwise

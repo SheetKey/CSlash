@@ -185,8 +185,8 @@ coreToStgApp f args ticks = do
       app = case idDetails f of
               DataConId dc
                 | saturated -> if isSumDataCon dc
-                               then StgConApp dc NoNumber args' 
-                               else StgConApp dc NoNumber args' 
+                               then StgConApp dc NoNumber args' (sumPrimReps args)
+                               else StgConApp dc NoNumber args' []
 
               -- PrimOpId TODO
 
@@ -200,6 +200,11 @@ coreToStgApp f args ticks = do
       tapp = foldr add_tick app (map (coreToStgTick res_ty) ticks ++ ticks')
 
   app `seq` return tapp
+
+sumPrimReps :: [CoreArg] -> [[PrimRep]]
+sumPrimReps args
+  = let val_args = dropWhile isNonValArg args
+    in typePrimRep . exprType <$> val_args
 
 -- ---------------------------------------------------------------------------
 -- Argument lists

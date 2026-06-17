@@ -15,7 +15,7 @@ import CSlash.Stg.Syntax
 -- import GHC.Stg.Lint     ( lintStgTopBindings )
 -- import GHC.Stg.Stats    ( showStgStats )
 import CSlash.Stg.FVs      ( depSortWithAnnotStgPgm )
--- import GHC.Stg.Unarise  ( unarise )
+import CSlash.Stg.Unarise  ( unarise )
 -- import GHC.Stg.BcPrep   ( bcPrep )
 -- import GHC.Stg.CSE      ( stgCse )
 import CSlash.Stg.Lift     ( StgLiftConfig, stgLiftLams )
@@ -69,19 +69,19 @@ stg2stg
   -> IO [(CgStgTopBinding, CoreIdSet)]
 stg2stg logger opts this_mod binds = do
   dump_when Opt_D_dump_stg_from_core "Initial STG:" binds
-  stg_linter "StgFromCore" binds
+  stg_linter False "StgFromCore" binds
   showPass logger "Stg2Stg"
   binds' <- runStgM 'g' $
     foldM (do_stg_pass this_mod) binds (stgPipeline_phases opts)
 
   let (cg_binds, imp_fvs) = unzip (depSortWithAnnotStgPgm this_mod binds')
-  stg_linter "StgCodeGen" cg_binds
+  stg_linter False "StgCodeGen" cg_binds
   pure (zip cg_binds imp_fvs)
   where
     stg_linter
       :: (BinderP a ~ CoreId, OutputablePass a)
-      => String -> [GenStgTopBinding a] -> IO ()
-    stg_linter
+      => Bool -> String -> [GenStgTopBinding a] -> IO ()
+    stg_linter unarised
       | Just diap_opts <- stgPipeline_lint opts
       = panic "lintStgTopBindings"
 
@@ -99,7 +99,14 @@ stg2stg logger opts this_mod binds = do
 
           StgLiftLams cfg -> panic "StgLiftLams"
 
-          StgUnarise -> panic "StgUnarise"
+          StgUnarise -> do
+            us <- getUniqueSupplyM
+            liftIO (stg_linter False "Pre-unarise" binds)
+            let binds' = {-# SCC "StgUnarise" #-}
+                         unarise us (stgPipeline_allowTopLevelConApp opts this_mod) binds
+            liftIO (dump_when Opt_D_dump_stg_unarised "Unarised STG:" binds')
+            liftIO (stg_linter True "Unarise" binds')
+            return binds'
 
     ppr_opts = stgPipeline_pprOpts opts
     dump_when flag header binds
@@ -109,7 +116,7 @@ stg2stg logger opts this_mod binds = do
       = liftIO $ do
           putDumpFileMaybe logger Opt_D_verbose_stg2stg what
             FormatSTG (vcat (map (pprStgTopBinding ppr_opts) binds2))
-          stg_linter what binds2
+          stg_linter False what binds2
           return binds2
 
 data StgToDo

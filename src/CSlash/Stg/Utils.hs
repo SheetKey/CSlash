@@ -11,7 +11,7 @@ import CSlash.Core
 import CSlash.Types.Tickish
 import CSlash.Types.Unique.Supply
 
--- import GHC.Types.RepType
+import CSlash.Types.RepType
 -- import CSlash.Types.Name ( isDynLinkName )
 import CSlash.Unit.Module ( Module )
 import CSlash.Stg.Syntax
@@ -21,6 +21,12 @@ import CSlash.Utils.Outputable
 import CSlash.Utils.Panic
 
 import CSlash.Data.FastString
+
+mkUnarisedIds :: MonadUnique m => FastString -> [NvUnaryType] -> m [CoreId]
+mkUnarisedIds fs tys = mapM (mkUnarisedId fs) tys
+
+mkUnarisedId :: MonadUnique m => FastString -> NvUnaryType -> m CoreId
+mkUnarisedId s t = mkSysLocalM s t
 
 bindersOf :: BinderP a ~ CoreId => GenStgBinding a -> [CoreId]
 bindersOf (StgNonRec binder _) = [binder]

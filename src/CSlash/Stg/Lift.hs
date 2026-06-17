@@ -82,14 +82,14 @@ liftRhs mb_former_fvs rhs@(StgRhsCon con mn ts args ty)
      $$ pprStgRhs panicStgPprOpts rhs) $
     StgRhsCon con mn ts <$> traverse liftArgs args <*> pure ty
     
-liftRhs Nothing (StgRhsClosure _ infos body ty)
+liftRhs Nothing (StgRhsClosure _ is_join infos body ty)
   = withSubstBndrs (map binderInfoBndr infos) $ \bndrs' ->
-    StgRhsClosure noExtFieldSilent bndrs' <$> liftExpr body <*> pure ty  
+    StgRhsClosure noExtFieldSilent is_join bndrs' <$> liftExpr body <*> pure ty  
 
-liftRhs (Just former_fvs) (StgRhsClosure _ infos body ty)
+liftRhs (Just former_fvs) (StgRhsClosure _ is_join infos body ty)
   = withSubstBndrs (map binderInfoBndr infos) $ \bndrs' -> do
     let bndrs'' = dVarSetElems former_fvs ++ bndrs'
-    StgRhsClosure noExtFieldSilent bndrs'' <$> liftExpr body <*> pure ty
+    StgRhsClosure noExtFieldSilent is_join bndrs'' <$> liftExpr body <*> pure ty
 
 liftArgs :: InStgArg -> LiftM OutStgArg
 liftArgs a@(StgLitArg _) = pure a
@@ -106,7 +106,8 @@ liftExpr (StgApp f args) = do
   fvs' <- formerFreeVars f
   let top_lvl_args = map StgVarArg fvs' ++ args'
   pure (StgApp f' top_lvl_args)
-liftExpr (StgConApp con mn args) = StgConApp con mn <$> traverse liftArgs args
+liftExpr (StgConApp con mn args tys) = StgConApp con mn <$> traverse liftArgs args <*> pure tys
+liftExpr (StgOpApp op args ty) = StgOpApp op <$> traverse liftArgs args <*> pure ty
 liftExpr (StgCase scrut info ty alts) = do
   scrut' <- liftExpr scrut
   withSubstBndr (binderInfoBndr info) $ \bndr' -> do

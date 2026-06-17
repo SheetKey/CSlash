@@ -15,7 +15,7 @@ import CSlash.Types.Var.Id
 import CSlash.Types.Var.Class
 import CSlash.Types.Literal
 import CSlash.Types.Var.Id.Info
--- import CSlash.Types.RepType ( isZeroBitTy )
+import CSlash.Types.RepType ( isZeroBitTy )
 import CSlash.Types.Basic  ( Arity, RecFlag )
 -- import GHC.Types.ForeignCall
 import CSlash.Types.Tickish
@@ -29,9 +29,6 @@ import CSlash.Utils.Panic
 
 import Data.Maybe (mapMaybe)
 import qualified Data.ByteString as BS
-
--- TODO: Void and () are zerobit
-isZeroBitTy _ = False
 
 data UnfoldingOpts = UnfoldingOpts
   { unfoldingCreationThreshold :: !Int

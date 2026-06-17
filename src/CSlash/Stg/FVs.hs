@@ -114,9 +114,13 @@ exprFVs env = go
 
     go (StgLit lit) = (StgLit lit, emptyVarSet, emptyVarSet, emptyDVarSet)
 
-    go (StgConApp dc n as)
+    go (StgConApp dc n as tys)
       = let (imp_fvs, top_fvs, lcl_fvs) = argsFVs env as
-        in (StgConApp dc n as, imp_fvs, top_fvs, lcl_fvs)
+        in (StgConApp dc n as tys, imp_fvs, top_fvs, lcl_fvs)
+
+    go (StgOpApp op as ty)
+      = let (imp_fvs, top_fvs, lcl_fvs) = argsFVs env as
+        in (StgOpApp op as ty, imp_fvs, top_fvs, lcl_fvs)
 
     go (StgCase scrut bndr ty alts)
       = let (scrut', scrut_imp_fvs, scrut_top_fvs, scrut_lcl_fvs) = exprFVs env scrut
@@ -146,10 +150,10 @@ exprFVs env = go
         imp_fvs = bind_imp_fvs `unionVarSet` body_imp_fvs
 
 rhsFVs :: Env -> StgRhs -> (CgStgRhs, ImpFVs, TopFVs, LocalFVs)
-rhsFVs env (StgRhsClosure _ bs body ty)
+rhsFVs env (StgRhsClosure _ is_join bs body ty)
   = let (body', imp_fvs, top_fvs, lcl_fvs) = exprFVs (addLocals bs env) body
         lcl_fvs' = delDVarSetList lcl_fvs bs
-    in (StgRhsClosure lcl_fvs' bs body' ty, imp_fvs, top_fvs, lcl_fvs')
+    in (StgRhsClosure lcl_fvs' is_join bs body' ty, imp_fvs, top_fvs, lcl_fvs')
 rhsFVs env (StgRhsCon dc mu ts bs ty)
   = let (imp_fvs, topp_fvs, lcl_fvs) = argsFVs env bs
     in (StgRhsCon dc mu ts bs ty, imp_fvs, topp_fvs, lcl_fvs)

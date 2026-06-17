@@ -69,9 +69,6 @@ cSLASH_BUILTIN = mkPrimModule (fsLit "CSL.BuiltIn")
 rOOT_MAIN :: Module
 rOOT_MAIN= mkMainModule (fsLit ":Main")
 
-pRELUDE_NAME :: ModuleName
-pRELUDE_NAME = mkModuleNameFS (fsLit "Prelude")
-
 mAIN_NAME :: ModuleName
 mAIN_NAME = mkModuleNameFS (fsLit "Main")
 
@@ -167,6 +164,9 @@ mkIoResDataConKey = mkWiredInDataConUnique 17
  
 wildCardKey :: Unique
 wildCardKey = mkWiredInMiscIdUnique 0
+
+voidArgIdKey :: Unique
+voidArgIdKey = mkWiredInMiscIdUnique 40
 
 assertIdKey :: Unique 
 assertIdKey = mkWiredInMiscIdUnique 44
