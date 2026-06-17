@@ -12,6 +12,7 @@ import CSlash.Core.Kind
 import CSlash.Core.Type.Rep
 import CSlash.Core.TyCon
 import CSlash.Core.DataCon
+import CSlash.Core.Unfold.Make
 
 import CSlash.Types.SourceText
 import CSlash.Types.RepType (countFunRepArgs)
@@ -95,12 +96,17 @@ leftTySectionName = panic "leftTySectionName"
 rightTySectionName :: Name
 rightTySectionName = panic "rightTySectionName"
 
-voidPrimId :: CoreId
-voidPrimId = panic "voidPrimId"
+voidPrimIdName :: Name
+voidPrimIdName = mkWiredInIdName cSLASH_BUILTIN (fsLit "void#") voidPrimIdKey voidPrimId
 
--- TODO: Should builtins be functions of kinds? Rather than be exprs/types which require kind args.
-unitExpr :: CoreExpr
-unitExpr = panic "unitExpr"
+voidPrimId :: CoreId
+voidPrimId = mkVanillaGlobalWithInfo
+             voidPrimIdName
+             (mkTyConApp unitTyCon [Embed (BIKi UKd)])
+             (vanillaIdInfo `setUnfoldingInfo` mkCompulsoryUnfolding (unitExpr (BIKi UKd)))
+
+unitExpr :: CoreMonoKind -> CoreExpr
+unitExpr ki = App (Var (dataConId unitDataCon)) (Kind ki)
 
 voidArgId :: CoreId
 voidArgId = mkSysLocal (fsLit "void") voidArgIdKey (mkTyConApp unitTyCon [Embed (BIKi UKd)])

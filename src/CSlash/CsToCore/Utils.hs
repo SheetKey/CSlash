@@ -130,7 +130,7 @@ mkFailurePair expr = do
   fail_fun_arg <- newSysLocalMDs (mkAppTy unitTy (Embed (BIKi UKd)))
   let real_arg = setOneShotLambda fail_fun_arg
   return ( NonRec fail_fun_var (Lam (Core.Id real_arg) (Just (BIKi UKd)) expr)
-         , App (Var fail_fun_var) unitExpr )
+         , App (Var fail_fun_var) (unitExpr (BIKi UKd)) )
   where ty = exprType expr
 
 shareFailureHandler :: MatchResult CoreExpr -> MatchResult CoreExpr

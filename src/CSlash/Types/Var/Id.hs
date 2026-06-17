@@ -121,6 +121,9 @@ mk_id name ty scope details info = Id { id_name = name
 mkGlobalId :: IdDetails -> Name -> Type p -> IdInfo -> Id p
 mkGlobalId details name ty info = mk_id name ty GlobalId details info
 
+mkVanillaGlobalWithInfo :: HasDebugCallStack => Name -> Type p -> IdInfo -> Id p
+mkVanillaGlobalWithInfo = mkGlobalId VanillaId
+
 mkLocalId :: Name -> Type p -> Id p
 mkLocalId name ty = mkLocalIdWithInfo name ty vanillaIdInfo
 

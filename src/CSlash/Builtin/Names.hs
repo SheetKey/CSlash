@@ -165,6 +165,9 @@ mkIoResDataConKey = mkWiredInDataConUnique 17
 wildCardKey :: Unique
 wildCardKey = mkWiredInMiscIdUnique 0
 
+voidPrimIdKey :: Unique
+voidPrimIdKey = mkWiredInMiscIdUnique 24
+
 voidArgIdKey :: Unique
 voidArgIdKey = mkWiredInMiscIdUnique 40
 

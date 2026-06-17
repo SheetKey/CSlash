@@ -79,9 +79,9 @@ mkWiredInDataConName
 mkWiredInDataConName built_in modu fs unique datacon
   = mkWiredInName modu (mkDataOccFS fs) unique (AConLike (RealDataCon datacon)) built_in
 
--- mkWiredInIdName :: Module -> FastString -> Unique -> Id Zk -> Name
--- mkWiredInIdName modu fs unique id
---   = mkWiredInName modu (mkOccNameFS Name.varName fs) unique (AnId id) UserSyntax
+mkWiredInIdName :: Module -> FastString -> Unique -> Id Zk -> Name
+mkWiredInIdName modu fs unique id
+  = mkWiredInName modu (mkOccNameFS Name.varName fs) unique (AnId id) UserSyntax
 
 boolTyConName :: Name
 boolTyConName = mkWiredInTyConName UserSyntax cSLASH_BUILTIN (fsLit "Bool") boolTyConKey boolTyCon

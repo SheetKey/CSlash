@@ -22,6 +22,12 @@ import Data.Maybe ( fromMaybe )
 -- the very simple optimiser is used to optimise unfoldings
 import {-# SOURCE #-} CSlash.Core.SimpleOpt
 
+mkCompulsoryUnfolding :: CoreExpr -> Unfolding
+mkCompulsoryUnfolding expr
+  = mkCoreUnfolding CompulsorySrc True expr Nothing (UnfWhen { ug_arity = 0
+                                                             , ug_unsat_ok = True
+                                                             , ug_boring_ok = True })
+
 mkSimpleUnfolding :: UnfoldingOpts -> CoreExpr -> Unfolding
 mkSimpleUnfolding !opts rhs
   = mkUnfolding opts VanillaSrc False False False rhs Nothing
@@ -59,7 +65,8 @@ mkUnfolding opts src top_lvl is_bottoming is_join expr cache
     is_top_bottoming = top_lvl && is_bottoming
     guidance = calcUnfoldingGuidance opts is_top_bottoming is_join expr
 
-mkCoreUnfolding :: UnfoldingSource
+mkCoreUnfolding
+  :: UnfoldingSource
   -> Bool
   -> CoreExpr
   -> Maybe UnfoldingCache
