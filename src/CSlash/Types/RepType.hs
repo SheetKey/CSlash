@@ -21,6 +21,8 @@ import CSlash.Builtin.Names
 import CSlash.Utils.Misc
 import CSlash.Utils.Outputable
 import CSlash.Utils.Panic
+import CSlash.Utils.Monad
+import CSlash.Data.Maybe (orElse)
 
 import Data.List.NonEmpty (NonEmpty (..))
 import Data.List (sort)
@@ -59,7 +61,7 @@ countFunRepArgs n ty
   = pprPanic "countFunRepArgs arity greater than type can handle" (ppr (n, ty))
 
 isZeroBitTy :: HasDebugCallStack => Type Zk -> Bool
-isZeroBitTy = null . typePrimRep
+isZeroBitTy ty = fmap null (typePrimRep_maybe ty) `orElse` False
 
 {- **********************************************************************
 *                                                                       *
@@ -165,12 +167,15 @@ fitsIn ty1 ty2
 ********************************************************************** -}
 
 typePrimRep :: HasDebugCallStack => Type Zk -> [PrimRep]
-typePrimRep ty
+typePrimRep ty = typePrimRep_maybe ty `orElse` pprPanic "typePrimRep" (ppr ty)
+
+typePrimRep_maybe :: HasDebugCallStack => Type Zk -> Maybe [PrimRep]
+typePrimRep_maybe ty
   -- Tuple type
   | Just (tc, tys) <- splitTyConApp_maybe ty
   , (_:_) <- tys
   , isTupleTyCon tc
-  = concatMap typePrimRep tys
+  = concatMapM typePrimRep_maybe tys
   -- Sum type
   | Just (tc, tys) <- splitTyConApp_maybe ty
   , (_:_) <- tys
@@ -181,37 +186,37 @@ typePrimRep ty
   | Just (tc, tys) <- splitTyConApp_maybe ty
   , tc `hasKey` ioResTyConKey
   , [_ki, ty] <- tys
-  = typePrimRep ty
+  = typePrimRep_maybe ty
          
   | Just (tc, tys) <- splitTyConApp_maybe ty
   , tc `hasKey` ioTyConKey
   , [_ki, _fki, ty] <- tys
-  = typePrimRep ty 
+  = typePrimRep_maybe ty 
+
+  -- Function types
+  | Just (tc, _) <- splitTyConApp_maybe ty
+  , tc `hasKey` fUNTyConKey
+  = Just [AddrRep] -- TODO: runtime rep of functions???
 
   -- Builtins (can have kind and coercion args, but no type args)
   | Just (tc, tys) <- splitTyConApp_maybe ty
-  = assert (all isKindOrCoArg tys) $ -- assertion may go away if comptime/type lits are allowed
+  = assertPpr (all isKindOrCoArg tys) (ppr tc $$ ppr tys) $ -- assertion may go away if comptime/type lits are allowed
     if | tc `hasKey` boolTyConKey
-         -> [IntRep 1]
+         -> Just [IntRep 1]
        | tc `hasKey` realWorldTyConKey
-         -> []
+         -> Just []
        -- if 'tc `hasKey` fUNTyConKey' then should we return 'AddrRep'?
        | otherwise
          -> pprPanic "typePrimRep unknown TyCon" (ppr tc $$ ppr tys)
 
   -- Necessary to make tupel/sum cases easier
   | Embed{} <- ty
-  = []
+  = Just []
   | KindCoercion{} <- ty
-  = []
+  = Just []
       
   | otherwise
-  = pprPanic "typePrimRep"
-    $ vcat [ text "type:" <+> ppr ty
-           , text "but expected a TyCon application" ]
-
-typePrimRep_maybe :: Type Zk -> Maybe [PrimRep]
-typePrimRep_maybe = panic "typePrimRep_maybe"
+  = Nothing
 
 typePrimRep1 :: HasDebugCallStack => UnaryType -> PrimOrVoidRep
 typePrimRep1 ty = case typePrimRep ty of
