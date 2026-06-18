@@ -809,3 +809,20 @@ dumpIdInfoOfProgram dump_locals ppr_id_info binds = vcat (map printId ids)
     printId :: CoreId -> SDoc
     printId id | isExportedId id || dump_locals = ppr id <> colon <+> ppr_id_info (idInfo id)
                | otherwise = empty
+
+{- *********************************************************************
+*                                                                      *
+              isPolyBind
+*                                                                      *
+********************************************************************* -}
+
+isPolyBind :: CoreBind -> Bool
+isPolyBind = foldBindersOfBindStrict (\b v -> b || isPolyType (varType v)) False
+  where
+    isPolyType :: CoreType -> Bool
+    isPolyType ty
+      | Just ty' <- coreView ty = isPolyType ty'
+    isPolyType (BigTyLamTy _ ty) = isPolyType ty
+    isPolyType (ForAllKiCo _ ty) = isPolyType ty
+    isPolyType ForAllTy{} = True
+    isPolyType _ = False

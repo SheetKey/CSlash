@@ -116,21 +116,21 @@ corePrepPgm logger cp_cfg pgm_cfg this_mod mod_loc binds
        endPassIO logger (cpPgm_endPassConfig pgm_cfg) binds_out []
        return binds_out
 
-corePrepExpr :: Logger -> CorePrepConfig -> CoreExpr -> IO CoreExpr
-corePrepExpr logger config expr
-  = withTiming logger (text "CorePrep [expr]") (\e -> e `seq` ()) $ do
-      us <- mkSplitUniqSupply 's'
-      let initialCorePrepEnv = mkInitialCorePrepEnv config
-          new_expr = initUs_ us (cpeBodyNF initialCorePrepEnv expr)
-      putDumpFileMaybe logger Opt_D_dump_prep "CorePrep" FormatCore (ppr new_expr)
-      return new_expr
+-- corePrepExpr :: Logger -> CorePrepConfig -> CoreExpr -> IO CoreExpr
+-- corePrepExpr logger config expr
+--   = withTiming logger (text "CorePrep [expr]") (\e -> e `seq` ()) $ do
+--       us <- mkSplitUniqSupply 's'
+--       let initialCorePrepEnv = mkInitialCorePrepEnv config
+--           new_expr = initUs_ us (cpeBodyNF initialCorePrepEnv expr)
+--       putDumpFileMaybe logger Opt_D_dump_prep "CorePrep" FormatCore (ppr new_expr)
+--       return new_expr
 
 corePrepTopBinds :: CorePrepEnv -> [CoreBind] -> UniqSM Floats
 corePrepTopBinds initialCorePrepEnv binds
   = go initialCorePrepEnv binds
   where
     go _ [] = return emptyFloats
-    go env (bind:binds) = do
+    go env (bind:binds) = if isPolyBind bind then go env binds else do -- NOTE/TODO: we drop polymorphic bindings here (We don't do codegen on polymorphic terms. Everything used binding should have been specialized by now). Stg passes will fail on polymorphic bindings. We could move this earlier or later in the pipeline (right after specialization?) or we could check that these values are truly unused (demand info?).
       (env', floats, maybe_new_bind) <- cpeBind TopLevel env bind
       massert (isNothing maybe_new_bind)
       floatss <- go env' binds
