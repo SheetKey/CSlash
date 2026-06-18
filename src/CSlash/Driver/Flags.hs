@@ -165,7 +165,6 @@ data GeneralFlag
   | Opt_InlineGenericsAggressively
   | Opt_StaticArgumentTransformation
   | Opt_CSE
-  | Opt_StgCSE
   | Opt_LiberateCase
   | Opt_SpecConstr
   | Opt_SpecConstrKeen
@@ -357,7 +356,6 @@ optimisationFlags = EnumSet.fromList
   , Opt_CrossModuleSpecialise
   , Opt_StaticArgumentTransformation
   , Opt_CSE
-  , Opt_StgCSE
   , Opt_LiberateCase
   , Opt_SpecConstr
   , Opt_SpecConstrKeen

@@ -17,7 +17,6 @@ import CSlash.Stg.Syntax
 import CSlash.Stg.FVs      ( depSortWithAnnotStgPgm )
 import CSlash.Stg.Unarise  ( unarise )
 -- import GHC.Stg.BcPrep   ( bcPrep )
--- import GHC.Stg.CSE      ( stgCse )
 import CSlash.Stg.Lift     ( StgLiftConfig, stgLiftLams )
 import CSlash.Unit.Module ( Module )
 
@@ -95,9 +94,10 @@ stg2stg logger opts this_mod binds = do
 
           StgStats -> panic "StgStats"
 
-          StgCSE -> panic "StgCSE"
-
-          StgLiftLams cfg -> panic "StgLiftLams"
+          StgLiftLams cfg -> do
+            us <- getUniqueSupplyM
+            let binds' = {-# SCC "StgLiftLams" #-} stgLiftLams this_mod cfg us binds
+            end_pass "StgLiftLams" binds'
 
           StgUnarise -> do
             us <- getUniqueSupplyM
@@ -120,8 +120,7 @@ stg2stg logger opts this_mod binds = do
           return binds2
 
 data StgToDo
-  = StgCSE
-  | StgLiftLams StgLiftConfig
+  = StgLiftLams StgLiftConfig
   | StgStats
   | StgUnarise
   | StgDoNothing

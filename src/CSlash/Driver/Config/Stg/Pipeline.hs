@@ -30,7 +30,6 @@ getStgToDo :: DynFlags -> [StgToDo]
 getStgToDo dflags =
   filter (/= StgDoNothing)
   [ StgUnarise
-  , optional Opt_StgCSE StgCSE
   , StgLiftLams $ initStgLiftConfig dflags
   , optional Opt_StgStats StgStats
   ]
