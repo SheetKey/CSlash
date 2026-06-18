@@ -173,12 +173,10 @@ typePrimRep_maybe :: HasDebugCallStack => Type Zk -> Maybe [PrimRep]
 typePrimRep_maybe ty
   -- Tuple type
   | Just (tc, tys) <- splitTyConApp_maybe ty
-  , (_:_) <- tys
   , isTupleTyCon tc
   = concatMapM typePrimRep_maybe tys
   -- Sum type
   | Just (tc, tys) <- splitTyConApp_maybe ty
-  , (_:_) <- tys
   , isSumTyCon tc
   = pprPanic "typePrimRep on sum" (ppr ty)
 
@@ -214,9 +212,19 @@ typePrimRep_maybe ty
   = Just []
   | KindCoercion{} <- ty
   = Just []
-      
-  | otherwise
+
+  -- Deal with stuff for 'isZeroBitTy' called in core2core
+  | TyVarTy{} <- ty
   = Nothing
+  | BigTyLamTy _ ty' <- ty
+  = typePrimRep_maybe ty'
+  | ForAllKiCo _ ty' <- ty
+  = typePrimRep_maybe ty'
+  | ForAllTy {} <- ty
+  = Nothing
+
+  | otherwise
+  = pprPanic "typePrimRep_maybe" (ppr ty)
 
 typePrimRep1 :: HasDebugCallStack => UnaryType -> PrimOrVoidRep
 typePrimRep1 ty = case typePrimRep ty of
