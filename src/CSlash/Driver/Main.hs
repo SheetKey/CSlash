@@ -25,7 +25,7 @@ import CSlash.Driver.Config.CoreToStg
 import CSlash.Driver.Config.CoreToStg.Prep
 import CSlash.Driver.Config.Logger   (initLogFlags)
 import CSlash.Driver.Config.Parser   (initParserOpts)
--- import CSlash.Driver.Config.Stg.Ppr  (initStgPprOpts)
+import CSlash.Driver.Config.Stg.Ppr  (initStgPprOpts)
 import CSlash.Driver.Config.Stg.Pipeline (initStgPipelineOpts)
 -- import GHC.Driver.Config.StgToCmm  (initStgToCmmConfig)
 -- import GHC.Driver.Config.Cmm       (initCmmConfig)
@@ -677,7 +677,10 @@ myCoreToStg logger dflags this_mod ml prepd_binds = do
     <- {-# SCC "Stg2Stg" #-}
        stg2stg logger (initStgPipelineOpts dflags) this_mod stg_binds
 
-  panic "myCoreToStg"
+  putDumpFileMaybe logger Opt_D_dump_stg_cg "CodeGenInput STG:" FormatSTG
+    (pprGenStgTopBindings (initStgPprOpts dflags) (fmap fst stg_binds_with_fvs))
+
+  return stg_binds_with_fvs
 
 --------------------------------------------------------------
 -- Tidy
