@@ -23,11 +23,11 @@ import CSlash.Driver.Config.Core.Lint ( endPassCsEnvIO )
 -- import GHC.Driver.Config.Core.Lint.Interactive ( lintInteractiveExpr )
 import CSlash.Driver.Config.CoreToStg
 import CSlash.Driver.Config.CoreToStg.Prep
-import CSlash.Driver.Config.Logger   (initLogFlags)
-import CSlash.Driver.Config.Parser   (initParserOpts)
-import CSlash.Driver.Config.Stg.Ppr  (initStgPprOpts)
+import CSlash.Driver.Config.Logger (initLogFlags)
+import CSlash.Driver.Config.Parser (initParserOpts)
+import CSlash.Driver.Config.Stg.Ppr (initStgPprOpts)
 import CSlash.Driver.Config.Stg.Pipeline (initStgPipelineOpts)
--- import GHC.Driver.Config.StgToCmm  (initStgToCmmConfig)
+import CSlash.Driver.Config.StgToPir (initStgToPirConfig)
 -- import GHC.Driver.Config.Cmm       (initCmmConfig)
 import CSlash.Driver.LlvmConfigCache  (initLlvmConfigCache)
 -- import GHC.Driver.Config.StgToJS  (initStgToJSConfig)
@@ -97,10 +97,11 @@ import CSlash.Stg.Pipeline ( stg2stg{-, StgCgInfos-} )
 import CSlash.Builtin.Utils
 import CSlash.Builtin.Names
 
--- import qualified GHC.StgToCmm as StgToCmm ( codeGen )
--- import GHC.StgToCmm.Types (CmmCgInfos (..), ModuleLFInfos, LambdaFormInfo(..))
+import qualified CSlash.StgToPir as StgToPir ( codeGen )
+import CSlash.StgToPir.Types (PirCgInfos (..){-, ModuleLFInfos, LambdaFormInfo(..)-})
+import CSlash.StgToPir.CgUtils (CgStream)
 
--- import GHC.Cmm
+import CSlash.Pir
 -- import GHC.Cmm.Info.Build
 -- import GHC.Cmm.Pipeline
 -- import GHC.Cmm.Info
@@ -654,13 +655,33 @@ csGenHardCode cs_env cgguts location output_filename = do
        (\(a) -> a `seqList` ())
        (myCoreToStg logger dflags this_mod location prepd_binds)
 
+  let (stg_binds, _) = unzip stg_binds_with_deps
+
   ------------------  Code generation ------------------
   withTiming logger (text "CodeGen" <+> brackets (ppr this_mod)) (const ()) $ do
-    output_filename <- {-# SCC "codeOutput" #-}
-      
-      panic "csGenHardCode unfinished"
+    pirs <- {-# SCC "StgToPir" #-}
+            doCodeGen cs_env this_mod stg_binds
 
     panic "csGenHardCode unfinished"
+
+doCodeGen :: CsEnv -> Module -> [CgStgTopBinding] -> IO (CgStream PirGroup PirCgInfos)
+doCodeGen cs_env this_mod stg_binds_w_fvs = do
+  let dflags = cs_dflags cs_env
+      logger = cs_logger cs_env
+      tmpfs = cs_tmpfs cs_env
+      platform = targetPlatform dflags
+      stg_ppr_opts = initStgPprOpts dflags
+
+  putDumpFileMaybe logger Opt_D_dump_stg_final "Final STG:" FormatSTG
+    (pprGenStgTopBindings stg_ppr_opts stg_binds_w_fvs)
+
+  let stg_to_pir dflags mod = StgToPir.codeGen logger tmpfs (initStgToPirConfig dflags mod)
+
+  let pir_stream :: CgStream PirGroup ()
+      pir_stream = stg_binds_w_fvs `seqList` {-# SCC "StgToPir" #-}
+        stg_to_pir dflags this_mod stg_binds_w_fvs
+
+  panic "doCodeGen unfinished"
 
 myCoreToStg
   :: Logger

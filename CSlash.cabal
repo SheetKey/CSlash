@@ -181,9 +181,11 @@ library
                     , CSlash.Data.Maybe
                     , CSlash.Data.OrdList
                     , CSlash.Data.Pair
+                    , CSlash.Data.Stream
                     , CSlash.Data.Strict
                     , CSlash.Data.StringBuffer
                     , CSlash.Data.TrieMap
+                    , CSlash.Data.Word64Map.Strict
                     , CSlash.Data.Word64Set
 
                     , CSlash.Driver.Backend
@@ -204,6 +206,7 @@ library
                     , CSlash.Driver.Config.Stg.Lift
                     , CSlash.Driver.Config.Stg.Pipeline
                     , CSlash.Driver.Config.Stg.Ppr
+                    , CSlash.Driver.Config.StgToPir
                     , CSlash.Driver.Config.Tidy
                     , CSlash.Driver.DynFlags
                     , CSlash.Driver.Env
@@ -283,6 +286,17 @@ library
                     , CSlash.Parser.PostProcess
                     , CSlash.Parser.Types
 
+                    , CSlash.Pir
+                    , CSlash.Pir.BlockId
+                    , CSlash.Pir.Dataflow.Block
+                    , CSlash.Pir.Dataflow.Graph
+                    , CSlash.Pir.Dataflow.Label
+                    , CSlash.Pir.Expr
+                    , CSlash.Pir.Node
+                    , CSlash.Pir.PLabel
+                    , CSlash.Pir.Reg
+                    , CSlash.Pir.Type
+
                     , CSlash.Platform
                     , CSlash.Platform.ArchOS
                     , CSlash.Platform.Constants
@@ -323,6 +337,11 @@ library
                     , CSlash.Stg.Syntax
                     , CSlash.Stg.Unarise
                     , CSlash.Stg.Utils
+
+                    , CSlash.StgToPir
+                    , CSlash.StgToPir.CgUtils
+                    , CSlash.StgToPir.Config
+                    , CSlash.StgToPir.Types
 
                     , CSlash.SysTools
                     , CSlash.SysTools.BaseDir
@@ -412,6 +431,7 @@ library
                     , CSlash.Types.Unique
                     , CSlash.Types.Unique.DFM
                     , CSlash.Types.Unique.DSet
+                    , CSlash.Types.Unique.DSM
                     , CSlash.Types.Unique.FM
                     , CSlash.Types.Unique.Map
                     , CSlash.Types.Unique.SDFM
@@ -523,3 +543,6 @@ library
                       -Wredundant-constraints
                       -O2
                       -Wno-unused-imports
+                      -Wno-unused-matches
+                      -Wno-unused-local-binds
+                      -Wno-type-equality-requires-operators

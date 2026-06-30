@@ -76,6 +76,8 @@ module CSlash.Driver.Session
 
   , IncludeSpecs(..)
   , addImplicitQuoteInclude
+
+  , initSDocContext
   ) where 
 
 import CSlash.Platform
