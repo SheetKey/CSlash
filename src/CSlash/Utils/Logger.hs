@@ -150,6 +150,7 @@ data DumpFormat
    = FormatCSlash
    | FormatCore
    | FormatSTG
+   | FormatPIR
    | FormatLLVM
    | FormatText
    deriving (Show,Eq)

@@ -711,6 +711,8 @@ dynamic_flags_deps =
         (setDumpFlag Opt_D_dump_prep)
   , make_ord_flag defCsFlag "ddump-late-cc"
         (setDumpFlag Opt_D_dump_late_cc)
+  , make_ord_flag defCsFlag "ddump-pir-from-stg"
+        (setDumpFlag Opt_D_dump_pir_from_stg)
   , make_ord_flag defCsFlag "ddump-stg-from-core"
         (setDumpFlag Opt_D_dump_stg_from_core)
   , make_ord_flag defCsFlag "ddump-stg-unarised"

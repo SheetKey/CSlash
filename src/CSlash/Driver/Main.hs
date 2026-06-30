@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE BangPatterns #-}
 
 module CSlash.Driver.Main
@@ -157,8 +158,8 @@ import CSlash.Utils.TmpFs
 import CSlash.Data.FastString
 import CSlash.Data.Bag
 import CSlash.Data.StringBuffer
--- import qualified GHC.Data.Stream as Stream
--- import GHC.Data.Stream (Stream)
+import qualified CSlash.Data.Stream as Stream
+import CSlash.Data.Stream (Stream)
 import CSlash.Data.Maybe
 
 import CSlash.SysTools (initSysTools)
@@ -680,6 +681,14 @@ doCodeGen cs_env this_mod stg_binds_w_fvs = do
   let pir_stream :: CgStream PirGroup ()
       pir_stream = stg_binds_w_fvs `seqList` {-# SCC "StgToPir" #-}
         stg_to_pir dflags this_mod stg_binds_w_fvs
+
+  let dump1 a = do
+        unless (null a) $
+          putDumpFileMaybe logger Opt_D_dump_pir_from_stg
+          "Pir produced by codegen" FormatPIR (pdoc platform a)
+        return a
+
+      ppr_stream1 = Stream.mapM (liftIO . dump1) pir_stream
 
   panic "doCodeGen unfinished"
 
