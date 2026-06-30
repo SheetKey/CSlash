@@ -29,7 +29,7 @@ import CSlash.Driver.Config.Parser (initParserOpts)
 import CSlash.Driver.Config.Stg.Ppr (initStgPprOpts)
 import CSlash.Driver.Config.Stg.Pipeline (initStgPipelineOpts)
 import CSlash.Driver.Config.StgToPir (initStgToPirConfig)
--- import GHC.Driver.Config.Cmm       (initCmmConfig)
+import CSlash.Driver.Config.Pir (initPirConfig)
 import CSlash.Driver.LlvmConfigCache  (initLlvmConfigCache)
 -- import GHC.Driver.Config.StgToJS  (initStgToJSConfig)
 import CSlash.Driver.Config.Diagnostic
@@ -689,6 +689,8 @@ doCodeGen cs_env this_mod stg_binds_w_fvs = do
         return a
 
       ppr_stream1 = Stream.mapM (liftIO . dump1) pir_stream
+
+      pir_config = initPirConfig dflags
 
   panic "doCodeGen unfinished"
 

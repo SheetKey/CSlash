@@ -203,6 +203,7 @@ library
                     , CSlash.Driver.Config.Finder
                     , CSlash.Driver.Config.Logger
                     , CSlash.Driver.Config.Parser
+                    , CSlash.Driver.Config.Pir
                     , CSlash.Driver.Config.Stg.Lift
                     , CSlash.Driver.Config.Stg.Pipeline
                     , CSlash.Driver.Config.Stg.Ppr
@@ -288,6 +289,7 @@ library
 
                     , CSlash.Pir
                     , CSlash.Pir.BlockId
+                    , CSlash.Pir.Config
                     , CSlash.Pir.Dataflow.Block
                     , CSlash.Pir.Dataflow.Graph
                     , CSlash.Pir.Dataflow.Label

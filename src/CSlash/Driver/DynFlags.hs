@@ -693,7 +693,9 @@ optLevelFlags
     , ([1,2], Opt_Exitification)
     , ([1,2], Opt_CaseMerge)
     , ([1,2], Opt_CaseFolding)
+    , ([1,2], Opt_PirElimCommonBlocks)
     , ([1,2], Opt_CSE)
+    , ([1,2], Opt_PirControlFlow)
 
     , ([1,2], Opt_EnableRewriteRules)
 

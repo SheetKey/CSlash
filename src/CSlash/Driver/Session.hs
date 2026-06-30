@@ -801,6 +801,10 @@ dynamic_flags_deps =
         (NoArg enableDLint)
   , make_ord_flag defCsFlag "dcore-lint"
         (NoArg (setGeneralFlag Opt_DoCoreLinting))
+  , make_ord_flag defCsFlag "dstg-lint"
+        (NoArg (setGeneralFlag Opt_DoStgLinting))
+  , make_ord_flag defCsFlag "dpir-lint"
+        (NoArg (setGeneralFlag Opt_DoPirLinting))
   , make_ord_flag defCsFlag "dshow-passes"
         (NoArg $ forceRecompile >> (setVerbosity $ Just 2))
   , make_ord_flag defCsFlag "dipe-stats"
@@ -1143,6 +1147,7 @@ fFlagsDeps =
   , flagSpec "exitification"                    Opt_Exitification
   , flagSpec "case-merge"                       Opt_CaseMerge
   , flagSpec "case-folding"                     Opt_CaseFolding
+  , flagSpec "pir-elim-common-blocks"           Opt_PirElimCommonBlocks
   , flagSpec "cse"                              Opt_CSE
   , flagSpec "cpr-anal"                         Opt_CprAnal
   , flagSpec "defer-diagnostics"                Opt_DeferDiagnostics
@@ -1228,6 +1233,7 @@ fFlagsDeps =
   , flagSpec "core-constant-folding"            Opt_CoreConstantFolding
   , flagSpec "fast-pap-calls"                   Opt_FastPAPCalls
   , flagSpec "spec-eval"                        Opt_SpecEval
+  , flagSpec "pir-control-flow"                 Opt_PirControlFlow
   , flagSpec "show-warning-groups"              Opt_ShowWarnGroups
   , flagSpec "hide-source-paths"                Opt_HideSourcePaths
   , flagSpec "show-loaded-modules"              Opt_ShowLoadedModules

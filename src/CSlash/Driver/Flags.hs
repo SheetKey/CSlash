@@ -138,6 +138,7 @@ data GeneralFlag
   | Opt_D_dump_minimal_imports
   | Opt_DoCoreLinting
   | Opt_DoStgLinting
+  | Opt_DoPirLinting
   | Opt_DoBoundsChecking
 
   | Opt_WarnIsError                    -- -Werror; makes warnings fatal
@@ -180,6 +181,8 @@ data GeneralFlag
   | Opt_EnableRewriteRules
   | Opt_LlvmFillUndefWithGarbage       -- Testing for undef bugs (hidden flag)
   | Opt_IrrefutableTuples
+  | Opt_PirElimCommonBlocks
+  | Opt_PirControlFlow
   | Opt_OmitYields
   | Opt_Loopification                  -- See Note [Self-recursive tail calls]
   | Opt_CfgBlocklayout             -- ^ Use the cfg based block layout algorithm.
@@ -368,6 +371,7 @@ optimisationFlags = EnumSet.fromList
   , Opt_DictsCheap
   , Opt_EnableRewriteRules
   , Opt_IrrefutableTuples
+  , Opt_PirElimCommonBlocks
   , Opt_Loopification
   , Opt_WeightlessBlocklayout
   , Opt_CprAnal
