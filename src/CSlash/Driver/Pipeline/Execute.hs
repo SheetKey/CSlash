@@ -65,7 +65,7 @@ import System.Directory
 import System.FilePath
 import System.IO
 
-import CSlash.Llvm.Config (LlvmTarget(..), LlvmConfig(..))
+import CSlash.PirToLlvm.Config (LlvmTarget(..), LlvmConfig(..))
 
 import CSlash.Language.Syntax.Module.Name
 import CSlash.Unit.Home.ModInfo

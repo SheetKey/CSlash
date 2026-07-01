@@ -1,4 +1,4 @@
-module CSlash.Llvm.Config where
+module CSlash.PirToLlvm.Config where
 
 import CSlash.Platform
 

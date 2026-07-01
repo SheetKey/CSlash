@@ -205,6 +205,7 @@ library
                     , CSlash.Driver.Config.Logger
                     , CSlash.Driver.Config.Parser
                     , CSlash.Driver.Config.Pir
+                    , CSlash.Driver.Config.PirToLlvm
                     , CSlash.Driver.Config.Stg.Lift
                     , CSlash.Driver.Config.Stg.Pipeline
                     , CSlash.Driver.Config.Stg.Ppr
@@ -271,7 +272,6 @@ library
                     , CSlash.Linker.Types
                     , CSlash.Linker.Unit
 
-                    , CSlash.Llvm.Config
                     , CSlash.Llvm.MetaData
                     , CSlash.Llvm.Ppr
                     , CSlash.Llvm.Syntax
@@ -300,6 +300,8 @@ library
                     , CSlash.Pir.PLabel
                     , CSlash.Pir.Reg
                     , CSlash.Pir.Type
+
+                    , CSlash.PirToLlvm.Config
 
                     , CSlash.Platform
                     , CSlash.Platform.ArchOS

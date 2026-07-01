@@ -2,7 +2,7 @@
 
 module CSlash.Driver.LlvmConfigCache where
 
-import CSlash.Llvm.Config
+import CSlash.PirToLlvm.Config
 
 import System.IO.Unsafe
 

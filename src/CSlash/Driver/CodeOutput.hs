@@ -16,7 +16,7 @@ import CSlash.StgToPir.CgUtils (CgStream)
 
 import CSlash.Driver.DynFlags
 import CSlash.Driver.Config.Finder ( initFinderOpts )
--- import CSlash.Driver.Config.PirToLlvm ( initLlvmCgConfig )
+import CSlash.Driver.Config.PirToLlvm ( initLlvmCgConfig )
 import CSlash.Driver.LlvmConfigCache (LlvmConfigCache)
 import CSlash.Driver.Ppr
 import CSlash.Driver.Backend

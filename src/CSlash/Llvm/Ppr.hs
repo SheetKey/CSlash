@@ -11,7 +11,7 @@ import CSlash.Llvm.Types
 import Data.List ( intersperse )
 import CSlash.Utils.Outputable
 
-import CSlash.Llvm.Config
+import CSlash.PirToLlvm.Config
 import CSlash.Utils.Panic
 import CSlash.Types.Unique
 
