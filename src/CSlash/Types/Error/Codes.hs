@@ -250,6 +250,7 @@ type family CsDiagnosticCode c = n | n -> c where
   CsDiagnosticCode "DriverPackageTrustIgnored"                     = 83552
   CsDiagnosticCode "DriverUnrecognizedFlag"                        = 93741
   CsDiagnosticCode "DriverDeprecatedFlag"                          = 53692
+  CsDiagnosticCode "DriverNoConfiguredLLVMToolchain"               = 66599
 
   CsDiagnosticCode "BadTelescope"                                  = 97739
   CsDiagnosticCode "CannotResolveRelation"                         = 39999

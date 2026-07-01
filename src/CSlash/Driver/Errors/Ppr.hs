@@ -27,6 +27,7 @@ import CSlash.CsToCore.Errors.Types (DsMessage)
 -- import GHC.Iface.Errors.Types
 import CSlash.Tc.Errors.Ppr ()
 -- import GHC.Iface.Errors.Ppr ()
+import CSlash.PirToLlvm.Version
 
 import CSlash.Utils.Panic
 
@@ -138,6 +139,14 @@ instance Diagnostic DriverMessage where
     DriverDeprecatedFlag arg msg
       -> mkSimpleDecorated $ text $ arg ++ " is deprecated: " ++ msg
     _ -> mkSimpleDecorated $ text "diagnosticMessage DriverMessage"
+    DriverNoConfiguredLLVMToolchain
+      -> mkSimpleDecorated $
+         text "CSL was not configured with a supported LLVM toolchain" $$
+         text ("Make sure you have installed LLVM between ["
+               ++ llvmVersionStr supportedLlvmVersionLowerBound
+               ++ " and "
+               ++ llvmVersionStr supportedLlvmVersionUpperBound
+               ++ ")")
 
   diagnosticReason = \case
     DriverUnknownMessage m
@@ -168,7 +177,10 @@ instance Diagnostic DriverMessage where
       -> WarningWithFlag Opt_WarnUnrecognizedWarningFlags
     DriverDeprecatedFlag {}
       -> WarningWithFlag Opt_WarnDeprecatedFlags
+    DriverNoConfiguredLLVMToolchain
+      -> WarningWithoutFlag
     _ -> panic "diagnosticReason DriverMessage"
+    
 
   diagnosticHints = \case
     DriverUnknownMessage m
@@ -198,6 +210,8 @@ instance Diagnostic DriverMessage where
     DriverUnrecognizedFlag {}
       -> noHints
     DriverDeprecatedFlag {}
+      -> noHints
+    DriverNoConfiguredLLVMToolchain
       -> noHints
     _ -> panic "diagnosticHints DriverMessage"
 

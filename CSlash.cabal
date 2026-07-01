@@ -303,6 +303,9 @@ library
 
                     , CSlash.PirToLlvm
                     , CSlash.PirToLlvm.Config
+                    , CSlash.PirToLlvm.Version
+                    , CSlash.PirToLlvm.Version.Bounds
+                    , CSlash.PirToLlvm.Version.Type
 
                     , CSlash.Platform
                     , CSlash.Platform.ArchOS

@@ -78,6 +78,7 @@ data DriverMessage where
   DriverInconsistentDynFlags :: String -> DriverMessage
   DriverUnrecognizedFlag :: String -> DriverMessage
   DriverDeprecatedFlag :: String -> String -> DriverMessage
+  DriverNoConfiguredLLVMToolchain :: DriverMessage
 
 deriving instance Generic DriverMessage
 

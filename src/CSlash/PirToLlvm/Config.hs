@@ -5,6 +5,7 @@ import CSlash.Platform
 import CSlash.Utils.Outputable
 import CSlash.Settings.Utils
 import CSlash.Utils.Panic
+import CSlash.PirToLlvm.Version.Type (LlvmVersion)
 
 import System.FilePath
 
@@ -15,16 +16,13 @@ data LlvmCgConfig = LlvmCgConfig
   , llvmCgContext :: !SDocContext
   , llvmCgFillUndefWithGarbage :: !Bool
   , llvmCgSplitSection :: !Bool
-  , llvmAvxEnabled :: !Bool
-  , llvmCgBmiVersion :: Maybe BmiVersion
+  -- , llvmAvxEnabled :: !Bool
+  -- , llvmCgBmiVersion :: Maybe BmiVersion
   , llvmCgLlvmVersion :: Maybe LlvmVersion
   , llvmCgDoWarn :: !Bool
   , llvmCgLlvmTarget :: !String
   , llvmCgLlvmConfig :: !LlvmConfig
   }
-
-newtype LlvmVersion = LlvmVersion { llvmVersionNE :: NE.NonEmpty Int }
-  deriving (Eq, Ord)
 
 data LlvmTarget = LlvmTarget
   { lDataLayout :: String
