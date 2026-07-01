@@ -295,6 +295,7 @@ library
                     , CSlash.Pir.Dataflow.Label
                     , CSlash.Pir.Expr
                     , CSlash.Pir.Node
+                    , CSlash.Pir.Pipeline
                     , CSlash.Pir.PLabel
                     , CSlash.Pir.Reg
                     , CSlash.Pir.Type

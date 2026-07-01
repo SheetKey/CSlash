@@ -104,7 +104,7 @@ import CSlash.StgToPir.CgUtils (CgStream)
 
 import CSlash.Pir
 -- import GHC.Cmm.Info.Build
--- import GHC.Cmm.Pipeline
+import CSlash.Pir.Pipeline
 -- import GHC.Cmm.Info
 -- import GHC.Cmm.Parser
 
@@ -192,7 +192,8 @@ import CSlash.Iface.Env ( trace_if )
 -- import GHC.StgToCmm.Utils (IPEStats)
 import CSlash.Types.Unique.FM
 import CSlash.Types.Unique.DFM
--- import GHC.Cmm.Config (CmmConfig)
+import CSlash.Types.Unique.DSM
+import CSlash.Pir.Config (PirConfig)
 
 import Control.Monad.IO.Class (liftIO)
 
@@ -691,6 +692,23 @@ doCodeGen cs_env this_mod stg_binds_w_fvs = do
       ppr_stream1 = Stream.mapM (liftIO . dump1) pir_stream
 
       pir_config = initPirConfig dflags
+
+      pipeline_action
+        :: Logger
+        -> PirConfig
+        -> PirGroup
+        -> UniqDSMT IO RawPirGroup
+      pipeline_action logger pir_config pir_group = do
+        pir <- withDUS $ pirPipeline logger pir_config pir_group
+
+        panic "pipeline_action"
+
+      pipeline_stream :: CgStream RawPirGroup PirCgInfos
+      pipeline_stream = do
+        () <- {-# SCC "pirPipeline" #-}
+              Stream.mapM (pipeline_action logger pir_config) ppr_stream1
+
+        panic "pipeline_stream"
 
   panic "doCodeGen unfinished"
 
