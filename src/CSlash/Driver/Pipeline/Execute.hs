@@ -238,7 +238,8 @@ runCsBackendPhase pipe_env cs_env mod_name src_flavor location result =
          | backendWritesFiles (backend dflags)
            -> do
              output_fn <- phaseOutputFilenameNew next_phase pipe_env cs_env (Just location)
-             outputFilename <- csGenHardCode cs_env cgguts mod_location output_fn
+             (outputFilename, cg_infos)
+               <- csGenHardCode cs_env cgguts mod_location output_fn
 
              panic "runCsBackendPhase unfinished"
          | otherwise

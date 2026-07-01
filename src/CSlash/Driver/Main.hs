@@ -17,7 +17,7 @@ import CSlash.Driver.Env
 import CSlash.Driver.Env.KnotVars
 import CSlash.Driver.Errors
 import CSlash.Driver.Errors.Types
--- import CSlash.Driver.CodeOutput
+import CSlash.Driver.CodeOutput
 -- import GHC.Driver.Config.Cmm.Parser (initCmmParserConfig)
 -- import GHC.Driver.Config.Core.Opt.Simplify ( initSimplifyExprOpts )
 import CSlash.Driver.Config.Core.Lint ( endPassCsEnvIO )
@@ -611,7 +611,7 @@ csSimplify' ds_result = do
 -- BackEnd combinators
 --------------------------------------------------------------
 
-csGenHardCode :: CsEnv -> CgGuts -> ModLocation -> FilePath -> IO FilePath
+csGenHardCode :: CsEnv -> CgGuts -> ModLocation -> FilePath -> IO (FilePath, PirCgInfos)
 csGenHardCode cs_env cgguts location output_filename = do
   let CgGuts { cg_module = this_mod
              , cg_binds = core_binds
@@ -664,9 +664,20 @@ csGenHardCode cs_env cgguts location output_filename = do
     pirs <- {-# SCC "StgToPir" #-}
             doCodeGen cs_env this_mod stg_binds
 
-    panic "csGenHardCode unfinished"
+    ------------------  Code output -----------------------
+    rawpirs0 <- {-# SCC "pirToRawPir" #-}
+      return pirs
 
-doCodeGen :: CsEnv -> Module -> [CgStgTopBinding] -> IO (CgStream PirGroup PirCgInfos)
+    let dump a = return a
+        rawpirs1 = Stream.mapM (liftIO . dump) rawpirs0
+
+    (output_filename, pir_cg_infos) <- {-# SCC "codeOutput" #-}
+      codeOutput logger tmpfs llvm_config dflags (cs_units cs_env) this_mod
+                 output_filename location dependencies (initDUniqSupply 'n' 0) rawpirs1
+
+    return (output_filename, pir_cg_infos)
+
+doCodeGen :: CsEnv -> Module -> [CgStgTopBinding] -> IO (CgStream RawPirGroup PirCgInfos)
 doCodeGen cs_env this_mod stg_binds_w_fvs = do
   let dflags = cs_dflags cs_env
       logger = cs_logger cs_env
@@ -710,7 +721,12 @@ doCodeGen cs_env this_mod stg_binds_w_fvs = do
 
         panic "pipeline_stream"
 
-  panic "doCodeGen unfinished"
+      dump2 a = do
+        unless (null a) $
+          putDumpFileMaybe logger Opt_D_dump_pir "Output Pir" FormatPIR (pdoc platform a)
+        return a
+
+  return $ Stream.mapM (liftIO . dump2) pipeline_stream
 
 myCoreToStg
   :: Logger

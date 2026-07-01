@@ -94,6 +94,7 @@ data DumpFlag
   | Opt_D_ipe_stats
   | Opt_D_dump_rule_rewrites
   | Opt_D_dump_rule_firings
+  | Opt_D_dump_pir
   | Opt_D_dump_pir_from_stg
   deriving (Eq, Ord, Show, Enum, Bounded)
 
