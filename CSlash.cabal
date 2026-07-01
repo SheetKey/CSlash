@@ -301,6 +301,7 @@ library
                     , CSlash.Pir.Reg
                     , CSlash.Pir.Type
 
+                    , CSlash.PirToLlvm
                     , CSlash.PirToLlvm.Config
 
                     , CSlash.Platform

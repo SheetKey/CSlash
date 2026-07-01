@@ -6,7 +6,7 @@ import CSlash.Platform
 -- import GHC.ForeignSrcLang
 import CSlash.Data.FastString
 
--- import GHC.CmmToLlvm    ( llvmCodeGen )
+import CSlash.PirToLlvm ( llvmCodeGen )
 
 -- import GHC.Cmm.Lint         ( cmmLint )
 import CSlash.Pir
