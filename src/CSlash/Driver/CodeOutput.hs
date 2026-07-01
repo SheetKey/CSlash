@@ -1,3 +1,5 @@
+{-# LANGUAGE ScopedTypeVariables #-}
+
 module CSlash.Driver.CodeOutput (codeOutput) where
 
 import CSlash.Platform
@@ -55,7 +57,8 @@ import qualified Data.Set as Set
 ********************************************************************* -}
 
 codeOutput
-  :: Logger
+  :: forall a
+   . Logger
   -> TmpFs
   -> LlvmConfigCache
   -> DynFlags
@@ -70,8 +73,39 @@ codeOutput
 codeOutput logger tmpfs llvm_config dflags unit_state this_mode filenm location
   pkg_deps dus0 pir_stream = do
 
-  panic "codeOutput"
 
-  -- let linted_pir_stream = if gopt Opt_DoPirLinting dflags
-  --                         then panic "Stream.mapM (liftIO . do_lint) pir_stream"
-  --                         else 
+  let linted_pir_stream = if gopt Opt_DoPirLinting dflags
+                          then panic "Stream.mapM (liftIO . do_lint) pir_stream"
+                          else pir_stream
+
+  let final_stream :: CgStream RawPirGroup a
+      final_stream = linted_pir_stream
+
+  let dus1 = newTagDUniqSupply 'n' dus0
+
+  a <- outputLlvm logger llvm_config dflags filenm dus1 final_stream
+  
+  return (filenm, a)
+
+doOutput :: String -> (Handle -> IO a) -> IO a
+doOutput filenm io_action = bracket (openFile filenm WriteMode) hClose io_action
+
+{- *********************************************************************
+*                                                                      *
+            LLVM
+*                                                                      *
+********************************************************************* -}
+
+outputLlvm
+  :: Logger
+  -> LlvmConfigCache
+  -> DynFlags
+  -> FilePath
+  -> DUniqSupply
+  -> CgStream RawPirGroup a
+  -> IO a
+outputLlvm logger llvm_config dflags filenm dus pir_stream = do
+  lcg_config <- initLlvmCgConfig logger llvm_config dflags
+  {-# SCC "llvm_output" #-} doOutput filenm $
+    \f -> {-# SCC "llvm_CodeGen" #-}
+      llvmCodeGen logger lcg_config f dus pir_stream
