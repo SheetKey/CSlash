@@ -10,4 +10,4 @@ supportedLlvmVersionLowerBound = LlvmVersion (18 NE.:| [])
 
 -- | The (not-inclusive) upper bound  bound on the LLVM Version that is currently supported.
 supportedLlvmVersionUpperBound :: LlvmVersion
-supportedLlvmVersionUpperBound = LlvmVersion (18 NE.:| [])
+supportedLlvmVersionUpperBound = LlvmVersion (19 NE.:| [])
