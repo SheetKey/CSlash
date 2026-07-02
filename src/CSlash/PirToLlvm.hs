@@ -5,7 +5,7 @@ module CSlash.PirToLlvm where
 import Prelude hiding ((<>))
 
 import CSlash.Llvm
-import CSlash.PirToLlvm.Base
+import CSlash.PirToLlvm.Base as Base
 -- import GHC.CmmToLlvm.CodeGen
 import CSlash.PirToLlvm.Config
 -- import GHC.CmmToLlvm.Data
@@ -81,6 +81,11 @@ llvmCodeGen'
   -> CgStream RawPirGroup a
   -> LlvmM a
 llvmCodeGen' cfg pir_stream = do
+  renderLlvm (llvmHeader cfg) (llvmHeader cfg)
+  pirMetaLlvmPrelude
+
+  -- a <- Stream.consume pir_stream Base.liftUDSMT llvmGroupLlvmGens
+
   panic "llvmCodeGen'"
 
 llvmHeader :: IsDoc doc => LlvmCgConfig -> doc
@@ -101,3 +106,13 @@ llvmHeader cfg =
                    (vcat $ map (text . fst) $ llvmTargets config)
 {-# SPECIALIZE llvmHeader :: LlvmCgConfig -> SDoc #-}
 {-# SPECIALIZE llvmHeader :: LlvmCgConfig -> HDoc #-}
+
+-- -----------------------------------------------------------------------------
+-- Generate meta data nodes
+
+-- Change if we add Avx! llvmCgAvxEnabled
+pirMetaLlvmPrelude :: LlvmM ()
+pirMetaLlvmPrelude = do
+  cfg <- getConfig
+  let metas = [MetaNamed "llvm.module.flags" []]
+  renderLlvm (ppLlvmMetas cfg metas) (ppLlvmMetas cfg metas)
