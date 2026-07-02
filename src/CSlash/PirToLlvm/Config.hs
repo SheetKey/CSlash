@@ -34,7 +34,7 @@ initLlvmConfig :: FilePath -> IO LlvmConfig
 initLlvmConfig top_dir
   = do
     targets <- readAndParse "llvm-targets"
-    passes <- readAndParse "llmv-passes"
+    passes <- readAndParse "llvm-passes"
     return $ LlvmConfig
       { llvmTargets = fmap mkLlvmTarget <$> targets
       , llvmPasses = passes
