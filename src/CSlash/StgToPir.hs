@@ -1,6 +1,6 @@
 module CSlash.StgToPir (codeGen) where
 
--- import CSlash.Pir.UniqueRenamer
+import CSlash.Pir.UniqueRenamer
 -- import CSlash.StgToPir.Prof (initCostCentres, ldvEnter)
 import CSlash.StgToPir.Monad
 -- import CSlash.StgToPir.Env
@@ -60,5 +60,7 @@ codeGen
   -> CgStream PirGroup ()
 codeGen logger tmpfs cfg stg_binds = do
   cgref <- liftIO $ initC >>= \s -> newIORef s
+  uniqRnRef <- liftIO $ newIORef emptyDetUFM
+  let fstate = initFCodeState $ stgToPirPlatform cfg
 
   panic "codeGen"

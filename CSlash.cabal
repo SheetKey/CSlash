@@ -302,6 +302,7 @@ library
                     , CSlash.Pir.PLabel
                     , CSlash.Pir.Reg
                     , CSlash.Pir.Type
+                    , CSlash.Pir.UniqueRenamer
 
                     , CSlash.PirToLlvm
                     , CSlash.PirToLlvm.Base

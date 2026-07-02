@@ -126,3 +126,6 @@ initCgState uniqs = MkCgState
 
 getState :: FCode CgState
 getState = FCode $ \_ _ state -> (state, state)
+
+initFCodeState :: Platform -> FCodeState
+initFCodeState p = MkFCodeState
