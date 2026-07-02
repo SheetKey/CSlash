@@ -84,7 +84,7 @@ llvmCodeGen' cfg pir_stream = do
   renderLlvm (llvmHeader cfg) (llvmHeader cfg)
   pirMetaLlvmPrelude
 
-  -- a <- Stream.consume pir_stream Base.liftUDSMT llvmGroupLlvmGens
+  a <- Stream.consume pir_stream Base.liftUDSMT llvmGroupLlvmGens
 
   panic "llvmCodeGen'"
 
@@ -106,6 +106,19 @@ llvmHeader cfg =
                    (vcat $ map (text . fst) $ llvmTargets config)
 {-# SPECIALIZE llvmHeader :: LlvmCgConfig -> SDoc #-}
 {-# SPECIALIZE llvmHeader :: LlvmCgConfig -> HDoc #-}
+
+llvmGroupLlvmGens :: RawPirGroup -> LlvmM ()
+llvmGroupLlvmGens pir = do
+  let split (PirData s d) = return $ Just (s, d)
+      split (PirProc l formals g) = do panic "split"
+  --       let l' = case mapLookup (g_entry g) h of
+  --                  Nothing -> l
+  --                  Just (PirStaticsRaw info_lbl _) -> info_lbl
+  --       lml <- strPLable_llvm l'
+  --       funInsert lml =<< llvmFunTy formals
+  --       return Nothing
+  -- cdata <- fmap catMaybes $ mapM split pir
+  panic "llvmGroupLlvmGens"
 
 -- -----------------------------------------------------------------------------
 -- Generate meta data nodes
