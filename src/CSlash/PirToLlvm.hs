@@ -82,3 +82,22 @@ llvmCodeGen'
   -> LlvmM a
 llvmCodeGen' cfg pir_stream = do
   panic "llvmCodeGen'"
+
+llvmHeader :: IsDoc doc => LlvmCgConfig -> doc
+llvmHeader cfg =
+  let target = llvmCgLlvmTarget cfg
+      llvmCfg = llvmCgLlvmConfig cfg
+  in lines_
+     [ text "target datalayout = \"" <> text (getDataLayout llvmCfg target) <> text "\""
+     , text "target triple = \"" <> text target <> text "\"" ]
+  where
+    getDataLayout :: LlvmConfig -> String -> String
+    getDataLayout config target =
+      case lookup target (llvmTargets config) of
+        Just (LlvmTarget { lDataLayout = dl }) -> dl
+        Nothing -> pprPanic "Failed to lookup LLVM data layout" $
+                   text "Target:" <+> text target $$
+                   hang (text "Available targets:") 4
+                   (vcat $ map (text . fst) $ llvmTargets config)
+{-# SPECIALIZE llvmHeader :: LlvmCgConfig -> SDoc #-}
+{-# SPECIALIZE llvmHeader :: LlvmCgConfig -> HDoc #-}
