@@ -1,14 +1,18 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module CSlash.PirToLlvm where
 
--- import CSlash.Llvm
--- import GHC.CmmToLlvm.Base
+import Prelude hiding ((<>))
+
+import CSlash.Llvm
+import CSlash.PirToLlvm.Base
 -- import GHC.CmmToLlvm.CodeGen
 import CSlash.PirToLlvm.Config
 -- import GHC.CmmToLlvm.Data
 -- import GHC.CmmToLlvm.Ppr
 -- import GHC.CmmToLlvm.Regs
 -- import GHC.CmmToLlvm.Mangler
--- import GHC.CmmToLlvm.Version
+import CSlash.PirToLlvm.Version
 
 import CSlash.StgToPir.CgUtils ( {-fixStgRegisters,-} CgStream )
 import CSlash.Pir
@@ -40,41 +44,41 @@ llvmCodeGen
   -> CgStream RawPirGroup a
   -> IO a
 llvmCodeGen logger cfg h dus pir_stream = withTiming logger (text "LLVM CodeGen") (const ()) $ do
-  panic "llvmCodeGen"
-  -- bufh <- newBufHandle h
+  bufh <- newBufHandle h
 
-  -- showPass logger "LLVM CodeGen"
+  showPass logger "LLVM CodeGen"
 
-  -- let mb_ver = llvmCgLlvmVersion cfg
+  let mb_ver = llvmCgLlvmVersion cfg
 
-  -- forM_ mb_ver $ \ver -> do
-  --   debugTraceMsg logger 2 (text "Using LLVM version:" <+> text (llvmVersionStr ver))
-  --   let doWarn = llvmCgDoWarn cfg
-  --   when (not (llvmVersionSupported ver) && doWarn) $ putMsg logger $
-  --     "You are using an unsupported version of LLVM!" $$
-  --     "Currently only" <+> text (llvmVersionStr supportedLlvmVersionLowerBound) <+>
-  --     "up to" <+> text (llvmVersionStr supoprtedLlvmVersionUpperBound) <+>
-  --     "(non inclusive) is supported." <+>
-  --     "System LLVM version: " <> text (llvmVersionStr ver) $$
-  --     "We will try though..."
+  forM_ mb_ver $ \ver -> do
+    debugTraceMsg logger 2 (text "Using LLVM version:" <+> text (llvmVersionStr ver))
+    let doWarn = llvmCgDoWarn cfg
+    when (not (llvmVersionSupported ver) && doWarn) $ putMsg logger $
+      "You are using an unsupported version of LLVM!" $$
+      "Currently only" <+> text (llvmVersionStr supportedLlvmVersionLowerBound) <+>
+      "up to" <+> text (llvmVersionStr supportedLlvmVersionUpperBound) <+>
+      "(non inclusive) is supported." <+>
+      "System LLVM version: " <> text (llvmVersionStr ver) $$
+      "We will try though..."
 
-  --   when (isNothing mb_ver) $ do
-  --     let doWarn = llvmCgDoWarn cfg
-  --     when doWarn $ putMsg logger $
-  --       "Failed to detect LLVM version!" $$
-  --       "Make sure LLVM is installed correctly." $$
-  --       "We will try though..."
+    when (isNothing mb_ver) $ do
+      let doWarn = llvmCgDoWarn cfg
+      when doWarn $ putMsg logger $
+        "Failed to detect LLVM version!" $$
+        "Make sure LLVM is installed correctly." $$
+        "We will try though..."
 
-  -- let llvm_ver = fromMaybe supportedLlvmVersionLowerBound mb_ver
+  let llvm_ver = fromMaybe supportedLlvmVersionLowerBound mb_ver
 
-  -- (a, _) <- runLlvm logger cfg llvm_ver bufh dus $ llvmCodeGen' cfg pir_stream
+  (a, _) <- runLlvm logger cfg llvm_ver bufh dus $ llvmCodeGen' cfg pir_stream
 
-  -- bFlush bufh
+  bFlush bufh
 
-  -- return a
+  return a
 
--- llvmCodeGen'
---   :: LlvmCgConfig
---   -> CgStream RawPirGroup a
---   -> LlvmM a
--- llvmCodeGen'
+llvmCodeGen'
+  :: LlvmCgConfig
+  -> CgStream RawPirGroup a
+  -> LlvmM a
+llvmCodeGen' cfg pir_stream = do
+  panic "llvmCodeGen'"

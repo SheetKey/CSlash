@@ -272,6 +272,7 @@ library
                     , CSlash.Linker.Types
                     , CSlash.Linker.Unit
 
+                    , CSlash.Llvm
                     , CSlash.Llvm.MetaData
                     , CSlash.Llvm.Ppr
                     , CSlash.Llvm.Syntax
@@ -302,6 +303,7 @@ library
                     , CSlash.Pir.Type
 
                     , CSlash.PirToLlvm
+                    , CSlash.PirToLlvm.Base
                     , CSlash.PirToLlvm.Config
                     , CSlash.PirToLlvm.Version
                     , CSlash.PirToLlvm.Version.Bounds
