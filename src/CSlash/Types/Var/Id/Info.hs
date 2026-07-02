@@ -3,6 +3,7 @@
 module CSlash.Types.Var.Id.Info
   ( module CSlash.Types.Var.Id.Info
   , OneShotInfo(..)
+  , LambdaFormInfo
   ) where
 
 import Prelude hiding ((<>))
@@ -21,6 +22,7 @@ import CSlash.Types.Demand
 
 import CSlash.Utils.Outputable
 import CSlash.Utils.Panic
+import CSlash.StgToPir.Types (LambdaFormInfo)
 
 import Data.Data ( Data )
 import Data.Word
@@ -315,28 +317,6 @@ data TickBoxOp = TickBox Module {-# UNPACK #-} !TickBoxId
 
 instance Outputable TickBoxOp where
   ppr (TickBox mod n) = text "tick" <+> ppr (mod, n)
-
-{- *********************************************************************
-*                                                                      *
-            LambdaForInfo (moved from GHC.StgToCmm.Types)
-*                                                                      *
-********************************************************************* -}
-
-data LambdaFormInfo
-  = LFReEntrant
-    !TopLevelFlag
-    !RepArity
-    !Bool
-    !ArgDescr
-  | LFCon
-    !(DataCon Zk)
-  | LFUnknown
-    !Bool
-
--- THIS SHOULD MOVE:
--- originally in GHC.Runtime.Heap.Layout
-data ArgDescr
-  = ArgUnknown
 
 {- *********************************************************************
 *                                                                      *

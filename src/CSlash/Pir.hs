@@ -8,7 +8,11 @@
 {-# LANGUAGE EmptyCase #-}
 {-# LANGUAGE DeriveFunctor #-}
 
-module CSlash.Pir where
+module CSlash.Pir
+  ( module CSlash.Pir
+  , module CSlash.Pir.Node
+  , module CSlash.Pir.Expr
+  ) where
 
 import Prelude hiding ((<>))
 
@@ -55,6 +59,7 @@ instance (OutputableP Platform d, OutputableP Platform g)
   => OutputableP Platform (GenPirDecl d g) where
   pdoc = pprTop
 
+type DPirDecl = GenPirDecl PirStatics DPirGraph
 type PirDecl = GenPirDecl PirStatics PirGraph
 type PirDataDecl = GenPirDataDecl PirStatics
 type GenPirDataDecl d = GenPirDecl d Void
@@ -70,6 +75,7 @@ pirDataDeclPirDecl = \case
 -----------------------------------------------------------------------------
 
 type PirGraph = GenPirGraph PirNode
+type DPirGraph = GenGenPirGraph DWrap PirNode
 
 type GenPirGraph n = GenGenPirGraph LabelMap n
 
@@ -96,6 +102,11 @@ revPostorder g = {-# SCC "revPostorder" #-} revPostorderFrom (toBlockMap g) (g_e
 
 toBlockList :: PirGraph -> [PirBlock]
 toBlockList g = mapElems $ toBlockMap g
+
+newtype DWrap a = DWrap [(BlockId, a)]
+
+unDeterm :: DWrap a -> [(BlockId, a)]
+unDeterm (DWrap f) = f
 
 -----------------------------------------------------------------------------
 --              Static Data

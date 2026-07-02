@@ -2,7 +2,7 @@ module CSlash.StgToPir (codeGen) where
 
 -- import CSlash.Pir.UniqueRenamer
 -- import CSlash.StgToPir.Prof (initCostCentres, ldvEnter)
--- import CSlash.StgToPir.Monad
+import CSlash.StgToPir.Monad
 -- import CSlash.StgToPir.Env
 -- import CSlash.StgToPir.Bind
 -- import CSlash.StgToPir.DataCon
@@ -16,8 +16,8 @@ import CSlash.StgToPir.CgUtils (CgStream)
 
 import CSlash.Pir
 -- import CSlash.Pir.Utils
--- import CSlash.Pir.CLabel
--- import CSlash.Pir.Graph
+import CSlash.Pir.PLabel
+import CSlash.Pir.Graph
 
 import CSlash.Stg.Syntax
 
@@ -59,4 +59,6 @@ codeGen
   -> [CgStgTopBinding]
   -> CgStream PirGroup ()
 codeGen logger tmpfs cfg stg_binds = do
+  cgref <- liftIO $ initC >>= \s -> newIORef s
+
   panic "codeGen"

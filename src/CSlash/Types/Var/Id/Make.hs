@@ -33,6 +33,8 @@ import CSlash.Utils.Panic
 
 import CSlash.Data.FastString
 
+import CSlash.StgToPir.Types (LambdaFormInfo(..))
+
 {- *********************************************************************
 *                                                                      *
         Wired in Ids
@@ -76,7 +78,7 @@ mkDataConId wkr_name data_con
     wkr_arity = dataConArity data_con
     wkr_lf_info
       | wkr_arity == 0 = LFCon data_con
-      | otherwise = LFReEntrant TopLevel (countFunRepArgs wkr_arity wkr_ty) True ArgUnknown
+      | otherwise = LFReEntrant TopLevel (countFunRepArgs wkr_arity wkr_ty) True -- ArgUnknown
 
 {- *********************************************************************
 *                                                                      *

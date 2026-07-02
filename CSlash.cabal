@@ -296,6 +296,7 @@ library
                     , CSlash.Pir.Dataflow.Graph
                     , CSlash.Pir.Dataflow.Label
                     , CSlash.Pir.Expr
+                    , CSlash.Pir.Graph
                     , CSlash.Pir.Node
                     , CSlash.Pir.Pipeline
                     , CSlash.Pir.PLabel
@@ -352,7 +353,9 @@ library
 
                     , CSlash.StgToPir
                     , CSlash.StgToPir.CgUtils
+                    , CSlash.StgToPir.Closure
                     , CSlash.StgToPir.Config
+                    , CSlash.StgToPir.Monad
                     , CSlash.StgToPir.Types
 
                     , CSlash.SysTools
