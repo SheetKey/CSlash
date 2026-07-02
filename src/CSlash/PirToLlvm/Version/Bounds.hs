@@ -6,8 +6,8 @@ import qualified Data.List.NonEmpty as NE
 
 -- | The (inclusive) lower bound on the LLVM Version that is currently supported.
 supportedLlvmVersionLowerBound :: LlvmVersion
-supportedLlvmVersionLowerBound = LlvmVersion (13 NE.:| [])
+supportedLlvmVersionLowerBound = LlvmVersion (18 NE.:| [])
 
 -- | The (not-inclusive) upper bound  bound on the LLVM Version that is currently supported.
 supportedLlvmVersionUpperBound :: LlvmVersion
-supportedLlvmVersionUpperBound = LlvmVersion (19 NE.:| [])
+supportedLlvmVersionUpperBound = LlvmVersion (18 NE.:| [])
