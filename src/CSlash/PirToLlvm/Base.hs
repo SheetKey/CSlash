@@ -113,3 +113,17 @@ runLlvm logger cfg ver out us m = do
 
 getEnv :: (LlvmEnv -> a) -> LlvmM a
 getEnv f = LlvmM $ \env -> return (f env, env)
+
+dumpIfSetLlvm :: DumpFlag -> String -> DumpFormat -> Outp.SDoc -> LlvmM ()
+dumpIfSetLlvm flag hdr fmt doc = do
+  logger <- getLogger
+  liftIO $ putDumpFileMaybe logger flag hdr fmt doc
+
+renderLlvm :: Outp.HDoc -> Outp.SDoc -> LlvmM ()
+renderLlvm hdoc sdoc = do
+  ctx <- llvmCgContext <$> getConfig
+  out <- getEnv envOutput
+  liftIO $ Outp.bPutHDoc out ctx hdoc
+
+  dumpIfSetLlvm Opt_D_dump_llvm "LLVM Code" FormatLLVM sdoc
+  return ()
