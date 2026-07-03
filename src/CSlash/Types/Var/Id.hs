@@ -371,6 +371,11 @@ setIdSpecialization :: Id p -> RuleInfo -> Id p
 setIdSpecialization id spec_info = modifyIdInfo (`setRuleInfo` spec_info) id
 
 ---------------------------------
+-- CAF INFO
+idCafInfo :: Id p -> CafInfo
+idCafInfo = cafInfo . idInfo
+
+---------------------------------
 -- Occurrence INFO
 
 infixl 1 `setIdOccInfo`

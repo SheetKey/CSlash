@@ -4,11 +4,11 @@ import CSlash.Pir.UniqueRenamer
 -- import CSlash.StgToPir.Prof (initCostCentres, ldvEnter)
 import CSlash.StgToPir.Monad
 -- import CSlash.StgToPir.Env
--- import CSlash.StgToPir.Bind
+import CSlash.StgToPir.Bind
 -- import CSlash.StgToPir.DataCon
 -- import CSlash.StgToPir.Layout
 -- import CSlash.StgToPir.Utils
--- import CSlash.StgToPir.Closure
+import CSlash.StgToPir.Function
 import CSlash.StgToPir.Config
 -- import CSlash.StgToPir.Ticky
 -- import CSlash.StgToPir.Types (ModuleLFInfos)
@@ -62,5 +62,37 @@ codeGen logger tmpfs cfg stg_binds = do
   cgref <- liftIO $ initC >>= \s -> newIORef s
   uniqRnRef <- liftIO $ newIORef emptyDetUFM
   let fstate = initFCodeState $ stgToPirPlatform cfg
+  let cg :: FCode a -> CgStream PirGroup a
+      cg fcode = do
+        (a, pir) <- liftIO . withTimingSilent logger (text "STG -> Pir") (`seq` ()) $ do
+          st <- readIORef cgref
+          rnm0 <- readIORef uniqRnRef
+
+          let ((a, pir), st') = runC cfg fstate st (getPir fcode)
+
+          panic "cg"
+        panic "cg"
+
+  mapM_ (cg . cgTopBinding logger tmpfs cfg) stg_binds
 
   panic "codeGen"
+
+---------------------------------------------------------------
+--      Top-level bindings
+---------------------------------------------------------------
+
+cgTopBinding :: Logger -> TmpFs -> StgToPirConfig -> CgStgTopBinding -> FCode ()
+cgTopBinding logger tmpfs cfg stg_bind = case stg_bind of
+  StgTopBind (StgNonRec id rhs) -> do
+    let (info, fcode) = cgTopRhs cfg NonRecursive id rhs
+    panic "cgTopBInding"
+
+  _ -> panic "cgTopBinding unfinished"
+
+cgTopRhs :: StgToPirConfig -> RecFlag -> CgId -> CgStgRhs -> (CgIdInfo, FCode ())
+cgTopRhs cfg _ bndr (StgRhsCon {}) = panic "cgTopRhs Con"
+
+cgTopRhs cfg is_rec bndr (StgRhsClosure fvs is_join args body _)
+  = assertPpr (isEmptyDVarSet fvs) (text "fvs:" <+> ppr fvs) $
+    assertPpr (not is_join) (text "cgTopRhs is_join") $
+    cgTopRhsFunction (stgToPirPlatform cfg) is_rec bndr args body

@@ -1,10 +1,11 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 
-module CSlash.StgToPir.Closure
-  ( module CSlash.StgToPir.Closure
+module CSlash.StgToPir.Function
+  ( module CSlash.StgToPir.Function
   , LambdaFormInfo
   ) where
 
+import CSlash.Cs.Pass
 import CSlash.Platform
 import CSlash.Platform.Profile
 
@@ -51,3 +52,39 @@ instance OutputableP Platform CgLoc where
 pprCgLoc :: Platform -> CgLoc -> SDoc
 pprCgLoc platform (PirLoc e) = text "pir" <+> pdoc platform e
 pprCgLoc _ (LneLoc b rs) = text "lne" <+> ppr b <+> ppr rs
+
+-----------------------------------------------------------------------------
+--              Data types for function information
+-----------------------------------------------------------------------------
+
+data FunctionInfo = FunctionInfo
+  { functionName :: !(Id Zk)
+  , functionLFInfo :: !LambdaFormInfo
+  , functionProf :: !ProfilingInfo
+  }
+
+--------------------------------------
+--        Building FunctionInfos
+--------------------------------------
+
+mkFunctionInfo
+  :: Profile
+  -> Id Zk
+  -> LambdaFormInfo
+  -> String
+  -> FunctionInfo
+mkFunctionInfo profile id lf_info val_descr
+  = FunctionInfo { functionName = id
+                 , functionLFInfo = lf_info
+                 , functionProf = prof }
+  where
+    prof = mkProfilingInfo profile id val_descr
+
+--------------------------------------
+--   Profiling
+--------------------------------------
+
+mkProfilingInfo :: Profile -> Id Zk -> String -> ProfilingInfo
+mkProfilingInfo profile id val_descr
+  | not (profileIsProfiling profile) = NoProfilingInfo
+  | otherwise = panic "profiling"

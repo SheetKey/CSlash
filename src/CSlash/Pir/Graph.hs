@@ -29,6 +29,11 @@ data CgStmt
   | CgLast (PirNode O C)
   | CgFork BlockId PirAGraph
 
+---------- AGraph manipulation
+
+(<:>) :: PirAGraph -> PirAGraph -> PirAGraph
+(<:>) = appOL
+
 ---------- No-ops
 
 mkNop :: PirAGraph

@@ -27,10 +27,12 @@ import CSlash.Types.Basic (Alignment, mkAlignment, alignmentOf)
 -----------------------------------------------------------------------------
 
 data PirExpr
+  = PirLit !PirLit
 
 instance OutputableP Platform PirExpr
 
 data PirLit
+  = PirLabel PLabel
 
 instance OutputableP Platform PirLit
 

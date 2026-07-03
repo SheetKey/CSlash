@@ -21,5 +21,16 @@ import CSlash.Types.SrcLoc
 import qualified Data.Semigroup as S
 
 data PLabel
+  = IdLabel Name CafInfo IdLabelInfo
   
 instance OutputableP Platform PLabel
+
+data IdLabelInfo
+  = Function
+
+-- -----------------------------------------------------------------------------
+-- Constructing PLabels
+-- -----------------------------------------------------------------------------
+
+mkFunctionLabel :: Name -> CafInfo -> PLabel
+mkFunctionLabel name c = IdLabel name c Function

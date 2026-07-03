@@ -42,6 +42,8 @@ type PirProgram = [PirGroup]
 
 type GenPirGroup d g = [GenPirDecl d g]
 
+type DPirGroup = GenPirGroup PirStatics DPirGraph
+
 type PirGroup = GenPirGroup PirStatics PirGraph
 
 type RawPirGroup = GenPirGroup RawPirStatics PirGraph
@@ -107,6 +109,10 @@ newtype DWrap a = DWrap [(BlockId, a)]
 
 unDeterm :: DWrap a -> [(BlockId, a)]
 unDeterm (DWrap f) = f
+
+data ProfilingInfo
+  = NoProfilingInfo
+  deriving (Eq, Ord)
 
 -----------------------------------------------------------------------------
 --              Static Data

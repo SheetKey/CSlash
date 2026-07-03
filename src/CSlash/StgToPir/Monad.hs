@@ -8,9 +8,9 @@ import CSlash.Platform
 import CSlash.Platform.Profile
 import CSlash.Pir
 import CSlash.StgToPir.Config
-import CSlash.StgToPir.Closure
--- import GHC.StgToCmm.Sequel
-import CSlash.Pir.Graph as PirGraph
+import CSlash.StgToPir.Function
+import CSlash.StgToPir.Sequel
+import CSlash.Pir.Graph
 import CSlash.Pir.BlockId
 import CSlash.Pir.PLabel
 -- import GHC.Runtime.Heap.Layout
@@ -112,6 +112,9 @@ data CgState = MkCgState
   }
 
 data FCodeState = MkFCodeState
+  { fcs_sequel :: !Sequel
+  , fcs_selfloop :: !(Maybe SelfLoopInfo)
+  }
 
 initCgState :: UniqSupply -> CgState
 initCgState uniqs = MkCgState
@@ -120,6 +123,11 @@ initCgState uniqs = MkCgState
   , cgs_binds = emptyVarEnv
   , cgs_uniqs = uniqs }
 
+addCodeBlocksFrom :: CgState -> CgState -> CgState
+addCodeBlocksFrom s1 s2
+  = s1 { cgs_stmts = cgs_stmts s1 <:> cgs_stmts s2
+       , cgs_tops = cgs_tops s1 `appOL` cgs_tops s2 }
+
 --------------------------------------------------------
 -- Operators for getting and setting the state
 --------------------------------------------------------
@@ -127,5 +135,66 @@ initCgState uniqs = MkCgState
 getState :: FCode CgState
 getState = FCode $ \_ _ state -> (state, state)
 
+setState :: CgState -> FCode ()
+setState state = FCode $ \_ _ _ -> ((), state)
+
+withCgState :: FCode a -> CgState -> FCode (a, CgState)
+withCgState (FCode fcode) newstate = FCode $ \cfg fstate state ->
+  case fcode cfg fstate newstate of
+    (retval, state2) -> ((retval, state2), state)
+
+newUniqSupply :: FCode UniqSupply
+newUniqSupply = do
+  state <- getState
+  let (us1, us2) = splitUniqSupply (cgs_uniqs state)
+  setState $ state { cgs_uniqs = us1 }
+  return us2
+
 initFCodeState :: Platform -> FCodeState
 initFCodeState p = MkFCodeState
+  { fcs_sequel = Return
+  , fcs_selfloop = Nothing
+  }
+
+getFCodeState :: FCode FCodeState
+getFCodeState = FCode $ \_ fstate state -> (fstate, state)
+
+-- ----------------------------------------------------------------------------
+-- Config related helpers
+
+getStgToPirConfig :: FCode StgToPirConfig
+getStgToPirConfig = FCode $ \cfg _ state -> (cfg, state)
+
+getProfile :: FCode Profile
+getProfile = stgToPirProfile <$> getStgToPirConfig
+
+getPlatform :: FCode Platform
+getPlatform = profilePlatform <$> getProfile
+
+getModuleName :: FCode Module
+getModuleName = stgToPirThisModule <$> getStgToPirConfig
+
+--------------------------------------------------------
+--                 Forking
+--------------------------------------------------------
+
+forkFunctionBody :: FCode () -> FCode ()
+forkFunctionBody body_code = do
+  platform <- getPlatform
+  cfg <- getStgToPirConfig
+  fstate <- getFCodeState
+  us <- newUniqSupply
+  state <- getState
+  let fcs = fstate { fcs_sequel = Return
+                   , fcs_selfloop = Nothing
+                   }
+      fork_state_in = (initCgState us) { cgs_binds = cgs_binds state }
+      ((), fork_state_out) = doFCode body_code cfg fcs fork_state_in
+  setState $ state `addCodeBlocksFrom` fork_state_out
+
+getPir :: FCode a -> FCode (a, DPirGroup)
+getPir code = do
+  state1 <- getState
+  (a, state2) <- withCgState code (state1 { cgs_tops = nilOL })
+  setState $ state2 { cgs_tops = cgs_tops state1 }
+  return (a, fromOL (cgs_tops state2))

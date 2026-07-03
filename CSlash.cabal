@@ -353,10 +353,13 @@ library
                     , CSlash.Stg.Utils
 
                     , CSlash.StgToPir
+                    , CSlash.StgToPir.Bind
                     , CSlash.StgToPir.CgUtils
-                    , CSlash.StgToPir.Closure
+                    , CSlash.StgToPir.Function
                     , CSlash.StgToPir.Config
+                    , CSlash.StgToPir.Env
                     , CSlash.StgToPir.Monad
+                    , CSlash.StgToPir.Sequel
                     , CSlash.StgToPir.Types
 
                     , CSlash.SysTools
