@@ -108,26 +108,34 @@ knownKeysMap = listToIdentityUFM knownKeyNames
 
 {- *********************************************************************
 *                                                                      *
-            Export lists for pseudo-modules (CSL.Prim)
+            Export lists for pseudo-modules (CSL.Prim and CSL.BuiltIn)
 *                                                                      *
 ********************************************************************* -}
 
+{- NOTE: Our goal:
+CSL.BuiltIn is a module auto imported to every .cs file.
+It exports things we always want available:
+tuples/sums (builtin syntax)
+Bool, IO
+
+CSL.Prim exports built-in things we don't always want:
+primitive functions used to implement higher level apis.
+Note that 'Prim' module does not correspond to 'PrimTyCon's (which may be BuiltIn)
+-}
+
 cslPrimExports :: [IfaceExport]
-cslPrimExports = trace "cslPrimExports" []
+cslPrimExports
+  = map (Avail . varName) csPrimIds ++
+    [ AvailTC n [n]
+    | tc <- primPrimTyCons
+    , let n = tyConName tc ]
 
 cslBuiltInExports :: [IfaceExport]
 cslBuiltInExports
-  = [ AvailTC n (n : (dataConName <$> tyConDataCons tc))
-    | tc <- builtInTyCons
+  = [ AvailTC n [n]
+    | tc <- builtInPrimTyCons
+    , let n = tyConName tc ] ++
+    [ AvailTC n (n : (dataConName <$> tyConDataCons tc))
+    | tc <- wiredInTyCons
     , let n = tyConName tc ]
-
-builtInTyCons :: [TyCon Zk]
-builtInTyCons
-  = ioTyCon
-  : primIoTyCon
-  : ioResTyCon
-  : boolTyCon
-  : unitTyCon
-  : soloTyCon
-  : (fst <$> elems sumArr)
-  ++ (fst <$> elems tupleArr)
+    

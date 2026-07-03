@@ -99,7 +99,7 @@ rightTySectionName :: Name
 rightTySectionName = panic "rightTySectionName"
 
 voidPrimIdName :: Name
-voidPrimIdName = mkWiredInIdName cSLASH_BUILTIN (fsLit "void#") voidPrimIdKey voidPrimId
+voidPrimIdName = mkWiredInIdName cSLASH_PRIM (fsLit "void#") voidPrimIdKey voidPrimId
 
 voidPrimId :: CoreId
 voidPrimId = mkVanillaGlobalWithInfo

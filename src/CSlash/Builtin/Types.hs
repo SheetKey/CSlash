@@ -62,12 +62,15 @@ tyConTyKiVars tc =
 *                                                                      *
 ********************************************************************* -}
 
+-- Proper tycons (not 'PrimTyCon' exported in CSL.BuiltIn)
 wiredInTyCons :: [TyCon p]
 wiredInTyCons
-  = [ unitTyCon
+  = [ {-unitTyCon
     , soloTyCon
-    , boolTyCon
+    , -}boolTyCon
     ]
+    ++ (fst <$> elems sumArr)
+    ++ (fst <$> elems tupleArr)
 
 mkWiredInTyConName
   :: BuiltInSyntax -> Module -> FastString -> Unique -> (forall p.TyCon p) -> Name
@@ -446,9 +449,11 @@ trueDataCon = pcDataCon trueDataConName boolTyCon 0
 unitTy :: Type p
 unitTy = tyConNullaryTy (tupleTyCon 0)
 
+{- Below is an IO implementation based on Idris2's implementation.
+   We now (for now at least) have an opaque IO implementation. (Found in Prim module)
 {- *********************************************************************
 *                                                                      *
-              IO
+              OLD IO
 *                                                                      *
 ********************************************************************* -}
 
@@ -627,3 +632,5 @@ mkIoDataCon = data_con
                                 (mkTyConApp primIoTyCon [Embed ka, Embed kb, a])
                                 (mkTyConApp ioTyCon [Embed ka, Embed kb, a])
             in dc_type
+
+-}

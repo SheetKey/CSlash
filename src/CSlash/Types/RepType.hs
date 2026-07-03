@@ -181,10 +181,10 @@ typePrimRep_maybe ty
   = pprPanic "typePrimRep on sum" (ppr ty)
 
   -- Special tuple/sum types
-  | Just (tc, tys) <- splitTyConApp_maybe ty
-  , tc `hasKey` ioResTyConKey
-  , [_ki, ty] <- tys
-  = typePrimRep_maybe ty
+  -- | Just (tc, tys) <- splitTyConApp_maybe ty
+  -- , tc `hasKey` ioResTyConKey
+  -- , [_ki, ty] <- tys
+  -- = typePrimRep_maybe ty
          
   | Just (tc, tys) <- splitTyConApp_maybe ty
   , tc `hasKey` ioTyConKey

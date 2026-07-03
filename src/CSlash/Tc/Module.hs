@@ -59,7 +59,8 @@ import CSlash.Rename.Module
 import CSlash.Iface.Env     ( externalizeName )
 import CSlash.Iface.Load
 
-import CSlash.Builtin.Types ( unitTyConName, ioTyConName )
+import CSlash.Builtin.Types ( unitTyConName )
+import CSlash.Builtin.Types.Prim ( ioTyConName )
 import CSlash.Builtin.Names
 import CSlash.Builtin.Utils
 

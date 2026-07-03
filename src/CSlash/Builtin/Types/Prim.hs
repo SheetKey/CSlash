@@ -37,7 +37,7 @@ mkPrimTc = mkGenPrimTc UserSyntax
 
 mkGenPrimTc :: BuiltInSyntax -> FastString -> Unique -> (forall p. TyCon p) -> Name
 mkGenPrimTc built_in_syntax occ key tycon
-  =  mkWiredInName cSLASH_BUILTIN
+  =  mkWiredInName cSLASH_PRIM
                   (mkTcOccFS occ)
                   key
                   (mkATyCon tycon)
@@ -50,14 +50,19 @@ mkGenPrimTc built_in_syntax occ key tycon
 ********************************************************************* -}
 
 primTyCons :: [TyCon p]
-primTyCons = unexposedPrimTyCons ++ exposedPrimTyCons
+primTyCons = unexposedPrimTyCons ++ primPrimTyCons ++ builtInPrimTyCons
 
 unexposedPrimTyCons :: [TyCon p]
 unexposedPrimTyCons = [ eqTyCon ]
 
-exposedPrimTyCons :: [TyCon p]
-exposedPrimTyCons
-  = [ fUNTyCon ]
+-- PrimTyCons in CSL.Prim
+primPrimTyCons :: [TyCon p]
+primPrimTyCons = []
+
+-- PrimTyCons in CSL.BuiltIn
+builtInPrimTyCons :: [TyCon p]
+builtInPrimTyCons
+  = [ fUNTyCon, ioTyCon ]
 
 {- *********************************************************************
 *                                                                      *
@@ -220,9 +225,10 @@ eqTyCon = mkPrimTyCon eqTyConName kind 2
            $ FunKi FKF_K_K (KiVarKi k2)
            $ BIKi UKd
 
+{- See note in BuiltIn.Types
 {- *********************************************************************
 *                                                                      *
-                IO
+                OLD IO
 *                                                                      *
 ********************************************************************* -}
 
@@ -231,3 +237,34 @@ realWorldTyConName = mkPrimTc (fsLit "RealWorld#") realWorldTyConKey realWorldTy
 
 realWorldTyCon :: TyCon p
 realWorldTyCon = mkPrimTyCon realWorldTyConName (Mono (BIKi LKd)) 0
+
+-}
+
+{- *********************************************************************
+*                                                                      *
+              IO
+*                                                                      *
+********************************************************************* -}
+
+{-
+The 'IO' tycon has kind
+type IO : ∀ k kf. k -> kf
+where 'kf' is the kind of the function 'RealWorld -kf> IORes a' and 'a : k'
+-}
+
+ioTyConName :: Name
+ioTyConName = mkPrimTc (fsLit "IO") ioTyConKey ioTyCon
+
+ioTyCon :: TyCon p
+ioTyCon
+  = mkPrimTyCon ioTyConName kind arity
+  where
+    arity = 1
+
+    (kva, kvb) = case mkTemplateKindVars 2 of
+                   [k1, k2] -> (k1, k2)
+                   _ -> panic "unreachable"
+
+    kind = ForAllKi kva $
+           ForAllKi kvb $
+           Mono $ FunKi FKF_K_K (KiVarKi kva) (KiVarKi kvb)

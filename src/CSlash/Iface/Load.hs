@@ -442,7 +442,7 @@ readIface dflags name_cache wanted_mod file_path = do
 
 {- *********************************************************************
 *                                                                      *
-        Wired-in interface for GHC.Prim
+        Wired-in interface for CSL.Prim and CSL.BuiltIn
 *                                                                      *
 ********************************************************************* -}
 
@@ -454,6 +454,16 @@ cslBuiltInIface = empty_iface
   & set_mi_final_exts ((mi_final_exts empty_iface) { mi_fix_fn = mkIfaceFixCache fixities })
   where
     empty_iface = emptyFullModIface cSLASH_BUILTIN
+    fixities = []
+
+cslPrimIface :: ModIface
+cslPrimIface = empty_iface
+  & set_mi_exports cslPrimExports
+  & set_mi_decls []
+  & set_mi_fixities fixities
+  & set_mi_final_exts ((mi_final_exts empty_iface) { mi_fix_fn = mkIfaceFixCache fixities })
+  where
+    empty_iface = emptyFullModIface cSLASH_PRIM
     fixities = []
 
 {- *********************************************************************

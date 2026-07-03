@@ -66,6 +66,9 @@ wildCardName = mkSystemVarName wildCardKey (fsLit "wild")
 cSLASH_BUILTIN :: Module
 cSLASH_BUILTIN = mkPrimModule (fsLit "CSL.BuiltIn")
 
+cSLASH_PRIM :: Module
+cSLASH_PRIM = mkPrimModule (fsLit "CSL.Prim")
+
 rOOT_MAIN :: Module
 rOOT_MAIN= mkMainModule (fsLit ":Main")
 
@@ -129,11 +132,11 @@ realWorldTyConKey = mkWiredInTyConUnique 37
 eqTyConKey :: Unique
 eqTyConKey = mkWiredInTyConUnique 53
 
-ioResTyConKey :: Unique
-ioResTyConKey = mkWiredInTyConUnique 55
+-- ioResTyConKey :: Unique
+-- ioResTyConKey = mkWiredInTyConUnique 55
 
-primIoTyConKey :: Unique
-primIoTyConKey = mkWiredInTyConUnique 56
+-- primIoTyConKey :: Unique
+-- primIoTyConKey = mkWiredInTyConUnique 56
 
 ioTyConKey :: Unique
 ioTyConKey = mkWiredInTyConUnique 57
@@ -150,11 +153,11 @@ falseDataConKey = mkWiredInDataConUnique 4
 trueDataConKey :: Unique
 trueDataConKey = mkWiredInDataConUnique 14
 
-mkIoDataConKey :: Unique
-mkIoDataConKey = mkWiredInDataConUnique 16
+-- mkIoDataConKey :: Unique
+-- mkIoDataConKey = mkWiredInDataConUnique 16
 
-mkIoResDataConKey :: Unique
-mkIoResDataConKey = mkWiredInDataConUnique 17
+-- mkIoResDataConKey :: Unique
+-- mkIoResDataConKey = mkWiredInDataConUnique 17
 
 {- *********************************************************************
 *                                                                      *
