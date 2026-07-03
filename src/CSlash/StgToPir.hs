@@ -69,9 +69,18 @@ codeGen logger tmpfs cfg stg_binds = do
           rnm0 <- readIORef uniqRnRef
 
           let ((a, pir), st') = runC cfg fstate st (getPir fcode)
+              (rnm1, pir_renamed) =
+                if stgToPirObjectDeterminism cfg
+                then panic "object determinism"
+                else (rnm0, removeDeterm pir)
 
-          panic "cg"
-        panic "cg"
+          writeIORef cgref $! (st' { cgs_tops = nilOL, cgs_stmts = mkNop })
+          writeIORef uniqRnRef $! rnm1
+
+          return (a, pir_renamed)
+          
+        yield pir
+        return a
 
   mapM_ (cg . cgTopBinding logger tmpfs cfg) stg_binds
 

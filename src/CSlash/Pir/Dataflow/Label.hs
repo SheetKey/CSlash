@@ -141,3 +141,7 @@ mapFilter f (LM m) = LM (M.filter f m)
 {-# INLINE mapElems #-}
 mapElems :: LabelMap a -> [a]
 mapElems (LM m) = M.elems m
+
+{-# INLINE mapFromList #-}
+mapFromList :: [(Label, v)] -> LabelMap v
+mapFromList assocs = LM (M.fromList [(lblToUnique k, v) | (k, v) <- assocs])

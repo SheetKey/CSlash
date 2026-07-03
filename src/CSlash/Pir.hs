@@ -165,6 +165,19 @@ instance OutputableP Platform (GenPirStatics a) where
 type PirStatics = GenPirStatics 'False
 type RawPirStatics = GenPirStatics 'True
 
+removeDeterm :: DPirGroup -> PirGroup
+removeDeterm = map removeDetermDecl
+
+removeDetermDecl :: DPirDecl -> PirDecl
+removeDetermDecl (PirProc e r g) = PirProc e r (removeDetermGraph g)
+removeDetermDecl (PirData a b) = PirData a b
+
+removeDetermGraph :: DPirGraph -> PirGraph
+removeDetermGraph (PirGraph x y)
+  = let y' = case y of
+               GMany a (DWrap b) c -> GMany a (mapFromList b) c
+    in PirGraph x y'
+
 -------------------------------------------------------------------------------
 -- Basic blocks consisting of lists
 -------------------------------------------------------------------------------
