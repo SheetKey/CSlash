@@ -142,6 +142,16 @@ withCgState :: FCode a -> CgState -> FCode (a, CgState)
 withCgState (FCode fcode) newstate = FCode $ \cfg fstate state ->
   case fcode cfg fstate newstate of
     (retval, state2) -> ((retval, state2), state)
+ 
+getBinds :: FCode CgBindings
+getBinds = do
+  state <- getState
+  return $ cgs_binds state
+
+setBinds :: CgBindings -> FCode ()
+setBinds new_binds = do
+  state <- getState
+  setState $ state { cgs_binds = new_binds }
 
 newUniqSupply :: FCode UniqSupply
 newUniqSupply = do

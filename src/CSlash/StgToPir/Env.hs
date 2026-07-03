@@ -35,3 +35,12 @@ litIdInfo platform id lf lit
   = CgIdInfo { cg_id = id
              , cg_lf = lf
              , cg_loc = PirLoc (PirLit lit) }
+
+---------------------------------------------------------
+--        The binding environment
+---------------------------------------------------------
+
+addBindC :: CgIdInfo -> FCode ()
+addBindC stuff_to_bind = do
+  binds <- getBinds
+  setBinds $ extendVarEnv binds (cg_id stuff_to_bind) stuff_to_bind

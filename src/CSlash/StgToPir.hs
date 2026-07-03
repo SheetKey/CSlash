@@ -3,7 +3,7 @@ module CSlash.StgToPir (codeGen) where
 import CSlash.Pir.UniqueRenamer
 -- import CSlash.StgToPir.Prof (initCostCentres, ldvEnter)
 import CSlash.StgToPir.Monad
--- import CSlash.StgToPir.Env
+import CSlash.StgToPir.Env
 import CSlash.StgToPir.Bind
 -- import CSlash.StgToPir.DataCon
 -- import CSlash.StgToPir.Layout
@@ -94,7 +94,8 @@ cgTopBinding :: Logger -> TmpFs -> StgToPirConfig -> CgStgTopBinding -> FCode ()
 cgTopBinding logger tmpfs cfg stg_bind = case stg_bind of
   StgTopBind (StgNonRec id rhs) -> do
     let (info, fcode) = cgTopRhs cfg NonRecursive id rhs
-    panic "cgTopBInding"
+    fcode
+    addBindC info
 
   _ -> panic "cgTopBinding unfinished"
 
