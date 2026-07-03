@@ -1,7 +1,10 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE PatternSynonyms #-}
 
-module CSlash.StgToPir.Monad where
+module CSlash.StgToPir.Monad
+  ( module CSlash.StgToPir.Monad
+  , module CSlash.StgToPir.Sequel
+  ) where
 
 import CSlash.Cs.Pass
 import CSlash.Platform
@@ -169,6 +172,17 @@ initFCodeState p = MkFCodeState
 getFCodeState :: FCode FCodeState
 getFCodeState = FCode $ \_ fstate state -> (fstate, state)
 
+withFCodeState :: FCode a -> FCodeState -> FCode a
+withFCodeState (FCode fcode) fst = FCode $ \cfg _ state -> fcode cfg fst state
+
+getSelfLoop :: FCode (Maybe SelfLoopInfo)
+getSelfLoop = fcs_selfloop <$> getFCodeState
+
+withSelfLoop :: SelfLoopInfo -> FCode a -> FCode a
+withSelfLoop self_loop code = do
+  fstate <- getFCodeState
+  withFCodeState code (fstate { fcs_selfloop = Just self_loop })
+
 -- ----------------------------------------------------------------------------
 -- Config related helpers
 
@@ -201,6 +215,34 @@ forkFunctionBody body_code = do
       fork_state_in = (initCgState us) { cgs_binds = cgs_binds state }
       ((), fork_state_out) = doFCode body_code cfg fcs fork_state_in
   setState $ state `addCodeBlocksFrom` fork_state_out
+
+-- TODO: ticky stuff: tickScope, getTickScope, PirAGraphScoped
+getCodeScoped :: FCode a -> FCode (a, PirAGraph)
+getCodeScoped fcode = do
+  state1 <- getState
+  (a, state2) <-
+    flip withCgState state1 { cgs_stmts = mkNop } $ do
+      a <- fcode
+      -- scp <- getTickScope
+      return a
+  setState $ state2 { cgs_stmts = cgs_stmts state1 }
+  return (a, cgs_stmts state2)
+
+-- ----------------------------------------------------------------------------
+-- Combinators for emitting code
+
+emitProc :: PLabel -> [PirFormal] -> PirAGraph -> FCode ()
+emitProc lbl args blocks = do
+  l <- newBlockId
+  let blks :: DPirGraph
+      blks = labelAGraph l blocks
+
+      proc_lbl = toProcDelimiterLbl lbl
+
+      proc_block = PirProc proc_lbl args blks
+
+  state <- getState
+  setState $ state { cgs_tops = cgs_tops state `snocOL` proc_block }
 
 getPir :: FCode a -> FCode (a, DPirGroup)
 getPir code = do

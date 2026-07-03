@@ -358,6 +358,7 @@ library
                     , CSlash.StgToPir.Function
                     , CSlash.StgToPir.Config
                     , CSlash.StgToPir.Env
+                    , CSlash.StgToPir.Expr
                     , CSlash.StgToPir.Monad
                     , CSlash.StgToPir.Sequel
                     , CSlash.StgToPir.Types

@@ -29,6 +29,8 @@ import CSlash.Types.Basic (Alignment, mkAlignment, alignmentOf)
 data PirExpr
   = PirLit !PirLit
 
+  | PirReg {-# UNPACK #-} !LocalReg
+
 instance OutputableP Platform PirExpr
 
 data PirLit

@@ -20,9 +20,10 @@ import CSlash.StgToPir.Types
 import CSlash.Pir.BlockId
 import CSlash.Pir.PLabel
 import CSlash.Types.Var.Id
+import CSlash.Types.Var.Class
 import CSlash.Types.Var.Id.Info
 import CSlash.Core.DataCon
-import CSlash.Types.Name
+import CSlash.Types.Name hiding (varName)
 import CSlash.Core.Type
 import CSlash.Core.Type.Rep
 import CSlash.Tc.Utils.TcType
@@ -53,6 +54,22 @@ pprCgLoc :: Platform -> CgLoc -> SDoc
 pprCgLoc platform (PirLoc e) = text "pir" <+> pdoc platform e
 pprCgLoc _ (LneLoc b rs) = text "lne" <+> ppr b <+> ppr rs
 
+-------------------------------------
+--        Non-void types
+-------------------------------------
+
+newtype NonVoid a = NonVoid a
+  deriving (Eq, Show)
+
+fromNonVoid :: NonVoid a -> a
+fromNonVoid (NonVoid a) = a
+
+instance (Outputable a) => Outputable (NonVoid a) where
+  ppr (NonVoid a) = ppr a
+
+nonVoidIds :: [Id Zk] -> [NonVoid (Id Zk)]
+nonVoidIds ids = [NonVoid id | id <- ids, not (isZeroBitTy (varType id))]
+
 -----------------------------------------------------------------------------
 --              Data types for function information
 -----------------------------------------------------------------------------
@@ -60,6 +77,7 @@ pprCgLoc _ (LneLoc b rs) = text "lne" <+> ppr b <+> ppr rs
 data FunctionInfo = FunctionInfo
   { functionName :: !(Id Zk)
   , functionLFInfo :: !LambdaFormInfo
+  , functionLabel :: !PLabel
   , functionProf :: !ProfilingInfo
   }
 
@@ -76,9 +94,11 @@ mkFunctionInfo
 mkFunctionInfo profile id lf_info val_descr
   = FunctionInfo { functionName = id
                  , functionLFInfo = lf_info
+                 , functionLabel = lbl
                  , functionProf = prof }
   where
     prof = mkProfilingInfo profile id val_descr
+    lbl = mkFunctionLabel (varName id) (idCafInfo id)
 
 --------------------------------------
 --   Profiling

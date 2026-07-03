@@ -7,6 +7,12 @@ import CSlash.Types.Name
 import CSlash.Types.Unique
 import qualified CSlash.Types.Unique.DSM as DSM
 
-import CSlash.Pir.Dataflow.Label (Label{-, mkHooplLabel-})
+import CSlash.Pir.Dataflow.Label (Label, mkHooplLabel)
 
 type BlockId = Label
+
+mkBlockId :: Unique -> BlockId
+mkBlockId unique = mkHooplLabel $ getKey unique
+
+newBlockId :: DSM.MonadGetUnique m => m BlockId
+newBlockId = mkBlockId <$> DSM.getUniqueM

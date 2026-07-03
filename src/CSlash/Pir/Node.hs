@@ -35,6 +35,8 @@ import CSlash.Utils.Constants (debugIsOn)
 data PirNode e x where
   PirEntry :: {-# UNPACK #-} !Label -> PirNode C O
 
+  PirBranch :: {-# UNPACK #-} !Label -> PirNode O C
+
 instance OutputableP Platform (PirNode e x) where
   pdoc = pprNode
 
@@ -47,10 +49,13 @@ pprNode platform node = pp_node <+> pp_debug
                          if cond then text "_lbl_" else ppr id)
                      <> colon
 
+      PirBranch ident -> text "goto" <+> ppr ident <> semi
+
     pp_debug :: SDoc
     pp_debug = if not debugIsOn then empty else
       case node of
         PirEntry{} -> empty
+        PirBranch{} -> text "  // PirBranch"
 
 instance OutputableP Platform (Block PirNode C C) where
     pdoc = pprBlock

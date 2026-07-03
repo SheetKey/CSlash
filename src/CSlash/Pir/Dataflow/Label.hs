@@ -26,6 +26,9 @@ import Data.List (foldl1')
 newtype Label = Label { lblToUnique :: Word64 }
   deriving newtype (Eq, Ord)
 
+mkHooplLabel :: Word64 -> Label
+mkHooplLabel = Label
+
 instance Show Label where
   show (Label n) = "L" ++ show n
 

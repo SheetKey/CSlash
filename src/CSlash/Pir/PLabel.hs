@@ -27,6 +27,7 @@ instance OutputableP Platform PLabel
 
 data IdLabelInfo
   = Function
+  | Entry
 
 -- -----------------------------------------------------------------------------
 -- Constructing PLabels
@@ -34,3 +35,16 @@ data IdLabelInfo
 
 mkFunctionLabel :: Name -> CafInfo -> PLabel
 mkFunctionLabel name c = IdLabel name c Function
+
+-- -----------------------------------------------------------------------------
+-- Convert between different kinds of label
+
+toEntryLbl :: Platform -> PLabel -> PLabel
+toEntryLbl platform lbl = case lbl of
+  IdLabel n c Function -> IdLabel n c Entry
+  IdLabel n c Entry -> IdLabel n c Entry
+
+toProcDelimiterLbl :: PLabel -> PLabel
+toProcDelimiterLbl lbl = case lbl of
+  -- LocalBlockLabel{}
+  _ -> lbl

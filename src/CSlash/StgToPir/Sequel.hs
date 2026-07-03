@@ -1,5 +1,7 @@
 module CSlash.StgToPir.Sequel where
 
+import CSlash.Cs.Pass
+
 import CSlash.Pir.BlockId
 import CSlash.Pir
 
@@ -14,3 +16,8 @@ instance Outputable Sequel where
   ppr Return = text "Return"
 
 data SelfLoopInfo = MkSelfLoopInfo
+  { sli_id :: !(Id Zk)
+  , sli_arity :: !RepArity
+  , sli_registers :: ![LocalReg]
+  , sli_header_block :: !BlockId
+  }

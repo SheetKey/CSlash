@@ -1,3 +1,5 @@
+{-# LANGUAGE BangPatterns #-}
+
 module CSlash.StgToPir.Bind where
 
 import Prelude hiding ((<>))
@@ -15,7 +17,7 @@ import CSlash.Platform.Profile
 -- import GHC.Builtin.Names (unpackCStringName, unpackCStringUtf8Name)
 
 import CSlash.StgToPir.Config
--- import CSlash.StgToPir.Expr
+import CSlash.StgToPir.Expr
 import CSlash.StgToPir.Monad
 import CSlash.StgToPir.Env
 -- import GHC.StgToCmm.DataCon
@@ -127,7 +129,57 @@ functionCodeBody
   -> [CgId]
   -> CgStgExpr
   -> FCode ()
-functionCodeBody = panic "functionCodeBody"
+functionCodeBody top_lvl bndr fn_info [] body = panic "functionCodeBody no args"
+
+functionCodeBody top_lvl bndr fn_info args@(arg0:_) body =
+  let nv_args = nonVoidIds args
+      arity = length args
+  in {-withNewTickyCounterFun (isOneShotBndr arg0) (functionName fn_info) nv_args $-} do -- TODO
+    let lf_info = functionLFInfo fn_info
+
+    {- NOTE/TODO nodeMustPointToIt
+       we assume this is always False. Should be ok since no GC or lazy eval
+    -}
+    emitFunctionProc top_lvl bndr lf_info (functionLabel fn_info) nv_args $
+      \arg_regs -> do
+        -- mkSlowEntryCode -- should be fine without: We don't have paps?
+        profile <- getProfile
+        platform <- getPlatform
+        loop_header_id <- newBlockId
+        let !self_loop_info = MkSelfLoopInfo
+                              { sli_id = bndr
+                              , sli_arity = arity
+                              , sli_header_block = loop_header_id
+                              , sli_registers = arg_regs
+                              }
+        withSelfLoop self_loop_info $ do
+          -- tickyEnterFun fn_info -- TODO: ticky stuff
+          -- enterCostCentreFun -- TODO const center/centre
+          -- checkFunctionArgTags -- TODO: not necessary?
+          cgExpr body
+
+emitFunctionProc
+  :: Bool
+  -> CgId
+  -> LambdaFormInfo
+  -> PLabel
+  -> [NonVoid CgId]
+  -> ([LocalReg] -> FCode ())
+  -> FCode ()
+emitFunctionProc top_lvl bndr lf_info lbl args body = do
+  profile <- getProfile
+  platform <- getPlatform
+  when (not top_lvl) $ void $
+    bindToReg (NonVoid bndr) lf_info
+  arg_regs <- bindArgsToRegs args
+  emitFunction (profilePlatform profile) lbl arg_regs $ body arg_regs
+
+-- Assumes 'Convention' is 'NativeDirectCall' (the only one for us?)
+emitFunction :: Platform -> PLabel -> [LocalReg] -> FCode () -> FCode ()
+emitFunction platform lbl args body = do
+  (_, blks) <- getCodeScoped body
+  let entry_lbl = toEntryLbl platform lbl
+  emitProc entry_lbl args blks
 
 ------------------------------------------------------------------------
 --              Profiling
