@@ -49,6 +49,7 @@ import CSlash.Platform.Profile (profileIsProfiling)
 ------------------------------------------------------------------------
 
 cgExpr :: CgStgExpr -> FCode ()
-cgExpr = panic "cgExpr"
 
 
+
+cgExpr e = pprPanic "cgExpr" (ppr e)
