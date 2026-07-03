@@ -116,7 +116,9 @@ mkFunctionLFInfo
   -> [CgId]
   -> LambdaFormInfo
 mkFunctionLFInfo platform bndr top is_join args
-  = panic "mkFunctionLFInfo" -- mkLFReEntrant top args (mkArgDescr platform args)
+  | null args = panic "mkFunctionLFInfo null args"
+  | otherwise
+  = mkLFReEntrant top args -- (mkArgDescr platform args)
 
 ------------------------------------------------------------------------
 --              The code for functions

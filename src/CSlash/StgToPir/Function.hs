@@ -70,6 +70,17 @@ instance (Outputable a) => Outputable (NonVoid a) where
 nonVoidIds :: [Id Zk] -> [NonVoid (Id Zk)]
 nonVoidIds ids = [NonVoid id | id <- ids, not (isZeroBitTy (varType id))]
 
+------------------------------------------------------
+--                Building LambdaFormInfo
+------------------------------------------------------
+
+mkLFReEntrant
+  :: TopLevelFlag
+  -> [Id Zk]
+  -> LambdaFormInfo
+mkLFReEntrant _ [] = pprPanic "mkLFReEntrant" empty
+mkLFReEntrant top args = LFReEntrant top (length args) False
+
 -----------------------------------------------------------------------------
 --              Data types for function information
 -----------------------------------------------------------------------------
