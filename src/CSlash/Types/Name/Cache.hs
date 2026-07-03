@@ -6,6 +6,7 @@ import CSlash.Unit.Module
 import CSlash.Types.Name
 import CSlash.Types.Unique.Supply
 import CSlash.Builtin.Types
+import CSlash.Builtin.Types.Prim
 import CSlash.Builtin.Names
 
 import CSlash.Utils.Outputable
@@ -27,7 +28,7 @@ takeUniqFromNameCache (NameCache c _) = uniqFromTag c
 
 lookupOrigNameCache :: OrigNameCache -> Module -> OccName -> Maybe Name
 lookupOrigNameCache nc mod occ
-  | mod == cSLASH_BUILTIN
+  | mod == cSLASH_BUILTIN || mod == cSLASH_PRIM
   , Just name <- isBuiltInOcc_maybe occ <|> isPunOcc_maybe mod occ
   = Just name
   | otherwise

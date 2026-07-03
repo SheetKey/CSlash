@@ -23,6 +23,8 @@ import CSlash.Utils.Panic
 import CSlash.Utils.Monad
 import CSlash.Utils.Error
 import CSlash.Utils.Exception as Exception
+import CSlash.Utils.Outputable
+import CSlash.Utils.Trace
 
 import CSlash.Data.StringBuffer
 import CSlash.Data.Maybe
@@ -64,8 +66,10 @@ getImports popts buf filename source_filename = do
                   imps = csmodImports csmod
                   ord_idecls = imps
 
+                  -- We don't need to filter out 'import CSL.BuiltIn':
+                  -- 'mkBuiltInImports' will error if this is explicitly encountered.
                   (ordinary_imps, csl_prim_import)
-                    = partition ((/= moduleName cSLASH_BUILTIN) . unLoc . ideclName . unLoc)
+                    = partition ((/= moduleName cSLASH_PRIM) . unLoc . ideclName . unLoc)
                       ord_idecls
 
                   pre_loc = srcLocSpan (mkSrcLoc (mkFastString source_filename) 1 1)

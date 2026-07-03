@@ -521,7 +521,9 @@ csDesugarAndSimplify summary (FrontendTypecheck tc_result) tc_warnings mb_old_ha
       diag_opts = initDiagOpts dflags
       print_config = initPrintConfig dflags
 
-  mb_desugar <- if ms_mod summary /= cSLASH_BUILTIN && cs_src == CsSrcFile
+  mb_desugar <- if ms_mod summary /= cSLASH_BUILTIN &&
+                   ms_mod summary /= cSLASH_PRIM &&
+                   cs_src == CsSrcFile
                 then Just <$> csDesugar' (ms_location summary) tc_result
                 else pure Nothing
 

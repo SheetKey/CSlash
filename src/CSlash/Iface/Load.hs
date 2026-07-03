@@ -160,9 +160,12 @@ loadSrcInterface_maybe
   :: SDoc -> ModuleName -> PkgQual -> RnM (MaybeErr MissingInterfaceError ModIface)
 loadSrcInterface_maybe doc mod maybe_pkg = do
   cs_env <- getTopEnv
-  res <- if mod == moduleName cSLASH_BUILTIN
-         then return $ Found (panic "Found BuiltIn") cSLASH_BUILTIN
-         else liftIO $ findImportedModule cs_env mod maybe_pkg
+  res <- if | mod == moduleName cSLASH_BUILTIN
+              -> return $ Found (panic "Found BuiltIn") cSLASH_BUILTIN
+            | mod == moduleName cSLASH_PRIM
+              -> return $ Found (panic "Found Prim") cSLASH_PRIM
+            | otherwise
+              -> liftIO $ findImportedModule cs_env mod maybe_pkg
   case res of
     Found _ mod -> initIfaceTcRn $ loadInterface doc mod ImportByUser
     err -> return $ Failed $ cannotFindModule cs_env mod err
@@ -233,7 +236,8 @@ loadInterface doc_str mod from
                           dontLeakTheHUG $ do
                             massertPpr ((isOneShot (csMode (cs_dflags cs_env)))
                                         || moduleUnitId mod `notElem` cs_all_home_unit_ids cs_env
-                                        || mod == cSLASH_BUILTIN)
+                                        || mod == cSLASH_BUILTIN
+                                        || mod == cSLASH_PRIM)
                               (text "Attempting to load home package interface into the EPS"
                                $$ ppr hug $$ doc_str $$ ppr mod $$ ppr (moduleUnitId mod))
                             ignore_prags <- goptM Opt_IgnoreInterfacePragmas
@@ -346,6 +350,8 @@ findAndReadIface  cs_env doc_str mod wanted_mod = do
 
   if | mod `installedModuleEq` cSLASH_BUILTIN
        -> return (Succeeded (cslBuiltInIface, "<built in interface for CSL.BuiltIn>"))
+     | mod `installedModuleEq` cSLASH_PRIM
+       -> return (Succeeded (cslPrimIface, "CSL.Prim ModLocation (findAndReadIface)"))
      | otherwise
        -> do let fopts = initFinderOpts dflags
              mb_found <- liftIO (findExactModule fc fopts other_fopts unit_state mhome_unit mod)
