@@ -57,7 +57,9 @@ import CSlash.Utils.Panic
 -- import Data.Maybe (fromMaybe, fromJust)
 
 primOpRules :: Name -> PrimOp -> Maybe CoreRule
-primOpRules = panic "primOpRules"
+primOpRules nm op = case op of
+  ReturnIO -> Nothing
+  _ -> panic "primOpRules"
 
 builtinRules :: [CoreRule]
 builtinRules = []
