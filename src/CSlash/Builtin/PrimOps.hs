@@ -39,47 +39,52 @@ import CSlash.Utils.Outputable
 import CSlash.Utils.Panic
 import CSlash.Utils.Trace
 
+import CSlash.Data.SmallArray
+
 import CSlash.Data.FastString
-import Data.List( inits )
+import Data.List( inits, find )
 import Data.Maybe ( mapMaybe, listToMaybe, catMaybes, maybeToList )
 
 data PrimOp
+  -- IO
+  = ReturnIO
+  | BindIO
+
   -- Casts
-  = IntToInt Int Int
-  | IntToUInt Int Int
-  | UIntToInt Int Int
-  | UIntToUInt Int Int
   | DoubleToFloatOp 
   | FloatToDoubleOp 
   | Int64ToAddrOp
   | AddrToInt64Op
-
-  -- IO
-  | ReturnIO
-  | BindIO
+  | IntToInt Int Int
+  | IntToUInt Int Int
+  | UIntToInt Int Int
+  | UIntToUInt Int Int
   deriving Eq
 
-instance Enum PrimOp where
-  fromEnum op = case op of
-    IntToInt i1 i2 -> assert (i1 <= 128) $
-                      assert (i2 <= 128) $
-                      0 + (i1 * i2)
-    IntToUInt i1 i2 -> assert (i1 <= 128) $
-                       assert (i2 <= 128) $
-                       (128 * 128) + 1 + (i1 * i2)
-    UIntToInt i1 i2 -> assert (i1 <= 128) $
-                       assert (i2 <= 128) $
-                       (2 * (128 * 128)) + 2 + (i1 * i2)
-    UIntToUInt i1 i2 -> assert (i1 <= 128) $
-                        assert (i2 <= 128) $
-                        (3 * (128 * 128)) + 3 + (i1 * i2)
-    DoubleToFloatOp -> (4 * (128 * 128)) + 4
-    FloatToDoubleOp -> (4 * (128 * 128)) + 5
-    Int64ToAddrOp -> (4 * (128 * 128)) + 6
-    AddrToInt64Op -> (4 * (128 * 128)) + 7
+allThePrimOps :: (Int, [(Int, PrimOp)])
+allThePrimOps =
+  let sizes = [(i1, i2) | i1 <- [1..128], i2 <- [1..128]] 
+      ops = zip [0..] $
+            [ ReturnIO, BindIO
+            , DoubleToFloatOp, FloatToDoubleOp
+            , Int64ToAddrOp, AddrToInt64Op
+            ] ++
+            [ IntToInt i1 i2 | (i1, i2) <- sizes ] ++
+            [ IntToUInt i1 i2 | (i1, i2) <- sizes ] ++
+            [ UIntToInt i1 i2 | (i1, i2) <- sizes ] ++
+            [ UIntToUInt i1 i2 | (i1, i2) <- sizes ]
+  in (length ops, ops)
 
-    ReturnIO -> (4 * (128 * 128)) + 8
-    BindIO -> (4 * (128 * 128)) + 9
+instance Enum PrimOp where
+  fromEnum op = case find ((== op) . snd) (snd allThePrimOps) of
+                  Just (i, _) -> i
+                  Nothing -> panic "fromEnum PrimOp"
+  toEnum i = case find ((== i) . fst) (snd allThePrimOps) of
+               Just (_, op) -> op
+               Nothing -> panic "toEnum PrimOp"
+
+primOpTag :: PrimOp -> Int
+primOpTag = fromEnum
 
 data PrimOpInfo = PrimOpInfo
   PrimOpId
@@ -113,15 +118,6 @@ type PrimOpCheap = Bool
 
 type PrimOpFixity = Maybe Fixity
 
-primOpInfo :: PrimOp -> PrimOpInfo
-primOpInfo op = case op of
-  -- Casts
-
-  -- IO
-  ReturnIO -> PrimOpInfo (mkPrimOpId op) NoEffect POI_Pir False 0 True True Nothing
-
-  _ -> panic "primOpInfo"
-
 data PrimOpIdInfo
   = GenPrimOpIdInfo
     OccName
@@ -131,54 +127,17 @@ data PrimOpIdInfo
     [Type Zk]
     (Type Zk)
 
-primOpIdInfo :: PrimOp -> PrimOpIdInfo
-primOpIdInfo op = case op of
-  -- Casts
+primOpId :: PrimOp -> PrimOpId
+{-# INLINE primOpId #-}
+primOpId op = indexSmallArray primOpIds (primOpTag op)
 
-  -- IO
-  ReturnIO -> let (a_kv, r_kv) = case mkTemplateKindVarsRes 1 of
-                                   ([a_kv], r_kv) -> (a_kv, r_kv)
-                                   _ -> panic "unreachable"
-                  a_ki = KiVarKi a_kv
-                  r_ki = KiVarKi r_kv
-                  pred = [(a_ki, LTEQKi, r_ki)]
-                  a_tv = case mkTemplateTyVars [a_ki] of
-                           [a_tv] -> a_tv
-                           _ -> panic "unreachable"
-                  a_ty = TyVarTy a_tv
-                  res_ty = mkTyConApp ioTyCon [Embed a_ki, Embed r_ki, a_ty]
-              in GenPrimOpIdInfo (mkVarOccFS "return_io") [a_kv, r_kv] pred [a_tv] [a_ty] res_ty
+allThePrimOpIds :: [PrimOpId]
+{-# INLINE allThePrimOpIds #-}
+allThePrimOpIds = map (indexSmallArray primOpIds) [0..(fst allThePrimOps - 1)]
 
-  _ -> panic "primOpIdInfo"
-
-mkPrimOpId :: PrimOp -> PrimOpId
-mkPrimOpId prim_op = case primOpIdInfo prim_op of
-  GenPrimOpIdInfo occ kvs in_preds tvs args res ->
-    let fun_kvs = tail $ mkTemplateFunKindVars (length args)
-        fun_kis = BIKi UKd : (KiVarKi <$> fun_kvs)
-        arg_kis = typeMonoKind <$> args
-        fun_preds = let want_lts = inits arg_kis
-                    in assert (length want_lts - 1 == length fun_kis) $
-                       concat $ zipWith (fmap . (KiPredApp LTEQKi)) fun_kis want_lts
-
-        kcvs = mkTemplateKiCoVars (map mk_pred in_preds ++ fun_preds)
-        ty = mkBigLamTys kvs $
-             mkForAllKiCos kcvs $
-             mkInfForAllTys tvs $
-             mkFunTys args fun_kis res
-        name = mkWiredInName cSLASH_PRIM occ (mkPrimOpIdUnique (fromEnum prim_op))
-               (AnId id) UserSyntax
-        id = mkGlobalId (PrimOpId prim_op) name ty info
-
-        info = noCafIdInfo
-               `setRuleInfo` mkRuleInfo (maybeToList $ primOpRules name prim_op)
-               `setArityInfo` 1
-               `setDmdSigInfo` mkClosedDmdSig (replicate 1 topDmd) topDiv
-               `setInlinePragInfo` neverInlinePragma
-    in pprTrace "mkPrimOpId" (ppr id) id
-  where
-    mk_pred :: (MonoKind Zk, KiPredCon, MonoKind Zk) -> MonoKind Zk
-    mk_pred (kl, pred, kr) = KiPredApp pred kl kr
+primOpInfo :: PrimOp -> PrimOpInfo
+{-# INLINE primOpInfo #-}
+primOpInfo op = indexSmallArray primOpInfos (primOpTag op)
 
 primOpOkForSpeculation :: PrimOp -> Bool
 primOpOkForSpeculation op
@@ -206,3 +165,69 @@ primOpImpl op = case primOpInfo op of
 
 primOpIsDiv :: PrimOp -> Bool
 primOpIsDiv op = panic "primOpIsDiv"
+
+-------------------------------------------------------------
+-- Cache of PrimOp Info and Ids
+-------------------------------------------------------------
+
+primOpInfos :: SmallArray PrimOpInfo
+{-# NOINLINE primOpInfos #-}
+primOpInfos = listToArray (fst allThePrimOps) fst (mkPrimOpInfo . snd) (snd allThePrimOps)
+
+primOpIds :: SmallArray PrimOpId
+{-# NOINLINE primOpIds #-}
+primOpIds = mapSmallArray (\(PrimOpInfo id _ _ _ _ _ _ _) -> id) primOpInfos
+
+mkPrimOpInfo :: PrimOp -> PrimOpInfo
+mkPrimOpInfo op = case op of
+  -- IO
+  ReturnIO -> PrimOpInfo (mkPrimOpId op) NoEffect POI_Pir False 0 True True Nothing
+
+  _ -> panic "primOpInfo"
+
+mkPrimOpIdInfo :: PrimOp -> PrimOpIdInfo
+mkPrimOpIdInfo op = case op of
+  -- IO
+  ReturnIO -> let (a_kv, r_kv) = case mkTemplateKindVarsRes 1 of
+                                   ([a_kv], r_kv) -> (a_kv, r_kv)
+                                   _ -> panic "unreachable"
+                  a_ki = KiVarKi a_kv
+                  r_ki = KiVarKi r_kv
+                  pred = [(a_ki, LTEQKi, r_ki)]
+                  a_tv = case mkTemplateTyVars [a_ki] of
+                           [a_tv] -> a_tv
+                           _ -> panic "unreachable"
+                  a_ty = TyVarTy a_tv
+                  res_ty = mkTyConApp ioTyCon [Embed a_ki, Embed r_ki, a_ty]
+              in GenPrimOpIdInfo (mkVarOccFS "return_io") [a_kv, r_kv] pred [a_tv] [a_ty] res_ty
+
+  _ -> panic "primOpIdInfo"
+
+mkPrimOpId :: PrimOp -> PrimOpId
+mkPrimOpId prim_op = case mkPrimOpIdInfo prim_op of
+  GenPrimOpIdInfo occ kvs in_preds tvs args res ->
+    let fun_kvs = tail $ mkTemplateFunKindVars (length args)
+        fun_kis = BIKi UKd : (KiVarKi <$> fun_kvs)
+        arg_kis = typeMonoKind <$> args
+        fun_preds = let want_lts = inits arg_kis
+                    in assert (length want_lts - 1 == length fun_kis) $
+                       concat $ zipWith (fmap . (KiPredApp LTEQKi)) fun_kis want_lts
+
+        kcvs = mkTemplateKiCoVars (map mk_pred in_preds ++ fun_preds)
+        ty = mkBigLamTys kvs $
+             mkForAllKiCos kcvs $
+             mkInfForAllTys tvs $
+             mkFunTys args fun_kis res
+        name = mkWiredInName cSLASH_PRIM occ (mkPrimOpIdUnique (primOpTag prim_op))
+               (AnId id) UserSyntax
+        id = mkGlobalId (PrimOpId prim_op) name ty info
+
+        info = noCafIdInfo
+               `setRuleInfo` mkRuleInfo (maybeToList $ primOpRules name prim_op)
+               `setArityInfo` 1
+               `setDmdSigInfo` mkClosedDmdSig (replicate 1 topDmd) topDiv
+               `setInlinePragInfo` neverInlinePragma
+    in pprTrace "mkPrimOpId" (ppr id) id
+  where
+    mk_pred :: (MonoKind Zk, KiPredCon, MonoKind Zk) -> MonoKind Zk
+    mk_pred (kl, pred, kr) = KiPredApp pred kl kr

@@ -457,6 +457,9 @@ unitTy = tyConNullaryTy (tupleTyCon 0)
 *                                                                      *
 ********************************************************************* -}
 
+return_io : k <= kr => ∀ {a : k}. a -★> (IO a : kr)
+return_io = \x -> MkIO $ \rw -> MkIORes x rw
+
 {-
 The 'IORes' tycon has kind
 type IORes : ∀ k. k -> ○

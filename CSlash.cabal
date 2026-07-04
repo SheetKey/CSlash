@@ -181,6 +181,7 @@ library
                     , CSlash.Data.Maybe
                     , CSlash.Data.OrdList
                     , CSlash.Data.Pair
+                    , CSlash.Data.SmallArray
                     , CSlash.Data.Stream
                     , CSlash.Data.Strict
                     , CSlash.Data.StringBuffer
