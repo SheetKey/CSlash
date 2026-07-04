@@ -11,6 +11,7 @@ import Prelude hiding ((<>))
 import CSlash.Cs.Pass
 
 import CSlash.Core
+import {-# SOURCE #-} CSlash.Builtin.PrimOps (PrimOp)
 -- import CSlash.Core.Type
 -- import CSlash.Core.Kind
 import CSlash.Types.Name
@@ -31,6 +32,7 @@ import Data.Bits
 data IdDetails 
   = VanillaId
   | DataConId (DataCon Zk)
+  | PrimOpId { id_primop :: PrimOp }
   | TickBoxOpId TickBoxOp
   | JoinId JoinArity
 
@@ -43,6 +45,7 @@ pprIdDetails other = brackets (pp other)
   where
     pp VanillaId = panic "pprIdDetails"
     pp (DataConId _) = text "DataCon"
+    pp (PrimOpId _) = text "PrimOp"
     pp (TickBoxOpId _) = text "TickBoxOp"
     pp (JoinId arity) = text "JoinId" <> parens (int arity)
 

@@ -86,6 +86,8 @@ mkTemplateKindVarsRes i
       ]
     , mkKiVar (mk_kv_name i ('k' : show i)) )
 
+-- Look at call sites: this should change in the future:
+-- The first fun kind should ALWAYS be UKd, not a kv!
 mkTemplateFunKindVars :: Int -> [KiVar p]
 mkTemplateFunKindVars i
   = [ mkKiVar (mk_fkv_name u ('k' : 'f' : show u))

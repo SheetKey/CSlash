@@ -3,6 +3,7 @@
 module CSlash.Core.Opt.ConstantFold
   ( builtinRules
   , caseRules2
+  , primOpRules
   ) where
 
 -- import GHC.Platform
@@ -13,7 +14,7 @@ module CSlash.Core.Opt.ConstantFold
 -- import GHC.Types.Literal
 -- import GHC.Types.Name.Occurrence ( occNameFS )
 -- import GHC.Types.Tickish
--- import GHC.Types.Name ( Name, nameOccName )
+import CSlash.Types.Name ( Name, nameOccName )
 -- import GHC.Types.Basic
 
 import CSlash.Core
@@ -31,7 +32,7 @@ import CSlash.Core
 --    , isEnumerationTyCon, isValidDTT2TyCon, isNewTyCon )
 -- import GHC.Core.Map.Expr ( eqCoreExpr )
 
--- import GHC.Builtin.PrimOps ( PrimOp(..), tagToEnumKey )
+import {-# SOURCE #-} CSlash.Builtin.PrimOps ( PrimOp(..){-, tagToEnumKey-} )
 -- import GHC.Builtin.PrimOps.Ids (primOpId)
 -- import GHC.Builtin.Types
 -- import GHC.Builtin.Types.Prim
@@ -54,6 +55,9 @@ import CSlash.Utils.Panic
 -- import Data.Ratio
 -- import Data.Word
 -- import Data.Maybe (fromMaybe, fromJust)
+
+primOpRules :: Name -> PrimOp -> Maybe CoreRule
+primOpRules = panic "primOpRules"
 
 builtinRules :: [CoreRule]
 builtinRules = []

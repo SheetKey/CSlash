@@ -250,6 +250,7 @@ idJoinPointHood id = case idDetails id of
 
 hasNoBinding :: Id p -> Bool
 hasNoBinding id = case idDetails id of
+  PrimOpId _ -> True
   DataConId dc -> isTupleDataCon dc
                   || isSumDataCon dc
   VanillaId -> rest
@@ -261,7 +262,7 @@ hasNoBinding id = case idDetails id of
 isImplicitId :: Id p -> Bool
 isImplicitId id = case idDetails id of
   DataConId{} -> True
-  
+  PrimOpId{} -> True
   VanillaId -> False
   TickBoxOpId{} -> False
   JoinId{} -> False

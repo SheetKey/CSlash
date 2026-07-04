@@ -18,6 +18,8 @@ import CSlash.Core.Type.Compare( eqType )
 import CSlash.Core.TyCon
 import CSlash.Core.Kind
 
+import CSlash.Builtin.PrimOps
+
 import CSlash.Types.Var
 import CSlash.Types.SrcLoc
 import CSlash.Types.Var.Env
@@ -430,7 +432,7 @@ isWorkFreeApp fn n_val_args
   | otherwise
   = case idDetails fn of
       DataConId{} -> True
-      -- PrimOpId
+      PrimOpId op -> primOpIsWorkFree op
       VanillaId -> False
       TickBoxOpId{} -> False
       JoinId{} -> False
@@ -442,7 +444,7 @@ isCheapApp fn n_val_args
   | otherwise
   = case idDetails fn of
       DataConId{} -> True
-      -- PrimOpId
+      PrimOpId op -> primOpIsCheap op
       VanillaId -> False
       TickBoxOpId{} -> False
       JoinId{} -> False
@@ -452,7 +454,7 @@ isExpandableApp fn n_val_args
   | isWorkFreeApp fn n_val_args = True
   | otherwise
   = case idDetails fn of
-      -- TODO: PrimOpId
+      PrimOpId {} -> False
       _ | isDeadEndId fn -> False
         | isConLikeId fn -> True
         | all_args_are_preds -> True
@@ -479,7 +481,7 @@ isExpandableApp fn n_val_args
 ********************************************************************* -}
 
 exprOkForSpeculation :: CoreExpr -> Bool
-exprOkForSpeculation = expr_ok fun_always_ok panic
+exprOkForSpeculation = expr_ok fun_always_ok primOpOkForSpeculation
 
 exprOkToDiscard :: CoreExpr -> Bool
 exprOkToDiscard = panic "unfinished"
@@ -487,8 +489,7 @@ exprOkToDiscard = panic "unfinished"
 fun_always_ok :: CoreId -> Bool
 fun_always_ok _ = True
 
--- TODO: a should be 'PrimOp'
-expr_ok :: (CoreId -> Bool) -> (a -> Bool) -> CoreExpr -> Bool
+expr_ok :: (CoreId -> Bool) -> (PrimOp -> Bool) -> CoreExpr -> Bool
 expr_ok _ _ Lit{} = True
 expr_ok _ _ Type{} = True
 expr_ok _ _ KiCo{} = True
@@ -518,8 +519,7 @@ expr_ok fun_ok primop_ok other_expr
          Lit lit -> panic "expr_ok Lit"
          _ -> False
 
--- TODO: a should be 'PrimOp'
-app_ok :: (CoreId -> Bool) -> (a -> Bool) -> CoreId -> [CoreExpr] -> Bool
+app_ok :: (CoreId -> Bool) -> (PrimOp -> Bool) -> CoreId -> [CoreExpr] -> Bool
 app_ok fun_ok primop_ok fun args
   | not (fun_ok fun)
   = False
@@ -528,6 +528,11 @@ app_ok fun_ok primop_ok fun args
   | otherwise
   = case idDetails fun of
       DataConId{} -> args_ok
+      PrimOpId op
+        | primOpIsDiv op
+          -> panic "div prim op"
+        | otherwise
+          -> primop_ok op && args_ok
       VanillaId -> rest
       TickBoxOpId{} -> rest
       JoinId{} -> rest
