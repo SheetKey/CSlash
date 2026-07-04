@@ -179,7 +179,22 @@ toTcTyCon tycon@(TyCon { tyConDetails = details, .. }) = case details of
                                    , tyConDetails = PrimTyCon {..}
                                    , .. }
                     in tc
-  
+
+unsafeTcToZkTyCon :: TyCon Tc -> TyCon Zk
+unsafeTcToZkTyCon tycon@TyCon{ tyConDetails = details, .. } = case details of
+  TcTyCon{} -> pprPanic "unsafeTcToZkTyCon" (ppr tycon)
+  AlgTyCon{..} -> let tc = TyCon { tyConNullaryTy = mkNakedTyConTy tc
+                                 , tyConDetails = AlgTyCon {..}
+                                 , .. }
+                  in tc
+  SynonymTyCon {..} -> let tc = TyCon { tyConNullaryTy = mkNakedTyConTy tc
+                                      , tyConDetails = SynonymTyCon {..}
+                                      , .. }
+                       in tc
+  PrimTyCon {..} -> let tc = TyCon { tyConNullaryTy = mkNakedTyConTy tc
+                                   , tyConDetails = PrimTyCon {..}
+                                   , .. }
+                    in tc    
 
 -- instance AsAnyTy TyConDetails where
 --   asAnyTy AlgTyCon { algTcRhs = rhs, .. } = AlgTyCon { algTcRhs = asAnyTy rhs, .. }

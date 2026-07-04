@@ -10,6 +10,7 @@ import Prelude hiding ((<>))
 import CSlash.Builtin.Types
 
 import CSlash.Core.Type.Ppr ( pprTyVar )
+import CSlash.Core.Subst (unsafeTcToZkType)
 
 import CSlash.Cs
 
@@ -382,7 +383,7 @@ zonkIdOcc id
   = do ZonkEnv { ze_id_env = id_env } <- getZonkEnv
        return $ lookupVarEnv_Directly id_env (varUnique id) `orElse` panic "zonkIdOcc"
   | otherwise
-  = panic "return id" -- make a type mapper in maybe monad that does toTy/KiVar_maybe on vars
+  = return $ changeIdType unsafeTcToZkType id
 
 zonkIdBndrX :: Id Tc -> ZonkBndrTcM (Id Zk)
 zonkIdBndrX v = do

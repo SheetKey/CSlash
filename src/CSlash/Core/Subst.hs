@@ -69,6 +69,11 @@ fromZkKind ki = let subst = mkEmptySubst (emptyVarSet, emptyVarSet, varsOfKind k
                                        (emptyVarSet, emptyVarSet, emptyVarSet)
               in substKi subst ki
 
+unsafeTcToZkType :: Type Tc -> Type Zk
+unsafeTcToZkType ty =
+  let subst = mkEmptySubst (varsOfType ty) (emptyVarSet, emptyVarSet, emptyVarSet)
+  in substTy subst ty
+
 {- **********************************************************************
 *                                                                       *
                         Substitutions
@@ -663,6 +668,21 @@ instance {-# INCOHERENT #-} SubstP p Tc where
     TcCoVar v -> TcCoVar $ v { tc_cv_thing = ki }
 
   vacuous_tycon = toTcTyCon
+
+instance SubstP Tc Zk where
+  vacuous_kv kv = case kv of
+    KiVar {..} -> KiVar {..}
+    TcKiVar tckv -> pprPanic "tckv found when calling 'unsafeTcToZk' or related" (ppr tckv)
+
+  vacuous_set_tv_kind ki tv = case tv of
+    TyVar {..} -> TyVar { tv_kind = ki, .. }
+    TcTyVar tctv -> pprPanic "tctv found when calling 'unsafeTcToZk' or related" (ppr tctv)
+
+  vacuous_set_kcv_kind ki kcv = case kcv of
+    CoVar {..} -> CoVar { cv_thing = ki, .. }
+    TcCoVar v -> pprPanic "tccv found when calling 'unsafeTcToZk' or related" (ppr v)
+
+  vacuous_tycon = unsafeTcToZkTyCon
 
 instance SubstP p p where
   vacuous_kv kv = kv
