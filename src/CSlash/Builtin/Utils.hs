@@ -57,6 +57,7 @@ knownKeyNames
       concat [ concatMap wired_tycon_kk_names primTyCons
              , concatMap wired_tycon_kk_names wiredInTyCons
              , map varName wiredInIds
+             , map varName allThePrimOpIds
              , basicKnownKeyNames
              ]
     wired_tycon_kk_names :: TyCon Zk -> [Name]
@@ -126,6 +127,7 @@ Note that 'Prim' module does not correspond to 'PrimTyCon's (which may be BuiltI
 cslPrimExports :: [IfaceExport]
 cslPrimExports
   = map (Avail . varName) csPrimIds ++
+    map (Avail . varName) allThePrimOpIds ++
     [ AvailTC n [n]
     | tc <- primPrimTyCons
     , let n = tyConName tc ]
