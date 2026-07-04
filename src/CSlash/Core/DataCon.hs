@@ -146,8 +146,10 @@ mkDataConTy tycon arity =
     -- want: /\fa_kvs -> forall kicos. forall tvs. tv1 -> ... -> tvn -> TyCon fa_kvs kicos tvs
 
     -- Since the fist arrow must be UKd
-    fun_ki_vars = tail $ mkTemplateFunKindVars arity
-    fun_kis = BIKi UKd : (KiVarKi <$> fun_ki_vars)
+    fun_ki_vars = mkTemplateFunKindVars arity
+    fun_kis = case fun_ki_vars of
+                [] -> []
+                _ -> BIKi UKd : (KiVarKi <$> fun_ki_vars)
     fun_ki_preds = let want_lts = inits arg_kis
                    in assert (length want_lts - 1 == length fun_kis) $
                       concat $ zipWith (fmap . (KiPredApp LTEQKi)) fun_kis want_lts
