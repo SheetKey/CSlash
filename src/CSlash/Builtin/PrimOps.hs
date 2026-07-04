@@ -65,14 +65,15 @@ allThePrimOps :: (Int, [(Int, PrimOp)])
 allThePrimOps =
   let sizes = [(i1, i2) | i1 <- [1..128], i2 <- [1..128]] 
       ops = zip [0..] $
-            [ ReturnIO, BindIO
-            , DoubleToFloatOp, FloatToDoubleOp
-            , Int64ToAddrOp, AddrToInt64Op
-            ] ++
-            [ IntToInt i1 i2 | (i1, i2) <- sizes ] ++
-            [ IntToUInt i1 i2 | (i1, i2) <- sizes ] ++
-            [ UIntToInt i1 i2 | (i1, i2) <- sizes ] ++
-            [ UIntToUInt i1 i2 | (i1, i2) <- sizes ]
+            [ReturnIO]
+            -- [ ReturnIO, BindIO
+            -- , DoubleToFloatOp, FloatToDoubleOp
+            -- , Int64ToAddrOp, AddrToInt64Op
+            -- ] ++
+            -- [ IntToInt i1 i2 | (i1, i2) <- sizes ] ++
+            -- [ IntToUInt i1 i2 | (i1, i2) <- sizes ] ++
+            -- [ UIntToInt i1 i2 | (i1, i2) <- sizes ] ++
+            -- [ UIntToUInt i1 i2 | (i1, i2) <- sizes ]
   in (length ops, ops)
 
 instance Enum PrimOp where
