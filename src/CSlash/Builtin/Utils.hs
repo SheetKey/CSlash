@@ -5,8 +5,7 @@ import Prelude hiding ((<>))
 import CSlash.Cs.Pass
 
 import CSlash.Builtin.Uniques
--- import GHC.Builtin.PrimOps
--- import GHC.Builtin.PrimOps.Ids
+import CSlash.Builtin.PrimOps
 import CSlash.Builtin.Types
 -- import GHC.Builtin.Types.Literals ( typeNatTyCons )
 import CSlash.Builtin.Types.Prim
