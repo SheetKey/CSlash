@@ -235,6 +235,7 @@ tcInferAppHead (fun, ctxt) = addHeadCtxt ctxt $ do
 tcInferAppHead_maybe :: CsExpr Rn -> TcM (Maybe (CsExpr Tc, SigmaType Tc))
 tcInferAppHead_maybe fun = case fun of
   CsVar _ (L _ nm) -> Just <$> tcInferId nm
+  CsRowVar _ rdr_nm -> Just <$> tcInferRowId rdr_nm
   ExprWithTySig _ e cs_ty -> Just <$> tcExprWithSig e cs_ty
   CsOverLit _ lit -> Just <$> tcInferOverLit lit
   _ -> return Nothing
@@ -320,6 +321,19 @@ check_local_id id = tcEmitBindingUsage $ singleUsageUE id
 tcInferDataCon :: DataCon Zk -> TcM (CsExpr Tc, SigmaType Zk)
 tcInferDataCon con = return ( XExpr (Cs.ConLike (RealDataCon con))
                             , dataConType con )
+
+tcInferRowId :: LocatedN OccName -> TcM (CsExpr Tc, SigmaType Tc)
+tcInferRowId (L loc row_name) = do
+  names <- tcLookupRow row_name
+  case names of
+    [name] -> do
+      thing <- tcLookup name
+      case thing of
+        ARowId { tct_row = row, tct_parent = parent }
+          -> return (CsRowSelector InfRowSel (noLocA parent) (L loc row), fromZkType (varType row))
+        _ -> panic "tcInferRowId" (ppr row_name $$ ppr name $$ ppr thing)
+
+    _ -> pprPanic "tcInferRowId" (ppr row_name $$ ppr names)
 
 {- *********************************************************************
 *                                                                      *

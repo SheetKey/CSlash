@@ -83,6 +83,9 @@ exports_from_avail
 exports_from_avail Nothing rdr_env _ this_mod = do
   addDiagnostic (TcRnMissingExportList $ moduleName this_mod)
   let avails = map fix_faminst . gresToAvailInfo . filter isLocalGRE . globalRdrEnvElts $ rdr_env
+  traceRn "exports_from_avail"
+    $ vcat [ ppr $ filter isLocalGRE . globalRdrEnvElts $ rdr_env
+           , ppr $ gresToAvailInfo . filter isLocalGRE . globalRdrEnvElts $ rdr_env ]
   return (Nothing, avails)
   where
     fix_faminst avail@(AvailTC n ns)

@@ -177,6 +177,7 @@ $unigraphic / { isSmartQuote } { smart_quote_error }
   \` { special ITbackquote }
   \{ { special ITocurly }
   \} { special ITccurly }
+  \. \{ { special ITdotocurly }
 }
 
 <0> {
@@ -280,6 +281,7 @@ data Token
 
   | ITocurly
   | ITccurly
+  | ITdotocurly
   | IToparen
   | ITcparen
   | ITcomma

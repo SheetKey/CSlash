@@ -20,6 +20,7 @@ data GREInfo
     | UnboundGRE
     | IAmTyCon !TyConFlavor
     | IAmConLike !ConInfo
+    | IAmRow
     deriving Data
 
 instance NFData GREInfo where
@@ -27,12 +28,14 @@ instance NFData GREInfo where
   rnf UnboundGRE = ()
   rnf (IAmTyCon tc) = rnf tc
   rnf (IAmConLike info) = rnf info
+  rnf IAmRow = ()
 
 plusGREInfo :: GREInfo -> GREInfo -> GREInfo
 plusGREInfo Vanilla Vanilla = Vanilla
 plusGREInfo UnboundGRE UnboundGRE = UnboundGRE
 plusGREInfo (IAmTyCon {})    info2@(IAmTyCon {}) = info2
 plusGREInfo (IAmConLike {})  info2@(IAmConLike {}) = info2
+plusGREInfo IAmRow IAmRow = IAmRow
 plusGREInfo info1 info2 = pprPanic "plusInfo" $
   vcat [ text "info1:" <+> ppr info1
        , text "info2:" <+> ppr info2 ]
@@ -44,6 +47,7 @@ instance Outputable GREInfo where
     = text "TyCon" <+> ppr flav
   ppr (IAmConLike info)
     = text "ConLike" <+> ppr info
+  ppr IAmRow = text "Row"
 
 data ConInfo
   = ConHasPositionalArgs

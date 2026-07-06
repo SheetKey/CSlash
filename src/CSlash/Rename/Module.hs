@@ -69,9 +69,9 @@ rnSrcDecls group@(CsGroup { cs_valds = val_decls
                           , cs_typeds = type_decls
                           , cs_fixds = fix_decls
                           }) = do
-  local_fix_env <- makeMiniFixityEnv $ csGroupTopLevelFixitySigs group
+  local_fix_env <- makeMiniFixityEnv $ csGroupTopLevelFixitySigs group -- does NOT contain row fixities
 
-  (tc_envs, tc_bndrs) <- getLocalNonValBinders local_fix_env group
+  (tc_envs, tc_bndrs) <- getLocalNonValBinders local_fix_env group -- includes rows
 
   restoreEnvs tc_envs $ do
     failIfErrsM
@@ -176,15 +176,20 @@ getParent rdr_env n = case lookupGRE_Name rdr_env n of
 ****************************************************** -}
 
 rnTypeDecl :: CsBind Ps -> RnM (CsBind Rn, FreeVars)
-rnTypeDecl (TyFunBind { tyfun_id = tycon, tyfun_body = body }) = do
+rnTypeDecl (TyFunBind { tyfun_id = tycon, tyfun_body = body, tyfun_mrecord = mrecord }) = do
   tycon' <- lookupLocatedTopConstructorRnN tycon
   traceRn "rntype-ty" (ppr tycon)
+  (mrecord, record_fvs) <- case mrecord of
+                             Nothing -> return (Nothing, emptyFVs)
+                             Just record -> (first Just) <$> rnLCsRecord record
   let doc = TySynCtx tycon
-  rnLCsTypeWithKvs doc body $ \ (final_body, fvs) kv_nms -> 
+  rnLCsTypeWithKvs doc body $ \ (final_body, fvs) kv_nms ->
+    let all_fvs = fvs `plusFV` record_fvs in
     return ( TyFunBind { tyfun_id = tycon'
                        , tyfun_body = final_body
-                       , tyfun_ext = (kv_nms, fvs) }
-           , fvs )
+                       , tyfun_mrecord = mrecord
+                       , tyfun_ext = (kv_nms, all_fvs) }
+           , all_fvs )
                        
   -- bindCsKiVars doc all_kv_occs $ \ all_kv_nms -> do
   --   (final_rhs, fvs) <- rnTyFun doc rhs
@@ -199,6 +204,20 @@ rnTypeDecl other = pprPanic "rnTypeDecl" (ppr other)
 
 rnTyFun :: CsDocContext -> LCsType Ps -> RnM (LCsType Rn, FreeVars)
 rnTyFun doc rhs = rnLCsType doc rhs
+
+{- *****************************************************
+*                                                      *
+        Records
+*                                                      *
+***************************************************** -}
+
+rnLCsRecord :: LCsRecord Ps -> RnM (LCsRecord Rn, FreeVars)
+rnLCsRecord = wrapLocFstMA rnCsRecord
+
+rnCsRecord :: CsRecord Ps -> RnM (CsRecord Rn, FreeVars)
+rnCsRecord (CsRecord ext sigs) = do
+  (sigs', fvs) <- renameSigs RowSigCtxt sigs
+  return (CsRecord ext sigs', fvs)
 
 {- *****************************************************
 *                                                      *
@@ -223,11 +242,21 @@ add gp@(CsGroup { cs_typeds = ts }) l (SigD _ s@(KindSig _ _ _)) ds
 add gp@(CsGroup { cs_valds = ts }) l (SigD _ d) ds
   = addl (gp { cs_valds = add_sig (L l d) ts }) ds
 
-add gp@(CsGroup { cs_typeds = ts }) l (ValD _ d@(TyFunBind{})) ds
-  = addl (gp { cs_typeds = add_typed (L l d) ts }) ds
+add gp@(CsGroup { cs_typeds = ts, cs_fixds = fs }) l (ValD _ d@(TyFunBind{})) ds
+  = addl (gp { cs_typeds = add_typed (L l d) ts
+             {-, cs_fixds = add_recfixd (L l d) fs-} }) ds
 
 add gp@(CsGroup { cs_valds = ts }) l (ValD _ d) ds
   = addl (gp { cs_valds = add_bind (L l d) ts }) ds
+
+-- add_recfixd :: LCsBind Ps -> [LFixitySig Ps] -> [LFixitySig Ps]
+-- add_recfixd (L _ TyFunBind{ tyfun_mrecord = Nothing }) fs = fs
+-- add_recfixd (L _ TyFunBind{ tyfun_mrecord = Just (L _ (CsRecord _ ds)) }) fs
+--   = let get_fix (L loc (SigD _ (FixSig _ fix))) = Just (L loc fix)
+--         get_fix _ = Nothing
+--         fds = mapMaybe get_fix ds 
+--     in fds ++ fs
+-- add_recfixd _ _ = panic "add_recfixd"
 
 add_typed
   :: OutputableBndrId p => LCsBind (CsPass p) -> [TypeGroup (CsPass p)] -> [TypeGroup (CsPass p)]

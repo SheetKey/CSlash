@@ -53,7 +53,9 @@ allocateGlobalBinder nc mod occ loc = updateNameCache nc mod occ $ \cache0 ->
                 name' = mkExternalName uniq mod occ loc
                 new_cache = extendOrigNameCache cache0 mod occ name'
     Nothing -> do uniq <- takeUniqFromNameCache nc
-                  let name = mkExternalName uniq mod occ loc
+                  let name = case occNameSpace occ of
+                               RowName{} -> mkRowName uniq mod occ loc
+                               _ -> mkExternalName uniq mod occ loc
                       new_cache = extendOrigNameCache cache0 mod occ name
                   pure (new_cache, name)
 

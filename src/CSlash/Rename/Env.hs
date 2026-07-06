@@ -188,7 +188,11 @@ lookupTypeOccRn rdr_name = do
   mb_gre <- lookupOccRn_maybe rdr_name
   case mb_gre of
     Just gre -> return $ greName gre
-    Nothing -> unboundName (LF WL_Anything WL_Anywhere) rdr_name
+    Nothing -> do
+      mb_gre <- lookupOccRn_maybe (tvToTc rdr_name)
+      case mb_gre of
+        Just gre -> return $ greName gre
+        Nothing -> unboundName (LF WL_Anything WL_Anywhere) rdr_name
 
 lookupKindOccRn :: RdrName -> RnM Name
 lookupKindOccRn rdr_name = do
@@ -210,13 +214,29 @@ lookupOccRnX_maybe globalLookup wrapper rdr_name = runMaybeT . msum . map MaybeT
 lookupOccRn_maybe :: RdrName -> RnM (Maybe GlobalRdrElt)
 lookupOccRn_maybe = lookupOccRnX_maybe (lookupGlobalOccRn_maybe $ RelevantGREs False) return 
 
-lookupExprOccRn :: RdrName -> RnM (Maybe GlobalRdrElt)
-lookupExprOccRn rdr_name = 
-  lookupOccRnX_maybe lookupExpr_helper return rdr_name
+{-
+'Left True' means that the rdrname is a row. Defer resolution to the typechecker.
+'Left False' means no known name exists.
+'Right elt' means a global or local 'VarNameSpace' variable was found. (Row NS was not checked.)
+-}
+lookupExprOccRn :: RdrName -> RnM (Either Bool GlobalRdrElt)
+lookupExprOccRn rdr_name = do
+  res <- lookupOccRnX_maybe lookupExpr_helper return rdr_name
+  case res of
+    Just elt -> return $ Right elt
+    Nothing -> do res' <- lookupGlobalRowOccRn rdr_name
+                  case res' of
+                    [] -> return $ Left False
+                    _ -> return $ Left True
   where
     lookupExpr_helper :: RdrName -> RnM (Maybe GlobalRdrElt)
     lookupExpr_helper rdr_name =
       lookupExactOrOrig_maybe rdr_name id $ lookupGreRn_maybe (RelevantGREs False) rdr_name
+
+lookupGlobalRowOccRn :: RdrName -> RnM [GlobalRdrElt]
+lookupGlobalRowOccRn rdr_name = do
+  env <- getGlobalRdrEnv
+  return $ lookupGRE env (LookupRdrName rdr_name RowsOnly)
 
 lookupGlobalOccRn_maybe :: WhichGREs GREInfo -> RdrName -> RnM (Maybe GlobalRdrElt)
 lookupGlobalOccRn_maybe which_gres rdr_name =
@@ -284,10 +304,12 @@ lookupGREInfo cs_env nm
 data CsSigCtxt
   = TopSigCtxt NameSet
   | LocalBindCtxt NameSet
+  | RowSigCtxt
 
 instance Outputable CsSigCtxt where
   ppr (TopSigCtxt ns) = text "TopSigCtxt" <+> ppr ns
   ppr (LocalBindCtxt ns) = text "LocalBindCtxt" <+> ppr ns
+  ppr RowSigCtxt = text "RowSigCtxt"
 
 lookupSigOccRnN :: CsSigCtxt -> Sig Ps -> LocatedN RdrName -> RnM (LocatedN Name)
 lookupSigOccRnN ctxt sig = lookupSigCtxtOccRn ctxt (csSigDoc sig)
@@ -326,6 +348,7 @@ lookupBindGroupOcc ctxt what rdr_name also_try_tycon_ns ns_spec
   = case ctxt of
       TopSigCtxt ns -> lookup_top (elem_name_set_with_namespace ns)
       LocalBindCtxt ns -> lookup_group ns
+      RowSigCtxt -> lookup_top check_namespace
   where
     elem_name_set_with_namespace ns n = check_namespace n && (n `elemNameSet` ns)
 

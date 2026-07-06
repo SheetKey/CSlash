@@ -9,7 +9,7 @@ module CSlash.Types.Name
     mkInternalName, mkClonedInternalName, mkDerivedInternalName,
     mkSystemVarName, mkSysTvName,
     mkFCallName,
-    mkExternalName, mkWiredInName,
+    mkExternalName, mkWiredInName, mkRowName,
     
     nameUnique, setNameUnique,
     nameOccName, nameNameSpace, nameModule, nameModule_maybe,
@@ -25,7 +25,7 @@ module CSlash.Types.Name
     isSystemName, isInternalName, isExternalName,
     isTyVarName, isKiVarName, isTyConName,
     isDataConName,
-    isValName, isVarName,
+    isValName, isVarName, isRowName,
     -- isDynLinkName, isFieldName,
     isWiredInName, isWiredIn, isBuiltInSyntax, isTupleTyConName,
     isSumTyConName,
@@ -78,6 +78,7 @@ data Name = Name
 
 data NameSort
   = External Module
+  | RowSort Module
   | WiredIn Module WITyThing BuiltInSyntax
   | Internal
   | System
@@ -87,6 +88,7 @@ instance Outputable NameSort where
   ppr (WiredIn _ _ _) = text "wired-in"
   ppr Internal = text "internal"
   ppr System = text "system"
+  ppr (RowSort _) = text "row"
 
 instance NFData Name where
   rnf Name{..} = rnf n_sort `seq` rnf n_occ `seq` n_uniq `seq` rnf n_loc
@@ -96,6 +98,7 @@ instance NFData NameSort where
   rnf (WiredIn m t b) = rnf m `seq` t `seq` b `seq` ()
   rnf Internal = ()
   rnf System = ()
+  rnf (RowSort m) = rnf m
 
 data BuiltInSyntax = BuiltInSyntax | UserSyntax
 
@@ -195,6 +198,7 @@ nameIsHomePackage this_mod
               WiredIn nm_mod _ _ -> moduleUnit nm_mod == this_pkg
               Internal -> True
               System   -> False
+              RowSort nm_mod -> moduleUnit nm_mod == this_pkg
   where
     this_pkg = moduleUnit this_mod  
 
@@ -233,6 +237,9 @@ isValName name = isValOcc (nameOccName name)
 isVarName :: Name -> Bool
 isVarName = isVarOcc . nameOccName
 
+isRowName :: Name -> Bool
+isRowName = isRowOcc . nameOccName
+
 mkInternalName :: Unique -> OccName -> SrcSpan -> Name
 mkInternalName uniq occ loc = Name { n_uniq = uniq
                                    , n_sort = Internal
@@ -254,6 +261,12 @@ mkExternalName :: Unique -> Module -> OccName -> SrcSpan -> Name
 mkExternalName uniq mod occ loc
   = Name { n_uniq = uniq, n_sort = External mod,
            n_occ = occ, n_loc = loc }
+
+mkRowName :: Unique -> Module -> OccName -> SrcSpan -> Name
+{-# INLINE mkRowName #-}
+mkRowName uniq mod occ loc = assert (isRowOcc occ) $
+  Name { n_uniq = uniq, n_sort = RowSort mod
+       , n_occ = occ, n_loc = loc }
 
 mkWiredInName :: Module -> OccName -> Unique -> WITyThing -> BuiltInSyntax -> Name
 {-# INLINE mkWiredInName #-}
@@ -304,10 +317,14 @@ stableNameCmp (Name { n_sort = s1, n_occ = occ1 })
     -- Later constructors are bigger
     sort_cmp (External m1) (External m2)       = m1 `stableModuleCmp` m2
     sort_cmp (External {}) _                   = LT
+    sort_cmp (RowSort m1) (RowSort m2)         = m1 `stableModuleCmp` m2
+    sort_cmp (RowSort {}) _                    = LT
     sort_cmp (WiredIn {}) (External {})        = GT
+    sort_cmp (WiredIn {}) (RowSort {})         = GT
     sort_cmp (WiredIn m1 _ _) (WiredIn m2 _ _) = m1 `stableModuleCmp` m2
     sort_cmp (WiredIn {})     _                = LT
     sort_cmp Internal         (External {})    = GT
+    sort_cmp Internal         (RowSort {})     = GT
     sort_cmp Internal         (WiredIn {})     = GT
     sort_cmp Internal         Internal         = EQ
     sort_cmp Internal         System           = LT
@@ -360,6 +377,7 @@ pprName name@(Name {n_sort = sort, n_uniq = uniq, n_occ = occ})
     codeDoc = case sort of
                 WiredIn mod _ _ -> pprModule mod <> char '_' <> z_occ
                 External mod -> pprModule mod <> char '_' <> z_occ
+                RowSort mod -> pprModule mod <> char '_' <> z_occ
                 System -> pprUniqueAlways uniq
                 Internal -> pprUniqueAlways uniq
     z_occ = ztext $ zEncodeFS $ occNameMangledFS occ
@@ -369,6 +387,7 @@ pprName name@(Name {n_sort = sort, n_uniq = uniq, n_occ = occ})
       case sort of
         WiredIn mod _ builtin -> pprExternal debug sty uniq mod occ True builtin
         External mod -> pprExternal debug sty uniq mod occ False UserSyntax
+        RowSort mod -> pprExternal debug sty uniq mod occ False UserSyntax -- TODO: ok to reuse?
         System -> pprSystem debug sty uniq occ
         Internal -> pprInternal debug sty uniq occ
     handlePuns :: Maybe FastString -> SDoc -> SDoc
@@ -382,6 +401,7 @@ pprFullName this_mod Name{n_sort = sort, n_uniq = uniq, n_occ = occ} =
   let mod = case sort of
         WiredIn  m _ _ -> m
         External m     -> m
+        RowSort m      -> m
         System         -> this_mod
         Internal       -> this_mod
       in ftext (unitIdFS (moduleUnitId mod))
@@ -480,6 +500,7 @@ nameSortStableString :: NameSort -> String
 nameSortStableString System = "$_sys"
 nameSortStableString Internal = "$_in"
 nameSortStableString (External mod) = moduleStableString mod
+nameSortStableString (RowSort mod) = moduleStableString mod
 nameSortStableString (WiredIn mod _ _) = moduleStableString mod
 
 class NamedThing a where

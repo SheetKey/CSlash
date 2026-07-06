@@ -60,6 +60,11 @@ deriving instance Data (FixitySig Rn)
 deriving instance Data (FixitySig Tc)
 deriving instance Data (FixitySig Zk)
 
+deriving instance Data (CsRecord Ps)
+deriving instance Data (CsRecord Rn)
+deriving instance Data (CsRecord Tc)
+deriving instance Data (CsRecord Zk)
+
 deriving instance Data (CsDecl Ps)
 deriving instance Data (CsDecl Rn)
 deriving instance Data (CsDecl Tc)
@@ -79,6 +84,16 @@ deriving instance Data (CsExpr Ps)
 deriving instance Data (CsExpr Rn)
 deriving instance Data (CsExpr Tc)
 deriving instance Data (CsExpr Zk)
+
+deriving instance Data (CsSetRecRows Ps)
+deriving instance Data (CsSetRecRows Rn)
+deriving instance Data (CsSetRecRows Tc)
+deriving instance Data (CsSetRecRows Zk)
+
+deriving instance Data (CsSetRecRow Ps)
+deriving instance Data (CsSetRecRow Rn)
+deriving instance Data (CsSetRecRow Tc)
+deriving instance Data (CsSetRecRow Zk)
 
 deriving instance Data (CsTupArg Ps)
 deriving instance Data (CsTupArg Rn)

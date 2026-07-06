@@ -79,7 +79,7 @@ tcUserTypeSig top_level loc cs_sig_ty mb_name = do
     $ vcat [ text "tcUserTypeSig bad kind"
            , ppr sigma_ty ]
     
-  return $ CSig { sig_bndr = mkLocalId name sigma_ty
+  return $ CSig { sig_bndr = mkLocalId name sigma_ty -- TODO May need to add 'RowId' tod IdDetails?
                 , sig_ctxt = ctxt_rrc
                 , sig_loc = loc }
   where
@@ -91,7 +91,9 @@ tcUserTypeSig top_level loc cs_sig_ty mb_name = do
     ctxt_no_rrc = ctxt_fn NoRRC
 
     ctxt_fn rrc = case mb_name of
-                    Just n -> FunSigCtxt n rrc
+                    Just n
+                      | isRowName n -> RowSigCtxt n rrc
+                      | otherwise -> FunSigCtxt n rrc
                     Nothing -> ExprSigCtxt rrc
 
 lcsSigTypeContextSpan :: LCsSigType Rn -> ReportRedundantConstraints

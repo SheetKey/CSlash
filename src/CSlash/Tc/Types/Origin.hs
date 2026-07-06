@@ -37,6 +37,7 @@ import Control.Monad.IO.Class ( MonadIO(..) )
 
 data UserTypeCtxt
   = FunSigCtxt Name ReportRedundantConstraints
+  | RowSigCtxt Name ReportRedundantConstraints
   | InfSigCtxt Name
   | ExprSigCtxt ReportRedundantConstraints
   | KindSigCtxt
@@ -62,6 +63,7 @@ reportRedundantConstraints (WantRRC {}) = True
 
 pprUserTypeCtxt :: UserTypeCtxt -> SDoc
 pprUserTypeCtxt (FunSigCtxt n _) = text "the type signature for" <+> quotes (ppr n)
+pprUserTypeCtxt (RowSigCtxt n _) = text "the type signature for the row" <+> quotes (ppr n)
 pprUserTypeCtxt (InfSigCtxt n) = text "the inferred type for" <+> quotes (ppr n)
 pprUserTypeCtxt (ExprSigCtxt _) = text "an expression type signature"
 pprUserTypeCtxt KindSigCtxt = text "a kind signature"
@@ -79,6 +81,7 @@ pprUserTypeCtxt (TySynKindCtxt n) = text "the kind annotation on the declaration
 
 isSigMaybe :: UserTypeCtxt -> Maybe Name
 isSigMaybe (FunSigCtxt n _) = Just n
+isSigMaybe (RowSigCtxt n _) = Just n
 isSigMaybe (ConArgCtxt n) = Just n
 isSigMaybe (PatSynCtxt n) = Just n
 isSigMaybe _ = Nothing
@@ -139,6 +142,8 @@ pprSkolInfo (UnkSkol cs) = text "UnkSkol (please report this as a bug)" $$ prett
 pprSigSkolInfo :: UserTypeCtxt -> Type Tc -> SDoc
 pprSigSkolInfo ctxt ty = case ctxt of
   FunSigCtxt f _ -> vcat [ text "the type signature for:"
+                         , nest 2 (pprPrefixOcc f <+> colon <+> ppr ty) ]
+  RowSigCtxt f _ -> vcat [ text "the type signature for the row:"
                          , nest 2 (pprPrefixOcc f <+> colon <+> ppr ty) ]
   PatSynCtxt {} -> panic "currently unreachable"
   _ -> vcat [ pprUserTypeCtxt ctxt <> colon, nest 2 (ppr ty) ]
@@ -221,6 +226,9 @@ lexprCtOrigin (L _ e) = exprCtOrigin e
 exprCtOrigin :: CsExpr Rn -> CtOrigin
 exprCtOrigin (CsVar _ (L _ name)) = OccurrenceOf name
 exprCtOrigin (CsUnboundVar {}) = Shouldn'tHappenOrigin "unbound variable"
+exprCtOrigin (CsRowVar {}) = Shouldn'tHappenOrigin "row variable" -- Maybe should be OccurrenceOf name
+exprCtOrigin (CsRowSelector {}) = Shouldn'tHappenOrigin "row selector" -- Maybe should be OccurrenceOf?
+exprCtOrigin (CsSetRecord {}) = Shouldn'tHappenOrigin "set record"
 exprCtOrigin (CsOverLit _ lit) = LiteralOrigin lit
 exprCtOrigin (CsLit {}) = Shouldn'tHappenOrigin "concrete literal"
 exprCtOrigin (CsLam _ ms) = matchesCtOrigin ms

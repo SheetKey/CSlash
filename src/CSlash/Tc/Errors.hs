@@ -57,6 +57,7 @@ import CSlash.Core.Type.Ppr ( pprTyVars )
 -- import GHC.Core.InstEnv
 import CSlash.Core.TyCon
 import CSlash.Core.DataCon
+import CSlash.Core.Subst (fromZkType)
 
 import CSlash.Utils.Error (diagReasonSeverity,  pprLocMsgEnvelope )
 import CSlash.Utils.Misc
@@ -611,6 +612,7 @@ zonkTidyTcLclEnvs tidy_env lcls = foldM go (tidy_env, emptyNameEnv) (concatMap c
       TcKCvBndr {} -> return envs
       TcKvBndr {} -> return envs
       TcIdBndr id _ -> go_one (varName id) (varType id) envs
+      TcRowBndr id _ -> go_one (varName id) (fromZkType $ varType id) envs -- TODO: double check
       TcIdBndr_ExpType name et _ -> panic "zonkTidyTcLclEnvs TcIdBndr_ExpType" --do
         -- mb_ty <- liftIO $ readExpType_maybe et
         -- case mb_ty of
@@ -1046,6 +1048,7 @@ relevant_bindings want_filtering lcl_env lcl_name_env (ct_tvs, ct_kcvs, ct_kvs) 
           TcKCvBndr {} -> discard_it
           TcKvBndr {} -> discard_it
           TcIdBndr id top_lvl -> go2 (varName id) top_lvl
+          TcRowBndr id _ -> go2 (varName id) TopLevel -- TODO: double check
           TcIdBndr_ExpType name et top_lvl -> panic "relevant_bindings TcIdBndr_ExpType"
       where
         discard_it = go dflags n_left tvs_seen kcvs_seen kvs_seen rels tc_bndrs

@@ -217,7 +217,7 @@ tc_pat pat_ty penv ps_pat thing_inside = case ps_pat of
   VarPat x (L l name) -> do
     (wrap, id) <- tcPatBndr penv name pat_ty
     (res, mult_wrap) <- tcCheckUsage name (idKind id)
-           $ tcExtendIdEnv1 name id thing_inside
+           $ tcExtendIdEnv1 name id thing_inside -- TODO/Note: we extend with rows here
     pat_ty <- readExpType pat_ty
     return (mkCsWrapPat (wrap <.> mult_wrap) (VarPat x (L l id)) pat_ty, res)
 

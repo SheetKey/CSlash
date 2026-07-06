@@ -70,11 +70,28 @@ mkTyFunBind
   -> LocatedN RdrName
   -> LCsType Ps
   -> [AddEpAnn]
+  -> Maybe (LCsRecord Ps)
   -> P (LCsBind Ps)
-mkTyFunBind loc name rhs annsIn = do
+mkTyFunBind loc name rhs annsIn mrecord = do
   cs <- checkTyHdr name
   let loc' = EpAnn (spanAsAnchor loc) noAnn cs
-  return $ L loc' (TyFunBind annsIn name rhs)
+      mrecord' = fmap (fixRecordNS (TyFunDeclInfo (rdrNameOcc (unLoc name)))) mrecord
+  return $ L loc' (TyFunBind annsIn name rhs mrecord')
+
+fixRecordNS :: RowInfo -> LCsRecord Ps -> LCsRecord Ps
+fixRecordNS info (L loc (CsRecord ann decls))
+  = L loc (CsRecord ann (fmap (fixRecordSigNS info) decls))
+
+fixRecordSigNS :: RowInfo -> LSig Ps -> LSig Ps
+fixRecordSigNS info (L l (TypeSig ext (L lid id) ty))
+  = L l $ TypeSig ext (L lid $ setRdrNameRowNS id info) ty
+fixRecordSigNS info (L l (FixSig ext sig))
+  = L l $ FixSig ext (fixRecordFixSigNS info sig)
+fixRecordSigNS _ _ = panic "bad record sig"
+
+fixRecordFixSigNS :: RowInfo -> FixitySig Ps -> FixitySig Ps
+fixRecordFixSigNS info (FixitySig ext (L l id) fix)
+  = FixitySig ext (L l $ setRdrNameRowNS id info) fix
 
 -- mkFunBind
 --   :: SrcSpan
@@ -132,7 +149,7 @@ cvBindsAndSigs fb = return $ partitionBindsAndSigs $ fromOL fb
 -- GHC checkTyClHdr
 checkTyHdr :: LocatedN RdrName -> P EpAnnComments
 checkTyHdr ty@(L l name)
-  | isRdrTyVar name = return $ emptyComments Semi.<> comments l
+  | isRdrTc name = return $ emptyComments Semi.<> comments l
   | otherwise = addFatalError $ mkPlainErrorMsgEnvelope (locA l) $
                 (PsErrMalformedTyDecl ty)
 
@@ -481,6 +498,7 @@ class (b ~ (Body b) Ps, AnnoBody b) => DisambETP b where
   mkCsPatListConsPV :: LocatedA b -> LocatedA b -> PV (LocatedA b)
   mkCsUnitSysConPV :: SrcSpan -> NameAnn -> PV (LocatedA b)
   mkCsTupleSysConPV :: SrcSpan -> NameAnn -> Int -> PV (LocatedA b)
+  mkCsSetRecordPV :: SrcSpan -> LCsExpr Ps -> LCsSetRecRows Ps -> PV (LocatedA b)
 
 instance DisambETP (CsExpr Ps) where
   type Body (CsExpr Ps) = CsExpr
@@ -606,6 +624,9 @@ instance DisambETP (CsExpr Ps) where
     let rdrName = nameRdrName $ tupleDataConName arity
         lrdrName = L (EpAnn (spanAsAnchor l) an cs) rdrName
     return $ L (EpAnn (spanAsAnchor l) noAnn cs) (CsVar noExtField lrdrName)
+  mkCsSetRecordPV l expr set_rec = do
+    !cs <- getCommentsFor l
+    return $ L (EpAnn (spanAsAnchor l) noAnn cs) (CsSetRecord noExtField expr set_rec)
 
 instance DisambETP (CsType Ps) where
   type Body (CsType Ps) = CsType
@@ -624,7 +645,7 @@ instance DisambETP (CsType Ps) where
     return $ L (EpAnn (spanAsAnchor l) noAnn cs) (CsOpTy [] t1 op t2)
   mkCsConOpAppPV l t1 (L opl n) t2 = do
     massert (isRdrUnknown n)
-    let op = L opl (unknownToTcCls n)
+    let op = L opl (unknownToTc n)
     !cs <- getCommentsFor l
     return $ L (EpAnn (spanAsAnchor l) noAnn cs) (CsOpTy [] t1 op t2)
   mkCsAppPV l t1 t2 = do
@@ -655,7 +676,7 @@ instance DisambETP (CsType Ps) where
   mkCsConPV v@(L l@(EpAnn anc _ _) n) = do
     !cs <- getCommentsFor (getHasLoc l)
     massert (isRdrUnknown n)
-    let v' = L l (unknownToTcCls n)
+    let v' = L l (unknownToTc n)
     return $ L (EpAnn anc noAnn cs) (CsTyVar [] v')
   mkCsLitPV (L l _) = addFatalError $ mkPlainErrorMsgEnvelope (locA l) PsErrLitInType
   mkCsOverLitPV (L l _) = addFatalError $ mkPlainErrorMsgEnvelope (locA l) PsErrOverLitInType
@@ -677,7 +698,7 @@ instance DisambETP (CsType Ps) where
   mkCsConSectionL l t op@(L opl@(EpAnn anc _ _) n) = do
     !opcs <- getCommentsFor (getHasLoc opl)
     massert (isRdrUnknown n)
-    let op' = L opl (unknownToTcCls n)
+    let op' = L opl (unknownToTc n)
         top = L (EpAnn anc noAnn opcs) (CsTyVar [] op')
     !cs <- getCommentsFor l
     return $ L (EpAnn (spanAsAnchor l) noAnn cs) (TySectionL noExtField t top)
@@ -691,7 +712,7 @@ instance DisambETP (CsType Ps) where
   mkCsConSectionR l op@(L opl@(EpAnn anc _ _) n) t = do
     !opcs <- getCommentsFor (getHasLoc opl)
     massert (isRdrUnknown n)
-    let op' = L opl (unknownToTcCls n)
+    let op' = L opl (unknownToTc n)
         top = L (EpAnn anc noAnn opcs) (CsTyVar [] op')
     !cs <- getCommentsFor l
     return $ L (EpAnn (spanAsAnchor l) noAnn cs) (TySectionL noExtField top t)
@@ -707,6 +728,7 @@ instance DisambETP (CsType Ps) where
     let rdrName = nameRdrName $ tupleTyConName arity
         lrdrName = L (EpAnn (spanAsAnchor l) an cs) rdrName
     return $ L (EpAnn (spanAsAnchor l) noAnn cs) (CsTyVar [] lrdrName)
+  mkCsSetRecordPV = panic "mkCsSetRecordPV type"
     
 instance DisambETP (CsKind Ps) where
   type Body (CsKind Ps) = CsKind
@@ -752,6 +774,7 @@ instance DisambETP (CsKind Ps) where
   mkCsPatListConsPV _ _ = panic "mkCsPatListConsPV kind"
   mkCsUnitSysConPV _ _ = panic "mkCsUnitSysConPV kind"
   mkCsTupleSysConPV _ _ _ = panic "mkCsTupleSysConPV kind"
+  mkCsSetRecordPV = panic "mkCsSetRecordPV kind"
 
 -- We don't set RdrName namespaces here:
 -- PatBuilder is used to build argument patterns for term and type level lambdas.
@@ -830,6 +853,7 @@ instance DisambETP (PatBuilder Ps) where
     let rdrName = nameRdrName $ tupleDataConName arity
         v@(L l' _) = L (EpAnn (spanAsAnchor l) an cs) rdrName
     return $ L (l2l l') (PatBuilderCon v)
+  mkCsSetRecordPV = panic "mkCsSetRecordPV PB"
 
 instance DisambETP (TyPatBuilder Ps) where
   type Body (TyPatBuilder Ps) = TyPatBuilder
@@ -893,6 +917,7 @@ instance DisambETP (TyPatBuilder Ps) where
     let rdrName = nameRdrName $ tupleTyConName arity
         v@(L l' _) = L (EpAnn (spanAsAnchor l) an cs) rdrName
     return $ L (l2l l') (TyPatBuilderCon v)
+  mkCsSetRecordPV = panic "mkCsSetRecordPV TPB"
   
 checkLamMatchGroup :: SrcSpan -> MatchGroup Ps (LCsExpr Ps) -> PV ()
 checkLamMatchGroup l (MG { mg_alts = (L _ (matches:_)) }) = do

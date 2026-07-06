@@ -44,6 +44,10 @@ type family IdP p
 
 type LIdP p = XRec p (IdP p)
 
+type family RowIdP p
+
+type LRowIdP p = XRec p (RowIdP p)
+
 -- =====================================================================
 -- Type families for the CsBinds extension points
 
@@ -68,6 +72,9 @@ type family XFixSig x
 
 -- FixitySig type families
 type family XFixitySig x
+
+-- Records
+type family XCsRecord x
 
 -- =====================================================================
 -- Type families for the CsDecls extension points
@@ -94,6 +101,8 @@ type family XCModule x
 
 type family XVar x
 type family XUnboundVar x
+type family XRowVar x
+type family XRowSelector x
 type family XOverLitE x
 type family XLitE x
 type family XLam x
@@ -114,6 +123,9 @@ type family XLet x
 type family XExprWithTySig x
 type family XEmbTy x
 type family XXExpr x
+type family XSetRecord x
+type family XSetRecRows x
+type family XSetRecRow x
 
 -- -------------------------------------
 -- HsTupArg type families

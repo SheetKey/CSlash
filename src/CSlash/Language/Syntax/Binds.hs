@@ -48,6 +48,7 @@ data CsBindLR idL idR
     { tyfun_ext :: XTyFunBind idL idR
     , tyfun_id :: LIdP idL
     , tyfun_body :: LCsType idR
+    , tyfun_mrecord :: Maybe (LCsRecord idR)
     }
   | TCVarBind -- only introduced by typechecker
     { tcvar_ext :: XTCVarBind idL idR
@@ -67,3 +68,26 @@ type LFixitySig pass = XRec pass (FixitySig pass)
 
 data FixitySig pass
   = FixitySig (XFixitySig pass) (LIdP pass) Fixity
+
+{- Record decls
+
+Renaming story:
+Records can occur in the following places:
+1. type syn decls (tyfun_mrecord :: Maybe (LCsRecord idR)): type List = ... .{ records }
+2. top level named record decls: record Name = .{ records }
+3. On universally quantified type variables: forall a.{ records }
+
+During parsing, if (3) is encountered, we add an anonymous records to the top level named record
+state (where (2) lives). This ensures that during renaming, LOCAL record names are in scope.
+Anonymous records are attatched with local information to allow for disambiguation.
+
+Record namespaces are fixed during parsing:
+1. mkTyFunBind
+
+Records can contain fixity info. This is added to 'cs_fixds' in 'mkGroup'.
+-}
+
+type LCsRecord p = XRec p (CsRecord p)
+data CsRecord pass = CsRecord (XCsRecord pass) [LSig pass] -- ONLY Type Sigs
+-- TODO: We don't really want to use 'LSig':
+-- We don't actually need a RdrName, OccName is semantically correct (as of now rows can unly be unqual RdrNames, which are just OccNames.)

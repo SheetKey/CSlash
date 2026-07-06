@@ -38,6 +38,8 @@ module CSlash.Core.Type
   , module CSlash.Core.Type
   ) where
 
+import {-# SOURCE #-} CSlash.Types.Var.Id
+
 import CSlash.Types.Basic
 
 import CSlash.Cs.Pass
@@ -82,6 +84,7 @@ import CSlash.Data.Pair
 import CSlash.Data.Maybe ( orElse, isJust, firstJust, fromJust )
 import Data.Bifunctor (bimap)
 import Control.Monad ((>=>))
+import Data.List.NonEmpty (NonEmpty(..))
 
 {- *********************************************************************
 *                                                                      *
@@ -151,7 +154,7 @@ saturates (_:tys) n = assert (n >= 0) $ saturates tys (n-1)
 {-# NOINLINE expand_syn #-}
 expand_syn :: (HasPass p p1, HasPass p' p2, SubstP p p') => Type p -> [Type p'] -> Type p'
 expand_syn rhs arg_tys
-  | null arg_tys = panic "closedType rhs"
+  | null arg_tys = substTy empty_subst rhs
   | otherwise = go rhs empty_subst arg_tys
   where
     empty_subst = mkEmptySubst (noDomFVs rhs (varsOfType rhs)) (varsOfTypes arg_tys)
@@ -1130,6 +1133,27 @@ isSumType ty
   = isSumTyCon tc
   | otherwise
   = False
+
+{- *********************************************************************
+*                                                                      *
+              Rows
+*                                                                      *
+********************************************************************* -}
+
+-- This returns the rows brought into scope by an IdBndr of this type.
+-- TODO: this needs to deal with name shadowing!
+typeISRows :: HasPass p pass => Type p -> [Id Zk]
+typeISRows ty = go ty []
+  where
+    go (AppTy ty _) rows = go ty rows
+    go (TyVarTy tv) rows = panic "tyvar rows todo"
+    go ty@(TyConApp tc _) rows = let tc_rows = case tyConRows tc of
+                                            Nothing -> []
+                                            Just (r :| rs) -> r : rs
+                                 in case coreView ty of
+                                      Just ty' -> go ty' (tc_rows ++ rows)
+                                      Nothing -> tc_rows ++ rows
+    go _ rows = rows
 
 {- *********************************************************************
 *                                                                      *

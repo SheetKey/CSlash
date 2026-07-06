@@ -134,6 +134,7 @@ tcMonoExpr (L loc expr) res_ty
 tcExpr :: CsExpr Rn -> ExpRhoType -> TcM (CsExpr Tc)
 -- Onto QuickLook
 tcExpr e@(CsVar {}) res_ty = tcApp e res_ty
+tcExpr e@(CsRowVar {}) res_ty = tcApp e res_ty
 tcExpr e@(CsApp {}) res_ty = tcApp e res_ty
 tcExpr e@(OpApp {}) res_ty = tcApp e res_ty
 tcExpr e@(ExprWithTySig {}) res_ty = tcApp e res_ty

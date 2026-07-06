@@ -163,6 +163,7 @@ data AnnKeywordId
     | AnnOpenB   -- ^ '(|'
     | AnnOpenBU  -- ^ '(|', unicode variant
     | AnnOpenC   -- ^ '{'
+    | AnnOpenDotC -- ^ '.{'
     | AnnOpenE   -- ^ '[e|' or '[e||'
     | AnnOpenEQ  -- ^ '[|'
     | AnnOpenEQU -- ^ '[|', unicode variant

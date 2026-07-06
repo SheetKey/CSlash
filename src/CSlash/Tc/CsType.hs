@@ -28,6 +28,7 @@ import CSlash.Tc.CsType.Utils
 -- import GHC.Tc.Deriv (DerivInfo(..))
 import CSlash.Tc.Gen.CsType
 import CSlash.Tc.Gen.CsKind
+import CSlash.Tc.Gen.Sig
 -- import GHC.Tc.Instance.Class( AssocInstInfo(..) )
 import CSlash.Tc.Utils.TcMType
 import CSlash.Tc.Utils.TcType
@@ -112,8 +113,9 @@ tcTyGroup (TypeGroup { group_typeds = typeds, group_kisigs = kisigs }) = do
   traceTc "---- tcTyGroup ---- {" empty
   traceTc "Decls for" (ppr (map (tydName . unLoc) typeds))
 
-  (tys, kindless) <- tcTyDs typeds
+  (tys_rows, kindless) <- tcTyDs typeds
 
+  let (tys, rows) = unzip tys_rows
   traceTc "Starting synonym cycle check" (ppr tys)
   home_unit <- cs_home_unit <$> getTopEnv
   checkSynCycles (homeUnitAsUnit home_unit) tys typeds
@@ -124,6 +126,13 @@ tcTyGroup (TypeGroup { group_typeds = typeds, group_kisigs = kisigs }) = do
          $ for tys
          $ \tycon -> checkValidTyCon tycon
   traceTc "Done validity check" (ppr tys)
+
+  traceTc "Zonking rows" (ppr rows)
+  tys <- tcExtendTyConEnv tys $ do
+    rows' <- initZonkEnv NoFlexi $ mapM (mapM (mapM zonkIdBndr)) rows
+    traceTc "Zonked rows" (ppr rows')
+    return $ zipWithEqual "tcTyGroup attaching rows" attachRows tys rows'
+  traceTc "Done zonking rows" (ppr tys)
              
   traceTc "---- end tcTyGroup ---- }" empty
 
@@ -132,7 +141,7 @@ tcTyGroup (TypeGroup { group_typeds = typeds, group_kisigs = kisigs }) = do
   let gbl_env' = gbl_env { tcg_ksigs = tcg_ksigs gbl_env `unionNameSet` kindless }
   return gbl_env'
 
-tcTyDs :: [LCsBind Rn] -> TcM ([TyCon Zk], NameSet)
+tcTyDs :: [LCsBind Rn] -> TcM ([(TyCon Zk, Maybe (NonEmpty (Id Tc)))], NameSet)
 tcTyDs typeds = do
   (tc_tycons, kindless) <- checkNoErrs $ kcTyGroup typeds
 
@@ -142,11 +151,11 @@ tcTyDs typeds = do
     tcg_env <- getGblEnv
     let !src = tcg_src tcg_env
 
-    tycons <- tcExtendRecEnv (zipRecTys tc_tycons rec_tys)
-              $ tcExtendKindEnvWithTyCons tc_tycons
-              $ mapM tcTyDecl typeds
+    tycons_rows <- tcExtendRecEnv (zipRecTys tc_tycons (fst <$> rec_tys))
+                   $ tcExtendKindEnvWithTyCons tc_tycons
+                   $ mapM tcTyDecl typeds
 
-    return (tycons, kindless)
+    return (tycons_rows, kindless)
   where
     ppr_tc_tycon tc = parens (sep [ ppr (tyConName tc) <> comma
                                   , pprTyConKind tc
@@ -455,11 +464,11 @@ kcTyDecl _ _ = panic "kcTyDecl/unreachable"
 *                                                                      *
 ********************************************************************* -}
 
-tcTyDecl :: LCsBind Rn -> TcM (TyCon Zk)
+tcTyDecl :: LCsBind Rn -> TcM (TyCon Zk, Maybe (NonEmpty (Id Tc)))
 tcTyDecl (L loc bind)
   | Just thing <- wiredInNameTyThing_maybe (tydName bind)
   = case thing of
-      ATyCon tc -> return tc
+      ATyCon tc -> return (tc, Nothing)
       _ -> pprPanic "tcTyDecl" (ppr thing)
   | otherwise
   = setSrcSpanA loc $ tcAddDeclCtxt bind $ do
@@ -468,9 +477,9 @@ tcTyDecl (L loc bind)
       traceTc "---- tcTyDecl ---- }" (ppr tc)
       return tc
 
-tcTyDecl1 :: CsBind Rn -> TcM (TyCon Zk)
-tcTyDecl1 (TyFunBind { tyfun_id = L _ tc_name, tyfun_body = rhs })
-  = tcTyFunRhs tc_name rhs
+tcTyDecl1 :: CsBind Rn -> TcM (TyCon Zk, Maybe (NonEmpty (Id Tc)))
+tcTyDecl1 (TyFunBind { tyfun_id = L _ tc_name, tyfun_body = rhs, tyfun_mrecord = mrecord })
+  = tcTyFunRhs tc_name rhs mrecord
 
 tcTyDecl1 other = pprPanic "tcTyDecl1" (ppr other)
 
@@ -480,33 +489,48 @@ tcTyDecl1 other = pprPanic "tcTyDecl1" (ppr other)
 *                                                                      *
 ********************************************************************* -}
 
-tcTyFunRhs :: Name -> LCsType Rn -> TcM (TyCon Zk)
-tcTyFunRhs tc_name cs_ty = bindTyConKiVars tc_name
-                           $ \ tc_ki_bndrs rhs_kind arity -> do
-  env <- getLclEnv
-  traceTc "tc-tyfun"
-    $ vcat [ ppr tc_name
-           , ppr rhs_kind
-           , ppr tc_ki_bndrs
-           , ppr (getLclEnvRdrEnv env) ]
+tcTyFunRhs
+  :: Name
+  -> LCsType Rn
+  -> Maybe (LCsRecord Rn)
+  -> TcM (TyCon Zk, Maybe (NonEmpty (Id Tc)))
+tcTyFunRhs tc_name cs_ty mcs_record = do
+  -- Record does not depend on the rest of the rhs, so do it first
+  mrecord' <- case mcs_record of
+                Just record -> Just <$> tcCsRecord tc_name record
+                Nothing -> return Nothing
+  bindTyConKiVars tc_name $ \ tc_ki_bndrs rhs_kind arity -> do
+    env <- getLclEnv
+    traceTc "tc-tyfun"
+      $ vcat [ ppr tc_name
+             , ppr rhs_kind
+             , ppr tc_ki_bndrs
+             , ppr (getLclEnvRdrEnv env) ]
+    
+    let skol_info = TyConSkol TypeFunFlavor tc_name
+    
+    rhs_ty <- pushLevelAndSolveKindCoercions skol_info tc_ki_bndrs
+              $ tcCheckLCsType cs_ty (TheMonoKind rhs_kind)
+    
+    kvs <- candidateQKiVarsOfType rhs_ty
+    -- let err_ctxt tidy_env = do (tidy_env2, rhs_ty) <- zonkTidyTcType tidy_env rhs_ty
+    --                            return (tidy_env2, UnifyTyCtx_TySynRhs rhs_ty)
+    doNotQuantifyKiVars kvs 
+    
+    (ki_bndrs, rhs_ty) <- initZonkEnv NoFlexi
+                          $ runZonkBndrT (zonkKiVarBindersX $ TcKiVar <$> tc_ki_bndrs)
+                          $ \bndrs -> do rhs_ty <- zonkTcTypeToTypeX rhs_ty
+                                         return (bndrs, rhs_ty)
+    let rhs_kind' = mkForAllKisMono ki_bndrs (typeMonoKind rhs_ty)
+        rhs_ty' = mkBigLamTys ki_bndrs rhs_ty
+    return (buildSynTyCon tc_name rhs_kind' arity rhs_ty', mrecord')
 
-  let skol_info = TyConSkol TypeFunFlavor tc_name
-
-  rhs_ty <- pushLevelAndSolveKindCoercions skol_info tc_ki_bndrs
-            $ tcCheckLCsType cs_ty (TheMonoKind rhs_kind)
-
-  kvs <- candidateQKiVarsOfType rhs_ty
-  -- let err_ctxt tidy_env = do (tidy_env2, rhs_ty) <- zonkTidyTcType tidy_env rhs_ty
-  --                            return (tidy_env2, UnifyTyCtx_TySynRhs rhs_ty)
-  doNotQuantifyKiVars kvs 
-
-  (ki_bndrs, rhs_ty) <- initZonkEnv NoFlexi
-                        $ runZonkBndrT (zonkKiVarBindersX $ TcKiVar <$> tc_ki_bndrs)
-                        $ \bndrs -> do rhs_ty <- zonkTcTypeToTypeX rhs_ty
-                                       return (bndrs, rhs_ty)
-  let rhs_kind' = mkForAllKisMono ki_bndrs (typeMonoKind rhs_ty)
-      rhs_ty' = mkBigLamTys ki_bndrs rhs_ty
-  return $ buildSynTyCon tc_name rhs_kind' arity rhs_ty'
+tcCsRecord :: Name -> LCsRecord Rn -> TcM (NonEmpty (Id Tc))
+tcCsRecord tc_name (L _ rows@(CsRecord _ sigs)) = addRowCtxt tc_name $ do
+  ids <- fst <$> tcTySigs TopLevel sigs
+  case ids of
+    [] -> panic "empty CsRecord"
+    (x:xs) -> return (x :| xs)
 
 {- *********************************************************************
 *                                                                      *
@@ -563,3 +587,7 @@ addTyConCtxt tc = addTyConFlavCtxt name flav
   where
     name = getName tc
     flav = tyConFlavor tc
+
+addRowCtxt :: Name -> TcM a -> TcM a
+addRowCtxt tc_name = addErrCtxt $
+  hsep [ text "In the record declaration for", quotes (ppr tc_name) ]

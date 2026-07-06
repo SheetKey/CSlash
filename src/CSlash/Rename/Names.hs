@@ -254,6 +254,7 @@ extendGlobalRdrEnvRn new_gres new_fixities = checkNoErrs $ do
 *                                                                      *
 ********************************************************************* -}
 
+-- Include rows
 getLocalNonValBinders :: MiniFixityEnv -> CsGroup Ps -> RnM ((TcGblEnv Tc, TcLclEnv), NameSet)
 getLocalNonValBinders fixity_env CsGroup{ cs_valds = binds, cs_typeds = type_decls } = do
   tc_gres <- concatMapM new_tc (typeGroupTypeDecls type_decls)
@@ -268,13 +269,16 @@ getLocalNonValBinders fixity_env CsGroup{ cs_valds = binds, cs_typeds = type_dec
   where
     new_tc :: LCsBind Ps -> RnM [GlobalRdrElt]
     new_tc tc_decl = do
-      let TyDeclBinders (main_bndr, tc_flav) = csLTyDeclBinders tc_decl
+      let TyDeclBinders (main_bndr, tc_flav) rows = csLTyDeclBinders tc_decl
       tycon_name <- newTopSrcBinder $ la2la main_bndr
+      row_names <- mapM (newTopSrcBinder . la2la) rows
       let tc_gre = mkLocalTyConGRE tc_flav tycon_name
+          row_gres = mkLocalRowGREs (ParentIs tycon_name) row_names
       traceRn "getLocalNonValBinders new_tc" $
         vcat [ text "tycon:" <+> ppr tycon_name
-             , text "tc_gre:" <+> ppr tc_gre ]
-      return $ [tc_gre]
+             , text "tc_gre:" <+> ppr tc_gre
+             , text "row_gres:" <+> ppr row_gres ]
+      return $ tc_gre : row_gres
 
 {- *********************************************************************
 *                                                                      *

@@ -10,6 +10,7 @@ import Prelude hiding ((<>))
 import {-# SOURCE #-} CSlash.Core.Type.Rep (Type, mkNakedTyConTy)
 import {-# SOURCE #-} CSlash.Core.DataCon (DataCon, dataConFullSig, dataConArity)
 import {-# SOURCE #-} CSlash.Core.Kind.Compare (tcEqKind)
+import {-# SOURCE #-} CSlash.Types.Var.Id
 
 import CSlash.Cs.Pass
 
@@ -29,6 +30,9 @@ import CSlash.Data.FastString.Env
 import CSlash.Utils.Misc
 import CSlash.Types.Unique.Set
 import CSlash.Unit.Module
+
+import Data.List.NonEmpty (NonEmpty(..))
+import qualified Data.List.NonEmpty as NE
 
 import qualified Data.Data as Data
 
@@ -126,6 +130,7 @@ data TyCon p = TyCon
   , tyConArity :: Arity
   , tyConNullaryTy :: Type p
   , tyConDetails :: !(TyConDetails p)
+  , tyConRows :: !(Maybe (NonEmpty (Id Zk)))
   }
 
 data TyConDetails p where
@@ -311,6 +316,7 @@ mkTyCon name arity details = tc
                , tyConArity = arity
                , tyConNullaryTy = mkNakedTyConTy tc
                , tyConDetails = details
+               , tyConRows = Nothing
                }
 
 mkAlgTyCon
@@ -385,6 +391,10 @@ mkSynonymTyCon name kind arity rhs is_tau is_forgetful is_concrete
                    , synIsForgetful = is_forgetful
                    , synIsConcrete = is_concrete
                    , tyConKind = kind }
+
+attachRows :: TyCon p -> Maybe (NonEmpty (Id Zk)) -> TyCon p
+attachRows tc@TyCon{ tyConRows = Nothing } rows = tc { tyConRows = rows }
+attachRows tc rows = pprPanic "attachRows" (ppr tc $$ ppr rows)
 
 isPrimTyCon :: TyCon p -> Bool
 isPrimTyCon (TyCon { tyConDetails = details })

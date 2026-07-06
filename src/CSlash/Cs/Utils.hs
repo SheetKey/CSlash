@@ -47,6 +47,7 @@ import Data.Foldable ( toList )
 import Data.List ( partition )
 import Data.List.NonEmpty ( nonEmpty )
 import qualified Data.List.NonEmpty as NE
+import Data.Maybe ( mapMaybe )
 
 import Data.IntMap ( IntMap )
 import qualified Data.IntMap.Strict as IntMap
@@ -373,10 +374,23 @@ data TyDeclBinders p = TyDeclBinders
   { tyDeclMainBinder :: !(LocatedA (IdP (CsPass p)), TyConFlavor)
   -- , tyDeclATs :: ![(LocatedA (IdP (CsPass p)), TyConFlavor ())]       -- ATs=associated types
   -- , tyDeclOpSigs :: ![LocatedA (IdP (CsPass p))]                      -- class op sigs
+  , tyDeclRows :: ![LocatedA (IdP (CsPass p))]
   }
 
 csLTyDeclBinders
   :: (IsPass p, OutputableBndrId p) => LocatedA (CsBind (CsPass p)) -> TyDeclBinders p
-csLTyDeclBinders (L loc (TyFunBind { tyfun_id = (L _ name) }))
-  = TyDeclBinders { tyDeclMainBinder = (L loc name, TypeFunFlavor) }
+csLTyDeclBinders (L loc (TyFunBind { tyfun_id = (L _ name), tyfun_mrecord = mrecord }))
+  = TyDeclBinders { tyDeclMainBinder = (L loc name, TypeFunFlavor)
+                  , tyDeclRows = csLRecordNames mrecord }
 csLTyDeclBinders b = pprPanic "csLTyDeclBinders" (ppr b)
+
+csLRecordNames
+  :: forall p. (IsPass p, OutputableBndrId p)
+  => Maybe (LocatedA (CsRecord (CsPass p))) -> [LocatedA (IdP (CsPass p))]
+csLRecordNames Nothing = []
+csLRecordNames (Just (L _ (CsRecord _ sigs))) = mapMaybe go sigs
+  where
+    go :: LocatedA (Sig (CsPass p)) -> Maybe (LocatedA (IdP (CsPass p)))
+    go (L loc (TypeSig _ id _)) = Just $ L loc (unLoc id)
+    go (L loc (FixSig{})) = Nothing
+    go _ = panic "csLRecordNames unreachable"

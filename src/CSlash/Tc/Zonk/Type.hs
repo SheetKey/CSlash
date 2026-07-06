@@ -546,6 +546,13 @@ zonkExpr (CsVar x (L l id))
   id' <- zonkIdOcc id
   return (CsVar x (L l id'))
 
+zonkExpr (CsRowSelector x (L l id) row)
+  = assertPpr (isNothing (isDataConId_maybe id)) (ppr id) $ do
+  id' <- zonkIdOcc id
+  return (CsRowSelector x (L l id') row)
+
+zonkExpr (CsRowVar x _) = dataConCantHappen x
+
 zonkExpr (CsUnboundVar x _) = dataConCantHappen x
 
 zonkExpr (CsLit x lit) = panic "return (CsLit x lit)"

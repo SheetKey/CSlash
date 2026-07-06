@@ -25,6 +25,7 @@ import CSlash.Parser.Annotation
 import CSlash.Types.SrcLoc
 import CSlash.Types.Name
 import CSlash.Types.Name.Reader
+import CSlash.Types.Name.Occurrence
 import CSlash.Utils.Outputable
 import CSlash.Utils.Panic.Plain
 
@@ -32,6 +33,7 @@ import Data.Data
 
 type instance XRec (CsPass p) a = GenLocated (Anno a) a
 
+type instance Anno OccName = SrcSpanAnnN
 type instance Anno RdrName = SrcSpanAnnN
 type instance Anno Name = SrcSpanAnnN
 type instance Anno (Id p) = SrcSpanAnnN
@@ -59,8 +61,20 @@ type OutputableBndrId pass =
   , OutputableBndr (IdCsP (NoCsTcPass pass))
   , Outputable (GenLocated (Anno (IdCsP pass)) (IdCsP pass))
   , Outputable (GenLocated (Anno (IdCsP (NoCsTcPass pass))) (IdCsP (NoCsTcPass pass)))
+  , OutputableBndr (RowIdCsP pass)
+  , OutputableBndr (RowIdCsP (NoCsTcPass pass))
+  , Outputable (GenLocated (Anno (RowIdCsP pass)) (RowIdCsP pass))
+  , Outputable (GenLocated (Anno (RowIdCsP (NoCsTcPass pass))) (RowIdCsP (NoCsTcPass pass)))
   , IsPass pass
   )
+
+type instance RowIdP (CsPass p) = RowIdCsP p
+
+type family RowIdCsP pass where
+  RowIdCsP 'Parsed = OccName
+  RowIdCsP 'Renamed = OccName
+  RowIdCsP 'Typechecked = Id Zk
+  RowIdCsP 'Zonked = Id Zk
 
 pprIfPs :: forall p. IsPass p => (p ~ 'Parsed => SDoc) -> SDoc
 pprIfPs pp = case csPass @p of Ps -> pp

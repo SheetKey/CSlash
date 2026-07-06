@@ -66,10 +66,17 @@ rnExpr :: CsExpr Ps -> RnM (CsExpr Rn, FreeVars)
 rnExpr (CsVar _ (L l v)) = do
   mb_gre <- lookupExprOccRn v
   case mb_gre of
-    Nothing -> rnUnboundVar v
-    Just gre -> return (CsVar noExtField (L (l2l l) (greName gre)), unitFV (greName gre))
+    Left False -> rnUnboundVar v
+    Left True -> rnRowVar (L l v)
+    Right gre -> return (CsVar noExtField (L (l2l l) (greName gre)), unitFV (greName gre))
 
 rnExpr (CsUnboundVar _ v) = return (CsUnboundVar noExtField v, emptyFVs)
+
+rnExpr (CsRowVar x _) = dataConCantHappen x
+
+rnExpr (CsRowSelector {}) = panic "rnExpr RowSelector"
+
+rnExpr (CsSetRecord {}) = panic "rnExpr SetRecord"
 
 rnExpr (CsOverLit x lit) = do
   ((lit', mb_neg), fvs) <- rnOverLit lit
@@ -177,6 +184,9 @@ rnUnboundVar v = do
   deferOutOfScopeVariables <- goptM Opt_DeferOutOfScopeVariables
   unless (isUnqual v || deferOutOfScopeVariables) (reportUnboundName v >> return ())
   return (CsUnboundVar noExtField v, emptyFVs)
+
+rnRowVar :: LocatedN RdrName -> RnM (CsExpr Rn, FreeVars)
+rnRowVar (L l v) = return (CsRowVar noExtField (L l $ rdrNameOcc v), emptyFVs)
 
 {- *********************************************************************
 *                                                                      *

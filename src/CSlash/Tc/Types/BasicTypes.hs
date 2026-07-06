@@ -35,9 +35,11 @@ data TcBinder
   | TcTvBndr Name TcTyVar
   | TcKCvBndr Name TcKiCoVar
   | TcKvBndr Name TcKiVar
+  | TcRowBndr (Id Zk) (Id Tc)
 
 instance Outputable TcBinder where
   ppr (TcIdBndr id top_lvl) = ppr id <> brackets (ppr top_lvl)
+  ppr (TcRowBndr row id) = ppr id <> dot <> ppr row
   ppr (TcIdBndr_ExpType id _ top_lvl) = ppr id <> brackets (ppr top_lvl)
   ppr (TcTvBndr name tv) = ppr name <+> ppr tv
   ppr (TcKCvBndr name kcv) = ppr name <+> ppr kcv
@@ -45,6 +47,7 @@ instance Outputable TcBinder where
 
 instance HasOccName TcBinder where
   occName (TcIdBndr id _) = occName (varName id)
+  occName (TcRowBndr id _) = occName (varName id)
   occName (TcIdBndr_ExpType name _ _) = occName name
   occName (TcTvBndr name _) = occName name
   occName (TcKCvBndr name _) = occName name
@@ -93,6 +96,7 @@ data TcTyKiThing
     { tct_id :: Id Tc
     , tct_info :: IdBindingInfo
     }
+  | ARowId { tct_row :: Id Zk, tct_parent :: Id Tc }
   | ATyVar Name (TyVar Tc) -- TODO: could be TcTyVar?
   | AKiCoVar Name (KiCoVar Tc)
   | AKiVar Name (KiVar Tc) -- should make a new type 'TcKiThing'
@@ -110,6 +114,11 @@ instance Outputable TcTyKiThing where
                                      <> ppr (varType (tct_id elt))
                                      <> comma
                                      <+> ppr (tct_info elt))
+  ppr elt@ARowId{} = text "Row Variable"
+                     <> brackets (ppr (tct_row elt) <> colon
+                                  <> ppr (varType (tct_row elt))
+                                  <> comma
+                                  <+> ppr (tct_parent elt))
   ppr (ATyVar n tv) = text "Type variable" <+> quotes (ppr n) <+> equals <+> ppr tv
                       <+> colon <+> ppr (varKind tv)
   ppr (AKiCoVar n kcv) = text "Kind Coercion variable" <+> quotes (ppr n) <+> equals <+> ppr kcv
@@ -142,4 +151,5 @@ tcTyKiThingCategory (ATyVar {}) = "type variable"
 tcTyKiThingCategory (AKiCoVar {}) = "kind coercion variable"
 tcTyKiThingCategory (AKiVar {}) = "kind variable"
 tcTyKiThingCategory (ATcId {}) = "local identifier"
+tcTyKiThingCategory (ARowId {}) = "row identifier"
 tcTyKiThingCategory (ATcTyCon {}) = "local tycon"

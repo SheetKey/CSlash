@@ -11,6 +11,7 @@ import CSlash.Language.Syntax.Binds
 
 import CSlash.Types.Fixity
 import CSlash.Types.Name.Reader
+import CSlash.Types.Name.Occurrence
 
 type LCsExpr p = XRec p (CsExpr p)
 
@@ -19,6 +20,9 @@ type family SyntaxExpr p
 data CsExpr p
   = CsVar (XVar p) (LIdP p)
   | CsUnboundVar (XUnboundVar p) RdrName
+  | CsRowVar (XRowVar p) (LRowIdP p)
+  | CsRowSelector (XRowSelector p) (LIdP p) (LRowIdP p)
+  | CsSetRecord (XSetRecord p) (LCsExpr p) (LCsSetRecRows p)
   | CsOverLit (XOverLitE p) (CsOverLit p)
   | CsLit (XLitE p) (CsLit p)
   | CsLam (XLam p) (MatchGroup p (LCsExpr p))
@@ -97,3 +101,12 @@ data StmtLR idL idR body
 isPatSynCtxt :: CsMatchContext fn -> Bool
 isPatSynCtxt ctxt = case ctxt of
   _ -> False
+
+type LCsSetRecRows p = XRec p (CsSetRecRows p)
+
+data CsSetRecRows p = SetRecRows (XSetRecRows p) [LCsSetRecRow p]
+
+type LCsSetRecRow p = XRec p (CsSetRecRow p)
+
+data CsSetRecRow p
+  = SetRecRow (XSetRecRow p) (LIdP p) (LCsExpr p)

@@ -22,6 +22,7 @@ import CSlash.Utils.Outputable
 import CSlash.Utils.Lexeme
 import CSlash.Utils.Binary
 import CSlash.Utils.Misc
+import CSlash.Utils.Panic
 
 import qualified Data.Semigroup as S
 import GHC.Exts ( Int(I#), dataToTag# )
@@ -34,9 +35,14 @@ data NameSpace
   = VarName
   | TvName
   | KvName
-  | TcClsName
+  | TcName
   | DataName
+  | RowName RowInfo
   | UNKNOWN_NS
+  deriving Eq
+
+data RowInfo
+  = TyFunDeclInfo OccName -- Should be RdrName but loop!
   deriving Eq
 
 instance Ord NameSpace where
@@ -46,9 +52,17 @@ instance Uniquable NameSpace where
   getUnique VarName = varNSUnique
   getUnique TvName = tvNSUnique
   getUnique KvName = kvNSUnique
-  getUnique TcClsName = tcNSUnique
+  getUnique TcName = tcNSUnique
   getUnique DataName = dataNSUnique
+  getUnique (RowName info) = mkRowNSUnique (rowInfoFS info)
   getUnique UNKNOWN_NS = unknownNSUnique
+
+rowInfoFS :: RowInfo -> FastString
+rowInfoFS (TyFunDeclInfo occ) = occNameFS occ
+
+setOccNameRowNS :: OccName -> RowInfo -> OccName
+setOccNameRowNS (OccName UNKNOWN_NS fs) info = OccName (RowName info) fs
+setOccNameRowNS occ info = pprPanic "setOccNameRowNS" (ppr occ $$ ppr info)
 
 varName :: NameSpace
 varName = VarName
@@ -60,10 +74,7 @@ kvName :: NameSpace
 kvName = KvName
 
 tcName :: NameSpace
-tcName = TcClsName
-
-tcClsName :: NameSpace
-tcClsName = TcClsName
+tcName = TcName
 
 dataName :: NameSpace
 dataName = DataName
@@ -72,9 +83,9 @@ isDataConNameSpace :: NameSpace -> Bool
 isDataConNameSpace DataName = True
 isDataConNameSpace _ = False
 
-isTcClsNameSpace :: NameSpace -> Bool
-isTcClsNameSpace TcClsName = True
-isTcClsNameSpace _ = False
+isTcNameSpace :: NameSpace -> Bool
+isTcNameSpace TcName = True
+isTcNameSpace _ = False
 
 isTvNameSpace :: NameSpace -> Bool
 isTvNameSpace TvName = True
@@ -101,14 +112,20 @@ isUnknownNameSpace _ = False
 isValNameSpace :: NameSpace -> Bool
 isValNameSpace DataName = True
 isValNameSpace VarName = True
+isValNameSpace RowName{} = True
 isValNameSpace _ = False
+
+isRowNameSpace :: NameSpace -> Bool
+isRowNameSpace RowName{} = True
+isRowNameSpace _ = False
 
 pprNameSpace :: NameSpace -> SDoc
 pprNameSpace VarName = text "variable"
 pprNameSpace TvName = text "type variable"
 pprNameSpace KvName = text "kind variable"
-pprNameSpace TcClsName = text "type constructor or class"
+pprNameSpace TcName = text "type constructor or class"
 pprNameSpace DataName = text "data constructor"
+pprNameSpace (RowName info) = text "row of" <+> ppr info
 pprNameSpace UNKNOWN_NS = text "UNKNOWN_NS"
 
 pprNonVarNameSpace :: NameSpace -> SDoc
@@ -119,8 +136,9 @@ pprNameSpaceBrief :: NameSpace -> SDoc
 pprNameSpaceBrief VarName = char 'v'
 pprNameSpaceBrief TvName = text "tv"
 pprNameSpaceBrief KvName = text "kv"
-pprNameSpaceBrief TcClsName = text "tc"
+pprNameSpaceBrief TcName = text "tc"
 pprNameSpaceBrief DataName = text "dc"
+pprNameSpaceBrief RowName{} = text "row"
 pprNameSpaceBrief UNKNOWN_NS = text "UK_NS"
 
 data OccName = OccName
@@ -149,6 +167,9 @@ instance NFData OccName where
 instance Outputable OccName where
   ppr = pprOccName
 
+instance Outputable RowInfo where
+  ppr (TyFunDeclInfo occ) = ftext (occNameFS occ)
+
 instance OutputableBndr OccName where
   pprBndr _ = ppr
   pprInfixOcc n = pprInfixVar (isSymOcc n) (ppr n)
@@ -160,10 +181,10 @@ pprOccName (OccName sp occ)
     (\ _ -> ftext occ <> whenPprDebug (braces (pprNameSpaceBrief sp)))
 
 occNameMangledFS :: OccName -> FastString
-occNameMangledFS (OccName _ns fs) = fs
-  -- case ns of
-  --   FldName con -> concatFS [fsLit "$fld:", con, ":", fs]
-  --   _ -> fs
+occNameMangledFS (OccName ns fs) =
+  case ns of
+    RowName info -> concatFS [fsLit "$row:", rowInfoFS info, ":", fs]
+    _ -> fs
 
 mkOccName :: NameSpace -> String -> OccName
 mkOccName occ_sp str = OccName occ_sp (mkFastString str)
@@ -333,6 +354,10 @@ isVarOcc :: OccName -> Bool
 isVarOcc (OccName VarName _) = True
 isVarOcc _ = False
 
+isRowOcc :: OccName -> Bool
+isRowOcc (OccName RowName{} _) = True
+isRowOcc _ = False
+
 isTvOcc :: OccName -> Bool
 isTvOcc (OccName TvName _) = True
 isTvOcc _ = False
@@ -342,7 +367,7 @@ isKvOcc (OccName KvName _) = True
 isKvOcc _ = False
 
 isTcOcc :: OccName -> Bool
-isTcOcc (OccName TcClsName _) = True
+isTcOcc (OccName TcName _) = True
 isTcOcc _ = False
 
 isDataOcc :: OccName -> Bool
@@ -350,8 +375,7 @@ isDataOcc (OccName DataName _) = True
 isDataOcc _ = False
 
 isValOcc :: OccName -> Bool
-isValOcc (OccName VarName _) = True
-isValOcc _ = False
+isValOcc (OccName ns _) = isValNameSpace ns
 
 isUnknownOcc :: OccName -> Bool
 isUnknownOcc (OccName UNKNOWN_NS _) = True
@@ -362,8 +386,9 @@ isSymOcc (OccName ns s) = case ns of
   VarName -> isLexSym s
   TvName -> isLexSym s
   KvName -> isLexKdSym s
-  TcClsName -> isLexSym s
+  TcName -> isLexSym s
   DataName -> isLexConSym s
+  RowName{} -> isLexSym s
   UNKNOWN_NS -> False
 
 isConOccFS :: OccName -> Bool
@@ -485,12 +510,26 @@ ppMainFn main_occ
 *                                                                      *
 ********************************************************************* -}
 
+instance Binary RowInfo where
+  put_ bh (TyFunDeclInfo occ) = do
+    putByte bh 0
+    put_ bh occ
+
+  get bh = do
+    h <- getByte bh
+    case h of
+      _ -> do parent <- get bh
+              return $ TyFunDeclInfo parent
+
 instance Binary NameSpace where
   put_ bh VarName = putByte bh 0
   put_ bh DataName = putByte bh 1
   put_ bh TvName = putByte bh 2
-  put_ bh TcClsName = putByte bh 3
+  put_ bh TcName = putByte bh 3
   put_ bh KvName = putByte bh 4
+  put_ bh (RowName parent) = do
+    putByte bh 5
+    put_ bh parent
   put_ _ UNKNOWN_NS = error "put_ bh UNKNOWN_NS"
   get bh = do
     h <- getByte bh
@@ -498,8 +537,10 @@ instance Binary NameSpace where
       0 -> return VarName
       1 -> return DataName
       2 -> return TvName
-      3 -> return TcClsName
-      _ -> return KvName
+      3 -> return TcName
+      4 -> return KvName
+      _ -> do parent <- get bh
+              return $ RowName parent
 
 instance Binary OccName where
   put_ bh (OccName aa ab) = do

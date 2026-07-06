@@ -36,7 +36,7 @@ import qualified CSlash.Data.Strict as Strict
 
 import CSlash.Types.Name.Reader
 import CSlash.Types.Name.Occurrence
-  (varName, tcClsName, tvName, kvName, occNameFS, mkVarOccFS, isConOccFS, NameSpace(UNKNOWN_NS))
+  (varName, tcName, tvName, kvName, occNameFS, mkVarOccFS, isConOccFS, NameSpace(UNKNOWN_NS))
 import CSlash.Types.SrcLoc
 import CSlash.Types.Basic
 import CSlash.Types.Error (CsHint(..))
@@ -109,6 +109,7 @@ import qualified Data.Semigroup as Semi
 
   '{' { L _ ITocurly }
   '}' { L _ ITccurly }
+  '.{' { L _ ITdotocurly }
   '(' { L _ IToparen }
   ')' { L _ ITcparen }
   ',' { L _ ITcomma }
@@ -379,8 +380,12 @@ topdecl :: { LCsDecl Ps }
 
 ty_decl :: { LCsBind Ps }
   : 'type' a_var '=' context_exp {% runPV (unETP $4) >>= \ $4 ->
-                                    mkTyFunBind (comb2 $1 $4) (fmap unknownToTv $2) $4
-                                                 [mj AnnType $1, mj AnnEqual $3] }
+                                    mkTyFunBind (comb2 $1 $4) (fmap unknownToTc $2) $4
+                                                 [mj AnnType $1, mj AnnEqual $3] Nothing }
+  | 'type' a_var '=' context_exp record
+                                 {% runPV (unETP $4) >>= \ $4 ->
+                                    mkTyFunBind (comb2 $1 $5) (fmap unknownToTc $2) $4
+                                                 [mj AnnType $1, mj AnnEqual $3] (Just $5) }
 
 -----------------------------------------------------------------------------
 -- Value definitions
@@ -404,7 +409,7 @@ sigdecl :: { LCsDecl Ps }
                                    | isConOccFS (rdrNameOcc (unLoc $4)) -> fmap unknownToData $4
                                    | otherwise -> fmap unknownToVar $4
                                  TypeNamespaceSpecifier _
-                                   | isConOccFS (rdrNameOcc (unLoc $4)) -> fmap unknownToTcCls $4
+                                   | isConOccFS (rdrNameOcc (unLoc $4)) -> fmap unknownToTc $4
                                    | otherwise -> fmap unknownToTv $4 }
             ; amsA' (sLL $1 $> $ SigD noExtField
                      (FixSig (mj AnnInfix $1 : [precAnn], fixText)
@@ -471,6 +476,44 @@ tv_bndr_parens :: { LCsTyVarBndr Ps }
                                                , mu AnnColon $3
                                                , mu AnnCloseC $5 ]
                                  (fmap unknownToTv $2) $4)) }
+
+-----------------------------------------------------------------------------
+-- Records
+
+record :: { (LCsRecord Ps) }
+  : '.{' record_sigdecls '}' {% amsA' (sLL $1 $> (CsRecord [ mu AnnOpenDotC $1
+                                                           , mu AnnCloseC $> ]
+                                                   (reverse $2))) }
+
+-- Non-empty, in reverse
+-- 'mkTyFunBind' is responsible for fixing the namespaces of records.
+record_sigdecls :: { [LSig Ps] }
+  : record_sigdecls ',' rec_sig {% case $1 of
+                                     (h:t) -> do
+                                       { h' <- addTrailingCommaA h (gl $2)
+                                       ; return ($3 : (h':t)) } }
+  | rec_sig { [$1] }
+
+rec_sig :: { LSig Ps }
+  : a_varid ':' sigtype {% amsA' $ sLL $1 $> $ 
+                           TypeSig (AnnSig (mu AnnColon $2) []) $1 $3 }
+
+set_record :: { LCsSetRecRows Ps }
+  : '.{' record_decls '}' {% amsA' (sLL $1 $> (SetRecRows [ mu AnnOpenDotC $1
+                                                          , mu AnnCloseC $> ]
+                                                (reverse $2))) }
+
+record_decls :: { [LCsSetRecRow Ps] }
+  : record_decls ',' rec_decl {% case $1 of
+                                   (h:t) -> do
+                                     { h' <- addTrailingCommaA h (gl $2)
+                                     ; return ($3 : (h' : t)) } }
+  | rec_decl { [$1] }
+
+rec_decl :: { LCsSetRecRow Ps }
+  : a_varid '=' sig_exp {% runPV (unETP $3) >>= \ ($3 :: LCsExpr Ps) ->
+                           amsA' $ sLL $1 $> $
+                           SetRecRow (mj AnnEqual $2) $1 $3 }
 
 -----------------------------------------------------------------------------
 -- Argument patterns
@@ -715,6 +758,9 @@ aexp :: { ETP }
                                        mkCsCasePV (comb3 $1 $3 $4) $2 $4
                                                   (EpAnnCsCase (glAA $1) (glAA $3) []) }
   | aexp1 %shift { $1 }
+
+  | aexp1 set_record {% runPV (unETP $1) >>= \ ($1 :: LCsExpr Ps) ->
+                        return $ ETP $ mkCsSetRecordPV (comb2 $1 $2) $1 $2 }
 
 aexp1 :: { ETP }
   : a_qvar { ETP $ mkCsVarPV $! $1 }

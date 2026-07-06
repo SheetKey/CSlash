@@ -199,6 +199,11 @@ tcLookup name = do
     Just thing -> return thing
     Nothing -> AGlobal <$> tcLookupGlobal name
 
+tcLookupRow :: OccName -> TcM [Name]
+tcLookupRow name = do
+  lcl_rdr_env <- getLocalRdrEnv
+  return $ lookupLocalRdrEnv_Row lcl_rdr_env name
+
 tcLookupId :: Name -> TcM (Id Tc)
 tcLookupId name = do
   thing <- tcLookupIdMaybe name
@@ -308,18 +313,32 @@ tcExtendLetEnv top_lvl sig_fn (IsGroupClosed fvs fv_type_closed) ids thing_insid
 tcExtendIdEnv1 :: Name -> Id Tc -> TcM a -> TcM a
 tcExtendIdEnv1 name id thing_inside = tcExtendIdEnv2 [(name, id)] thing_inside
 
+-- This is where we add rows to the environment
 tcExtendIdEnv2 :: [(Name, Id Tc)] -> TcM a -> TcM a
 tcExtendIdEnv2 names_w_ids thing_inside
-  = tcExtendBinderStack [ TcIdBndr mono_id NotTopLevel
-                        | (_, mono_id) <- names_w_ids ]
-    $ tc_extend_local_env NotTopLevel [ (name, ATcId { tct_id = id, tct_info = NotLetBound })
-                                      | (name, id) <- names_w_ids ]
+  = tcExtendBinderStack
+    ((\(_, mono_id) ->
+        TcIdBndr mono_id NotTopLevel :
+        [ TcRowBndr row_id mono_id
+        | (_, row_id) <- get_rows mono_id ]
+     ) `concatMap` names_w_ids)
+    $ tc_extend_local_env NotTopLevel
+    ((\(name, id) ->
+         (name, ATcId { tct_id = id, tct_info = NotLetBound }) :
+         [ (row_name, ARowId { tct_row = row_id, tct_parent = id })
+         | (row_name, row_id) <- get_rows id ]
+     ) `concatMap` names_w_ids)
     thing_inside
-    
+  where
+    get_rows :: Id Tc -> [(Name, Id Zk)]
+    get_rows id =
+       let rows = typeISRows (varType id)
+       in (\r -> (varName r, r)) <$> rows
 
 tc_extend_local_env :: TopLevelFlag -> [(Name, TcTyKiThing)] -> TcM a -> TcM a
 tc_extend_local_env top_lvl extra_env thing_inside = do
-  traceTc "tc_extend_local_env" (ppr extra_env)
+  traceTc "tc_extend_local_env"
+    (ppr $ map (\(n, t) -> (n, isInternalName n, t)) extra_env)
   updLclCtxt upd_lcl_env thing_inside
   where
     upd_lcl_env env0@(TcLclCtxt { tcl_rdr = rdr_env, tcl_env = lcl_type_env })

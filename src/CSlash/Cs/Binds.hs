@@ -183,7 +183,7 @@ ppr_monobind (FunBind { fun_id = fun
                 Tc | (wrap, _) <- ext -> ppr wrap
                 Zk | (wrap, _) <- ext -> ppr wrap
 
-ppr_monobind (TyFunBind _ _ _) = text "TyFunBind ppr non implemented"
+ppr_monobind (TyFunBind _ _ _ _) = text "TyFunBind ppr non implemented"
 ppr_monobind (TCVarBind { tcvar_id = var, tcvar_rhs = rhs })
   = sep [pprBndr CasePatBind var, nest 2 $ equals <+> pprExpr (unLoc rhs)]
 ppr_monobind (XCsBindsLR b) = case csPass @idL of
@@ -222,6 +222,11 @@ type instance XFixitySig Rn = NamespaceSpecifier
 type instance XFixitySig Tc = NoExtField
 type instance XFixitySig Zk = NoExtField
 
+type instance XCsRecord Ps = [AddEpAnn]
+type instance XCsRecord Rn = [AddEpAnn]
+type instance XCsRecord Tc = [AddEpAnn]
+type instance XCsRecord Zk = [AddEpAnn]
+
 data NamespaceSpecifier
   = NoNamespaceSpecifier
   | TypeNamespaceSpecifier (EpToken "type")
@@ -229,7 +234,7 @@ data NamespaceSpecifier
 
 coveredByNamespaceSpecifier :: NamespaceSpecifier -> NameSpace -> Bool
 coveredByNamespaceSpecifier NoNamespaceSpecifier = const True
-coveredByNamespaceSpecifier TypeNamespaceSpecifier{} = isTcClsNameSpace <||> isTvNameSpace
+coveredByNamespaceSpecifier TypeNamespaceSpecifier{} = isTcNameSpace <||> isTvNameSpace
 
 data AnnSig = AnnSig
   { asColon :: AddEpAnn
@@ -273,3 +278,5 @@ type instance Anno (CsBindLR (CsPass idL) (CsPass idR)) = SrcSpanAnnA
 type instance Anno (Sig (CsPass p)) = SrcSpanAnnA
 
 type instance Anno (FixitySig (CsPass p)) = SrcSpanAnnA
+
+type instance Anno (CsRecord (CsPass p)) = SrcSpanAnnA

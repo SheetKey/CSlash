@@ -88,6 +88,21 @@ type instance XUnboundVar Rn = NoExtField
 type instance XUnboundVar Tc = DataConCantHappen
 type instance XUnboundVar Zk = DataConCantHappen
 
+type instance XRowVar Ps = DataConCantHappen
+type instance XRowVar Rn = NoExtField
+type instance XRowVar Tc = DataConCantHappen
+type instance XRowVar Zk = DataConCantHappen
+
+type instance XRowSelector Ps = AddEpAnn
+type instance XRowSelector Rn = AddEpAnn
+type instance XRowSelector Tc = RowSelKind
+type instance XRowSelector Zk = RowSelKind
+
+data RowSelKind
+  = InfRowSel
+  | UserRowSel
+  deriving Data
+
 type instance XOverLitE (CsPass _) = NoExtField
 type instance XLitE (CsPass _) = NoExtField
 type instance XApp (CsPass _) = NoExtField
@@ -180,6 +195,18 @@ type instance XEmbTy Ps = [AddEpAnn]
 type instance XEmbTy Rn = NoExtField
 type instance XEmbTy Tc = Type Tc
 type instance XEmbTy Zk = Type Zk
+
+type instance XSetRecord (CsPass p) = NoExtField
+
+type instance XSetRecRows Ps = [AddEpAnn]
+type instance XSetRecRows Rn = [AddEpAnn]
+type instance XSetRecRows Tc = NoExtField
+type instance XSetRecRows Zk = NoExtField
+
+type instance XSetRecRow Ps = AddEpAnn
+type instance XSetRecRow Rn = AddEpAnn
+type instance XSetRecRow Tc = NoExtField
+type instance XSetRecRow Zk = NoExtField
 
 type instance Anno [LocatedA ((StmtLR (CsPass pl) (CsPass pr) (LocatedA (body (CsPass pr)))))]
   = SrcSpanAnnL
@@ -298,6 +325,9 @@ ppr_expr
   -> SDoc
 ppr_expr (CsVar _ (L _ v)) = pprPrefixOcc v
 ppr_expr (CsUnboundVar _ uv) = pprPrefixOcc uv
+ppr_expr (CsRowVar _ (L _ rv)) = pprPrefixOcc rv
+ppr_expr (CsRowSelector _ (L _ parent) (L _ row)) = pprPrefixOcc parent <> dot <> pprPrefixOcc row
+ppr_expr (CsSetRecord _ (L _ e) (L _ upd)) = ppr_expr e <+> ppr_set_rec upd
 ppr_expr (CsLit _ lit) = ppr lit
 ppr_expr (CsOverLit _ lit) = ppr lit
 ppr_expr (CsLam _ matches) = pprMatches matches
@@ -432,12 +462,26 @@ pprParendExpr p expr
   | csExprNeedsParens p expr = parens (pprExpr expr)
   | otherwise = pprExpr expr
 
+ppr_set_rec
+  :: forall p. (OutputableBndrId p)
+  => CsSetRecRows (CsPass p) -> SDoc
+ppr_set_rec (SetRecRows _ rows) = text ".{" <+> interpp'SP' ppr_set_row rows <+> char '}'
+
+ppr_set_row
+  :: forall p. (OutputableBndrId p)
+  => LCsSetRecRow (CsPass p) -> SDoc
+ppr_set_row (L _ (SetRecRow _ (L _ id) (L _ expr)))
+  = ppr id <+> equals <+> ppr_expr expr
+
 csExprNeedsParens :: forall p. IsPass p => PprPrec -> CsExpr (CsPass p) -> Bool
 csExprNeedsParens prec = go
   where
     go :: CsExpr (CsPass p) -> Bool
     go (CsVar{}) = False
     go (CsUnboundVar{}) = False
+    go (CsRowVar{}) = False
+    go (CsRowSelector{}) = False
+    go (CsSetRecord{}) = False -- TODO: True?
     go (CsLit _ l) = csLitNeedsParens prec l
     go (CsOverLit _ ol) = csOverLitNeedsParens prec ol
     go (CsLam{}) = prec > topPrec
@@ -667,6 +711,8 @@ type instance Anno (Match (CsPass p) (LocatedA (CsExpr (CsPass p)))) = SrcSpanAn
 type instance Anno [LocatedA (Pat (CsPass p))] = EpaLocation
 type instance Anno (GRHS (CsPass p) (LocatedA (CsExpr (CsPass p)))) = EpAnnCO
 type instance Anno (StmtLR (CsPass pl) (CsPass pr) (LocatedA (body (CsPass pr)))) = SrcSpanAnnA
+type instance Anno (CsSetRecRows (CsPass p)) = SrcSpanAnnA
+type instance Anno (CsSetRecRow (CsPass p)) = SrcSpanAnnA
 
 type instance Anno FastString = EpAnnCO
 

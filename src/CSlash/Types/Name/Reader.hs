@@ -41,7 +41,7 @@ import qualified Data.Semigroup as S
 data RdrName
   = Unqual OccName
   | Qual ModuleName OccName
-  | Orig Module OccName
+  | Orig Module OccName -- TODO: this is unused?
   | Exact Name
   deriving Data
 
@@ -65,11 +65,21 @@ unknownToData (Unqual (OccName UNKNOWN_NS fs)) = Unqual (OccName DataName fs)
 unknownToData (Qual mn (OccName UNKNOWN_NS fs)) = Qual mn (OccName DataName fs)
 unknownToData other = pprPanic "unknownToData" (ppr other)
 
-unknownToTcCls :: RdrName -> RdrName
-unknownToTcCls (Unqual (OccName UNKNOWN_NS fs)) = Unqual (OccName TcClsName fs)  
-unknownToTcCls (Qual mn (OccName UNKNOWN_NS fs)) = Qual mn (OccName TcClsName fs)
-unknownToTcCls n@(Exact {}) = n
-unknownToTcCls other = pprPanic "unknownToTcCls" (ppr other)
+unknownToTc :: RdrName -> RdrName
+unknownToTc (Unqual (OccName UNKNOWN_NS fs)) = Unqual (OccName TcName fs)  
+unknownToTc (Qual mn (OccName UNKNOWN_NS fs)) = Qual mn (OccName TcName fs)
+unknownToTc n@(Exact {}) = n
+unknownToTc other = pprPanic "unknownToTc" (ppr other)
+
+setRdrNameRowNS :: RdrName -> RowInfo -> RdrName
+setRdrNameRowNS (Unqual occname) info = Unqual $ setOccNameRowNS occname info
+setRdrNameRowNS (Qual mn occname) info = Qual mn $ setOccNameRowNS occname info
+setRdrNameRowNS other inof = pprPanic "setRdrnameRowNS" (ppr other)
+
+tvToTc :: RdrName -> RdrName
+tvToTc (Unqual (OccName TvName fs)) = Unqual (OccName TcName fs)
+tvToTc (Qual mn (OccName TvName fs)) = Qual mn (OccName TcName fs)
+tvToTc other = pprPanic "tvToTc" (ppr other)
 
 instance HasOccName RdrName where
   occName = rdrNameOcc
@@ -242,6 +252,10 @@ lookupLocalRdrEnv (LRE { lre_env = env, lre_in_scope = ns }) rdr
   | otherwise
   = Nothing
 
+lookupLocalRdrEnv_Row :: LocalRdrEnv -> OccName -> [Name]
+lookupLocalRdrEnv_Row LRE{ lre_env = env } occ
+  = filter (isRowNameSpace . nameNameSpace) $ lookupOccEnv_AllNameSpaces env occ
+
 lookupLocalRdrOcc :: LocalRdrEnv -> OccName -> Maybe Name
 lookupLocalRdrOcc (LRE { lre_env = env }) occ = lookupOccEnv env occ
 
@@ -351,6 +365,11 @@ mkLocalTyConGRE flav nm = mkLocalGRE (IAmTyCon flav) par nm
       Nothing -> NoParent
       Just p -> ParentIs p
 
+mkLocalRowGREs :: Parent -> [Name] -> [GlobalRdrElt]
+mkLocalRowGREs p row_nms =
+  [ mkLocalGRE IAmRow p row_nm
+  | row_nm <- row_nms ]
+
 instance HasOccName (GlobalRdrEltX info) where
   occName = greOccName
 
@@ -454,6 +473,7 @@ data LookupGRE info where
 data WhichGREs info where
   SameNameSpace :: WhichGREs info
   RelevantGREs :: { lookupTyConsAsWell :: !Bool } -> WhichGREs GREInfo
+  RowsOnly :: WhichGREs GREInfo
 
 instance Outputable (WhichGREs info) where
   ppr SameNameSpace = text "SameNameSpace"
@@ -461,6 +481,7 @@ instance Outputable (WhichGREs info) where
     = braces $ hsep
       [ text "RelevantGREs"
       , if tcs_too then text "[tcs]" else empty ]
+  ppr RowsOnly = text "RowsOnly"
 
 pattern AllRelevantGREs :: WhichGREs GREInfo
 pattern AllRelevantGREs = RelevantGREs { lookupTyConsAsWell = True }
@@ -494,7 +515,8 @@ greIsRelevant which_gres ns gre
         | isDataConNameSpace ns -> tc_too
         | otherwise -> False
         where
-          tc_too = tycons_too && isTcClsNameSpace other_ns
+          tc_too = tycons_too && isTcNameSpace other_ns
+      RowsOnly -> isRowNameSpace other_ns
   where
     other_ns = greNameSpace gre
 
@@ -537,6 +559,8 @@ lookupGRE env = \case
       SameNameSpace -> concat $ lookupOccEnv env occ
       rel@(RelevantGREs{}) -> filter (greIsRelevant rel (occNameSpace occ)) $
                               concat $ lookupOccEnv_AllNameSpaces env occ
+      rel@RowsOnly -> filter (greIsRelevant rel (occNameSpace occ)) $
+                      concat $ lookupOccEnv_AllNameSpaces env occ
   LookupRdrName rdr rel -> pickGREs rdr $ lookupGRE env (LookupOccName (rdrNameOcc rdr) rel)
   LookupExactName { lookupExactName = nm, lookInAllNameSpaces = all_ns } ->
     [ gre | gre <- lkup, greName gre == nm ]
