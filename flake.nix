@@ -73,7 +73,7 @@
             haskellPackages.happy
 
             llvm_18
-          ];
+          ] ++ my-pkg-post-install-files.buildInputs;
           inputsFrom = builtins.attrValues self.packages.${system};
         };
       }
