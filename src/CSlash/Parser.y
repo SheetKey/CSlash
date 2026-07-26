@@ -14,7 +14,7 @@ module CSlash.Parser
 import Control.Monad (unless, liftM, when, (<=<))
 import GHC.Exts
 import Data.Maybe (maybeToList)
-import Data.List.NonEmpty (NonEmpty(..))
+import Data.List.NonEmpty (NonEmpty(..), (<|))
 import qualified Data.List.NonEmpty as NE
 -- import qualified Prelude -- for happy-generated code
 -- import Prelude (Maybe(..), Either(..))
@@ -36,7 +36,7 @@ import qualified CSlash.Data.Strict as Strict
 
 import CSlash.Types.Name.Reader
 import CSlash.Types.Name.Occurrence
-  (varName, tcClsName, tvName, kvName, occNameFS, mkVarOccFS, isConOccFS, NameSpace(UNKNOWN_NS))
+  (varName, tcName, tvName, kvName, occNameFS, mkVarOccFS, isConOccFS, NameSpace(UNKNOWN_NS))
 import CSlash.Types.SrcLoc
 import CSlash.Types.Basic
 import CSlash.Types.Error (CsHint(..))
@@ -78,6 +78,7 @@ import qualified Data.Semigroup as Semi
   'qualified' { L _ ITqualified }
   'then' { L _ ITthen }
   'type' { L _ ITtype }
+  'kind' { L _ ITkind }
   'where' { L _ ITwhere }
 
   'forall' { L _ ITforall }
@@ -114,6 +115,7 @@ import qualified Data.Semigroup as Semi
   ',' { L _ ITcomma }
   '_' { L _ ITunderscore }
   '`' { L _ ITbackquote }
+  '.{' { L _ ITdotocurly }
 
   VARID { L _ (ITvarid _) }
   CONID { L _ (ITconid _) }
@@ -247,7 +249,8 @@ export_subspec :: { Located ([AddEpAnn], ImpExpSubSpec) }
 
 qcname_ext :: { LocatedA ImpExpQcSpec }
   : a_qvar { sL1a $1 (ImpExpQcName $ fmap unknownToVar $1) }
-  | 'type' a_qvar { sLLa $1 $> (ImpExpQcTyVar (glAA $1) (fmap unknownToTv $2)) }
+  | 'type' a_qvar { sLLa $1 $> (ImpExpQcTyCon (glAA $1) (fmap unknownToTc $2)) }
+  | 'kind' a_qconid { sLLa $1 $> (ImpExpQcKiCon (glAA $1) (fmap unknownToKc $2)) }
 
 -----------------------------------------------------------------------------
 -- Import Declarations
@@ -372,6 +375,7 @@ topdecl_cs :: { LCsDecl Ps }
 
 topdecl :: { LCsDecl Ps }
   : ty_decl { L (getLoc $1) (ValD noExtField (unLoc $1)) }
+  | ki_decl { L (getLoc $1) (ValD noExtField (unLoc $1)) }
   | decl { $1 }
 
 -----------------------------------------------------------------------------
@@ -379,8 +383,31 @@ topdecl :: { LCsDecl Ps }
 
 ty_decl :: { LCsBind Ps }
   : 'type' a_var '=' context_exp {% runPV (unETP $4) >>= \ $4 ->
-                                    mkTyFunBind (comb2 $1 $4) (fmap unknownToTv $2) $4
+                                    mkTyFunBind (comb2 $1 $4) (fmap unknownToTc $2) $4
                                                  [mj AnnType $1, mj AnnEqual $3] }
+
+-----------------------------------------------------------------------------
+-- Kind definitions
+
+ki_decl :: { LCsBind Ps }
+  : 'kind' a_conid '=' fun_exp '.{' rowdecls '}'
+    {% runPV (unETP $4) >>= \ ($4 :: LCsKind Ps) ->
+       mkKiRowBind (comb2 $1 $>) (fmap unknownToKc $2) $4 $6
+       [mj AnnKind $1, mj AnnEqual $3, mj AnnOpenDotC $5, mj AnnCloseC $7] }
+
+rowdecls :: { NonEmpty (LRowDecl Ps Ps) }
+  : rowdecl ',' rowdecls
+    {% do { h <- addTrailingCommaA $1 (gl $2)
+          ; return (h <| $3) } }
+  | rowdecl { $1 :| [] }
+
+rowdecl :: { LRowDecl Ps Ps }
+  : a_varid ':' sigtype {% amsA' $ sLL $1 $> $ RowSigD (AnnSig (mu AnnColon $2) [])
+                           (fmap unknownToRow $1) $3 }
+  | 'type' a_varid ':' aexp1 {% runPV (unETP $4) >>= \ $4 ->
+                                 amsA' $ sLL $1 $> $ RowTySigD
+                                 (AnnSig (mu AnnColon $3) [mj AnnType $1])
+                                 (fmap unknownToTcRow $2) $4 }
 
 -----------------------------------------------------------------------------
 -- Value definitions
@@ -404,7 +431,7 @@ sigdecl :: { LCsDecl Ps }
                                    | isConOccFS (rdrNameOcc (unLoc $4)) -> fmap unknownToData $4
                                    | otherwise -> fmap unknownToVar $4
                                  TypeNamespaceSpecifier _
-                                   | isConOccFS (rdrNameOcc (unLoc $4)) -> fmap unknownToTcCls $4
+                                   | isConOccFS (rdrNameOcc (unLoc $4)) -> fmap unknownToTc $4
                                    | otherwise -> fmap unknownToTv $4 }
             ; amsA' (sLL $1 $> $ SigD noExtField
                      (FixSig (mj AnnInfix $1 : [precAnn], fixText)
@@ -453,7 +480,7 @@ tv_bndrs :: { [LCsTyVarBndr Ps] }
   | tv_bndrs1 { reverse $1 }
 
 tv_bndr :: { LCsTyVarBndr Ps }
-  : a_var ':' aexp1 {% runPV (unETP $3) >>= \ ($3 :: LCsKind Ps) ->
+  : a_var ':' fun_exp {% runPV (unETP $3) >>= \ ($3 :: LCsKind Ps) ->
                       amsA' (sLL $1 $> (KindedTyVar [mu AnnColon $2] (fmap unknownToTv $1) $3)) }
 
 tv_bndrs1 :: { [LCsTyVarBndr Ps] }
@@ -462,10 +489,10 @@ tv_bndrs1 :: { [LCsTyVarBndr Ps] }
   | tv_bndr_parens { [$1] }
 
 tv_bndr_parens :: { LCsTyVarBndr Ps }
-  : '(' a_var ':' aexp1 ')' {% runPV (unETP $4) >>= \ ($4 :: LCsKind Ps) ->
+  : '(' a_var ':' fun_exp ')' {% runPV (unETP $4) >>= \ ($4 :: LCsKind Ps) ->
                               amsA' (sLL $1 $> (KindedTyVar [mop $1, mu AnnColon $3, mcp $5]
                                                             (fmap unknownToTv $2) $4)) }
-  | '{' a_var ':' aexp1 '}'
+  | '{' a_var ':' fun_exp '}'
            {% runPV (unETP $4) >>= \ ($4 :: LCsKind Ps) ->
               amsA' (sLL $1 $> (ImpKindedTyVar [ mu AnnOpenC $1
                                                , mu AnnColon $3

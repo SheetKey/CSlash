@@ -41,6 +41,7 @@ import CSlash.Utils.Misc
 import qualified Data.Semigroup as Semi
 import CSlash.Utils.Panic
 import qualified CSlash.Data.Strict as Strict
+import Data.List.NonEmpty (NonEmpty)
 
 import Control.Monad
 import qualified Data.Kind as K
@@ -75,6 +76,18 @@ mkTyFunBind loc name rhs annsIn = do
   cs <- checkTyHdr name
   let loc' = EpAnn (spanAsAnchor loc) noAnn cs
   return $ L loc' (TyFunBind annsIn name rhs)
+
+mkKiRowBind
+  :: SrcSpan
+  -> LocatedN RdrName
+  -> LCsKind Ps
+  -> NonEmpty (LRowDecl Ps Ps)
+  -> [AddEpAnn]
+  -> P (LCsBind Ps)
+mkKiRowBind loc name rhs rows annsIn = do
+  cs <- checkKiHdr name
+  let loc' = EpAnn (spanAsAnchor loc) noAnn cs
+  return $ L loc' (KiRowBind annsIn name rhs rows)
 
 -- mkFunBind
 --   :: SrcSpan
@@ -129,12 +142,17 @@ cvBindsAndSigs fb = return $ partitionBindsAndSigs $ fromOL fb
 
 *********************************************************************** -}
 
--- GHC checkTyClHdr
 checkTyHdr :: LocatedN RdrName -> P EpAnnComments
 checkTyHdr ty@(L l name)
-  | isRdrTyVar name = return $ emptyComments Semi.<> comments l
+  | isRdrTc name = return $ emptyComments Semi.<> comments l
   | otherwise = addFatalError $ mkPlainErrorMsgEnvelope (locA l) $
                 (PsErrMalformedTyDecl ty)
+
+checkKiHdr :: LocatedN RdrName -> P EpAnnComments
+checkKiHdr ki@(L l name)
+  | isRdrKc name = return $ emptyComments Semi.<> comments l
+  | otherwise = addFatalError $ mkPlainErrorMsgEnvelope (locA l) $
+                panic "(PsErrMalformedKiDecl ki)"
 
 checkExpBlockArguments :: LCsExpr Ps -> PV ()
 checkExpBlockArguments = checkExpr
@@ -624,7 +642,7 @@ instance DisambETP (CsType Ps) where
     return $ L (EpAnn (spanAsAnchor l) noAnn cs) (CsOpTy [] t1 op t2)
   mkCsConOpAppPV l t1 (L opl n) t2 = do
     massert (isRdrUnknown n)
-    let op = L opl (unknownToTcCls n)
+    let op = L opl (unknownToTc n)
     !cs <- getCommentsFor l
     return $ L (EpAnn (spanAsAnchor l) noAnn cs) (CsOpTy [] t1 op t2)
   mkCsAppPV l t1 t2 = do
@@ -655,7 +673,7 @@ instance DisambETP (CsType Ps) where
   mkCsConPV v@(L l@(EpAnn anc _ _) n) = do
     !cs <- getCommentsFor (getHasLoc l)
     massert (isRdrUnknown n)
-    let v' = L l (unknownToTcCls n)
+    let v' = L l (unknownToTc n)
     return $ L (EpAnn anc noAnn cs) (CsTyVar [] v')
   mkCsLitPV (L l _) = addFatalError $ mkPlainErrorMsgEnvelope (locA l) PsErrLitInType
   mkCsOverLitPV (L l _) = addFatalError $ mkPlainErrorMsgEnvelope (locA l) PsErrOverLitInType
@@ -677,7 +695,7 @@ instance DisambETP (CsType Ps) where
   mkCsConSectionL l t op@(L opl@(EpAnn anc _ _) n) = do
     !opcs <- getCommentsFor (getHasLoc opl)
     massert (isRdrUnknown n)
-    let op' = L opl (unknownToTcCls n)
+    let op' = L opl (unknownToTc n)
         top = L (EpAnn anc noAnn opcs) (CsTyVar [] op')
     !cs <- getCommentsFor l
     return $ L (EpAnn (spanAsAnchor l) noAnn cs) (TySectionL noExtField t top)
@@ -691,7 +709,7 @@ instance DisambETP (CsType Ps) where
   mkCsConSectionR l op@(L opl@(EpAnn anc _ _) n) t = do
     !opcs <- getCommentsFor (getHasLoc opl)
     massert (isRdrUnknown n)
-    let op' = L opl (unknownToTcCls n)
+    let op' = L opl (unknownToTc n)
         top = L (EpAnn anc noAnn opcs) (CsTyVar [] op')
     !cs <- getCommentsFor l
     return $ L (EpAnn (spanAsAnchor l) noAnn cs) (TySectionL noExtField top t)
@@ -733,7 +751,11 @@ instance DisambETP (CsKind Ps) where
     massert (isRdrUnknown n)
     let v' = L l (unknownToKv n)
     return $ L (EpAnn anc noAnn cs) (CsKiVar [] v')
-  mkCsConPV (L l _) = addFatalError $ mkPlainErrorMsgEnvelope (locA l) PsErrKindCon
+  mkCsConPV v@(L l@(EpAnn anc _ _) n) = do
+    !cs <- getCommentsFor (getHasLoc l)
+    massert (isRdrUnknown n)
+    let v' = L l (unknownToKc n)
+    return $ L (EpAnn anc noAnn cs) (CsKiVar [] v')
   mkCsLitPV (L l _) = addFatalError $ mkPlainErrorMsgEnvelope (locA l) PsErrLitInKind
   mkCsOverLitPV (L l _) = addFatalError $ mkPlainErrorMsgEnvelope (locA l) PsErrOverLitInKind
   mkCsParPV l lpar k rpar = do
@@ -949,7 +971,8 @@ checkPrecP (L l (_, i)) op
 data ImpExpSubSpec = ImpExpAbs
 
 data ImpExpQcSpec = ImpExpQcName (LocatedN RdrName)
-                  | ImpExpQcTyVar EpaLocation (LocatedN RdrName)
+                  | ImpExpQcTyCon EpaLocation (LocatedN RdrName)
+                  | ImpExpQcKiCon EpaLocation (LocatedN RdrName)
 
 mkModuleImpExp :: [AddEpAnn] -> LocatedA ImpExpQcSpec -> ImpExpSubSpec -> P (IE Ps)
 mkModuleImpExp anns (L l specname) subs = do
@@ -964,11 +987,13 @@ mkModuleImpExp anns (L l specname) subs = do
     name = ieNameVal specname
 
     ieNameVal (ImpExpQcName ln) = unLoc ln
-    ieNameVal (ImpExpQcTyVar _ ln) = unLoc ln
+    ieNameVal (ImpExpQcTyCon _ ln) = unLoc ln
+    ieNameVal (ImpExpQcKiCon _ ln) = unLoc ln
 
     ieNameFromSpec :: ImpExpQcSpec -> IEWrappedName Ps
     ieNameFromSpec (ImpExpQcName (L l n)) = IEName noExtField (L l n)
-    ieNameFromSpec (ImpExpQcTyVar r (L l n)) = IETyName r (L l n)
+    ieNameFromSpec (ImpExpQcTyCon r (L l n)) = IETyName r (L l n)
+    ieNameFromSpec (ImpExpQcKiCon r (L l n)) = IEKiName r (L l n)
 
 -- forward compatability:
 -- checks that imports of the form 'Thing(Thing1, Thing2, ..)'

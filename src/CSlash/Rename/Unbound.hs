@@ -314,5 +314,8 @@ nameSpacesRelated dflags what_looking ns ns'
   where
     other_namespaces =
       [ (isVarNameSpace, [(isDataConNameSpace, [WL_Constructor])])
-      , (isTvNameSpace, [(isTcClsNameSpace, [WL_Constructor])])
-      , (isTcClsNameSpace, [(isTvNameSpace, [])]) ]
+      , (isTvNameSpace, [(isTcNameSpace, [WL_Constructor])])
+      , (isTcNameSpace, [(isTvNameSpace, [])])
+      , (isKvNameSpace, [(isKcNameSpace, [WL_Constructor])])
+      , (isKcNameSpace, [(isKvNameSpace, [])])
+      ]

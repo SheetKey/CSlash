@@ -177,6 +177,7 @@ $unigraphic / { isSmartQuote } { smart_quote_error }
   \` { special ITbackquote }
   \{ { special ITocurly }
   \} { special ITccurly }
+  \. \{ { special ITdotocurly }
 }
 
 <0> {
@@ -249,6 +250,7 @@ data Token
   | ITqualified
   | ITthen
   | ITtype
+  | ITkind
   | ITwhere
 
   | ITforall
@@ -285,6 +287,7 @@ data Token
   | ITcomma
   | ITunderscore
   | ITbackquote
+  | ITdotocurly
 
   | ITvarid FastString
   | ITconid FastString
@@ -331,6 +334,7 @@ reservedWordsFM = listToUFM $
       , ("qualified", ITqualified)
       , ("then", ITthen)
       , ("type", ITtype)
+      , ("kind", ITkind)
       , ("where", ITwhere)
       ]
 

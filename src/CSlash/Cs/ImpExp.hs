@@ -132,6 +132,7 @@ ppr_impdecl (ImportDecl { ideclExt = impExt
 
 type instance XIEName (CsPass _) = NoExtField
 type instance XIETyName (CsPass _) = EpaLocation
+type instance XIEKiName (CsPass _) = EpaLocation
 
 type instance Anno (IEWrappedName (CsPass _)) = SrcSpanAnnA
 
@@ -161,6 +162,7 @@ ieName _ = panic "ieName failed pattern match!"
 ieWrappedLName :: IEWrappedName (CsPass p) -> LIdP (CsPass p)
 ieWrappedLName (IEName _ n) = n
 ieWrappedLName (IETyName _ n) = n
+ieWrappedLName (IEKiName _ n) = n
 
 ieWrappedName :: IEWrappedName (CsPass p) -> IdP (CsPass p)
 ieWrappedName = unLoc . ieWrappedLName
@@ -171,6 +173,7 @@ lieWrappedName (L _ n) = ieWrappedName n
 replaceWrappedName :: IEWrappedName Ps -> IdP Rn -> IEWrappedName Rn
 replaceWrappedName (IEName x (L l _)) n = IEName x (L l n)
 replaceWrappedName (IETyName r (L l _)) n = IETyName r (L l n)
+replaceWrappedName (IEKiName r (L l _)) n = IEKiName r (L l n)
 
 instance OutputableBndrId p => Outputable (IE (CsPass p)) where
   ppr (IEVar _ var) = ppr (unLoc var)
@@ -179,3 +182,4 @@ instance OutputableBndrId p => Outputable (IE (CsPass p)) where
 instance OutputableBndrId p => Outputable (IEWrappedName (CsPass p)) where
   ppr (IEName _ (L _ n)) = pprPrefixOcc n
   ppr (IETyName _ (L _ n)) = text "type" <+> pprPrefixOcc n
+  ppr (IEKiName _ (L _ n)) = text "kind" <+> pprPrefixOcc n

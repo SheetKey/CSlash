@@ -210,7 +210,7 @@ isBuiltInOcc_maybe occ =
 
     choose_ns :: Name -> Name -> Name
     choose_ns tc dc
-      | isTcClsNameSpace ns = tc
+      | isTcNameSpace ns = tc
       | isDataConNameSpace ns = dc
       | otherwise = pprPanic "tup_name" (ppr occ <+> parens (pprNameSpace ns))
       where ns = occNameSpace occ

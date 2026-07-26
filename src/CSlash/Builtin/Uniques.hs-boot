@@ -10,5 +10,6 @@ varNSUnique :: Unique
 tvNSUnique :: Unique
 kvNSUnique :: Unique
 tcNSUnique :: Unique
+kcNSUnique :: Unique
 dataNSUnique :: Unique
 unknownNSUnique :: Unique

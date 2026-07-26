@@ -132,6 +132,9 @@ kvNSUnique = mkUnique 'k' 0
 tcNSUnique :: Unique
 tcNSUnique = mkUnique 'c' 0
 
+kcNSUnique :: Unique
+kcNSUnique = mkUnique 'c' 0 -- should be ok but need to double check!
+
 dataNSUnique :: Unique
 dataNSUnique = mkUnique 'd' 0
 

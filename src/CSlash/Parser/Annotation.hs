@@ -162,6 +162,7 @@ data AnnKeywordId
                  -- 'SourceText' on the relevant pragma item.
     | AnnOpenB   -- ^ '(|'
     | AnnOpenBU  -- ^ '(|', unicode variant
+    | AnnOpenDotC -- ^ '.{'
     | AnnOpenC   -- ^ '{'
     | AnnOpenE   -- ^ '[e|' or '[e||'
     | AnnOpenEQ  -- ^ '[|'
@@ -191,6 +192,7 @@ data AnnKeywordId
     | AnnThTyQuote -- ^ double '''
     | AnnTilde -- ^ '~'
     | AnnType
+    | AnnKind
     | AnnUnit -- ^ '()' for types
     | AnnUsing
     | AnnVal  -- ^ e.g. INTEGER

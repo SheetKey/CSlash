@@ -7,6 +7,8 @@ import CSlash.Language.Syntax.Extension
 import CSlash.Language.Syntax.Type
 import CSlash.Language.Syntax.Kind
 
+import Data.List.NonEmpty (NonEmpty)
+
 import CSlash.Types.Fixity
 import CSlash.Data.Bag (Bag)
 
@@ -49,6 +51,12 @@ data CsBindLR idL idR
     , tyfun_id :: LIdP idL
     , tyfun_body :: LCsType idR
     }
+  | KiRowBind -- for kind synonyms with rows
+    { kirow_ext :: XKiRowBind idL idR
+    , kirow_id :: LIdP idL
+    , kirow_base :: LCsKind idR
+    , kirow_rows :: NonEmpty (LRowDecl idL idR)
+    }
   | TCVarBind -- only introduced by typechecker
     { tcvar_ext :: XTCVarBind idL idR
     , tcvar_id :: IdP idL
@@ -67,3 +75,9 @@ type LFixitySig pass = XRec pass (FixitySig pass)
 
 data FixitySig pass
   = FixitySig (XFixitySig pass) (LIdP pass) Fixity
+
+type LRowDecl idL idR = XRec idL (RowDecl idL idR)
+
+data RowDecl idL idR
+  = RowSigD (XRowSigD idL idR) (LIdP idL) (LCsSigType idR)
+  | RowTySigD (XRowTySigD idL idR) (LIdP idL) (LCsKind idR)

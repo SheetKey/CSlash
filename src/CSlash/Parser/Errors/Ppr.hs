@@ -177,8 +177,6 @@ instance Diagnostic PsMessage where
       -> mkSimpleDecorated $ text "(/\\ ...)-syntax in kind"
     PsErrCaseInKind
       -> mkSimpleDecorated $ text "(case ... of ...)-syntax in kind"
-    PsErrKindCon
-      -> mkSimpleDecorated $ text "Invalid kind constructor."
     PsErrLitInType
       -> mkSimpleDecorated $ text "Invalid literal in type."
     PsErrLitInKind
@@ -383,7 +381,6 @@ instance Diagnostic PsMessage where
     PsErrLamInKind -> ErrorWithoutFlag
     PsErrTyLamInKind -> ErrorWithoutFlag
     PsErrCaseInKind -> ErrorWithoutFlag
-    PsErrKindCon -> ErrorWithoutFlag
     PsErrLitInKind -> ErrorWithoutFlag
     PsErrOverLitInKind -> ErrorWithoutFlag
     PsErrSumOrTupleKind -> ErrorWithoutFlag
@@ -464,7 +461,6 @@ instance Diagnostic PsMessage where
     PsErrLamInKind -> noHints
     PsErrTyLamInKind -> noHints
     PsErrCaseInKind -> noHints
-    PsErrKindCon -> noHints
     PsErrLitInKind -> noHints
     PsErrOverLitInKind -> noHints
     PsErrSumOrTupleKind -> noHints

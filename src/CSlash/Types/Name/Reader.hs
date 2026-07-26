@@ -65,11 +65,29 @@ unknownToData (Unqual (OccName UNKNOWN_NS fs)) = Unqual (OccName DataName fs)
 unknownToData (Qual mn (OccName UNKNOWN_NS fs)) = Qual mn (OccName DataName fs)
 unknownToData other = pprPanic "unknownToData" (ppr other)
 
-unknownToTcCls :: RdrName -> RdrName
-unknownToTcCls (Unqual (OccName UNKNOWN_NS fs)) = Unqual (OccName TcClsName fs)  
-unknownToTcCls (Qual mn (OccName UNKNOWN_NS fs)) = Qual mn (OccName TcClsName fs)
-unknownToTcCls n@(Exact {}) = n
-unknownToTcCls other = pprPanic "unknownToTcCls" (ppr other)
+unknownToTc :: RdrName -> RdrName
+unknownToTc (Unqual (OccName UNKNOWN_NS fs)) = Unqual (OccName TcName fs)  
+unknownToTc (Qual mn (OccName UNKNOWN_NS fs)) = Qual mn (OccName TcName fs)
+unknownToTc n@(Exact {}) = n
+unknownToTc other = pprPanic "unknownToTc" (ppr other)
+
+unknownToKc :: RdrName -> RdrName
+unknownToKc (Unqual (OccName UNKNOWN_NS fs)) = Unqual (OccName KcName fs)  
+unknownToKc (Qual mn (OccName UNKNOWN_NS fs)) = Qual mn (OccName KcName fs)
+unknownToKc n@(Exact {}) = n
+unknownToKc other = pprPanic "unknownToKc" (ppr other)
+
+unknownToRow :: RdrName -> RdrName
+unknownToRow (Unqual (OccName UNKNOWN_NS fs)) = Unqual (OccName RowName fs)  
+unknownToRow (Qual mn (OccName UNKNOWN_NS fs)) = Qual mn (OccName RowName fs)
+unknownToRow n@(Exact {}) = n
+unknownToRow other = pprPanic "unknownToRow" (ppr other)
+
+unknownToTcRow :: RdrName -> RdrName
+unknownToTcRow (Unqual (OccName UNKNOWN_NS fs)) = Unqual (OccName TcRowName fs)  
+unknownToTcRow (Qual mn (OccName UNKNOWN_NS fs)) = Qual mn (OccName TcRowName fs)
+unknownToTcRow n@(Exact {}) = n
+unknownToTcRow other = pprPanic "unknownToTcRow" (ppr other)
 
 instance HasOccName RdrName where
   occName = rdrNameOcc
@@ -114,6 +132,9 @@ isRdrTyLvl rn = let occ = rdrNameOcc rn in isTcOcc occ || isTvOcc occ
 
 isRdrTc :: RdrName -> Bool
 isRdrTc rn = isTcOcc (rdrNameOcc rn)
+
+isRdrKc :: RdrName -> Bool
+isRdrKc rn = isKcOcc (rdrNameOcc rn)
 
 isRdrTyVar :: RdrName -> Bool
 isRdrTyVar rn = isTvOcc (rdrNameOcc rn)
@@ -494,7 +515,7 @@ greIsRelevant which_gres ns gre
         | isDataConNameSpace ns -> tc_too
         | otherwise -> False
         where
-          tc_too = tycons_too && isTcClsNameSpace other_ns
+          tc_too = tycons_too && isTcNameSpace other_ns
   where
     other_ns = greNameSpace gre
 

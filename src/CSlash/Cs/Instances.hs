@@ -60,6 +60,12 @@ deriving instance Data (FixitySig Rn)
 deriving instance Data (FixitySig Tc)
 deriving instance Data (FixitySig Zk)
 
+deriving instance Data (RowDecl Ps Ps)
+deriving instance Data (RowDecl Ps Rn)
+deriving instance Data (RowDecl Rn Rn)
+deriving instance Data (RowDecl Tc Tc)
+deriving instance Data (RowDecl Zk Zk)
+
 deriving instance Data (CsDecl Ps)
 deriving instance Data (CsDecl Rn)
 deriving instance Data (CsDecl Tc)

@@ -22,6 +22,7 @@ import CSlash.Utils.Outputable
 import CSlash.Utils.Lexeme
 import CSlash.Utils.Binary
 import CSlash.Utils.Misc
+import CSlash.Utils.Panic
 
 import qualified Data.Semigroup as S
 import GHC.Exts ( Int(I#), dataToTag# )
@@ -34,8 +35,11 @@ data NameSpace
   = VarName
   | TvName
   | KvName
-  | TcClsName
+  | TcName
+  | KcName
   | DataName
+  | RowName
+  | TcRowName
   | UNKNOWN_NS
   deriving Eq
 
@@ -46,8 +50,11 @@ instance Uniquable NameSpace where
   getUnique VarName = varNSUnique
   getUnique TvName = tvNSUnique
   getUnique KvName = kvNSUnique
-  getUnique TcClsName = tcNSUnique
+  getUnique TcName = tcNSUnique
+  getUnique KcName = kcNSUnique
   getUnique DataName = dataNSUnique
+  getUnique RowName = panic "rowNSUnique"
+  getUnique TcRowName = panic "tcrowNSUnique"
   getUnique UNKNOWN_NS = unknownNSUnique
 
 varName :: NameSpace
@@ -60,10 +67,7 @@ kvName :: NameSpace
 kvName = KvName
 
 tcName :: NameSpace
-tcName = TcClsName
-
-tcClsName :: NameSpace
-tcClsName = TcClsName
+tcName = TcName
 
 dataName :: NameSpace
 dataName = DataName
@@ -72,9 +76,13 @@ isDataConNameSpace :: NameSpace -> Bool
 isDataConNameSpace DataName = True
 isDataConNameSpace _ = False
 
-isTcClsNameSpace :: NameSpace -> Bool
-isTcClsNameSpace TcClsName = True
-isTcClsNameSpace _ = False
+isTcNameSpace :: NameSpace -> Bool
+isTcNameSpace TcName = True
+isTcNameSpace _ = False
+
+isKcNameSpace :: NameSpace -> Bool
+isKcNameSpace KcName = True
+isKcNameSpace _ = False
 
 isTvNameSpace :: NameSpace -> Bool
 isTvNameSpace TvName = True
@@ -107,8 +115,11 @@ pprNameSpace :: NameSpace -> SDoc
 pprNameSpace VarName = text "variable"
 pprNameSpace TvName = text "type variable"
 pprNameSpace KvName = text "kind variable"
-pprNameSpace TcClsName = text "type constructor or class"
+pprNameSpace TcName = text "type constructor"
+pprNameSpace KcName = text "kind constructor"
 pprNameSpace DataName = text "data constructor"
+pprNameSpace RowName = text "row variable"
+pprNameSpace TcRowName = text "row type constructor"
 pprNameSpace UNKNOWN_NS = text "UNKNOWN_NS"
 
 pprNonVarNameSpace :: NameSpace -> SDoc
@@ -119,8 +130,11 @@ pprNameSpaceBrief :: NameSpace -> SDoc
 pprNameSpaceBrief VarName = char 'v'
 pprNameSpaceBrief TvName = text "tv"
 pprNameSpaceBrief KvName = text "kv"
-pprNameSpaceBrief TcClsName = text "tc"
+pprNameSpaceBrief TcName = text "tc"
+pprNameSpaceBrief KcName = text "kc"
 pprNameSpaceBrief DataName = text "dc"
+pprNameSpaceBrief RowName = text "r"
+pprNameSpaceBrief TcRowName = text "tr"
 pprNameSpaceBrief UNKNOWN_NS = text "UK_NS"
 
 data OccName = OccName
@@ -342,8 +356,12 @@ isKvOcc (OccName KvName _) = True
 isKvOcc _ = False
 
 isTcOcc :: OccName -> Bool
-isTcOcc (OccName TcClsName _) = True
+isTcOcc (OccName TcName _) = True
 isTcOcc _ = False
+
+isKcOcc :: OccName -> Bool
+isKcOcc (OccName KcName _) = True
+isKcOcc _ = False
 
 isDataOcc :: OccName -> Bool
 isDataOcc (OccName DataName _) = True
@@ -362,8 +380,11 @@ isSymOcc (OccName ns s) = case ns of
   VarName -> isLexSym s
   TvName -> isLexSym s
   KvName -> isLexKdSym s
-  TcClsName -> isLexSym s
+  TcName -> isLexSym s
+  KcName -> isLexKdSym s
   DataName -> isLexConSym s
+  RowName -> isLexSym s
+  TcRowName -> isLexSym s
   UNKNOWN_NS -> False
 
 isConOccFS :: OccName -> Bool
@@ -489,8 +510,11 @@ instance Binary NameSpace where
   put_ bh VarName = putByte bh 0
   put_ bh DataName = putByte bh 1
   put_ bh TvName = putByte bh 2
-  put_ bh TcClsName = putByte bh 3
+  put_ bh TcName = putByte bh 3
   put_ bh KvName = putByte bh 4
+  put_ bh KcName = putByte bh 5
+  put_ bh RowName = putByte bh 6
+  put_ bh TcRowName = putByte bh 7
   put_ _ UNKNOWN_NS = error "put_ bh UNKNOWN_NS"
   get bh = do
     h <- getByte bh
@@ -498,8 +522,11 @@ instance Binary NameSpace where
       0 -> return VarName
       1 -> return DataName
       2 -> return TvName
-      3 -> return TcClsName
-      _ -> return KvName
+      3 -> return TcName
+      4 -> return KvName
+      5 -> return KcName
+      6 -> return RowName
+      _ -> return TcRowName
 
 instance Binary OccName where
   put_ bh (OccName aa ab) = do

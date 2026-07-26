@@ -60,6 +60,11 @@ type instance XTyFunBind (CsPass pL) Rn = ([Name], FreeVars)
 type instance XTyFunBind (CsPass pL) Tc = NoExtField
 type instance XTyFunBind (CsPass pL) Zk = NoExtField
 
+type instance XKiRowBind (CsPass pL) Ps = [AddEpAnn]
+type instance XKiRowBind (CsPass pL) Rn = NoExtField
+type instance XKiRowBind (CsPass pL) Tc = NoExtField
+type instance XKiRowBind (CsPass pL) Zk = NoExtField
+
 type instance XXCsBindsLR Ps pR = DataConCantHappen
 type instance XXCsBindsLR Rn pR = DataConCantHappen
 type instance XXCsBindsLR Tc pR = AbsBinds Tc
@@ -184,6 +189,7 @@ ppr_monobind (FunBind { fun_id = fun
                 Zk | (wrap, _) <- ext -> ppr wrap
 
 ppr_monobind (TyFunBind _ _ _) = text "TyFunBind ppr non implemented"
+ppr_monobind (KiRowBind {}) = text "KiRowBind ppr not implemented"
 ppr_monobind (TCVarBind { tcvar_id = var, tcvar_rhs = rhs })
   = sep [pprBndr CasePatBind var, nest 2 $ equals <+> pprExpr (unLoc rhs)]
 ppr_monobind (XCsBindsLR b) = case csPass @idL of
@@ -222,6 +228,16 @@ type instance XFixitySig Rn = NamespaceSpecifier
 type instance XFixitySig Tc = NoExtField
 type instance XFixitySig Zk = NoExtField
 
+type instance XRowSigD Ps Ps = AnnSig
+type instance XRowSigD (CsPass p) Rn = NoExtField
+type instance XRowSigD (CsPass p) Tc = NoExtField
+type instance XRowSigD (CsPass p) Zk = NoExtField
+
+type instance XRowTySigD Ps Ps = AnnSig
+type instance XRowTySigD (CsPass p) Rn = NoExtField
+type instance XRowTySigD (CsPass p) Tc = NoExtField
+type instance XRowTySigD (CsPass p) Zk = NoExtField
+
 data NamespaceSpecifier
   = NoNamespaceSpecifier
   | TypeNamespaceSpecifier (EpToken "type")
@@ -229,7 +245,7 @@ data NamespaceSpecifier
 
 coveredByNamespaceSpecifier :: NamespaceSpecifier -> NameSpace -> Bool
 coveredByNamespaceSpecifier NoNamespaceSpecifier = const True
-coveredByNamespaceSpecifier TypeNamespaceSpecifier{} = isTcClsNameSpace <||> isTvNameSpace
+coveredByNamespaceSpecifier TypeNamespaceSpecifier{} = isTcNameSpace <||> isTvNameSpace
 
 data AnnSig = AnnSig
   { asColon :: AddEpAnn
@@ -273,3 +289,4 @@ type instance Anno (CsBindLR (CsPass idL) (CsPass idR)) = SrcSpanAnnA
 type instance Anno (Sig (CsPass p)) = SrcSpanAnnA
 
 type instance Anno (FixitySig (CsPass p)) = SrcSpanAnnA
+type instance Anno (RowDecl (CsPass idL) (CsPass idR)) = SrcSpanAnnA

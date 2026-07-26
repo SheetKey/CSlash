@@ -58,6 +58,7 @@ type family XXValBindsLR x x'
 -- CsBindLR type families
 type family XFunBind x x'
 type family XTyFunBind x x'
+type family XKiRowBind x x'
 type family XTCVarBind x x'
 type family XXCsBindsLR x x'
 
@@ -68,6 +69,10 @@ type family XFixSig x
 
 -- FixitySig type families
 type family XFixitySig x
+
+-- KiRow type families
+type family XRowSigD x x'
+type family XRowTySigD x x'
 
 -- =====================================================================
 -- Type families for the CsDecls extension points
@@ -238,6 +243,7 @@ type family XIETyVar x
 -- IEWrappedName type families
 type family XIEName p
 type family XIETyName p
+type family XIEKiName p
 
 -- =====================================================================
 -- Type families for the CsKind type families

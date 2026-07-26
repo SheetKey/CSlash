@@ -150,7 +150,6 @@ type family CsDiagnosticCode c = n | n -> c where
   CsDiagnosticCode "PsErrLamInKind"                                = 32858
   CsDiagnosticCode "PsErrTyLamInKind"                              = 90808
   CsDiagnosticCode "PsErrCaseInKind"                               = 60521
-  CsDiagnosticCode "PsErrKindCon"                                  = 33573
   CsDiagnosticCode "PsErrLitInKind"                                = 19645
   CsDiagnosticCode "PsErrOverLitInKind"                            = 59521
   CsDiagnosticCode "PsErrSumOrTupleKind"                           = 12064

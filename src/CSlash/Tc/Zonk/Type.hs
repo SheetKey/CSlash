@@ -438,6 +438,8 @@ zonk_bind bind@(FunBind { fun_id = L loc var
 
 zonk_bind bind@(TyFunBind {}) = panic "zonk_bind TyFunBind"
 
+zonk_bind bind@(KiRowBind {}) = panic "zonk_bind KiRowBind"
+
 zonk_bind bind@(TCVarBind {}) = panic "zonk_bind TCVarBind"
 
 zonk_bind (XCsBindsLR (AbsBinds { abs_tvs = tyvars

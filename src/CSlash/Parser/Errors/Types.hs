@@ -75,7 +75,6 @@ data PsMessage
   | PsErrLamInKind
   | PsErrTyLamInKind
   | PsErrCaseInKind
-  | PsErrKindCon
   | PsErrLitInKind
   | PsErrOverLitInKind
   | PsErrSumOrTupleKind
