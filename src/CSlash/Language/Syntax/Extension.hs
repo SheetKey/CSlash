@@ -226,6 +226,13 @@ type family XCsForAll x
 type family XKindedTyVar x
 type family XImpKindedTyVar x
 
+-- ---------------------------------------------------------------------
+-- CsSetRows type families
+type family XCsSetRows x
+type family XSetRows x
+type family XSetRow x
+type family XSetTyRow x
+
 -- =====================================================================
 -- Type families for the CsImpExp type families
 

@@ -137,6 +137,8 @@ rnCsTy env (CsUnboundTyVar _ v) = return (CsUnboundTyVar noExtField v, emptyFVs)
 
 rnCsTy _ (CsSelf x) = dataConCantHappen x
 
+rnCsTy _ (CsSetRows _ _ _) = panic "rnCsTy setrows"
+
 rnCsTy env (CsAppTy _ ty1 ty2) = do
   (ty1', fvs1) <- rnLCsTy env ty1
   (ty2', fvs2) <- rnLCsTy env ty2

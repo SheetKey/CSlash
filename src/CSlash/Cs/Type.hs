@@ -17,6 +17,7 @@ module CSlash.Cs.Type
   , CsTyPat(..)
   , CsSigType(..), LCsSigType
   , CsTyTupArg(..)
+  , CsSetRows(..), CsSetRow(..)
 
   , CsConDetails(..)
 
@@ -149,6 +150,26 @@ type instance XTyMissing Zk = NoExtField -- should be Scaled Type
 type instance XValArg (CsPass _) = NoExtField
 type instance XTypeArg (CsPass _) = NoExtField
 type instance XArgPar (CsPass _) = SrcSpan
+
+type instance XCsSetRows Ps = NoExtField
+type instance XCsSetRows Rn = NoExtField
+type instance XCsSetRows Tc = NoExtField
+type instance XCsSetRows Zk = NoExtField
+
+type instance XSetRows Ps = [AddEpAnn]
+type instance XSetRows Rn = NoExtField
+type instance XSetRows Tc = NoExtField
+type instance XSetRows Zk = NoExtField
+
+type instance XSetRow Ps = AddEpAnn
+type instance XSetRow Rn = NoExtField
+type instance XSetRow Tc = NoExtField
+type instance XSetRow Zk = NoExtField
+
+type instance XSetTyRow Ps = [AddEpAnn]
+type instance XSetTyRow Rn = NoExtField
+type instance XSetTyRow Tc = NoExtField
+type instance XSetTyRow Zk = NoExtField
 
 data EpAnnUnboundTyVar = EpAnnUnboundTyVar
   { csUnboundTyBackquotes :: (EpaLocation, EpaLocation)
@@ -311,6 +332,16 @@ ppr_mono_ty (TySectionR _ op ty)
                              , text "x_" ])
                         4 (pp_ty <> rparen)
     pp_infixly v = sep [v, pp_ty]
+ppr_mono_ty (CsSetRows _ ty rows)
+  = hang (ppr_mono_lty ty) 2 (ppr_set_rows rows)
+
+ppr_set_rows :: OutputableBndrId p => LCsSetRows (CsPass p) -> SDoc
+ppr_set_rows (L _ (SetRows _ rows))
+  = dot <> (braces (fsep (punctuate comma (map ppr_set_row rows))))
+
+ppr_set_row :: OutputableBndrId p => LCsSetRow (CsPass p) -> SDoc
+ppr_set_row (L _ (SetRow _ id e)) = ppr id <+> equals <+> ppr (unLoc e)
+ppr_set_row (L _ (SetTyRow _ id t)) = text "type" <+> ppr id <+> equals <+> ppr t
 
 ppr_infix_ty :: (OutputableBndrId p) => CsType (CsPass p) -> Maybe SDoc
 ppr_infix_ty (CsTyVar _ (L _ v)) = Just (pprInfixOcc v)
@@ -336,6 +367,7 @@ csTyNeedsParens prec = go
     go (CsTyVar{}) = False
     go (CsUnboundTyVar{}) = False
     go (CsSelf{}) = False
+    go (CsSetRows{}) = False
     go (CsTyLamTy{}) = prec > topPrec
     go (CsAppTy{}) = prec >= appPrec
     go (CsOpTy{}) = prec >= opPrec
@@ -381,3 +413,6 @@ type instance Anno (CsTyVarBndr Zk) = SrcSpanAnnA
 type instance Anno [LocatedA (Match (CsPass p) (LocatedA (CsType (CsPass p))))] = SrcSpanAnnL
 type instance Anno (Match (CsPass p) (LocatedA (CsType (CsPass p)))) = SrcSpanAnnA
 type instance Anno (GRHS (CsPass p) (LocatedA (CsType (CsPass p)))) = EpAnnCO
+
+type instance Anno (CsSetRows (CsPass p)) = SrcSpanAnnA
+type instance Anno (CsSetRow (CsPass p)) = SrcSpanAnnA

@@ -205,6 +205,16 @@ deriving instance Data (CsType Rn)
 deriving instance Data (CsType Tc)
 deriving instance Data (CsType Zk)
 
+deriving instance Data (CsSetRows Ps)
+deriving instance Data (CsSetRows Rn)
+deriving instance Data (CsSetRows Tc)
+deriving instance Data (CsSetRows Zk)
+
+deriving instance Data (CsSetRow Ps)
+deriving instance Data (CsSetRow Rn)
+deriving instance Data (CsSetRow Tc)
+deriving instance Data (CsSetRow Zk)
+
 deriving instance Data (CsTyTupArg Ps)
 deriving instance Data (CsTyTupArg Rn)
 deriving instance Data (CsTyTupArg Tc)

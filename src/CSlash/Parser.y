@@ -413,6 +413,24 @@ rowdecl :: { LRowDecl Ps Ps }
                                  (AnnSig (mu AnnColon $3) [mj AnnType $1])
                                  (fmap unknownToTc $2) $4 }
 
+set_rows :: { LCsSetRows Ps }
+  : '.{' rowdefns '}' {% amsA' (sLL $1 $> (SetRows [ mu AnnOpenDotC $1
+                                                   , mu AnnCloseC $> ]
+                                           $2)) }
+
+rowdefns :: { [LCsSetRow Ps] }
+  : rowdefn ',' rowdefns {% do { h <- addTrailingCommaA $1 (gl $2)
+                               ; return (h : $3) } }
+  | rowdefn { [$1] }
+
+rowdefn :: { LCsSetRow Ps }
+  : a_varid '=' sig_exp {% runPV (unETP $3) >>= \ ($3 :: LCsExpr Ps) ->
+                           amsA' $ sLL $1 $> $
+                           SetRow (mj AnnEqual $2) $1 $3 }
+  | 'type' a_varid '=' context_exp {% runPV (unETP $4) >>= \($4 :: LCsType Ps) ->
+                                      amsA' $ sLL $1 $> $
+                                      SetTyRow [mj AnnType $1, mj AnnEqual $3] $2 $4 }
+
 -----------------------------------------------------------------------------
 -- Value definitions
 
@@ -745,6 +763,11 @@ aexp :: { ETP }
                                        $4 >>= \ $4 ->
                                        mkCsCasePV (comb3 $1 $3 $4) $2 $4
                                                   (EpAnnCsCase (glAA $1) (glAA $3) []) }
+
+  | aexp1 set_rows {% runPV (unETP $1) >>= \($1 :: LCsType Ps) ->
+                      fmap etpFromTy (amsA' $ sLL $1 $> $
+                      CsSetRows noExtField $1 $2) }
+
   | aexp1 %shift { $1 }
 
 aexp1 :: { ETP }
