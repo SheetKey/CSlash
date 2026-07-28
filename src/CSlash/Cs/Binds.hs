@@ -61,7 +61,7 @@ type instance XTyFunBind (CsPass pL) Tc = NoExtField
 type instance XTyFunBind (CsPass pL) Zk = NoExtField
 
 type instance XKiRowBind (CsPass pL) Ps = [AddEpAnn]
-type instance XKiRowBind (CsPass pL) Rn = NoExtField
+type instance XKiRowBind (CsPass pL) Rn = ([Name], FreeVars)
 type instance XKiRowBind (CsPass pL) Tc = NoExtField
 type instance XKiRowBind (CsPass pL) Zk = NoExtField
 
@@ -229,12 +229,12 @@ type instance XFixitySig Tc = NoExtField
 type instance XFixitySig Zk = NoExtField
 
 type instance XRowSigD Ps Ps = AnnSig
-type instance XRowSigD (CsPass p) Rn = NoExtField
+type instance XRowSigD (CsPass p) Rn = ([Name], FreeVars)
 type instance XRowSigD (CsPass p) Tc = NoExtField
 type instance XRowSigD (CsPass p) Zk = NoExtField
 
 type instance XRowTySigD Ps Ps = AnnSig
-type instance XRowTySigD (CsPass p) Rn = NoExtField
+type instance XRowTySigD (CsPass p) Rn = ([Name], FreeVars)
 type instance XRowTySigD (CsPass p) Tc = NoExtField
 type instance XRowTySigD (CsPass p) Zk = NoExtField
 

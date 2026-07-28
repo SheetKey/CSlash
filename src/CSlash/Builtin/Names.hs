@@ -171,6 +171,9 @@ wildCardKey = mkWiredInMiscIdUnique 0
 voidPrimIdKey :: Unique
 voidPrimIdKey = mkWiredInMiscIdUnique 24
 
+selfPrimIdKey :: Unique
+selfPrimIdKey = mkWiredInMiscIdUnique 25
+
 voidArgIdKey :: Unique
 voidArgIdKey = mkWiredInMiscIdUnique 40
 

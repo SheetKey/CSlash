@@ -328,7 +328,7 @@ rnTopSrcDecls group = do
   return (tcg_env', rn_decls)
 
 tcTopSrcDecls :: CsGroup Rn -> TcM (TcGblEnv Tc, TcLclEnv)
-tcTopSrcDecls (CsGroup { cs_typeds = type_ds
+tcTopSrcDecls (CsGroup { cs_tykids = type_ds -- TODO!
                        , cs_valds = cs_val_binds@(XValBindsLR (NValBinds val_binds val_sigs))
                        }) = do
   traceTc "Tc2 (src)" empty
@@ -356,7 +356,7 @@ tcTopSrcDecls (CsGroup { cs_typeds = type_ds
 
 tcTopSrcDecls _ = panic "tcTopSrcDecls: ValBindsIn"
 
-tcTypeDecls :: [TypeGroup Rn] -> TcM (TcGblEnv Tc)
+tcTypeDecls :: [TyKiGroup Rn] -> TcM (TcGblEnv Tc)
 tcTypeDecls type_decls = do
   tcg_env <- tcTyDecls type_decls
   setGblEnv tcg_env $ do

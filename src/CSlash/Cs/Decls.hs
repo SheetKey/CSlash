@@ -45,14 +45,14 @@ partitionBindsAndSigs ((L l decl) : ds) =
 appendGroups :: CsGroup (CsPass p) -> CsGroup (CsPass p) -> CsGroup (CsPass p)
 appendGroups
   CsGroup { cs_valds = val_groups1
-          , cs_typeds = typeds1
+          , cs_tykids = tykids1
           , cs_fixds = fixds1 }
   CsGroup { cs_valds = val_groups2
-          , cs_typeds = typeds2
+          , cs_tykids = tykids2
           , cs_fixds = fixds2 }
   = CsGroup { cs_ext = noExtField
             , cs_valds = val_groups1 `plusCsValBinds` val_groups2
-            , cs_typeds = typeds1 ++ typeds2
+            , cs_tykids = tykids1 ++ tykids2
             , cs_fixds = fixds1 ++ fixds2 }            
 
 instance (OutputableBndrId p) => Outputable (CsDecl (CsPass p)) where
@@ -67,17 +67,18 @@ emptyRnGroup = emptyGroup { cs_valds = emptyValBindsOut }
 emptyGroup :: CsGroup (CsPass p)
 emptyGroup = CsGroup { cs_ext = noExtField
                      , cs_valds = error "emptyGroup cs_valds: Can't happen"
-                     , cs_typeds = []
+                     , cs_tykids = []
                      , cs_fixds = []
                      }
 
 instance OutputableBndrId p => Outputable (CsGroup (CsPass p)) where
-  ppr (CsGroup { cs_valds = val_decls, cs_typeds = type_decls, cs_fixds = fix_decls })
+  ppr (CsGroup { cs_valds = val_decls, cs_tykids = tyki_decls, cs_fixds = fix_decls })
     = vcat_mb empty
       [ ppr_ds fix_decls
       , if isEmptyValBinds val_decls then Nothing else Just (ppr val_decls)
-      , ppr_ds (typeGroupKindSigs type_decls)
-      , ppr_ds (typeGroupTypeDecls type_decls)
+      , ppr_ds (tykiGroupKindSigs tyki_decls)
+      , ppr_ds (tykiGroupTypeDecls tyki_decls)
+      , ppr_ds (tykiGroupKindDecls tyki_decls)
       ]
     where
       ppr_ds :: Outputable a => [a] -> Maybe SDoc
@@ -89,10 +90,10 @@ instance OutputableBndrId p => Outputable (CsGroup (CsPass p)) where
       vcat_mb gap (Nothing : ds) = vcat_mb gap ds
       vcat_mb gap (Just d : ds) = gap $$ d $$ vcat_mb blankLine ds
 
-instance OutputableBndrId p => Outputable (TypeGroup (CsPass p)) where
-  ppr (TypeGroup { group_typeds = typeds, group_kisigs = kisigs })
-    = hang (text "TypeGroup") 2 $
-      ppr kisigs $$ ppr typeds
+instance OutputableBndrId p => Outputable (TyKiGroup (CsPass p)) where
+  ppr (TyKiGroup { group_typeds = typeds, group_kindds = kindds, group_kisigs = kisigs })
+    = hang (text "TyKiGroup") 2 $
+      ppr kisigs $$ ppr typeds $$ ppr kindds
 
 pprTyDeclFlavor :: CsBind (CsPass p) -> SDoc
 pprTyDeclFlavor (TyFunBind {}) = text "type"
@@ -120,5 +121,21 @@ tydName
   => CsBind (CsPass p)
   -> IdP (CsPass p)
 tydName = unLoc . typeDeclLName
+
+tykiDeclLName
+  :: ( Anno (IdCsP p) ~ SrcSpanAnnN
+     , OutputableBndrId p )
+  => CsBind (CsPass p)
+  -> LocatedN (IdP (CsPass p))
+tykiDeclLName (TyFunBind { tyfun_id = ln }) = ln
+tykiDeclLName (KiRowBind { kirow_id = ln }) = ln
+tykiDeclLName other = pprPanic "tykiDeclLName" (ppr other)
+
+tykidName
+  :: ( Anno (IdCsP p) ~ SrcSpanAnnN
+     , OutputableBndrId p )
+  => CsBind (CsPass p)
+  -> IdP (CsPass p)
+tykidName = unLoc . tykiDeclLName
 
 type instance Anno (CsDecl (CsPass _)) = SrcSpanAnnA

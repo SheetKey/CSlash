@@ -198,6 +198,7 @@ type family XForAllTy x
 type family XQualTy x
 type family XTyVar x
 type family XUnboundTyVar x
+type family XCsSelf x
 type family XAppTy x
 type family XFunTy x
 type family XTupleTy x

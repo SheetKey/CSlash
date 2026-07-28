@@ -383,9 +383,12 @@ discardMsg = text "(Some bindings suppressed;" <+>
 data CsDocContext
   = TypeSigCtx SDoc
   | TySynCtx (LocatedN RdrName)
+  | KiSynCtx (LocatedN RdrName)
   | PatCtx
   | ExprWithTySigCtx
   | CsTypeCtx
+  | RowTypeSigCtx (LocatedN RdrName)
+  | RowTySynCtx (LocatedN RdrName)
 
 data MatchArgBadMatches where
   MatchArgMatches :: { matchArgFirstMatch :: LocatedA (Match Rn body)

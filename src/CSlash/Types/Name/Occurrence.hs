@@ -38,8 +38,8 @@ data NameSpace
   | TcName
   | KcName
   | DataName
-  | RowName
-  | TcRowName
+  | RowName FastString -- the kicon
+  | TcRowName FastString -- the kicon
   | UNKNOWN_NS
   deriving Eq
 
@@ -53,8 +53,8 @@ instance Uniquable NameSpace where
   getUnique TcName = tcNSUnique
   getUnique KcName = kcNSUnique
   getUnique DataName = dataNSUnique
-  getUnique RowName = panic "rowNSUnique"
-  getUnique TcRowName = panic "tcrowNSUnique"
+  getUnique (RowName p) = mkRowNSUnique p
+  getUnique (TcRowName p) = mkTcRowNSUnique p
   getUnique UNKNOWN_NS = unknownNSUnique
 
 varName :: NameSpace
@@ -76,8 +76,17 @@ isDataConNameSpace :: NameSpace -> Bool
 isDataConNameSpace DataName = True
 isDataConNameSpace _ = False
 
+isRowNameSpace :: NameSpace -> Bool
+isRowNameSpace RowName{} = True
+isRowNameSpace _ = False
+
+isTcRowNameSpace :: NameSpace -> Bool
+isTcRowNameSpace TcRowName{} = True
+isTcRowNameSpace _ = False
+
 isTcNameSpace :: NameSpace -> Bool
 isTcNameSpace TcName = True
+isTcNameSpace TcRowName{} = True
 isTcNameSpace _ = False
 
 isKcNameSpace :: NameSpace -> Bool
@@ -94,12 +103,14 @@ isKvNameSpace _ = False
 
 isTermVarNameSpace :: NameSpace -> Bool
 isTermVarNameSpace VarName = True
+isTermVarNameSpace RowName{} = True
 isTermVarNameSpace _ = False
 
 isVarNameSpace :: NameSpace -> Bool
 isVarNameSpace TvName = True
 isVarNameSpace KvName = True
 isVarNameSpace VarName = True
+isVarNameSpace RowName{} = True
 isVarNameSpace _ = False
 
 isUnknownNameSpace :: NameSpace -> Bool
@@ -109,6 +120,7 @@ isUnknownNameSpace _ = False
 isValNameSpace :: NameSpace -> Bool
 isValNameSpace DataName = True
 isValNameSpace VarName = True
+isValNameSpace RowName{} = True
 isValNameSpace _ = False
 
 pprNameSpace :: NameSpace -> SDoc
@@ -118,8 +130,8 @@ pprNameSpace KvName = text "kind variable"
 pprNameSpace TcName = text "type constructor"
 pprNameSpace KcName = text "kind constructor"
 pprNameSpace DataName = text "data constructor"
-pprNameSpace RowName = text "row variable"
-pprNameSpace TcRowName = text "row type constructor"
+pprNameSpace (RowName p) = text "row variable of" <+> ftext p
+pprNameSpace (TcRowName p) = text "row type constructor of" <+> ftext p
 pprNameSpace UNKNOWN_NS = text "UNKNOWN_NS"
 
 pprNonVarNameSpace :: NameSpace -> SDoc
@@ -133,8 +145,8 @@ pprNameSpaceBrief KvName = text "kv"
 pprNameSpaceBrief TcName = text "tc"
 pprNameSpaceBrief KcName = text "kc"
 pprNameSpaceBrief DataName = text "dc"
-pprNameSpaceBrief RowName = text "r"
-pprNameSpaceBrief TcRowName = text "tr"
+pprNameSpaceBrief RowName{} = text "r"
+pprNameSpaceBrief TcRowName{} = text "tr"
 pprNameSpaceBrief UNKNOWN_NS = text "UK_NS"
 
 data OccName = OccName
@@ -220,6 +232,19 @@ mkUnknownOcc = mkOccName UNKNOWN_NS
 
 mkUnknownOccFS :: FastString -> OccName
 mkUnknownOccFS = mkOccNameFS UNKNOWN_NS
+
+mkRowOccFS :: FastString -> FastString -> OccName
+mkRowOccFS kicon = mkOccNameFS (RowName kicon)
+
+mkTcRowOccFS :: FastString -> FastString -> OccName
+mkTcRowOccFS kicon = mkOccNameFS (TcRowName kicon)
+
+varToRowOcc :: HasDebugCallStack => FastString -> OccName -> OccName
+varToRowOcc kicon (OccName ns s) =
+  case ns of
+    VarName -> mkRowOccFS kicon s
+    TcName -> mkTcRowOccFS kicon s
+    _ -> panic "varToRowOcc"
 
 class HasOccName name where
   occName :: name -> OccName
@@ -383,8 +408,8 @@ isSymOcc (OccName ns s) = case ns of
   TcName -> isLexSym s
   KcName -> isLexKdSym s
   DataName -> isLexConSym s
-  RowName -> isLexSym s
-  TcRowName -> isLexSym s
+  RowName{} -> isLexSym s
+  TcRowName{} -> isLexSym s
   UNKNOWN_NS -> False
 
 isConOccFS :: OccName -> Bool
@@ -513,8 +538,12 @@ instance Binary NameSpace where
   put_ bh TcName = putByte bh 3
   put_ bh KvName = putByte bh 4
   put_ bh KcName = putByte bh 5
-  put_ bh RowName = putByte bh 6
-  put_ bh TcRowName = putByte bh 7
+  put_ bh (RowName p) = do
+    putByte bh 6
+    put_ bh p
+  put_ bh (TcRowName p) = do
+    putByte bh 7
+    put_ bh p
   put_ _ UNKNOWN_NS = error "put_ bh UNKNOWN_NS"
   get bh = do
     h <- getByte bh
@@ -525,8 +554,12 @@ instance Binary NameSpace where
       3 -> return TcName
       4 -> return KvName
       5 -> return KcName
-      6 -> return RowName
-      _ -> return TcRowName
+      6 -> do
+        parent <- get bh
+        return $ RowName parent
+      _ -> do
+        parent <- get bh
+        return $ TcRowName parent
 
 instance Binary OccName where
   put_ bh (OccName aa ab) = do

@@ -35,6 +35,7 @@ import CSlash.Utils.Misc as Utils
 import Control.DeepSeq
 import Data.Data
 import Data.List (sort)
+import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Semigroup as S
 
@@ -77,17 +78,17 @@ unknownToKc (Qual mn (OccName UNKNOWN_NS fs)) = Qual mn (OccName KcName fs)
 unknownToKc n@(Exact {}) = n
 unknownToKc other = pprPanic "unknownToKc" (ppr other)
 
-unknownToRow :: RdrName -> RdrName
-unknownToRow (Unqual (OccName UNKNOWN_NS fs)) = Unqual (OccName RowName fs)  
-unknownToRow (Qual mn (OccName UNKNOWN_NS fs)) = Qual mn (OccName RowName fs)
-unknownToRow n@(Exact {}) = n
-unknownToRow other = pprPanic "unknownToRow" (ppr other)
+-- unknownToRow :: RdrName -> RdrName
+-- unknownToRow (Unqual (OccName UNKNOWN_NS fs)) = Unqual (OccName RowName fs)  
+-- unknownToRow (Qual mn (OccName UNKNOWN_NS fs)) = Qual mn (OccName RowName fs)
+-- unknownToRow n@(Exact {}) = n
+-- unknownToRow other = pprPanic "unknownToRow" (ppr other)
 
-unknownToTcRow :: RdrName -> RdrName
-unknownToTcRow (Unqual (OccName UNKNOWN_NS fs)) = Unqual (OccName TcRowName fs)  
-unknownToTcRow (Qual mn (OccName UNKNOWN_NS fs)) = Qual mn (OccName TcRowName fs)
-unknownToTcRow n@(Exact {}) = n
-unknownToTcRow other = pprPanic "unknownToTcRow" (ppr other)
+-- unknownToTcRow :: RdrName -> RdrName
+-- unknownToTcRow (Unqual (OccName UNKNOWN_NS fs)) = Unqual (OccName TcRowName fs)  
+-- unknownToTcRow (Qual mn (OccName UNKNOWN_NS fs)) = Qual mn (OccName TcRowName fs)
+-- unknownToTcRow n@(Exact {}) = n
+-- unknownToTcRow other = pprPanic "unknownToTcRow" (ppr other)
 
 instance HasOccName RdrName where
   occName = rdrNameOcc
@@ -365,12 +366,20 @@ mkLocalGRE = mkGRE (const Nothing)
 mkLocalVanillaGRE :: Parent -> Name -> GlobalRdrElt
 mkLocalVanillaGRE = mkLocalGRE Vanilla
 
-mkLocalTyConGRE :: TyConFlavor -> Name -> GlobalRdrElt
-mkLocalTyConGRE flav nm = mkLocalGRE (IAmTyCon flav) par nm
-  where
-    par = case tyConFlavorAssoc_maybe flav of
-      Nothing -> NoParent
-      Just p -> ParentIs p
+mkLocalTyKiConGRE :: Either TyConFlavor (NonEmpty Name) -> Name -> GlobalRdrElt
+mkLocalTyKiConGRE mflav nm = case mflav of
+  Left flav -> mkLocalGRE (IAmTyCon flav) par nm
+    where
+      par = case tyConFlavorAssoc_maybe flav of
+        Nothing -> NoParent
+        Just p -> ParentIs p
+  Right rows -> mkLocalGRE (IAmKiCon rows) NoParent nm
+
+mkLocalRowGREs :: Name -> NonEmpty Name -> [GlobalRdrElt]
+mkLocalRowGREs p_nm rows =
+  [ mkLocalGRE (IAmRow row_nm p_nm) (ParentIs p_nm) row_nm
+  | row_nm <- NE.toList rows
+  ]
 
 instance HasOccName (GlobalRdrEltX info) where
   occName = greOccName
@@ -474,7 +483,8 @@ data LookupGRE info where
 
 data WhichGREs info where
   SameNameSpace :: WhichGREs info
-  RelevantGREs :: { lookupTyConsAsWell :: !Bool } -> WhichGREs GREInfo
+  RelevantGREs
+    :: { lookupTyConsAsWell :: !Bool } -> WhichGREs GREInfo
 
 instance Outputable (WhichGREs info) where
   ppr SameNameSpace = text "SameNameSpace"
@@ -511,7 +521,8 @@ greIsRelevant which_gres ns gre
   = case which_gres of
       SameNameSpace -> False
       RelevantGREs { lookupTyConsAsWell = tycons_too }
-        | ns == varName -> tc_too
+        | ns == varName -> isRowNameSpace other_ns || tc_too
+        | ns == tvName -> isTcRowNameSpace other_ns
         | isDataConNameSpace ns -> tc_too
         | otherwise -> False
         where

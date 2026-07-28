@@ -29,6 +29,7 @@ ppSourceStats
       , ("  ImpHiding      ", imp_hiding)
       , ("FixityDecls      ", fixity_sigs)
       , ("TypeDecls        ", ty_bind_ds)
+      , ("KindDecls        ", ki_bind_ds)
       , ("TypeSigs         ", bind_tys)
       , ("FunBinds         ", fn_bind_ds)
       ])
@@ -55,13 +56,14 @@ ppSourceStats
     export_ds = n_exports - export_ms
     export_all = case exports of { Nothing -> 1; _ -> 0 }
 
-    (fn_bind_ds, ty_bind_ds) = sum2 (map count_bind val_decls)
+    (fn_bind_ds, ty_bind_ds, ki_bind_ds) = sum3 (map count_bind val_decls)
 
     (imp_no, imp_qual, imp_as, imp_all, imp_partial, imp_hiding)
       = sum6 (map import_info imports)
 
-    count_bind (FunBind {}) = (1, 0)
-    count_bind (TyFunBind {}) = (0, 1)
+    count_bind (FunBind {}) = (1, 0, 0)
+    count_bind (TyFunBind {}) = (0, 1, 0)
+    count_bind (KiRowBind {}) = (0, 0, 1)
     count_bind b = pprPanic "count_bind: Unhandled binder" (ppr b)
 
     count_sigs sigs = sum2 (map sig_info sigs)
@@ -89,6 +91,11 @@ ppSourceStats
     sum2 = foldr add2 (0, 0)
       where
         add2 (x1, x2) (y1, y2) = (x1+y1, x2+y2)
+
+    sum3 :: [(Int, Int, Int)] -> (Int, Int, Int)
+    sum3 = foldr add3 (0, 0, 0)
+      where
+        add3 (x1, x2, x3) (y1, y2, y3) = (x1+y1, x2+y2, x3+y3)
 
     add6 :: (Int, Int, Int, Int, Int, Int) -> (Int, Int, Int, Int, Int, Int)
          -> (Int, Int, Int, Int, Int, Int)

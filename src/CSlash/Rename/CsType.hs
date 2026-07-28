@@ -36,6 +36,7 @@ import CSlash.Types.Basic  ( TypeOrKind(..) )
 import CSlash.Utils.Outputable
 import CSlash.Utils.Panic
 import CSlash.Data.Maybe
+import CSlash.Data.FastString (fsLit)
 
 import Data.List (nubBy, partition)
 import Control.Monad
@@ -127,10 +128,14 @@ rnCsTy env (CsQualTy { cst_ctxt = lctxt, cst_body = tau }) = do
 
 rnCsTy env (CsTyVar _ ln@(L loc rdr_name)) = do
   massertPpr (isRdrTyLvl rdr_name) (text "rnCsTy CsTyVar" <+> ppr ln)
-  name <- rnTyVar env rdr_name
-  return (CsTyVar noAnn (L loc name), unitFV name)
+  if occNameFS (rdrNameOcc rdr_name) == fsLit "self"
+    then return (CsSelf ln, emptyFVs)
+    else do name <- rnTyVar env rdr_name
+            return (CsTyVar noAnn (L loc name), unitFV name)
 
 rnCsTy env (CsUnboundTyVar _ v) = return (CsUnboundTyVar noExtField v, emptyFVs)
+
+rnCsTy _ (CsSelf x) = dataConCantHappen x
 
 rnCsTy env (CsAppTy _ ty1 ty2) = do
   (ty1', fvs1) <- rnLCsTy env ty1
@@ -231,7 +236,7 @@ rnLCsTypeWithKvs doc lty thing_inside = do
 
     stuff <- rnLCsType doc lty
 
-    thing_inside stuff kv_nms
+    thing_inside stuff kv_nms_final
 
 -- bindHsQTyVars
 -- We require all type variables to be bound (by forall or lambda)

@@ -79,5 +79,5 @@ data FixitySig pass
 type LRowDecl idL idR = XRec idL (RowDecl idL idR)
 
 data RowDecl idL idR
-  = RowSigD (XRowSigD idL idR) (LIdP idL) (LCsSigType idR)
+  = RowSigD (XRowSigD idL idR) (LIdP idL) (LCsType idR)
   | RowTySigD (XRowTySigD idL idR) (LIdP idL) (LCsKind idR)

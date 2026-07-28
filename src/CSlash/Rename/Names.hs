@@ -1,4 +1,6 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE LambdaCase #-}
+
 module CSlash.Rename.Names where
 
 import CSlash.Driver.Env
@@ -255,26 +257,74 @@ extendGlobalRdrEnvRn new_gres new_fixities = checkNoErrs $ do
 ********************************************************************* -}
 
 getLocalNonValBinders :: MiniFixityEnv -> CsGroup Ps -> RnM ((TcGblEnv Tc, TcLclEnv), NameSet)
-getLocalNonValBinders fixity_env CsGroup{ cs_valds = binds, cs_typeds = type_decls } = do
-  tc_gres <- concatMapM new_tc (typeGroupTypeDecls type_decls)
-  traceRn "getLocalNonValBinders 1" (ppr tc_gres)
-  envs <- extendGlobalRdrEnvRn tc_gres fixity_env
+getLocalNonValBinders fixity_env CsGroup{ cs_valds = binds
+                                        , cs_tykids = tyki_decls } = do
+  tkc_gres <- concatMapM new_tkc (tykiGroupTypeDecls tyki_decls ++ tykiGroupKindDecls tyki_decls)
+  traceRn "getLocalNonValBinders 1" (ppr tkc_gres)
+  envs <- extendGlobalRdrEnvRn tkc_gres fixity_env
   restoreEnvs envs $ do
-    let new_bndrs = gresToNameSet tc_gres
+    let new_bndrs = gresToNameSet tkc_gres
     traceRn "getLocalNonValBinders 2" (Outputable.empty)
     envs <- extendGlobalRdrEnvRn [] fixity_env
     return (envs, new_bndrs)
 
   where
-    new_tc :: LCsBind Ps -> RnM [GlobalRdrElt]
-    new_tc tc_decl = do
-      let TyDeclBinders (main_bndr, tc_flav) = csLTyDeclBinders tc_decl
-      tycon_name <- newTopSrcBinder $ la2la main_bndr
-      let tc_gre = mkLocalTyConGRE tc_flav tycon_name
-      traceRn "getLocalNonValBinders new_tc" $
-        vcat [ text "tycon:" <+> ppr tycon_name
-             , text "tc_gre:" <+> ppr tc_gre ]
-      return $ [tc_gre]
+    new_tkc :: LCsBind Ps -> RnM [GlobalRdrElt]
+    new_tkc tkc_decl = do
+      let TyKiDeclBinders (main_bndr, tkc_extra) = csLTyKiDeclBinders tkc_decl
+      con_name <- newTopSrcBinder $ la2la main_bndr
+      tkc_extra <- case tkc_extra of
+        Left flav -> return $ Left flav
+        Right (LRows val_i val_rows ty_i ty_rows) -> do
+          val_rows' <- mapM (newRowLabel con_name) val_rows
+          ty_rows' <- mapM (newRowLabel con_name) ty_rows
+          add_dup_row_errs con_name val_rows' val_i
+          add_dup_row_errs con_name ty_rows' ty_i
+          return $ Right $ LRows val_i val_rows' ty_i ty_rows'
+      let tkc_extra' = row_names con_name <$> tkc_extra
+          tkc_gre = mkLocalTyKiConGRE tkc_extra' con_name
+
+          row_gres = case tkc_extra' of
+            Right row_env -> mkLocalRowGREs con_name row_env
+            _ -> []
+
+      traceRn "getLocalNonValBinders new_tkc" $
+        vcat [ text "con:" <+> ppr con_name
+             , text "tkc_gre:" <+> ppr tkc_gre
+             , text "row_gres:" <+> ppr row_gres ]
+      return $ tkc_gre : row_gres
+
+    row_names :: Name -> LRows 'Renamed -> NonEmpty Name
+    row_names con_name (LRows v_idxs v_rows t_idxs t_rows) =
+      case ( fmap ((v_rows IntMap.!) . unLoc) v_idxs
+           , fmap ((t_rows IntMap.!) . unLoc) t_idxs ) of
+        ([], []) -> panic "mk_row_env impossible"
+        (v:vs, ts) -> unLoc <$> (v NE.:| (vs ++ ts))
+        ([], t:ts) -> unLoc <$> (t NE.:| ts)
+
+    add_dup_row_errs
+      :: Name
+      -> IntMap (LocatedN Name)
+      -> [Located Int]
+      -> IOEnv (Env (TcGblEnv Tc) TcLclEnv) ()
+    add_dup_row_errs kicon all_rows con_rows
+      = let (_, dups) = removeDups (comparing unLoc) con_rows
+        in for_ dups $ \dup_rows ->
+                         let loc = case dup_rows of
+                               _ :| (L loc _ : _) -> loc
+                               L loc _ :| _ -> loc
+                             dup_rdrs = fmap (nameRdrName . unLoc . (all_rows IntMap.!) . unLoc)
+                                        dup_rows
+                         in addErrAt loc $ panic "TcRnDuplicateRowName"
+
+newRowLabel :: Name -> LocatedN RdrName -> RnM (LocatedN Name)
+newRowLabel ki_con (L loc row) = L loc <$> newTopSrcBinder (L loc row')
+  where
+    row'
+      | isExact row
+      = panic "isExact row"
+      | otherwise
+      = mkRdrUnqual $ varToRowOcc (occNameFS $ nameOccName ki_con) (rdrNameOcc row)
 
 {- *********************************************************************
 *                                                                      *

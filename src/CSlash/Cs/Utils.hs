@@ -45,7 +45,7 @@ import CSlash.Utils.Panic
 import Control.Arrow ( first )
 import Data.Foldable ( toList )
 import Data.List ( partition )
-import Data.List.NonEmpty ( nonEmpty )
+import Data.List.NonEmpty ( NonEmpty )
 import qualified Data.List.NonEmpty as NE
 
 import Data.IntMap ( IntMap )
@@ -364,19 +364,114 @@ instance IsPass p => CollectPass (CsPass p) where
       Zk -> case ext of
         AbsBinds { abs_exports = dbinds} -> (map abe_poly dbinds ++)
 
-csTyForeignBinders :: [TypeGroup Rn] -> [Name]
+csTyForeignBinders :: [TyKiGroup Rn] -> [Name]
 csTyForeignBinders type_decls = panic "csTyForeignBinders"
 
 -------------------
 
-data TyDeclBinders p = TyDeclBinders
-  { tyDeclMainBinder :: !(LocatedA (IdP (CsPass p)), TyConFlavor)
-  -- , tyDeclATs :: ![(LocatedA (IdP (CsPass p)), TyConFlavor ())]       -- ATs=associated types
-  -- , tyDeclOpSigs :: ![LocatedA (IdP (CsPass p))]                      -- class op sigs
+data TyKiDeclBinders p = TyKiDeclBinders
+  { tyKiDeclMainBinder :: !(LocatedA (IdP (CsPass p))
+                           , Either
+                             TyConFlavor -- For a type
+                             (LRows p)   -- For a kind
+                           ) 
   }
 
-csLTyDeclBinders
-  :: (IsPass p, OutputableBndrId p) => LocatedA (CsBind (CsPass p)) -> TyDeclBinders p
-csLTyDeclBinders (L loc (TyFunBind { tyfun_id = (L _ name) }))
-  = TyDeclBinders { tyDeclMainBinder = (L loc name, TypeFunFlavor) }
-csLTyDeclBinders b = pprPanic "csLTyDeclBinders" (ppr b)
+csLTyKiDeclBinders
+  :: (IsPass p, OutputableBndrId p, Anno (IdCsP p) ~ SrcSpanAnnN)
+  => LocatedA (CsBind (CsPass p))
+  -> TyKiDeclBinders p
+
+csLTyKiDeclBinders (L loc (TyFunBind { tyfun_id = (L _ name) }))
+  = TyKiDeclBinders { tyKiDeclMainBinder = (L loc name, Left TypeFunFlavor) }
+
+csLTyKiDeclBinders (L loc (KiRowBind { kirow_id = (L _ name), kirow_rows = rows }))
+  = TyKiDeclBinders { tyKiDeclMainBinder = (L loc name, Right (csRowDefnBinders rows)) }
+
+csLTyKiDeclBinders b = pprPanic "csLTyKiDeclBinders" (ppr b)
+
+data LRows p = LRows
+  { valRowsIndices :: [Located Int]
+  , valRows :: IntMap (LIdP (CsPass p))
+  , tyRowsIndices :: [Located Int]
+  , tyRows :: IntMap (LIdP (CsPass p))
+  }
+
+data RowIndices p = RowIndices
+  { valRows_I :: IntMap (LIdP (CsPass p))
+  , valRowIndices_I :: Map RdrName Int
+  , newValInt :: !Int
+  , tyRows_I :: IntMap (LIdP (CsPass p))
+  , tyRowIndices_I :: Map RdrName Int
+  , newTyInt :: !Int
+  } 
+
+emptyRowIndices :: RowIndices p
+emptyRowIndices = RowIndices
+  { valRows_I = IntMap.empty
+  , valRowIndices_I = Map.empty
+  , newValInt = 0
+  , tyRows_I = IntMap.empty
+  , tyRowIndices_I = Map.empty
+  , newTyInt = 0
+  } 
+
+csRowDefnBinders
+  :: forall p. (IsPass p, OutputableBndrId p, Anno (IdCsP p) ~ SrcSpanAnnN)
+  => NonEmpty (LRowDecl (CsPass p) (CsPass p))
+  -> LRows p
+csRowDefnBinders rows = go emptyRowIndices (toList rows)
+  where
+    go :: RowIndices p -> [LRowDecl (CsPass p) (CsPass p)] -> LRows p
+    go seen [] = LRows [] (valRows_I seen) [] (tyRows_I seen)
+    go seen (r:rs) = case r of
+      L loc (RowSigD _ id _)
+        -> LRows (v : nvs) vrs nts trs
+        where
+          (v, seen') = insertRow id seen 
+          LRows nvs vrs nts trs = go seen' rs
+      L loc (RowTySigD _ id _)
+        -> LRows nvs vrs (t : nts) trs
+        where
+          (t, seen') = insertTyRow id seen 
+          LRows nvs vrs nts trs = go seen' rs
+
+insertRow
+  :: forall p. (IsPass p, Anno (IdCsP p) ~ SrcSpanAnnN)
+  => LIdP (CsPass p) -> RowIndices p -> (Located Int, RowIndices p)
+insertRow new_row ri@(RowIndices rows idxs new_idx trows tidxs tnew_idx)
+  | Just i <- Map.lookup rdr idxs
+  = (L loc i, ri)
+  | otherwise
+  = ( L loc new_idx
+    , RowIndices
+      (IntMap.insert new_idx new_row rows)
+      (Map.insert rdr new_idx idxs)
+      (new_idx + 1)
+      trows tidxs tnew_idx )
+  where
+    loc = getLocA new_row
+    rdr = case csPass @p of
+            Ps -> unLoc new_row
+            Rn -> nameRdrName (unLoc new_row)
+            _ -> panic "idpRdrname"
+
+insertTyRow
+  :: forall p. (IsPass p, Anno (IdCsP p) ~ SrcSpanAnnN)
+  => LIdP (CsPass p) -> RowIndices p -> (Located Int, RowIndices p)
+insertTyRow new_row ri@(RowIndices rows idxs new_idx trows tidxs tnew_idx)
+  | Just i <- Map.lookup rdr tidxs
+  = (L loc i, ri)
+  | otherwise
+  = ( L loc tnew_idx
+    , RowIndices
+      rows idxs new_idx
+      (IntMap.insert tnew_idx new_row trows)
+      (Map.insert rdr tnew_idx tidxs)
+      (tnew_idx + 1) )
+  where
+    loc = getLocA new_row
+    rdr = case csPass @p of
+            Ps -> unLoc new_row
+            Rn -> nameRdrName (unLoc new_row)
+            _ -> panic "idpRdrname"

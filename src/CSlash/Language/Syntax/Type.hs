@@ -61,6 +61,7 @@ data CsType pass
     }
   | CsTyVar (XTyVar pass) (LIdP pass)
   | CsUnboundTyVar (XUnboundTyVar pass) RdrName
+  | CsSelf (XCsSelf pass)
   | CsAppTy (XAppTy pass) (LCsType pass) (LCsType pass)
   | CsFunTy (XFunTy pass) (CsArrow pass) (LCsType pass) (LCsType pass)
   | CsTupleTy (XTupleTy pass) [CsTyTupArg pass]

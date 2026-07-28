@@ -73,3 +73,4 @@ pprIfRn pp = case csPass @p of Rn -> pp
 pprIfTc :: forall p. IsPass p => (p ~ 'Typechecked => SDoc) -> SDoc
 pprIfTc pp = case csPass @p of Tc -> pp
                                _ -> empty
+

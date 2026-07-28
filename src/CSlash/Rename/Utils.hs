@@ -120,6 +120,7 @@ mapFvRn f xs = do
   case unzip stuff of
     (ys, fvs_s) -> return (ys, foldl' (flip plusFV) emptyFVs fvs_s)
 {-# SPECIALIZE mapFvRn :: (a -> RnM (b, FreeVars)) -> [a] -> RnM ([b], FreeVars) #-}
+{-# SPECIALIZE mapFvRn :: (a -> RnM (b, FreeVars)) -> NE.NonEmpty a -> RnM (NE.NonEmpty b, FreeVars) #-}
 
 unzip :: Functor f => f (a, b) -> (f a, f b)
 unzip = \xs -> (fmap fst xs, fmap snd xs)

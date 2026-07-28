@@ -8,6 +8,7 @@ import {-# SOURCE #-} CSlash.Types.Var.Class (varName)
 import {-# SOURCE #-} CSlash.Types.Name hiding (varName)
 import CSlash.Types.Basic
 import CSlash.Types.Unique
+import CSlash.Data.FastString
 
 import CSlash.Utils.Outputable
 import CSlash.Utils.Panic
@@ -140,6 +141,12 @@ dataNSUnique = mkUnique 'd' 0
 
 unknownNSUnique :: Unique
 unknownNSUnique = mkUnique 'u' 0
+
+mkRowNSUnique :: FastString -> Unique
+mkRowNSUnique fs = mkUniqueInt 'r' (uniqueOfFS fs)
+
+mkTcRowNSUnique :: FastString -> Unique
+mkTcRowNSUnique fs = mkUniqueInt 'R' (uniqueOfFS fs)
 
 initExitJoinUnique :: Unique
 initExitJoinUnique = mkUnique 's' 0

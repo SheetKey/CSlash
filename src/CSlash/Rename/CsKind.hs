@@ -197,3 +197,58 @@ extract_kv :: LocatedN RdrName -> FreeKiVars -> FreeKiVars
 extract_kv kv acc =
   assertPpr (isRdrKiVar (unLoc kv) && (not . isQual) (unLoc kv)) (text "extact_kv:" <+> ppr kv)
   $ kv : acc
+
+{- *****************************************************
+*                                                      *
+          Binding kind variables
+*                                                      *
+***************************************************** -}
+
+rnLCsKindBaseWithKvs
+  :: CsDocContext
+  -> LCsKind Ps
+  -> ((LCsKind Rn, FreeVars) -> [Name] -> RnM (a, FreeVars))
+  -> RnM (a, FreeVars)
+rnLCsKindBaseWithKvs doc lki thing_inside = do
+  traceRn "rnLCsKindBaseWithKvs" (ppr lki)
+  let kv_occs = extractCsKindKindVars lki
+      bndrs_loc = case map getLocA kv_occs of
+        [] -> panic "bindCsKindVars/bndrs_loc"
+        [loc] -> loc
+        loc:locs -> loc `combineSrcSpans` last locs
+  traceRn "kv_occs" (ppr kv_occs)
+
+  rnImplicitKvOccs kv_occs $ \kv_nms -> do
+    let kv_nms_final = map (`setNameLoc` bndrs_loc) kv_nms
+    traceRn "kv_nms" (ppr kv_nms_final)
+
+    stuff <- rnLCsKind doc lki
+
+    thing_inside stuff kv_nms_final
+
+rnLCsKindRowWithKvs
+  :: (Outputable thing, Outputable thing')
+  => thing
+  -> (thing -> FreeKiVars)
+  -> (thing -> RnM (thing', FreeVars))
+  -> ((thing', FreeVars) -> [Name] -> RnM (a, FreeVars))
+  -> RnM (a, FreeVars)
+rnLCsKindRowWithKvs thing thing_fkvs rn_thing thing_inside = do
+  traceRn "rnLCsKindRowWithKvs" (ppr thing)
+  let all_kv_occs = thing_fkvs thing
+      bndrs_loc = case map getLocA all_kv_occs of
+        [] -> panic "bindCsKindVars/bndrs_loc"
+        [loc] -> loc
+        loc:locs -> loc `combineSrcSpans` last locs
+  traceRn "all_kv_occs" (ppr all_kv_occs)
+  
+  kv_occs <- filterInScopeM all_kv_occs
+  traceRn "kv_occs" (ppr kv_occs)
+
+  rnImplicitKvOccs kv_occs $ \kv_nms -> do
+    let kv_nms_final = map (`setNameLoc` bndrs_loc) kv_nms
+    traceRn "kv_nms" (ppr kv_nms_final)
+
+    stuff <- rn_thing thing
+
+    thing_inside stuff kv_nms

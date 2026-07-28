@@ -11,15 +11,16 @@ import CSlash.Cs
 -- import GHC.Types.FieldLabel
 import CSlash.Types.Name.Reader
 import CSlash.Rename.CsType
+import CSlash.Rename.CsKind
 import CSlash.Rename.Bind
 -- import GHC.Rename.Doc
 import CSlash.Rename.Env
--- import GHC.Rename.Utils ( mapFvRn, bindLocalNames
---                         , checkDupRdrNames, bindLocalNamesFV
---                         , checkShadowedRdrNames, warnUnusedTypePatterns
---                         , newLocalBndrsRn
---                         , noNestedForallsContextsErr
---                         , addNoNestedForallsContextsErr, checkInferredVars )
+import CSlash.Rename.Utils ( mapFvRn{-, bindLocalNames
+                        , checkDupRdrNames, bindLocalNamesFV
+                        , checkShadowedRdrNames, warnUnusedTypePatterns
+                        , newLocalBndrsRn
+                        , noNestedForallsContextsErr
+                        , addNoNestedForallsContextsErr, checkInferredVars-} )
 -- import GHC.Rename.Unbound ( mkUnboundName, notInScopeErr, WhereLooking(WL_Global) )
 import CSlash.Rename.Names
 import CSlash.Tc.Errors.Types
@@ -58,15 +59,16 @@ import CSlash.Data.OrdList
 import Control.Monad
 import Control.Arrow ( first )
 import Data.Foldable ( toList, for_ )
-import Data.List ( mapAccumL )
+import Data.List ( mapAccumL, partition )
 import Data.List.NonEmpty ( NonEmpty(..), head, nonEmpty )
 import Data.Maybe ( isNothing, fromMaybe, mapMaybe )
+import CSlash.Data.Maybe ( expectJust )
 import qualified Data.Set as Set ( difference, fromList, toList, null )
 import CSlash.Types.GREInfo (ConInfo, mkConInfo{-, conInfoFields-})
 
 rnSrcDecls :: CsGroup Ps -> RnM (TcGblEnv Tc, CsGroup Rn)
 rnSrcDecls group@(CsGroup { cs_valds = val_decls
-                          , cs_typeds = type_decls
+                          , cs_tykids = tyki_decls
                           , cs_fixds = fix_decls
                           }) = do
   local_fix_env <- makeMiniFixityEnv $ csGroupTopLevelFixitySigs group
@@ -82,8 +84,8 @@ rnSrcDecls group@(CsGroup { cs_valds = val_decls
     tc_envs <- extendGlobalRdrEnvRn (map (mkLocalVanillaGRE NoParent) id_bndrs) local_fix_env
 
     restoreEnvs tc_envs $ do
-      traceRn "Start rnTypeDecls" (ppr type_decls)
-      (rn_type_decls, src_fvs1) <- rnTypeDecls type_decls
+      traceRn "Start rnTypeDecls" (ppr tyki_decls)
+      (rn_tyki_decls, src_fvs1) <- rnTyKiDecls tyki_decls
 
       traceRn "Start rnmono" empty
       let val_bndr_set = mkNameSet id_bndrs
@@ -98,10 +100,10 @@ rnSrcDecls group@(CsGroup { cs_valds = val_decls
       last_tcg_env <- getGblEnv
       let rn_group = CsGroup { cs_ext = noExtField
                              , cs_valds = rn_val_decls
-                             , cs_typeds = rn_type_decls
+                             , cs_tykids = rn_tyki_decls
                              , cs_fixds = rn_fix_decls
                              }
-          other_fvs = src_fvs1
+          other_fvs = plusFVs [src_fvs1]
 
           src_dus = bind_dus `plusDU` usesOnly other_fvs
 
@@ -120,46 +122,53 @@ addTcgDUs tcg_env dus = tcg_env { tcg_dus = tcg_dus tcg_env `plusDU` dus }
 *                                                               *
 ************************************************************** -}
 
-rnTypeDecls :: [TypeGroup Ps] -> RnM ([TypeGroup Rn], FreeVars)
-rnTypeDecls type_ds = do
-  types_w_fvs <- mapM (wrapLocFstMA rnTypeDecl) (typeGroupTypeDecls type_ds)
+rnTyKiDecls :: [TyKiGroup Ps] -> RnM ([TyKiGroup Rn], FreeVars)
+rnTyKiDecls ds = do
+  kinds_w_fvs <- mapM (wrapLocFstMA rnKindDecl) (tykiGroupKindDecls ds)
+  types_w_fvs <- mapM (wrapLocFstMA rnTypeDecl) (tykiGroupTypeDecls ds)
   let tc_names = mkNameSet $ map (tydName . unLoc . fst) types_w_fvs
   traceRn "rnTypeDecls" $
-    vcat [ text "typeGroupTypeDecls:" <+> ppr types_w_fvs
-         , text "tc_names:" <+> ppr tc_names ]
+    vcat [ text "tykiGroupTypeDecls:" <+> ppr types_w_fvs
+         , text "tc_names:" <+> ppr tc_names
+         , text "tykiGroupKindDecls:" <+> ppr kinds_w_fvs ]
 
-  massertPpr (null (typeGroupKindSigs type_ds)) (ppr $ typeGroupKindSigs type_ds)
+  massertPpr (null (tykiGroupKindSigs ds)) (ppr $ tykiGroupKindSigs ds)
 
+  let decls_w_fvs = kinds_w_fvs ++ types_w_fvs
   rdr_env <- getGlobalRdrEnv
   traceRn "rnTypeDecls SCC analysis" $
     vcat [ text "rdr_env:" {-<+> ppr rdr_env-} ]
-  let type_sccs = depAnalTypeDecls rdr_env types_w_fvs
+  let tyki_sccs = depAnalTyKiDecls rdr_env decls_w_fvs
 
-      all_groups = map mk_group type_sccs
+      all_groups = map mk_group tyki_sccs
 
-      all_fvs = foldr (plusFV . snd) emptyFVs types_w_fvs
+      all_fvs = foldr (plusFV . snd) emptyFVs decls_w_fvs
 
   traceRn "rnType dependency analysis made groups" (ppr all_groups)
   return (all_groups, all_fvs)
 
   where
-    mk_group :: SCC (LCsBind Rn) -> TypeGroup Rn
+    mk_group :: SCC (LCsBind Rn) -> TyKiGroup Rn
     mk_group scc = group
       where
-        type_ds = flattenSCC scc
+        ds = flattenSCC scc
+        (kind_ds, type_ds) = flip partition ds $ \(L _ bind) -> case bind of
+          KiRowBind{} -> True
+          _ -> False
 
-        group = TypeGroup { group_ext = noExtField
+        group = TyKiGroup { group_ext = noExtField
                           , group_typeds = type_ds
+                          , group_kindds = kind_ds
                           , group_kisigs = []
                           }
 
-depAnalTypeDecls :: GlobalRdrEnv -> [(LCsBind Rn, FreeVars)] -> [SCC (LCsBind Rn)]
-depAnalTypeDecls rdr_env ds_w_fvs = stronglyConnCompFromEdgedVerticesUniq edges
+depAnalTyKiDecls :: GlobalRdrEnv -> [(LCsBind Rn, FreeVars)] -> [SCC (LCsBind Rn)]
+depAnalTyKiDecls rdr_env ds_w_fvs = stronglyConnCompFromEdgedVerticesUniq edges
   where
     edges :: [Node Name (LCsBind Rn)]
     edges = [ DigraphNode d name (map (getParent rdr_env) (nonDetEltsUniqSet fvs))
             | (d, fvs) <- ds_w_fvs
-            , let name = tydName (unLoc d)
+            , let name = tykidName (unLoc d)
             ]
 
 getParent :: GlobalRdrEnv -> Name -> Name
@@ -200,6 +209,50 @@ rnTypeDecl other = pprPanic "rnTypeDecl" (ppr other)
 rnTyFun :: CsDocContext -> LCsType Ps -> RnM (LCsType Rn, FreeVars)
 rnTyFun doc rhs = rnLCsType doc rhs
 
+rnKindDecl :: CsBind Ps -> RnM (CsBind Rn, FreeVars)
+rnKindDecl KiRowBind{ kirow_id = kicon, kirow_base = base, kirow_rows = rows } = do
+  kicon' <- lookupLocatedTopConstructorRnN kicon
+  traceRn "rnkind-ki" (ppr kicon)
+  let doc = KiSynCtx kicon
+  rnLCsKindBaseWithKvs doc base $ \(final_base, base_fvs) kv_nms -> do
+    (final_rows, row_fvs) <- rnRowDecls (unLoc kicon') rows
+    let all_fvs = base_fvs `plusFV` row_fvs
+    return ( KiRowBind { kirow_id = kicon'
+                       , kirow_base = final_base
+                       , kirow_rows = final_rows
+                       , kirow_ext = (kv_nms, all_fvs) }
+           , all_fvs )
+rnKindDecl other = pprPanic "rnKindDecl" (ppr other)
+
+rnRowDecls :: Name -> NonEmpty (LRowDecl Ps Ps) -> RnM (NonEmpty (LRowDecl Rn Rn), FreeVars)
+rnRowDecls con decls = do
+  rows <- lookupConstructorRows con
+
+  let row_env = mkFsEnv [ (occNameFS (nameOccName row), row)
+                        | row <- toList rows ]
+
+  mapFvRn (wrapLocFstMA (rnRowDecl row_env)) decls
+
+rnRowDecl :: FastStringEnv Name -> RowDecl Ps Ps -> RnM (RowDecl Rn Rn, FreeVars)
+rnRowDecl row_env (RowSigD _ id ty) = do
+  let id' = lookupRow row_env id
+  traceRn "rnRowDecl-val" (ppr id $$ ppr id')
+  let doc = RowTypeSigCtx id
+  rnLCsKindRowWithKvs ty extractCsTyRdrKindVars (rnLCsType doc) $ \(final_ty, fvs) kv_nms ->
+    return (RowSigD (kv_nms, fvs) id' final_ty, fvs)
+  
+rnRowDecl row_env (RowTySigD _ tycon ki) = do
+  let tycon' = lookupRow row_env tycon
+  traceRn "rnRowDecl-type" (ppr tycon $$ ppr tycon')
+  let doc = RowTySynCtx tycon
+  rnLCsKindRowWithKvs ki extractCsKindKindVars (rnLCsKind doc) $ \(final_ki, fvs) kv_nms -> 
+    return (RowTySigD (kv_nms, fvs) tycon' final_ki, fvs)
+
+lookupRow :: FastStringEnv Name -> LocatedN RdrName -> LocatedN Name
+lookupRow row_env (L lr rdr) = L lr (expectJust "lookupRow" $ lookupFsEnv row_env lbl)
+  where
+    lbl = occNameFS $ rdrNameOcc rdr  
+
 {- *****************************************************
 *                                                      *
         mkGroup
@@ -217,37 +270,52 @@ add :: CsGroup Ps -> SrcSpanAnnA -> CsDecl Ps -> [LCsDecl Ps] -> CsGroup Ps
 add gp@(CsGroup { cs_fixds = ts }) l (SigD _ (FixSig _ f)) ds
   = addl (gp { cs_fixds = L l f : ts }) ds
 
-add gp@(CsGroup { cs_typeds = ts }) l (SigD _ s@(KindSig _ _ _)) ds
-  = addl (gp { cs_typeds = add_kisig (L l s) ts }) ds
+add gp@(CsGroup { cs_tykids = ts }) l (SigD _ s@(KindSig _ _ _)) ds
+  = addl (gp { cs_tykids = add_kisig (L l s) ts }) ds
 
 add gp@(CsGroup { cs_valds = ts }) l (SigD _ d) ds
   = addl (gp { cs_valds = add_sig (L l d) ts }) ds
 
-add gp@(CsGroup { cs_typeds = ts }) l (ValD _ d@(TyFunBind{})) ds
-  = addl (gp { cs_typeds = add_typed (L l d) ts }) ds
+add gp@(CsGroup { cs_tykids = ts }) l (ValD _ d@(TyFunBind{})) ds
+  = addl (gp { cs_tykids = add_typed (L l d) ts }) ds
+
+add gp@(CsGroup { cs_tykids = ts }) l (ValD _ d@(KiRowBind{})) ds
+  = addl (gp { cs_tykids = add_kindd (L l d) ts }) ds
 
 add gp@(CsGroup { cs_valds = ts }) l (ValD _ d) ds
   = addl (gp { cs_valds = add_bind (L l d) ts }) ds
 
 add_typed
-  :: OutputableBndrId p => LCsBind (CsPass p) -> [TypeGroup (CsPass p)] -> [TypeGroup (CsPass p)]
-add_typed d@(L _ TyFunBind{}) [] = [TypeGroup { group_ext = noExtField
-                                          , group_typeds = [d]
-                                          , group_kisigs = []
-                                          }
+  :: OutputableBndrId p => LCsBind (CsPass p) -> [TyKiGroup (CsPass p)] -> [TyKiGroup (CsPass p)]
+add_typed d@(L _ TyFunBind{}) [] = [TyKiGroup { group_ext = noExtField
+                                              , group_typeds = [d]
+                                              , group_kisigs = []
+                                              , group_kindds = []
+                                              }
                                ]
-add_typed d@(L _ TyFunBind{}) (ds@(TypeGroup { group_typeds = typeds }) : dss)
+add_typed d@(L _ TyFunBind{}) (ds@(TyKiGroup { group_typeds = typeds }) : dss)
   = ds { group_typeds = d : typeds } : dss
 add_typed (L _ d) _ = pprPanic "add_typed" (ppr d)
 
+add_kindd
+  :: OutputableBndrId p => LCsBind (CsPass p) -> [TyKiGroup (CsPass p)] -> [TyKiGroup (CsPass p)]
+add_kindd d@(L _ KiRowBind{}) [] = [TyKiGroup { group_ext = noExtField
+                                              , group_kindds = [d]
+                                              , group_typeds = []
+                                              , group_kisigs = [] }]
+add_kindd d@(L _ KiRowBind{}) (ds@(TyKiGroup { group_kindds = kindds }) : dss)
+  = ds { group_kindds = d : kindds } : dss
+add_kindd (L _ d) _ = pprPanic "add_kindd" (ppr d)                                   
+
 add_kisig
-  :: OutputableBndrId p => LSig (CsPass p) -> [TypeGroup (CsPass p)] -> [TypeGroup (CsPass p)]
-add_kisig d@(L _ KindSig{}) [] = [TypeGroup { group_ext = noExtField
+  :: OutputableBndrId p => LSig (CsPass p) -> [TyKiGroup (CsPass p)] -> [TyKiGroup (CsPass p)]
+add_kisig d@(L _ KindSig{}) [] = [TyKiGroup { group_ext = noExtField
                                         , group_typeds = []
+                                        , group_kindds = []
                                         , group_kisigs = [d]
                                         }
                              ]
-add_kisig d@(L _ KindSig{}) (ds@(TypeGroup { group_kisigs = kisigs }) : dss)
+add_kisig d@(L _ KindSig{}) (ds@(TyKiGroup { group_kisigs = kisigs }) : dss)
   = ds { group_kisigs = d : kisigs } : dss
 add_kisig d _ = pprPanic "add_kisig" (ppr d)
 

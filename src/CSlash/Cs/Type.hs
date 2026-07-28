@@ -117,6 +117,10 @@ type instance XUnboundTyVar Ps = Maybe EpAnnUnboundTyVar
 type instance XUnboundTyVar Rn = NoExtField
 type instance XUnboundTyVar Tc = DataConCantHappen
 type instance XUnboundTyVar Zk = DataConCantHappen
+type instance XCsSelf Ps = DataConCantHappen
+type instance XCsSelf Rn = LocatedN RdrName
+type instance XCsSelf Tc = DataConCantHappen
+type instance XCsSelf Zk = DataConCantHappen
 type instance XAppTy (CsPass _) = NoExtField
 type instance XFunTy (CsPass _) = NoExtField
 type instance XTupleTy (CsPass _) = AnnParen
@@ -264,6 +268,7 @@ ppr_mono_ty (CsForAllTy {cst_tele = tele, cst_body = ty})
 ppr_mono_ty (CsQualTy _ ctxt ty) = sep [pprLCsContextAlways ctxt, ppr_mono_lty ty]
 ppr_mono_ty (CsTyVar _ (L _ name)) = pprPrefixOcc name
 ppr_mono_ty (CsUnboundTyVar _ v) = pprPrefixOcc v
+ppr_mono_ty (CsSelf _) = text "self"
 ppr_mono_ty (CsAppTy _ fun_ty arg_ty)
   = hsep [ppr_mono_lty fun_ty, ppr_mono_lty arg_ty]
 ppr_mono_ty (CsFunTy _ mult ty1 ty2) = ppr_fun_ty mult ty1 ty2
@@ -330,6 +335,7 @@ csTyNeedsParens prec = go
   where
     go (CsTyVar{}) = False
     go (CsUnboundTyVar{}) = False
+    go (CsSelf{}) = False
     go (CsTyLamTy{}) = prec > topPrec
     go (CsAppTy{}) = prec >= appPrec
     go (CsOpTy{}) = prec >= opPrec

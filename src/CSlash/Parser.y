@@ -401,13 +401,17 @@ rowdecls :: { NonEmpty (LRowDecl Ps Ps) }
           ; return (h <| $3) } }
   | rowdecl { $1 :| [] }
 
+-- 'a_varid' could be 'a_var':
+-- we can allow operators in records, but fixity decls only at top level:
+-- infixl Monad.>>= 2 (or whatever it should be!)
 rowdecl :: { LRowDecl Ps Ps }
-  : a_varid ':' sigtype {% amsA' $ sLL $1 $> $ RowSigD (AnnSig (mu AnnColon $2) [])
-                           (fmap unknownToRow $1) $3 }
-  | 'type' a_varid ':' aexp1 {% runPV (unETP $4) >>= \ $4 ->
+  : a_varid ':' context_exp {% runPV (unETP $3) >>= \ $3 ->
+                               amsA' $ sLL $1 $> $ RowSigD (AnnSig (mu AnnColon $2) [])
+                               (fmap unknownToVar $1) $3 }
+  | 'type' a_varid ':' fun_exp {% runPV (unETP $4) >>= \ $4 ->
                                  amsA' $ sLL $1 $> $ RowTySigD
                                  (AnnSig (mu AnnColon $3) [mj AnnType $1])
-                                 (fmap unknownToTcRow $2) $4 }
+                                 (fmap unknownToTc $2) $4 }
 
 -----------------------------------------------------------------------------
 -- Value definitions

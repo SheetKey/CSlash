@@ -138,6 +138,14 @@ lookupLocalExactGRE name = do
                else return $ Left $ NoExactName name
     gres -> return $ Left $ SameName gres
 
+lookupConstructorRows :: HasDebugCallStack => Name -> RnM RowInfo
+lookupConstructorRows con_name = do
+  info <- lookupGREInfo_GRE con_name
+  case info of
+    IAmKiCon row_info -> return row_info
+    _ -> pprPanic "lookupConstructorRows: not a KiCon" $
+         vcat [ text "name:" <+> ppr con_name ] -- TODO: better error messages for other cases
+
 lookupExactOrOrig :: RdrName -> (GlobalRdrElt -> r) -> RnM r -> RnM r
 lookupExactOrOrig rdr_name res k = do
   men <- lookupExactOrOrig_base rdr_name
@@ -226,6 +234,14 @@ lookupGlobalOccRn_maybe which_gres rdr_name =
 lookupGlobalOccRn_base :: WhichGREs GREInfo -> RdrName -> RnM (Maybe GlobalRdrElt)
 lookupGlobalOccRn_base which_gres rdr_name = runMaybeT . MaybeT $
   lookupGreRn_maybe which_gres rdr_name
+
+lookupGREInfo_GRE :: HasDebugCallStack => Name -> RnM GREInfo
+lookupGREInfo_GRE name = do
+  rdr_env <- getGlobalRdrEnv
+  case lookupGRE_Name rdr_env name of
+    Just (GRE { gre_info = info }) -> return info
+    _ -> do cs_env <- getTopEnv
+            return $ lookupGREInfo cs_env name
 
 lookupInfoOccRn ::RdrName -> RnM [Name]
 lookupInfoOccRn rdr_name = lookupExactOrOrig rdr_name (\gre -> [greName gre]) $ do

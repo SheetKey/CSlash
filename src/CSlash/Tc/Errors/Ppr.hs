@@ -740,9 +740,13 @@ mk_supplementary_ea_msg _ _ _ _ _ = panic "mk_supplementary_ea_msg"
 pprCsDocContext :: CsDocContext -> SDoc
 pprCsDocContext (TypeSigCtx doc) = text "the type signature for" <+> doc
 pprCsDocContext (TySynCtx name) = text "the declaration for type synonym" <+> quotes (ppr name)
+pprCsDocContext (KiSynCtx name) = text "the declaration for kind synonym" <+> quotes (ppr name)
 pprCsDocContext PatCtx = text "a pattern type-signature"
 pprCsDocContext ExprWithTySigCtx = text "an expression type signature"
 pprCsDocContext CsTypeCtx = text "a type argument"
+pprCsDocContext (RowTypeSigCtx name) = text "the type signature for the row" <+> quotes (ppr name)
+pprCsDocContext (RowTySynCtx name) = text "the kind signature for the row type synonym"
+                                     <+> quotes (ppr name)
 
 pprTyThingUsedWrong :: WrongThingSort -> TcTyKiThing -> Name -> SDoc
 pprTyThingUsedWrong sort thing name =
