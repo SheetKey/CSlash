@@ -13,6 +13,7 @@ module CSlash.Core.Kind
 
 import Prelude hiding ((<>))
 
+import {-# SOURCE #-} CSlash.Core.Type.Rep (Type)
 import {-# SOURCE #-} CSlash.Types.Var
 import {-# SOURCE #-} CSlash.Core.Kind.Compare (eqMonoKind)
 
@@ -23,6 +24,7 @@ import CSlash.Types.Var.Set
 
 import CSlash.Types.Basic
 import CSlash.Types.Unique
+import CSlash.Types.Name
 import CSlash.Utils.Outputable
 import CSlash.Utils.Misc
 import CSlash.Utils.Panic
@@ -52,6 +54,7 @@ data MonoKind p
   = KiVarKi (KiVar p)
   | BIKi BuiltInKi
   | KiPredApp KiPredCon (MonoKind p) (MonoKind p)
+  | KiConApp (KiCon p) [MonoKind p] -- Saturated!
   | FunKi
     { fk_f :: FunKiFlag
     , fk_arg :: MonoKind p
@@ -70,6 +73,18 @@ data KiPredCon
   | LTEQKi
   | EQKi
   deriving (Show, Eq, Ord, Data.Data)
+
+data KiCon p = KiCon
+  { kicon_name :: Maybe (KiVar p)
+  , kicon_base :: Kind p
+  , kicon_rows :: [RowSig p] -- NonEmpty
+  }
+  deriving Data.Data
+
+data RowSig p
+  = RowTySig Name (Type p)
+  | RowKiSig Name (Kind p)
+  deriving Data.Data
 
 -- Checks if a value with infered mult w1 is DEFINITELY allowed where a value of w2 is expected.
 submult :: BuiltInKi -> MonoKind kv -> Bool

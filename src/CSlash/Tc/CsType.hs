@@ -112,7 +112,9 @@ tcTyKiGroup TyKiGroup{ group_typeds = typeds, group_kisigs = kisigs, group_kindd
   traceTc "---- tcTyKiGroup ---- {" empty
   traceTc "Decls for" (ppr (map (tydName . unLoc) typeds ++ map (tykidName . unLoc) kindds))
 
-  (tys, kindless) <- tcTyDs typeds -- TODO!
+  kis <- tcKiDs kindds
+  -- TODO!
+  (tys, kindless) <- tcTyDs typeds
 
   traceTc "Starting synonym cycle check" (ppr tys)
   home_unit <- cs_home_unit <$> getTopEnv
@@ -174,6 +176,10 @@ zipRecTys tc_tycons rec_tycons
     get name = case lookupNameEnv rec_tc_env name of
                  Just tc -> tc
                  other -> pprPanic "zipRecTys" (ppr name <+> ppr other)
+
+tcKiDs :: [LCsBind Rn] -> TcM [KiCon Zk]
+tcKiDs kindds = do
+  panic "tcKiDs"
 
 {- *********************************************************************
 *                                                                      *
