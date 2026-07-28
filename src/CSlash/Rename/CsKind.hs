@@ -241,9 +241,14 @@ rnLCsKindRowWithKvs thing thing_fkvs rn_thing thing_inside = do
         [loc] -> loc
         loc:locs -> loc `combineSrcSpans` last locs
   traceRn "all_kv_occs" (ppr all_kv_occs)
-  
-  kv_occs <- filterInScopeM all_kv_occs
-  traceRn "kv_occs" (ppr kv_occs)
+
+  -- NOTE: we do NOT want to filter out the in scope kvs.
+  -- Doing so means kvs in the base kind are in scope in the record.
+  -- This doesn't seem useful, and it makes inferred row kinds incompatible when checked against
+  -- kind signatures (I think).
+  -- kv_occs <- filterInScopeM all_kv_occs
+  -- traceRn "kv_occs" (ppr kv_occs)
+  let kv_occs = all_kv_occs
 
   rnImplicitKvOccs kv_occs $ \kv_nms -> do
     let kv_nms_final = map (`setNameLoc` bndrs_loc) kv_nms
