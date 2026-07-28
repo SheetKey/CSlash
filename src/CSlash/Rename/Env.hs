@@ -1,3 +1,6 @@
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+
 module CSlash.Rename.Env where
 
 import CSlash.Iface.Load
@@ -248,6 +251,17 @@ lookupInfoOccRn rdr_name = lookupExactOrOrig rdr_name (\gre -> [greName gre]) $ 
   rdr_env <- getGlobalRdrEnv
   let nms = map greName $ lookupGRE rdr_env (LookupRdrName rdr_name (RelevantGREs False))
   return nms
+
+getSetRowLbl :: forall p. IsPass p => LCsSetRow (CsPass p) -> LocatedN RdrName
+getSetRowLbl row
+  = let id = case row of
+               L _ (SetRow _ id _) -> id
+               L _ (SetTyRow _ id _) -> id
+
+    in case csPass @p of
+         Ps -> id
+         Rn -> nameRdrName <$> id
+         _ -> panic "getSetRowLbl"
 
 data GreLookupResult
   = GreNotFound

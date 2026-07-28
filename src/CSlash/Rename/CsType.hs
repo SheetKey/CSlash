@@ -3,6 +3,7 @@
 module CSlash.Rename.CsType where
 
 import {-# SOURCE #-} CSlash.Rename.Bind (rnMatchGroup)
+import {-# SOURCE #-} CSlash.Rename.Expr (rnLExpr)
 
 -- import GHC.Core.Type.FVs ( tyCoVarsOfTypeList )
 -- import CSlash.Core.TyCon    ( isKindName )
@@ -36,10 +37,13 @@ import CSlash.Types.Basic  ( TypeOrKind(..) )
 import CSlash.Utils.Outputable
 import CSlash.Utils.Panic
 import CSlash.Data.Maybe
-import CSlash.Data.FastString (fsLit)
+import CSlash.Data.FastString (fsLit, uniqCompareFS)
+import CSlash.Data.List.SetOps ( removeDups )
 
 import Data.List (nubBy, partition)
+import qualified Data.List.NonEmpty as NE
 import Control.Monad
+import Data.Function (on)
 
 {- ******************************************************
 *                                                       *
@@ -137,7 +141,10 @@ rnCsTy env (CsUnboundTyVar _ v) = return (CsUnboundTyVar noExtField v, emptyFVs)
 
 rnCsTy _ (CsSelf x) = dataConCantHappen x
 
-rnCsTy _ (CsSetRows _ _ _) = panic "rnCsTy setrows"
+rnCsTy env (CsSetRows _ (L l ty) rows) = setSrcSpanA l $ do
+  (ty', ty_fvs) <- rnCsTy env ty
+  (rows, row_fvs) <- rnCsSetRows env rows
+  return (CsSetRows noExtField (L l ty') rows, ty_fvs `plusFV` row_fvs)
 
 rnCsTy env (CsAppTy _ ty1 ty2) = do
   (ty1', fvs1) <- rnLCsTy env ty1
@@ -211,6 +218,48 @@ rnCsArrow env (CsArrow _ ki) = do
 
 rnTyVar :: RnTyEnv -> RdrName -> RnM Name
 rnTyVar _ rdr_name = lookupTypeOccRn rdr_name
+
+{- *****************************************************
+*                                                      *
+          SetRows
+*                                                      *
+***************************************************** -}
+
+rnCsSetRows :: RnTyEnv -> LCsSetRows Ps -> RnM (LCsSetRows Rn, FreeVars)
+rnCsSetRows env (L loc (SetRows _ rows)) = case rows of
+  [] -> panic "rnCsSetRows empty"
+  _ : _ -> do
+    let dup_lbls :: [NE.NonEmpty RdrName]
+        (_, dup_lbls) = removeDups (uniqCompareFS `on` (occNameFS . rdrNameOcc))
+                        (fmap (unLoc . getSetRowLbl) rows)
+
+    mapM_ (panic "addErr . dupRowErr CsSetRow") dup_lbls
+
+    -- Not needed?: possible_parents
+
+    (rows', fvs) <- rn_rows rows
+    return (L loc (SetRows noExtField rows'), fvs)
+  where
+    rn_rows :: [LCsSetRow Ps] -> RnM ([LCsSetRow Rn], FreeVars)
+    rn_rows [] = return ([], emptyFVs)
+    rn_rows (L l (SetRow _ (L loc lbl) arg) : rows) = do
+      (arg', fvs) <- rnLExpr arg
+      let lbl' :: LocatedN Name
+          lbl' = L (l2l loc) (mkUnboundName $ rdrNameOcc lbl)
+
+          row' :: LCsSetRow Rn
+          row' = L l (SetRow noExtField lbl' arg')
+      (rows', fvs') <- rn_rows rows
+      return (row' : rows', fvs `plusFV` fvs')
+    rn_rows (L l (SetTyRow _ (L loc lbl) arg) : rows) = do
+      (arg', fvs) <- rnLCsTy env arg
+      let lbl' :: LocatedN Name
+          lbl' = L (l2l loc) (mkUnboundName $ rdrNameOcc lbl)
+
+          row' :: LCsSetRow Rn
+          row' = L l (SetTyRow noExtField lbl' arg')
+      (rows', fvs') <- rn_rows rows
+      return (row' : rows', fvs `plusFV` fvs')
 
 {- *****************************************************
 *                                                      *
