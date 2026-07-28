@@ -96,23 +96,23 @@ import Debug.Trace (trace)
 *                                                                      *
 ********************************************************************* -}
 
-tcTyDecls :: [TyKiGroup Rn] -> TcM (TcGblEnv Tc)
-tcTyDecls typeds_s = checkNoErrs $ fold_env typeds_s
+tcTyKiDecls :: [TyKiGroup Rn] -> TcM (TcGblEnv Tc)
+tcTyKiDecls tykids_s = checkNoErrs $ fold_env tykids_s
   where
     fold_env :: [TyKiGroup Rn] -> TcM (TcGblEnv Tc)
     fold_env [] = getGblEnv
-    fold_env (typeds : typeds_s) = do
-      tcg_env <- tcTyGroup typeds
-      setGblEnv tcg_env $ fold_env typeds_s
+    fold_env (tykids : tykids_s) = do
+      tcg_env <- tcTyKiGroup tykids
+      setGblEnv tcg_env $ fold_env tykids_s
 
-tcTyGroup :: TyKiGroup Rn -> TcM (TcGblEnv Tc)
-tcTyGroup (TyKiGroup { group_typeds = typeds, group_kisigs = kisigs }) = do -- TODO!
+tcTyKiGroup :: TyKiGroup Rn -> TcM (TcGblEnv Tc)
+tcTyKiGroup TyKiGroup{ group_typeds = typeds, group_kisigs = kisigs, group_kindds = kindds } = do
   massertPpr (null kisigs) (ppr kisigs)
 
-  traceTc "---- tcTyGroup ---- {" empty
-  traceTc "Decls for" (ppr (map (tydName . unLoc) typeds))
+  traceTc "---- tcTyKiGroup ---- {" empty
+  traceTc "Decls for" (ppr (map (tydName . unLoc) typeds ++ map (tykidName . unLoc) kindds))
 
-  (tys, kindless) <- tcTyDs typeds
+  (tys, kindless) <- tcTyDs typeds -- TODO!
 
   traceTc "Starting synonym cycle check" (ppr tys)
   home_unit <- cs_home_unit <$> getTopEnv

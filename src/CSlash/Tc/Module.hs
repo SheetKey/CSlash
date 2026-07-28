@@ -39,7 +39,8 @@ import CSlash.Tc.Utils.Env
 import CSlash.Tc.Utils.TcMType
 import CSlash.Tc.Utils.TcType
 import CSlash.Tc.Solver
-import CSlash.Tc.CsType
+import qualified CSlash.Tc.CsType as CsType
+import CSlash.Tc.CsType hiding (tcTyKiDecls)
 -- import GHC.Tc.Instance.Typeable ( mkTypeableBinds )
 -- import GHC.Tc.Utils.Backpack
 import CSlash.Tc.Zonk.TcType
@@ -328,14 +329,14 @@ rnTopSrcDecls group = do
   return (tcg_env', rn_decls)
 
 tcTopSrcDecls :: CsGroup Rn -> TcM (TcGblEnv Tc, TcLclEnv)
-tcTopSrcDecls (CsGroup { cs_tykids = type_ds -- TODO!
+tcTopSrcDecls (CsGroup { cs_tykids = tyki_ds
                        , cs_valds = cs_val_binds@(XValBindsLR (NValBinds val_binds val_sigs))
                        }) = do
   traceTc "Tc2 (src)" empty
 
   traceTc "Tc3" empty
 
-  tcg_env <- tcTypeDecls type_ds
+  tcg_env <- tcTyKiDecls tyki_ds
   setGblEnv tcg_env $ do
     traceTc "Tc4" empty
 
@@ -356,9 +357,9 @@ tcTopSrcDecls (CsGroup { cs_tykids = type_ds -- TODO!
 
 tcTopSrcDecls _ = panic "tcTopSrcDecls: ValBindsIn"
 
-tcTypeDecls :: [TyKiGroup Rn] -> TcM (TcGblEnv Tc)
-tcTypeDecls type_decls = do
-  tcg_env <- tcTyDecls type_decls
+tcTyKiDecls :: [TyKiGroup Rn] -> TcM (TcGblEnv Tc)
+tcTyKiDecls tyki_decls = do
+  tcg_env <- CsType.tcTyKiDecls tyki_decls
   setGblEnv tcg_env $ do
     failIfErrsM
     return tcg_env
