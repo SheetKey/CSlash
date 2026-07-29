@@ -90,7 +90,6 @@ rnCsKi _ (CsUKd {}) = return (CsUKd noExtField, emptyFVs)
 rnCsKi _ (CsAKd {}) = return (CsAKd noExtField, emptyFVs)
 rnCsKi _ (CsLKd {}) = return (CsLKd noExtField, emptyFVs)
 rnCsKi env (CsKiVar _ ln@(L loc rdr_name)) = do
-  massertPpr (isRdrKiVar rdr_name) (text "rnCsKi CsKiVar" <+> ppr ln)
   name <- rnKiVar env rdr_name
   return (CsKiVar noAnn (L loc name), unitFV name)  
 rnCsKi env (CsFunKi _ ki1 ki2) = do
@@ -114,7 +113,6 @@ rnCsKdRel ctxt (L l (CsKdLTEQ _ ki1 ki2)) = do
   (ki2', fvs2) <- rnLCsKind ctxt ki2
   return (L l (CsKdLTEQ noAnn ki1' ki2'), fvs1 `plusFV` fvs2)
   
-
 rnKiVar :: RnKiEnv -> RdrName -> RnM Name
 rnKiVar env rdr_name = do
   name <- lookupKindOccRn rdr_name
@@ -195,8 +193,9 @@ extract_lki (L _ ki) acc = case ki of
 
 extract_kv :: LocatedN RdrName -> FreeKiVars -> FreeKiVars
 extract_kv kv acc =
-  assertPpr (isRdrKiVar (unLoc kv) && (not . isQual) (unLoc kv)) (text "extact_kv:" <+> ppr kv)
-  $ kv : acc
+  if isRdrKiVar (unLoc kv) && (not . isQual) (unLoc kv)
+  then kv : acc
+  else acc   
 
 {- *****************************************************
 *                                                      *
