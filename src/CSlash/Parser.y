@@ -616,6 +616,9 @@ quant_exp :: { ETP }
                                                               , cst_body = $2 }
                                   in return $ etpFromTy forallTy }
   | fun_exp %shift { $1 }
+  | aexp1 set_rows {% runPV (unETP $1) >>= \($1 :: LCsType Ps) ->
+                      fmap etpFromTy (amsA' $ sLL $1 $> $
+                      CsSetRows noExtField $1 $2) }
 
 forall_telescope :: { Located (CsForAllTelescope Ps) }
   : 'forall' tv_bndrs '.' {% acs (comb2 $1 $>) (\loc cs -> (L loc $
@@ -674,7 +677,7 @@ fun_exp :: { ETP }
   --                                              $ mkUnqual kvName (fsLit "kT")) kind)
   --                              $1 $5)
   --              ; return $ etpFromTy res } }
-  | fun_exp '->' aexp1 {% runPV $ unETP $1 >>= \ ($1 :: LCsKind Ps) ->
+  | aexp1 '->' fun_exp {% runPV $ unETP $1 >>= \ ($1 :: LCsKind Ps) ->
                                   unETP $3 >>= \ ($3 :: LCsKind Ps) -> do
                                   { res <- amsA' (sLL $1 $3 $ CsFunKi noExtField $1 $3)
                                   ; return $ etpFromKd res } }
@@ -763,10 +766,6 @@ aexp :: { ETP }
                                        $4 >>= \ $4 ->
                                        mkCsCasePV (comb3 $1 $3 $4) $2 $4
                                                   (EpAnnCsCase (glAA $1) (glAA $3) []) }
-
-  | aexp1 set_rows {% runPV (unETP $1) >>= \($1 :: LCsType Ps) ->
-                      fmap etpFromTy (amsA' $ sLL $1 $> $
-                      CsSetRows noExtField $1 $2) }
 
   | aexp1 %shift { $1 }
 
