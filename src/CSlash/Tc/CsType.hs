@@ -1,3 +1,4 @@
+{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE BangPatterns #-}
 
 module CSlash.Tc.CsType where
@@ -108,12 +109,27 @@ tcTyKiDecls tykids_s = checkNoErrs $ fold_env tykids_s
 tcTyKiGroup :: TyKiGroup Rn -> TcM (TcGblEnv Tc)
 tcTyKiGroup TyKiGroup{ group_typeds = typeds, group_kisigs = kisigs, group_kindds = kindds } = do
   massertPpr (null kisigs) (ppr kisigs)
+  if | null kindds -> tcTyGroup typeds
+     | null typeds -> tcKiGroup kindds
+     | otherwise -> pprPanic "type/kind decl cycle" (ppr typeds $$ ppr kindds)
 
-  traceTc "---- tcTyKiGroup ---- {" empty
-  traceTc "Decls for" (ppr (map (tydName . unLoc) typeds ++ map (tykidName . unLoc) kindds))
+tcKiGroup :: [LCsBind Rn] -> TcM (TcGblEnv Tc)
+tcKiGroup kindds@(_:_:_) = pprPanic "tcKiGroup cycle" (ppr kindds)
+tcKiGroup [] = panic "tcKiGroup empty"
+tcKiGroup [kindd] = do
+  traceTc "---- tcKiGroup ---- {" empty
+  traceTc "Decl for" (ppr (tykidName (unLoc kindd)))
 
-  kis <- tcKiDs kindds
-  -- TODO!
+  ki <- tcKiD kindd
+
+  panic "tcKiGroup"
+
+tcTyGroup :: [LCsBind Rn] -> TcM (TcGblEnv Tc)
+tcTyGroup typeds = do
+  traceTc "---- tcTyGroup ---- {" empty
+  traceTc "Decls for" (ppr (map (tydName . unLoc) typeds))
+  traceTc "Decls for" (ppr (map (tydName . unLoc) typeds))
+  
   (tys, kindless) <- tcTyDs typeds
 
   traceTc "Starting synonym cycle check" (ppr tys)
@@ -177,9 +193,41 @@ zipRecTys tc_tycons rec_tycons
                  Just tc -> tc
                  other -> pprPanic "zipRecTys" (ppr name <+> ppr other)
 
-tcKiDs :: [LCsBind Rn] -> TcM [KiCon Zk]
-tcKiDs kindds = do
-  panic "tcKiDs"
+tcKiD :: LCsBind Rn -> TcM (KiCon Zk)
+tcKiD (L loc bind@(KiRowBind (kv_names, _) (L _ name) base_kind rows))
+  = setSrcSpanA loc $ tcAddDeclCtxt bind $ do
+  traceTc "---- tcKiD ---- {" (ppr bind)
+
+  -- Kind check the base_kind
+  skol_info <- mkSkolemInfo (KiConSkol name)
+  (spec_kvs, base_mono_kind) <- bindImplicitKBndrs_Q_Skol skol_info kv_names $
+    tcLCsKind base_kind
+
+  traceTc "base_kind0" (ppr spec_kvs $$ ppr base_mono_kind)
+
+  all_kvs <- candidateQKiVarsOfKind (Mono base_mono_kind)
+  let inf_kvs = all_kvs `delDVarSetList` spec_kvs
+  inferred <- quantifyKiVars skol_info inf_kvs
+
+  traceTc "tcKiD base pre zonk"
+    $ vcat [ text "base_mono_kind =" <+> ppr base_mono_kind
+           , text "inf_kvs =" <+> ppr inf_kvs
+           , text "inferred =" <+> ppr inferred
+           , text "spec_kvs =" <+> ppr spec_kvs ]
+
+  (inferred, specified, base_mono_kind) <- liftZonkM $ do
+    inferred <- zonkTcKiVarsToTcKiVars inferred
+    specified <- zonkTcKiVarsToTcKiVars spec_kvs
+    base_mono_kind <- zonkTcMonoKind base_mono_kind
+    return (inferred, specified, base_mono_kind)
+
+  let all_kvs = inferred ++ specified
+      base_kind = mkForAllKisMono (TcKiVar <$> all_kvs) base_mono_kind
+  traceTc "base_kind1" (ppr base_kind)
+
+  -- traceTc "---- tcKiD ---- }" (ppr kicon)
+  panic "return kicon"
+
 
 {- *********************************************************************
 *                                                                      *
@@ -190,7 +238,8 @@ tcKiDs kindds = do
 kcTyGroup :: [LCsBind Rn] -> TcM ([PolyTyCon Tc], NameSet)
 kcTyGroup kindless_decls = do
   mod <- getModule
-  traceTc "---- kcTyGroup ---- {" (text "module" <+> ppr mod $$ vcat (map ppr kindless_decls))
+  traceTc "---- kcTyGroup ---- {"
+    (text "module" <+> ppr mod $$ vcat (map ppr kindless_decls))
 
   let kindless_names = mkNameSet $ map (tydName . unLoc) kindless_decls
 

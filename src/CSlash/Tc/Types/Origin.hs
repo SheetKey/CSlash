@@ -100,6 +100,7 @@ data SkolemInfoAnon
   | InferKindSkol
   | UnifyForAllSkol (Type Tc)
   | TyConSkol TyConFlavor Name
+  | KiConSkol Name
   | UnkSkol CallStack
 
 unkSkol :: HasDebugCallStack => SkolemInfo
