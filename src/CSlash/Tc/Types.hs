@@ -37,6 +37,7 @@ import CSlash.Tc.Errors.Types
 -- import GHC.Core.Reduction ( Reduction(..) )
 import CSlash.Core.Type
 import CSlash.Core.TyCon  ( TyCon )
+import CSlash.Core.Kind
 -- import GHC.Core.PatSyn ( PatSyn )
 -- import GHC.Core.Lint   ( lintAxioms )
 -- import GHC.Core.InstEnv
@@ -196,6 +197,7 @@ data TcGblEnv p = TcGblEnv
   , tcg_binds :: LCsBinds p
   , tcg_sigs :: NameSet
   , tcg_tcs :: [TyCon Zk]
+  , tcg_kcs :: [KiCon Zk] -- all have names
   , tcg_ksigs :: NameSet
   , tcg_hdr_info :: Maybe (XRec Rn ModuleName)
   , tcg_pc :: !AnyPcUsage

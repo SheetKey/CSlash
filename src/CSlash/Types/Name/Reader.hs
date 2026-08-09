@@ -523,6 +523,7 @@ greIsRelevant which_gres ns gre
       RelevantGREs { lookupTyConsAsWell = tycons_too }
         | ns == varName -> isRowNameSpace other_ns || tc_too
         | ns == tvName -> isTcNameSpace other_ns
+        | ns == kvName -> isKcNameSpace other_ns
         | isDataConNameSpace ns -> tc_too
         | otherwise -> False
         where

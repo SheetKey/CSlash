@@ -59,7 +59,7 @@ classifyPredKind ev_ki = case ev_ki of
   KiPredApp pred ki1 ki2 -> KiCoPred pred ki1 ki2
   _ -> IrredPred ev_ki
 
-getPredKis :: PredKind p -> (KiPredCon, MonoKind p, MonoKind p)
+getPredKis :: HasPass p pass => PredKind p -> (KiPredCon, MonoKind p, MonoKind p)
 getPredKis (KiPredApp pred k1 k2) = (pred, k1, k2)
 getPredKis other = pprPanic "getPredKis" (ppr other)
 

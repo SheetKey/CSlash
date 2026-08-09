@@ -101,7 +101,7 @@ mkTemplateFunKindVars i
 --         tc_kind = foldr (FunKd FKF_K_K) res_kind kinds
 --     in tc_kind
 
-mkTemplateTyConKindFromRes :: Int -> MonoKind p -> Kind p
+mkTemplateTyConKindFromRes :: HasPass p pass => Int -> MonoKind p -> Kind p
 mkTemplateTyConKindFromRes arity res_kind
   = let kind_vars = mkTemplateKindVars arity
         kinds = KiVarKi <$> kind_vars
@@ -114,7 +114,7 @@ mkTemplateTyConKindFromRes arity res_kind
         q_full_kind = foldr ForAllKi (Mono full_kind) (kind_vars ++ res_kind_var)
     in pprTrace "mkTemplateTyConKindFromRes" (ppr q_full_kind) q_full_kind
 
-mkTemplateTyConKind :: Int -> Kind p
+mkTemplateTyConKind :: HasPass p pass => Int -> Kind p
 mkTemplateTyConKind arity
   = let res_kind = KiVarKi $ mkKiVar (mk_kv_name arity ('k' : show arity))
     in mkTemplateTyConKindFromRes arity res_kind

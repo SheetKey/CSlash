@@ -69,6 +69,14 @@ fromZkKind ki = let subst = mkEmptySubst (emptyVarSet, emptyVarSet, varsOfKind k
                                        (emptyVarSet, emptyVarSet, emptyVarSet)
               in substKi subst ki
 
+fromZkKiCon :: HasPass p pass => KiCon Zk -> KiCon p
+fromZkKiCon (KiCon nm base rows)
+  = KiCon nm (fromZkKind base) (fromZkRow <$> rows)
+
+fromZkRow :: HasPass p pass => RowSig Zk -> RowSig p
+fromZkRow (RowTySig nm ty) = RowTySig nm (fromZkType ty)
+fromZkRow (RowKiSig nm ki) = RowKiSig nm (fromZkKind ki)
+
 unsafeTcToZkType :: Type Tc -> Type Zk
 unsafeTcToZkType ty =
   let subst = mkEmptySubst (varsOfType ty) (emptyVarSet, emptyVarSet, emptyVarSet)
@@ -345,7 +353,8 @@ bindFreeDomTv subst@(Subst {..}) dom_var
                           , .. }
 
 noDomFVs
-  :: Outputable thing => thing
+  :: (Outputable thing, HasPass p pass)
+  => thing
   -> (TyVarSet p, KiCoVarSet p, KiVarSet p)
   -> (TyVarSet p, KiCoVarSet p, KiVarSet p)
 noDomFVs thing (tv, kcv, kv) =
@@ -620,6 +629,7 @@ subst_mono_ki subst ki = go ki
       = let !k1' = go k1
             !k2' = go k2
       in (mkKiPredApp $! pred) k1' k2'
+    go _ = panic "subst kiconapp"
 
 substKiVar :: (HasDebugCallStack, HasPass p' pass) => Subst p p' -> KiVar p -> MonoKind p'
 substKiVar subst@(Subst { kv_env = env }) kv
@@ -697,12 +707,12 @@ instance SubstP p p where
 
   vacuous_tycon tc = tc
 
-substKiCo :: HasPass p' pass => Subst p p' -> KindCoercion p -> KindCoercion p'
+substKiCo :: (HasPass p pass, HasPass p' pass') => Subst p p' -> KindCoercion p -> KindCoercion p'
 substKiCo subst co
 {-  | isEmptySubstKiCo subst = co
   | otherwise-} = checkValidSubst subst $ subst_kco subst co
 
-subst_kco :: HasPass p' pass => Subst p p' -> KindCoercion p -> KindCoercion p'
+subst_kco :: (HasPass p pass, HasPass p' pass') => Subst p p' -> KindCoercion p -> KindCoercion p'
 subst_kco subst co = go co
   where
     go_mki = subst_mono_ki subst
@@ -724,7 +734,7 @@ subst_kco subst co = go co
     -- go_hole h@(KindCoercionHole { kch_co_var = cv })
     --   = panic "h { kch_co_var = updateVarKind go_mki cv }"
 
-substKiCoVar :: Subst p p' -> KiCoVar p -> KindCoercion p'
+substKiCoVar :: (HasPass p pass, HasPass p' pass') => Subst p p' -> KiCoVar p -> KindCoercion p'
 substKiCoVar (Subst { kcv_env = env }) kcv
   = lookupVarEnv env kcv `orElse` pprPanic "substKiCoVar" (ppr kcv $$ ppr env)
 
@@ -734,14 +744,17 @@ substKiCoVar (Subst { kcv_env = env }) kcv
 *                                                                       *
 ********************************************************************** -}
 
-substTy :: (HasDebugCallStack, HasPass p' pass, SubstP p p') => Subst p p' -> Type p -> Type p'
+substTy
+  :: (HasDebugCallStack, HasPass p pass, HasPass p' pass', SubstP p p')
+  => Subst p p' -> Type p -> Type p'
 substTy subst ty = checkValidSubst subst $
                    subst_ty subst ty
 
-substTyUnchecked :: (HasPass p' pass, SubstP p p') => Subst p p' -> Type p -> Type p'
+substTyUnchecked
+  :: (HasPass p pass, HasPass p' pass', SubstP p p') => Subst p p' -> Type p -> Type p'
 substTyUnchecked subst ty = subst_ty subst ty
 
-subst_ty :: (HasPass p' pass, SubstP p p') => Subst p p' -> Type p -> Type p'
+subst_ty :: (HasPass p pass, HasPass p' pass', SubstP p p') => Subst p p' -> Type p -> Type p'
 subst_ty subst ty = go ty
   where
     go (TyVarTy tv) = substTyVar subst tv
@@ -770,17 +783,17 @@ subst_ty subst ty = go ty
     go (CastTy ty kco) = (mkCastTy $! (go ty)) $! subst_kco subst kco
     go co@(KindCoercion kco) = KindCoercion $! subst_kco subst kco
 
-substTyVar :: HasPass p' pass => Subst p p' -> TyVar p -> Type p'
+substTyVar :: (HasPass p pass, HasPass p' pass') => Subst p p' -> TyVar p -> Type p'
 substTyVar (Subst { tv_env = tenv, tv_in_scope = in_scope }) tv
   = lookupVarEnv tenv tv `orElse` pprPanic "substTyVar" (ppr tv $$ ppr tenv $$ ppr in_scope)
 
 substTyVarBndr
-  :: (HasDebugCallStack, HasPass p' pass, SubstP p p')
+  :: (HasDebugCallStack, HasPass p pass, HasPass p' pass', SubstP p p')
   => Subst p p' -> TyVar p -> (Subst p p', TyVar p')
 substTyVarBndr = substTyVarBndrUsing substMonoKi
 
 substTyVarBndrUsing
-  :: (HasPass p' pass, SubstP p p')
+  :: (HasPass p pass, HasPass p' pass', SubstP p p')
   => (Subst p p' -> MonoKind p -> MonoKind p')
   -> Subst p p' -> TyVar p -> (Subst p p', TyVar p')
 substTyVarBndrUsing subst_fn subst@(Subst {..}) old_var
@@ -798,12 +811,12 @@ substTyVarBndrUsing subst_fn subst@(Subst {..}) old_var
     new_env = extendVarEnv tv_env old_var (mkTyVarTy new_var)
 
 substKiCoVarBndr
-  :: (HasDebugCallStack, HasPass p' pass, SubstP p p')
+  :: (HasDebugCallStack, HasPass p pass, HasPass p' pass', SubstP p p')
   => Subst p p' -> KiCoVar p -> (Subst p p', KiCoVar p')
 substKiCoVarBndr = substKiCoVarBndrUsing substMonoKi
 
 substKiCoVarBndrUsing
-  :: (HasPass p' pass, SubstP p p')
+  :: (HasPass p pass, HasPass p' pass', SubstP p p')
   => (Subst p p' -> MonoKind p -> MonoKind p')
   -> Subst p p' -> KiCoVar p -> (Subst p p', KiCoVar p')
 substKiCoVarBndrUsing subst_fn subst@(Subst {..}) old_var

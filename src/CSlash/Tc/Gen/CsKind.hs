@@ -24,6 +24,8 @@ import CSlash.Core.Type
 import CSlash.Core.Type.Rep
 import CSlash.Core.Type.Ppr
 import CSlash.Core.Kind
+import CSlash.Core.Kind.FVs
+import CSlash.Core.Subst
 
 import CSlash.Builtin.Types.Prim
 import CSlash.Types.Error
@@ -93,4 +95,22 @@ tcKiVar name = do
   thing <- tcLookup name
   case thing of
     AKiVar _ kv -> return $ mkKiVarKi kv
+    AGlobal (AKiCon kicon) -> tcInferKiCon_instantiate kicon
     _ -> wrongThingErr WrongThingKind thing name
+
+-- Shouldn't need to bring anything into scope here.
+-- That would happen at type lambdas or foralls.
+tcInferKiCon_instantiate :: KiCon Zk -> TcM (MonoKind Tc)
+tcInferKiCon_instantiate con = do
+  traceTc "tcInferKiCon {" (ppr con)
+  res <- go_init (fromZkKiCon con)
+  traceTc "tcInferKiCon }" (ppr res)
+  return res
+  where
+    go_init con@(KiCon nm base rows) = assert (noFreeVarsOfKind base) $
+      case splitForAllKiVars base of
+        (kvs, _) -> do
+          (_, args) <- newMetaKiVarsX emptySubst kvs
+          traceTc "tcInferKiCon (need to instantiate)"
+            $ vcat [ ppr kvs, ppr args ]
+          return $ KiConApp con (KiVarKi . TcKiVar <$> args)

@@ -1,6 +1,9 @@
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE RoleAnnotations #-}
 
 module CSlash.Core.Kind where
+
+import CSlash.Cs.Pass
 
 import CSlash.Utils.Outputable 
 import Data.Data (Data)
@@ -18,12 +21,12 @@ type PredKind = MonoKind
 
 data FunKiFlag
 
-instance Outputable (Kind p)
-instance Outputable (MonoKind p)
+instance IsPass p => Outputable (Kind (CsPass p))
+instance IsPass p => Outputable (MonoKind (CsPass p))
 instance Data p => Data (MonoKind p)
 instance Data FunKiFlag
 instance Outputable FunKiFlag
 
-pprKind :: Kind p -> SDoc
+pprKind :: HasPass p pass => Kind p -> SDoc
 
 isKiCoVarKind :: MonoKind p -> Bool

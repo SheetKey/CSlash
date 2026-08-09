@@ -36,13 +36,13 @@ pprPrecTypeX env prec ty
 pprSigmaType :: HasPass p pass => Type p -> SDoc
 pprSigmaType ty = text "pprSigmaType not implemented" <+> pprType ty
 
-pprTyVars :: [TyVar p] -> SDoc
+pprTyVars :: HasPass p pass => [TyVar p] -> SDoc
 pprTyVars tvs = sep (map pprTyVar tvs)
  
 pprTcTyVars :: [TcTyVar] -> SDoc
 pprTcTyVars = pprTyVars . fmap TcTyVar
 
-pprTyVar :: TyVar p -> SDoc
+pprTyVar :: HasPass p pass => TyVar p -> SDoc
 pprTyVar tv = parens (ppr tv <+> colon <+> ppr kind)
   where
     kind = varKind tv

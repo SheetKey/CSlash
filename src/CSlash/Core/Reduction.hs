@@ -215,7 +215,9 @@ emptyLiftingContext is
   = LC (mkEmptySubst (emptyVarSet, emptyVarSet, is) (emptyVarSet, emptyVarSet, emptyVarSet))
        emptyVarEnv
 
-liftCoSubst :: HasDebugCallStack => LiftingContext p -> MonoKind p -> KindCoercion Tc
+liftCoSubst
+  :: (HasDebugCallStack, HasPass p pass)
+  => LiftingContext p -> MonoKind p -> KindCoercion Tc
 {-# INLINE liftCoSubst #-}
 liftCoSubst lc@(LC subst env) ki
   | isEmptyVarEnv env = mkReflKiCo (substMonoKi subst ki)
@@ -246,7 +248,7 @@ extendLiftingContextAndInScope (LC subst env) kv kco
 zapLiftingContext :: LiftingContext p -> LiftingContext p
 zapLiftingContext (LC subst _) = LC (zapSubst subst) emptyVarEnv
 
-ki_co_subst :: forall p. LiftingContext p -> MonoKind p -> KindCoercion Tc
+ki_co_subst :: forall p pass. HasPass p pass => LiftingContext p -> MonoKind p -> KindCoercion Tc
 ki_co_subst @p !lc ki = go ki
   where
     go :: MonoKind p -> KindCoercion Tc
@@ -285,7 +287,7 @@ whose kind is always 'MonoKind', making all this easier.
 -}
 {-# INLINE simplifyArgsWorker #-}
 simplifyArgsWorker
-  :: forall p. HasDebugCallStack
+  :: forall p pass. (HasDebugCallStack, HasPass p pass)
   => [PiKiBinder p]
   -> MonoKind p
   -> KiVarSet p

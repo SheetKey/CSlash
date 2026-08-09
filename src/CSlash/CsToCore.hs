@@ -100,7 +100,7 @@ deSugar cs_env
                           , tcg_fix_env = fix_env
                           , tcg_merged = merged
                           , tcg_binds = binds
-                          , tcg_tcs = tcs
+                          , tcg_tcs = tcs -- TODO: kcs
                           , tcg_pc = other_pc_info
                           , tcg_complete_matches = complete_matches
                           })

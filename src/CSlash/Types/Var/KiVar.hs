@@ -168,7 +168,7 @@ data PiKiBinder p
   | Anon (MonoKind p) FunKiFlag
   deriving Data
 
-instance Outputable (PiKiBinder p) where
+instance IsPass p => Outputable (PiKiBinder (CsPass p)) where
   ppr (Anon ki af) = ppr af <+> ppr ki
   ppr (Named v) = ppr v
 

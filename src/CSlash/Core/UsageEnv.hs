@@ -46,13 +46,14 @@ supUsage _ One = One
 supUsage _ _ = Zero
 
 -- Takes the kind of a binder and gives the usage to scale the RHS of the binding
-bindingKindUsage :: MonoKind p -> Usage
+bindingKindUsage :: HasPass p pass => MonoKind p -> Usage
 bindingKindUsage ki = case splitInvisFunKis ki of
   (_, FunKi{}) -> pprPanic "bindingKindUsage" (ppr ki)
   (_, KiPredApp{}) -> pprPanic "bindingKindUsage" (ppr ki)
   (_, BIKi UKd) -> Zero
   (_, BIKi AKd) -> Zero
   (_, BIKi LKd) -> One
+  (_, KiConApp{}) -> panic "bindingkindusage kiconapp"
   (preds, KiVarKi kv) -> panic "bindingKindUsage"
 
 data UsageEnv = UsageEnv !(NameEnv Usage)

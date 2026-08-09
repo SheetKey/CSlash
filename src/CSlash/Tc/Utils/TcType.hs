@@ -241,6 +241,7 @@ any_rewritable_ki kv_pred = go_mono emptyVarSet
     go_mono bvs (KiVarKi kv) = go_kv bvs kv
     go_mono bvs (BIKi {}) = False
     go_mono bvs (FunKi _ arg res) = go_mono bvs arg || go_mono bvs res
+    go_mono bvs _ = panic "go_mono kiconapp"
 
     go_kv bvs kv | kv `elemVarSet` bvs = False
                  | otherwise = kv_pred kv

@@ -1245,6 +1245,8 @@ simpleUnifyCheckKind lhs_kv rhs = go_mono rhs
 
     go_mono (KiPredApp _ k1 k2) = go_mono k1 && go_mono k2
 
+    go_mono (KiConApp{}) = panic "go_mono kiconapp"
+
 data UnifyCheckCaller
   = UC_OnTheFly
   | UC_QuickLook
@@ -1289,6 +1291,7 @@ simpleUnifyCheckType caller lhs_tv rhs = go rhs
       | otherwise = True
     go_ki BIKi{} = True
     go_ki KiPredApp{} = False -- ??
+    go_ki KiConApp{} = panic "go_ki kiconapp"
     go_ki FunKi { fk_f = af } = isVisibleKiFunArg af
     
 {- *********************************************************************
@@ -1494,6 +1497,7 @@ checkKiEqRhs flags ki = case ki of
     redn1 <- checkKiEqRhs flags ki1
     redn2 <- checkKiEqRhs flags ki2
     return $ mkKiPredAppRedn con <$> redn1 <*> redn2
+  KiConApp{} -> panic "checkkieqrhs kiconapp"
   BIKi {} -> okCheckReflKi ki
   KiVarKi kv -> checkKiVar flags kv
   FunKi { fk_f = af, fk_arg = a, fk_res = r }

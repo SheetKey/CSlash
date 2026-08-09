@@ -284,7 +284,8 @@ rewrite_vector ki tys =
 
 {-# INLINE rewrite_args #-}
 rewrite_args
-  :: [PiKiBinder p]
+  :: HasPass p pass
+  => [PiKiBinder p]
   -> Bool
   -> MonoKind p
   -> KiVarSet p
@@ -312,7 +313,8 @@ rewrite_args_fast orig_tys = fmap finish (iterate orig_tys)
 
 {-# INLINE rewrite_args_slow #-}
 rewrite_args_slow
-  :: [PiKiBinder p]
+  :: HasPass p pass
+  => [PiKiBinder p]
   -> MonoKind p
   -> KiVarSet p
   -> [Type Tc]
@@ -332,7 +334,7 @@ rewrite_one_ki (KiPredApp pred ki1 ki2) = do
   redn2 <- rewrite_one_ki ki2
   return $ mkKiPredAppRedn pred redn1 redn2
 
--- rewrite_one_ki (KiConApp kc kis) = rewrite_ki_con_app kc kis
+rewrite_one_ki (KiConApp{}) = panic "rewrite_one_ki kiconapp"
 
 rewrite_one_ki (FunKi { fk_f = vis, fk_arg = ki1, fk_res = ki2 }) = do
   arg_redn <- rewrite_one_ki ki1

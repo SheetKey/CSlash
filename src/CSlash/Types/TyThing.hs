@@ -13,6 +13,7 @@ import CSlash.Types.Unique.Set
 import CSlash.Core.DataCon
 import CSlash.Core.ConLike
 import CSlash.Core.TyCon
+import CSlash.Core.Kind
 
 import CSlash.Utils.Outputable
 import CSlash.Utils.Misc
@@ -22,6 +23,7 @@ data TyThing p
   = AnId (Id p)
   | AConLike (ConLike p)
   | ATyCon (TyCon p)
+  | AKiCon (KiCon p)
 
 -- Wire-in TyThing 
 type WITyThing = TyThing Zk
@@ -32,6 +34,7 @@ instance Outputable (TyThing p) where
 instance NamedThing (TyThing p) where
   getName (AnId id) = getName id
   getName (ATyCon tc) = getName tc
+  getName (AKiCon kc) = kiConName kc
   getName (AConLike cl) = conLikeName cl
 
 mkATyCon :: TyCon p -> TyThing p
@@ -45,6 +48,7 @@ pprShortTyThing = undefined
 
 tyThingCategory :: TyThing p -> String
 tyThingCategory (ATyCon _) = "type constructor"
+tyThingCategory (AKiCon _) = "kind constructor"
 tyThingCategory (AnId _) = "identifier"
 tyThingCategory (AConLike (RealDataCon _)) = "data constructor"
 tyThingCategory (AConLike PatSynCon) = "pattern synonym"
@@ -65,3 +69,4 @@ tyThingGREInfo = \case
   AConLike con -> IAmConLike $ conLikeConInfo con
   AnId _ -> Vanilla
   ATyCon tc -> IAmTyCon $ tyConFlavor tc
+  AKiCon kc -> IAmKiCon $ kiConRowNames kc

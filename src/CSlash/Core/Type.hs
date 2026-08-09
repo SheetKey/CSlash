@@ -1039,7 +1039,7 @@ mkTyEqPred ty1 ty2
     ki2 = typeMonoKind ty2
 
 decomposeFunCo
-  :: HasDebugCallStack
+  :: (HasDebugCallStack, HasPass p pass)
   => KindCoercion p
   -> (KindCoercion p, KindCoercion p)
 decomposeFunCo (FunCo { fco_arg = co1, fco_res = co2 })

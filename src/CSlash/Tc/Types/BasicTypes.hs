@@ -20,6 +20,7 @@ import CSlash.Language.Syntax.Type ( LCsSigType )
 -- import GHC.Tc.Errors.Types.PromotionErr (PromotionErr, peCategory)
 
 import CSlash.Core.TyCon  ( TyCon, pprTyConKind, fromZkTyCon )
+import CSlash.Core.Kind (Kind)
 import CSlash.Utils.Outputable
 import CSlash.Utils.Misc
 
@@ -97,6 +98,7 @@ data TcTyKiThing
   | AKiCoVar Name (KiCoVar Tc)
   | AKiVar Name (KiVar Tc) -- should make a new type 'TcKiThing'
   | ATcTyCon (TyCon Tc)
+  | ATcTyRow (Kind Tc) -- The kind of the row type (not a kind representing a kind synonym)
 
 tcTyThingTyCon_maybe :: TcTyKiThing -> Maybe (TyCon Tc)
 tcTyThingTyCon_maybe (AGlobal (ATyCon tc)) = Just $ fromZkTyCon tc
@@ -115,6 +117,7 @@ instance Outputable TcTyKiThing where
   ppr (AKiCoVar n kcv) = text "Kind Coercion variable" <+> quotes (ppr n) <+> equals <+> ppr kcv
   ppr (AKiVar n kv) = text "Kind variable" <+> quotes (ppr n) <+> equals <+> ppr kv
   ppr (ATcTyCon tc) = text "ATcTyCon" <+> ppr tc <+> colon <+> pprTyConKind tc
+  ppr (ATcTyRow ki) = text "ATcTyRow" <+> ppr ki
 
 data IdBindingInfo
   = NotLetBound
@@ -143,3 +146,4 @@ tcTyKiThingCategory (AKiCoVar {}) = "kind coercion variable"
 tcTyKiThingCategory (AKiVar {}) = "kind variable"
 tcTyKiThingCategory (ATcId {}) = "local identifier"
 tcTyKiThingCategory (ATcTyCon {}) = "local tycon"
+tcTyKiThingCategory (ATcTyRow {}) = "kind row"

@@ -105,7 +105,7 @@ instance VarHasKind TcKiCoVar Tc where
     ki' <- f tc_cv_thing
     return $ TcCoVar' { tc_cv_thing = ki', .. }
 
-instance Outputable (thing p) => IsVar (CoVar thing p) where
+instance IsVar (CoVar thing p) where
   isTcVar TcCoVar {} = True
   isTcVar _ = False
 

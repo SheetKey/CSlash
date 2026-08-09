@@ -84,7 +84,7 @@ instance TcVar TcTyVar where
 
   tcVarDetails = tc_tv_details
 
-instance Outputable (TyVar p) where
+instance IsPass p => Outputable (TyVar (CsPass p)) where
   ppr (TcTyVar tv) = ppr tv
   ppr TyVar {..} = docWithStyle ppr_code ppr_normal
     where

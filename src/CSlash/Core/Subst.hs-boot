@@ -39,11 +39,11 @@ mkEmptySubst
   -> Subst p p'
 
 noDomFVs
-  :: Outputable thing => thing
+  :: (Outputable thing, HasPass p pass) => thing
   -> (TyVarSet p, KiCoVarSet p, KiVarSet p)
   -> (TyVarSet p, KiCoVarSet p, KiVarSet p)
 
-substTy :: (HasDebugCallStack, HasPass p' pass, SubstP p p') => Subst p p' -> Type p -> Type p'
+substTy :: (HasDebugCallStack, HasPass p pass, HasPass p' pass', SubstP p p') => Subst p p' -> Type p -> Type p'
 
 extendTvSubst :: Subst p p' -> TyVar p -> Type p' -> Subst p p'
 
@@ -51,7 +51,7 @@ extendKCvSubst :: Subst p p' -> KiCoVar p -> KindCoercion p' -> Subst p p'
 
 extendKvSubst :: Subst p p' -> KiVar p -> MonoKind p' -> Subst p p'
 
-substTyUnchecked :: (HasPass p' pass, SubstP p p') => Subst p p' -> Type p -> Type p'
+substTyUnchecked :: (HasPass p pass, HasPass p' pass', SubstP p p') => Subst p p' -> Type p -> Type p'
 
 isEmptySubst :: Subst p p' -> Bool
 

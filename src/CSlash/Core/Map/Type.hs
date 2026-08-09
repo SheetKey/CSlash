@@ -179,6 +179,7 @@ lkMK (D env ki) m = go ki m
     go (KiVarKi v) = mkm_var >.> lkVar (\e b -> lookupCMEB e (Kv v)) env v
     go (BIKi bi) = mkm_bi >.> lookupTM bi
     go (KiPredApp p k1 k2) = mkm_pred >.> lookupTM p >=> lkG (D env k1) >=> lkG (D env k2)
+    go (KiConApp{}) = panic "lkMK kiconapp"
     go (FunKi f k1 k2) = mkm_fun >.> lookupTM f >=> lkG (D env k1) >=> lkG (D env k2)
 
 xtMK :: DeBruijn CoreMonoKind -> XT a -> MonoKindMapX a -> MonoKindMapX a
@@ -188,6 +189,8 @@ xtMK (D env (BIKi bi)) f m
   = m { mkm_bi = mkm_bi m |> alterTM bi f }
 xtMK (D env (KiPredApp p k1 k2)) f m
   = m { mkm_pred = mkm_pred m |> alterTM p |>> xtG (D env k1) |>> xtG (D env k2) f }
+xtMK (D env (KiConApp{})) f m
+  = panic "xtMK kiconapp"
 xtMK (D env (FunKi fl k1 k2)) f m
   = m { mkm_fun = mkm_fun m |> alterTM fl |>> xtG (D env k1) |>> xtG (D env k2) f }
 

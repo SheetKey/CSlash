@@ -1,3 +1,5 @@
+{-# LANGUAGE FlexibleInstances #-}
+
 module CSlash.Tc.Validity where
 
 import CSlash.Data.FastString
@@ -140,7 +142,7 @@ data ValidityEnv p = ValidityEnv
   { ve_tidy_env :: TidyEnv p
   , ve_ctxt :: UserTypeCtxt }
 
-instance Outputable (ValidityEnv p) where
+instance IsPass p => Outputable (ValidityEnv (CsPass p)) where
   ppr (ValidityEnv { ve_tidy_env = env
                    , ve_ctxt = ctxt })
     = hang (text "ValidityEnv")

@@ -49,6 +49,7 @@ data UserTypeCtxt
   | SigmaCtxt
   | TyVarBndrKindCtxt Name
   | TySynKindCtxt Name
+  | RowSigCtxt Name ReportRedundantConstraints
   deriving (Eq)
 
 data ReportRedundantConstraints
@@ -62,6 +63,7 @@ reportRedundantConstraints (WantRRC {}) = True
 
 pprUserTypeCtxt :: UserTypeCtxt -> SDoc
 pprUserTypeCtxt (FunSigCtxt n _) = text "the type signature for" <+> quotes (ppr n)
+pprUserTypeCtxt (RowSigCtxt n _) = text "the type signature for the row" <+> quotes (ppr n) 
 pprUserTypeCtxt (InfSigCtxt n) = text "the inferred type for" <+> quotes (ppr n)
 pprUserTypeCtxt (ExprSigCtxt _) = text "an expression type signature"
 pprUserTypeCtxt KindSigCtxt = text "a kind signature"
@@ -101,6 +103,7 @@ data SkolemInfoAnon
   | UnifyForAllSkol (Type Tc)
   | TyConSkol TyConFlavor Name
   | KiConSkol Name
+  | RowTySigSkol Name
   | UnkSkol CallStack
 
 unkSkol :: HasDebugCallStack => SkolemInfo
@@ -126,6 +129,8 @@ instance Outputable SkolemInfoAnon where
 pprSkolInfo :: SkolemInfoAnon -> SDoc
 pprSkolInfo (SigSkol cx ty _ _ _) = pprSigSkolInfo cx ty
 pprSkolInfo (SigTypeSkol cx) = pprUserTypeCtxt cx
+pprSkolInfo (RowTySigSkol nm) = text "the row signature for" <+> quotes (ppr nm)
+pprSkolInfo (KiConSkol nm) = text "the row declaration for" <+> quotes (ppr nm)
 pprSkolInfo (ForAllSkol tvs) = text "an explicit forall" <+> ppr tvs
 pprSkolInfo (TyLamTySkol tvs) = text "an explicit type lambda" <+> ppr tvs
 pprSkolInfo (InferSkol ids) = hang (text "the inferred type" <> plural ids <+> text "of")

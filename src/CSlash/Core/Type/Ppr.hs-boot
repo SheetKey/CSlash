@@ -7,5 +7,6 @@ import CSlash.Utils.Outputable (Outputable, SDoc)
 import {-# SOURCE #-} CSlash.Types.Var (TyVar)
 
 pprType :: HasPass p pass => Type p -> SDoc
+debugPprType :: HasPass p pass => Type p -> SDoc
 
-pprTyVar :: TyVar p -> SDoc
+pprTyVar :: HasPass p pass => TyVar p -> SDoc

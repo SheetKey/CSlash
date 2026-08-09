@@ -97,6 +97,7 @@ instance OutputableBndrId p => Outputable (TyKiGroup (CsPass p)) where
 
 pprTyDeclFlavor :: CsBind (CsPass p) -> SDoc
 pprTyDeclFlavor (TyFunBind {}) = text "type"
+pprTyDeclFlavor (KiRowBind {}) = text "kind"
 pprTyDeclFlavor _ = panic "pprTyDeclFlavor"
 
 emptyRdrGroup :: CsGroup (CsPass p)

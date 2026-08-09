@@ -147,6 +147,7 @@ initTc cs_env cs_src keep_rn_syntax mod loc do_this = do
                 , tcg_binds = emptyLCsBinds
                 , tcg_sigs = emptyNameSet
                 , tcg_tcs = []
+                , tcg_kcs = []
                 , tcg_ksigs = emptyNameSet
                 , tcg_hdr_info = Nothing
                 , tcg_pc = False

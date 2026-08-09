@@ -238,6 +238,10 @@ type instance XRowTySigD (CsPass p) Rn = ([Name], FreeVars)
 type instance XRowTySigD (CsPass p) Tc = NoExtField
 type instance XRowTySigD (CsPass p) Zk = NoExtField
 
+isTypeRow :: LRowDecl (CsPass pL) (CsPass pR) -> Bool
+isTypeRow (L _ RowSigD{}) = False
+isTypeRow (L _ RowTySigD{}) = True
+
 data NamespaceSpecifier
   = NoNamespaceSpecifier
   | TypeNamespaceSpecifier (EpToken "type")

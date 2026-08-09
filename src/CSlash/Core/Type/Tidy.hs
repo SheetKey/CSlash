@@ -255,6 +255,7 @@ tidyMonoKind _ kc@(BIKi _) = kc
 tidyMonoKind env (KiPredApp pred k1 k2) = let !k1' = tidyMonoKind env k1
                                               !k2' = tidyMonoKind env k2
                                           in KiPredApp pred k1' k2'
+tidyMonoKind env (KiConApp{}) = panic "tidyMonoKind KiConApp"
 tidyMonoKind env ki@(FunKi _ arg res) = let !arg' = tidyMonoKind env arg
                                             !res' = tidyMonoKind env res
                                         in ki { fk_arg = arg', fk_res = res' }

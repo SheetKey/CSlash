@@ -166,7 +166,9 @@ newTyCoercionHole pred_ty = do
   ref <- newMutVar Nothing
   return $ TypeCoercionHole { tch_co_var = co_var, tch_ref = ref }
 
-newKiCoercionHoleX :: Subst p Tc -> KiCoVar p -> TcM (Subst p Tc, KindCoercionHole)
+newKiCoercionHoleX
+  :: HasPass p pass
+  => Subst p Tc -> KiCoVar p -> TcM (Subst p Tc, KindCoercionHole)
 newKiCoercionHoleX subst kcv = do
   name <- cloneKiCoVarName (varName kcv)
   let kcv' = mkTcCoVar name (substMonoKi subst (varKind kcv)) vanillaSkolemVarUnk  
@@ -399,6 +401,9 @@ newMetaTyKiVarsX subst kvs tvs = do
   (subst', kvs) <- mapAccumLM newMetaKiVarX subst kvs
   (subst'', tvs) <- mapAccumLM newMetaTyVarX subst' tvs
   return (subst'', kvs, tvs)
+
+newMetaKiVarsX :: Subst p Tc -> [KiVar p] -> TcM (Subst p Tc, [TcKiVar])
+newMetaKiVarsX subst kvs = mapAccumLM newMetaKiVarX subst kvs
 
 newMetaTyVarX :: Subst p Tc -> TyVar p -> TcM (Subst p Tc, TcTyVar)
 newMetaTyVarX = new_meta_tv_x TauVar
@@ -757,6 +762,7 @@ collect_cand_qkvs orig_ki cur_lvl bound dvs ki = go dvs ki
 
     go_mono :: DTcKiVarSet -> MonoKind Tc -> TcM DTcKiVarSet
     go_mono dv (KiPredApp _ k1 k2) = foldlM go_mono dv [k1, k2]
+    go_mono dv (KiConApp{}) = panic "go_mono dv kiconapp"
     go_mono dv (FunKi _ k1 k2) = foldlM go_mono dv [k1, k2]
     go_mono dv (BIKi {}) = return dv
     go_mono dv (KiVarKi kv)
