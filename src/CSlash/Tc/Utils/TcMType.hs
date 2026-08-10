@@ -408,6 +408,9 @@ newMetaKiVarsX subst kvs = mapAccumLM newMetaKiVarX subst kvs
 newMetaTyVarX :: Subst p Tc -> TyVar p -> TcM (Subst p Tc, TcTyVar)
 newMetaTyVarX = new_meta_tv_x TauVar
 
+newMetaVarKiVarsX :: Subst p Tc -> [KiVar p] -> TcM (Subst p Tc, [TcKiVar])
+newMetaVarKiVarsX subst kvs = mapAccumLM (new_meta_kv_x VarVar) subst kvs
+
 new_meta_tv_x
   :: MetaInfo -> Subst p Tc -> TyVar p -> TcM (Subst p Tc, TcTyVar)
 new_meta_tv_x info subst tv = do
@@ -971,7 +974,7 @@ skolemizeUnboundMetaKiVar skol_info kv = assertPpr (isMetaVar kv) (ppr kv) $ do
       final_kv = mkTcKiVar final_name details
 
   traceZonk "Skolemizing" (ppr kv <+> text ":=" <+> ppr final_kv)
-  writeMetaKiVar kv (mkKiVarKi $ panic "toAnyKiVar final_kv")
+  writeMetaKiVar kv (mkKiVarKi $ TcKiVar final_kv)
   return final_kv
   where
     check_empty kv = when debugIsOn $ do

@@ -202,7 +202,9 @@ tcKiD (L loc bind@(KiRowBind (kv_names, _) (L _ name) base_kind rows))
 
   -- Kind check the base_kind
   skol_info <- mkSkolemInfo (KiConSkol name)
-  (spec_kvs, base_mono_kind) <- bindImplicitKBndrs_Q_Skol skol_info kv_names $
+  (spec_kvs, base_mono_kind) <-
+    pushLevelAndSolveKindCoercions (KiConSkol name) [] $ -- TODO: swap these lines?
+    bindImplicitKBndrs_Q_Skol skol_info kv_names $
     tcLCsKind base_kind
 
   traceTc "base_kind0" (ppr spec_kvs $$ ppr base_mono_kind)
