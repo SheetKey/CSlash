@@ -151,7 +151,7 @@ addTyConsToGblEnv tys = assertPpr (all isTypeSynonymTyCon tys) (ppr tys) -- temp
                                       -- , text "implicits" <+> ppr implicit_things ]
                              getGblEnv
 
-addKiConToGblEnv :: KiCon Zk -> TcM (TcGblEnv Tc)
+addKiConToGblEnv :: ([KiVar Zk], KiCon Zk) -> TcM (TcGblEnv Tc)
 addKiConToGblEnv ki = tcExtendKiConEnv ki $ do
   traceTc "tcAddKiCon"
     $ vcat [ text "kicon" <+> ppr ki ]

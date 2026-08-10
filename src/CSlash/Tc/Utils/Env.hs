@@ -179,7 +179,7 @@ tcExtendTyConEnv tycons thing_inside = do
   let env' = env { tcg_tcs = tycons ++ tcg_tcs env }
   setGblEnv env' $ tcExtendGlobalEnvImplicit (map ATyCon tycons) thing_inside
 
-tcExtendKiConEnv :: KiCon Zk -> TcM r -> TcM r
+tcExtendKiConEnv :: ([KiVar Zk], KiCon Zk) -> TcM r -> TcM r
 tcExtendKiConEnv kicon thing_inside = do
   env <- getGblEnv
   let env' = env { tcg_kcs = kicon : tcg_kcs env }

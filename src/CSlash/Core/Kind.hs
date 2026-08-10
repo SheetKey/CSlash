@@ -58,7 +58,7 @@ data MonoKind p
   = KiVarKi (KiVar p)
   | BIKi BuiltInKi
   | KiPredApp KiPredCon (MonoKind p) (MonoKind p)
-  | KiConApp (KiCon p) [MonoKind p] -- Saturated! (Applies the kicon_base to some args), core view will discard the rows and just apply the base kind to the args.
+  | KiConApp (KiCon p)
   | FunKi
     { fk_f :: FunKiFlag
     , fk_arg :: MonoKind p
@@ -80,7 +80,7 @@ data KiPredCon
 
 data KiCon p = KiCon
   { kicon_name :: Maybe Name
-  , kicon_base :: Kind p
+  , kicon_base :: MonoKind p
   , kicon_rows :: [RowSig p] -- NonEmpty
   }
   deriving Data.Data
@@ -261,10 +261,8 @@ debug_ppr_ki _ _ = panic "debug_ppr_ki unreachable"
 debug_ppr_mono_ki :: HasPass p pass => PprPrec -> MonoKind p -> SDoc
 debug_ppr_mono_ki _ (KiVarKi kv) = ppr kv
 debug_ppr_mono_ki _ (BIKi ki) = ppr ki
-debug_ppr_mono_ki _ (KiConApp kc args)
-  = hang ((if null args || isJust (kicon_name kc) then id else parens)
-          (debug_ppr_kicon kc)) 2
-    (sep (map (debug_ppr_mono_ki appPrec) args))
+debug_ppr_mono_ki _ (KiConApp kc)
+  = debug_ppr_kicon kc
 debug_ppr_mono_ki prec ki@(KiPredApp pred k1 k2)
   = maybeParen prec appPrec
     $ debug_ppr_mono_ki appPrec k1 <+> ppr pred <+> debug_ppr_mono_ki appPrec k2
@@ -281,7 +279,7 @@ debug_ppr_kicon KiCon{..}
   | Just name <- kicon_name
   = ppr name
   | otherwise
-  = debug_ppr_ki appPrec kicon_base <+>
+  = debug_ppr_mono_ki appPrec kicon_base <+>
     dot <> (braces (fsep (punctuate comma (map debug_ppr_row kicon_rows))))
 
 debug_ppr_row :: HasPass p pass => RowSig p -> SDoc

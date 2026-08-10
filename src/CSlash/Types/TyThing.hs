@@ -23,7 +23,7 @@ data TyThing p
   = AnId (Id p)
   | AConLike (ConLike p)
   | ATyCon (TyCon p)
-  | AKiCon (KiCon p)
+  | AKiCon ([KiVar p], KiCon p)
 
 -- Wire-in TyThing 
 type WITyThing = TyThing Zk
@@ -34,7 +34,7 @@ instance Outputable (TyThing p) where
 instance NamedThing (TyThing p) where
   getName (AnId id) = getName id
   getName (ATyCon tc) = getName tc
-  getName (AKiCon kc) = kiConName kc
+  getName (AKiCon (_, kc)) = kiConName kc
   getName (AConLike cl) = conLikeName cl
 
 mkATyCon :: TyCon p -> TyThing p
@@ -69,4 +69,4 @@ tyThingGREInfo = \case
   AConLike con -> IAmConLike $ conLikeConInfo con
   AnId _ -> Vanilla
   ATyCon tc -> IAmTyCon $ tyConFlavor tc
-  AKiCon kc -> IAmKiCon $ kiConRowNames kc
+  AKiCon (_, kc) -> IAmKiCon $ kiConRowNames kc

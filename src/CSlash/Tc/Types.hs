@@ -197,7 +197,7 @@ data TcGblEnv p = TcGblEnv
   , tcg_binds :: LCsBinds p
   , tcg_sigs :: NameSet
   , tcg_tcs :: [TyCon Zk]
-  , tcg_kcs :: [KiCon Zk] -- all have names
+  , tcg_kcs :: [([KiVar Zk],KiCon Zk)] -- all have names
   , tcg_ksigs :: NameSet
   , tcg_hdr_info :: Maybe (XRec Rn ModuleName)
   , tcg_pc :: !AnyPcUsage

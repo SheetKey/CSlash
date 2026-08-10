@@ -95,22 +95,17 @@ tcKiVar name = do
   thing <- tcLookup name
   case thing of
     AKiVar _ kv -> return $ mkKiVarKi kv
-    AGlobal (AKiCon kicon) -> tcInferKiCon_instantiate kicon
+    AGlobal (AKiCon (kvs, kicon)) -> tcInferKiCon_instantiate kvs kicon
     _ -> wrongThingErr WrongThingKind thing name
 
 -- Shouldn't need to bring anything into scope here.
 -- That would happen at type lambdas or foralls.
-tcInferKiCon_instantiate :: KiCon Zk -> TcM (MonoKind Tc)
-tcInferKiCon_instantiate con = do
-  traceTc "tcInferKiCon {" (ppr con)
-  res <- go_init (fromZkKiCon con)
+tcInferKiCon_instantiate :: [KiVar Zk] -> KiCon Zk -> TcM (MonoKind Tc)
+tcInferKiCon_instantiate kvs kicon@(KiCon nm base rows) = do
+  traceTc "tcInferKiCon {" (ppr kvs $$ ppr kicon)
+  (subst, _) <- newMetaKiVarsX emptySubst kvs
+  let base' = substMonoKi subst base
+      rows' = fromZkRow <$> rows
+      res = KiConApp (KiCon nm base' rows')
   traceTc "tcInferKiCon }" (ppr res)
   return res
-  where
-    go_init con@(KiCon nm base rows) = assert (noFreeVarsOfKind base) $
-      case splitForAllKiVars base of
-        (kvs, _) -> do
-          (_, args) <- newMetaKiVarsX emptySubst kvs
-          traceTc "tcInferKiCon (need to instantiate)"
-            $ vcat [ ppr kvs, ppr args ]
-          return $ KiConApp con (KiVarKi . TcKiVar <$> args)

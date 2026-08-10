@@ -69,9 +69,14 @@ fromZkKind ki = let subst = mkEmptySubst (emptyVarSet, emptyVarSet, varsOfKind k
                                        (emptyVarSet, emptyVarSet, emptyVarSet)
               in substKi subst ki
 
+fromZkMonoKind :: HasPass p pass => MonoKind Zk -> MonoKind p
+fromZkMonoKind ki = let subst = mkEmptySubst (emptyVarSet, emptyVarSet, varsOfMonoKind ki)
+                                (emptyVarSet, emptyVarSet, emptyVarSet)
+                    in substMonoKi subst ki
+
 fromZkKiCon :: HasPass p pass => KiCon Zk -> KiCon p
 fromZkKiCon (KiCon nm base rows)
-  = KiCon nm (fromZkKind base) (fromZkRow <$> rows)
+  = KiCon nm (fromZkMonoKind base) (fromZkRow <$> rows)
 
 fromZkRow :: HasPass p pass => RowSig Zk -> RowSig p
 fromZkRow (RowTySig nm ty) = RowTySig nm (fromZkType ty)

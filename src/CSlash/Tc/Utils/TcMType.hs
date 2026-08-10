@@ -762,9 +762,7 @@ collect_cand_qkvs orig_ki cur_lvl bound dvs ki = go dvs ki
 
     go_mono :: DTcKiVarSet -> MonoKind Tc -> TcM DTcKiVarSet
     go_mono dv (KiPredApp _ k1 k2) = foldlM go_mono dv [k1, k2]
-    go_mono dv (KiConApp (KiCon _ base _) args) = do
-      dv1 <- go dv base
-      foldM go_mono dv1 args
+    go_mono dv (KiConApp (KiCon _ base _)) = go_mono dv base
     go_mono dv (FunKi _ k1 k2) = foldlM go_mono dv [k1, k2]
     go_mono dv (BIKi {}) = return dv
     go_mono dv (KiVarKi kv)

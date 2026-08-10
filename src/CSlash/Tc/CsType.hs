@@ -121,11 +121,11 @@ tcKiGroup [kindd] = do
   traceTc "---- tcKiGroup ---- {" empty
   traceTc "Decl for" (ppr (tykidName (unLoc kindd)))
 
-  ki <- tcKiD kindd
+  stuff <- tcKiD kindd
 
   -- TODO: validity check
 
-  addKiConToGblEnv ki
+  addKiConToGblEnv stuff
 
 tcTyGroup :: [LCsBind Rn] -> TcM (TcGblEnv Tc)
 tcTyGroup typeds = do
@@ -195,7 +195,7 @@ zipRecTys tc_tycons rec_tycons
                  Just tc -> tc
                  other -> pprPanic "zipRecTys" (ppr name <+> ppr other)
 
-tcKiD :: LCsBind Rn -> TcM (KiCon Zk)
+tcKiD :: LCsBind Rn -> TcM ([KiVar Zk], KiCon Zk)
 tcKiD (L loc bind@(KiRowBind (kv_names, _) (L _ name) base_kind rows))
   = setSrcSpanA loc $ tcAddDeclCtxt bind $ do
   traceTc "---- tcKiD ---- {" (ppr bind)
@@ -224,20 +224,21 @@ tcKiD (L loc bind@(KiRowBind (kv_names, _) (L _ name) base_kind rows))
     return (inferred, specified, base_mono_kind)
 
   let all_kvs = inferred ++ specified
-      base_kind = mkForAllKisMono (TcKiVar <$> all_kvs) base_mono_kind
-  traceTc "base_kind1" (ppr base_kind)
+      self_kind = mkForAllKisMono (TcKiVar <$> all_kvs) base_mono_kind
+  traceTc "self_kind1" (ppr self_kind)
 
   -- Now the rows
-  rows <- tcRowsD base_kind rows
+  rows <- tcRowsD self_kind rows
 
   -- Now zonk whats left
-  base_kind <- initZonkEnv NoFlexi $ zonkTcKindToKindX base_kind
-  traceTc "base_kind2(Zonked)" (ppr base_kind $$ ppr rows)
+  self_kind <- initZonkEnv NoFlexi $ zonkTcKindToKindX self_kind
+  traceTc "self_kind2(Zonked)" (ppr self_kind $$ ppr rows)
 
-  let kicon = KiCon (Just name) base_kind rows
-  
-  traceTc "---- tcKiD ---- }" (ppr kicon)
-  return kicon
+  let (kvs, base_mono_kind) = splitForAllKiVars self_kind
+      kicon = KiCon (Just name) base_mono_kind rows
+
+  traceTc "---- tcKiD ---- }" (ppr kvs $$ ppr kicon)
+  return (kvs, kicon)
 
 tcKiD _ = panic "tcKiD other"
 
