@@ -242,7 +242,7 @@ tcKiD (L loc bind@(KiRowBind (kv_names, _) (L _ name) base_kind rows))
 
 tcKiD _ = panic "tcKiD other"
 
-tcRowsD :: Kind Tc -> NonEmpty (LRowDecl Rn Rn) -> RnM [RowSig Zk]
+tcRowsD :: Kind Tc -> NonEmpty (LRowDecl Rn Rn) -> RnM [RowSig]
 tcRowsD base_kind rows = do
   let (ty_rows, val_rows) = NE.partition isTypeRow rows
   ty_rows <- tcTyRowsD ty_rows

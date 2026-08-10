@@ -81,7 +81,7 @@ data KiPredCon
 data KiCon p = KiCon
   { kicon_name :: Maybe Name
   , kicon_base :: MonoKind p
-  , kicon_rows :: [RowSig p] -- NonEmpty
+  , kicon_rows :: [RowSig] -- NonEmpty
   }
   deriving Data.Data
 
@@ -99,12 +99,12 @@ kiConRowNames KiCon{ kicon_rows = rows }
   | otherwise
   = panic "kiConRowNames empty rows"
 
-data RowSig p
-  = RowTySig Name (Type p)
-  | RowKiSig Name (Kind p)
+data RowSig
+  = RowTySig Name (Type Zk)
+  | RowKiSig Name (Kind Zk)
   deriving Data.Data
 
-rowName :: RowSig p -> Name
+rowName :: RowSig -> Name
 rowName (RowTySig n _) = n
 rowName (RowKiSig n _) = n
 
@@ -159,7 +159,7 @@ instance IsPass p => Outputable (Kind (CsPass p)) where
 instance IsPass p => Outputable (MonoKind (CsPass p)) where
   ppr = pprMonoKind
 
-instance IsPass p => Outputable (RowSig (CsPass p)) where
+instance Outputable RowSig where
   ppr = pprRowSig
 
 instance IsPass p => Outputable (KiCon (CsPass p)) where
@@ -211,13 +211,13 @@ pprPrecMonoKindX env prec ki
     then debug_ppr_mono_ki prec ki
     else text "{pprKind not implemented}"--pprPrecIfaceKind prec (tidyToIfaceKindStyX env ty sty)
 
-pprRowSig :: HasPass p pass => RowSig p -> SDoc
+pprRowSig :: RowSig -> SDoc
 pprRowSig = pprPrecRowSig topPrec
 
-pprPrecRowSig :: HasPass p pass => PprPrec -> RowSig p -> SDoc
+pprPrecRowSig :: PprPrec -> RowSig -> SDoc
 pprPrecRowSig = pprPrecRowSigX emptyTidyEnv
 
-pprPrecRowSigX :: HasPass p pass => TidyEnv p -> PprPrec -> RowSig p -> SDoc
+pprPrecRowSigX :: TidyEnv p -> PprPrec -> RowSig -> SDoc
 pprPrecRowSigX env prec ki
   = getPprStyle $ \sty ->
     getPprDebug $ \debug ->
@@ -282,7 +282,7 @@ debug_ppr_kicon KiCon{..}
   = debug_ppr_mono_ki appPrec kicon_base <+>
     dot <> (braces (fsep (punctuate comma (map debug_ppr_row kicon_rows))))
 
-debug_ppr_row :: HasPass p pass => RowSig p -> SDoc
+debug_ppr_row :: RowSig -> SDoc
 debug_ppr_row (RowTySig name ty) = ppr name <+> colon <+> debugPprType ty
 debug_ppr_row (RowKiSig name ki) = text "type" <+> ppr name <+> colon <+> debugPprKind ki
 
@@ -841,7 +841,9 @@ mapMKiCoX (MKiCoMapper { mkcm_kivar = kivar, mkcm_covar = covar, mkcm_hole = coh
 
     go_mki !env (KiVarKi kv) = kivar env kv
     go_mki !env (BIKi k) = return $ BIKi k
-    go_mki !env (KiConApp{}) = panic "go_mki kiconapp"
+    go_mki !env (KiConApp (KiCon nm base rows)) = do
+      base' <- go_mki env base
+      return $ KiConApp $ KiCon nm base' rows
     go_mki !env (KiPredApp pred ki1 ki2)
       = mkKiPredApp pred <$> go_mki env ki1 <*> go_mki env ki2
     go_mki !env ki@(FunKi _ arg res) = do

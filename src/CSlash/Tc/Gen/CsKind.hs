@@ -105,7 +105,6 @@ tcInferKiCon_instantiate kvs kicon@(KiCon nm base rows) = do
   traceTc "tcInferKiCon {" (ppr kvs $$ ppr kicon)
   (subst, _) <- newMetaKiVarsX emptySubst kvs
   let base' = substMonoKi subst base
-      rows' = fromZkRow <$> rows
-      res = KiConApp (KiCon nm base' rows')
+      res = KiConApp (KiCon nm base' rows)
   traceTc "tcInferKiCon }" (ppr res)
   return res
