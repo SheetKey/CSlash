@@ -37,6 +37,7 @@ import CSlash.Tc.Types.Origin
 import CSlash.Tc.Types.LclEnv
 
 import CSlash.Builtin.Types ({-oneDataConTy,  unitTy, -}makeRecoveryTyCon )
+import CSlash.Builtin.Names (selfName)
 
 -- import GHC.Rename.Env( lookupConstructorFields )
 
@@ -229,12 +230,13 @@ tcKiD (L loc bind@(KiRowBind (kv_names, _) (L _ name) base_kind rows))
       self_kind = mkForAllKisMono (TcKiVar <$> all_kvs) base_mono_kind
   traceTc "self_kind1" (ppr self_kind)
 
+  -- Now zonk
+  self_kind <- initZonkEnv NoFlexi $ zonkTcKindToKindX self_kind
+  traceTc "self_kind2(Zonked)" (ppr self_kind)
+
   -- Now the rows
   rows <- tcRowsD self_kind rows
-
-  -- Now zonk whats left
-  self_kind <- initZonkEnv NoFlexi $ zonkTcKindToKindX self_kind
-  traceTc "self_kind2(Zonked)" (ppr self_kind $$ ppr rows)
+  traceTc "rows(Zonked)" (ppr self_kind)
 
   let (kvs, base_mono_kind) = splitForAllKiVars self_kind
       kicon = KiCon (Just name) base_mono_kind rows
@@ -244,22 +246,21 @@ tcKiD (L loc bind@(KiRowBind (kv_names, _) (L _ name) base_kind rows))
 
 tcKiD _ = panic "tcKiD other"
 
-tcRowsD :: Kind Tc -> NonEmpty (LRowDecl Rn Rn) -> RnM [RowSig]
+tcRowsD :: Kind Zk -> NonEmpty (LRowDecl Rn Rn) -> RnM [RowSig]
 tcRowsD base_kind rows = do
   let (ty_rows, val_rows) = NE.partition isTypeRow rows
   ty_rows <- tcTyRowsD ty_rows
 
-  val_rows <- tcExtendKindEnvWithTyRows ty_rows $ -- TODO: deal with 'self' here!
+  ty_rows <- initZonkEnv NoFlexi $ mapSndM zonkTcKindToKindX ty_rows
+
+  val_rows <- tcExtendKindEnvWithTyRows ((selfName, base_kind) : ty_rows) $
               mapM tcValRowD val_rows
 
   -- pushLevelAndSolveKindCoercions before zonking? I.e., wrapping tcTyRowsD and/or tcValRowD?
-  (ty_rows', val_rows') <- initZonkEnv NoFlexi $ do
-    tys <- mapSndM zonkTcKindToKindX ty_rows
-    vals <- mapSndM zonkTcTypeToTypeX val_rows
-    return (tys, vals)
+  val_rows <- initZonkEnv NoFlexi $ mapSndM zonkTcTypeToTypeX val_rows
 
-  let rows = (uncurry RowKiSig <$> ty_rows')
-             ++ (uncurry RowTySig <$> val_rows')
+  let rows = (uncurry RowKiSig <$> ty_rows)
+             ++ (uncurry RowTySig <$> val_rows)
 
   traceTc "tcRowsD" (ppr rows)
   return rows
@@ -496,7 +497,7 @@ generalizeTcTyCon (tc, skol_info, scoped_prs, tc_full_kind)
 tcExtendKindEnvWithTyCons :: [TyCon Tc] -> TcM a -> TcM a
 tcExtendKindEnvWithTyCons tcs = tcExtendKindEnvList [ (tyConName tc, ATcTyCon tc) | tc <- tcs ]
 
-tcExtendKindEnvWithTyRows :: [(Name, Kind Tc)] -> TcM a -> TcM a
+tcExtendKindEnvWithTyRows :: [(Name, Kind Zk)] -> TcM a -> TcM a
 tcExtendKindEnvWithTyRows tys = tcExtendKindEnvList $ mapSnd ATcTyRow tys
 
 inferInitialKinds :: [LCsBind Rn] -> TcM [MonoTyCon Tc]

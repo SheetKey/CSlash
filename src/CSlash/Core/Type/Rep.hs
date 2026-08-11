@@ -53,7 +53,7 @@ data Type p
     , ft_arg :: Type p
     , ft_res :: Type p
     }
-  | LocalTyRow Name (Kind p)
+  | LocalTyRow Name (Kind Zk)
   | CastTy (Type p) (KindCoercion p)
   | Embed (MonoKind p) -- for application to a 'BigTyLamTy
   | KindCoercion (KindCoercion p) -- embed a kind coercion (evidence stuff)

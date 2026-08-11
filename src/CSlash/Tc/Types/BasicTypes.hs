@@ -98,7 +98,7 @@ data TcTyKiThing
   | AKiCoVar Name (KiCoVar Tc)
   | AKiVar Name (KiVar Tc) -- should make a new type 'TcKiThing'
   | ATcTyCon (TyCon Tc)
-  | ATcTyRow (Kind Tc) -- The kind of the row type (not a kind representing a kind synonym)
+  | ATcTyRow (Kind Zk) -- The kind of the row type (not a kind representing a kind synonym)
 
 tcTyThingTyCon_maybe :: TcTyKiThing -> Maybe (TyCon Tc)
 tcTyThingTyCon_maybe (AGlobal (ATyCon tc)) = Just $ fromZkTyCon tc

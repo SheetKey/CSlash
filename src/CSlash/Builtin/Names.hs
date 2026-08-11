@@ -44,6 +44,9 @@ mkUnboundName occ = mkInternalName unboundKey occ noSrcSpan
 isUnboundName :: Name -> Bool
 isUnboundName name = name `hasKey` unboundKey
 
+selfName :: Name
+selfName = mkUnboundName (mkOccName TcName "self")
+
 {- *********************************************************************
 *                                                                      *
       Known key Names
