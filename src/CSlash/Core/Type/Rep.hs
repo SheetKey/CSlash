@@ -20,6 +20,7 @@ import CSlash.Core.Kind
 import CSlash.Core.Kind.Compare
 
 import CSlash.Builtin.Names
+import CSlash.Types.Name
 
 import CSlash.Types.Basic (LeftOrRight(..), pickLR)
 import CSlash.Utils.Outputable
@@ -52,6 +53,7 @@ data Type p
     , ft_arg :: Type p
     , ft_res :: Type p
     }
+  | LocalTyRow Name (Kind p)
   | CastTy (Type p) (KindCoercion p)
   | Embed (MonoKind p) -- for application to a 'BigTyLamTy
   | KindCoercion (KindCoercion p) -- embed a kind coercion (evidence stuff)

@@ -143,7 +143,7 @@ rnCsTy _ (CsSelf x) = dataConCantHappen x
 
 rnCsTy env (CsSetRows _ (L l ty) rows) = setSrcSpanA l $ do
   (ty', ty_fvs) <- rnCsTy env ty
-  (rows, row_fvs) <- rnCsSetRows env rows
+  (rows, row_fvs) <- rnCsSetRows env rows -- TODO: set namespace here?
   return (CsSetRows noExtField (L l ty') rows, ty_fvs `plusFV` row_fvs)
 
 rnCsTy env (CsAppTy _ ty1 ty2) = do

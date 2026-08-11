@@ -728,6 +728,8 @@ collect_cand_qkvs_ty orig_ty cur_lvl (boundtvs, boundkcvs, boundkvs) dvs ty = go
     go dv (KindCoercion co)
       = snd <$> collect_cand_qkvs_co co cur_lvl (boundkcvs, boundkvs) (emptyDVarSet, dv) co
 
+    go dv (LocalTyRow {}) = return dv
+
     go _ other = pprPanic "collect_cand_qkvs_ty" (ppr other)
 
     go_tv :: DTcKiVarSet -> TyVar Tc -> TcM DTcKiVarSet

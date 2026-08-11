@@ -241,6 +241,21 @@ tc_cs_type rn_ty@(CsTupleTy _ tup_args) exp_kind
     tyTupArgPresent (TyPresent {}) = True
     tyTupArgPresent (TyMissing {}) = False
 
+tc_cs_type rn_ty@(CsSetRows _ base rows) exp_kind
+  | KiConApp (KiCon nm base_ki rowsig) <- exp_kind
+  = do base' <- tc_lcs_type base base_ki
+       rows' <- tcCheckSetRows nm rowsig rows
+       let ty = panic "tc_cs_type final row type"
+       return ty
+
+  | otherwise
+  = do base_ki <- newMetaKindVar
+       base' <- tc_lcs_type base base_ki
+       (rows', rowsig) <- tcInferSetRows rows
+       let full_kind = KiConApp $ KiCon Nothing base_ki rowsig
+           ty = panic "tc_cs_type final row type"
+       checkExpectedKind rn_ty ty full_kind exp_kind
+
 -- TODO: move to '..infer_ek'
 tc_cs_type rn_ty@(CsSumTy _ cs_tys) exp_kind = do
   loc <- getSrcSpanM
@@ -277,6 +292,18 @@ tc_fun_type arr_kind ty1 ty2 exp_kind = do
 
 tc_arrow :: CsArrow Rn -> TcM (MonoKind Tc)
 tc_arrow (CsArrow _ (L _ ki)) = tcArrow ki
+
+{- *********************************************************************
+*                                                                      *
+                Rows
+*                                                                      *
+********************************************************************* -}
+
+tcCheckSetRows :: Maybe Name -> [RowSig] -> LCsSetRows Rn -> TcM a
+tcCheckSetRows = panic "tcCheckSetRows"
+
+tcInferSetRows :: LCsSetRows Rn -> TcM (a, [RowSig])
+tcInferSetRows = panic "tcInferSetRows"
 
 {- *********************************************************************
 *                                                                      *
@@ -650,7 +677,8 @@ tcTyVar name = do
   case thing of
     ATyVar _ tv -> return $ mkTyVarTy tv
     (tcTyThingTyCon_maybe -> Just tc) -> return $ mkTyConTy tc
-    
+    ATcTyRow row_ki -> return $ LocalTyRow name row_ki
+
     _ -> wrongThingErr WrongThingType thing name
 
 addTypeCtxt :: LCsType Rn -> TcM a -> TcM a

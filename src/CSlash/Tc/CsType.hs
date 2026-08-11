@@ -631,6 +631,26 @@ tcTyDecl1 other = pprPanic "tcTyDecl1" (ppr other)
 *                                                                      *
 ********************************************************************* -}
 
+{- MAINTODO:
+
+We will do some special row stuff starting here.
+(We may actually need to start earlier. Recursive stuff?)
+Need to:
+1. Set the namespace for the rows, based on the name of the current tycon.
+2. If a bound tv has rows in it's kind, we need to scope those row vars.
+
+Temp Thoughts:
+1. Row types should all be checked independently.
+2. Add row type synonyms to scope.
+3. Check row values independently.
+4. Could be smart about out of scope errors but doesn't matter for now.
+
+NOTE:
+We DO NOT need to add row names into scope before now:
+Instead, rows are brought into scope by the binders.
+So, it doesn't make sence for a type synonym to just refer to some random row.
+It can ONLY refer to the row of a tv bound in the type syn.
+-}
 tcTyFunRhs :: Name -> LCsType Rn -> TcM (TyCon Zk)
 tcTyFunRhs tc_name cs_ty = bindTyConKiVars tc_name
                            $ \ tc_ki_bndrs rhs_kind arity -> do
