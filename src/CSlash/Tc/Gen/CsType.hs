@@ -270,6 +270,7 @@ tc_cs_type ty@(CsTyLamTy _ matches) ek = tcTyLamMatches ty matches ek
 tc_cs_type ty@(CsTyVar {}) ek = tc_infer_cs_type_ek ty ek
 tc_cs_type ty@(CsAppTy {}) ek = tc_infer_cs_type_ek ty ek
 tc_cs_type ty@(CsOpTy {}) ek = tc_infer_cs_type_ek ty ek
+tc_cs_type ty@(CsSelf {}) ek = tc_infer_cs_type_ek ty ek
 tc_cs_type ty@(CsKindSig {}) ek = tc_infer_cs_type_ek ty ek
 
 tc_cs_type ty@(TySectionL {}) _ = pprPanic "tc_cs_type" (ppr ty)
@@ -595,6 +596,7 @@ splitCsAppTys cs_ty
     is_app (CsTyVar {}) = True
     is_app (CsParTy _ (L _ ty)) = is_app ty
     is_app (CsUnboundTyVar {}) = True
+    is_app (CsSelf{}) = True
     is_app _ = False
 
     go :: LCsType Rn -> [LCsTypeArg Rn] -> (LCsType Rn, [LCsTypeArg Rn])
@@ -609,6 +611,7 @@ splitCsAppTys cs_ty
 tcInferTyAppHead :: LCsType Rn -> TcM (Type Tc)
 tcInferTyAppHead (L _ (CsTyVar _ (L _ tv))) = tcTyVar tv
 tcInferTyAppHead (L _ (CsUnboundTyVar _ _)) = panic "tcInferTyAppHead/unbound ty var"
+tcInferTyAppHead (L _ (CsSelf{})) = tcTyVar selfName
 tcInferTyAppHead ty = fst <$> tc_infer_lcs_type ty
 
 {- *********************************************************************

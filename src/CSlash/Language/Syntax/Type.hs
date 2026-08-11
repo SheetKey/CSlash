@@ -61,7 +61,7 @@ data CsType pass
     }
   | CsTyVar (XTyVar pass) (LIdP pass)
   | CsUnboundTyVar (XUnboundTyVar pass) RdrName
-  | CsSelf (XCsSelf pass)
+  | CsSelf (XCsSelf pass) -- TODO: use 'CsTyVar _ selfName' where 'selfName : Name' is in module BuiltIn.Names
   | CsSetRows (XCsSetRows pass) (LCsType pass) (LCsSetRows pass)
   | CsAppTy (XAppTy pass) (LCsType pass) (LCsType pass)
   | CsFunTy (XFunTy pass) (CsArrow pass) (LCsType pass) (LCsType pass)
