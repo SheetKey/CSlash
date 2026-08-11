@@ -584,6 +584,10 @@ extractCsTyRdrKindVars (L _ ty) = case ty of
   TySectionR _ ty1 ty2 -> extractCsTyRdrKindVars ty1 ++ extractCsTyRdrKindVars ty2
   CsSetRows _ ty _ -> extractCsTyRdrKindVars ty
 
+  CsTyVar{} -> []
+  CsUnboundTyVar{} -> []
+  CsSelf{} -> []
+
 extractCsForAllTelescopeKindVars :: CsForAllTelescope Ps -> FreeKiVars
 extractCsForAllTelescopeKindVars (CsForAll { csf_bndrs = bndrs })
   = concatMap extractCsTyVarBndrsKindVars bndrs
