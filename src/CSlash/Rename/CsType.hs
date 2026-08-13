@@ -245,7 +245,7 @@ rnCsSetRows env (L loc (SetRows _ rows)) = case rows of
     rn_rows (L l (SetRow _ (L loc lbl) arg) : rows) = do
       (arg', fvs) <- rnLExpr arg
       let lbl' :: LocatedN Name
-          lbl' = L (l2l loc) (mkUnboundName $ rdrNameOcc lbl)
+          lbl' = L (l2l loc) (mkUnboundName $ setOccNameSpace (RowName (fsLit "")) $ rdrNameOcc lbl)
 
           row' :: LCsSetRow Rn
           row' = L l (SetRow noExtField lbl' arg')
@@ -254,7 +254,7 @@ rnCsSetRows env (L loc (SetRows _ rows)) = case rows of
     rn_rows (L l (SetTyRow _ (L loc lbl) arg) : rows) = do
       (arg', fvs) <- rnLCsTy env arg
       let lbl' :: LocatedN Name
-          lbl' = L (l2l loc) (mkUnboundName $ rdrNameOcc lbl)
+          lbl' = L (l2l loc) (mkUnboundName $ setOccNameSpace (TcRowName (fsLit "")) $ rdrNameOcc lbl)
 
           row' :: LCsSetRow Rn
           row' = L l (SetTyRow noExtField lbl' arg')

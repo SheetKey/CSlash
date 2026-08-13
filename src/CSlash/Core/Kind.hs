@@ -28,6 +28,7 @@ import CSlash.Types.Var.Set
 import CSlash.Types.Basic
 import CSlash.Types.Unique
 import CSlash.Types.Name
+import CSlash.Types.Name.Env
 import CSlash.Utils.Outputable
 import CSlash.Utils.Misc
 import CSlash.Utils.Panic
@@ -85,6 +86,43 @@ data KiCon p = KiCon
   }
   deriving Data.Data
 
+newtype RowEnv = RowEnv (OccEnv RowSig)
+
+-- Looks deeply through kicons.
+mkRowEnv :: MonoKind p -> RowEnv
+mkRowEnv (KiConApp (KiCon _ base rows))
+  = mkRowEnv base `plusRowEnv` mkRowEnvFromSig rows
+mkRowEnv _ = RowEnv emptyOccEnv
+ 
+plusRowEnv :: RowEnv -> RowEnv -> RowEnv
+plusRowEnv (RowEnv env1) (RowEnv env2) = RowEnv $ env1 `plusOccEnv` env2
+
+mkRowEnvFromSig :: [RowSig] -> RowEnv
+mkRowEnvFromSig rows
+  = RowEnv $ extendOccEnvList emptyOccEnv pairs
+  where
+    pairs = mkPair <$> rows
+    mkPair :: RowSig -> (OccName, RowSig)
+    mkPair r@(RowTySig nm _) = (setOccNameSpace (RowName (fsLit "")) (nameOccName nm), r)
+    mkPair r@(RowKiSig nm _) = (setOccNameSpace (TcRowName (fsLit "")) (nameOccName nm), r)
+
+lookupRowEnv :: RowEnv -> Name -> Maybe RowSig
+lookupRowEnv (RowEnv env) nm =
+  let occ = nameOccName nm
+      new_ns = case occNameSpace occ of
+                 RowName _ -> RowName (fsLit "")
+                 TcRowName _ -> TcRowName (fsLit "")
+                 _ -> pprPanic "unreachable" (ppr nm)
+      new_occ = setOccNameSpace new_ns occ
+  in lookupOccEnv env new_occ
+
+instance Outputable RowEnv where
+  ppr (RowEnv env) = ppr env
+
+rowSigName :: RowSig -> Name
+rowSigName (RowTySig nm _) = nm
+rowSigName (RowKiSig nm _) = nm
+
 kiConName :: KiCon p -> Name
 kiConName KiCon{ kicon_name = name }
   | Just n <- name
@@ -92,6 +130,7 @@ kiConName KiCon{ kicon_name = name }
   | otherwise
   = panic "kiConName"
 
+-- Only for the TOP kicon. 
 kiConRowNames :: KiCon p -> NonEmpty Name
 kiConRowNames KiCon{ kicon_rows = rows }
   | r:rs <- rows

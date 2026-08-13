@@ -241,20 +241,14 @@ tc_cs_type rn_ty@(CsTupleTy _ tup_args) exp_kind
     tyTupArgPresent (TyPresent {}) = True
     tyTupArgPresent (TyMissing {}) = False
 
-tc_cs_type rn_ty@(CsSetRows _ base rows) exp_kind
-  | KiConApp (KiCon nm base_ki rowsig) <- exp_kind
-  = do base' <- tc_lcs_type base base_ki
-       rows' <- tcCheckSetRows nm rowsig rows
-       let ty = panic "tc_cs_type final row type"
-       return ty
-
-  | otherwise
-  = do base_ki <- newMetaKindVar
-       base' <- tc_lcs_type base base_ki
-       (rows', rowsig) <- tcInferSetRows rows
-       let full_kind = KiConApp $ KiCon Nothing base_ki rowsig
-           ty = panic "tc_cs_type final row type"
-       checkExpectedKind rn_ty ty full_kind exp_kind
+tc_cs_type rn_ty@(CsSetRows _ base rows) exp_kind = do
+  base_ki <- newMetaKindVar
+  base' <- tc_lcs_type base base_ki
+  let row_env = mkRowEnv exp_kind
+  (rows', rowsig) <- tcSetRows row_env rows
+  let full_kind = KiConApp $ KiCon Nothing base_ki rowsig
+      ty = panic "SetRowType?"
+  checkExpectedKind rn_ty ty full_kind exp_kind
 
 -- TODO: move to '..infer_ek'
 tc_cs_type rn_ty@(CsSumTy _ cs_tys) exp_kind = do
@@ -300,11 +294,77 @@ tc_arrow (CsArrow _ (L _ ki)) = tcArrow ki
 *                                                                      *
 ********************************************************************* -}
 
-tcCheckSetRows :: Maybe Name -> [RowSig] -> LCsSetRows Rn -> TcM a
-tcCheckSetRows = panic "tcCheckSetRows"
+tcSetRows :: RowEnv -> LCsSetRows Rn -> TcM a
+tcSetRows env rn_ty@(L _ (SetRows _ lrows)) = do
+  traceTc "tcSetRows env" (ppr env $$ ppr_set_rows rn_ty)
+  let rows = unLoc <$> lrows
+      pairs = map (\r -> (lookupRow r, r)) rows
+  traceTc "pairs" (ppr (fst <$> pairs))
+  res <- mapM (uncurry tcSetRow) pairs
 
-tcInferSetRows :: LCsSetRows Rn -> TcM (a, [RowSig])
-tcInferSetRows = panic "tcInferSetRows"
+  panic "unfinished"
+
+  where
+    rowName (SetRow _ nm _) = unLoc nm
+    rowName (SetTyRow _ nm _) = unLoc nm
+
+    lookupRow row = lookupRowEnv env (rowName row)
+
+tcSetRow :: Maybe RowSig -> CsSetRow Rn -> TcM (a, RowSig)
+tcSetRow (Just sig) = tcCheckSetRow sig
+tcSetRow Nothing = tcInferSetRow 
+
+tcCheckSetRow :: RowSig -> CsSetRow Rn -> TcM (a, RowSig)
+tcCheckSetRow (RowTySig nm ty) (SetRow _ row_nm row_expr) = panic "tcCheckSetRow SetRow"
+tcCheckSetRow (RowKiSig nm ki) (SetTyRow _ row_nm row_type) = do
+  -- Need to instantiate the kvs of 'ki'
+  -- This gives us a 'MonoKind Tc'
+  -- Similar to 'tcInferKiCon_instantiate'?
+  -- Better yet, we could reuse parts of 'tcInferTyApps_nosat'
+  -- Not quite, we are checking a kind sig, not an application where the head has a known kind.
+  -- This may be more like 'bindTyConKiVars'
+  -- Nope!
+  -- Its probably most similar to 'topSkolemize', but we want to avoid having to do that
+  -- for types.
+  -- Probably fine to instantiate with metas (VarVars?) and then check the resulting mono.
+
+  traceTc "tcCheckSetRow"
+    $ vcat [ ppr nm <+> colon <+> ppr ki
+           , ppr row_nm <+> equals <+> ppr row_type ]
+
+  let (kvs, mono_ki) = splitForAllKiVars ki
+  (subst, _) <- newMetaVarKiVarsX emptySubst kvs
+  let mono_ki' = substMonoKi subst mono_ki
+
+  let skol_info = TyRowImplSkol (unLoc row_nm)
+  row_type <- pushLevelAndSolveKindCoercions skol_info [] $
+    tcCheckLCsType row_type (TheMonoKind mono_ki')
+
+  kvs <- candidateQKiVarsOfType row_type
+
+  skol_info <- mkSkolemInfo skol_info
+  inferred <- quantifyKiVars skol_info kvs
+
+  traceTc "tcCheckSetRow pre zonk"
+    $ vcat [ text "mono_kind =" <+> ppr mono_ki
+           , text "row_type =" <+> ppr row_type
+           , text "kvs =" <+> ppr kvs
+           , text "inferred =" <+> ppr inferred ]
+
+  (inferred, row_type) <- liftZonkM $ do
+    inferred <- zonkTcKiVarsToTcKiVars inferred
+    row_type <- zonkTcType row_type
+    return (inferred, row_type)
+
+  traceTc "tcCheckSetRow post zonk"
+    $ vcat [ text "inferred =" <+> ppr inferred
+           , text "row_type =" <+> ppr row_type ]
+
+  panic "unfin"
+
+tcInferSetRow :: CsSetRow Rn -> TcM (a, RowSig)
+tcInferSetRow (SetRow kv_nms row_nm row_expr) = panic "tcInferSetRow SetRow"
+tcInferSetRow (SetTyRow kv_nms row_nm row_type) = panic "tcInferSetRow SetTyRow"
 
 {- *********************************************************************
 *                                                                      *

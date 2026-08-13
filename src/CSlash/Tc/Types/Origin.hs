@@ -104,6 +104,7 @@ data SkolemInfoAnon
   | TyConSkol TyConFlavor Name
   | KiConSkol Name
   | RowTySigSkol Name
+  | TyRowImplSkol Name
   | UnkSkol CallStack
 
 unkSkol :: HasDebugCallStack => SkolemInfo

@@ -258,6 +258,10 @@ emptyOccEnv = MkOccEnv emptyFsEnv
 unitOccEnv :: OccName -> a -> OccEnv a
 unitOccEnv (OccName ns s) a = MkOccEnv $ unitFsEnv s (unitUFM ns a)
 
+plusOccEnv :: OccEnv a -> OccEnv a -> OccEnv a
+plusOccEnv (MkOccEnv env1) (MkOccEnv env2)
+  = MkOccEnv $ plusFsEnv_C plusUFM env1 env2
+
 extendOccEnv :: OccEnv a -> OccName -> a -> OccEnv a
 extendOccEnv (MkOccEnv as) (OccName ns s) a =
   MkOccEnv $ extendFsEnv_C plusUFM as s (unitUFM ns a)
