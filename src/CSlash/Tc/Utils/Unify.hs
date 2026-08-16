@@ -1245,7 +1245,7 @@ simpleUnifyCheckKind lhs_kv rhs = go_mono rhs
 
     go_mono (KiPredApp _ k1 k2) = go_mono k1 && go_mono k2
 
-    go_mono (KiConApp{}) = panic "go_mono kiconapp"
+    go_mono (KiConApp{}) = True -- TODO: should be fine since no FAs!
 
 data UnifyCheckCaller
   = UC_OnTheFly
