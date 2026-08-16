@@ -201,63 +201,58 @@ tcKiD (L loc bind@(KiRowBind (kv_names, _) (L _ name) base_kind rows))
   = setSrcSpanA loc $ tcAddDeclCtxt bind $ do
   traceTc "---- tcKiD ---- {" (ppr bind)
 
-  -- Kind check the base_kind
   skol_info <- mkSkolemInfo (KiConSkol name)
-  (spec_kvs, base_mono_kind) <-
-    pushLevelAndSolveKindCoercions (KiConSkol name) [] $ -- TODO: swap these lines?
-    bindImplicitKBndrs_Q_Skol skol_info kv_names $
-    tcLCsKind base_kind
+  (spec_kvs, full_mono_kind) <-
+    pushLevelAndSolveKindCoercions (KiConSkol name) [] $
+    bindImplicitKBndrs_Q_Skol skol_info kv_names $ do
+      base_mono_kind <- checkNoErrs $ tcLCsKind base_kind
+      traceTc "base_mono_kind0" (ppr base_mono_kind)
 
-  traceTc "base_kind0" (ppr spec_kvs $$ ppr base_mono_kind)
+      rows <- tcRowsD base_mono_kind rows
+      traceTc "rows0" (ppr rows)
+      return $ KiConApp $ KiCon (Just name) base_mono_kind rows
 
-  all_kvs <- candidateQKiVarsOfKind (Mono base_mono_kind)
+  all_kvs <- candidateQKiVarsOfKind (Mono full_mono_kind)
   let inf_kvs = all_kvs `delDVarSetList` spec_kvs
   inferred <- quantifyKiVars skol_info inf_kvs
 
   traceTc "tcKiD base pre zonk"
-    $ vcat [ text "base_mono_kind =" <+> ppr base_mono_kind
+    $ vcat [ text "full_mono_kind =" <+> ppr full_mono_kind
            , text "inf_kvs =" <+> ppr inf_kvs
            , text "inferred =" <+> ppr inferred
            , text "spec_kvs =" <+> ppr spec_kvs ]
 
-  (inferred, specified, base_mono_kind) <- liftZonkM $ do
+  (inferred, specified, full_mono_kind) <- liftZonkM $ do
     inferred <- zonkTcKiVarsToTcKiVars inferred
     specified <- zonkTcKiVarsToTcKiVars spec_kvs
-    base_mono_kind <- zonkTcMonoKind base_mono_kind
-    return (inferred, specified, base_mono_kind)
+    base_mono_kind <- zonkTcMonoKind full_mono_kind
+    return (inferred, specified, full_mono_kind)
 
   let all_kvs = inferred ++ specified
-      self_kind = mkForAllKisMono (TcKiVar <$> all_kvs) base_mono_kind
-  traceTc "self_kind1" (ppr self_kind)
+      full_kind = mkForAllKisMono (TcKiVar <$> all_kvs) full_mono_kind
+  traceTc "full_kind1" (ppr full_kind)
 
   -- Now zonk
-  self_kind <- initZonkEnv NoFlexi $ zonkTcKindToKindX self_kind
-  traceTc "self_kind2(Zonked)" (ppr self_kind)
+  full_kind <- initZonkEnv NoFlexi $ zonkTcKindToKindX full_kind
+  traceTc "full_kind2(Zonked)" (ppr full_kind)
 
-  -- Now the rows
-  rows <- tcRowsD self_kind rows
-  traceTc "rows(Zonked)" (ppr self_kind)
-
-  let (kvs, base_mono_kind) = splitForAllKiVars self_kind
-      kicon = KiCon (Just name) base_mono_kind rows
+  let (kvs, kicon) = case splitForAllKiVars full_kind of
+                       (kvs, KiConApp kc) -> (kvs, kc)
+                       _ -> panic "unreachable"
 
   traceTc "---- tcKiD ---- }" (ppr kvs $$ ppr kicon)
   return (kvs, kicon)
 
 tcKiD _ = panic "tcKiD other"
 
-tcRowsD :: Kind Zk -> NonEmpty (LRowDecl Rn Rn) -> RnM [RowSig]
+tcRowsD :: MonoKind Tc -> NonEmpty (LRowDecl Rn Rn) -> RnM [RowSig Tc]
 tcRowsD base_kind rows = do
   let (ty_rows, val_rows) = NE.partition isTypeRow rows
-  ty_rows <- tcTyRowsD ty_rows
+  ty_rows <- checkNoErrs $ tcTyRowsD ty_rows
 
-  ty_rows <- initZonkEnv NoFlexi $ mapSndM zonkTcKindToKindX ty_rows
-
-  val_rows <- tcExtendKindEnvWithTyRows ((selfName, base_kind) : ty_rows) $
-              mapM tcValRowD val_rows
-
-  -- pushLevelAndSolveKindCoercions before zonking? I.e., wrapping tcTyRowsD and/or tcValRowD?
-  val_rows <- initZonkEnv NoFlexi $ mapSndM zonkTcTypeToTypeX val_rows
+  val_rows <- tcExtendKindEnvWithTyRows ((selfName, base_kind) : ty_rows)
+              $ checkNoErrs
+              $ mapM tcValRowD val_rows
 
   let rows = (uncurry RowKiSig <$> ty_rows)
              ++ (uncurry RowTySig <$> val_rows)
@@ -265,54 +260,41 @@ tcRowsD base_kind rows = do
   traceTc "tcRowsD" (ppr rows)
   return rows
 
-tcTyRowsD :: [LRowDecl Rn Rn] -> RnM [(Name, Kind Tc)]
+tcTyRowsD :: [LRowDecl Rn Rn] -> RnM [(Name, MonoKind Tc)]
 tcTyRowsD = mapM tcTyRowD
 
-tcTyRowD :: LRowDecl Rn Rn -> RnM (Name, Kind Tc)
-tcTyRowD (L loc (RowTySigD (kv_names, _) (L _ name) kind)) = do
-  skol_info <- mkSkolemInfo (RowTySigSkol name)
-  (spec_kvs, kind) <- addErrCtxt (text "In the kind signature" <+> quotes (ppr kind)
-                                  <+> text "for the row" <+> quotes (ppr name))
-                      $ bindImplicitKBndrs_Q_Skol skol_info kv_names
-                      $ tcLCsKind kind
+tcTyRowD :: LRowDecl Rn Rn -> RnM (Name, MonoKind Tc)
+tcTyRowD (L loc (RowTySigD _ (L _ name) kind)) = do
+  mono_kind <- addErrCtxt (text "In the kind signature" <+> quotes (ppr kind)
+                           <+> text "for the row" <+> quotes (ppr name))
+               $ pushLevelAndSolveKindCoercions (RowKiSigSkol name) []
+               $ tcLCsKind kind
                       
-  traceTc "tcTyRowD0" (ppr kind)
+  traceTc "tcTyRowD0" (ppr mono_kind)
 
-  all_kvs <- candidateQKiVarsOfKind (Mono kind)
-  let inf_kvs = all_kvs `delDVarSetList` spec_kvs
-  inferred <- quantifyKiVars skol_info inf_kvs
+  mono_kind <- liftZonkM $ zonkTcMonoKind mono_kind
 
-  traceTc "tcTyRowD1 pre zonk"
-    $ vcat [ text "kind =" <+> ppr kind
-           , text "spec_kvs =" <+> ppr spec_kvs
-           , text "inf_kvs =" <+> ppr inf_kvs
-           , text "inferred =" <+> ppr inferred ]
+  traceTc "tcTyRowD1" (ppr mono_kind)
 
-  (inferred, specified, kind) <- liftZonkM $ do
-    inferred <- zonkTcKiVarsToTcKiVars inferred
-    specified <- zonkTcKiVarsToTcKiVars spec_kvs
-    kind <- zonkTcMonoKind kind
-    return (inferred, specified, kind)
-
-  let all_kvs = inferred ++ specified
-      final_kind = mkForAllKisMono (TcKiVar <$> all_kvs) kind
-  traceTc "tcTyRowD2" (ppr final_kind)
-
-  return (name, final_kind)
+  return (name, mono_kind)
 
 tcTyRowD _ = panic "tcTyRowD"
 
 tcValRowD :: LRowDecl Rn Rn -> RnM (Name, Type Tc) 
-tcValRowD (L loc (RowSigD (kv_names, _) (L _ name) (L ty_l ty))) = do
+tcValRowD (L loc (RowSigD _ (L _ name) ty)) = do
+  let ctxt = RowSigCtxt name NoRRC -- TODO (do we want to report here?)
+  ty
+    <- addErrCtxt (text "In the type signature" <+> quotes (ppr ty)
+                   <+> text "for the row" <+> quotes (ppr name)) $
+       pushLevelAndSolveKindCoercions (RowTySigSkol name) [] $ do
+         ctxt_kind <- getInitialCtxtKind ctxt ty
+         exp_kind <- newExpectedKind ctxt_kind
+         tcLCsType ty exp_kind
+
   traceTc "tcValRowD0" (ppr ty)
-  -- We want to use 'tcCsSigType' here,
-  -- but do not want to use 'CsSigType' for the 'RowSigD' type earlier in the pipeline.
-  -- Doing so would duplicate the representation of user written kind variables.
-  -- We can switch to 'CsSigType', but would also want to switch tyrow kinds to an
-  -- analogous 'CsSigKind', which we don't currently have.
-  let cs_sig_type = L ty_l (CsSig kv_names (L ty_l ty))
-      ctxt = RowSigCtxt name NoRRC -- TODO (do we want to report here?)
-  ty <- tcCsSigType ctxt cs_sig_type -- tcCsSigType does zonking
+
+  ty <- liftZonkM $ zonkTcType ty
+
   traceTc "tcValRowD1" (ppr ty)
 
   massertPpr ((snd $ splitForAllKiVars $ typeKind ty) `eqMonoKind` (BIKi UKd))
@@ -497,7 +479,7 @@ generalizeTcTyCon (tc, skol_info, scoped_prs, tc_full_kind)
 tcExtendKindEnvWithTyCons :: [TyCon Tc] -> TcM a -> TcM a
 tcExtendKindEnvWithTyCons tcs = tcExtendKindEnvList [ (tyConName tc, ATcTyCon tc) | tc <- tcs ]
 
-tcExtendKindEnvWithTyRows :: [(Name, Kind Zk)] -> TcM a -> TcM a
+tcExtendKindEnvWithTyRows :: [(Name, MonoKind Tc)] -> TcM a -> TcM a
 tcExtendKindEnvWithTyRows tys = tcExtendKindEnvList $ mapSnd ATcTyRow tys
 
 inferInitialKinds :: [LCsBind Rn] -> TcM [MonoTyCon Tc]

@@ -20,7 +20,7 @@ import CSlash.Language.Syntax.Type ( LCsSigType )
 -- import GHC.Tc.Errors.Types.PromotionErr (PromotionErr, peCategory)
 
 import CSlash.Core.TyCon  ( TyCon, pprTyConKind, fromZkTyCon )
-import CSlash.Core.Kind (Kind)
+import CSlash.Core.Kind (MonoKind)
 import CSlash.Utils.Outputable
 import CSlash.Utils.Misc
 
@@ -98,7 +98,7 @@ data TcTyKiThing
   | AKiCoVar Name (KiCoVar Tc)
   | AKiVar Name (KiVar Tc) -- should make a new type 'TcKiThing'
   | ATcTyCon (TyCon Tc)
-  | ATcTyRow (Kind Zk) -- The kind of the row type (not a kind representing a kind synonym)
+  | ATcTyRow (MonoKind Tc) -- The kind of the row type (not a kind representing a kind synonym)
 
 tcTyThingTyCon_maybe :: TcTyKiThing -> Maybe (TyCon Tc)
 tcTyThingTyCon_maybe (AGlobal (ATyCon tc)) = Just $ fromZkTyCon tc

@@ -104,6 +104,7 @@ data SkolemInfoAnon
   | TyConSkol TyConFlavor Name
   | KiConSkol Name
   | RowTySigSkol Name
+  | RowKiSigSkol Name
   | TyRowImplSkol Name
   | UnkSkol CallStack
 

@@ -101,10 +101,9 @@ tcKiVar name = do
 -- Shouldn't need to bring anything into scope here.
 -- That would happen at type lambdas or foralls.
 tcInferKiCon_instantiate :: [KiVar Zk] -> KiCon Zk -> TcM (MonoKind Tc)
-tcInferKiCon_instantiate kvs kicon@(KiCon nm base rows) = do
+tcInferKiCon_instantiate kvs kicon = do
   traceTc "tcInferKiCon {" (ppr kvs $$ ppr kicon)
   (subst, _) <- newMetaVarKiVarsX emptySubst kvs
-  let base' = substMonoKi subst base
-      res = KiConApp (KiCon nm base' rows)
-  traceTc "tcInferKiCon }" (ppr res)
-  return res
+  let kicon' = substKiCon subst kicon
+  traceTc "tcInferKiCon }" (ppr kicon')
+  return (KiConApp kicon')

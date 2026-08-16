@@ -245,7 +245,7 @@ mapTyCoX (TyCoMapper { tm_tyvar = tyvar
     go_ty !env (Embed ki) = Embed <$> go_mki env ki
     go_ty !env (CastTy ty kco) = mkCastTy <$> go_ty env ty <*> go_kco env kco
     go_ty !env (KindCoercion kco) = KindCoercion <$> go_kco env kco
-    go_ty !env (LocalTyRow nm ki) = return $ LocalTyRow nm ki
+    go_ty !env (LocalTyRow nm ki) = LocalTyRow nm <$> go_mki env ki
 
     go_cos !_ [] = return []
     go_cos !env (co:cos) = (:) <$> go_co env co <*> go_cos env cos
@@ -917,7 +917,6 @@ typeKind (BigTyLamTy kv res) = mkForAllKi kv (typeKind res)
 typeKind (TyConApp tc []) = case tyConDetails tc of
   TcTyCon { tcTyConKind = ki } -> ki
   other -> fromZkKind $ tyConKind other
-typeKind (LocalTyRow _ ki) = fromZkKind ki
 typeKind ty = Mono $ typeMonoKind ty
 
 typeMonoKind :: (HasDebugCallStack, HasPass p pass) => Type p -> MonoKind p
@@ -957,6 +956,7 @@ typeMonoKind ty@(BigTyLamTy _ _) = pprPanic "typeMonoKind" (ppr ty)
 typeMonoKind ty@(Embed _) = pprPanic "typeMonoKind" (ppr ty)
 typeMonoKind (CastTy _ co) = kicoercionRKind co
 typeMonoKind (KindCoercion kco) = kiCoercionKind kco
+typeMonoKind (LocalTyRow _ ki) = ki
 
 handle_non_mono :: Kind p -> (Kind p -> SDoc) -> MonoKind p
 handle_non_mono ki doc = case ki of

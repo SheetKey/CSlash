@@ -33,6 +33,8 @@ import CSlash.Utils.Panic
 import CSlash.Data.Maybe
 
 import Data.List (nubBy, partition)
+import Data.List.NonEmpty (NonEmpty(..))
+import qualified Data.List.NonEmpty as NE
 import Control.Monad
 
 {- ******************************************************
@@ -182,6 +184,13 @@ extractCsPatSigKindKindVars (CsPSK _ ki) = extractCsKindKindVars ki
 extractCsKindKindVars :: LCsKind Ps -> FreeKiVars
 extractCsKindKindVars ki = extract_lki ki []
 
+extractCsKindRowsKindVars :: NonEmpty (LRowDecl Ps Ps) -> FreeKiVars
+extractCsKindRowsKindVars = concatMap extractCsKindRowKindVars 
+
+extractCsKindRowKindVars :: LRowDecl Ps Ps -> FreeKiVars
+extractCsKindRowKindVars (L _ (RowSigD _ _ ty)) = extractCsTyRdrKindVars ty
+extractCsKindRowKindVars (L _ (RowTySigD _ _ ki)) = extractCsKindKindVars ki
+
 extract_lki :: LCsKind Ps -> FreeKiVars -> FreeKiVars
 extract_lki (L _ ki) acc = case ki of
   CsUKd {} -> acc
@@ -197,20 +206,118 @@ extract_kv kv acc =
   then kv : acc
   else acc   
 
+{- *********************************************************************
+*                                                                      *
+      Finding the free kind variables of a (CsType RdrName)
+*                                                                      *
+********************************************************************* -}
+
+{-
+We have two major differences compared to GHC:
+  1. All type variables must be bound. E.g., by forall or a type lambda.
+  2. Kind variables cannot be explicitly quantified, but are always implicitly universally
+     quantified. 
+-}
+
+-- Extract ALL the free kind variables from a CsType.
+-- In GHC, order of the result list matters for scoping:
+-- The kvs in the result type signature should be last in the list since
+-- GHC checks that these are quantified earlier.
+-- We don't care; all kvs are implicitly quantified; we don't allow explicit quantification.
+-- We list them in the order they appear from left to right. 
+extractCsTyRdrKindVars :: LCsType Ps -> FreeKiVars
+extractCsTyRdrKindVars (L _ ty) = case ty of
+  CsForAllTy _ tele ty -> extractCsForAllTelescopeKindVars tele ++ extractCsTyRdrKindVars ty
+  CsQualTy _ c ty -> extractCsContextKindVars c ++ extractCsTyRdrKindVars ty
+  CsAppTy _ ty1 ty2 -> extractCsTyRdrKindVars ty1 ++ extractCsTyRdrKindVars ty2
+  CsFunTy _ arr ty1 ty2 -> extractCsTyRdrKindVars ty1
+                           ++ extractCsArrowKindVars arr
+                           ++ extractCsTyRdrKindVars ty2
+  CsTupleTy _ tys -> concatMap extractCsTyTupArgKindVars tys
+  CsSumTy _ tys -> concatMap extractCsTyRdrKindVars tys
+  CsOpTy _ ty1 _ ty2 -> extractCsTyRdrKindVars ty1 ++ extractCsTyRdrKindVars ty2
+  CsParTy _ ty -> extractCsTyRdrKindVars ty
+  CsKindSig _ ty ki -> extractCsTyRdrKindVars ty ++ extractCsKindKindVars ki
+  CsTyLamTy _ mg -> extractCsTyMGKindVars mg
+  TySectionL _ ty1 ty2 -> extractCsTyRdrKindVars ty1 ++ extractCsTyRdrKindVars ty2
+  TySectionR _ ty1 ty2 -> extractCsTyRdrKindVars ty1 ++ extractCsTyRdrKindVars ty2
+  CsSetRows _ ty rows -> extractCsTyRdrKindVars ty ++ extractCsSetRowsRdrKindVars rows
+
+  CsTyVar{} -> []
+  CsUnboundTyVar{} -> []
+  CsSelf{} -> []
+
+extractCsSetRowsRdrKindVars :: LCsSetRows Ps -> FreeKiVars
+extractCsSetRowsRdrKindVars (L _ (SetRows _ rows)) = concatMap extractCsSetRowRdrKindVars rows
+
+extractCsSetRowRdrKindVars :: LCsSetRow Ps -> FreeKiVars
+extractCsSetRowRdrKindVars (L _ set) = case set of
+  SetRow _ _ expr -> [] -- TODO: could be a bug
+  SetTyRow _ _ ty -> extractCsTyRdrKindVars ty
+
+extractCsForAllTelescopeKindVars :: CsForAllTelescope Ps -> FreeKiVars
+extractCsForAllTelescopeKindVars (CsForAll { csf_bndrs = bndrs })
+  = concatMap extractCsTyVarBndrsKindVars bndrs
+
+extractCsTyVarBndrsKindVars :: LCsTyVarBndr Ps -> FreeKiVars
+extractCsTyVarBndrsKindVars (L _ (KindedTyVar _ _ ki)) = extractCsKindKindVars ki
+extractCsTyVarBndrsKindVars (L _ (ImpKindedTyVar _ _ ki)) = extractCsKindKindVars ki
+
+extractCsContextKindVars :: LCsContext Ps -> FreeKiVars
+extractCsContextKindVars (L _ ctxt)
+  = concatMap extractCsKdRelKindVars ctxt
+
+extractCsKdRelKindVars :: LCsKdRel Ps -> FreeKiVars
+extractCsKdRelKindVars (L _ rel) = case rel of
+  CsKdLT _ k1 k2 -> extractCsKindKindVars k1 ++ extractCsKindKindVars k2
+  CsKdLTEQ _ k1 k2 -> extractCsKindKindVars k1 ++ extractCsKindKindVars k2
+
+extractCsArrowKindVars :: CsArrow Ps -> FreeKiVars
+extractCsArrowKindVars (CsArrow _ ki) = extractCsKindKindVars ki
+
+extractCsTyTupArgKindVars :: CsTyTupArg Ps -> FreeKiVars
+extractCsTyTupArgKindVars (TyPresent _ ty) = extractCsTyRdrKindVars ty
+extractCsTyTupArgKindVars _ = []
+
+extractCsTyMGKindVars :: MatchGroup Ps (LCsType Ps) -> FreeKiVars
+extractCsTyMGKindVars (MG _ (L _ alts)) = concatMap extractCsTyMatchKindVars alts
+
+extractCsTyMatchKindVars :: LMatch Ps (LCsType Ps) -> FreeKiVars
+extractCsTyMatchKindVars (L _ (Match _ _ (L _ pats) grhss))
+  = concatMap extractCsTyPatKindVars pats ++ extractCsTyGRHSsKindVars grhss
+
+extractCsTyPatKindVars :: LPat Ps -> FreeKiVars
+extractCsTyPatKindVars (L _ pat) = case pat of
+  ParPat _ lpat -> extractCsTyPatKindVars lpat
+  KdSigPat _ lpat ksig -> extractCsTyPatKindVars lpat ++ extractCsPatSigKindKindVars ksig
+  ImpPat _ lpat -> extractCsTyPatKindVars lpat
+  _ -> []
+
+extractCsTyGRHSsKindVars :: GRHSs Ps (LCsType Ps) -> FreeKiVars
+extractCsTyGRHSsKindVars (GRHSs _ grhss)
+  = concatMap extractCsTyGRHSKindVars grhss
+
+extractCsTyGRHSKindVars :: LGRHS Ps (LCsType Ps) -> FreeKiVars
+extractCsTyGRHSKindVars (L _ (GRHS _ [] ty)) = extractCsTyRdrKindVars ty
+extractCsTyGRHSKindVars (L _ (GRHS _ stmt _)) = pprPanic "extractCsTyGRHSKindVars" (ppr stmt)
+
 {- *****************************************************
 *                                                      *
           Binding kind variables
 *                                                      *
 ***************************************************** -}
 
-rnLCsKindBaseWithKvs
+rnLCsRowKindKvs
   :: CsDocContext
   -> LCsKind Ps
-  -> ((LCsKind Rn, FreeVars) -> [Name] -> RnM (a, FreeVars))
+  -> NonEmpty (LRowDecl Ps Ps)
+  -> ([Name] -> RnM (a, FreeVars))
   -> RnM (a, FreeVars)
-rnLCsKindBaseWithKvs doc lki thing_inside = do
-  traceRn "rnLCsKindBaseWithKvs" (ppr lki)
-  let kv_occs = extractCsKindKindVars lki
+rnLCsRowKindKvs doc lki lrows thing_inside = do
+  traceRn "rnLCsRowKindWithKvs" (ppr lki)
+  let base_occs = extractCsKindKindVars lki
+      row_occs = extractCsKindRowsKindVars lrows
+      kv_occs = base_occs ++ row_occs
       bndrs_loc = case map getLocA kv_occs of
         [] -> panic "bindCsKindVars/bndrs_loc"
         [loc] -> loc
@@ -221,38 +328,4 @@ rnLCsKindBaseWithKvs doc lki thing_inside = do
     let kv_nms_final = map (`setNameLoc` bndrs_loc) kv_nms
     traceRn "kv_nms" (ppr kv_nms_final)
 
-    stuff <- rnLCsKind doc lki
-
-    thing_inside stuff kv_nms_final
-
-rnLCsKindRowWithKvs
-  :: (Outputable thing, Outputable thing')
-  => thing
-  -> (thing -> FreeKiVars)
-  -> (thing -> RnM (thing', FreeVars))
-  -> ((thing', FreeVars) -> [Name] -> RnM (a, FreeVars))
-  -> RnM (a, FreeVars)
-rnLCsKindRowWithKvs thing thing_fkvs rn_thing thing_inside = do
-  traceRn "rnLCsKindRowWithKvs" (ppr thing)
-  let all_kv_occs = thing_fkvs thing
-      bndrs_loc = case map getLocA all_kv_occs of
-        [] -> panic "bindCsKindVars/bndrs_loc"
-        [loc] -> loc
-        loc:locs -> loc `combineSrcSpans` last locs
-  traceRn "all_kv_occs" (ppr all_kv_occs)
-
-  -- NOTE: we do NOT want to filter out the in scope kvs.
-  -- Doing so means kvs in the base kind are in scope in the record.
-  -- This doesn't seem useful, and it makes inferred row kinds incompatible when checked against
-  -- kind signatures (I think).
-  -- kv_occs <- filterInScopeM all_kv_occs
-  -- traceRn "kv_occs" (ppr kv_occs)
-  let kv_occs = all_kv_occs
-
-  rnImplicitKvOccs kv_occs $ \kv_nms -> do
-    let kv_nms_final = map (`setNameLoc` bndrs_loc) kv_nms
-    traceRn "kv_nms" (ppr kv_nms_final)
-
-    stuff <- rn_thing thing
-
-    thing_inside stuff kv_nms
+    thing_inside kv_nms_final

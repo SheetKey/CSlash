@@ -74,9 +74,14 @@ fromZkMonoKind ki = let subst = mkEmptySubst (emptyVarSet, emptyVarSet, varsOfMo
                                 (emptyVarSet, emptyVarSet, emptyVarSet)
                     in substMonoKi subst ki
 
+-- TODO: there is a more direct way to do this using 'substKiCon'
 fromZkKiCon :: HasPass p pass => KiCon Zk -> KiCon p
 fromZkKiCon (KiCon nm base rows)
-  = KiCon nm (fromZkMonoKind base) rows
+  = KiCon nm (fromZkMonoKind base) (fromZkRow <$> rows)
+
+fromZkRow :: HasPass p pass => RowSig Zk -> RowSig p
+fromZkRow (RowTySig nm ty) = RowTySig nm (fromZkType ty)
+fromZkRow (RowKiSig nm ki) = RowKiSig nm (fromZkMonoKind ki)
 
 unsafeTcToZkType :: Type Tc -> Type Zk
 unsafeTcToZkType ty =
@@ -589,6 +594,16 @@ substKi :: (HasDebugCallStack, HasPass p' pass, SubstP p p') => Subst p p' -> Ki
 substKi subst ki = checkValidSubst subst $
                    subst_ki subst ki
 
+substKiCon
+  :: (HasDebugCallStack, HasPass p pass, HasPass p' pass', SubstP p p')
+  => Subst p p' -> KiCon p -> KiCon p'
+substKiCon subst (KiCon nm base rows) = KiCon nm (substMonoKi subst base) (substRow subst <$> rows)
+
+substRow
+  :: (HasDebugCallStack, HasPass p pass, HasPass p' pass', SubstP p p')
+  => Subst p p' -> RowSig p -> RowSig p'
+substRow subst (RowTySig nm ty) = RowTySig nm (substTy subst ty)
+substRow subst (RowKiSig nm ki) = RowKiSig nm (substMonoKi subst ki)
 
 substMonoKi
   :: (HasDebugCallStack, HasPass p' pass, SubstP p p')

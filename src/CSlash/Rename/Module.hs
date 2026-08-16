@@ -214,14 +214,20 @@ rnKindDecl KiRowBind{ kirow_id = kicon, kirow_base = base, kirow_rows = rows } =
   kicon' <- lookupLocatedTopConstructorRnN kicon
   traceRn "rnkind-ki" (ppr kicon)
   let doc = KiSynCtx kicon
-  rnLCsKindBaseWithKvs doc base $ \(final_base, base_fvs) kv_nms -> do
+  rnLCsRowKindKvs doc base rows $ \kv_nms -> do
+    (final_base, base_fvs) <- rnLCsKind doc base
+
     (final_rows, row_fvs) <- rnRowDecls (unLoc kicon') rows
-    let all_fvs = base_fvs `plusFV` row_fvs
+
+    traceTc "rnKindDecl" (ppr final_base)
+
+    let fvs = base_fvs `plusFV` row_fvs
+
     return ( KiRowBind { kirow_id = kicon'
                        , kirow_base = final_base
                        , kirow_rows = final_rows
-                       , kirow_ext = (kv_nms, all_fvs) }
-           , all_fvs )
+                       , kirow_ext = (kv_nms, fvs) }
+           , fvs )
 rnKindDecl other = pprPanic "rnKindDecl" (ppr other)
 
 rnRowDecls :: Name -> NonEmpty (LRowDecl Ps Ps) -> RnM (NonEmpty (LRowDecl Rn Rn), FreeVars)
@@ -238,15 +244,15 @@ rnRowDecl row_env (RowSigD _ id ty) = do
   let id' = lookupRow row_env id
   traceRn "rnRowDecl-val" (ppr id $$ ppr id')
   let doc = RowTypeSigCtx id
-  rnLCsKindRowWithKvs ty extractCsTyRdrKindVars (rnLCsType doc) $ \(final_ty, fvs) kv_nms ->
-    return (RowSigD (kv_nms, fvs) id' final_ty, fvs)
+  (ty, fvs) <- rnLCsType doc ty
+  return (RowSigD fvs id' ty, fvs)
   
 rnRowDecl row_env (RowTySigD _ tycon ki) = do
   let tycon' = lookupRow row_env tycon
   traceRn "rnRowDecl-type" (ppr tycon $$ ppr tycon')
   let doc = RowTySynCtx tycon
-  rnLCsKindRowWithKvs ki extractCsKindKindVars (rnLCsKind doc) $ \(final_ki, fvs) kv_nms -> 
-    return (RowTySigD (kv_nms, fvs) tycon' final_ki, fvs)
+  (ki, fvs) <- rnLCsKind doc ki
+  return (RowTySigD fvs tycon' ki, fvs)
 
 lookupRow :: FastStringEnv Name -> LocatedN RdrName -> LocatedN Name
 lookupRow row_env (L lr rdr) = L lr (expectJust "lookupRow" $ lookupFsEnv row_env lbl)

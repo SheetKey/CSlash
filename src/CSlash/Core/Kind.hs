@@ -82,31 +82,31 @@ data KiPredCon
 data KiCon p = KiCon
   { kicon_name :: Maybe Name
   , kicon_base :: MonoKind p
-  , kicon_rows :: [RowSig] -- NonEmpty
+  , kicon_rows :: [RowSig p] -- NonEmpty
   }
   deriving Data.Data
 
-newtype RowEnv = RowEnv (OccEnv RowSig)
+newtype RowEnv p = RowEnv (OccEnv (RowSig p))
 
 -- Looks deeply through kicons.
-mkRowEnv :: MonoKind p -> RowEnv
+mkRowEnv :: MonoKind p -> RowEnv p
 mkRowEnv (KiConApp (KiCon _ base rows))
   = mkRowEnv base `plusRowEnv` mkRowEnvFromSig rows
 mkRowEnv _ = RowEnv emptyOccEnv
  
-plusRowEnv :: RowEnv -> RowEnv -> RowEnv
+plusRowEnv :: RowEnv p -> RowEnv p -> RowEnv p
 plusRowEnv (RowEnv env1) (RowEnv env2) = RowEnv $ env1 `plusOccEnv` env2
 
-mkRowEnvFromSig :: [RowSig] -> RowEnv
+mkRowEnvFromSig :: [RowSig p] -> RowEnv p
 mkRowEnvFromSig rows
   = RowEnv $ extendOccEnvList emptyOccEnv pairs
   where
     pairs = mkPair <$> rows
-    mkPair :: RowSig -> (OccName, RowSig)
+    -- mkPair :: RowSig p -> (OccName, RowSig p)
     mkPair r@(RowTySig nm _) = (setOccNameSpace (RowName (fsLit "")) (nameOccName nm), r)
     mkPair r@(RowKiSig nm _) = (setOccNameSpace (TcRowName (fsLit "")) (nameOccName nm), r)
 
-lookupRowEnv :: RowEnv -> Name -> Maybe RowSig
+lookupRowEnv :: RowEnv p -> Name -> Maybe (RowSig p)
 lookupRowEnv (RowEnv env) nm =
   let occ = nameOccName nm
       new_ns = case occNameSpace occ of
@@ -116,10 +116,10 @@ lookupRowEnv (RowEnv env) nm =
       new_occ = setOccNameSpace new_ns occ
   in lookupOccEnv env new_occ
 
-instance Outputable RowEnv where
+instance IsPass p => Outputable (RowEnv (CsPass p)) where
   ppr (RowEnv env) = ppr env
 
-rowSigName :: RowSig -> Name
+rowSigName :: RowSig p -> Name
 rowSigName (RowTySig nm _) = nm
 rowSigName (RowKiSig nm _) = nm
 
@@ -138,12 +138,17 @@ kiConRowNames KiCon{ kicon_rows = rows }
   | otherwise
   = panic "kiConRowNames empty rows"
 
-data RowSig
-  = RowTySig Name (Type Zk)
-  | RowKiSig Name (Kind Zk)
+-- All ki vars present here should be bound elsewhere.
+-- I.e., we have the invariant that there are no 'ForAllKi's at the head
+-- of a RowTySig, and no ForAlls at the head of a kid sig, guaranteed by 'MonoKind'
+-- This is useful/necessary for handling kivars properly during checking/unification/solving.
+-- The first part of the invariant may not be as necessary as the second, but still makes like easier.
+data RowSig p
+  = RowTySig Name (Type p)
+  | RowKiSig Name (MonoKind p)
   deriving Data.Data
 
-rowName :: RowSig -> Name
+rowName :: RowSig p -> Name
 rowName (RowTySig n _) = n
 rowName (RowKiSig n _) = n
 
@@ -198,7 +203,7 @@ instance IsPass p => Outputable (Kind (CsPass p)) where
 instance IsPass p => Outputable (MonoKind (CsPass p)) where
   ppr = pprMonoKind
 
-instance Outputable RowSig where
+instance IsPass p => Outputable (RowSig (CsPass p)) where
   ppr = pprRowSig
 
 instance IsPass p => Outputable (KiCon (CsPass p)) where
@@ -250,13 +255,13 @@ pprPrecMonoKindX env prec ki
     then debug_ppr_mono_ki prec ki
     else text "{pprKind not implemented}"--pprPrecIfaceKind prec (tidyToIfaceKindStyX env ty sty)
 
-pprRowSig :: RowSig -> SDoc
+pprRowSig :: HasPass p pass => RowSig p -> SDoc
 pprRowSig = pprPrecRowSig topPrec
 
-pprPrecRowSig :: PprPrec -> RowSig -> SDoc
+pprPrecRowSig :: HasPass p pass => PprPrec -> RowSig p -> SDoc
 pprPrecRowSig = pprPrecRowSigX emptyTidyEnv
 
-pprPrecRowSigX :: TidyEnv p -> PprPrec -> RowSig -> SDoc
+pprPrecRowSigX :: HasPass p pass => TidyEnv p -> PprPrec -> RowSig p -> SDoc
 pprPrecRowSigX env prec ki
   = getPprStyle $ \sty ->
     getPprDebug $ \debug ->
@@ -321,9 +326,9 @@ debug_ppr_kicon KiCon{..}
   = debug_ppr_mono_ki appPrec kicon_base <+>
     dot <> (braces (fsep (punctuate comma (map debug_ppr_row kicon_rows))))
 
-debug_ppr_row :: RowSig -> SDoc
+debug_ppr_row :: HasPass p pass => RowSig p -> SDoc
 debug_ppr_row (RowTySig name ty) = ppr name <+> colon <+> debugPprType ty
-debug_ppr_row (RowKiSig name ki) = text "type" <+> ppr name <+> colon <+> debugPprKind ki
+debug_ppr_row (RowKiSig name ki) = text "type" <+> ppr name <+> colon <+> debugPprMonoKind ki
 
 debug_ppr_ki_co :: HasPass p pass => PprPrec -> KindCoercion p -> SDoc
 debug_ppr_ki_co _ (Refl ki) = angleBrackets (ppr ki)
@@ -882,13 +887,20 @@ mapMKiCoX (MKiCoMapper { mkcm_kivar = kivar, mkcm_covar = covar, mkcm_hole = coh
     go_mki !env (BIKi k) = return $ BIKi k
     go_mki !env (KiConApp (KiCon nm base rows)) = do
       base' <- go_mki env base
-      return $ KiConApp $ KiCon nm base' rows
+      rows' <- go_rows env rows
+      return $ KiConApp $ KiCon nm base' rows'
     go_mki !env (KiPredApp pred ki1 ki2)
       = mkKiPredApp pred <$> go_mki env ki1 <*> go_mki env ki2
     go_mki !env ki@(FunKi _ arg res) = do
       arg' <- go_mki env arg
       res' <- go_mki env res
       return ki { fk_arg = arg', fk_res = res' }
+
+    go_rows !_ [] = return []
+    go_rows !env (r:rs) = (:) <$> go_row env r <*> go_rows env rs
+
+    go_row !env (RowTySig nm ty) = return $ RowTySig nm (panic "mapMKiCoX RowTySig")
+    go_row !env (RowKiSig nm ki) = RowKiSig nm <$> go_mki env ki
 
     go_cos !_ [] = return []
     go_cos !env (co:cos) = (:) <$> go_co env co <*> go_cos env cos

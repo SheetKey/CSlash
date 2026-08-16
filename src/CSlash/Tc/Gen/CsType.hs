@@ -294,7 +294,7 @@ tc_arrow (CsArrow _ (L _ ki)) = tcArrow ki
 *                                                                      *
 ********************************************************************* -}
 
-tcSetRows :: RowEnv -> LCsSetRows Rn -> TcM a
+tcSetRows :: RowEnv Tc -> LCsSetRows Rn -> TcM a
 tcSetRows env rn_ty@(L _ (SetRows _ lrows)) = do
   traceTc "tcSetRows env" (ppr env $$ ppr_set_rows rn_ty)
   let rows = unLoc <$> lrows
@@ -310,11 +310,11 @@ tcSetRows env rn_ty@(L _ (SetRows _ lrows)) = do
 
     lookupRow row = lookupRowEnv env (rowName row)
 
-tcSetRow :: Maybe RowSig -> CsSetRow Rn -> TcM (a, RowSig)
+tcSetRow :: Maybe (RowSig Tc) -> CsSetRow Rn -> TcM (a, RowSig Tc)
 tcSetRow (Just sig) = tcCheckSetRow sig
 tcSetRow Nothing = tcInferSetRow 
 
-tcCheckSetRow :: RowSig -> CsSetRow Rn -> TcM (a, RowSig)
+tcCheckSetRow :: RowSig Tc -> CsSetRow Rn -> TcM (a, RowSig Tc)
 tcCheckSetRow (RowTySig nm ty) (SetRow _ row_nm row_expr) = panic "tcCheckSetRow SetRow"
 tcCheckSetRow (RowKiSig nm ki) (SetTyRow _ row_nm row_type) = do
   -- Need to instantiate the kvs of 'ki'
@@ -332,37 +332,17 @@ tcCheckSetRow (RowKiSig nm ki) (SetTyRow _ row_nm row_type) = do
     $ vcat [ ppr nm <+> colon <+> ppr ki
            , ppr row_nm <+> equals <+> ppr row_type ]
 
-  let (kvs, mono_ki) = splitForAllKiVars ki
-  (subst, _) <- newMetaVarKiVarsX emptySubst kvs
-  let mono_ki' = substMonoKi subst mono_ki
-
   let skol_info = TyRowImplSkol (unLoc row_nm)
   row_type <- pushLevelAndSolveKindCoercions skol_info [] $
-    tcCheckLCsType row_type (TheMonoKind mono_ki')
+    tcCheckLCsType row_type (TheMonoKind ki)
 
-  kvs <- candidateQKiVarsOfType row_type
-
-  skol_info <- mkSkolemInfo skol_info
-  inferred <- quantifyKiVars skol_info kvs
-
-  traceTc "tcCheckSetRow pre zonk"
-    $ vcat [ text "mono_kind =" <+> ppr mono_ki
-           , text "row_type =" <+> ppr row_type
-           , text "kvs =" <+> ppr kvs
-           , text "inferred =" <+> ppr inferred ]
-
-  (inferred, row_type) <- liftZonkM $ do
-    inferred <- zonkTcKiVarsToTcKiVars inferred
-    row_type <- zonkTcType row_type
-    return (inferred, row_type)
-
-  traceTc "tcCheckSetRow post zonk"
-    $ vcat [ text "inferred =" <+> ppr inferred
+  traceTc "tcCheckSetRow"
+    $ vcat [ text "ki =" <+> ppr ki
            , text "row_type =" <+> ppr row_type ]
 
   panic "unfin"
 
-tcInferSetRow :: CsSetRow Rn -> TcM (a, RowSig)
+tcInferSetRow :: CsSetRow Rn -> TcM (a, RowSig Tc)
 tcInferSetRow (SetRow kv_nms row_nm row_expr) = panic "tcInferSetRow SetRow"
 tcInferSetRow (SetTyRow kv_nms row_nm row_type) = panic "tcInferSetRow SetTyRow"
 
