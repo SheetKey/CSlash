@@ -54,6 +54,7 @@ data Type p
     , ft_res :: Type p
     }
   | LocalTyRow Name (MonoKind p)
+  | SetRowsTy (Type p) [SetRow p]
   | CastTy (Type p) (KindCoercion p)
   | Embed (MonoKind p) -- for application to a 'BigTyLamTy
   | KindCoercion (KindCoercion p) -- embed a kind coercion (evidence stuff)
@@ -65,6 +66,11 @@ instance IsPass p => Outputable (Type (CsPass p)) where
   ppr = pprType
 
 type KnotTied ty = ty
+
+data SetRow p
+  = SetRowVal Name -- (Expr p)
+  | SetRowTy Name (Type p)
+  deriving (Data.Data)
 
 {- **********************************************************************
 *                                                                       *

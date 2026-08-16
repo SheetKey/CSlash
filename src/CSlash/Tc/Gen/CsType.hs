@@ -247,7 +247,7 @@ tc_cs_type rn_ty@(CsSetRows _ base rows) exp_kind = do
   let row_env = mkRowEnv exp_kind
   (rows', rowsig) <- tcSetRows row_env rows
   let full_kind = KiConApp $ KiCon Nothing base_ki rowsig
-      ty = panic "SetRowType?"
+      ty = SetRowsTy base' rows'
   checkExpectedKind rn_ty ty full_kind exp_kind
 
 -- TODO: move to '..infer_ek'
@@ -294,27 +294,24 @@ tc_arrow (CsArrow _ (L _ ki)) = tcArrow ki
 *                                                                      *
 ********************************************************************* -}
 
-tcSetRows :: RowEnv Tc -> LCsSetRows Rn -> TcM a
+tcSetRows :: RowEnv Tc -> LCsSetRows Rn -> TcM ([SetRow Tc], [RowSig Tc])
 tcSetRows env rn_ty@(L _ (SetRows _ lrows)) = do
   traceTc "tcSetRows env" (ppr env $$ ppr_set_rows rn_ty)
   let rows = unLoc <$> lrows
       pairs = map (\r -> (lookupRow r, r)) rows
   traceTc "pairs" (ppr (fst <$> pairs))
-  res <- mapM (uncurry tcSetRow) pairs
-
-  panic "unfinished"
-
+  mapAndUnzipM (uncurry tcSetRow) pairs
   where
     rowName (SetRow _ nm _) = unLoc nm
     rowName (SetTyRow _ nm _) = unLoc nm
 
     lookupRow row = lookupRowEnv env (rowName row)
 
-tcSetRow :: Maybe (RowSig Tc) -> CsSetRow Rn -> TcM (a, RowSig Tc)
+tcSetRow :: Maybe (RowSig Tc) -> CsSetRow Rn -> TcM (SetRow Tc, RowSig Tc)
 tcSetRow (Just sig) = tcCheckSetRow sig
 tcSetRow Nothing = tcInferSetRow 
 
-tcCheckSetRow :: RowSig Tc -> CsSetRow Rn -> TcM (a, RowSig Tc)
+tcCheckSetRow :: RowSig Tc -> CsSetRow Rn -> TcM (SetRow Tc, RowSig Tc)
 tcCheckSetRow (RowTySig nm ty) (SetRow _ row_nm row_expr) = panic "tcCheckSetRow SetRow"
 tcCheckSetRow (RowKiSig nm ki) (SetTyRow _ row_nm row_type) = do
   -- Need to instantiate the kvs of 'ki'
@@ -328,6 +325,8 @@ tcCheckSetRow (RowKiSig nm ki) (SetTyRow _ row_nm row_type) = do
   -- for types.
   -- Probably fine to instantiate with metas (VarVars?) and then check the resulting mono.
 
+  -- Note may be irrelevant given a recent rework.
+
   traceTc "tcCheckSetRow"
     $ vcat [ ppr nm <+> colon <+> ppr ki
            , ppr row_nm <+> equals <+> ppr row_type ]
@@ -340,9 +339,12 @@ tcCheckSetRow (RowKiSig nm ki) (SetTyRow _ row_nm row_type) = do
     $ vcat [ text "ki =" <+> ppr ki
            , text "row_type =" <+> ppr row_type ]
 
-  panic "unfin"
+  return
+    ( SetRowTy (unLoc row_nm) row_type
+    , RowKiSig (unLoc row_nm) ki) -- TODO: which name? Doesn't matter?
+    
 
-tcInferSetRow :: CsSetRow Rn -> TcM (a, RowSig Tc)
+tcInferSetRow :: CsSetRow Rn -> TcM (SetRow Tc, RowSig Tc)
 tcInferSetRow (SetRow kv_nms row_nm row_expr) = panic "tcInferSetRow SetRow"
 tcInferSetRow (SetTyRow kv_nms row_nm row_type) = panic "tcInferSetRow SetTyRow"
 

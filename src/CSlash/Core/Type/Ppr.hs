@@ -119,3 +119,11 @@ debug_ppr_ty _ (Embed ki) = ppr ki
 debug_ppr_ty _ (KindCoercion co) = text "[KiCo]" <+> (ppr co)
 
 debug_ppr_ty _ (LocalTyRow nm _) = ppr nm
+
+debug_ppr_ty _ (SetRowsTy base rows)
+  = ppr base <+> dot <> braces
+    (fsep (punctuate comma (map debug_ppr_set_row rows)))
+
+debug_ppr_set_row :: HasPass p pass => SetRow p -> SDoc
+debug_ppr_set_row (SetRowVal nm) = ppr nm <+> equals
+debug_ppr_set_row (SetRowTy nm ty) = ppr nm <+> equals <+> ppr ty
