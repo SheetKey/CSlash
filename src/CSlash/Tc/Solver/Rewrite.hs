@@ -334,7 +334,7 @@ rewrite_one_ki (KiPredApp pred ki1 ki2) = do
   redn2 <- rewrite_one_ki ki2
   return $ mkKiPredAppRedn pred redn1 redn2
 
-rewrite_one_ki (KiConApp{}) = panic "rewrite_one_ki kiconapp"
+rewrite_one_ki ki@KiConApp{} = return $ mkReflRednKi ki -- TODO
 
 rewrite_one_ki (FunKi { fk_f = vis, fk_arg = ki1, fk_res = ki2 }) = do
   arg_redn <- rewrite_one_ki ki1
