@@ -17,7 +17,7 @@ import CSlash.Types.Var.Class
 import CSlash.Types.Var.Set
 import CSlash.Core.TyCon
 import CSlash.Core.Kind
-import CSlash.Core.Kind.Compare
+import {-# SOURCE #-} CSlash.Core.Kind.Compare
 
 import CSlash.Builtin.Names
 import CSlash.Types.Name
@@ -251,8 +251,6 @@ isReflTyCo_maybe _ = Nothing
             Type FV instance
 *                                                                       *
 ********************************************************************** -}
-
-data E3 a b c = In1 a | In2 b | In3 c
 
 instance HasFVs (Type p) where
   type FVInScope (Type p) = (TyVarSet p, KiCoVarSet p, KiVarSet p)
