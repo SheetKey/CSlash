@@ -1,8 +1,12 @@
+{-# LANGUAGE TypeAbstractions #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeAbstractions #-}
 {-# LANGUAGE ExplicitForAll #-}
 
 module CSlash.Core.Kind.FVs where
+
+import {-# SOURCE #-} CSlash.Core.Type.FVs (fvsOfType)
+import CSlash.Core.Type.Rep (Type)
 
 import CSlash.Cs.Pass
 
@@ -288,7 +292,7 @@ fvsOfMonoKind (KiVarKi v) f bound_vars (acc_list, acc_set)
   | v `elemVarSet` acc_set = (acc_list, acc_set)
   | otherwise = (v:acc_list, extendVarSet acc_set v)
 fvsOfMonoKind (BIKi{}) f bound_vars acc = acc
-fvsOfMonoKind (KiConApp{}) f bound_vars acc = panic "fvsOfMonoKind kiconapp"
+fvsOfMonoKind (KiConApp kc) f bound_vars acc = fvsOfKiCon kc f bound_vars acc
 fvsOfMonoKind (KiPredApp _ k1 k2) f bound_vars acc
   = (fvsOfMonoKind k1 `unionFV` fvsOfMonoKind k2) f bound_vars acc
 fvsOfMonoKind (FunKi _ arg res) f bound_var acc
@@ -298,6 +302,19 @@ fvsOfMonoKinds :: [MonoKind p] -> KiFV p
 fvsOfMonoKinds (ki:kis) fv_cand in_scope acc
   = (fvsOfMonoKind ki `unionFV` fvsOfMonoKinds kis) fv_cand in_scope acc
 fvsOfMonoKinds [] fv_cand in_scope acc = emptyFV fv_cand in_scope acc
+
+fvsOfKiCon :: KiCon p -> KiFV p
+fvsOfKiCon (KiCon _ base rows) f bound_vars acc
+  = (fvsOfMonoKind base `unionFV` fvsOfRowSigs rows) f bound_vars acc
+
+fvsOfRowSigs :: [RowSig p] -> KiFV p
+fvsOfRowSigs (r:rs) fv_cand in_scope acc
+  = (fvsOfRowSig r `unionFV` fvsOfRowSigs rs) fv_cand in_scope acc
+fvsOfRowSigs [] fv_cand in_scope acc = emptyFV fv_cand in_scope acc
+
+fvsOfRowSig :: RowSig p -> KiFV p
+fvsOfRowSig (RowTySig _ ty) f bound_vars acc = fvsOfType_ClosedTv ty f bound_vars acc
+fvsOfRowSig (RowKiSig _ ki) f bound_vars acc = fvsOfMonoKind ki f bound_vars acc
 
 almostDevoidKiCoVarOfKiCo :: KiCoVar p -> KindCoercion p -> Bool
 almostDevoidKiCoVarOfKiCo kcv kco = almost_devoid_kico_var_of_kico kco kcv
@@ -377,3 +394,28 @@ mafvFolder check_kcv check_kv = MKiCoFolder { mkcf_kivar = do_kv
     do_kv (_, is) kv = Any (not (kv `elemVarSet` is) && check_kv kv)
     do_kcv (is, _) kcv = Any (not (kcv `elemVarSet` is) && check_kcv kcv)
     do_hole _ _ = Any False
+
+{- *********************************************************************
+*                                                                      *
+                 Should be elsewhere
+*                                                                      *
+********************************************************************* -}
+
+-- Used for 'fvsOfRowSig':
+-- Asserts there are no free tvs or kcvs. 
+fvsOfType_ClosedTv :: forall p. Type p -> KiFV p
+fvsOfType_ClosedTv @p ty f kis (kaccl, kaccs)
+  = case fvsOfType ty f' is' acc' of
+      (_, ts, _, kcs, kaccl, kaccs)
+        -> assertPpr (isEmptyVarSet ts && isEmptyVarSet kcs)
+           (text "fvsOfType_ClosedTv" {-$$ ppr ty $$ ppr ts $$ ppr kcs-})
+           (kaccl, kaccs)
+  where
+    is' = (emptyVarSet, emptyVarSet, kis)
+    acc' = ([], emptyVarSet, [], emptyVarSet, kaccl, kaccs)
+
+    f' :: forall a b. E3 a b (KiVar p) -> Bool
+    f' (In1 _) = True
+    f' (In2 _) = True
+    f' (In3 k) = f k
+

@@ -28,7 +28,8 @@ import CSlash.Core.TyCon
 import CSlash.Builtin.Types.Prim( fUNTyCon )
 import CSlash.Data.Maybe( orElse )
 
-import CSlash.Utils.FV as FV
+import qualified CSlash.Utils.FV as FV
+import CSlash.Utils.FV hiding (E3(..))
 import CSlash.Utils.Misc
 import CSlash.Utils.Panic.Plain
 
@@ -111,9 +112,9 @@ liftTyToCoreFV tfv f (_, _, tis, kcis, kis)
       (taccl, taccs, kcaccl, kcaccs, kaccl, kaccs)
         -> (idaccl, idaccs, tcaccl, tcaccs, taccl, taccs, kcaccl, kcaccs, kaccl, kaccs)
   where
-    new_f (TFV.In1 v) = f (In3 v)
-    new_f (TFV.In2 v) = f (In4 v)
-    new_f (TFV.In3 v) = f (In5 v)
+    new_f (FV.In1 v) = f (In3 v)
+    new_f (FV.In2 v) = f (In4 v)
+    new_f (FV.In3 v) = f (In5 v)
 
 exprFreeVars :: CoreExpr -> (IdSet Zk, TyCoVarSet Zk, TyVarSet Zk, KiCoVarSet Zk, KiVarSet Zk)
 exprFreeVars e = case fvVarAcc (exprLocalFVs e) of

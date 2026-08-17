@@ -7,7 +7,6 @@ module CSlash.Core.Type.FVs where
 
 import CSlash.Cs.Pass
 
-import {-# SOURCE #-} CSlash.Core.Type (coreView)
 import {-# SOURCE #-} CSlash.Core.Type
 
 import Data.Monoid as DM ( Endo(..), Any(..) )
