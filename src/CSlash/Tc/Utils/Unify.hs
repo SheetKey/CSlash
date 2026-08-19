@@ -977,9 +977,27 @@ uKind env kc orig_ki1 orig_ki2 = do
           (UKd, LKd) -> return $ LiftLT $ TransCo BI_U_A BI_A_L
           _ -> panic "unreachable"
 
+    go (KiConApp kc1) (KiConApp kc2)
+      | EQKi <- kc -- TODO: maybe this should be an assert 
+      = do traceTc "go-kiconapp" (ppr kc1 $$ ppr kc2)
+           let (ki1, rs1) = flattenKiCon kc1
+               (ki2, rs2) = flattenKiCon kc2
+           {- Plan:
+           1. Unify the rows with common names.
+           2. Collect leftover rows from the left and the right.
+           3. If both have leftovers, then error. Otherwise, hopefully the otherside is a metavar
+           4. Unify the bases with leftover rows attached.
+           -}
+           (leftover_rows, row_cos) <- go_rows rs1 rs2
+           base_co <- case leftover_rows of
+             Nothing -> go ki1 ki2
+             Left rs -> go (KiConApp (KiCon Nothing ki1 rs)) ki2
+             Right rs -> go ki1 (KiConApp (KiCon Nothing ki2 rs))
+           return $ mkKiRowCo base_co row_cos
+
     go k1@(KiPredApp p1 ka1 kb1) k2@(KiPredApp p2 ka2 kb2) 
       | p1 == p2
-      , EQKi <- kc -- maybe this should be an assert
+      , EQKi <- kc -- TODO: maybe this should be an assert
       = do traceTc "go-kipred" (ppr k1 $$ ppr k2)
            coa <- u_kc_arg ka1 ka2 
            cob <- u_kc_arg kb1 kb2
