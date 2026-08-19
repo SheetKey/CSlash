@@ -22,3 +22,10 @@ mkNakedTyConTy :: TyCon p -> Type p
 
 instance IsPass p => Outputable (Type (CsPass p))
 
+type role TypeCoercion nominal
+data TypeCoercion p 
+
+instance Data.Typeable p => Data.Data (TypeCoercion p)
+
+isReflTyCo :: TypeCoercion p -> Bool
+isReflTyCo_maybe :: HasPass p pass => TypeCoercion p -> Maybe (Type p)

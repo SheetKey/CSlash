@@ -15,7 +15,7 @@ module CSlash.Core.Kind
 
 import Prelude hiding ((<>))
 
-import {-# SOURCE #-} CSlash.Core.Type.Rep (Type)
+import {-# SOURCE #-} CSlash.Core.Type.Rep
 import {-# SOURCE #-} CSlash.Core.Type.Ppr (debugPprType)
 import {-# SOURCE #-} CSlash.Types.Var
 import {-# SOURCE #-} CSlash.Core.Kind.Compare (eqMonoKind)
@@ -89,7 +89,7 @@ data KiCon p = KiCon
 newtype RowEnv p = RowEnv (OccEnv (RowSig p))
 
 flattenKiCon :: KiCon p -> (MonoKind p, RowEnv p)
-flattenKiCon = go (RowEnv emptyOccEnv)
+flattenKiCon = go (RowEnv emptyOccEnv) . KiConApp
   where
     go env (KiConApp (KiCon _ base rows))
       = go (mkRowEnvFromSig rows `plusRowEnv` env) base
@@ -491,16 +491,16 @@ isReflRowCo :: RowCoercion p -> Bool
 isReflRowCo (RowTySigCo _ co) = isReflTyCo co
 isReflRowCo (RowKiSigCo _ co) = isReflKiCo co
 
-isReflRowCo_maybe :: RowCoercion p -> Maybe (RowSig p)
+isReflRowCo_maybe :: HasPass p pass => RowCoercion p -> Maybe (RowSig p)
 isReflRowCo_maybe (RowTySigCo nm co) = RowTySig nm <$> isReflTyCo_maybe co
 isReflRowCo_maybe (RowKiSigCo nm co) = RowKiSig nm <$> isReflKiCo_maybe co
 
-mkKiRowCo :: KindCoercion p -> [RowCoercion p] -> KindCoercion p
+mkKiRowCo :: HasPass p pass => KindCoercion p -> [RowCoercion p] -> KindCoercion p
 mkKiRowCo base rs
   | Just bk <- isReflKiCo_maybe base
   , let rks = isReflRowCo_maybe <$> rs
   , Just rks' <- sequence rks
-  = reflKiCo $ KiConApp (KiCon bk rks')
+  = mkReflKiCo $ KiConApp (KiCon Nothing bk rks')
   | otherwise
   = KiRowCo base rs
 
