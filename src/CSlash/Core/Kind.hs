@@ -88,6 +88,13 @@ data KiCon p = KiCon
 
 newtype RowEnv p = RowEnv (OccEnv (RowSig p))
 
+flattenKiCon :: KiCon p -> (MonoKind p, RowEnv p)
+flattenKiCon = go (RowEnv emptyOccEnv)
+  where
+    go env (KiConApp (KiCon _ base rows))
+      = go (mkRowEnvFromSig rows `plusRowEnv` env) base
+    go env base = (base, env)
+
 -- Looks deeply through kicons.
 mkRowEnv :: MonoKind p -> RowEnv p
 mkRowEnv (KiConApp (KiCon _ base rows))
@@ -463,6 +470,7 @@ data KindCoercion p where
     , fco_res :: KindCoercion p }
     -> KindCoercion p
   -- KiPredAppCo :: KiPredCon -> KindCoercion p -> KindCoercion p -> KindCoercion p
+  KiRowCo :: KindCoercion p -> [RowCoercion p] -> KindCoercion p
   KiCoVarCo :: (KiCoVar p) -> KindCoercion p
   SymCo :: (KindCoercion p) -> KindCoercion p
   TransCo :: (KindCoercion p) -> (KindCoercion p) -> KindCoercion p
@@ -473,7 +481,28 @@ instance (Data.Typeable p) => Data.Data (KindCoercion p) where
   toConstr _ = abstractConstr "KindCoercion"
   gunfold _ _ = error "gunfold"
   dataTypeOf _ = mkNoRepType "KindCoercion"
-  
+
+data RowCoercion p
+  = RowTySigCo Name (TypeCoercion p)
+  | RowKiSigCo Name (KindCoercion p)
+  deriving Data.Data
+
+isReflRowCo :: RowCoercion p -> Bool
+isReflRowCo (RowTySigCo _ co) = isReflTyCo co
+isReflRowCo (RowKiSigCo _ co) = isReflKiCo co
+
+isReflRowCo_maybe :: RowCoercion p -> Maybe (RowSig p)
+isReflRowCo_maybe (RowTySigCo nm co) = RowTySig nm <$> isReflTyCo_maybe co
+isReflRowCo_maybe (RowKiSigCo nm co) = RowKiSig nm <$> isReflKiCo_maybe co
+
+mkKiRowCo :: KindCoercion p -> [RowCoercion p] -> KindCoercion p
+mkKiRowCo base rs
+  | Just bk <- isReflKiCo_maybe base
+  , let rks = isReflRowCo_maybe <$> rs
+  , Just rks' <- sequence rks
+  = reflKiCo $ KiConApp (KiCon bk rks')
+  | otherwise
+  = KiRowCo base rs
 
 data KindCoercionHole = KindCoercionHole
   { kch_co_var :: TcKiCoVar
