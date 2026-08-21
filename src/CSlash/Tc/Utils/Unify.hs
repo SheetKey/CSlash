@@ -986,13 +986,28 @@ uKind env kc orig_ki1 orig_ki2 = do
            1. Unify the rows with common names.
            2. Collect leftover rows from the left and the right.
            3. If both have leftovers, then error. Otherwise, hopefully the otherside is a metavar
+              - What about 'k1.{r1} ~ k2.{r2}'?
+                Seems unlikely?
+                If both k1 and k2 are metas then we unify to 'k.{r1, r2}'.
+                Try to come up with some test cases for this.
+                Is there a valid occurrence of this where we can unify, but one of k1,k2 is non-meta?
+
+                Don't fall into the trap of just doing
+                  uKind k1 k2.{r2}
+                  uKind k1.{r1} k2
+                Maybe we want to do a unify check for each of those cases
+                and then pick one that passes.
+                Then, if either k1 or k2 is a meta, we're in the clear.
+
+                Just read the paper!!! 
+
            4. Unify the bases with leftover rows attached.
            -}
            (leftover_rows, row_cos) <- go_rows rs1 rs2
            base_co <- case leftover_rows of
              Nothing -> go ki1 ki2
-             Left rs -> go (KiConApp (KiCon Nothing ki1 rs)) ki2
-             Right rs -> go ki1 (KiConApp (KiCon Nothing ki2 rs))
+             Just (Left rs) -> go (KiConApp (KiCon Nothing ki1 rs)) ki2
+             Just (Right rs) -> go ki1 (KiConApp (KiCon Nothing ki2 rs))
            return $ mkKiRowCo base_co row_cos
 
     go k1@(KiPredApp p1 ka1 kb1) k2@(KiPredApp p2 ka2 kb2) 
@@ -1032,6 +1047,35 @@ uKind env kc orig_ki1 orig_ki2 = do
       uKind env_arg kc ki1 ki2
       where
         env_arg = env { u_loc = adjustCtLoc False True (u_loc env) }
+
+    ------------------
+    go_rows rs1 rs2 = do
+      let (l, r, z) = zipRowEnvs rs1 rs2
+          l' = rowEnvElts l
+          r' = rowEnvElts r
+          pairs = rowEnvElts z
+          res | [] <- l'
+              , [] <- r'
+              = Nothing
+              | [] <- l'
+              = Just (Right r')
+              | [] <- r'
+              = Just (Left l')
+              | otherwise
+              = pprPanic "incompatible rows" (ppr rs1 $$ ppr rs2)
+
+      cos <- mapM go_row_pair pairs
+      return (res, cos)
+
+    go_row_pair (RowTySig nm ty1, RowTySig _ ty2) = do
+      co <- uType env ty1 ty2 -- TODO: change the 'CtLoc' to have a row related origin
+      return $ RowTySigCo nm co
+
+    go_row_pair (RowKiSig nm ki1, RowKiSig _ ki2) = do
+      co <- go ki1 ki2
+      return $ RowKiSigCo nm co
+
+    go_row_pair _ = panic "go_row_pair unreachable"
 
 {- *********************************************************************
 *                                                                      *
