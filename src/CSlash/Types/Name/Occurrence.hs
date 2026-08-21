@@ -317,6 +317,26 @@ extendOccEnv_Acc f g (MkOccEnv env) (OccName ns s)
     f' a bs = alterUFM (Just . \case { Nothing -> g a; Just b -> f a b }) bs ns
     g' a = unitUFM ns (g a)
 
+intersectOccEnv_C :: (a -> b -> c) -> OccEnv a -> OccEnv b -> OccEnv c
+intersectOccEnv_C f (MkOccEnv as) (MkOccEnv bs)
+  = MkOccEnv $ intersectUFM_C (intersectUFM_C f) as bs
+
+minusOccEnv :: OccEnv a -> OccEnv b -> OccEnv a
+minusOccEnv = minusOccEnv_C_Ns minusUFM
+
+minusOccEnv_C_Ns :: forall a b
+                 .  (UniqFM NameSpace a -> UniqFM NameSpace b -> UniqFM NameSpace a)
+                 -> OccEnv a -> OccEnv b -> OccEnv a
+minusOccEnv_C_Ns f (MkOccEnv as) (MkOccEnv bs) =
+  MkOccEnv $ minusUFM_C g as bs
+    where
+      g :: UniqFM NameSpace a -> UniqFM NameSpace b -> Maybe (UniqFM NameSpace a)
+      g as bs =
+        let m = f as bs
+        in if isNullUFM m
+           then Nothing
+           else Just m
+
 instance Outputable a => Outputable (OccEnv a) where
   ppr x = pprOccEnv ppr x
 
