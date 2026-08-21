@@ -1,3 +1,4 @@
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE StandaloneDeriving #-}
@@ -86,7 +87,12 @@ data KiCon p = KiCon
   }
   deriving Data.Data
 
-newtype RowEnv p = RowEnv (OccEnv (RowSig p))
+type RowEnv p = RowEnv' (RowSig p)
+type ZipRowEnv p = RowEnv' (RowSig p, RowSig p)
+newtype RowEnv' a = RowEnv (OccEnv a)
+
+rowEnvElts :: RowEnv' a -> [a]
+rowEnvElts (RowEnv e) = nonDetOccEnvElts e
 
 flattenKiCon :: KiCon p -> (MonoKind p, RowEnv p)
 flattenKiCon = go (RowEnv emptyOccEnv) . KiConApp
@@ -112,6 +118,13 @@ mkRowEnvFromSig rows
     -- mkPair :: RowSig p -> (OccName, RowSig p)
     mkPair r@(RowTySig nm _) = (setOccNameSpace (RowName (fsLit "")) (nameOccName nm), r)
     mkPair r@(RowKiSig nm _) = (setOccNameSpace (TcRowName (fsLit "")) (nameOccName nm), r)
+
+zipRowEnvs :: RowEnv p -> RowEnv p -> (RowEnv p, RowEnv p, ZipRowEnv p)
+zipRowEnvs (RowEnv a) (RowEnv b) =
+  let l = a `minusOccEnv` b
+      r = b `minusOccEnv` a
+      z = intersectOccEnv_C (,) a b
+  in (RowEnv l, RowEnv r, RowEnv z)
 
 lookupRowEnv :: RowEnv p -> Name -> Maybe (RowSig p)
 lookupRowEnv (RowEnv env) nm =
