@@ -375,7 +375,16 @@ debug_ppr_ki_co prec (TransCo co1 co2)
      $ vcat (debug_ppr_ki_co topPrec co1 : ppr_trans co2)
 debug_ppr_ki_co _ (HoleCo co) = ppr co
 debug_ppr_ki_co _ (KiCoVarCo cv) = ppr cv
+debug_ppr_ki_co _ (KiRowCo base rows)
+  = angleBrackets $
+    debug_ppr_ki_co topPrec base
+    <+> dot <> braces
+    (fsep (punctuate comma (map debug_ppr_row_co rows)))
 debug_ppr_ki_co _ _ = panic "debug_ppr_ki_co"
+
+debug_ppr_row_co :: HasPass p pass => RowCoercion p -> SDoc
+debug_ppr_row_co (RowTySigCo nm co) = ppr nm <+> equals <+> ppr co
+debug_ppr_row_co (RowKiSigCo nm co) = ppr nm <+> equals <+> ppr co
 
 data FunKiFlag
   = FKF_K_K -- Kind -> Kind

@@ -21,6 +21,7 @@ type PredType = Type
 mkNakedTyConTy :: TyCon p -> Type p
 
 instance IsPass p => Outputable (Type (CsPass p))
+instance Outputable (TypeCoercion p) 
 
 type role TypeCoercion nominal
 data TypeCoercion p 
