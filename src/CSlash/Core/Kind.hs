@@ -12,6 +12,7 @@
 module CSlash.Core.Kind
   ( module CSlash.Core.Kind
   , KiVar
+  , Name
   ) where
 
 import Prelude hiding ((<>))

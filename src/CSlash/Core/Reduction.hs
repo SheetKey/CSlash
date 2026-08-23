@@ -147,6 +147,11 @@ mkKiPredAppRedn pred (KiReduction co1 ki1) (KiReduction co2 ki2)
   = mkKiReduction (mkKiPredAppCo pred co1 co2) (mkKiPredApp pred ki1 ki2)
 {-# INLINE mkKiPredAppRedn #-}
 
+mkKiRowRedn :: Maybe Name -> KiReduction -> KiRowSigReductions -> KiReduction
+mkKiRowRedn nm (KiReduction co1 ki1) (KiRowSigReductions rcos rs)
+  = mkKiReduction (KiRowCo co1 rcos) (KiConApp (KiCon nm ki1 rs))
+{-# INLINE mkKiRowRedn #-}
+
 mkAppRedn :: TyReduction -> TyReduction -> TyReduction
 mkAppRedn (TyReduction co1 ty1) (TyReduction co2 ty2)
   = mkTyReduction (mkAppCo co1 co2) (mkAppTy ty1 ty2)
@@ -172,6 +177,8 @@ mkReflKiCoRedn kco = mkTyReduction (mkReflTyCo kco_ty) kco_ty
   where
     kco_ty = KindCoercion kco
 {-# INLINE mkReflKiCoRedn #-}
+
+data KiRowSigReductions = KiRowSigReductions [RowCoercion Tc] [RowSig Tc]
 
 data TyReductions = TyReductions [TypeCoercion Tc] [Type Tc]
 data KiReductions = KiReductions [KindCoercion Tc] [MonoKind Tc]

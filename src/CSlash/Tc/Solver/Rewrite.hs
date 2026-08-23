@@ -334,12 +334,26 @@ rewrite_one_ki (KiPredApp pred ki1 ki2) = do
   redn2 <- rewrite_one_ki ki2
   return $ mkKiPredAppRedn pred redn1 redn2
 
-rewrite_one_ki ki@KiConApp{} = return $ mkReflRednKi ki -- TODO
+rewrite_one_ki (KiConApp (KiCon nm base rows)) = do
+  redn1 <- rewrite_one_ki base
+  redn2 <- rewrite_row_sigs rows
+  return $ mkKiRowRedn nm redn1 redn2
 
 rewrite_one_ki (FunKi { fk_f = vis, fk_arg = ki1, fk_res = ki2 }) = do
   arg_redn <- rewrite_one_ki ki1
   res_redn <- rewrite_one_ki ki2
   return $ mkFunKiRedn vis arg_redn res_redn
+
+rewrite_row_sigs :: [RowSig Tc] -> RewriteM KiRowSigReductions
+rewrite_row_sigs [] = return $ KiRowSigReductions [] []
+rewrite_row_sigs (RowTySig nm ty : rs) = do
+  TyReduction co xi <- rewrite_one_ty ty
+  KiRowSigReductions cos xis <- rewrite_row_sigs rs
+  return $ KiRowSigReductions (RowTySigCo nm co : cos) (RowTySig nm xi : xis)
+rewrite_row_sigs (RowKiSig nm ki : rs) = do
+  KiReduction co xi <- rewrite_one_ki ki
+  KiRowSigReductions cos xis <- rewrite_row_sigs rs
+  return $ KiRowSigReductions (RowKiSigCo nm co : cos) (RowKiSig nm xi : xis)
 
 rewrite_reduction :: KiReduction -> RewriteM KiReduction
 rewrite_reduction (KiReduction co ki) = do
