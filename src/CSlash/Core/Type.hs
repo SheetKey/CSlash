@@ -94,7 +94,7 @@ rewriterView (TyConApp tc tys)
   | isTypeSynonymTyCon tc
   , isForgetfulSynTyCon tc
   = expandSynTyConApp_maybe tc tys
-rewriterView ty@(AppTy{}) = expandTyLamApp_maybe ty (not . isForgetfulTy)
+rewriterView ty@(AppTy{}) = expandTyLamApp_maybe ty isForgetfulTy
 rewriterView _ = Nothing
 {-# INLINE rewriterView #-}
 
