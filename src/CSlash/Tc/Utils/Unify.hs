@@ -1004,10 +1004,12 @@ uKind env kc orig_ki1 orig_ki2 = do
            4. Unify the bases with leftover rows attached.
            -}
            (leftover_rows, row_cos) <- go_rows rs1 rs2
+           traceTc "leftover_rows" (ppr leftover_rows)
            base_co <- case leftover_rows of
-             Nothing -> go ki1 ki2
-             Just (Left rs) -> go (KiConApp (KiCon Nothing ki1 rs)) ki2
-             Just (Right rs) -> go ki1 (KiConApp (KiCon Nothing ki2 rs))
+             Nothing -> uKind env kc ki1 ki2
+             Just (Left rs) -> uKind env kc (KiConApp (KiCon Nothing ki1 rs)) ki2
+             Just (Right rs) -> uKind env kc ki1 (KiConApp (KiCon Nothing ki2 rs))
+           traceTc "base_co" (ppr ki1 $$ ppr ki2 $$ ppr base_co)
            return $ mkKiRowCo base_co row_cos
 
     go k1@(KiPredApp p1 ka1 kb1) k2@(KiPredApp p2 ka2 kb2) 
@@ -1065,6 +1067,7 @@ uKind env kc orig_ki1 orig_ki2 = do
               = pprPanic "incompatible rows" (ppr rs1 $$ ppr rs2)
 
       cos <- mapM go_row_pair pairs
+      traceTc "go_rows done" empty
       return (res, cos)
 
     go_row_pair (RowTySig nm ty1, RowTySig _ ty2) = do
@@ -1072,7 +1075,8 @@ uKind env kc orig_ki1 orig_ki2 = do
       return $ RowTySigCo nm co
 
     go_row_pair (RowKiSig nm ki1, RowKiSig _ ki2) = do
-      co <- go ki1 ki2
+      traceTc "go_row_pair ki" (ppr nm $$ ppr ki1 $$ ppr ki2)
+      co <- uKind env kc ki1 ki2
       return $ RowKiSigCo nm co
 
     go_row_pair _ = panic "go_row_pair unreachable"
