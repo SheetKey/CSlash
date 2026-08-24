@@ -103,7 +103,7 @@ tcKiVar name = do
 tcInferKiCon_instantiate :: [KiVar Zk] -> KiCon Zk -> TcM (MonoKind Tc)
 tcInferKiCon_instantiate kvs kicon = do
   traceTc "tcInferKiCon {" (ppr kvs $$ ppr kicon)
-  (subst, _) <- newMetaVarKiVarsX emptySubst kvs
+  (subst, _) <- newMetaKiVarsX emptySubst kvs
   let kicon' = substKiCon subst kicon
   traceTc "tcInferKiCon }" (ppr kicon')
   return (KiConApp kicon')
