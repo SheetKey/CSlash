@@ -510,6 +510,10 @@ data RowCoercion p
   | RowKiSigCo Name (KindCoercion p)
   deriving Data.Data
 
+mkReflRowCo :: RowSig p -> RowCoercion p 
+mkReflRowCo (RowTySig nm ty) = RowTySigCo nm (mkReflTyCo ty)
+mkReflRowCo (RowKiSig nm ki) = RowKiSigCo nm (mkReflKiCo ki)
+
 isReflRowCo :: RowCoercion p -> Bool
 isReflRowCo (RowTySigCo _ co) = isReflTyCo co
 isReflRowCo (RowKiSigCo _ co) = isReflKiCo co

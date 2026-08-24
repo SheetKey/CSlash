@@ -1559,7 +1559,7 @@ checkKiEqRhs flags ki = case ki of
     redn1 <- checkKiEqRhs flags ki1
     redn2 <- checkKiEqRhs flags ki2
     return $ mkKiPredAppRedn con <$> redn1 <*> redn2
-  KiConApp{} -> panic "checkkieqrhs kiconapp"
+  KiConApp kc -> checkKiCon flags kc
   BIKi {} -> okCheckReflKi ki
   KiVarKi kv -> checkKiVar flags kv
   FunKi { fk_f = af, fk_arg = a, fk_res = r }
@@ -1571,15 +1571,11 @@ checkKiEqRhs flags ki = case ki of
           r_res <- checkKiEqRhs flags r
           return $ mkFunKiRedn af <$> a_res <*> r_res
 
--- checkKiConApp
---   :: KiEqFlags -> AnyMonoKind -> KiCon -> [AnyMonoKind] -> TcM (PuResult () Reduction)
--- checkKiConApp flags kc_app kc kis
---   = recurseIntoKiConApp flags kc kis
-
--- recurseIntoKiConApp :: KiEqFlags -> KiCon -> [AnyMonoKind] -> TcM (PuResult () Reduction)
--- recurseIntoKiConApp flags kc kis = do
---   kis_res <- mapCheck (checkKiEqRhs flags) kis
---   return (mkKiConAppRedn kc <$> kis_res)
+checkKiCon :: KiEqFlags -> KiCon Tc -> TcM (PuResult () KiReduction)
+checkKiCon flags (KiCon nm base rows) = do
+  redn1 <- checkKiEqRhs flags base
+  -- TODO: Need an occurs check here (for kvs in the rows)??
+  return $ flip (mkKiRowRedn nm) (mkReflRednRows rows) <$> redn1
 
 checkKiVar :: KiEqFlags -> KiVar Tc -> TcM (PuResult () KiReduction)
 checkKiVar (KEF { kef_lhs = lhs, kef_unifying = unifying, kef_occurs = occ_prob }) occ_kv

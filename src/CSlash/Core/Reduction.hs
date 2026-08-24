@@ -99,6 +99,9 @@ mkTransTyRedn co1 redn@(TyReduction co2 _)
 mkReflRednKi :: MonoKind Tc -> KiReduction
 mkReflRednKi ki = mkKiReduction (mkReflKiCo ki) ki
 
+mkReflRednRows :: [RowSig Tc] -> KiRowSigReductions
+mkReflRednRows rows = KiRowSigReductions (mkReflRowCo <$> rows) rows
+
 mkReflRednTy :: Type Tc -> TyReduction
 mkReflRednTy ty = mkTyReduction (mkReflTyCo ty) ty
 

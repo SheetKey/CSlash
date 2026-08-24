@@ -30,3 +30,5 @@ instance Data.Typeable p => Data.Data (TypeCoercion p)
 
 isReflTyCo :: TypeCoercion p -> Bool
 isReflTyCo_maybe :: HasPass p pass => TypeCoercion p -> Maybe (Type p)
+
+mkReflTyCo :: Type p -> TypeCoercion p
