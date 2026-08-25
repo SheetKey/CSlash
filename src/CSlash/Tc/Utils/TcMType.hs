@@ -730,6 +730,10 @@ collect_cand_qkvs_ty orig_ty cur_lvl (boundtvs, boundkcvs, boundkvs) dvs ty = go
 
     go dv (LocalTyRow {}) = return dv
 
+    go dv (SetRowsTy ty rows) = do
+      dv1 <- go dv ty
+      go_rows dv1 rows
+
     go _ other = pprPanic "collect_cand_qkvs_ty" (ppr other)
 
     go_tv :: DTcKiVarSet -> TyVar Tc -> TcM DTcKiVarSet
@@ -743,6 +747,14 @@ collect_cand_qkvs_ty orig_ty cur_lvl (boundtvs, boundkcvs, boundkvs) dvs ty = go
       | otherwise
       = do tv_kind <- liftZonkM $ zonkTcMonoKind (varKind tv)
            collect_cand_qkvs (Mono tv_kind) cur_lvl boundkvs dv (Mono tv_kind)
+
+    go_rows dv [] = return dv
+    go_rows dv (r:rs) = do
+      dv1 <- go_row dv r
+      go_rows dv1 rs
+
+    go_row dv (SetRowVal _) = return dv
+    go_row dv (SetRowTy _ ty) = go dv ty
 
 candidateQKiVarsOfKind :: Kind Tc -> TcM DTcKiVarSet
 candidateQKiVarsOfKind ki = do
