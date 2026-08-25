@@ -205,6 +205,8 @@ check_type ve ty@(FunTy _ arg_ty res_ty) = do
 
 check_type ve LocalTyRow{} = return ()
 
+check_type ve (SetRowsTy ty rs) = check_type ve ty -- TODO: rows?
+
 check_type _ ty@(ForAllTy {}) = pprPanic "check_type/FA2" (ppr ty)
 check_type _ ty@(TyLamTy {}) = pprPanic "check_type/TL2" (ppr ty)
 check_type _ ty@(BigTyLamTy {}) = pprPanic "check_type/BTL2" (ppr ty)
