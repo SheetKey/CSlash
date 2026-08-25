@@ -246,6 +246,13 @@ mapTyCoX (TyCoMapper { tm_tyvar = tyvar
     go_ty !env (CastTy ty kco) = mkCastTy <$> go_ty env ty <*> go_kco env kco
     go_ty !env (KindCoercion kco) = KindCoercion <$> go_kco env kco
     go_ty !env (LocalTyRow nm ki) = LocalTyRow nm <$> go_mki env ki
+    go_ty !env (SetRowsTy ty rs) = SetRowsTy <$> go_ty env ty <*> go_rows env rs
+
+    go_rows !_ [] = return []
+    go_rows !env (r:rs) = (:) <$> go_row env r <*> go_rows env rs
+
+    go_row !env (SetRowVal nm) = return $ SetRowVal nm 
+    go_row !env (SetRowTy nm ty) = SetRowTy nm <$> go_ty env ty
 
     go_cos !_ [] = return []
     go_cos !env (co:cos) = (:) <$> go_co env co <*> go_cos env cos
