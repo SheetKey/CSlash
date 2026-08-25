@@ -14,7 +14,7 @@ import CSlash.Tc.Utils.TcType
 
 import CSlash.Cs
 
-import CSlash.Core.Type.Rep( Type(..) )
+import CSlash.Core.Type.Rep( Type(..), SetRow(..) )
 import CSlash.Core.Kind
 import CSlash.Core.Type
 import CSlash.Core.TyCon
@@ -130,11 +130,17 @@ synonymTyConsOfType ty = nonDetNameEnvElts (go ty)
     go (CastTy ty _) = go ty
     go (Embed _) = emptyNameEnv
     go (KindCoercion _) = emptyNameEnv
+    go (SetRowsTy ty rs) = go ty `plusNameEnv` go_rows rs
 
     go_tc tc | isTypeSynonymTyCon tc = unitNameEnv (tyConName tc) tc
              | otherwise = emptyNameEnv
 
     go_s tys = foldr (plusNameEnv . go) emptyNameEnv tys
+
+    go_rows = foldr (plusNameEnv . go_row) emptyNameEnv
+
+    go_row (SetRowVal _) = emptyNameEnv
+    go_row (SetRowTy _ ty) = go ty
 
 {- *********************************************************************
 *                                                                      *
