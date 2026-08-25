@@ -546,3 +546,6 @@ tidyTyCoVar env var = updateVarType (tidyType env) var
 
 tidyKiCoVar :: TidyEnv Tc -> KiCoVar Tc -> KiCoVar Tc
 tidyKiCoVar env var = updateVarKind (tidyMonoKind env) var
+
+tidyTcKiCoVar :: TidyEnv Tc -> TcKiCoVar -> TcKiCoVar
+tidyTcKiCoVar env var = updateVarKind (tidyMonoKind env) var

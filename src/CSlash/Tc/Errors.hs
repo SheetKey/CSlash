@@ -309,7 +309,7 @@ reportKiImpic ctxt implic@(KiImplic { kic_skols = kvs
 
     info' = tidySkolemInfoAnon env1 info
     implic' = implic { kic_skols = kvs'
-                     , kic_given = panic "map (tidyKiCoVar env1) given"
+                     , kic_given = map (tidyTcKiCoVar env1) given
                      , kic_info = info' }
 
     ctxt1 = ctxt { cec_defer_type_errors = ErrorWithoutFlag
