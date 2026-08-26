@@ -625,7 +625,8 @@ forall_telescope :: { Located (CsForAllTelescope Ps) }
                                     mkCsForAllTele (EpAnn (glEE $1 $>)
                                                           ( mu AnnForall $1
                                                           , mu AnnDot $3) cs) $2)) }
-
+-- TODO: split out a fun_ki_exp that has only '->' to allow for
+-- better looking function sigs with kind annots
 fun_exp :: { ETP }
   : sig_exp %shift { $1 }
   | sig_exp ARR_U quant_exp {% runPV $ unETP $1 >>= \ ($1 :: LCsType Ps) ->
