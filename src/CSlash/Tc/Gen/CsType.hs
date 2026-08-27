@@ -224,10 +224,17 @@ tc_cs_type rn_ty@(CsQualTy { cst_ctxt = ctxt, cst_body = body_ty }) exp_kind
        massertPpr (ctxt_kis `equalLength` unLoc ctxt)
          $ vcat [ text "tc_cs_type CsQualTy", ppr ctxt, ppr exp_kind ]
        (coVars, coVarKis) <- tcLCsContext ctxt
-       traceTc "tc_cs_type CsQualTy"
+       traceTc "tc_cs_type CsQualTy {"
          $ vcat [ ppr rn_ty, ppr coVars ]
        (ty', body_ki) <- checkKiConstraints InferKindSkol [] coVars
                          $ tc_infer_lcs_type body_ty
+       traceTc "tc_cs_type CsQualTy }"
+         $ vcat [ ppr ty', ppr body_ki ]
+
+       -- TODO: try calling doNotQuantifyKiVars here. Should default the vars brought into scope when instantiating potential kicons. Should be safe to do since there aren't other ways to introduce kvs at this point in typechecking. 
+       exp_kind_vars <- candidateQKiVarsOfKind (Mono body_ki)
+       doNotQuantifyKiVars exp_kind_vars
+
        let final_ty = mkForAllKiCos (TcCoVar <$> coVars) ty'
            final_ki = mkInvisFunKis coVarKis body_ki
        checkExpectedKind rn_ty final_ty final_ki exp_kind
