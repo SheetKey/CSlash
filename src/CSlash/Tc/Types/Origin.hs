@@ -132,6 +132,8 @@ pprSkolInfo :: SkolemInfoAnon -> SDoc
 pprSkolInfo (SigSkol cx ty _ _ _) = pprSigSkolInfo cx ty
 pprSkolInfo (SigTypeSkol cx) = pprUserTypeCtxt cx
 pprSkolInfo (RowTySigSkol nm) = text "the row signature for" <+> quotes (ppr nm)
+pprSkolInfo (RowKiSigSkol nm) = text "the row signature for" <+> quotes (ppr nm)
+pprSkolInfo (TyRowImplSkol nm) = text "in the row declaration for" <+> quotes (ppr nm)
 pprSkolInfo (KiConSkol nm) = text "the row declaration for" <+> quotes (ppr nm)
 pprSkolInfo (ForAllSkol tvs) = text "an explicit forall" <+> ppr tvs
 pprSkolInfo (TyLamTySkol tvs) = text "an explicit type lambda" <+> ppr tvs
