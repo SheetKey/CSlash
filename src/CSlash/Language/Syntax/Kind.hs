@@ -17,6 +17,7 @@ data CsKind pass
   | CsAKd (XAKd pass)
   | CsLKd (XLKd pass)
   | CsKiVar (XKiVar pass) (LIdP pass)
+  | CsBasedKiCon (XBasedKiCon pass) (LCsKind pass) (LIdP pass)
   | CsFunKi (XFunKi pass) (LCsKind pass) (LCsKind pass)
   -- | CsQualKd -- should be removed (don't want or have standalone kind sigs)
   --   { csk_xqual :: XQualKd pass

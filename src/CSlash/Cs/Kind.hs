@@ -37,6 +37,7 @@ type instance XUKd (CsPass _) = NoExtField
 type instance XAKd (CsPass _) = NoExtField
 type instance XLKd (CsPass _) = NoExtField
 type instance XKiVar (CsPass _) = [AddEpAnn]
+type instance XBasedKiCon (CsPass _) = AddEpAnn
 type instance XFunKi (CsPass _) = NoExtField
 type instance XQualKd (CsPass _) = NoExtField
 type instance XParKd (CsPass _) = (EpToken "(", EpToken ")")

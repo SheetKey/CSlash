@@ -259,6 +259,7 @@ type family XUKd x
 type family XAKd x
 type family XLKd x
 type family XKiVar x
+type family XBasedKiCon x
 type family XFunKi x
 type family XQualKd x
 type family XParKd x

@@ -101,6 +101,7 @@ import qualified Data.Semigroup as Semi
   A_KIND { L _ ITbullet }
   L_KIND { L _ ITcirc }
   '.' { L _ ITdot }
+  TIGHT_INFIX_DOT { L _ ITtightinfixdot }
 
   '/\\' { L _ ITbiglam }
 
@@ -774,6 +775,9 @@ aexp1 :: { ETP }
   : a_qvar { ETP $ mkCsVarPV $! $1 }
   | a_qcon { ETP $ mkCsConPV $! $1 }
   | literal { ETP $ mkCsLitPV $! $1 }
+  | aexp1 TIGHT_INFIX_DOT a_qcon { ETP $ unETP $1 >>= \ ($1 :: LCsKind Ps) ->
+                                   etpFromKd' $ sLLa $1 $> $
+                                   CsBasedKiCon (mu AnnDot $2) $1 (fmap unknownToKc $3) }
   | STRING { ETP $ mkCsOverLitPV (sL1a $1 $ mkCsIsString (getSTRINGs $1) (getSTRING $1)) }
   | INTEGER { ETP $ mkCsOverLitPV (sL1a $1 $ mkCsIntegral (getINTEGER $1)) }
   | RATIONAL { ETP $ mkCsOverLitPV (sL1a $1 $ mkCsFractional (getRATIONAL $1)) }

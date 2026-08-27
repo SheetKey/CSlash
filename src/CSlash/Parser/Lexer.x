@@ -273,6 +273,7 @@ data Token
   | ITbullet
   | ITcirc
   | ITdot
+  | ITtightinfixdot
 
   | ITbiglam
 
@@ -630,7 +631,7 @@ varsym opws@OpWsSuffix = sym $ \ span s ->
         return (ITvarsym s)
 varsym opws@OpWsTightInfix = sym $ \ span s ->
   if | s == fsLit "@" -> return ITtightinfixat
-     | s == fsLit "." -> return ITdot
+     | s == fsLit "." -> return ITtightinfixdot
      | otherwise -> do warnOperatorWhitespace opws span s
                        return (ITvarsym s)
 varsym OpWsLooseInfix = sym $ \ _ s ->
