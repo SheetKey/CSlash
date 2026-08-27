@@ -342,7 +342,7 @@ debug_ppr_mono_ki prec (FunKi { fk_f = f, fk_arg = arg, fk_res = res })
 debug_ppr_kicon :: HasPass p pass => KiCon p -> SDoc
 debug_ppr_kicon KiCon{..}
   | Just name <- kicon_name
-  = ppr name
+  = ppr name <> angleBrackets (debug_ppr_kicon KiCon { kicon_name = Nothing, .. })
   | otherwise
   = debug_ppr_mono_ki appPrec kicon_base <+>
     dot <> (braces (fsep (punctuate comma (map debug_ppr_row kicon_rows))))
