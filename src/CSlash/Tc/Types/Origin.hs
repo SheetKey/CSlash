@@ -194,6 +194,7 @@ data CtOrigin -- DOUBLE CHECK PATTERN MATCHES IF YOU ADD 'AmbiguityCheckOrigin' 
                  , kco_thing :: Maybe KindedThing
                  , kco_visible :: Bool
                  }
+  | BasedKiCoOrigin (MonoKind Tc) (MonoKind Tc) (Maybe Name) (CsKind Rn)
   | LiteralOrigin (CsOverLit Rn)
   | SectionOrigin
   | ExprSigOrigin

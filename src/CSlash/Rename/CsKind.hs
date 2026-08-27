@@ -101,6 +101,10 @@ rnCsKi env (CsFunKi _ ki1 ki2) = do
 rnCsKi env (CsParKd _ ki) = do
   (ki', fvs) <- rnLCsKi env ki
   return (CsParKd noAnn ki', fvs)
+rnCsKi env (CsBasedKiCon ann base (L loc con)) = do
+  con' <- rnKiVar env con
+  (base', fvs) <- rnLCsKi env base
+  return (CsBasedKiCon ann base' (L loc con'), addOneFV fvs con')
 
 rnKiContext :: CsDocContext -> LCsContext Ps -> RnM (LCsContext Rn, FreeVars)
 rnKiContext ctxt = wrapLocFstMA $ mapFvRn $ rnCsKdRel ctxt
@@ -199,6 +203,7 @@ extract_lki (L _ ki) acc = case ki of
   CsKiVar _ lkv -> extract_kv lkv acc
   CsFunKi _ ki1 ki2 -> extract_lki ki1 $ extract_lki ki2 acc
   CsParKd _ ki -> extract_lki ki acc
+  CsBasedKiCon _ base con -> extract_lki base $ extract_kv con acc
 
 extract_kv :: LocatedN RdrName -> FreeKiVars -> FreeKiVars
 extract_kv kv acc =

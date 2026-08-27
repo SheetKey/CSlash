@@ -10,6 +10,8 @@ module CSlash.Cs.Kind
   , module CSlash.Cs.Kind
   ) where
 
+import Prelude hiding ((<>))
+
 import {-# SOURCE #-} CSlash.Language.Syntax.Expr
 import CSlash.Language.Syntax.Extension
 import CSlash.Language.Syntax.Kind
@@ -68,6 +70,7 @@ ppr_kind (CsFunKi _ kd1 kd2)
 -- ppr_kind (CsQualKd{ csk_ctxt = ctxt, csk_body = kind })
 --   = sep [pprLCsContextAlways ctxt, ppr_lkind kind]
 ppr_kind (CsParKd _ kind) = parens (ppr_lkind kind)
+ppr_kind (CsBasedKiCon _ base con) = ppr base <> dot <> ppr con
 
 pprLCsContextAlways
   :: (OutputableBndrId p)

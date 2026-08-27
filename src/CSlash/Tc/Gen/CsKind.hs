@@ -10,7 +10,7 @@ import CSlash.Tc.Types.LclEnv
 import CSlash.Tc.Utils.Env
 import CSlash.Tc.Utils.TcMType
 -- import GHC.Tc.Validity
--- import GHC.Tc.Utils.Unify
+import CSlash.Tc.Utils.Unify
 -- import GHC.IfaceToCore
 import CSlash.Tc.Solver
 -- import GHC.Tc.Zonk.Type
@@ -75,6 +75,18 @@ tcCsKind CsLKd {} = return $ BIKi LKd
 tcCsKind (CsKiVar _ kv) = tcKiVar (unLoc kv)
 tcCsKind (CsFunKi _ k1 k2) = tc_fun_kind k1 k2
 tcCsKind (CsParKd _ ki) = tcLCsKind ki
+tcCsKind cs_ki@(CsBasedKiCon _ base con) = do
+  base <- tcLCsKind base
+  con <- tcKiVar (unLoc con)
+  case con of
+    KiConApp (KiCon nm kc_base rows) -> do
+      let origin = BasedKiCoOrigin base kc_base nm cs_ki
+      kco <- unifyKindAndEmit origin EQKi base kc_base
+      traceTc "tcCsKind CsBasedKiCon"
+        (ppr base $$ ppr con $$ ppr kco)
+      return con
+
+    _ -> panic "tcCsKind BasedKiCon unreachable"
 
 tcArrow :: CsKind Rn -> TcM (MonoKind Tc)
 tcArrow CsUKd {} = return $ BIKi UKd
