@@ -106,7 +106,7 @@ solveKiCoercion ev rel ki1 ki2 = do
 
 updInertKiCos :: KiCoCt -> TcS ()
 updInertKiCos kico_ct = do
-  kickOutRewritable (KOAfterAdding (kiCoCtLHS kico_ct) (kc_pred kico_ct)) (kiCoCtFlavor kico_ct)
+  kickOutRewritable (KOAfterAdding (kiCoCtLHS kico_ct)) (kiCoCtFlavorPred kico_ct)
   tc_lvl <- getTcLevel
   updInertKiCans (addKiCoToCans tc_lvl kico_ct)
 
@@ -1285,29 +1285,31 @@ tryInertKiCos work_item@(KiCoCt { kc_ev = ev }) = Stage $ do
     Nothing -> continueWith ()
 
 kiInertsCanDischarge :: InertKiCans -> KiCoCt -> Maybe (CtKiEvidence, SwapFlag)
-kiInertsCanDischarge inerts (KiCoCt { kc_lhs = lhs_w, kc_rhs = rhs_w, kc_ev = ev_w })
-  | (ev_i : _) <- [ ev_i | KiCoCt { kc_ev = ev_i, kc_rhs = rhs_i }
+kiInertsCanDischarge inerts (KiCoCt { kc_lhs = lhs_w, kc_rhs = rhs_w
+                                    , kc_ev = ev_w, kc_pred = pred })
+  | (ev_i : _) <- [ ev_i | KiCoCt { kc_ev = ev_i, kc_rhs = rhs_i, kc_pred = pred }
                            <- findKiCo inerts lhs_w
                          , rhs_i `tcEqMonoKind` rhs_w
-                         , inert_beats_wanted ev_i ]
+                         , inert_beats_wanted ev_i pred ]
   = Just (ev_i, NotSwapped)
 
   | Just rhs_lhs <- canKiCoLHS_maybe rhs_w
-  , (ev_i : _) <- [ ev_i | KiCoCt { kc_ev = ev_i, kc_rhs = rhs_i }
+  , (ev_i : _) <- [ ev_i | KiCoCt { kc_ev = ev_i, kc_rhs = rhs_i, kc_pred = pred }
                            <- findKiCo inerts rhs_lhs
                          , rhs_i `tcEqMonoKind` canKiCoLHSKind lhs_w
-                         , inert_beats_wanted ev_i ]
+                         , inert_beats_wanted ev_i pred ]
   = Just (ev_i, IsSwapped)
   where
     loc_w = ctEvLoc ev_w
-    f_w = ctEvFlavor ev_w
+    flav_w = ctEvFlavor ev_w
+    fp_w = (flav_w, pred)
 
-    inert_beats_wanted ev_i
-      = f_i `eqCanRewriteF` f_w
+    inert_beats_wanted ev_i pred
+      = fp_i `eqCanRewriteFP` fp_w
         && not ((loc_w `strictly_more_visible` ctEvLoc ev_i)
-                && (f_w `eqCanRewriteF` f_i))
+                && (fp_w `eqCanRewriteFP` fp_i))
       where
-        f_i = ctEvFlavor ev_i
+        fp_i = (ctEvFlavor ev_i, pred)
 
     strictly_more_visible loc1 loc2
       = not (isVisibleOrigin (ctLocOrigin loc2))

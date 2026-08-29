@@ -147,9 +147,7 @@ addToKiCoCtList ct old_kicos
 
     bad_prs = filter is_bad_pair (distinctPairs (ct : old_kicos))
     is_bad_pair :: (KiCoCt, KiCoCt) -> Bool
-    is_bad_pair (ct1, ct2) = kiCoCtFlavor ct1 `eqCanRewriteF` kiCoCtFlavor ct2
-                             && kc_pred ct1 == EQKi
-                             && kc_pred ct2 == EQKi -- TODO: maybe only one is required?
+    is_bad_pair (ct1, ct2) = kiCoCtFlavorPred ct1 `eqCanRewriteFP` kiCoCtFlavorPred ct2
 
 distinctPairs :: [a] -> [(a, a)]
 distinctPairs [] = []

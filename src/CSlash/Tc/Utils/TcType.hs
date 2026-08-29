@@ -233,23 +233,21 @@ tcKindLevel ki = nonDetStrictFoldDVarSet add topTcLevel (varsOfKindDSet ki)
     add v lvl = lvl `maxTcLevel` varLevel v
 
 {-# INLINE any_rewritable_ki #-}
-any_rewritable_ki :: (KiVar Tc -> Bool) -> MonoKind Tc -> Bool
-any_rewritable_ki kv_pred = go_mono emptyVarSet
+any_rewritable_ki :: KiPredCon -> (KiPredCon -> KiVar Tc -> Bool) -> MonoKind Tc -> Bool
+any_rewritable_ki pred kv_pred = go_mono emptyVarSet pred
   where
-    go_mono :: KiVarSet Tc -> MonoKind Tc -> Bool
-    go_mono bvs (KiPredApp pred k1 k2) = go_pred bvs pred k1 k2
-    go_mono bvs (KiVarKi kv) = go_kv bvs kv
-    go_mono bvs (BIKi {}) = False
-    go_mono bvs (FunKi _ arg res) = go_mono bvs arg || go_mono bvs res
-    go_mono bvs _ = panic "go_mono kiconapp"
+    go_mono :: KiVarSet Tc -> KiPredCon -> MonoKind Tc -> Bool
+    go_mono bvs pred (KiPredApp _ k1 k2)
+      = go_mono bvs pred k1 || go_mono bvs pred k2
+    go_mono bvs pred (KiVarKi kv) = go_kv bvs pred kv
+    go_mono _ _ (BIKi {}) = False
+    go_mono bvs pred (FunKi _ arg res) = go_mono bvs pred arg || go_mono bvs pred res
+    go_mono bvs _ _ = panic "go_mono kiconapp"
 
-    go_kv bvs kv | kv `elemVarSet` bvs = False
-                 | otherwise = kv_pred kv
+    go_kv bvs pred kv | kv `elemVarSet` bvs = False
+                      | otherwise = kv_pred pred kv
 
-    go_pred :: KiVarSet Tc -> KiPredCon -> MonoKind Tc -> MonoKind Tc -> Bool
-    go_pred bvs _ ki1 ki2 = go_mono bvs ki1 || go_mono bvs ki2
-
-anyRewritableKiVar :: (KiVar Tc -> Bool) -> MonoKind Tc -> Bool
+anyRewritableKiVar :: KiPredCon -> (KiPredCon -> KiVar Tc -> Bool) -> MonoKind Tc -> Bool
 anyRewritableKiVar = any_rewritable_ki
 
 any_rewritable_ty :: (TyVar Tc -> Bool) -> Type Tc -> Bool

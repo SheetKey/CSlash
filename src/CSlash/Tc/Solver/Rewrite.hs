@@ -81,6 +81,7 @@ runRewriteTy loc flav thing_inside = do
   ki_rewriters_ref <- newTcRef emptyKiRewriterSet
   let fmode = RE { re_loc = loc
                  , re_flavor = flav
+                 , re_pred = Nothing
                  , re_ty_rewriters = ty_rewriters_ref
                  , re_ki_rewriters = ki_rewriters_ref }
   res <- runRewriteM thing_inside fmode
@@ -89,14 +90,15 @@ runRewriteTy loc flav thing_inside = do
   return (res, ty_rewriters, ki_rewriters)
 
 runRewriteKiCtEv :: CtKiEvidence -> RewriteM a -> TcS (a, KiRewriterSet)
-runRewriteKiCtEv ev = runRewriteKi (ctEvLoc ev) (ctEvFlavor ev)
+runRewriteKiCtEv ev = runRewriteKi (ctEvLoc ev) (ctEvFlavor ev) (ctKiEvRel ev)
 
-runRewriteKi :: CtLoc -> CtFlavor -> RewriteM a -> TcS (a, KiRewriterSet)
-runRewriteKi loc flav thing_inside = do
+runRewriteKi :: CtLoc -> CtFlavor -> KiPredCon -> RewriteM a -> TcS (a, KiRewriterSet)
+runRewriteKi loc flav pred thing_inside = do
   rewriters_ref <- newTcRef emptyKiRewriterSet
   ty_rewriters_ref <- newTcRef emptyTyRewriterSet
   let fmode = RE { re_loc = loc
                  , re_flavor = flav
+                 , re_pred = Just pred
                  , re_ty_rewriters = ty_rewriters_ref
                  , re_ki_rewriters = rewriters_ref }
   res <- runRewriteM thing_inside fmode
@@ -116,8 +118,17 @@ getRewriteEnv = mkRewriteM $ \env -> return env
 getRewriteEnvField :: (RewriteEnv -> a) -> RewriteM a
 getRewriteEnvField accessor = mkRewriteM $ \env -> return (accessor env)
 
+getPred :: RewriteM KiPredCon
+getPred = fromJust <$> getRewriteEnvField re_pred
+
 getFlavor :: RewriteM CtFlavor
 getFlavor = getRewriteEnvField re_flavor
+
+getFlavorPred :: RewriteM CtFlavorPred
+getFlavorPred = do
+  flavor <- getFlavor
+  pred <- getPred
+  return (flavor, pred)
 
 getLoc :: RewriteM CtLoc
 getLoc = getRewriteEnvField re_loc
@@ -168,7 +179,8 @@ rewriteTyForErrors ev ty = do
 rewriteKiForErrors :: CtKiEvidence -> MonoKind Tc -> TcS (KiReduction, KiRewriterSet)
 rewriteKiForErrors ev ki = do
   traceTcS "rewriteKiForErrors {" (ppr ki)
-  result@(redn, rewriters) <- runRewriteKi (ctEvLoc ev) (ctEvFlavor ev) (rewrite_one_ki ki)
+  result@(redn, rewriters) <- runRewriteKi (ctEvLoc ev) (ctEvFlavor ev)
+                              (ctKiEvRel ev) (rewrite_one_ki ki)
   traceTcS "rewriteKiForErrors }" (ppr $ reductionReducedKind redn)
   return result
 
@@ -450,29 +462,30 @@ rewrite_kivar1 kv = do
       return $ RVRFollowed $ mkReflRednKi ki
     Nothing -> do
       traceRewriteM "Unfilled kivar" (ppr kv)
-      f <- getFlavor
-      rewrite_kivar2 kv f
+      fp <- getFlavorPred
+      rewrite_kivar2 kv fp
 
-rewrite_kivar2 :: KiVar Tc -> CtFlavor -> RewriteM RewriteKvResult
-rewrite_kivar2 kv f = do
+rewrite_kivar2 :: KiVar Tc -> CtFlavorPred -> RewriteM RewriteKvResult
+rewrite_kivar2 kv fp@(_, pred) = do
   ieqs <- liftTcS $ getInertKiCos
   case lookupDVarEnv ieqs kv of
     Just equal_ct_list
-      | Just ct <- find can_rewrite equal_ct_list
-      , KiCoCt { kc_ev = ctev, kc_lhs = KiVarLHS kv, kc_pred = EQKi, kc_rhs = rhs_ki } <- ct
+      | Just ct <- find can_rewrite equal_ct_list      
+      , KiCoCt { kc_ev = ctev, kc_lhs = KiVarLHS kv, kc_pred = ct_pred, kc_rhs = rhs_ki } <- ct
       -> do let wrw = isWanted ctev
+                rewriting_co = ctEvKiCoercion ctev
             traceRewriteM "Following inert kivar"
-              $ vcat [ ppr kv <+> equals <+> ppr rhs_ki
+              $ vcat [ ppr kv <+> ppr ct_pred <+> ppr rhs_ki
                      , ppr ctev
+                     , text "rewriting_co =" <+> ppr rewriting_co
                      , text "wanted_rewrite_wanted:" <+> ppr wrw ]
             when wrw $ recordKiRewriter ctev
 
-            let rewriting_co = ctEvKiCoercion ctev
             return $ RVRFollowed $ mkKiReduction rewriting_co rhs_ki
     _ -> return RVRNotFollowed
   where
     can_rewrite :: KiCoCt -> Bool
-    can_rewrite ct = kiCoCtFlavor ct `eqCanRewriteF` f
+    can_rewrite ct = kiCoCtFlavorPred ct `eqCanRewriteFP` fp
 
 --------------------------------------
 -- Utilities

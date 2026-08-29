@@ -163,10 +163,10 @@ kickOutRewritableTy ki_spec new_f = do
                               , text "kicked_out =" <+> ppr kicked_out
                               , text "Residual inerts =" <+> ppr ics' ])
 
-kickOutRewritable :: KiKickOutSpec -> CtFlavor -> TcS ()
-kickOutRewritable ko_spec new_f = do
+kickOutRewritable :: KiKickOutSpec -> CtFlavorPred -> TcS ()
+kickOutRewritable ko_spec new_fp = do
   ics <- getInertKiCans
-  let (kicked_out, ics') = kickOutRewritableLHSKi ko_spec new_f ics
+  let (kicked_out, ics') = kickOutRewritableLHSKi ko_spec new_fp ics
       n_kicked = lengthBag kicked_out
   setInertKiCans ics'
 
@@ -197,7 +197,7 @@ kickOutAfterKiUnification vs
   = return ()
   | otherwise
   = do let v_set = mkVarSet vs
-       n_kicked <- kickOutRewritable (KOAfterUnify v_set) Given
+       n_kicked <- kickOutRewritable (KOAfterUnify v_set) (Given, EQKi)
 
        let min_v_lvl = foldr1 minTcLevel (map varLevel vs)
        ambient_lvl <- getTcLevel
@@ -985,6 +985,7 @@ newGivenTyCoVar loc pred = do
 newGivenKiCoVar :: CtLoc -> PredKind Tc -> TcS CtKiEvidence
 newGivenKiCoVar loc pred = do
   new_covar <- newKiCoVar pred
+  traceTcS "newGivenKiCoVar" (ppr new_covar)
   return (CtKiGiven { ctkev_pred = pred, ctkev_covar = new_covar, ctkev_loc = loc })
 
 emitNewTyGivens :: CtLoc -> [TypeCoercion Tc] -> TcS ()

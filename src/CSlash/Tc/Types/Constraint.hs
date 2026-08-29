@@ -1111,8 +1111,13 @@ instance Outputable CtFlavor where
   ppr Given = text "[G]"
   ppr Wanted = text "[W]"
 
+type CtFlavorPred = (CtFlavor, KiPredCon)
+
 tyEqCtFlavor :: TyEqCt -> CtFlavor
 tyEqCtFlavor (TyEqCt { teq_ev = ev }) = ctEvFlavor ev
+
+kiCoCtFlavorPred :: KiCoCt -> CtFlavorPred
+kiCoCtFlavorPred (KiCoCt { kc_ev = ev, kc_pred = pred }) = (ctEvFlavor ev, pred)
 
 kiCoCtFlavor :: KiCoCt -> CtFlavor
 kiCoCtFlavor (KiCoCt { kc_ev = ev }) = ctEvFlavor ev
@@ -1146,6 +1151,20 @@ eqCanTyEqLHS (TyVarLHS tv1) (TyVarLHS tv2) = tv1 == tv2
 eqCanKiCoLHS :: CanKiCoLHS -> CanKiCoLHS -> Bool
 eqCanKiCoLHS (KiVarLHS kv1) (KiVarLHS kv2) = kv1 == kv2
 
+eqCanRewrite :: KiPredCon -> KiPredCon -> Bool
+eqCanRewrite EQKi _ = True -- Equality rewrites anything
+eqCanRewrite _ EQKi = False -- Equality can only be rewritten by equality
+eqCanRewrite LTKi _ = True -- LT can rewrite LT or LTEQ
+eqCanRewrite _ LTKi = False -- LT can not be rewritten by LTEQ
+eqCanRewrite LTEQKi LTEQKi = True -- LTEQ can rewrite LTEQ
+
+-- Used for solving kinds
+eqCanRewriteFP :: CtFlavorPred -> CtFlavorPred -> Bool
+eqCanRewriteFP (Given, r1) (_, r2) = eqCanRewrite r1 r2
+eqCanRewriteFP (Wanted, r1) (Wanted, r2) = eqCanRewrite r1 r2
+eqCanRewriteFP (Wanted, _) (Given, _) = False
+
+-- Used for solving types
 eqCanRewriteF :: CtFlavor -> CtFlavor -> Bool
 eqCanRewriteF Given _ = True
 eqCanRewriteF Wanted Wanted = True

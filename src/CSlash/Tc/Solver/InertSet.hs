@@ -517,7 +517,7 @@ updGivenKiCos tclvl ct inerts@(IKC { inert_given_kico_lvl = kc_lvl })
 
 data KiKickOutSpec
   = KOAfterUnify (VarSet TcKiVar)
-  | KOAfterAdding CanKiCoLHS KiPredCon
+  | KOAfterAdding CanKiCoLHS
 
 data TyKickOutSpec
   = TKOAfterUnify (VarSet TcTyVar)
@@ -587,9 +587,9 @@ kickOutRewritableLHSTy ko_spec new_f ics@(ITC { inert_tyeqs = tv_eqs
                                _ -> False
       
 -- TODO: REWRITE THIS
-kickOutRewritableLHSKi :: KiKickOutSpec -> CtFlavor -> InertKiCans -> (KiCts, InertKiCans)
-kickOutRewritableLHSKi ko_spec new_f ics@(IKC { inert_kicos = kv_kicos
-                                             , inert_ki_irreds = irreds })
+kickOutRewritableLHSKi :: KiKickOutSpec -> CtFlavorPred -> InertKiCans -> (KiCts, InertKiCans)
+kickOutRewritableLHSKi ko_spec new_fp@(_, new_pred) ics@(IKC { inert_kicos = kv_kicos
+                                                             , inert_ki_irreds = irreds })
   = (kicked_out, inert_cans_in)
   where
     inert_cans_in = ics { inert_kicos = kv_kicos_in
@@ -602,46 +602,51 @@ kickOutRewritableLHSKi ko_spec new_f ics@(IKC { inert_kicos = kv_kicos
     (kv_kicos_out, kv_kicos_in) = partitionInertKiCos kick_out_kico kv_kicos
     (irs_out, irs_in) = partitionBag kick_out_irred irreds
 
-    f_kv_can_rewrite_ki :: Bool -> (KiVar Tc -> Bool) -> MonoKind Tc -> Bool
-    f_kv_can_rewrite_ki look check_kv ki
-      = anyRewritableKiVar can_rewrite ki
+    fp_kv_can_rewrite_ki :: Bool -> (KiVar Tc -> Bool) -> KiPredCon -> MonoKind Tc -> Bool
+    fp_kv_can_rewrite_ki look check_kv pred ki
+      = anyRewritableKiVar pred can_rewrite ki
       where
-        can_rewrite kv = look && check_kv kv
+        can_rewrite old_pred kv = look &&
+                                  new_pred `eqCanRewrite` old_pred &&
+                                  check_kv kv
 
-    f_can_rewrite_ki :: Bool -> MonoKind Tc -> Bool
-    f_can_rewrite_ki look = case ko_spec of
-      KOAfterUnify kvs -> f_kv_can_rewrite_ki look (\kv -> case toTcKiVar_maybe kv of
-                                                             Just kv -> kv `elemVarSet` kvs
-                                                             Nothing -> False)
-      KOAfterAdding (KiVarLHS kv) EQKi -> f_kv_can_rewrite_ki look (== kv)
-      KOAfterAdding _ _ -> const False
+    fp_can_rewrite_ki :: Bool -> KiPredCon -> MonoKind Tc -> Bool
+    fp_can_rewrite_ki look = case ko_spec of
+      KOAfterUnify kvs -> fp_kv_can_rewrite_ki look (\kv -> case toTcKiVar_maybe kv of
+                                                              Just kv -> kv `elemVarSet` kvs
+                                                              Nothing -> False)
+      KOAfterAdding (KiVarLHS kv) -> fp_kv_can_rewrite_ki look (== kv)
 
-    f_may_rewrite f = new_f `eqCanRewriteF` f
+    fp_may_rewrite fs = new_fp `eqCanRewriteFP` fs
 
     kick_out_irred (IrredKiCt { ikr_ev = ev })
-      = f_may_rewrite (ctEvFlavor ev) && f_can_rewrite_ki True (ctKiEvPred ev)
+      = fp_may_rewrite (ctEvFlavor ev, rel)
+        && fp_can_rewrite_ki True rel pred
+      where
+        pred = ctKiEvPred ev
+        rel = predKindRel pred
 
-    kick_out_kico (KiCoCt { kc_lhs = lhs, kc_rhs = rhs_ki, kc_ev = ev })
-      | not (f_may_rewrite f)
+    kick_out_kico (KiCoCt { kc_lhs = lhs, kc_rhs = rhs_ki, kc_ev = ev, kc_pred = pred })
+      | not (fp_may_rewrite fs)
       = False
-      | f_can_rewrite_ki True (canKiCoLHSKind lhs)
+      | fp_can_rewrite_ki True pred (canKiCoLHSKind lhs)
       = True
-      | let look | f_can_rewrite_f = False
+      | let look | fs_can_rewrite_fp = False
                  | otherwise = True
-      , f_can_rewrite_ki look rhs_ki
+      , fp_can_rewrite_ki look pred rhs_ki
       = True
-      | not f_can_rewrite_f
+      | not fs_can_rewrite_fp
       , is_new_lhs_ki rhs_ki
       = True
       | otherwise = False
       where
-        f_can_rewrite_f = f `eqCanRewriteF` new_f
-        f = ctEvFlavor ev
+        fs_can_rewrite_fp = fs `eqCanRewriteFP` new_fp
+        fs = (ctEvFlavor ev, pred)
 
     is_new_lhs_ki = case ko_spec of
       KOAfterUnify vs -> is_kivar_ki_for vs
-      KOAfterAdding lhs _ -> (`eqMonoKind` canKiCoLHSKind lhs)
-                        -- TODO: maybe only for EQKi^ ?
+      KOAfterAdding lhs -> (`eqMonoKind` canKiCoLHSKind lhs)
+
     is_kivar_ki_for vs ki = case getKiVar_maybe ki of
                               Just kv
                                 | Just tckv <- toTcKiVar_maybe kv
