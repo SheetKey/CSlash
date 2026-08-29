@@ -303,7 +303,10 @@ zonkKiCoVarOcc (TcCoVar tckcv) = f_tc tckcv
       ZonkEnv { ze_kcv_env = kcv_env } <- getZonkEnv
       let lookup_in_env :: ZonkTcM (KindCoercion Zk)
           lookup_in_env = case lookupVarEnv_Directly kcv_env (varUnique kcv) of
-            Nothing -> panic "zonkKiCoVarOcc bad skolem"
+            Nothing -> case kcv of
+              -- This handles given kcvs created by the solver
+              TcCoVar' nm uniq ki (SkolemVar{})
+                -> (mkKiCoVarCo . mkCoVarU nm uniq) <$> zonkTcMonoKindToMonoKindX ki
             Just kcv' -> return $ mkKiCoVarCo kcv'
 
           -- finish_meta :: KindCoercion Zk -> ZonkTcM (KindCoercion Zk)

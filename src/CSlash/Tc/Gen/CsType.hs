@@ -1316,6 +1316,7 @@ tcCsContext [] = panic "tcCsContext empty"
 tcCsContext ctxt = do
   rels <- mapM tc_lcs_kdrel ctxt 
   coVars <- newKiCoVars rels
+  traceTc "tcCsContext" (ppr coVars)
   return $ (coVars, rels)
 
 tc_lcs_kdrel :: LCsKdRel Rn -> TcM (MonoKind Tc)

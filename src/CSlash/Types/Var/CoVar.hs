@@ -35,7 +35,10 @@ data CoVar thing p where
        }
     -> CoVar thing p
   TcCoVar :: (TcCoVar thing) -> CoVar thing Tc
-
+-- TODO: We can remove 'TcCoVar' entirely.
+-- Right now we are creating 'Skolems' for given co vars created in the solver/rewriter.
+-- Then we convert these to 'CoVar's when zonking.
+-- We can simplify things!
 data TcCoVar thing = TcCoVar'
   { tc_cv_name :: !Name
   , tc_cv_real_unique :: {-# UNPACK #-} !Unique
@@ -213,6 +216,11 @@ mkCoVar name thing = CoVar { cv_name = name
                            , cv_real_unique = nameUnique name
                            , cv_thing = thing }
 
+mkCoVarU :: Name -> Unique -> thing p -> CoVar thing p     
+mkCoVarU name u thing = CoVar { cv_name = name    
+                              , cv_real_unique = u
+                              , cv_thing = thing }
+                      
 mkTcCoVar :: Name -> thing Tc -> TcVarDetails Void -> TcCoVar thing
 mkTcCoVar name thing details = TcCoVar' { tc_cv_name = name
                                         , tc_cv_real_unique = nameUnique name
