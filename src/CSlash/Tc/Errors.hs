@@ -53,7 +53,6 @@ import CSlash.Core.Kind
 import CSlash.Core.Kind.FVs
 import CSlash.Core.Kind.Compare
 -- import GHC.Core.Coercion
-import CSlash.Core.Type.Ppr ( pprTyVars )
 -- import GHC.Core.InstEnv
 import CSlash.Core.TyCon
 import CSlash.Core.DataCon

@@ -8,7 +8,7 @@ import {-# SOURCE #-} CSlash.Types.Var.Id (Id)
 import {-# SOURCE #-} CSlash.Types.Name (Name, NamedThing)
 import CSlash.Types.Unique (Uniquable)
 import CSlash.Utils.Outputable (Outputable, OutputableBndr)
-import {-# SOURCE #-} CSlash.Core.Type.Rep (Type)
+import {-# SOURCE #-} CSlash.Core.Rep (Type)
 import CSlash.Types.Basic (Arity)
 
 type role DataCon phantom

@@ -17,7 +17,6 @@ import CSlash.Types.Var.Id
 import CSlash.Core.DataCon
 import CSlash.Core.ConLike
 import CSlash.Core.TyCon
-import qualified CSlash.Core.Type.Rep as TypeRep (Type(TyConApp))
 
 import CSlash.Types.TyThing
 import CSlash.Types.SourceText

@@ -15,7 +15,6 @@ import CSlash.Builtin.Names ( cSLASH_PRIM )
 
 -- import CSlash.Core.TyCon    ( isPrimTyCon, isUnboxedTupleTyCon, PrimRep(..) )
 import CSlash.Core.Type
-import CSlash.Core.Type.Rep
 import CSlash.Core.Kind
 
 import CSlash.Pir.Type

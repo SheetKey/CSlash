@@ -18,8 +18,6 @@ import CSlash.Types.Var.Id.Info
 import CSlash.Core.DataCon
 import CSlash.Core.TyCon
 import CSlash.Core.Type
-import CSlash.Core.Type.Ppr
-import CSlash.Core.Type.Rep
 import CSlash.Core.Kind
 import CSlash.Types.Basic
 import CSlash.Utils.Misc

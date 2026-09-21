@@ -14,7 +14,6 @@ import CSlash.Tc.Utils.TcType
 
 import CSlash.Cs
 
-import CSlash.Core.Type.Rep( Type(..), SetRow(..) )
 import CSlash.Core.Kind
 import CSlash.Core.Type
 import CSlash.Core.TyCon

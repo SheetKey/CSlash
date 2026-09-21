@@ -30,7 +30,6 @@ import CSlash.Tc.Types.CtLocEnv
 
 import CSlash.Core
 
-import CSlash.Core.Type.Ppr
 import CSlash.Utils.FV
 import CSlash.Types.Var.Set
 import CSlash.Builtin.Names

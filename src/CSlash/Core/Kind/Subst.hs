@@ -7,7 +7,6 @@ import Prelude hiding ((<>))
 import {-# SOURCE #-} CSlash.Core ( CoreExpr )
 import {-# SOURCE #-} CSlash.Core.Ppr ()
 
-import CSlash.Core.Type.Rep
 import CSlash.Core.Kind
 import CSlash.Core.Kind.FVs
 

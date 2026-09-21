@@ -27,7 +27,6 @@ import {-# SOURCE #-} CSlash.CsToCore.Binds (dsCsWrapper)
 import CSlash.CsToCore.Utils (isTrueLCsExpr, selectMatchVar)
 -- import CSlash.CsToCore.Match.Literal (dsLit, dsOverLit)
 import CSlash.CsToCore.Monad
-import CSlash.Core.Type.Rep
 import CSlash.Core.Type.Compare( eqType )
 import CSlash.Core.Type
 import CSlash.Data.Maybe

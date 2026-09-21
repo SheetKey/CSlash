@@ -11,7 +11,6 @@ import CSlash.Tc.Utils.TcType
 import CSlash.Tc.Zonk.TcType
 import CSlash.Core.Type
 import CSlash.Core.TyCon( TyCon )
-import CSlash.Core.Type.Rep( Type(..) )
 import CSlash.Core.DataCon
 import CSlash.Core.Predicate( KiPred(..), classifyPredKind )
 import CSlash.Types.Name

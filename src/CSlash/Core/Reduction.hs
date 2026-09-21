@@ -12,9 +12,8 @@ import CSlash.Cs.Pass
 -- import GHC.Core.Predicate  ( mkClassPred )
 import CSlash.Core.TyCon ( TyCon )
 import CSlash.Core.Type
-import CSlash.Core.Type.Rep
 import CSlash.Core.Kind
-import CSlash.Core.Kind.FVs
+import CSlash.Core.Type.FVs
 import CSlash.Core.Subst
 
 import CSlash.Data.Pair ( Pair(Pair) )
@@ -252,7 +251,7 @@ extendLiftingContextAndInScope
 extendLiftingContextAndInScope (LC subst env) kv kco
   = extendLiftingContext
     (LC (extendSubstInScopeSetsSets subst $
-          (\(kcv, kv) -> (emptyVarSet, kcv, kv)) (varsOfKindCoercion kco))
+          (\(kcv, kv) -> (emptyVarSet, kcv, kv)) (varsOfKiCo kco))
         env) kv kco
 
 zapLiftingContext :: LiftingContext p -> LiftingContext p

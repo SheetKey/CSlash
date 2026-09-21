@@ -5,12 +5,11 @@
 module CSlash.Core.Subst where
 
 import CSlash.Cs.Pass
-import {-# SOURCE #-} CSlash.Core.Type.Rep
 import {-# SOURCE #-} CSlash.Types.Var.Id
+import {-# SOURCE #-} CSlash.Core.Rep
 import CSlash.Types.Var.TyVar
 import CSlash.Types.Var.KiVar
 import CSlash.Types.Var.CoVar
-import CSlash.Core.Kind
 import CSlash.Types.Var.Env
 import CSlash.Types.Var.Set
 import CSlash.Utils.Outputable

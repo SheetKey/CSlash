@@ -25,7 +25,6 @@ import CSlash.Core.Kind.FVs
 import CSlash.Core.Kind
 import CSlash.Core.Subst
 import CSlash.Core.Kind.Compare
-import qualified CSlash.Core.Type.Rep as Rep
 -- import GHC.Core.Class( Class )
 import CSlash.Core.TyCon
 -- import GHC.Core.Class( classTyCon )
@@ -660,7 +659,11 @@ kickOutRewritableLHSKi ko_spec new_fp@(_, new_pred) ics@(IKC { inert_kicos = kv_
 ********************************************************************* -}
 
 mentionsOuterVar :: TcLevel -> CtKiEvidence -> Bool
-mentionsOuterVar tclvl ev = anyFreeVarsOfMonoKind (isOuterVar tclvl) $ ctKiEvPred ev
+mentionsOuterVar tclvl ev
+  = anyFreeVarsOfMonoKind
+    (isOuterVar tclvl) (isOuterVar tclvl)
+    (isOuterVar tclvl) (isOuterVar tclvl)
+    $ ctKiEvPred ev
 
 isOuterVar :: (Outputable v, TcVar v) => TcLevel -> v -> Bool
 isOuterVar tclvl v

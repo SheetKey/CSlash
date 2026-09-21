@@ -45,8 +45,6 @@ import CSlash.Builtin.Names (selfName)
 -- import GHC.Core.FamInstEnv ( mkBranchedCoAxiom, mkCoAxBranch )
 -- import GHC.Core.Coercion
 import CSlash.Core.Type
-import CSlash.Core.Type.Rep   -- for checkValidRoles
-import CSlash.Core.Type.Ppr( pprTyVars )
 import CSlash.Core.Kind
 import CSlash.Core.Kind.Compare
 -- import GHC.Core.Class

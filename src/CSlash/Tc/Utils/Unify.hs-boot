@@ -2,8 +2,7 @@ module CSlash.Tc.Utils.Unify where
 
 import CSlash.Cs.Pass
 
-import CSlash.Core.Type.Rep (TypeCoercion)
-import CSlash.Core.Kind (BuiltInKi, KiPredCon, Kind, MonoKind, KindCoercion)
+import CSlash.Core.Rep (BuiltInKi, KiPredCon, Kind, MonoKind, KindCoercion, TypeCoercion)
 import CSlash.Tc.Utils.TcType (TauType)
 import CSlash.Tc.Types.Evidence (CsWrapper)
 import CSlash.Tc.Types (TcM)

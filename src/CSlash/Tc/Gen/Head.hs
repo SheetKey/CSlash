@@ -37,7 +37,6 @@ import CSlash.Core.UsageEnv      ( singleUsageUE, UsageEnv )
 import CSlash.Core.ConLike( ConLike(..) )
 import CSlash.Core.DataCon
 import CSlash.Core.TyCon
-import CSlash.Core.Type.Rep
 import CSlash.Core.Type
 
 import CSlash.Types.Var.Id

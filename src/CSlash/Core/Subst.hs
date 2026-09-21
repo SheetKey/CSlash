@@ -17,12 +17,10 @@ import CSlash.Cs.Pass
 import CSlash.Core as Core
 import CSlash.Core.Ppr
 import {-# SOURCE #-} CSlash.Core.Ppr ()
-import {-# SOURCE #-} CSlash.Core.Type ( mkAppTy, mkTyConApp, mkCastTy )
-import {-# SOURCE #-} CSlash.Core.Type.Ppr ( pprTyVar )
+import CSlash.Core.Type
+import CSlash.Core.Kind
 
 import CSlash.Core.TyCon
-import CSlash.Core.Type.Rep
-import CSlash.Core.Kind
 import CSlash.Core.Kind.FVs
 import CSlash.Core.Type.FVs
 import CSlash.Core.FVs

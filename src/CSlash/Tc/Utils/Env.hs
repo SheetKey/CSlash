@@ -34,7 +34,6 @@ import CSlash.Core.DataCon ( DataCon, dataConTyCon{-, flSelector-} )
 -- import GHC.Core.PatSyn  ( PatSyn )
 import CSlash.Core.ConLike
 import CSlash.Core.TyCon
-import CSlash.Core.Type.Rep
 import CSlash.Core.Type
 import CSlash.Core.Type.FVs
 import CSlash.Core.Kind

@@ -42,9 +42,7 @@ import CSlash.Tc.Utils.Unify
 import CSlash.Core.Subst
 import CSlash.Core.Type
 import CSlash.Core.Type.Compare
-import CSlash.Core.Type.Ppr
 import CSlash.Core.Type.FVs
-import CSlash.Core.Type.Rep as Rep
 import CSlash.Core.Kind
 import CSlash.Core.Kind.FVs
 -- import GHC.Core.Coercion

@@ -9,7 +9,6 @@ import CSlash.Cs.Pass
 
 import CSlash.Core.Type
 import CSlash.Core.Type.Compare
-import CSlash.Core.Type.Rep
 import CSlash.Core.Type.FVs
 import CSlash.Core.Subst
 import CSlash.Core.Kind

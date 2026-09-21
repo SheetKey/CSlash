@@ -3,8 +3,6 @@ module CSlash.Builtin.Types where
 import CSlash.Cs.Pass
 
 import {-# SOURCE #-} CSlash.Core.TyCon (TyCon)
-import {-# SOURCE #-} CSlash.Core.Type.Rep (Type)
-import {-# SOURCE #-} CSlash.Core.Kind (Kind)
 import {-# SOURCE #-} CSlash.Core.DataCon (DataCon)
 
 import CSlash.Types.Basic (Arity, ConTag)

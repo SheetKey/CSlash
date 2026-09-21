@@ -7,7 +7,6 @@ import CSlash.Cs.Pass
 
 import CSlash.Data.FastString
 
-import CSlash.Core.Type.Rep
 import CSlash.Core.Kind
 import CSlash.Core.Type.FVs (varsOfTypeList)
 import CSlash.Core.Kind.FVs (varsOfKindList, varsOfMonoKindList, varsOfMonoKindsList)

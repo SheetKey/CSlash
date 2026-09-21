@@ -26,8 +26,7 @@ import CSlash.Tc.Utils.Instantiate ( instCallKiConstraints, tcInstInvisibleKiBin
 import CSlash.Tc.Zonk.TcType
 
 import CSlash.Core.Type
-import CSlash.Core.Type.Rep
-import CSlash.Core.Type.Ppr
+import CSlash.Core.Type.FVs
 import CSlash.Core.Kind
 import CSlash.Core.Kind.Compare
 import CSlash.Core.Subst

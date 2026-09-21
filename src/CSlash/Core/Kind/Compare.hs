@@ -7,6 +7,7 @@ import CSlash.Cs.Pass
 
 import CSlash.Core.Kind
 import CSlash.Core.Kind.FVs
+import CSlash.Core.Type.FVs
 
 import {-# SOURCE #-} CSlash.Types.Var.KiVar
 import CSlash.Types.Var.Set

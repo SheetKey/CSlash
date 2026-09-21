@@ -7,16 +7,15 @@ module CSlash.Tc.Solver.Rewrite where
 
 import CSlash.Cs.Pass
 
-import CSlash.Core.Type.Ppr ( pprTyVar )
 import CSlash.Tc.Types ( TcGblEnv(), RewriteEnv(..) )
 
 import CSlash.Tc.Types.Constraint
 -- import GHC.Core.Predicate
 import CSlash.Tc.Utils.TcType
 import CSlash.Core.Type
+import CSlash.Core.Type.FVs
 -- import GHC.Tc.Types.Evidence
 import CSlash.Core.TyCon
-import CSlash.Core.Type.Rep
 import CSlash.Core.Kind
 import CSlash.Core.Kind.FVs
 -- import GHC.Core.Coercion

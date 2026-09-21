@@ -17,7 +17,6 @@ import CSlash.Core.Opt.Stats ( Tick(..) )
 import qualified CSlash.Core.Subst as Subst
 import CSlash.Core.Subst (CoreSubst)
 import CSlash.Core.Ppr
-import CSlash.Core.Type.Ppr ( pprParendType )
 import CSlash.Core.FVs
 import CSlash.Core.Utils
 import CSlash.Core.Rules( RuleEnv, getRules )

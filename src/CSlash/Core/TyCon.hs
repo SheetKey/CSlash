@@ -7,13 +7,11 @@ module CSlash.Core.TyCon where
 
 import Prelude hiding ((<>))
 
-import {-# SOURCE #-} CSlash.Core.Type.Rep (Type, mkNakedTyConTy)
+import {-# SOURCE #-} CSlash.Core.Rep (Type, Kind(Mono), MonoKind, mkNakedTyConTy)
 import {-# SOURCE #-} CSlash.Core.DataCon (DataCon, dataConFullSig, dataConArity)
 import {-# SOURCE #-} CSlash.Core.Kind.Compare (tcEqKind)
 
 import CSlash.Cs.Pass
-
-import CSlash.Core.Kind
 
 import CSlash.Utils.Binary
 import CSlash.Types.Var.TyVar

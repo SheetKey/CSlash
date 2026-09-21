@@ -23,7 +23,6 @@ import CSlash.Core.Kind
 import CSlash.Tc.Utils.Env
 import CSlash.Tc.Utils.TcMType
 import CSlash.Tc.Zonk.TcType
-import CSlash.Core.Type.Ppr ( pprTyVars )
 import CSlash.Tc.Utils.TcType
 import CSlash.Tc.Utils.Unify
 import CSlash.Tc.Gen.CsType

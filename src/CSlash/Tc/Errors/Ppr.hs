@@ -24,14 +24,13 @@ import CSlash.Core.DataCon
 import CSlash.Core.ConLike
 -- import GHC.Core.FamInstEnv ( FamInst(..), famInstAxiom, pprFamInst )
 -- import GHC.Core.InstEnv
-import CSlash.Core.Type.Rep (Type(..))
 -- import CSlash.Core.Type.Ppr (pprWithExplicitKindsWhen,
 --                              pprSourceTyCon, pprTyVars, pprWithTYPE, pprTyVar, pprTidiedType)
 -- import GHC.Core.PatSyn ( patSynName, pprPatSynType )
 import CSlash.Core.Predicate
 import CSlash.Core.Type
-import CSlash.Core.Type.Ppr
 import CSlash.Core.Type.Tidy
+import CSlash.Core.Type.FVs
 import CSlash.Core.Kind
 import CSlash.Core.Kind.FVs
 -- import GHC.Core.FVs( orphNamesOfTypes )

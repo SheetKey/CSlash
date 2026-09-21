@@ -6,8 +6,7 @@
 
 module CSlash.Types.Var.Class where
 
-import {-# SOURCE #-} CSlash.Core.Type.Rep (Type)
-import {-# SOURCE #-} CSlash.Core.Kind (MonoKind)
+import {-# SOURCE #-} CSlash.Core.Rep (Type, MonoKind)
 import {-# SOURCE #-} CSlash.Types.Name (Name, NamedThing)
 import {-# SOURCE #-} CSlash.Tc.Utils.TcType
 

@@ -20,7 +20,7 @@ import Prelude hiding ((<>))
 import CSlash.Language.Syntax.Expr
 import CSlash.Language.Syntax.Extension
 
-import CSlash.Core.Type.Rep (Type)
+import CSlash.Core.Rep (Type)
 import CSlash.Core.Kind (MonoKind)
 import CSlash.Core.ConLike
 import CSlash.Tc.Types.Evidence

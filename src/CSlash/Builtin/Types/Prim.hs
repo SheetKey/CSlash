@@ -3,12 +3,12 @@
 module CSlash.Builtin.Types.Prim where
 
 import {-# SOURCE #-} CSlash.Types.TyThing (mkATyCon)
-import {-# SOURCE #-} CSlash.Core.Type (buildSynTyCon, mkTyConApp, typeKind)
+import {-# SOURCE #-} CSlash.Core.Type (buildSynTyCon, typeKind)
+import CSlash.Core.Rep (mkTyConApp)
 
 import CSlash.Cs.Pass
 
 import CSlash.Core.TyCon
-import CSlash.Core.Type.Rep
 import CSlash.Core.Kind
 
 import CSlash.Types.Var

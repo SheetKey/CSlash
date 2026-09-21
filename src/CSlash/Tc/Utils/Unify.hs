@@ -22,10 +22,8 @@ import CSlash.Tc.Types.BasicTypes
 import CSlash.Tc.Zonk.TcType
 
 import CSlash.Core.Type
-import CSlash.Core.Type.Rep
 import CSlash.Core.Type.Compare (tcEqType)
-import CSlash.Core.Type.Ppr (debugPprType, pprSigmaType)
-import CSlash.Core.Type.FVs( isInjectiveInType )
+import CSlash.Core.Type.FVs
 import CSlash.Core.TyCon
 -- import GHC.Core.Coercion
 import CSlash.Core.Kind

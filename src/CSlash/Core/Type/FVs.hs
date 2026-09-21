@@ -1,3 +1,4 @@
+{-# LANGUAGE TypeAbstractions #-}
 {-# LANGUAGE ExplicitForAll #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -8,9 +9,11 @@ module CSlash.Core.Type.FVs where
 import CSlash.Cs.Pass
 
 import {-# SOURCE #-} CSlash.Core.Type
+import CSlash.Core.Folder
+import {-# SOURCE #-} CSlash.Core.Mapper
 
 import Data.Monoid as DM ( Endo(..), Any(..) )
-import CSlash.Core.Type.Rep
+import CSlash.Core.Rep
 import CSlash.Core.Kind
 import CSlash.Core.Kind.FVs hiding (fvsVarBndr, afvFolder, runCoVars)
 import CSlash.Core.TyCon
@@ -27,29 +30,51 @@ import CSlash.Utils.FV
 import CSlash.Utils.Panic
 import CSlash.Utils.Outputable
 
-{- **********************************************************************
-*                                                                       *
-                 Free variables of types and coercions
-*                                                                       *
-********************************************************************** -}
-
 {- *********************************************************************
 *                                                                      *
           Endo for free variables
 *                                                                      *
 ********************************************************************* -}
 
-runTyKiVars
+runVarsForTy
   :: Endo (TyVarSet p, KiCoVarSet p, KiVarSet p)
   -> (TyVarSet p, KiCoVarSet p, KiVarSet p)
-{-# INLINE runTyKiVars #-}
-runTyKiVars f = appEndo f (emptyVarSet, emptyVarSet, emptyVarSet)
+{-# INLINE runVarsForTy #-}
+runVarsForTy f = appEndo f (emptyVarSet, emptyVarSet, emptyVarSet)
+
+runVarsForKi
+  :: HasPass p pass
+  => Endo (TyVarSet p, KiCoVarSet p, KiVarSet p)
+  -> KiVarSet p
+{-# INLINE runVarsForKi #-}
+runVarsForKi f = case appEndo f (emptyVarSet, emptyVarSet, emptyVarSet) of
+  (tvs, kcvs, kvs) -> assertPpr (isEmptyVarSet tvs) (text "runVarsForKi tvs" $$ ppr tvs) $
+                      assertPpr (isEmptyVarSet kcvs) (text "runVarsForKi kcvs" $$ ppr kcvs) $
+                      kvs
+
+runVarsForKiCo 
+  :: HasPass p pass
+  => Endo (TyVarSet p, KiCoVarSet p, KiVarSet p)
+  -> (KiCoVarSet p, KiVarSet p)
+{-# INLINE runVarsForKiCo #-}
+runVarsForKiCo f = case appEndo f (emptyVarSet, emptyVarSet, emptyVarSet) of
+  (tvs, kcvs, kvs) -> assertPpr (isEmptyVarSet tvs) (text "runVarsForKi tvs" $$ ppr tvs) $
+                      (kcvs, kvs)
 
 runCoVars
   :: Endo (TyCoVarSet p, KiCoVarSet p)
   -> (TyCoVarSet p, KiCoVarSet p)
 {-# INLINE runCoVars #-}
 runCoVars f = appEndo f (emptyVarSet, emptyVarSet)
+
+runKiCoVars
+  :: HasPass p pass
+  => Endo (TyCoVarSet p, KiCoVarSet p)
+  -> KiCoVarSet p
+{-# INLINE runKiCoVars #-}
+runKiCoVars f = case appEndo f (emptyVarSet, emptyVarSet) of
+  (tcvs, kcvs) -> assertPpr (isEmptyVarSet tcvs) (text "runKiCoVars tcvs" $$ ppr tcvs) $
+                  kcvs
 
 {- *********************************************************************
 *                                                                      *
@@ -61,64 +86,125 @@ varsOfTyVarEnv
   :: HasPass p p' => VarEnv (TyVar p1) (Type p) -> (TyVarSet p, KiCoVarSet p, KiVarSet p)
 varsOfTyVarEnv tys = varsOfTypes (nonDetEltsUFM tys)
 
+varsOfMonoKiVarEnv :: HasPass p p' => VarEnv kva (MonoKind p) -> KiVarSet p
+varsOfMonoKiVarEnv kis = varsOfMonoKinds (nonDetEltsUFM kis)
+
+varsOfKiCoVarEnv :: HasPass p p' => VarEnv kcva (KindCoercion p) -> (KiCoVarSet p, KiVarSet p)
+varsOfKiCoVarEnv cos = varsOfKiCos (nonDetEltsUFM cos)
+
 varsOfType :: HasPass p p' => Type p -> (TyVarSet p, KiCoVarSet p, KiVarSet p)
-varsOfType ty = runTyKiVars (deep_ty ty)
+varsOfType ty = runVarsForTy (deep_ty ty)
 
 varsOfTypes :: HasPass p p' => [Type p] -> (TyVarSet p, KiCoVarSet p, KiVarSet p)
-varsOfTypes tys = runTyKiVars (deep_tys tys)
+varsOfTypes tys = runVarsForTy (deep_tys tys)
+
+varsOfKind :: HasPass p p' => Kind p -> KiVarSet p
+varsOfKind ty = runVarsForKi (deep_ki ty)
+
+varsOfKinds :: HasPass p p' => [Kind p] -> KiVarSet p
+varsOfKinds tys = runVarsForKi (deep_kis tys)
+
+varsOfMonoKind :: HasPass p p' => MonoKind p -> KiVarSet p
+varsOfMonoKind ty = runVarsForKi (deep_mki ty)
+
+varsOfMonoKinds :: HasPass p p' => [MonoKind p] -> KiVarSet p
+varsOfMonoKinds tys = runVarsForKi (deep_mkis tys)
 
 varsOfTyCo :: HasPass p p' => TypeCoercion p -> (TyVarSet p, KiCoVarSet p, KiVarSet p)
-varsOfTyCo co = runTyKiVars (deep_tyco co)
+varsOfTyCo co = runVarsForTy (deep_tco co)
 
-deep_ty :: HasPass p p' => Type p -> Endo (TyVarSet p, KiCoVarSet p, KiVarSet p)
-deep_ty = case foldTyCo deepTvFolder (emptyVarSet, emptyVarSet, emptyVarSet) of
-  (f, _, _, _) -> f
+varsOfKiCo :: HasPass p p' => KindCoercion p -> (KiCoVarSet p, KiVarSet p)
+varsOfKiCo co = runVarsForKiCo (deep_kco co)
 
-deep_tys :: HasPass p p' => [Type p] -> Endo (TyVarSet p, KiCoVarSet p, KiVarSet p)
-deep_tys = case foldTyCo deepTvFolder (emptyVarSet, emptyVarSet, emptyVarSet) of
-  (_, f, _, _) -> f
+varsOfKiCos :: HasPass p p' => [KindCoercion p] -> (KiCoVarSet p, KiVarSet p)
+varsOfKiCos co = runVarsForKiCo (deep_kcos co)
 
-deep_tyco :: HasPass p p' => TypeCoercion p -> Endo (TyVarSet p, KiCoVarSet p, KiVarSet p)
-deep_tyco = case foldTyCo deepTvFolder (emptyVarSet, emptyVarSet, emptyVarSet) of
-  (_, _, f, _) -> f
+deep_ty :: HasPass p pass => Type p -> Endo (TyVarSet p, KiCoVarSet p, KiVarSet p)
+deep_ty = case foldCore deepFvFolder (emptyVarSet, emptyVarSet, emptyVarSet) of
+  (f, _, _, _, _, _, _, _, _, _) -> f
 
-deepTvFolder
-  :: HasPass p p'
-  => TyCoFolder p
+deep_tys :: HasPass p pass => [Type p] -> Endo (TyVarSet p, KiCoVarSet p, KiVarSet p)
+deep_tys = case foldCore deepFvFolder (emptyVarSet, emptyVarSet, emptyVarSet) of
+  (_, f, _, _, _, _, _, _, _, _) -> f
+
+deep_tco :: HasPass p pass => TypeCoercion p -> Endo (TyVarSet p, KiCoVarSet p, KiVarSet p)
+deep_tco = case foldCore deepFvFolder (emptyVarSet, emptyVarSet, emptyVarSet) of
+  (_, _, f, _, _, _, _, _, _, _) -> f
+
+deep_tcos :: HasPass p pass => [TypeCoercion p] -> Endo (TyVarSet p, KiCoVarSet p, KiVarSet p)
+deep_tcos = case foldCore deepFvFolder (emptyVarSet, emptyVarSet, emptyVarSet) of
+  (_, _, _, f, _, _, _, _, _, _) -> f
+
+deep_mki :: HasPass p pass => MonoKind p -> Endo (TyVarSet p, KiCoVarSet p, KiVarSet p)
+deep_mki = case foldCore deepFvFolder (emptyVarSet, emptyVarSet, emptyVarSet) of
+  (_, _, _, _, f, _, _, _, _, _) -> f
+
+deep_mkis :: HasPass p pass => [MonoKind p] -> Endo (TyVarSet p, KiCoVarSet p, KiVarSet p)
+deep_mkis = case foldCore deepFvFolder (emptyVarSet, emptyVarSet, emptyVarSet) of
+  (_, _, _, _, _, f, _, _, _, _) -> f
+
+deep_ki :: HasPass p pass => Kind p -> Endo (TyVarSet p, KiCoVarSet p, KiVarSet p)
+deep_ki = case foldCore deepFvFolder (emptyVarSet, emptyVarSet, emptyVarSet) of
+  (_, _, _, _, _, _, f, _, _, _) -> f
+
+deep_kis :: HasPass p pass => [Kind p] -> Endo (TyVarSet p, KiCoVarSet p, KiVarSet p)
+deep_kis = case foldCore deepFvFolder (emptyVarSet, emptyVarSet, emptyVarSet) of
+  (_, _, _, _, _, _, _, f, _, _) -> f
+
+deep_kco :: HasPass p pass => KindCoercion p -> Endo (TyVarSet p, KiCoVarSet p, KiVarSet p)
+deep_kco = case foldCore deepFvFolder (emptyVarSet, emptyVarSet, emptyVarSet) of
+  (_, _, _, _, _, _, _, _, f, _) -> f
+
+deep_kcos :: HasPass p pass => [KindCoercion p] -> Endo (TyVarSet p, KiCoVarSet p, KiVarSet p)
+deep_kcos = case foldCore deepFvFolder (emptyVarSet, emptyVarSet, emptyVarSet) of
+  (_, _, _, _, _, _, _, _, _, f) -> f
+
+deepFvFolder
+  :: forall p pass. HasPass p pass
+  => CoreFolder p
      (TyVarSet p, KiCoVarSet p, KiVarSet p)
-     (KiCoVarSet p, KiVarSet p)
-     (Endo (KiCoVarSet p, KiVarSet p))
      (Endo (TyVarSet p, KiCoVarSet p, KiVarSet p))
-deepTvFolder = TyCoFolder { tcf_view = noView
-                          , tcf_tyvar = do_tv
-                          , tcf_covar = panic "deepTvFolder do_covar"
-                          , tcf_hole = panic "deepTvFolder do_hole"
-                          , tcf_tybinder = do_bndr
-                          , tcf_kcobinder = do_bndr_kco
-                          , tcf_tylambinder = do_tylambndr
-                          , tcf_tylamkibinder = do_kilambndr
-                          , tcf_swapEnv = \(_, kcv, kv) -> (kcv, kv)
-                          , tcf_embedKiRes = \(Endo f) -> Endo $ \(tv, kcv, kv) ->
-                              let (kcv', kv') = f (kcv, kv)
-                              in (tv, kcv', kv')
-                          , tcf_mkcf = deepMKcvFolder }
-  where
-    do_tv (tis, _, _) v = Endo do_it
-      where
-        do_it acc@(tacc, kcvacc, kacc)
-          | v `elemVarSet` tis = acc
-          | v `elemVarSet` tacc = acc
-          | otherwise = let (kcvacc', kacc') = appEndo (deep_mki (varKind v)) (kcvacc, kacc)
-                        in (tacc `extendVarSet` v, kcvacc', kacc')
-          -- see GHC note [Closing over free variable kinds] for justification of deep_mki
-          -- (deep_mki starts with emptyVarSet as in_scope set)
-    do_bndr (tis, kcvis, kis) tv _
-      = (extendVarSet tis tv, kcvis, kis)
-    do_bndr_kco (tis, kcvis, kis) kcv
-      = (tis, extendVarSet kcvis kcv, kis)
-    do_tylambndr (tis, kcvis, kis) tv
-      = (extendVarSet tis tv, kcvis, kis)
-    do_kilambndr (tis, kcvis, kis) kv = (tis, kcvis, extendVarSet kis kv)
+deepFvFolder @p @pass =
+  let -- folder
+        -- :: forall p' pass'. HasPass p' pass'
+        -- => CoreFolder p' (TyVarSet p', KiCoVarSet p', KiVarSet p')
+        --    (Endo (TyVarSet p', KiCoVarSet p', KiVarSet p'))
+      folder = CoreFolder
+  	{ cf_ty_view = noView
+ 	, cf_fa_kv = \(tvs, kcvs, kvs) kv -> (tvs, kcvs, extendVarSet kvs kv)
+  	, cf_fa_kcv = \(tvs, kcvs, kvs) kcv -> (tvs, extendVarSet kcvs kcv, kvs)
+  	, cf_fa_tv = \(tvs, kcvs, kvs) tv _ -> (extendVarSet tvs tv, kcvs, kvs)
+  	, cf_lam_kv = \(tvs, kcvs, kvs) kv -> (tvs, kcvs, extendVarSet kvs kv)
+  	, cf_lam_tv = \(tvs, kcvs, kvs) tv -> (extendVarSet tvs tv, kcvs, kvs)
+  	, cf_kv = \(_, _, is) kv ->
+            let do_it acc@(tvs, kcvs, kvs)
+  	          | kv `elemVarSet` is = acc
+  	          | kv `elemVarSet` kvs = acc
+  	          | otherwise = (tvs, kcvs, extendVarSet kvs kv)
+            in Endo do_it
+  	, cf_kcv = \(_, is, _) kcv ->
+            let do_it acc@(tvs, kcvs, kvs)
+  	          | kcv `elemVarSet` is = acc
+  	          | kcv `elemVarSet` kcvs = acc
+  	          | otherwise
+                  = appEndo (deep_mki (varKind kcv))
+                    (tvs, extendVarSet kcvs kcv, kvs)
+            in Endo do_it
+  	, cf_tv = \(is, _, _) tv ->
+            let do_it acc@(tvs, kcvs, kvs)
+  	          | tv `elemVarSet` is = acc
+  	          | tv `elemVarSet` tvs = acc
+  	          | otherwise
+                  = appEndo (deep_mki (varKind tv))
+                    (extendVarSet tvs tv, kcvs, kvs)
+            in Endo do_it
+  	, cf_tcv = panic "deepFvFolder cf_tcv"
+  	, cf_thole = panic "deepFvFolder cf_thole"
+  	, cf_khole = \is hole -> case csPass @pass of
+  	    Tc -> cf_kcv folder is (TcCoVar $ coHoleCoVar hole)
+            _ -> panic "deepFvFolder cf_khole unreachable"
+  	}
+  in folder
 
 {- *********************************************************************
 *                                                                      *
@@ -126,53 +212,97 @@ deepTvFolder = TyCoFolder { tcf_view = noView
 *                                                                      *
 ********************************************************************* -}
 
-shallowVarsOfTypes :: [Type p] -> (TyVarSet p, KiCoVarSet p, KiVarSet p)
-shallowVarsOfTypes tys = runTyKiVars (shallow_tys tys)
+shallowVarsOfTypes :: HasPass p pass => [Type p] -> (TyVarSet p, KiCoVarSet p, KiVarSet p)
+shallowVarsOfTypes tys = runVarsForTy (shallow_tys tys)
 
-shallowVarsOfTyVarEnv :: VarEnv (TyVar p') (Type p) -> (TyVarSet p, KiCoVarSet p, KiVarSet p)
+shallowVarsOfTyVarEnv
+  :: HasPass p pass => VarEnv (TyVar p') (Type p) -> (TyVarSet p, KiCoVarSet p, KiVarSet p)
 shallowVarsOfTyVarEnv tys = shallowVarsOfTypes (nonDetEltsUFM tys)
 
-shallow_ty :: Type p -> Endo (TyVarSet p, KiCoVarSet p, KiVarSet p)
-shallow_ty = case foldTyCo shallowTvFolder (emptyVarSet, emptyVarSet, emptyVarSet) of
-  (f, _, _, _) -> f
+shallow_ty :: HasPass p pass => Type p -> Endo (TyVarSet p, KiCoVarSet p, KiVarSet p)
+shallow_ty = case foldCore shallowFvFolder (emptyVarSet, emptyVarSet, emptyVarSet) of
+  (f, _, _, _, _, _, _, _, _, _) -> f
 
-shallow_tys :: [Type p] -> Endo (TyVarSet p, KiCoVarSet p, KiVarSet p)
-shallow_tys = case foldTyCo shallowTvFolder (emptyVarSet, emptyVarSet, emptyVarSet) of
-  (_, f, _, _) -> f
+shallow_tys :: HasPass p pass => [Type p] -> Endo (TyVarSet p, KiCoVarSet p, KiVarSet p)
+shallow_tys = case foldCore shallowFvFolder (emptyVarSet, emptyVarSet, emptyVarSet) of
+  (_, f, _, _, _, _, _, _, _, _) -> f
 
-shallowTvFolder
-  :: TyCoFolder p
+shallow_tco :: HasPass p pass => TypeCoercion p -> Endo (TyVarSet p, KiCoVarSet p, KiVarSet p)
+shallow_tco = case foldCore shallowFvFolder (emptyVarSet, emptyVarSet, emptyVarSet) of
+  (_, _, f, _, _, _, _, _, _, _) -> f
+
+shallow_tcos :: HasPass p pass => [TypeCoercion p] -> Endo (TyVarSet p, KiCoVarSet p, KiVarSet p)
+shallow_tcos = case foldCore shallowFvFolder (emptyVarSet, emptyVarSet, emptyVarSet) of
+  (_, _, _, f, _, _, _, _, _, _) -> f
+
+shallow_mki :: HasPass p pass => MonoKind p -> Endo (TyVarSet p, KiCoVarSet p, KiVarSet p)
+shallow_mki = case foldCore shallowFvFolder (emptyVarSet, emptyVarSet, emptyVarSet) of
+  (_, _, _, _, f, _, _, _, _, _) -> f
+
+shallow_mkis :: HasPass p pass => [MonoKind p] -> Endo (TyVarSet p, KiCoVarSet p, KiVarSet p)
+shallow_mkis = case foldCore shallowFvFolder (emptyVarSet, emptyVarSet, emptyVarSet) of
+  (_, _, _, _, _, f, _, _, _, _) -> f
+
+shallow_ki :: HasPass p pass => Kind p -> Endo (TyVarSet p, KiCoVarSet p, KiVarSet p)
+shallow_ki = case foldCore shallowFvFolder (emptyVarSet, emptyVarSet, emptyVarSet) of
+  (_, _, _, _, _, _, f, _, _, _) -> f
+
+shallow_kis :: HasPass p pass => [Kind p] -> Endo (TyVarSet p, KiCoVarSet p, KiVarSet p)
+shallow_kis = case foldCore shallowFvFolder (emptyVarSet, emptyVarSet, emptyVarSet) of
+  (_, _, _, _, _, _, _, f, _, _) -> f
+
+shallow_kco :: HasPass p pass => KindCoercion p -> Endo (TyVarSet p, KiCoVarSet p, KiVarSet p)
+shallow_kco = case foldCore shallowFvFolder (emptyVarSet, emptyVarSet, emptyVarSet) of
+  (_, _, _, _, _, _, _, _, f, _) -> f
+
+shallow_kcos :: HasPass p pass => [KindCoercion p] -> Endo (TyVarSet p, KiCoVarSet p, KiVarSet p)
+shallow_kcos = case foldCore shallowFvFolder (emptyVarSet, emptyVarSet, emptyVarSet) of
+  (_, _, _, _, _, _, _, _, _, f) -> f
+
+shallowFvFolder
+  :: forall p pass. HasPass p pass
+  => CoreFolder p
      (TyVarSet p, KiCoVarSet p, KiVarSet p)
-     (KiCoVarSet p, KiVarSet p)
-     (Endo (KiCoVarSet p, KiVarSet p))
      (Endo (TyVarSet p, KiCoVarSet p, KiVarSet p))
-shallowTvFolder = TyCoFolder { tcf_view = noView
-                             , tcf_tyvar = do_tv
-                             , tcf_covar = panic "shallowTvFolder do_covar"
-                             , tcf_hole = panic "shallowTvFolder do_hole"
-                             , tcf_tybinder = do_bndr
-                             , tcf_kcobinder = do_bndr_kco
-                             , tcf_tylambinder = do_tylambndr
-                             , tcf_tylamkibinder = do_kilambndr
-                             , tcf_swapEnv = \(_, kcv, kv) -> (kcv, kv)
-                             , tcf_embedKiRes = \(Endo f) -> Endo $ \(tv, kcv, kv) ->
-                                 let (kcv', kv') = f (kcv, kv)
-                                 in (tv, kcv', kv')
-                             , tcf_mkcf = shallowMKcvFolder }
-  where
-    do_tv (tis, _, _) v = Endo do_it
-      where
-        do_it acc@(tacc, kcvacc, kacc)
-          | v `elemVarSet` tis = acc
-          | v `elemVarSet` tacc = acc
-          | otherwise = (tacc `extendVarSet` v, kcvacc, kacc)
-    do_bndr (tis, kcvis, kis) tv _
-      = (extendVarSet tis tv, kcvis, kis)
-    do_bndr_kco (tis, kcvis, kis) kcv
-      = (tis, extendVarSet kcvis kcv, kis)
-    do_tylambndr (tis, kcvis, kis) tv
-      = (extendVarSet tis tv, kcvis, kis)
-    do_kilambndr (tis, kcvis, kis) kv = (tis, kcvis, extendVarSet kis kv)
+shallowFvFolder @p @pass =
+  let folder
+        :: CoreFolder p
+           (TyVarSet p, KiCoVarSet p, KiVarSet p)
+           (Endo (TyVarSet p, KiCoVarSet p, KiVarSet p))
+      folder = CoreFolder
+  	{ cf_ty_view = noView
+  	, cf_fa_kv = \(tvs, kcvs, kvs) kv -> (tvs, kcvs, extendVarSet kvs kv)
+  	, cf_fa_kcv = \(tvs, kcvs, kvs) kcv -> (tvs, extendVarSet kcvs kcv, kvs)
+  	, cf_fa_tv = \(tvs, kcvs, kvs) tv _ -> (extendVarSet tvs tv, kcvs, kvs)
+  	, cf_lam_kv = \(tvs, kcvs, kvs) kv -> (tvs, kcvs, extendVarSet kvs kv)
+  	, cf_lam_tv = \(tvs, kcvs, kvs) tv -> (extendVarSet tvs tv, kcvs, kvs)
+  	, cf_kv = \(_, _, is) kv ->
+            let do_it acc@(tvs, kcvs, kvs)
+  	          | kv `elemVarSet` is = acc
+  	          | kv `elemVarSet` kvs = acc
+  	          | otherwise = (tvs, kcvs, extendVarSet kvs kv)
+            in Endo do_it
+  	, cf_kcv = \(_, is, _) kcv ->
+            let do_it acc@(tvs, kcvs, kvs)
+  	          | kcv `elemVarSet` is = acc
+  	          | kcv `elemVarSet` kcvs = acc
+  	          | otherwise
+                  = (tvs, extendVarSet kcvs kcv, kvs)
+            in Endo do_it
+  	, cf_tv = \(is, _, _) tv ->
+            let do_it acc@(tvs, kcvs, kvs)
+  	          | tv `elemVarSet` is = acc
+  	          | tv `elemVarSet` tvs = acc
+  	          | otherwise
+                  = (extendVarSet tvs tv, kcvs, kvs)
+            in Endo do_it
+  	, cf_tcv = panic "shallowFvFolder cf_tcv"
+  	, cf_thole = panic "shallowFvFolder cf_thole"
+  	, cf_khole = \is hole -> case csPass @pass of
+  	    Tc -> cf_kcv folder is (TcCoVar $ coHoleCoVar hole)
+            _ -> panic "shallowFvFolder cf_khole unreachable"
+  	}
+  in folder
 
 {- *********************************************************************
 *                                                                      *
@@ -184,73 +314,99 @@ coVarsOfType :: HasPass p p' => Type p -> (TyCoVarSet p, KiCoVarSet p)
 coVarsOfTypes :: HasPass p p' => [Type p] -> (TyCoVarSet p, KiCoVarSet p)
 coVarsOfTyCo :: HasPass p p' => TypeCoercion p -> (TyCoVarSet p, KiCoVarSet p)
 coVarsOfTyCos :: HasPass p p' => [TypeCoercion p] -> (TyCoVarSet p, KiCoVarSet p)
+coVarsOfMonoKind :: HasPass p p' => MonoKind p -> (TyCoVarSet p, KiCoVarSet p)
+coVarsOfMonoKinds :: HasPass p p' => [MonoKind p] -> (TyCoVarSet p, KiCoVarSet p)
+coVarsOfKind :: HasPass p p' => Kind p -> (TyCoVarSet p, KiCoVarSet p)
+coVarsOfKinds :: HasPass p p' => [Kind p] -> (TyCoVarSet p, KiCoVarSet p)
+coVarsOfKiCo :: HasPass p p' => KindCoercion p -> KiCoVarSet p
+coVarsOfKiCos :: HasPass p p' => [KindCoercion p] -> KiCoVarSet p
 
 coVarsOfType ty = runCoVars (deep_cv_ty ty)
 coVarsOfTypes tys = runCoVars (deep_cv_tys tys)
-coVarsOfTyCo co = runCoVars (deep_cv_co co)
-coVarsOfTyCos cos = runCoVars (deep_cv_cos cos)
+coVarsOfTyCo co = runCoVars (deep_cv_tco co)
+coVarsOfTyCos cos = runCoVars (deep_cv_tcos cos)
+coVarsOfMonoKind ty = runCoVars (deep_cv_mki ty)
+coVarsOfMonoKinds tys = runCoVars (deep_cv_mkis tys)
+coVarsOfKind ty = runCoVars (deep_cv_ki ty)
+coVarsOfKinds tys = runCoVars (deep_cv_kis tys)
+coVarsOfKiCo co = runKiCoVars (deep_cv_kco co)
+coVarsOfKiCos cos = runKiCoVars (deep_cv_kcos cos)
 
 deep_cv_ty :: HasPass p p' => Type p -> Endo (TyCoVarSet p, KiCoVarSet p)
-deep_cv_ty = case foldTyCo deepCoVarFolder (emptyVarSet, emptyVarSet) of
-  (f, _, _, _) -> f
+deep_cv_ty = case foldCore deepCoVarFolder (emptyVarSet, emptyVarSet) of
+  (f, _, _, _, _, _, _, _, _, _) -> f
 
 deep_cv_tys :: HasPass p p' => [Type p] -> Endo (TyCoVarSet p, KiCoVarSet p)
-deep_cv_tys = case foldTyCo deepCoVarFolder (emptyVarSet, emptyVarSet) of
-  (_, f, _, _) -> f
+deep_cv_tys = case foldCore deepCoVarFolder (emptyVarSet, emptyVarSet) of
+  (_, f, _, _, _, _, _, _, _, _) -> f
 
-deep_cv_co :: HasPass p p' => TypeCoercion p -> Endo (TyCoVarSet p, KiCoVarSet p)
-deep_cv_co = case foldTyCo deepCoVarFolder (emptyVarSet, emptyVarSet) of
-  (_, _, f, _) -> f
+deep_cv_tco :: HasPass p p' => TypeCoercion p -> Endo (TyCoVarSet p, KiCoVarSet p)
+deep_cv_tco = case foldCore deepCoVarFolder (emptyVarSet, emptyVarSet) of
+  (_, _, f, _, _, _, _, _, _, _) -> f
 
-deep_cv_cos :: HasPass p p' => [TypeCoercion p] -> Endo (TyCoVarSet p, KiCoVarSet p)
-deep_cv_cos = case foldTyCo deepCoVarFolder (emptyVarSet, emptyVarSet) of
-  (_, _, _, f) -> f
+deep_cv_tcos :: HasPass p p' => [TypeCoercion p] -> Endo (TyCoVarSet p, KiCoVarSet p)
+deep_cv_tcos = case foldCore deepCoVarFolder (emptyVarSet, emptyVarSet) of
+  (_, _, _, f, _, _, _, _, _, _) -> f
+
+deep_cv_mki :: HasPass p p' => MonoKind p -> Endo (TyCoVarSet p, KiCoVarSet p)
+deep_cv_mki = case foldCore deepCoVarFolder (emptyVarSet, emptyVarSet) of
+  (_, _, _, _, f, _, _, _, _, _) -> f
+
+deep_cv_mkis :: HasPass p p' => [MonoKind p] -> Endo (TyCoVarSet p, KiCoVarSet p)
+deep_cv_mkis = case foldCore deepCoVarFolder (emptyVarSet, emptyVarSet) of
+  (_, _, _, _, _, f, _, _, _, _) -> f
+
+deep_cv_ki :: HasPass p p' => Kind p -> Endo (TyCoVarSet p, KiCoVarSet p)
+deep_cv_ki = case foldCore deepCoVarFolder (emptyVarSet, emptyVarSet) of
+  (_, _, _, _, _, _, f, _, _, _) -> f
+
+deep_cv_kis :: HasPass p p' => [Kind p] -> Endo (TyCoVarSet p, KiCoVarSet p)
+deep_cv_kis = case foldCore deepCoVarFolder (emptyVarSet, emptyVarSet) of
+  (_, _, _, _, _, _, _, f, _, _) -> f
+
+deep_cv_kco :: HasPass p p' => KindCoercion p -> Endo (TyCoVarSet p, KiCoVarSet p)
+deep_cv_kco = case foldCore deepCoVarFolder (emptyVarSet, emptyVarSet) of
+  (_, _, _, _, _, _, _, _, f, _) -> f
+
+deep_cv_kcos :: HasPass p p' => [KindCoercion p] -> Endo (TyCoVarSet p, KiCoVarSet p)
+deep_cv_kcos = case foldCore deepCoVarFolder (emptyVarSet, emptyVarSet) of
+  (_, _, _, _, _, _, _, _, _, f) -> f
 
 deepCoVarFolder
-  :: forall p p'. HasPass p p'
-  => TyCoFolder p
+  :: forall p pass. HasPass p pass
+  => CoreFolder p
      (TyCoVarSet p, KiCoVarSet p)
-     (KiCoVarSet p)
-     (Endo (KiCoVarSet p))
      (Endo (TyCoVarSet p, KiCoVarSet p))
-deepCoVarFolder @p @p' = TyCoFolder { tcf_view = noView
-                             , tcf_tyvar = do_tyvar
-                             , tcf_covar = do_covar
-                             , tcf_hole = do_hole
-                             , tcf_tybinder = do_bndr
-                             , tcf_kcobinder = do_bndr_kco
-                             , tcf_tylambinder = do_tylambinder
-                             , tcf_tylamkibinder = do_kilambinder
-                             , tcf_swapEnv = \(_, kcv) -> kcv
-                             , tcf_embedKiRes = \(Endo f) -> Endo $ \(tcv, kcv) ->
-                                 let kcv' = f kcv
-                                 in (tcv, kcv')
-                             , tcf_mkcf = deepKiCoVarFolder
-                             }
-  where
-    do_tyvar _ _ = mempty
-
-    do_covar :: (TyCoVarSet p, KiCoVarSet p) -> TyCoVar p -> Endo (TyCoVarSet p, KiCoVarSet p)
-    do_covar (is, _) v = Endo do_it
-      where
-        do_it acc@(tacc, kacc) | v `elemVarSet` is = acc
-                               | v `elemVarSet` tacc = acc
-                               | otherwise = appEndo (deep_cv_ty (varType v))
-                                             $ (tacc `extendVarSet` v, kacc)
-
-    do_bndr is _ _ = is
-    do_bndr_kco (tis, kis) kcv
-      = (tis, extendVarSet kis kcv)
-    do_tylambinder is _ = is
-    do_kilambinder is _ = is
-
-    do_hole
-      :: (TyCoVarSet p, KiCoVarSet p)
-      -> TypeCoercionHole
-      -> Endo (TyCoVarSet p, KiCoVarSet p)
-    do_hole is hole = case csPass @p' of
-                        Tc -> do_covar is (TcCoVar $ tyCoHoleCoVar hole)
-                        _ -> panic "unreachable"
+deepCoVarFolder @p @pass =
+  let folder = CoreFolder
+        { cf_ty_view = noView
+        , cf_tv = \_ _ -> mempty
+        , cf_kv = \_ _ -> mempty
+        , cf_tcv = \(is, _) v ->
+            let do_it acc@(tacc, kacc) | v `elemVarSet` is = acc
+                                       | v `elemVarSet` tacc = acc
+                                       | otherwise = appEndo (deep_cv_ty @p @pass (varType v))
+                                                     (tacc `extendVarSet` v, kacc)
+            in Endo do_it
+        , cf_kcv = \(_, is) v ->
+            let do_it acc@(tacc, kacc) | v `elemVarSet` is = acc
+                                       | v `elemVarSet` kacc = acc
+                                       | otherwise = appEndo (deep_cv_mki @p @pass (varKind v))
+                                                     (tacc, kacc `extendVarSet` v)
+            in Endo do_it
+        , cf_thole = \is hole -> case csPass @pass of
+            Tc -> cf_tcv folder is (TcCoVar $ tyCoHoleCoVar hole)
+            _ -> panic "unreachable"
+        , cf_khole = \is hole -> case csPass @pass of
+            Tc -> cf_kcv folder is (TcCoVar $ coHoleCoVar hole)
+            _ -> panic "unreachable"
+        , cf_fa_kv = \is _ -> is
+        , cf_fa_tv = \is _ _ -> is
+        , cf_lam_kv = \is _ -> is
+        , cf_lam_tv = \is _ -> is
+        , cf_fa_kcv = \(tacc, kacc) k -> (tacc, extendVarSet kacc k)
+        }
+  in folder
 
 {- *********************************************************************
 *                                                                      *
@@ -460,37 +616,44 @@ isInjectiveInType tv ty = go ty
 *                                                                      *
 ********************************************************************* -}
 
-afvFolder
-  :: (TyVar p -> Bool) -> (KiCoVar p -> Bool) -> (KiVar p -> Bool)
-  -> TyCoFolder p
-     (TyVarSet p, KiCoVarSet p, KiVarSet p)
-     (KiCoVarSet p, KiVarSet p)
-     DM.Any DM.Any
-afvFolder f_tv f_kcv f_kv = TyCoFolder { tcf_view = noView
-                                       , tcf_tyvar = do_tyvar
-                                       , tcf_covar = panic "afvFolder do_covar"
-                                       , tcf_hole = panic "do_hole"
-                                       , tcf_tybinder = do_bndr
-                                       , tcf_kcobinder = do_bndr_kco
-                                       , tcf_tylambinder = do_tylambndr
-                                       , tcf_tylamkibinder = do_kilambndr
-                                       , tcf_swapEnv = \(_, kcv, kv) -> (kcv, kv)
-                                       , tcf_embedKiRes = id
-                                       , tcf_mkcf = mafvFolder f_kcv f_kv }
-  where
-    do_tyvar (is, _, _) tv = Any (not (tv `elemVarSet` is) && f_tv tv)
-    do_bndr (is, kcvs, kvs) tv _
-      = (is `extendVarSet` tv, kcvs, kvs)
-    do_bndr_kco (is, kcvs, kvs) kcv
-      = (is, kcvs `extendVarSet` kcv, kvs)
-    do_tylambndr (is, kcvs, kvs) tv
-      = (is `extendVarSet` tv, kcvs, kvs)
-    do_kilambndr (tv, kcv, is) kv = (tv, kcv, is `extendVarSet` kv)
+anyFreeVarsOfMonoKind
+  :: (TyCoVar p -> Bool) -> (TyVar p -> Bool) -> (KiCoVar p -> Bool) -> (KiVar p -> Bool)
+  -> MonoKind p -> Bool
+anyFreeVarsOfMonoKind tcv tv kcv kv ki = DM.getAny (f ki)
+  where (_, _, _, _, f, _, _, _, _, _) = foldCore (afvFolder tcv tv kcv kv)
+                          (emptyVarSet, emptyVarSet, emptyVarSet, emptyVarSet)
 
 noFreeVarsOfType :: Type p -> Bool
 noFreeVarsOfType ty = not $ DM.getAny (f ty)
-  where (f, _, _, _) = foldTyCo (afvFolder (const True) (const True) (const True))
-                 (emptyVarSet, emptyVarSet, emptyVarSet)
+  where (f, _, _, _, _, _, _, _, _, _) = foldCore
+          (afvFolder (const True) (const True) (const True) (const True))
+          (emptyVarSet, emptyVarSet, emptyVarSet, emptyVarSet)
+
+noFreeVarsOfMonoKind :: MonoKind p -> Bool
+noFreeVarsOfMonoKind ki = not $ DM.getAny (f ki)
+  where (_, _, _, _, f, _, _, _, _, _) = foldCore
+          (afvFolder (const True) (const True) (const True) (const True))
+          (emptyVarSet, emptyVarSet, emptyVarSet, emptyVarSet)
+
+afvFolder
+  :: (TyCoVar p -> Bool) -> (TyVar p -> Bool) -> (KiCoVar p -> Bool) -> (KiVar p -> Bool)
+  -> CoreFolder p
+     (TyCoVarSet p, TyVarSet p, KiCoVarSet p, KiVarSet p)
+     DM.Any
+afvFolder f_tcv f_tv f_kcv f_kv = CoreFolder
+  { cf_ty_view = noView
+  , cf_tv = \(_, is, _, _) v -> Any (not (v `elemVarSet` is) && f_tv v)
+  , cf_tcv = \(is, _, _, _) v -> Any (not (v `elemVarSet` is) && f_tcv v)
+  , cf_kv = \(_, _, _, is) v -> Any (not (v `elemVarSet` is) && f_kv v)
+  , cf_kcv = \(_, _, is, _) v -> Any (not (v `elemVarSet` is) && f_kcv v)
+  , cf_khole = panic "do_hole"
+  , cf_thole = panic "do_hole"
+  , cf_fa_kv = \(tcvs, tvs, kcvs, kvs) v -> (tcvs, tvs, kcvs, extendVarSet kvs v)
+  , cf_fa_kcv = \(tcvs, tvs, kcvs, kvs) v -> (tcvs, tvs, extendVarSet kcvs v, kvs)
+  , cf_fa_tv = \(tcvs, tvs, kcvs, kvs) v _ -> (tcvs, extendVarSet tvs v, kcvs, kvs)
+  , cf_lam_kv = \(tcvs, tvs, kcvs, kvs) v -> (tcvs, tvs, kcvs, extendVarSet kvs v)
+  , cf_lam_tv = \(tcvs, tvs, kcvs, kvs) v -> (tcvs, extendVarSet tvs v, kcvs, kvs)
+  }
 
 {- *********************************************************************
 *                                                                      *
@@ -515,3 +678,51 @@ tyConsOfType ty = go ty
 
 tyConsOfTypes :: HasPass p pass => [Type p] -> UniqSet (TyCon p)
 tyConsOfTypes tys = foldr (unionUniqSets . tyConsOfType) emptyUniqSet tys
+
+{- *********************************************************************
+*                                                                      *
+            Free type constructors
+*                                                                      *
+********************************************************************* -}
+
+closedKind :: HasPass p pass => Kind p -> Maybe (Kind p)
+closedKind = case mapCoreX closedMapper of
+  (_, _, _, _, _, _, f, _, _, _) -> f (emptyVarSet, emptyVarSet, emptyVarSet, emptyVarSet)
+
+closedMonoKind :: HasPass p pass => MonoKind p -> Maybe (MonoKind p)
+closedMonoKind = case mapCoreX closedMapper of
+  (_, _, _, _, f, _, _, _, _, _) -> f (emptyVarSet, emptyVarSet, emptyVarSet, emptyVarSet)
+
+closedMonoKinds :: HasPass p pass => [MonoKind p] -> Maybe [MonoKind p]
+closedMonoKinds = case mapCoreX closedMapper of
+  (_, _, _, _, _, f, _, _, _, _) -> f (emptyVarSet, emptyVarSet, emptyVarSet, emptyVarSet)
+
+closedKiCo :: HasPass p pass => KindCoercion p -> Maybe (KindCoercion p)
+closedKiCo = case mapCoreX closedMapper of
+  (_, _, _, _, _, _, _, _, f, _) -> f (emptyVarSet, emptyVarSet, emptyVarSet, emptyVarSet)
+
+closedMapper :: CoreMapper p p (TyCoVarSet p, TyVarSet p, KiCoVarSet p, KiVarSet p) Maybe
+closedMapper = CoreMapper
+  { cm_kv = \(_, _, _, is) v -> if v `elemVarSet` is then Just (KiVarKi v) else Nothing
+  , cm_kcv = \(_, _, is, _) v -> if v `elemVarSet` is then Just (KiCoVarCo v) else Nothing
+  , cm_tv = \(_, is, _, _) v -> if v `elemVarSet` is then Just (TyVarTy v) else Nothing
+  , cm_tcv = \(is, _, _, _) v -> if v `elemVarSet` is then Just (TyCoVarCo v) else Nothing
+  , cm_khole = panic "closedMapper khole"
+  , cm_thole = panic "closedMapper thole"
+  , cm_lam_kv = \(tcvs, tvs, kcvs, kvs) kv f ->
+      let env' = (tcvs, tvs, kcvs, extendVarSet kvs kv)
+      in f env' kv
+  , cm_lam_tv = \(tcvs, tvs, kcvs, kvs) tv f ->
+      let env' = (tcvs, extendVarSet tvs tv, kcvs, kvs)
+      in f env' tv
+  , cm_fa_kv = \(tcvs, tvs, kcvs, kvs) kv f ->
+      let env' = (tcvs, tvs, kcvs, extendVarSet kvs kv)
+      in f env' kv
+  , cm_fa_kcv = \(tcvs, tvs, kcvs, kvs) kcv f ->
+      let env' = (tcvs, tvs, extendVarSet kcvs kcv, kvs)
+      in f env' kcv
+  , cm_fa_tv = \(tcvs, tvs, kcvs, kvs) tv _ f ->
+      let env' = (tcvs, extendVarSet tvs tv, kcvs, kvs)
+      in f env' tv
+  , cm_tycon = panic "closedMapper tycon"
+  }

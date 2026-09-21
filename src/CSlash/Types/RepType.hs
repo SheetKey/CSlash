@@ -14,7 +14,6 @@ import CSlash.Types.Unique
 import CSlash.Types.Var
 import CSlash.Core.DataCon
 import CSlash.Core.TyCon
-import CSlash.Core.Type.Rep
 import CSlash.Core.Type
 import CSlash.Builtin.Names
 

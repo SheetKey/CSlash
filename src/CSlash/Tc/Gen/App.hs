@@ -23,11 +23,10 @@ import CSlash.Core.ConLike (ConLike(..))
 import CSlash.Core.DataCon ( dataConTyCon )
 import CSlash.Core.TyCon
 import CSlash.Core.Kind
-import CSlash.Core.Type.Rep
-import CSlash.Core.Type.Ppr
 -- import CSlash.Core.Type.Subst ( substTyWithInScope )
 import CSlash.Core.Type
 -- import GHC.Core.Coercion
+import CSlash.Core.Folder
 
 import CSlash.Builtin.Names
 
@@ -422,27 +421,28 @@ instance Semigroup TcMBool where
 instance Monoid TcMBool where
   mempty = TCMB $ return False
 
+-- TODO: This only looks at TVs?
 foldQLInstVars :: forall a. Monoid a => (TcTyVar -> a) -> Type Tc -> a
 {-# INLINE foldQLInstVars #-}
 foldQLInstVars check_tv ty = do_ty ty
   where
-    (do_ty, _, _, _) = foldTyCo folder ()
+    (do_ty, _, _, _, _, _, _, _, _, _) = foldCore folder ()
 
-    folder :: TyCoFolder Tc () () () a
-    folder = TyCoFolder { tcf_view = noView
-                        , tcf_tyvar = do_tv
-                        , tcf_covar = mempty
-                        , tcf_hole = do_hole
-                        , tcf_tybinder = \_ _ _ -> ()
-                        , tcf_kcobinder = \_ _ -> ()
-                        , tcf_tylambinder = \_ _ -> ()
-                        , tcf_tylamkibinder = \_ _ -> ()
-                        , tcf_swapEnv = \_ -> ()
-                        , tcf_embedKiRes = \_ -> mempty
-                        , tcf_mkcf = MKiCoFolder { mkcf_kivar = \_ _ -> ()
-                                                 , mkcf_covar = \_ _ -> ()
-                                                 , mkcf_hole = \_ _ -> () }
+    folder :: CoreFolder Tc () a
+    folder = CoreFolder { cf_ty_view = noView
+                        , cf_tv = do_tv
+                        , cf_tcv = \_ _ -> mempty
+                        , cf_kv = \_ _ -> mempty
+                        , cf_kcv = \_ _ -> mempty
+                        , cf_thole = do_hole
+                        , cf_khole = \_ _ -> mempty
+                        , cf_fa_tv = \_ _ _ -> ()
+                        , cf_fa_kcv = \_ _ -> ()
+                        , cf_fa_kv = \_ _ -> ()
+                        , cf_lam_tv = \_ _ -> ()
+                        , cf_lam_kv = \_ _ -> ()
                         }
+
     do_hole _ hole = do_ty (varType (tyCoHoleCoVar hole))
 
     do_tv :: () -> TyVar Tc -> a

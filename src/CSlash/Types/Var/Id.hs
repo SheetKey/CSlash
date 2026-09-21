@@ -9,8 +9,7 @@ import Prelude hiding ((<>))
 import CSlash.Core hiding (Id)
 
 import {-# SOURCE #-} CSlash.Core.Type (typeKind)
-import {-# SOURCE #-} CSlash.Core.Type.Rep (Type, PredType)
-import {-# SOURCE #-} CSlash.Core.Kind (Kind, MonoKind)
+import {-# SOURCE #-} CSlash.Core.Rep (Type, Kind, MonoKind)
 import {-# SOURCE #-} CSlash.Tc.Utils.TcType (TcVarDetails, pprTcVarDetails)
 import {-# SOURCE #-} CSlash.Types.Var.Id.Info (IdDetails, IdInfo, pprIdDetails)
 import {-# SOURCE #-} CSlash.Core.DataCon

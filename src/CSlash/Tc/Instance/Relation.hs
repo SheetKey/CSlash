@@ -2,8 +2,6 @@ module CSlash.Tc.Instance.Relation where
 
 import CSlash.Driver.DynFlags
 
-import CSlash.Core.Type.Rep
-
 import CSlash.Tc.Utils.Env
 import CSlash.Tc.Utils.Monad
 import CSlash.Tc.Utils.TcType

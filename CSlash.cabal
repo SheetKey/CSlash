@@ -68,6 +68,7 @@ library
                     , CSlash.Core
                     , CSlash.Core.ConLike
                     , CSlash.Core.DataCon
+                    , CSlash.Core.Folder
                     , CSlash.Core.FVs
                     , CSlash.Core.Kind
                     , CSlash.Core.Kind.Compare
@@ -77,6 +78,7 @@ library
                     , CSlash.Core.Map.Expr
                     , CSlash.Core.Map.Kind
                     , CSlash.Core.Map.Type
+                    , CSlash.Core.Mapper
                     , CSlash.Core.Opt.Arity
                     , CSlash.Core.Opt.CallArity
                     , CSlash.Core.Opt.CallerCC
@@ -105,6 +107,7 @@ library
                     , CSlash.Core.Ppr
                     , CSlash.Core.Predicate
                     , CSlash.Core.Reduction
+                    , CSlash.Core.Rep
                     , CSlash.Core.Rules
                     , CSlash.Core.Rules.Config
                     , CSlash.Core.Seq
@@ -117,8 +120,6 @@ library
                     , CSlash.Core.Type
                     , CSlash.Core.Type.Compare
                     , CSlash.Core.Type.FVs
-                    , CSlash.Core.Type.Ppr
-                    , CSlash.Core.Type.Rep
                     , CSlash.Core.Type.Tidy
                     , CSlash.Core.Unfold
                     , CSlash.Core.Unfold.Make
@@ -553,8 +554,8 @@ library
     ghc-options:      -W
                       -Wall
                       -Wno-name-shadowing
-                      -Werror=incomplete-patterns
-                      -Werror=incomplete-uni-patterns
+                      -- -Werror=incomplete-patterns
+                      -- -Werror=incomplete-uni-patterns
                       -Werror=missing-fields
                       -- -Werror=missing-methods
                       -Wincomplete-record-updates

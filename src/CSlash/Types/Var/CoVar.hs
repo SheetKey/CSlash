@@ -11,8 +11,7 @@ import Prelude hiding ((<>))
 
 import CSlash.Cs.Pass
 
-import {-# SOURCE #-} CSlash.Core.Type.Rep (Type)
-import {-# SOURCE #-} CSlash.Core.Kind (MonoKind)
+import {-# SOURCE #-} CSlash.Core.Rep (Type, MonoKind)
 import {-# SOURCE #-} CSlash.Tc.Utils.TcType (TcVarDetails, pprTcVarDetails, vanillaSkolemVarUnk)
 
 import CSlash.Types.Var.Class
@@ -142,6 +141,17 @@ instance (Typeable thing, Typeable p) => Data (CoVar thing p) where
   toConstr _ = abstractConstr "CoVar"
   gunfold _ _ = error "gunfold"
   dataTypeOf _ = mkNoRepType "CoVar"
+
+instance TcVar (TyCoVar Tc) where
+  type TcDetailsThing (TyCoVar Tc) = Void
+
+  tcVarDetails (TcCoVar tv) = tcVarDetails tv
+  tcVarDetails _ = vanillaSkolemVarUnk
+
+instance TcVar TcTyCoVar where
+  type TcDetailsThing TcTyCoVar = Void
+
+  tcVarDetails = tc_cv_details
 
 instance TcVar (KiCoVar Tc) where
   type TcDetailsThing (KiCoVar Tc) = Void

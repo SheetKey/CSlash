@@ -27,11 +27,9 @@ import CSlash.Core.Predicate( isTyCoVarType )
 import CSlash.Core.Kind
 import CSlash.Core.Kind.Compare
 import CSlash.Core.UsageEnv
-import CSlash.Core.Type.Rep   -- checks validity of types/coercions
 import CSlash.Core.Type.Compare ( eqType{-, eqTypes, eqTypeIgnoringMultiplicity, eqForAllVis-} )
 import CSlash.Core.Subst
 import CSlash.Core.Type.FVs
-import CSlash.Core.Type.Ppr
 import CSlash.Core.TyCon as TyCon
 import CSlash.Core.Unify hiding (getSubst)
 -- import CSlash.Core.Opt.Arity    ( typeArity, exprIsDeadEnd )

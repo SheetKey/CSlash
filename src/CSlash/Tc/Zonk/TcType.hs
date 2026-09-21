@@ -26,11 +26,12 @@ import CSlash.Tc.Utils.TcType
 import CSlash.Tc.Zonk.Monad
 
 -- import GHC.Core.InstEnv (ClsInst(is_tys))
-import CSlash.Core.Type.Rep
+import CSlash.Core.Mapper
 import CSlash.Core.Type.Compare
 import CSlash.Core.Type.Tidy
 import CSlash.Core.TyCon
 import CSlash.Core.Type
+import CSlash.Core.Type.FVs
 import CSlash.Core.Kind
 import CSlash.Core.Kind.FVs
 import CSlash.Core.Kind.Compare
@@ -148,20 +149,36 @@ writeMetaKiVarRef kivar ref ki
 
 zonkTcType :: Type Tc -> ZonkM (Type Tc)
 zonkTcTypes :: [Type Tc] -> ZonkM [Type Tc]
-(zonkTcType, zonkTcTypes, _, _) = mapTyCo zonkTcTyCoMapper
+zonkTcMonoKind :: (MonoKind Tc) -> ZonkM (MonoKind Tc)
+zonkTcMonoKinds :: [MonoKind Tc] -> ZonkM [MonoKind Tc]
+zonkTcKind :: Kind Tc -> ZonkM (Kind Tc)
+zonkTcKinds :: [Kind Tc] -> ZonkM [Kind Tc]
+zonkKiCo :: KindCoercion Tc -> ZonkM (KindCoercion Tc)
+(zonkTcType, zonkTcTypes, _, _, zonkTcMonoKind, zonkTcMonoKinds
+  , zonkTcKind, zonkTcKinds, zonkKiCo, _)
+  = mapCore zonkTcMapper
   where
-    zonkTcTyCoMapper
-      :: TyCoMapper Tc Tc () ZonkM
-    zonkTcTyCoMapper = TyCoMapper
-      { tm_tyvar = const zonkTyVar
-      , tm_covar = panic "tm_covar unused zonkTcType"
-      , tm_hole = panic "tm_hole unused zonkTcType"
-      , tm_tybinder = \_ tv _ k -> zonkVarKind tv >>= k ()
-      , tm_kicobinder = \_ kcv k -> zonkVarKind kcv >>= k ()
-      , tm_tylambinder = \_ tv k -> zonkVarKind tv >>= k ()
-      , tm_tylamkibinder = \_ kv k -> k () kv
-      , tm_tycon = zonkTcTyCon
-      , tm_mkcm = zonkTcMonoKindMapper
+    zonkTcMapper
+      :: CoreMapper Tc Tc () ZonkM
+    zonkTcMapper = CoreMapper
+      { cm_tv = const zonkTyVar
+      , cm_tcv = panic "tm_covar unused zonkTcType"
+      , cm_kv = const zonkKiVar
+      , cm_kcv = \_ cv -> mkKiCoVarCo <$> zonkVarKind cv
+      , cm_thole = panic "tm_hole unused zonkTcType"
+      , cm_khole = \_ hole@KindCoercionHole{ kch_ref = ref, kch_co_var = cv } -> do
+          contents <- readTcRef ref
+          case contents of
+            Just co -> do co' <- zonkKiCo co
+                          checkKiCoercionHole cv co'
+            Nothing -> do cv' <- zonkVarKind cv
+                          return $ HoleCo $ hole { kch_co_var = cv' }
+      , cm_fa_tv = \_ tv _ k -> zonkVarKind tv >>= k ()
+      , cm_fa_kcv = \_ kcv k -> zonkVarKind kcv >>= k ()
+      , cm_fa_kv = \_ kv k -> k () kv
+      , cm_lam_tv = \_ tv k -> zonkVarKind tv >>= k ()
+      , cm_lam_kv = \_ kv k -> k () kv
+      , cm_tycon = zonkTcTyCon
       }
 
 zonkTcTyCon :: TyCon Tc -> ZonkM (TyCon Tc)
@@ -221,38 +238,6 @@ zonkVarKind tv = do
               Zonking kinds
 *                                                                      *
 ********************************************************************* -}
-
-zonkTcMonoKind :: (MonoKind Tc) -> ZonkM (MonoKind Tc)
-zonkTcMonoKinds :: [MonoKind Tc] -> ZonkM [MonoKind Tc]
-zonkKiCo :: KindCoercion Tc -> ZonkM (KindCoercion Tc)
-(zonkTcMonoKind, zonkTcMonoKinds, zonkKiCo, _) = mapMKiCo zonkTcMonoKindMapper
-
-zonkTcKind :: Kind Tc -> ZonkM (Kind Tc)
-zonkTcKinds :: [Kind Tc] -> ZonkM [Kind Tc]
-(zonkTcKind, zonkTcKinds) = mapKind zonkTcKindMapper
-
-zonkTcKindMapper
-  :: KiCoMapper Tc Tc () ZonkM
-zonkTcKindMapper = KiCoMapper
-  { kcm_kibinder = \_ kv k -> k () kv
-  , kcm_mkcm = zonkTcMonoKindMapper
-  }
-
-zonkTcMonoKindMapper
-  :: MKiCoMapper Tc Tc () ZonkM
-zonkTcMonoKindMapper = MKiCoMapper
-  { mkcm_kivar = const zonkKiVar
-  , mkcm_covar = const (\cv -> mkKiCoVarCo <$> zonkVarKind cv)
-  , mkcm_hole = hole }
-  where
-    hole :: () -> KindCoercionHole -> ZonkM (KindCoercion Tc)
-    hole _ hole@(KindCoercionHole { kch_ref = ref, kch_co_var = cv }) = do
-      contents <- readTcRef ref
-      case contents of
-        Just co -> do co' <- zonkKiCo co
-                      checkKiCoercionHole cv co'
-        Nothing -> do cv' <- zonkVarKind cv
-                      return $ HoleCo $ hole { kch_co_var = cv' }
 
 zonkKiVarsAndFV :: KiVarSet Tc -> ZonkM (KiVarSet Tc)
 zonkKiVarsAndFV kivars = varsOfMonoKinds <$> mapM zonkKiVar (nonDetEltsUniqSet kivars)

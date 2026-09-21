@@ -33,8 +33,6 @@ import CSlash.Core.Kind
 import CSlash.Core.TyCon
 -- import GHC.Core.Predicate
 import CSlash.Core.Type.FVs
-import CSlash.Core.Type.Rep
-import CSlash.Core.Type.Ppr
 -- import GHC.Core.FamInstEnv ( isDominatedBy, injectiveBranches
 --                            , InjectivityCheckResult(..) )
 

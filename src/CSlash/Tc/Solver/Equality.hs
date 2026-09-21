@@ -29,7 +29,6 @@ import CSlash.Core.Predicate
 -- import GHC.Core.Class
 import CSlash.Core.DataCon ( dataConName )
 import CSlash.Core.TyCon
-import CSlash.Core.Type.Rep
 -- import GHC.Core.Coercion
 -- import GHC.Core.Coercion.Axiom
 import CSlash.Core.Reduction

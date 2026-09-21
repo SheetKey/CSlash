@@ -16,7 +16,6 @@ import CSlash.Types.Unique.FM
 import CSlash.Types.Basic
 import CSlash.Data.Maybe   ( orElse )
 
-import {-# SOURCE #-} CSlash.Core.Type.Rep    ( Type )
 -- import CSlash.Core.DataCon ( splitDataProductType_maybe, StrictnessMark, isMarkedStrict )
 -- import GHC.Core.Multiplicity    ( scaledThing )
 

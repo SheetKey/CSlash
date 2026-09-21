@@ -11,16 +11,18 @@
 
 module CSlash.Core.Kind
   ( module CSlash.Core.Kind
+  , module CSlash.Core.Rep
   , KiVar
   , Name
   ) where
 
 import Prelude hiding ((<>))
 
-import {-# SOURCE #-} CSlash.Core.Type.Rep
-import {-# SOURCE #-} CSlash.Core.Type.Ppr (debugPprType)
 import {-# SOURCE #-} CSlash.Types.Var
 import {-# SOURCE #-} CSlash.Core.Kind.Compare (eqMonoKind)
+
+import CSlash.Core.Rep
+import {-# SOURCE #-} CSlash.Core.Mapper
 
 import CSlash.Cs.Pass
 
@@ -51,42 +53,6 @@ import Data.Maybe (isJust)
                         Kind
 *                                                                       *
 ********************************************************************** -}
-
-data Kind p
-  = ForAllKi !(KiVar p) (Kind p)
-  | Mono (MonoKind p)
-  deriving Data.Data
-
-data MonoKind p
-  = KiVarKi (KiVar p)
-  | BIKi BuiltInKi
-  | KiPredApp KiPredCon (MonoKind p) (MonoKind p)
-  | KiConApp (KiCon p)
-  | FunKi
-    { fk_f :: FunKiFlag
-    , fk_arg :: MonoKind p
-    , fk_res :: MonoKind p
-    }
-  deriving Data.Data
-
-data BuiltInKi
-  = UKd
-  | AKd
-  | LKd
-  deriving (Show, Eq, Ord, Data.Data)
-
-data KiPredCon
-  = LTKi
-  | LTEQKi
-  | EQKi
-  deriving (Show, Eq, Ord, Data.Data)
-
-data KiCon p = KiCon
-  { kicon_name :: Maybe Name
-  , kicon_base :: MonoKind p
-  , kicon_rows :: [RowSig p] -- NonEmpty
-  }
-  deriving Data.Data
 
 type RowEnv p = RowEnv' (RowSig p)
 type ZipRowEnv p = RowEnv' (RowSig p, RowSig p)
@@ -159,16 +125,6 @@ kiConRowNames KiCon{ kicon_rows = rows }
   | otherwise
   = panic "kiConRowNames empty rows"
 
--- All ki vars present here should be bound elsewhere.
--- I.e., we have the invariant that there are no 'ForAllKi's at the head
--- of a RowTySig, and no ForAlls at the head of a kid sig, guaranteed by 'MonoKind'
--- This is useful/necessary for handling kivars properly during checking/unification/solving.
--- The first part of the invariant may not be as necessary as the second, but still makes like easier.
-data RowSig p
-  = RowTySig Name (Type p)
-  | RowKiSig Name (MonoKind p)
-  deriving Data.Data
-
 rowName :: RowSig p -> Name
 rowName (RowTySig n _) = n
 rowName (RowKiSig n _) = n
@@ -201,220 +157,6 @@ submult _ _ = False
 
 -- foldDKiConEnv :: (a -> b -> b) -> b -> DKiConEnv a -> b
 -- foldDKiConEnv = foldUDFM
-
-instance Uniquable BuiltInKi where
-  getUnique kc = getUnique $ mkFastString $ show kc
-
-instance Outputable BuiltInKi where
-  ppr UKd = uKindLit
-  ppr AKd = aKindLit
-  ppr LKd = lKindLit
-
-instance Uniquable KiPredCon where
-  getUnique pred = getUnique $ mkFastString $ show pred
-
-instance Outputable KiPredCon where
-  ppr LTKi = char '<'
-  ppr LTEQKi = text "<="
-  ppr EQKi = char '~'
-
-instance IsPass p => Outputable (Kind (CsPass p)) where
-  ppr = pprKind
-
-instance IsPass p => Outputable (MonoKind (CsPass p)) where
-  ppr = pprMonoKind
-
-instance IsPass p => Outputable (RowSig (CsPass p)) where
-  ppr = pprRowSig
-
-instance IsPass p => Outputable (KiCon (CsPass p)) where
-  ppr (KiCon nm base rows) = text "kind" <+> ppr nm <+> equals <+> ppr base <+> dot <> braces
-    (fsep (punctuate comma (map ppr rows)))
-
-instance Eq (MonoKind p) where
-  k1 == k2 = go k1 k2
-    where
-      go (BIKi k1) (BIKi k2) = k1 == k2
-      go (KiPredApp p1 ka1 kb1) (KiPredApp p2 ka2 kb2)
-        = p1 == p2 && ka1 == ka2 && kb1 == kb2
-      go (KiVarKi v) (KiVarKi v') = v == v'
-      go (FunKi v1 k1 k2) (FunKi v1' k1' k2') = (v1 == v1') && go k1 k1' && go k2 k2'
-      go _ _ = False
-
-      gos [] [] = True
-      gos (k1:ks1) (k2:ks2) = go k1 k2 && gos ks1 ks2
-      gos _ _ = False
-
-pprKind :: HasPass p pass => Kind p -> SDoc
-pprKind = pprPrecKind topPrec
-
-pprMonoKind :: HasPass p pass => MonoKind p -> SDoc
-pprMonoKind = pprPrecMonoKind topPrec
-
-pprParendMonoKind :: HasPass p pass => MonoKind p -> SDoc
-pprParendMonoKind = pprPrecMonoKind appPrec
-
-pprPrecKind :: HasPass p pass => PprPrec -> Kind p -> SDoc
-pprPrecKind = pprPrecKindX emptyTidyEnv
-
-pprPrecMonoKind :: HasPass p pass => PprPrec -> MonoKind p -> SDoc
-pprPrecMonoKind = pprPrecMonoKindX emptyTidyEnv
-
-pprPrecKindX :: HasPass p pass => TidyEnv p -> PprPrec -> Kind p -> SDoc
-pprPrecKindX env prec ki
-  = getPprStyle $ \sty ->
-    getPprDebug $ \debug ->
-    if debug
-    then debug_ppr_ki prec ki
-    else text "{pprKind not implemented}"--pprPrecIfaceKind prec (tidyToIfaceKindStyX env ty sty)
-
-pprPrecMonoKindX :: HasPass p pass => TidyEnv p -> PprPrec -> MonoKind p -> SDoc
-pprPrecMonoKindX env prec ki
-  = getPprStyle $ \sty ->
-    getPprDebug $ \debug ->
-    if debug
-    then debug_ppr_mono_ki prec ki
-    else text "{pprKind not implemented}"--pprPrecIfaceKind prec (tidyToIfaceKindStyX env ty sty)
-
-pprRowSig :: HasPass p pass => RowSig p -> SDoc
-pprRowSig = pprPrecRowSig topPrec
-
-pprPrecRowSig :: HasPass p pass => PprPrec -> RowSig p -> SDoc
-pprPrecRowSig = pprPrecRowSigX emptyTidyEnv
-
-pprPrecRowSigX :: HasPass p pass => TidyEnv p -> PprPrec -> RowSig p -> SDoc
-pprPrecRowSigX env prec ki
-  = getPprStyle $ \sty ->
-    getPprDebug $ \debug ->
-    if debug
-    then debug_ppr_row ki
-    else text "{pprRowSig not implemented}"--pprPrecIfaceKind prec (tidyToIfaceKindStyX env ty sty)
-
-pprKiCo :: HasPass p pass => KindCoercion p -> SDoc
-pprKiCo = pprPrecKiCo topPrec
-
-pprPrecKiCo :: HasPass p pass => PprPrec -> KindCoercion p -> SDoc
-pprPrecKiCo = pprPrecKiCoX emptyTidyEnv
-
-pprPrecKiCoX
-  :: HasPass p pass
-  => TidyEnv p
-  -> PprPrec
-  -> KindCoercion p
-  -> SDoc
-pprPrecKiCoX _ prec co = getPprStyle $ \sty ->
-                       getPprDebug $ \debug ->
-                       if debug
-                       then debug_ppr_ki_co prec co
-                       else panic "pprPrecKiCoX"
-
-debugPprKind :: HasPass p pass => Kind p -> SDoc
-debugPprKind ki = debug_ppr_ki topPrec ki
-
-debugPprMonoKind :: HasPass p pass => MonoKind p -> SDoc
-debugPprMonoKind ki = debug_ppr_mono_ki topPrec ki
-
-debug_ppr_ki :: HasPass p pass => PprPrec -> Kind p -> SDoc
-debug_ppr_ki prec (Mono ki) = debug_ppr_mono_ki prec ki
-debug_ppr_ki prec ki
-  | (bndrs, body) <- splitForAllKiVars ki
-  , not (null bndrs)
-  = maybeParen prec funPrec $ sep [ text "forall" <+> fsep (map (braces . ppr) bndrs) <> dot
-                                  , ppr body ]
-debug_ppr_ki _ _ = panic "debug_ppr_ki unreachable"
-
-debug_ppr_mono_ki :: HasPass p pass => PprPrec -> MonoKind p -> SDoc
-debug_ppr_mono_ki _ (KiVarKi kv) = ppr kv
-debug_ppr_mono_ki _ (BIKi ki) = ppr ki
-debug_ppr_mono_ki _ (KiConApp kc)
-  = debug_ppr_kicon kc
-debug_ppr_mono_ki prec ki@(KiPredApp pred k1 k2)
-  = maybeParen prec appPrec
-    $ debug_ppr_mono_ki appPrec k1 <+> ppr pred <+> debug_ppr_mono_ki appPrec k2
-debug_ppr_mono_ki prec (FunKi { fk_f = f, fk_arg = arg, fk_res = res })
-  = maybeParen prec funPrec
-    $ sep [ debug_ppr_mono_ki funPrec arg, fun_arrow <+> debug_ppr_mono_ki prec res]
-  where
-    fun_arrow = case f of
-                  FKF_C_K -> darrow
-                  FKF_K_K -> arrow
-
-debug_ppr_kicon :: HasPass p pass => KiCon p -> SDoc
-debug_ppr_kicon KiCon{..}
-  | Just name <- kicon_name
-  = ppr name <> angleBrackets (debug_ppr_kicon KiCon { kicon_name = Nothing, .. })
-  | otherwise
-  = debug_ppr_mono_ki appPrec kicon_base <+>
-    dot <> (braces (fsep (punctuate comma (map debug_ppr_row kicon_rows))))
-
-debug_ppr_row :: HasPass p pass => RowSig p -> SDoc
-debug_ppr_row (RowTySig name ty) = ppr name <+> colon <+> debugPprType ty
-debug_ppr_row (RowKiSig name ki) = text "type" <+> ppr name <+> colon <+> debugPprMonoKind ki
-
-debug_ppr_ki_co :: HasPass p pass => PprPrec -> KindCoercion p -> SDoc
-debug_ppr_ki_co _ (Refl ki) = angleBrackets (ppr ki)
-debug_ppr_ki_co _ BI_U_A = angleBrackets (text "UKd < AKd")
-debug_ppr_ki_co _ BI_A_L = angleBrackets (text "AKd < LKd")
-debug_ppr_ki_co _ (BI_U_LTEQ ki) = angleBrackets (text "UKd < " <> ppr ki)
-debug_ppr_ki_co _ (BI_LTEQ_L ki) = angleBrackets (ppr ki <> text " < LKd")
-debug_ppr_ki_co _ (LiftEq ki) = angleBrackets (text "LiftEq" <+> ppr ki)
-debug_ppr_ki_co _ (LiftLT ki) = angleBrackets (text "LiftLT" <+> ppr ki)
-debug_ppr_ki_co prec (FunCo _ _ co1 co2)
-  = maybeParen prec funPrec
-    $ sep (debug_ppr_ki_co funPrec co1 : ppr_fun_tail co2)
-  where
-    ppr_fun_tail (FunCo _ _ co1 co2)
-      = (arrow <+> debug_ppr_ki_co funPrec co1)
-        : ppr_fun_tail co2
-    ppr_fun_tail other = [ arrow <+> ppr other ]
-debug_ppr_ki_co prec (SymCo co) = maybeParen prec appPrec $ sep [ text "Sym"
-                                                                , nest 4 (ppr co) ]
-debug_ppr_ki_co prec (TransCo co1 co2)
-  = let ppr_trans (TransCo c1 c2) = semi <+> debug_ppr_ki_co topPrec c1 : ppr_trans c2
-        ppr_trans c = [semi <+> debug_ppr_ki_co opPrec c]
-  in maybeParen prec opPrec
-     $ vcat (debug_ppr_ki_co topPrec co1 : ppr_trans co2)
-debug_ppr_ki_co _ (HoleCo co) = ppr co
-debug_ppr_ki_co _ (KiCoVarCo cv) = ppr cv
-debug_ppr_ki_co _ (KiRowCo base rows)
-  = angleBrackets $
-    debug_ppr_ki_co topPrec base
-    <+> dot <> braces
-    (fsep (punctuate comma (map debug_ppr_row_co rows)))
-debug_ppr_ki_co _ _ = panic "debug_ppr_ki_co"
-
-debug_ppr_row_co :: HasPass p pass => RowCoercion p -> SDoc
-debug_ppr_row_co (RowTySigCo nm co) = ppr nm <+> equals <+> ppr co
-debug_ppr_row_co (RowKiSigCo nm co) = ppr nm <+> equals <+> ppr co
-
-data FunKiFlag
-  = FKF_K_K -- Kind -> Kind
-  | FKF_C_K -- Constraint -> Kind
-  deriving (Eq, Ord, Data.Data)
-
-instance Outputable FunKiFlag where
-  ppr FKF_K_K = text "[->]"
-  ppr FKF_C_K = text "[=>]"
-
-{- **********************************************************************
-*                                                                       *
-                        Kind FV instance
-*                                                                       *
-********************************************************************** -}
-
-instance HasFVs (Kind p) where
-  type FVInScope (Kind p) = KiVarSet p
-  type FVAcc (Kind p) = ([KiVar p], KiVarSet p)
-  type FVArg (Kind p) = KiVar p
-
-  fvElemAcc kv (_, haveSet) = kv `elemVarSet` haveSet
-  fvElemIS kv in_scope = kv `elemVarSet` in_scope
-
-  fvExtendAcc kv (have, haveSet) = (kv:have, extendVarSet haveSet kv)
-  fvExtendIS kv in_scope = extendVarSet in_scope kv
-
-  fvEmptyAcc = ([], emptyVarSet)
-  fvEmptyIS = emptyVarSet
 
 {- **********************************************************************
 *                                                                       *
@@ -471,45 +213,6 @@ mkPiKis kbs ki = foldr mkPiKi ki kbs
 *                                                                      *
 ********************************************************************* -}
 
-data KindCoercion p where
-  Refl :: (MonoKind p) -- refl : kv = kv
-    -> KindCoercion p
-  BI_U_A             -- builtin : u < a
-    :: KindCoercion p
-  BI_A_L             -- builtin : a < l
-    :: KindCoercion p
-  BI_U_LTEQ :: (MonoKind p)
-    -> KindCoercion p
-  BI_LTEQ_L :: (MonoKind p)
-    -> KindCoercion p
-  LiftEq :: (KindCoercion p) -- LiftEq : (kv = kv) -> (kv <= kv)
-    -> KindCoercion p
-  LiftLT :: (KindCoercion p) -- LiftLT : (kv1 < kv2) -> (kv1 <= kv2)
-    -> KindCoercion p
-  FunCo ::
-    { fco_afl :: FunKiFlag
-    , fco_afr :: FunKiFlag
-    , fco_arg :: KindCoercion p
-    , fco_res :: KindCoercion p }
-    -> KindCoercion p
-  -- KiPredAppCo :: KiPredCon -> KindCoercion p -> KindCoercion p -> KindCoercion p
-  KiRowCo :: KindCoercion p -> [RowCoercion p] -> KindCoercion p
-  KiCoVarCo :: (KiCoVar p) -> KindCoercion p
-  SymCo :: (KindCoercion p) -> KindCoercion p
-  TransCo :: (KindCoercion p) -> (KindCoercion p) -> KindCoercion p
-  SelCo :: CoSel -> (KindCoercion p) -> KindCoercion p
-  HoleCo :: KindCoercionHole -> KindCoercion Tc
-
-instance (Data.Typeable p) => Data.Data (KindCoercion p) where
-  toConstr _ = abstractConstr "KindCoercion"
-  gunfold _ _ = error "gunfold"
-  dataTypeOf _ = mkNoRepType "KindCoercion"
-
-data RowCoercion p
-  = RowTySigCo Name (TypeCoercion p)
-  | RowKiSigCo Name (KindCoercion p)
-  deriving Data.Data
-
 mkReflRowCo :: RowSig p -> RowCoercion p 
 mkReflRowCo (RowTySig nm ty) = RowTySigCo nm (mkReflTyCo ty)
 mkReflRowCo (RowKiSig nm ki) = RowKiSigCo nm (mkReflKiCo ki)
@@ -531,40 +234,8 @@ mkKiRowCo base rs
   | otherwise
   = KiRowCo base rs
 
-data KindCoercionHole = KindCoercionHole
-  { kch_co_var :: TcKiCoVar
-  , kch_ref :: IORef (Maybe (KindCoercion Tc))
-  }
-
-data CoSel
-  = SelFun FunSel
-  deriving Data.Data
-
-data FunSel = SelArg | SelRes
-  deriving Data.Data
-
-instance Outputable CoSel where
-  ppr (SelFun fs) = text "Fun" <> parens (ppr fs)
-
-instance Outputable FunSel where
-  ppr SelArg = text "arg"
-  ppr SelRes = text "res"
-
-instance Data.Data KindCoercionHole where
-  toConstr _ = abstractConstr "KindCoercionHole"
-  gunfold _ _ = error "gunfold"
-  dataTypeOf _ = mkNoRepType "KindCoercionHole"
-
 coHoleCoVar :: KindCoercionHole -> TcKiCoVar 
 coHoleCoVar = kch_co_var
-
-isReflKiCo :: KindCoercion p -> Bool
-isReflKiCo (Refl{}) = True
-isReflKiCo _ = False
-
-isReflKiCo_maybe :: KindCoercion p -> Maybe (MonoKind p)
-isReflKiCo_maybe (Refl ki) = Just ki
-isReflKiCo_maybe _ = Nothing
 
 mkSelCo
   :: (HasDebugCallStack, HasPass p pass) => CoSel -> KindCoercion p -> KindCoercion p
@@ -609,9 +280,6 @@ selectFromKind  (SelFun SelRes) ki
   | Just (_, _, res) <- splitMonoFunKi_maybe ki
   = res
 selectFromKind cs ki = pprPanic "selectFromKind" (ppr cs $$ ppr ki)
-
-mkReflKiCo :: MonoKind kv -> KindCoercion kv
-mkReflKiCo ki = Refl ki
 
 mkSymKiCo :: KindCoercion kv -> KindCoercion kv
 mkSymKiCo co | isReflKiCo co = co
@@ -735,15 +403,6 @@ kicoercionRKind co = go co
     go (SelCo d co) = selectFromKind d (go co)
     go (HoleCo h) = coVarRKind (coHoleCoVar h)
 
-instance IsPass p => Outputable (KindCoercion (CsPass p)) where
-  ppr = pprKiCo
-
-instance  Outputable KindCoercionHole where
-  ppr (KindCoercionHole { kch_co_var = cv }) = braces (ppr cv)
-
-instance Uniquable KindCoercionHole where
-  getUnique (KindCoercionHole { kch_co_var = cv }) = getUnique cv
-
 kiCoVarKiPred :: (HasDebugCallStack, Outputable cv, VarHasKind cv p, HasPass p pass) => cv -> KiPredCon
 kiCoVarKiPred cv | (kc, _, _) <- coVarKinds cv = kc
 
@@ -786,224 +445,6 @@ type PredKind = MonoKind
 isKiCoVarKind :: MonoKind kv -> Bool
 isKiCoVarKind (KiPredApp {}) = True
 isKiCoVarKind _ = False
-
-{- *********************************************************************
-*                                                                      *
-                foldKiCo
-*                                                                      *
-********************************************************************* -}
-
-data KiCoFolder p env a = KiCoFolder
-  { kcf_kibinder :: env -> KiVar p -> env
-  , kcf_mkcf :: MKiCoFolder p env a
-  }
-
-data MKiCoFolder p env a = MKiCoFolder
-  { mkcf_kivar :: env -> KiVar p -> a
-  , mkcf_covar :: env -> KiCoVar p -> a
-  , mkcf_hole :: env -> KindCoercionHole -> a
-  }
-
-noKindView :: a -> Maybe a
-noKindView _ = Nothing
-
-{-# INLINE foldKind #-}
-foldKind
-  :: Monoid a
-  => KiCoFolder p env a
-  -> env
-  -> (Kind p -> a, [Kind p] -> a)
-foldKind (KiCoFolder { kcf_kibinder = kibinder
-                     , kcf_mkcf = mkcfolder
-                     }) env
-  = (go_ki env, go_kis env)
-  where
-    go_ki env (Mono ki) = go_mki ki
-      where
-        (go_mki, _, _, _) = foldMonoKiCo mkcfolder env
-    go_ki env (ForAllKi kv inner)
-      = let !env' = kibinder env kv
-        in go_ki env' inner
-
-    go_kis _ [] = mempty
-    go_kis env (k:ks) = go_ki env k `mappend` go_kis env ks
-
-{-# INLINE foldMonoKiCo #-}
-foldMonoKiCo
-  :: Monoid a
-  => MKiCoFolder p env a
-  -> env
-  -> (MonoKind p -> a, [MonoKind p] -> a, KindCoercion p -> a, [KindCoercion p] -> a)
-foldMonoKiCo (MKiCoFolder { mkcf_kivar = kivar
-                          , mkcf_covar = covar
-                          , mkcf_hole = cohole }) env
-  = (go_ki env, go_kis env, go_co env, go_cos env)
-  where
-    go_ki env (KiVarKi kv) = kivar env kv
-    go_ki env (BIKi _) = mempty
-    go_ki env (FunKi _ arg res) = go_ki env arg `mappend` go_ki env res
-    go_ki env (KiPredApp _ k1 k2) = go_ki env k1 `mappend` go_ki env k2
-    go_ki env (KiConApp{}) = panic "go_ki kiconapp"
-
-    go_kis _ [] = mempty
-    go_kis env (k:ks) = go_ki env k `mappend` go_kis env ks
-
-    go_cos _ [] = mempty
-    go_cos env (c:cs) = go_co env c `mappend` go_cos env cs
-
-    go_co env (Refl ki) = go_ki env ki
-    go_co env BI_U_A = mempty
-    go_co env BI_A_L = mempty
-    go_co env (BI_U_LTEQ ki) = go_ki env ki
-    go_co env (BI_LTEQ_L ki) = go_ki env ki
-    go_co env (LiftEq co) = go_co env co
-    go_co env (LiftLT co) = go_co env co
-    go_co env (HoleCo hole) = cohole env hole
-    go_co env (FunCo { fco_arg = c1, fco_res = c2 }) = go_co env c1 `mappend` go_co env c2
-    go_co env (SelCo _ co) = go_co env co
-    go_co env (KiCoVarCo cv) = covar env cv
-
-    go_co env (SymCo co) = go_co env co
-    go_co env (TransCo c1 c2) = go_co env c1 `mappend` go_co env c2
-
-{- *********************************************************************
-*                                                                      *
-                mapKiCo
-*                                                                      *
-********************************************************************* -}
-
-data KiCoMapper p p' env m = KiCoMapper
-  { kcm_kibinder :: forall r. env -> KiVar p -> (env -> KiVar p' -> m r) -> m r
-  , kcm_mkcm :: MKiCoMapper p p' env m
-  }
-
-data MKiCoMapper p p' env m = MKiCoMapper
-  { mkcm_kivar :: env -> KiVar p -> m (MonoKind p')
-  , mkcm_covar :: env -> KiCoVar p -> m (KindCoercion p')
-  , mkcm_hole :: env -> KindCoercionHole -> m (KindCoercion p')
-  }
-
-{-# INLINE mapKind #-}
-mapKind
-  :: (Monad m, HasPass p' pass')
-  => KiCoMapper p p' () m
-  -> ( Kind p -> m (Kind p')
-     , [Kind p] -> m [Kind p'] )
-mapKind mapper = case mapKindX mapper of
-  (go_ki, go_kis) -> (go_ki (), go_kis ())
-
-{-# INLINE mapMKiCo #-}
-mapMKiCo
-  :: (Monad m, HasPass p' pass')
-  => MKiCoMapper p p' () m
-  -> ( MonoKind p -> m (MonoKind p')
-     , [MonoKind p] -> m [MonoKind p']
-     , KindCoercion p -> m (KindCoercion p')
-     , [KindCoercion p] -> m [KindCoercion p'] )
-mapMKiCo mapper = case mapMKiCoX mapper of
-  (go_ki, go_kis, go_co, go_cos) -> (go_ki (), go_kis (), go_co (), go_cos ())
-
-{-# INLINE mapKindX #-}
-mapKindX
-  :: (Monad m, HasPass p' pass')
-  => KiCoMapper p p' env m
-  -> ( env -> Kind p -> m (Kind p')
-     , env -> [Kind p] -> m [Kind p'] )
-mapKindX (KiCoMapper { kcm_kibinder = kibinder, kcm_mkcm = mkcmapper })
-  = (go_ki, go_kis)
-  where
-    go_kis !_ [] = return []
-    go_kis !env (ki:kis) = (:) <$> go_ki env ki <*> go_kis env kis
-
-    (go_mki, _, _, _) = mapMKiCoX mkcmapper
-
-    go_ki !env (Mono ki) = do
-      ki' <- go_mki env ki
-      return $ Mono ki'
-    go_ki !env (ForAllKi kv inner) = do
-      kibinder env kv $ \env' kv' -> do
-        inner' <- go_ki env' inner
-        return $ ForAllKi kv' inner'
-
-{-# INLINE mapMKiCoX #-}
-mapMKiCoX
-  :: (Monad m, HasPass p' pass')
-  => MKiCoMapper p p' env m
-  -> ( env -> MonoKind p -> m (MonoKind p')
-     , env -> [MonoKind p] -> m [MonoKind p']
-     , env -> KindCoercion p -> m (KindCoercion p')
-     , env -> [KindCoercion p] -> m [KindCoercion p'] )
-mapMKiCoX (MKiCoMapper { mkcm_kivar = kivar, mkcm_covar = covar, mkcm_hole = cohole })
-  = (go_mki, go_mkis, go_co, go_cos)
-  where    
-    go_mkis !_ [] = return []
-    go_mkis !env (ki:kis) = (:) <$> go_mki env ki <*> go_mkis env kis
-
-    go_mki !env (KiVarKi kv) = kivar env kv
-    go_mki !env (BIKi k) = return $ BIKi k
-    go_mki !env (KiConApp (KiCon nm base rows)) = do
-      base' <- go_mki env base
-      rows' <- go_rows env rows
-      return $ KiConApp $ KiCon nm base' rows'
-    go_mki !env (KiPredApp pred ki1 ki2)
-      = mkKiPredApp pred <$> go_mki env ki1 <*> go_mki env ki2
-    go_mki !env ki@(FunKi _ arg res) = do
-      arg' <- go_mki env arg
-      res' <- go_mki env res
-      return ki { fk_arg = arg', fk_res = res' }
-
-    go_rows !_ [] = return []
-    go_rows !env (r:rs) = (:) <$> go_row env r <*> go_rows env rs
-
-    go_row !env (RowTySig nm ty) = return $ RowTySig nm (panic "mapMKiCoX RowTySig")
-    go_row !env (RowKiSig nm ki) = RowKiSig nm <$> go_mki env ki
-
-    go_cos !_ [] = return []
-    go_cos !env (co:cos) = (:) <$> go_co env co <*> go_cos env cos
-
-    go_co !env (Refl ki) = Refl <$> go_mki env ki
-    go_co !env BI_U_A = return BI_U_A
-    go_co !env BI_A_L = return BI_A_L
-    go_co !env (BI_U_LTEQ ki) = BI_U_LTEQ <$> go_mki env ki
-    go_co !env (BI_LTEQ_L ki) = BI_LTEQ_L <$> go_mki env ki
-    go_co !env (LiftEq co) = LiftEq <$> go_co env co
-    go_co !env (LiftLT co) = LiftLT <$> go_co env co
-
-    go_co !env (FunCo afl afr c1 c2) = mkFunKiCo2 afl afr <$> go_co env c1 <*> go_co env c2
-
-    go_co !env (KiCoVarCo cv) = covar env cv
-    go_co !env (HoleCo hole) = cohole env hole
-
-    go_co !env (SymCo co) = mkSymKiCo <$> go_co env co
-    go_co !env (TransCo c1 c2) = mkTransKiCo <$> go_co env c1 <*> go_co env c2
-    go_co !env (SelCo i co) = mkSelCo i <$> go_co env co
-
-closedKind :: HasPass p' pass' => Kind p -> Maybe (Kind p')
-closedKind = case mapKind kcvClosedMapper of
-               (f, _) -> f
-
-closedMonoKind :: HasPass p' pass' => MonoKind p -> Maybe (MonoKind p')
-closedMonoKind = case mapMKiCo mkcvClosedMapper of
-                   (f, _, _, _) -> f
-
-closedMonoKinds :: HasPass p' pass' => [MonoKind p] -> Maybe [MonoKind p']
-closedMonoKinds = case mapMKiCo mkcvClosedMapper of
-                    (_, f, _, _) -> f
-
-closedKiCo :: HasPass p' pass' => KindCoercion p -> Maybe (KindCoercion p')
-closedKiCo = case mapMKiCo mkcvClosedMapper of
-               (_, _, f, _) -> f
-
-kcvClosedMapper :: KiCoMapper p p' () Maybe
-kcvClosedMapper = KiCoMapper { kcm_kibinder = \_ _ _ -> panic "kcvClosedMapper"
-                             , kcm_mkcm = mkcvClosedMapper
-                             }
-
-mkcvClosedMapper :: MKiCoMapper p p' () Maybe
-mkcvClosedMapper = MKiCoMapper { mkcm_kivar = \_ _ -> Nothing
-                               , mkcm_covar = \_ _ -> Nothing
-                               , mkcm_hole = \_ _ -> panic "impossible"
-                               }
 
 {- *********************************************************************
 *                                                                      *
@@ -1103,12 +544,6 @@ splitForAllKi_maybe :: Kind p -> Maybe (KiVar p, Kind p)
 splitForAllKi_maybe ki = case ki of
   ForAllKi kv ki -> Just (kv, ki)
   _ -> Nothing
-
-splitForAllKiVars :: Kind p -> ([KiVar p], MonoKind p)
-splitForAllKiVars ki = split ki []
-  where
-    split (ForAllKi kv ki) kvs = split ki (kv:kvs)
-    split (Mono mki) kvs = (reverse kvs, mki)
 
 invisibleKiBndrCount :: MonoKind kv -> Int
 invisibleKiBndrCount ki = length (fst (splitInvisFunKis ki))

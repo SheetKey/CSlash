@@ -9,7 +9,6 @@ import Prelude hiding ((<>))
 
 import CSlash.Builtin.Types
 
-import CSlash.Core.Type.Ppr ( pprTyVar )
 import CSlash.Core.Subst (unsafeTcToZkType)
 
 import CSlash.Cs
@@ -33,9 +32,9 @@ import CSlash.Tc.Zonk.TcType
        , checkTyCoercionHole )
 
 import CSlash.Core.Type
-import CSlash.Core.Type.Rep (mkNakedTyConTy, TypeCoercion, TypeCoercionHole(..))
 import CSlash.Core.Kind
 import CSlash.Core.TyCon
+import CSlash.Core.Mapper
 
 import CSlash.Utils.Outputable
 import CSlash.Utils.Misc
@@ -193,21 +192,25 @@ zonkTyCoHole hole@(TypeCoercionHole { tch_ref = ref, tch_co_var = cv }) = do
                   return co'
     Nothing -> panic "zonkTyCoHole"
 
-zonk_typemapper :: TyCoMapper Tc Zk ZonkEnv TcM
-zonk_typemapper = TyCoMapper
-  { tm_tyvar = \env tv -> runZonkT (zonkTyVarOcc tv) env
-  , tm_covar = \env cv -> runZonkT (zonkTyCoVarOcc cv) env
-  , tm_hole = \env co -> runZonkT (zonkTyCoHole co) env
-  , tm_tybinder = \env tv _ k -> flip runZonkT env $ runZonkBndrT (zonkTyBndrX tv)
+zonk_mapper :: CoreMapper Tc Zk ZonkEnv TcM
+zonk_mapper = CoreMapper
+  { cm_tv = \env tv -> runZonkT (zonkTyVarOcc tv) env
+  , cm_tcv = \env cv -> runZonkT (zonkTyCoVarOcc cv) env
+  , cm_kv = \env kv -> runZonkT (zonkKiVarOcc kv) env
+  , cm_kcv = \env cv -> runZonkT (zonkKiCoVarOcc cv) env
+  , cm_thole = \env co -> runZonkT (zonkTyCoHole co) env
+  , cm_khole = \env co -> runZonkT (zonkKiCoHole co) env
+  , cm_fa_tv = \env tv _ k -> flip runZonkT env $ runZonkBndrT (zonkTyBndrX tv)
                                  $ \tv' -> ZonkT $ \env' -> (k env' tv')
-  , tm_kicobinder = \env kcv k -> flip runZonkT env $ runZonkBndrT (zonkKiCoBndrX kcv)
+  , cm_fa_kcv = \env kcv k -> flip runZonkT env $ runZonkBndrT (zonkKiCoBndrX kcv)
                                   $ \kcv' -> ZonkT $ \env' -> (k env' kcv')
-  , tm_tylambinder = \env tv k -> flip runZonkT env $ runZonkBndrT (zonkTyBndrX tv)
+  , cm_fa_kv = \env kv k -> flip runZonkT env $ runZonkBndrT (zonkKiBndrX kv)
+                            $ \kv' -> ZonkT $ \env' -> (k env' kv')
+  , cm_lam_tv = \env tv k -> flip runZonkT env $ runZonkBndrT (zonkTyBndrX tv)
                                   $ \tv' -> ZonkT $ \env' -> (k env' tv')
-  , tm_tylamkibinder = \env kv k -> flip runZonkT env $ runZonkBndrT (zonkKiBndrX kv)
+  , cm_lam_kv = \env kv k -> flip runZonkT env $ runZonkBndrT (zonkKiBndrX kv)
                                     $ \kv' -> ZonkT $ \env' -> (k env' kv')
-  , tm_tycon = \tc -> zonkTcTyConToTyCon tc
-  , tm_mkcm = zonk_mkindmapper
+  , cm_tycon = \tc -> zonkTcTyConToTyCon tc
   }
 
 zonkTcTyConToTyCon :: TyCon Tc -> TcM (TyCon Zk)
@@ -233,8 +236,19 @@ zonkTcTyConToTyCon tc@(TyCon {..}) = case tyConDetails of
 zonkTcTypeToTypeX :: Type Tc -> ZonkTcM (Type Zk)
 zonkTcTypesToTypesX :: [Type Tc] -> ZonkTcM [Type Zk]
 zonkTyCoToTyCo :: TypeCoercion Tc -> ZonkTcM (TypeCoercion Zk)
-(zonkTcTypeToTypeX, zonkTcTypesToTypesX, zonkTyCoToTyCo) = case mapTyCoX zonk_typemapper of
-  (zty, ztys, zco, _) -> (ZonkT . flip zty, ZonkT . flip ztys, ZonkT . flip zco)
+zonkTcMonoKindToMonoKindX :: MonoKind Tc -> ZonkTcM (MonoKind Zk)
+zonkTcMonoKindsToMonoKindsX :: [MonoKind Tc] -> ZonkTcM [MonoKind Zk]
+zonkTcKindToKindX :: Kind Tc -> ZonkTcM (Kind Zk)
+zonkTcKindsToKindsX :: [Kind Tc] -> ZonkTcM [Kind Zk]
+zonkKiCoToCo :: KindCoercion Tc -> ZonkTcM (KindCoercion Zk)
+(zonkTcTypeToTypeX, zonkTcTypesToTypesX, zonkTyCoToTyCo, 
+  zonkTcMonoKindToMonoKindX, zonkTcMonoKindsToMonoKindsX,
+  zonkTcKindToKindX, zonkTcKindsToKindsX, zonkKiCoToCo)
+  = case mapCoreX zonk_mapper of
+  (zty, ztys, ztco, _, zmki, zmkis, zki, zkis, zkco, _)
+    -> ( ZonkT . flip zty, ZonkT . flip ztys, ZonkT . flip ztco
+       , ZonkT . flip zmki, ZonkT . flip zmkis
+       , ZonkT . flip zki, ZonkT . flip zkis, ZonkT . flip zkco)
 
 zonkKiVarOcc :: HasDebugCallStack => KiVar Tc -> ZonkTcM (MonoKind Zk)
 zonkKiVarOcc (TcKiVar tckv) = f_tc tckv
@@ -346,35 +360,8 @@ zonkKiCoHole hole@(KindCoercionHole { kch_ref = ref, kch_co_var = cv }) = do
       return co'
     Nothing -> panic "zonkKiCoHole"
 
-zonk_kindmapper :: KiCoMapper Tc Zk ZonkEnv TcM
-zonk_kindmapper = KiCoMapper
-  { kcm_kibinder = \env kv k -> flip runZonkT env $ runZonkBndrT (zonkKiBndrX kv)
-                               $ \kv' -> ZonkT $ \env' -> (k env' kv')
-  , kcm_mkcm = zonk_mkindmapper
-  }
-
-zonk_mkindmapper :: MKiCoMapper Tc Zk ZonkEnv TcM
-zonk_mkindmapper = MKiCoMapper
-  { mkcm_kivar = \env kv -> runZonkT (zonkKiVarOcc kv) env
-  , mkcm_covar = \env cv -> runZonkT (zonkKiCoVarOcc cv) env
-  , mkcm_hole = \env co -> runZonkT (zonkKiCoHole co) env
-  }
-
 zonkTcKindToKind :: Kind Tc -> TcM (Kind Zk)
 zonkTcKindToKind ki = initZonkEnv DefaultFlexiKi $ zonkTcKindToKindX ki
-
-zonkTcKindToKindX :: Kind Tc -> ZonkTcM (Kind Zk)
-zonkTcKindsToKindsX :: [Kind Tc] -> ZonkTcM [Kind Zk]
-(zonkTcKindToKindX, zonkTcKindsToKindsX) = case mapKindX zonk_kindmapper of
-  (zki, zkis) -> (ZonkT . flip zki, ZonkT . flip zkis)
-
-zonkTcMonoKindToMonoKindX :: MonoKind Tc -> ZonkTcM (MonoKind Zk)
-zonkTcMonoKindsToMonoKindsX :: [MonoKind Tc] -> ZonkTcM [MonoKind Zk]
-zonkKiCoToCo :: KindCoercion Tc -> ZonkTcM (KindCoercion Zk)
-(zonkTcMonoKindToMonoKindX, zonkTcMonoKindsToMonoKindsX, zonkKiCoToCo)
-  = case mapMKiCoX zonk_mkindmapper of
-      (zki, zkis, zco, _) ->
-        (ZonkT . flip zki, ZonkT . flip zkis, ZonkT . flip zco)
 
 zonkEnvIds :: ZonkEnv -> TypeEnv
 zonkEnvIds (ZonkEnv { ze_id_env = id_env })
@@ -779,14 +766,14 @@ zonkRewriterSet (KiRewriterSet set) = nonDetStrictFoldUniqSet go (return emptyKi
       m_co <- unpackKiCoercionHole_maybe hole
       case m_co of
         Nothing -> return $ unitKiRewriterSet hole
-        Just co -> unUCHM (check_co co)
+        Just co -> panic "unUCHM (check_co co)"
 
     -- check_ki :: MonoKind -> UnfilledCoercionHoleMonoid
     -- check_co :: KindCoercion -> UnfilledCoercionHoleMonoid
-    (check_ki, _, check_co, _) = foldMonoKiCo folder ()
+    -- (check_ki, _, check_co, _) = foldCore folder ()
 
     --folder :: MKiCoFolder () UnfilledCoercionHoleMonoid
-    folder = panic "folder"
+    -- folder = panic "folder"
       -- MKiCoFolder { kcf_kivar = \_ _ -> mempty
       --                    , kcf_covar = \_ cv -> check_ki (varKind cv)
       --                    , kcf_hole = \_ -> UCHM . check_hole }

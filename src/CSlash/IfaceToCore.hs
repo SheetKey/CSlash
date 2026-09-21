@@ -26,7 +26,6 @@ import CSlash.Core.Type
 -- import GHC.Core.Coercion
 -- import GHC.Core.Coercion.Axiom
 -- import CSlash.Core.FVs
-import CSlash.Core.Type.Rep    -- needs to build types & coercions in a knot
 -- import GHC.Core.TyCo.Subst ( substTyCoVars )
 -- import GHC.Core.InstEnv
 -- import GHC.Core.FamInstEnv

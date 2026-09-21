@@ -18,7 +18,6 @@ import CSlash.Cs
 import CSlash.Core.Predicate
 import CSlash.Core ( Expr(..) ) 
 import CSlash.Core.Type
-import CSlash.Core.Type.Ppr
 import CSlash.Core.Type.FVs
 import CSlash.Core.Subst
 import CSlash.Core.Kind

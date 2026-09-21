@@ -20,8 +20,7 @@ import CSlash.Core.Utils
 import CSlash.Core.Ppr
 -- import GHC.Core.Unify as Unify ( ruleMatchTyKiX )
 import CSlash.Core.Type as Type
-  ( Type, MTypeCoercion, getTyVar_maybe, tcSplitTyConApp_maybe )
-import CSlash.Core.Type.Ppr( pprParendType )
+  ( Type, MTypeCoercion, getTyVar_maybe, tcSplitTyConApp_maybe, pprParendType )
 -- import CSlash.Core.Tidy     ( tidyRules )
 -- import GHC.Core.Map.Expr ( eqCoreExpr )
 import CSlash.Core.Opt.Arity( etaExpandToJoinPointRule )

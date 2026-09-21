@@ -5,10 +5,8 @@ module CSlash.Core.Type.Subst where
 import Prelude hiding ((<>))
 
 import {-# SOURCE #-} CSlash.Core.Type ( mkAppTy, mkTyConApp, mkCastTy )
-import {-# SOURCE #-} CSlash.Core.Type.Ppr ( pprTyVar )
 import {-# SOURCE #-} CSlash.Core ( CoreExpr )
 
-import CSlash.Core.Type.Rep
 import CSlash.Core.Type.FVs
 import CSlash.Core.Kind
 import CSlash.Core.Subst

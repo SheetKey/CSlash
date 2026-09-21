@@ -2,7 +2,7 @@ module CSlash.Tc.Solver.Irred where
 
 import CSlash.Cs.Pass
 
-import CSlash.Core.Type.Rep (TypeCoercion, mkSymTyCo)
+import CSlash.Core.Type (TypeCoercion, mkSymTyCo)
 import CSlash.Core.Kind (KindCoercion, mkSymKiCo)
 
 import CSlash.Tc.Types.Constraint

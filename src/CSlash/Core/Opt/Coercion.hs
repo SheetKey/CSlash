@@ -4,7 +4,6 @@ import CSlash.Cs.Pass
 
 -- import CSlash.Tc.Utils.TcType   ( exactTyCoVarsOfType )
 
-import CSlash.Core.Type.Rep
 import CSlash.Core.Subst
 import CSlash.Core.Type.Compare( eqType )
 -- import GHC.Core.Coercion

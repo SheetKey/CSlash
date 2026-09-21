@@ -25,7 +25,6 @@ import CSlash.Types.Var.Id.Info
 import CSlash.Core.DataCon
 import CSlash.Types.Name hiding (varName)
 import CSlash.Core.Type
-import CSlash.Core.Type.Rep
 import CSlash.Tc.Utils.TcType
 import CSlash.Core.TyCon
 import CSlash.Types.RepType

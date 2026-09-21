@@ -18,8 +18,6 @@ import CSlash.Types.Basic
 import CSlash.Types.Var.Set
 import CSlash.Types.Var
 import CSlash.Core.Type
-import CSlash.Core.Type.Rep hiding (E3(..))
-import qualified CSlash.Core.Type.Rep as TFV
 import CSlash.Core.Type.FVs
 import CSlash.Core.Kind
 import CSlash.Core.Kind.FVs

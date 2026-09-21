@@ -18,7 +18,6 @@ import CSlash.Types.Var
 import CSlash.Core.Ppr ()   -- Instance OutputableBndr TyVar
 import CSlash.Tc.Utils.TcType
 import CSlash.Core.Type
-import CSlash.Core.Type.Rep (TypeCoercion, mkReflTyCo, isReflTyCo, mkSymTyCo)
 import CSlash.Core.Type.FVs
 import CSlash.Core.Kind
 import CSlash.Core.TyCon

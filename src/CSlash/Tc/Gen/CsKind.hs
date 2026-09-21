@@ -21,8 +21,6 @@ import CSlash.Tc.Utils.TcType
 import CSlash.Tc.Zonk.TcType
 
 import CSlash.Core.Type
-import CSlash.Core.Type.Rep
-import CSlash.Core.Type.Ppr
 import CSlash.Core.Kind
 import CSlash.Core.Kind.FVs
 import CSlash.Core.Subst

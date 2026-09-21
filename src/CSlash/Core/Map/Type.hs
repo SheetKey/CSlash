@@ -10,7 +10,6 @@ import CSlash.Cs.Pass
 
 import CSlash.Core as C
 import CSlash.Core.Type hiding (tm_tycon)
-import CSlash.Core.Type.Rep
 import CSlash.Core.Kind
 import CSlash.Core.TyCon( isForgetfulSynTyCon )
 import CSlash.Data.TrieMap

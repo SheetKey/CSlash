@@ -2,7 +2,7 @@
 {-# LANGUAGE RoleAnnotations #-}
 
 module CSlash.Core.Kind where
-
+{-
 import CSlash.Cs.Pass
 
 import CSlash.Utils.Outputable 
@@ -30,3 +30,4 @@ instance Outputable FunKiFlag
 pprKind :: HasPass p pass => Kind p -> SDoc
 
 isKiCoVarKind :: MonoKind p -> Bool
+-}

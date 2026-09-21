@@ -21,7 +21,6 @@ import CSlash.Tc.Types.Evidence
 import CSlash.Tc.Utils.Monad
 import CSlash.Core.Type
 import CSlash.Core.Kind
-import CSlash.Core.Type.Rep
 import CSlash.Core as Core
 import CSlash.Core.Utils
 import CSlash.Core.Make

@@ -6,7 +6,7 @@ import Prelude hiding ((<>))
 
 import CSlash.Cs.Pass
 
-import CSlash.Core.Type.Rep
+import CSlash.Core.Rep (Type)
 import CSlash.Types.Unique
 import CSlash.Types.Unique.DSet
 import CSlash.Core.ConLike

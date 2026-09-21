@@ -74,7 +74,6 @@ import CSlash.Core.Subst
 -- import GHC.Core.InstEnv
 import CSlash.Core.TyCon
 import CSlash.Core.DataCon
-import CSlash.Core.Type.Rep
 import CSlash.Core.Type
 import CSlash.Core.Type.Tidy
 import CSlash.Core.Kind

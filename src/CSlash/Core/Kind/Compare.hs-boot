@@ -2,7 +2,7 @@ module CSlash.Core.Kind.Compare where
 
 import CSlash.Cs.Pass
 
-import {-# SOURCE #-} CSlash.Core.Kind (Kind, MonoKind)
+import {-# SOURCE #-} CSlash.Core.Rep (Kind, MonoKind)
 import CSlash.Utils.Misc (HasCallStack, HasDebugCallStack)
 
 tcEqKind :: (HasDebugCallStack, HasPass p p') => Kind p -> Kind p -> Bool

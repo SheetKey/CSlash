@@ -51,7 +51,6 @@ import CSlash.Core.TyCon
 -- import CSlash.Core.TyCon.RecWalk
 import CSlash.Builtin.Names
 import CSlash.Builtin.Types
-import CSlash.Core.Type.Rep
 -- import CSlash.Core.Subst (elemSubst)
 import CSlash.Core.Type
 -- import CSlash.Tc.Solver   (tcNormalise, tcCheckGivens, tcCheckWanteds)

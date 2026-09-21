@@ -8,7 +8,6 @@ import CSlash.Cs.Pass
 import CSlash.Core.Type
   ( typeKind, coreView, tcSplitAppTyNoView_maybe, splitAppTyNoView_maybe, tycoercionTypes )
 
-import CSlash.Core.Type.Rep
 import CSlash.Core.Type.FVs
 import CSlash.Core.TyCon
 import CSlash.Core.Kind

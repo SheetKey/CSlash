@@ -22,9 +22,7 @@ import CSlash.Builtin.Names
 import CSlash.Core.ConLike
 import CSlash.Core.DataCon
 import CSlash.Core.Type
-import CSlash.Core.Type.Rep
-import CSlash.Core.Type.Ppr
-import CSlash.Core.Type.Ppr
+import CSlash.Core.Type.FVs
 import CSlash.Core.Subst
 import CSlash.Core.Kind
 import CSlash.Core.Kind.FVs

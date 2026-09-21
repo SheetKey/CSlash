@@ -9,7 +9,6 @@ import CSlash.Builtin.Names
 import CSlash.Core
 import CSlash.Core.Type
 import CSlash.Core.Kind
-import CSlash.Core.Type.Rep
 import CSlash.Core.TyCon
 import CSlash.Core.DataCon
 import CSlash.Core.Unfold.Make

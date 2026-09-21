@@ -36,19 +36,20 @@ module CSlash.Core.Type
   , binderVar, binderVars
 
   , module CSlash.Core.Type
+  , module CSlash.Core.Rep
   ) where
 
 import CSlash.Types.Basic
 
 import CSlash.Cs.Pass
 
-import CSlash.Core.Type.Rep
 import {-# SOURCE #-} CSlash.Core.Subst
+import CSlash.Core.Rep
 import CSlash.Core.Type.FVs
 
 import CSlash.Core.Kind
 import CSlash.Core.Kind.Compare
-import CSlash.Core.Kind.FVs
+-- import CSlash.Core.Kind.FVs
 
 import CSlash.Types.Var.TyVar
 import CSlash.Types.Var.KiVar
@@ -83,205 +84,15 @@ import CSlash.Data.Maybe ( orElse, isJust, firstJust, fromJust )
 import Data.Bifunctor (bimap)
 import Control.Monad ((>=>))
 
-{- *********************************************************************
-*                                                                      *
-                Type representation
-*                                                                      *
-********************************************************************* -}
+{- **********************************************************************
+*                                                                       *
+                        Type
+*                                                                       *
+********************************************************************** -}
 
-rewriterView :: HasPass p pass => Type p -> Maybe (Type p)
-rewriterView (TyConApp tc tys)
-  | isTypeSynonymTyCon tc
-  , isForgetfulSynTyCon tc
-  = expandSynTyConApp_maybe tc tys
-rewriterView ty@(AppTy{}) = expandTyLamApp_maybe ty isForgetfulTy
-rewriterView _ = Nothing
-{-# INLINE rewriterView #-}
+type PredType = Type
 
-coreView :: HasPass p pass => Type p -> Maybe (Type p)
-coreView (TyConApp tc tys) = expandSynTyConApp_maybe tc tys
-coreView ty@(AppTy{}) = expandTyLamApp_maybe ty (const True)
-coreView _ = Nothing
-{-# INLINE coreView #-}
-
-coreFullView :: HasPass p pass => Type p -> Type p
-coreFullView ty@(TyConApp tc _)
-  | isTypeSynonymTyCon tc = core_full_view ty
-coreFullView ty@(AppTy{}) = core_full_view ty
-coreFullView ty = ty
-{-# INLINE coreFullView #-}
-
-core_full_view :: HasPass p pass => Type p -> Type p
-core_full_view ty
-  | Just ty' <- coreView ty = core_full_view ty'
-  | otherwise = ty
-
-expandTyLamApp_maybe :: HasPass p pass => Type p -> (Type p -> Bool) -> Maybe (Type p)
-expandTyLamApp_maybe ty pred = case split ty [] of
-  (fn, args)
-    | let arity = tyFunArity fn
-    , args `saturates` arity
-    , pred fn
-      -> Just $! (expand_syn fn args)
-  _ -> Nothing
-  where
-    split (AppTy ty arg) args = split ty (arg:args)
-    split ty args = (ty, args)
-
-tyFunArity :: Type p -> Arity
-tyFunArity = go 0
-  where
-    go i (TyLamTy _ ty) = go (i + 1) ty
-    go i (BigTyLamTy _ ty) = go (i + 1) ty
-    go i _ = i
-
-expandSynTyConApp_maybe :: HasPass p pass => TyCon p -> [Type p] -> Maybe (Type p)
-expandSynTyConApp_maybe tc arg_tys
-  | Just rhs <- synTyConDefn_maybe tc
-  , arg_tys `saturates` tyConArity tc
-  = Just $! (expand_syn rhs arg_tys)
-  | otherwise
-  = Nothing
-
-saturates :: [Type p] -> Arity -> Bool
-saturates _ 0 = True
-saturates [] _ = False
-saturates (_:tys) n = assert (n >= 0) $ saturates tys (n-1)
-
-{-# NOINLINE expand_syn #-}
-expand_syn :: (HasPass p p1, HasPass p' p2, SubstP p p') => Type p -> [Type p'] -> Type p'
-expand_syn rhs arg_tys
-  | null arg_tys = panic "closedType rhs"
-  | otherwise = go rhs empty_subst arg_tys
-  where
-    empty_subst = mkEmptySubst (noDomFVs rhs (varsOfType rhs)) (varsOfTypes arg_tys)
-
-    go (TyLamTy _ _) _ [] = pprPanic "expand_syn" (ppr rhs $$ ppr arg_tys)
-    go (BigTyLamTy _ _) _ [] = pprPanic "expand_syn" (ppr rhs $$ ppr arg_tys)
-    go ty subst [] = substTy subst ty
-    go (TyLamTy tv ty) subst (arg:args) = go ty (extendTvSubst subst tv arg) args
-    go (BigTyLamTy kv ty) subst (arg:args)
-      | Embed ki <- arg = go ty (extendKvSubst subst kv ki) args
-      | otherwise = pprPanic "expand_syn" (ppr rhs $$ ppr arg_tys)
-    go ty subst args = mkAppTys (substTy subst ty) args
-
-{- *********************************************************************
-*                                                                      *
-                      mapType
-*                                                                      *
-********************************************************************* -}
-
-data TyCoMapper p p' env m = TyCoMapper
-  { tm_tyvar :: env -> TyVar p -> m (Type p')
-  , tm_covar :: env -> TyCoVar p -> m (TypeCoercion p')
-  , tm_hole :: env -> TypeCoercionHole -> m (TypeCoercion p')
-  , tm_tybinder :: forall r. env -> TyVar p -> ForAllFlag -> (env -> TyVar p' -> m r) -> m r
-  , tm_kicobinder :: forall r. env -> KiCoVar p -> (env -> KiCoVar p' -> m r) -> m r
-  , tm_tylambinder :: forall r. env -> TyVar p -> (env -> TyVar p' -> m r) -> m r
-  , tm_tylamkibinder :: forall r. env -> KiVar p -> (env -> KiVar p' -> m r) -> m r
-  , tm_tycon :: TyCon p -> m (TyCon p')
-  , tm_mkcm :: MKiCoMapper p p' env m
-  }
-
-{-# INLINE mapTyCo #-}
-mapTyCo
-  :: (Monad m, HasPass p' pass) => TyCoMapper p p' () m
-  -> ( Type p -> m (Type p')
-     , [Type p] -> m [Type p']
-     , TypeCoercion p -> m (TypeCoercion p')
-     , [TypeCoercion p] -> m [TypeCoercion p'] )
-mapTyCo mapper = case mapTyCoX mapper of
-  (go_ty, go_tys, go_co, go_cos) -> (go_ty (), go_tys (), go_co (), go_cos ())
-
-{-# INLINE mapTyCoX #-}
-mapTyCoX
-  :: (Monad m, HasPass p' pass) => TyCoMapper p p' env m
-  -> ( env -> Type p -> m (Type p')
-     , env -> [Type p] -> m [Type p']
-     , env -> TypeCoercion p -> m (TypeCoercion p')
-     , env -> [TypeCoercion p] -> m [TypeCoercion p'] )
-mapTyCoX (TyCoMapper { tm_tyvar = tyvar
-                     , tm_covar = covar
-                     , tm_hole = cohole
-                     , tm_tybinder = tybinder
-                     , tm_kicobinder = kicobinder
-                     , tm_tycon = tycon
-                     , tm_tylambinder = tylambinder
-                     , tm_tylamkibinder = kibinder
-                     , tm_mkcm = mkcmapper })
-  = (go_ty, go_tys, go_co, go_cos)
-  where
-    (go_mki, _, go_kco, _) = mapMKiCoX mkcmapper
-
-    go_tys !_ [] = return []
-    go_tys !env (ty:tys) = (:) <$> go_ty env ty <*> go_tys env tys
-
-    go_ty !env (TyVarTy tv) = tyvar env tv
-    go_ty !env (AppTy t1 t2) = mkAppTy <$> go_ty env t1 <*> go_ty env t2
-    go_ty !env ty@(FunTy ki arg res) = do
-      ki' <- go_mki env ki
-      arg' <- go_ty env arg
-      res' <- go_ty env res
-      return $ FunTy ki' arg' res'
-    go_ty !env ty@(TyConApp tc tys) = do
-      tc' <- tycon tc
-      mkTyConApp tc' <$> go_tys env tys
-    go_ty !env (ForAllTy (Bndr tv vis) inner) = 
-      tybinder env tv vis $ \env' tv' -> do
-        inner' <- go_ty env' inner
-        return $ ForAllTy (Bndr tv' vis) inner'
-    go_ty !env (ForAllKiCo kcv inner) = 
-      kicobinder env kcv $ \env' kcv' -> do
-        inner' <- go_ty env' inner
-        return $ ForAllKiCo kcv' inner'
-    go_ty !env (TyLamTy tv inner) = 
-      tylambinder env tv $ \env' tv' -> do
-        inner' <- go_ty env' inner
-        return $ TyLamTy tv' inner'
-    go_ty !env (BigTyLamTy kv inner) = 
-      kibinder env kv $ \env' kv' -> do
-        inner' <- go_ty env' inner
-        return $ BigTyLamTy kv' inner'
-    go_ty !env (Embed ki) = Embed <$> go_mki env ki
-    go_ty !env (CastTy ty kco) = mkCastTy <$> go_ty env ty <*> go_kco env kco
-    go_ty !env (KindCoercion kco) = KindCoercion <$> go_kco env kco
-    go_ty !env (LocalTyRow nm ki) = LocalTyRow nm <$> go_mki env ki
-    go_ty !env (SetRowsTy ty rs) = SetRowsTy <$> go_ty env ty <*> go_rows env rs
-
-    go_rows !_ [] = return []
-    go_rows !env (r:rs) = (:) <$> go_row env r <*> go_rows env rs
-
-    go_row !env (SetRowVal nm) = return $ SetRowVal nm 
-    go_row !env (SetRowTy nm ty) = SetRowTy nm <$> go_ty env ty
-
-    go_cos !_ [] = return []
-    go_cos !env (co:cos) = (:) <$> go_co env co <*> go_cos env cos
-
-    go_co !env (TyRefl ty) = TyRefl <$> go_ty env ty
-    go_co !env (GRefl ty kco) = mkGReflCo <$> go_ty env ty <*> go_kco env kco
-    go_co !env (AppCo c1 c2) = mkAppCo <$> go_co env c1 <*> go_co env c2
-    go_co !env (TyFunCo kco c1 c2)
-      = mkTyFunCo <$> go_kco env kco <*> go_co env c1 <*> go_co env c2
-    go_co !env (TyCoVarCo cv) = covar env cv
-    go_co !env (TyHoleCo hole) = cohole env hole
-    go_co !env (TySymCo co) = mkSymTyCo <$> go_co env co
-    go_co !env (TyTransCo c1 c2) = mkTyTransCo <$> go_co env c1 <*> go_co env c2
-    go_co !env (LRCo lr co) = mkLRTyCo lr <$> go_co env co
-    go_co !env (LiftKCo kco) = LiftKCo <$> go_kco env kco
-    go_co !env (TyConAppCo tc cos) = do
-      tc' <- tycon tc
-      mkTyConAppCo tc' <$> go_cos env cos
-    go_co !env (ForAllCo { tfco_tv = tv, tfco_visL = visL, tfco_visR = visR
-                         , tfco_tv_kind_co = kind_co, tfco_body = co })
-      = do kind_co' <- go_kco env kind_co
-           tybinder env tv visL $ \env' tv' -> do
-             co' <- go_co env' co
-             return $ mkForAllCo tv' visL visR kind_co' co'
-    go_co !env (ForAllCoCo { tfcoco_kcv = kcv, tfcoco_kcv_kind_co = kind_co, tfcoco_body = co })
-      = do kind_co' <- go_kco env kind_co
-           kicobinder env kcv $ \env' kcv' -> do
-             co' <- go_co env' co
-             return $ mkForAllCoCo kcv' kind_co' co'
+type KnotTied ty = ty
 
 {- *********************************************************************
 *                                                                      *
@@ -311,11 +122,6 @@ getTyVarNoView_maybe _ = Nothing
 mkAppTy :: Type p -> Type p -> Type p
 mkAppTy (TyConApp tc tys) ty2 = mkTyConApp tc (tys ++ [ty2])
 mkAppTy ty1 ty2 = AppTy ty1 ty2
-
-mkAppTys :: Type p -> [Type p] -> Type p
-mkAppTys ty1 [] = ty1
-mkAppTys (TyConApp tc tys1) tys2 = mkTyConApp tc (tys1 ++ tys2)
-mkAppTys ty1 tys2 = foldl' AppTy ty1 tys2
 
 splitAppTy_maybe :: HasPass p pass => Type p -> Maybe (Type p, Type p)
 splitAppTy_maybe = splitAppTyNoView_maybe . coreFullView
@@ -402,7 +208,7 @@ piResultTy_maybe ty (KindCoercion arg) = case coreFullView ty of
   FunTy { ft_res = res }  -> Just res
   ForAllKiCo kcv res ->
     let empty_subst = mkEmptySubst (varsOfType res)
-                      ((\(kcv, kv) -> (emptyVarSet, kcv, kv)) $ varsOfKindCoercion arg)
+                      ((\(kcv, kv) -> (emptyVarSet, kcv, kv)) $ varsOfKiCo arg)
     in Just $ substTy (extendKCvSubst empty_subst kcv arg) res
   _ -> Nothing
 piResultTy_maybe ty arg = case coreFullView ty of
@@ -727,14 +533,6 @@ assertGoodForAllCoCo kcv kind_co co =
 *                                                                      *
 ********************************************************************* -}
 
-splitForAllForAllTyBinders :: HasPass p pass => Type p -> ([ForAllBinder (TyVar p)], Type p)
-splitForAllForAllTyBinders ty = split ty ty []
-  where
-    split _ (ForAllTy b res) bs = split res res (b : bs)
-    split orig_ty ty bs | Just ty' <- coreView ty = split orig_ty ty' bs
-    split orig_ty _ bs = (reverse bs, orig_ty)
-{-# INLINE splitForAllForAllTyBinders #-}
-
 splitForAllTyVar_maybe :: HasPass p pass => Type p -> Maybe (TyVar p, Type p)
 splitForAllTyVar_maybe ty
   | ForAllTy (Bndr tv _) inner_ty <- coreFullView ty = Just (tv, inner_ty)
@@ -767,33 +565,12 @@ splitForAllInvisTyBinders ty = split ty ty []
     split orig_ty ty tvs | Just ty' <- coreView ty = split orig_ty ty' tvs
     split orig_ty _ tvs = (reverse tvs, orig_ty)
 
-splitTyLamTyBinders :: HasPass p pass => Type p -> ([TyVar p], Type p)
-splitTyLamTyBinders ty = split ty ty []
-  where
-    split _ (TyLamTy b res) bs = split res res (b : bs)
-    split orig_ty ty bs | Just ty' <- coreView ty = split orig_ty ty' bs
-    split orig_ty _ bs = (reverse bs, orig_ty)
-
-splitBigLamTyBinders :: HasPass p pass => Type p -> ([KiVar p], Type p)
-splitBigLamTyBinders ty = split ty ty []
-  where
-    split _ (BigTyLamTy b res) bs = split res res (b : bs)
-    split orig_ty ty bs | Just ty' <- coreView ty = split orig_ty ty' bs
-    split orig_ty _ bs = (reverse bs, orig_ty)
-
 splitForAllTyVars :: HasPass p pass => Type p -> ([TyVar p], Type p)
 splitForAllTyVars ty = split ty ty []
   where
     split _ (ForAllTy (Bndr tv _) ty) tvs = split ty ty (tv:tvs)
     split orig_ty ty tvs | Just ty' <- coreView ty = split orig_ty ty' tvs
     split orig_ty _ tvs = (reverse tvs, orig_ty)
-
-splitForAllKiCoVars :: HasPass p pass => Type p -> ([KiCoVar p], Type p)
-splitForAllKiCoVars ty = split ty ty []
-  where
-    split _ (ForAllKiCo kcv ty) kcvs = split ty ty (kcv:kcvs)
-    split orig_ty ty kcvs | Just ty' <- coreView ty = split orig_ty ty' kcvs
-    split orig_ty _ kcvs = (reverse kcvs, orig_ty)
 
 isForAllTy :: HasPass p pass => Type p -> Bool
 isForAllTy ty
@@ -815,16 +592,6 @@ isTauTy (FunTy _ a b) = isTauTy a && isTauTy b
 isTauTy (ForAllTy {}) = False
 isTauTy (TyLamTy _ ty) = isTauTy ty
 isTauTy other = pprPanic "isTauTy" (ppr other)
-
-isForgetfulTy :: HasPass p pass => Type p -> Bool
-isForgetfulTy (TyVarTy _) = False
-isForgetfulTy (TyConApp tc tys) = isForgetfulSynTyCon tc || any isForgetfulTy tys
-isForgetfulTy (AppTy a b) = isForgetfulTy a || isForgetfulTy b
-isForgetfulTy (FunTy _ a b) = isForgetfulTy a || isForgetfulTy b
-isForgetfulTy (ForAllTy (Bndr tv _) ty)
-  = (not $ tv `elemVarSet` (fstOf3 $ varsOfType ty)) || isForgetfulTy ty
-isForgetfulTy (TyLamTy tv ty) = (not $ tv `elemVarSet` (fstOf3 $ varsOfType ty)) || isForgetfulTy ty
-isForgetfulTy other = pprPanic "isForgetfulTy" (ppr other)
 
 {-# INLINE splitPiTy_maybe #-} 
 splitPiTy_maybe :: HasPass p pass => Type p -> Maybe (PiTyBinder p, Type p)
@@ -976,15 +743,69 @@ handle_non_mono ki doc = case ki of
                            Mono ki -> ki
                            other -> pprPanic "typeMonoKind" (doc other)
 
+{- **********************************************************************
+*                                                                       *
+            Simple constructors
+*                                                                       *
+********************************************************************** -}
+
+mkTyVarTy :: TyVar p -> Type p
+mkTyVarTy v = TyVarTy v
+
+mkTyVarTys :: [TyVar p] -> [Type p]
+mkTyVarTys = map mkTyVarTy
+
+mkFunTys :: [Type p] -> [MonoKind p] -> Type p -> Type p
+mkFunTys args fun_kis res_ty =
+  assert (args `equalLength` fun_kis)
+  $ foldr (uncurry mkFunTy) res_ty (zip fun_kis args)
+
+mkForAllTy :: ForAllBinder (TyVar p) -> Type p -> Type p
+mkForAllTy = ForAllTy
+
+mkInfForAllTy :: TyVar p -> Type p -> Type p
+mkInfForAllTy tv ty = ForAllTy (Bndr tv Inferred) ty
+
+mkInfForAllTys :: [TyVar p] -> Type p -> Type p
+mkInfForAllTys tvs ty = foldr mkInfForAllTy ty tvs
+
+mkForAllKiCo :: KiCoVar p -> Type p -> Type p
+mkForAllKiCo = ForAllKiCo
+
+mkForAllTys :: [ForAllBinder (TyVar p)] -> Type p -> Type p
+mkForAllTys tyvars ty = foldr ForAllTy ty tyvars
+
+-- TODO: this is NOT like GHC (they use fun ty for kcos when the kcv does not occur in type)
+-- This seems simpler for us without causing issues. Should double check anyways
+mkForAllKiCos :: [KiCoVar p] -> Type p -> Type p
+mkForAllKiCos bndrs ty = foldr ForAllKiCo ty bndrs
+
+mkInvisForAllTys :: [InvisBinder (TyVar p)] -> Type p -> Type p
+mkInvisForAllTys tyvars = mkForAllTys (varSpecToBinders tyvars)
+
+mkFunTy :: HasDebugCallStack => MonoKind p -> Type p -> Type p -> Type p
+mkFunTy = FunTy
+
+tcMkFunTy :: MonoKind p -> Type p -> Type p -> Type p
+tcMkFunTy = FunTy 
+
+mkTyLamTy :: TyVar p -> Type p -> Type p
+mkTyLamTy = TyLamTy
+
+mkTyLamTys :: [TyVar p] -> Type p -> Type p
+mkTyLamTys = flip (foldr mkTyLamTy)
+
+mkBigLamTy :: KiVar p -> Type p -> Type p
+mkBigLamTy = BigTyLamTy
+
+mkBigLamTys :: [KiVar p] -> Type p -> Type p
+mkBigLamTys = flip (foldr mkBigLamTy)
+
 {- *********************************************************************
 *                                                                      *
                     Space-saving construction
 *                                                                      *
 ********************************************************************* -}
-
-mkTyConApp :: TyCon p -> [Type p] -> Type p
-mkTyConApp tycon [] = mkTyConTy tycon
-mkTyConApp tycon tys = TyConApp tycon tys
 
 mkTyConAppCo
   :: (HasDebugCallStack, HasPass p pass)
@@ -1045,6 +866,98 @@ mkAppCos co1 cos = foldl' mkAppCo co1 cos
                     Type Coercions
 *                                                                      *
 ********************************************************************* -}
+
+liftKCo :: KindCoercion p -> TypeCoercion p
+liftKCo = LiftKCo
+
+mkTyCoVarCo :: TyCoVar p -> TypeCoercion p
+mkTyCoVarCo = TyCoVarCo
+
+mkTyHoleCo :: TypeCoercionHole -> TypeCoercion Tc
+mkTyHoleCo = TyHoleCo
+
+mkGReflRightCo :: Type p -> KindCoercion p -> TypeCoercion p 
+mkGReflRightCo ty kco
+  | isReflKiCo kco = mkReflTyCo ty
+  | otherwise = mkGReflCo ty kco
+
+mkGReflLeftCo :: Type p -> KindCoercion p -> TypeCoercion p
+mkGReflLeftCo ty kco
+  | isReflKiCo kco = mkReflTyCo ty
+  | otherwise = mkSymTyCo $ mkGReflCo ty kco
+
+ty_con_app_fun_maybe
+  :: (HasDebugCallStack, Outputable a)
+  => TyCon p
+  -> [a]
+  -> Maybe (a, a, a, a, a)
+ty_con_app_fun_maybe tc args
+  | tc_uniq == fUNTyConKey = fUN_case
+  | otherwise = Nothing
+  where
+    tc_uniq = tyConUnique tc
+
+    fUN_case
+      | (arg_k : res_k : fun_k : arg : res : rest) <- args
+      = assertPpr (null rest) (ppr tc <+> ppr args)
+        $ Just (arg_k, res_k, fun_k, arg, res)
+      | otherwise
+      = Nothing
+    
+-- Given 'ty : k1', 'kco : k1 ~ k2', 'co : ty ~ ty2',
+-- produces 'co' : (ty |> kco) ~ ty2'
+mkCoherenceLeftCo :: Type p -> KindCoercion p -> TypeCoercion p -> TypeCoercion p
+mkCoherenceLeftCo ty kco co
+  | isReflKiCo kco = co
+  | otherwise = (mkSymTyCo $ mkGReflCo ty kco) `mkTyTransCo` co
+
+mkCoherenceRightCo :: Type p -> KindCoercion p -> TypeCoercion p -> TypeCoercion p
+mkCoherenceRightCo ty kco co
+  | isReflKiCo kco = co
+  | otherwise = co `mkTyTransCo` mkGReflCo ty kco
+
+mkGReflLeftMCo :: Type p -> Maybe (KindCoercion p) -> TypeCoercion p
+mkGReflLeftMCo ty Nothing = mkReflTyCo ty
+mkGReflLeftMCo ty (Just kco) = mkGReflLeftCo ty kco
+
+mkGReflRightMCo :: Type p -> Maybe (KindCoercion p) -> TypeCoercion p
+mkGReflRightMCo ty Nothing = mkReflTyCo ty
+mkGReflRightMCo ty (Just kco) = mkGReflRightCo ty kco
+
+mkCoherenceRightMCo
+  :: Type p -> Maybe (KindCoercion p) -> TypeCoercion p -> TypeCoercion p
+mkCoherenceRightMCo _ Nothing co2 = co2
+mkCoherenceRightMCo ty (Just kco) co2 = mkCoherenceRightCo ty kco co2
+
+tyCoHoleCoVar :: TypeCoercionHole -> TcTyCoVar 
+tyCoHoleCoVar = tch_co_var
+
+mkGReflCo :: Type p -> KindCoercion p -> TypeCoercion p
+mkGReflCo ty kco
+  | isReflKiCo kco = TyRefl ty
+  | otherwise = GRefl ty kco
+
+mkSymTyCo :: TypeCoercion p -> TypeCoercion p
+mkSymTyCo co | isReflTyCo co = co
+mkSymTyCo (TySymCo co) = co
+mkSymTyCo (LiftKCo kco) = LiftKCo $ mkSymKiCo kco
+mkSymTyCo co = TySymCo co
+
+mkTyTransCo :: TypeCoercion p -> TypeCoercion p -> TypeCoercion p
+mkTyTransCo co1 co2
+  | LiftKCo kco1 <- co1
+  = case co2 of
+      LiftKCo kco2 -> LiftKCo $ mkTransKiCo kco1 kco2
+      _ -> pprPanic "mkTyTransCo" (ppr co1 $$ ppr co2)
+  | LiftKCo _ <- co2
+  = pprPanic "mkTyTransCo" (ppr co1 $$ ppr co2)
+  | isReflTyCo co1 = co2
+  | isReflTyCo co2 = co1
+  | GRefl t1 kco1 <- co1
+  , GRefl t2 kco2 <- co2
+  = GRefl t1 (mkTransKiCo kco1 kco2)
+  | otherwise
+  = TyTransCo co1 co2
 
 mkTyEqPred :: HasPass p pass => Type p -> Type p -> Type p
 mkTyEqPred ty1 ty2
@@ -1178,3 +1091,25 @@ isValidJoinPointType arity ty
       = valid_under (tvs, kcvs, kvs) (arity - 1) res_ty
       | otherwise
       = False
+
+{- *********************************************************************
+*                                                                      *
+                   typeSize
+*                                                                      *
+********************************************************************* -}
+
+typeSize :: HasPass p pass => Type p -> Int
+typeSize (TyVarTy {}) = 1
+typeSize (AppTy t1 t2) = typeSize t1 + typeSize t2
+typeSize (TyLamTy _ t) = 1 + typeSize t
+typeSize (BigTyLamTy _ t) = 1 + typeSize t
+typeSize (TyConApp _ ts) = 1 + typesSize ts
+typeSize (ForAllTy (Bndr tv _) t) = panic "kindSize (varKind tv) + typeSize t"
+typeSize (ForAllKiCo kcv t) = panic "typeSize ForAllKiCo"
+typeSize (FunTy _ t1 t2) = typeSize t1 + typeSize t2
+typeSize (Embed _) = 1
+typeSize (CastTy ty _) = typeSize ty
+typeSize co@(KindCoercion _) = pprPanic "typeSize" (ppr co)
+
+typesSize :: HasPass p pass => [Type p] -> Int
+typesSize tys = foldr ((+) . typeSize) 0 tys

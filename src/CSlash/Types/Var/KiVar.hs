@@ -11,7 +11,7 @@ module CSlash.Types.Var.KiVar where
 
 import Prelude hiding ((<>))
 
-import {-# SOURCE #-} CSlash.Core.Kind (MonoKind, FunKiFlag)
+import {-# SOURCE #-} CSlash.Core.Rep (MonoKind, FunKiFlag)
 import {-# SOURCE #-} CSlash.Tc.Utils.TcType (TcVarDetails, pprTcVarDetails, vanillaSkolemVarUnk)
 
 import CSlash.Cs.Pass

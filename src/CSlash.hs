@@ -96,7 +96,6 @@ import CSlash.Utils.Fingerprint
 -- import GHC.Core.Predicate
 import CSlash.Core.Type
 import CSlash.Core.TyCon
--- import CSlash.Core.Type.Ppr   ( pprForAll )
 -- import GHC.Core.Class
 import CSlash.Core.DataCon
 -- import GHC.Core.FamInstEnv ( FamInst, famInstEnvElts, orphNamesOfFamInst )
