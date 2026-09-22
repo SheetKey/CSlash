@@ -793,9 +793,15 @@ subst_ty subst ty = go ty
     go (ForAllKiCo kcv ty)
       = case substKiCoVarBndr subst kcv of
           (subst', kcv') -> (ForAllKiCo $! kcv') $! (subst_ty subst' ty)
+    go (SetRowsTy ty rows)
+      = (SetRowsTy $! go ty) $! strictMap go_set_row rows
+    go (LocalTyRow nm ki) = (LocalTyRow $! nm) $! substMonoKi subst ki
     go (Embed mki) = Embed $! substMonoKi subst mki
     go (CastTy ty kco) = (mkCastTy $! (go ty)) $! subst_kco subst kco
     go co@(KindCoercion kco) = KindCoercion $! subst_kco subst kco
+
+    go_set_row (SetRowVal name) = SetRowVal $! name
+    go_set_row (SetRowTy name ty) = (SetRowTy $! name) $! go ty
 
 substTyVar :: (HasPass p pass, HasPass p' pass') => Subst p p' -> TyVar p -> Type p'
 substTyVar (Subst { tv_env = tenv, tv_in_scope = in_scope }) tv
