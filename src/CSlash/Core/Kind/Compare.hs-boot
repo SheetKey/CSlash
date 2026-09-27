@@ -1,3 +1,5 @@
+{-# LANGUAGE FlexibleContexts #-}
+
 module CSlash.Core.Kind.Compare where
 
 import CSlash.Cs.Pass

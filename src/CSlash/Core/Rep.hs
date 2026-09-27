@@ -1,3 +1,5 @@
+{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -11,6 +13,11 @@ module CSlash.Core.Rep where
 import Prelude hiding ((<>))
 
 import CSlash.Cs.Pass
+import {-# SOURCE #-} CSlash.Cs.Expr (CsExpr, pprExpr)
+import {-# SOURCE #-} CSlash.Cs.Instances ()
+-- import CSlash.Cs.Extension
+
+import {-# SOURCE #-} CSlash.Core.Ppr
 
 import {-# SOURCE #-} CSlash.Core.Type.FVs
 import {-# SOURCE #-} CSlash.Core.Subst
@@ -44,6 +51,8 @@ import Data.IORef (IORef)
 *                                                                       *
 ********************************************************************** -}
 
+type KnotTied ty = ty
+
 data Type p 
   = TyVarTy (TyVar p)
   | AppTy (Type p) (Type p) -- The first arg must be an 'AppTy' or a 'TyVarTy' or a 'TyLam'
@@ -64,10 +73,11 @@ data Type p
   | KindCoercion (KindCoercion p) -- embed a kind coercion (evidence stuff)
   deriving Data.Data
 
-data SetRow p
-  = SetRowVal Name -- (Expr p)
-  | SetRowTy Name (Type p)
-  deriving (Data.Data)
+data SetRow p where
+  SetRowVal :: Name -> (CsExpr (CsPass p)) -> (Type (CsPass p)) -> SetRow (CsPass p)
+  SetRowTy :: Name -> (Type p) -> SetRow p
+
+instance Data.Typeable p => Data.Data (SetRow p)
 
 {- **********************************************************************
 *                                                                       *
@@ -230,7 +240,7 @@ data FunSel = SelArg | SelRes
 *                                                                       *
 ********************************************************************** -}
 
-instance IsPass p => Outputable (Type (CsPass p)) where
+instance HasPass p p' => Outputable (Type (CsPass p')) where
   ppr = pprType
 
 instance Outputable (TypeCoercion p) where
@@ -253,16 +263,16 @@ instance Outputable KiPredCon where
   ppr LTEQKi = text "<="
   ppr EQKi = char '~'
 
-instance IsPass p => Outputable (Kind (CsPass p)) where
+instance HasPass p p' => Outputable (Kind (CsPass p')) where
   ppr = pprKind
 
-instance IsPass p => Outputable (MonoKind (CsPass p)) where
+instance HasPass p p' => Outputable (MonoKind (CsPass p')) where
   ppr = pprMonoKind
 
-instance IsPass p => Outputable (RowSig (CsPass p)) where
+instance HasPass p p' => Outputable (RowSig (CsPass p')) where
   ppr = pprRowSig
 
-instance IsPass p => Outputable (KiCon (CsPass p)) where
+instance HasPass p p' => Outputable (KiCon (CsPass p')) where
   ppr (KiCon nm base rows) = text "kind" <+> ppr nm <+> equals <+> ppr base <+> dot <> braces
     (fsep (punctuate comma (map ppr rows)))
 
@@ -277,7 +287,7 @@ instance Outputable FunSel where
   ppr SelArg = text "arg"
   ppr SelRes = text "res"
 
-instance IsPass p => Outputable (KindCoercion (CsPass p)) where
+instance HasPass p p' => Outputable (KindCoercion (CsPass p')) where
   ppr = pprKiCo
 
 instance  Outputable KindCoercionHole where
@@ -693,7 +703,7 @@ debug_ppr_ty _ (SetRowsTy base rows)
     (fsep (punctuate comma (map debug_ppr_set_row rows)))
 
 debug_ppr_set_row :: HasPass p pass => SetRow p -> SDoc
-debug_ppr_set_row (SetRowVal nm) = ppr nm <+> equals
+debug_ppr_set_row (SetRowVal nm expr _) = ppr nm <+> equals <+> pprExpr expr
 debug_ppr_set_row (SetRowTy nm ty) = ppr nm <+> equals <+> ppr ty
 
 -- * Kinds

@@ -167,6 +167,7 @@ tcTyDs typeds = do
 
     return (tycons, kindless)
   where
+    ppr_tc_tycon :: TyCon Tc -> SDoc
     ppr_tc_tycon tc = parens (sep [ ppr (tyConName tc) <> comma
                                   , pprTyConKind tc
                                   , ppr (isTcTyCon tc) ])
@@ -334,6 +335,7 @@ kcTyGroup kindless_decls = do
   return (poly_tcs, kindless_names)
   where
     ppr_tc_kinds tcs = vcat (map pp_tc tcs)
+    pp_tc :: TyCon Tc -> SDoc
     pp_tc tc = ppr (tyConName tc) <+> colon <+> pprTyConKind tc
 
 type ScopedPairs = [(Name, TcKiVar)]

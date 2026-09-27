@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RoleAnnotations #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -32,7 +33,7 @@ instance {-# INCOHERENT #-} SubstP p Tc
 instance SubstP p p 
 
 mkEmptySubst
-  :: (HasPass p' pass, SubstP p p')
+  :: (HasPass p pass, HasPass p' pass', SubstP p p')
   => (TyVarSet p, KiCoVarSet p, KiVarSet p)    -- domain FVs
   -> (TyVarSet p', KiCoVarSet p', KiVarSet p') -- range FVs
   -> Subst p p'
@@ -54,6 +55,8 @@ substTyUnchecked :: (HasPass p pass, HasPass p' pass', SubstP p p') => Subst p p
 
 isEmptySubst :: Subst p p' -> Bool
 
-substMonoKiUnchecked :: (HasDebugCallStack, HasPass p' pass, SubstP p p') => Subst p p' -> MonoKind p -> MonoKind p'
+substMonoKiUnchecked
+  :: (HasDebugCallStack, HasPass p pass, HasPass p' pass', SubstP p p')
+  => Subst p p' -> MonoKind p -> MonoKind p'
 
 fromZkKind :: HasPass p pass => Kind Zk -> Kind p

@@ -40,7 +40,7 @@ import CSlash.Types.Name
 import CSlash.Types.Name.Reader
 import CSlash.Parser.Annotation
 import CSlash.Utils.Outputable
-import CSlash.Core.Ppr (pprOcc)
+import {-# SOURCE #-} CSlash.Core.Ppr (pprOcc)
 import CSlash.Builtin.Names ( negateName )
 import CSlash.Data.Bag
 
@@ -163,8 +163,8 @@ type instance XSetRows Zk = NoExtField
 
 type instance XSetRow Ps = AddEpAnn
 type instance XSetRow Rn = NoExtField -- [Name] MAIN TODO or not?
-type instance XSetRow Tc = NoExtField
-type instance XSetRow Zk = NoExtField
+type instance XSetRow Tc = DataConCantHappen
+type instance XSetRow Zk = DataConCantHappen
 
 type instance XSetTyRow Ps = [AddEpAnn]
 type instance XSetTyRow Rn = NoExtField -- [Name] MAIN TODO or not?

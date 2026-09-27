@@ -245,6 +245,7 @@ tc_pat pat_ty penv ps_pat thing_inside = case ps_pat of
 
   TuplePat _ pats -> do
     let arity = length pats
+        tc :: TyCon Zk
         tc = tupleTyCon arity
     checkTupSize arity
     (coi, arg_tys) <- matchExpectedPatTy (matchExpectedTyConApp tc) penv pat_ty

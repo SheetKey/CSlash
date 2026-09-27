@@ -1,3 +1,4 @@
+{-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE DeriveDataTypeable #-}
@@ -15,20 +16,21 @@ import CSlash.Types.Var
 -- import GHC.Types.Id( idScaledType )
 -- import GHC.Core.Coercion.Axiom
 -- import GHC.Core.Coercion
-import CSlash.Core.Ppr ()   -- Instance OutputableBndr TyVar
-import CSlash.Tc.Utils.TcType
+import {-# SOURCE #-} CSlash.Core.Ppr ()   -- Instance OutputableBndr TyVar
+-- import CSlash.Tc.Utils.TcType
 import CSlash.Core.Type
-import CSlash.Core.Type.FVs
 import CSlash.Core.Kind
+-- import CSlash.Core.Type.FVs
+import {-# SOURCE #-} CSlash.Core.Rep
 import CSlash.Core.TyCon
 import CSlash.Core.DataCon ( DataCon{-, dataConWrapId-} )
 import CSlash.Builtin.Names
 import CSlash.Types.Var.Env
 import CSlash.Types.Var.Set
-import CSlash.Core.Predicate
+-- import CSlash.Core.Predicate
 import CSlash.Types.Basic
 
-import CSlash.Core
+-- import CSlash.Core
 -- import GHC.Core.Class (Class, classSCSelId )
 -- import GHC.Core.FVs   ( exprSomeFreeVars )
 -- import GHC.Core.InstEnv ( Canonical )
@@ -168,7 +170,7 @@ data TyCoBindsVar
 *                                                                      *
 ********************************************************************* -}
 
-instance IsPass p => Outputable (CsWrapper (CsPass p)) where
+instance HasPass p p' => Outputable (CsWrapper (CsPass p')) where
   ppr co_fn = pprCsWrapper co_fn (no_parens (text "<>"))
 
 pprCsWrapper :: HasPass p pass => CsWrapper p -> (Bool -> SDoc) -> SDoc

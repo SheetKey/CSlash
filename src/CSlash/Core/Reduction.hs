@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE ExplicitForAll #-}
 {-# LANGUAGE TypeAbstractions #-}
@@ -219,7 +220,7 @@ instance Outputable (LiftingContext p) where
 
 type LiftCoEnv p = VarEnv (KiVar p) (KindCoercion Tc)
 
-emptyLiftingContext :: KiVarSet p -> LiftingContext p
+emptyLiftingContext :: HasPass p pass => KiVarSet p -> LiftingContext p
 emptyLiftingContext is
   = LC (mkEmptySubst (emptyVarSet, emptyVarSet, is) (emptyVarSet, emptyVarSet, emptyVarSet))
        emptyVarEnv
@@ -266,7 +267,7 @@ ki_co_subst @p !lc ki = go ki
     go (BIKi bi) = mkReflKiCo $ BIKi bi
     go other = pprPanic "ki_co_subst" (ppr other)
 
-liftKiCoSubstKiVar :: LiftingContext p -> KiVar p -> KindCoercion Tc
+liftKiCoSubstKiVar :: HasPass p pass => LiftingContext p -> KiVar p -> KindCoercion Tc
 liftKiCoSubstKiVar (LC subst env) kv
   | Just co_arg <- lookupVarEnv env kv
   = co_arg

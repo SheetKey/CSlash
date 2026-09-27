@@ -50,6 +50,7 @@ data UserTypeCtxt
   | TyVarBndrKindCtxt Name
   | TySynKindCtxt Name
   | RowSigCtxt Name ReportRedundantConstraints
+  | SetRowCtxt Name
   deriving (Eq)
 
 data ReportRedundantConstraints

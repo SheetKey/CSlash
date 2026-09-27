@@ -3,7 +3,7 @@
 
 module CSlash.Types.Literal where
 
-import CSlash.Core.Type (Type)
+import {-# SOURCE #-} CSlash.Core.Rep (Type)
 import CSlash.Utils.Outputable
 import CSlash.Settings.Constants
 import CSlash.Utils.Panic

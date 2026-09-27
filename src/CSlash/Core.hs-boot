@@ -21,6 +21,8 @@ type CoreId = Id Zk
 
 data Unfolding
 
+data CoreRule
+
 noUnfolding :: Unfolding
 
 evaldUnfolding :: Unfolding

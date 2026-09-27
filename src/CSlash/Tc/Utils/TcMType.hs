@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TupleSections #-}
 
 module CSlash.Tc.Utils.TcMType where
@@ -391,7 +392,8 @@ newMetaTyKiVars (kvs, tvs)
   = newMetaTyKiVarsX emptySubst kvs tvs
 
 newMetaTyKiVarsX
-  :: Subst p Tc
+  :: HasPass p pass
+  => Subst p Tc
   -> [KiVar p]
   -> [TyVar p]
   -> TcM (Subst p Tc, [TcKiVar], [TcTyVar])
@@ -403,14 +405,15 @@ newMetaTyKiVarsX subst kvs tvs = do
 newMetaKiVarsX :: Subst p Tc -> [KiVar p] -> TcM (Subst p Tc, [TcKiVar])
 newMetaKiVarsX subst kvs = mapAccumLM newMetaKiVarX subst kvs
 
-newMetaTyVarX :: Subst p Tc -> TyVar p -> TcM (Subst p Tc, TcTyVar)
+newMetaTyVarX :: HasPass p pass => Subst p Tc -> TyVar p -> TcM (Subst p Tc, TcTyVar)
 newMetaTyVarX = new_meta_tv_x TauVar
 
 newMetaVarKiVarsX :: Subst p Tc -> [KiVar p] -> TcM (Subst p Tc, [TcKiVar])
 newMetaVarKiVarsX subst kvs = mapAccumLM (new_meta_kv_x VarVar) subst kvs
 
 new_meta_tv_x
-  :: MetaInfo -> Subst p Tc -> TyVar p -> TcM (Subst p Tc, TcTyVar)
+  :: HasPass p pass
+  => MetaInfo -> Subst p Tc -> TyVar p -> TcM (Subst p Tc, TcTyVar)
 new_meta_tv_x info subst tv = do
   new_tv <- cloneAnonMetaTyVar info tv (substMonoKi subst (varKind tv))
   let subst1 = extendTvSubstWithClone subst tv (TcTyVar new_tv)
@@ -751,7 +754,7 @@ collect_cand_qkvs_ty orig_ty cur_lvl (boundtvs, boundkcvs, boundkvs) dvs ty = go
       dv1 <- go_row dv r
       go_rows dv1 rs
 
-    go_row dv (SetRowVal _) = return dv
+    go_row dv (SetRowVal _ e ty) = panic "return dv"
     go_row dv (SetRowTy _ ty) = go dv ty
 
 candidateQKiVarsOfKind :: Kind Tc -> TcM DTcKiVarSet

@@ -1,3 +1,5 @@
+{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeAbstractions #-}
@@ -15,6 +17,7 @@ import {-# SOURCE #-} CSlash.Core.Rep (MonoKind, FunKiFlag)
 import {-# SOURCE #-} CSlash.Tc.Utils.TcType (TcVarDetails, pprTcVarDetails, vanillaSkolemVarUnk)
 
 import CSlash.Cs.Pass
+-- import CSlash.Cs.Extension
 
 import CSlash.Types.Var.Class
 
@@ -85,7 +88,7 @@ instance TcKiVarMaybe (KiVar p) where
 instance TcKiVarMaybe TcKiVar where
   toTcKiVar_maybe = Just
 
-instance Outputable (KiVar p) where
+instance HasPass p p' => Outputable (KiVar (CsPass p')) where
   ppr (TcKiVar kv) = ppr kv
   ppr KiVar {..} = docWithStyle ppr_code ppr_normal
     where
@@ -168,7 +171,7 @@ data PiKiBinder p
   | Anon (MonoKind p) FunKiFlag
   deriving Data
 
-instance IsPass p => Outputable (PiKiBinder (CsPass p)) where
+instance HasPass p p' => Outputable (PiKiBinder (CsPass p')) where
   ppr (Anon ki af) = ppr af <+> ppr ki
   ppr (Named v) = ppr v
 

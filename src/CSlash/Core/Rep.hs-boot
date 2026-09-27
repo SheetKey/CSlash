@@ -1,3 +1,6 @@
+{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE RoleAnnotations #-}
@@ -8,8 +11,11 @@ import {-# SOURCE #-} CSlash.Core.TyCon (TyCon)
 import {-# SOURCE #-} CSlash.Types.Var.KiVar (KiVar)
 
 import CSlash.Cs.Pass
+-- import CSlash.Cs.Extension
 import CSlash.Utils.Outputable 
 import Data.Data (Data)
+
+type KnotTied ty = ty
 
 type role Type nominal
 data Type tv 
@@ -34,11 +40,13 @@ data KindCoercionHole
 
 data FunKiFlag
 
-instance IsPass p => Outputable (Type (CsPass p))
-instance IsPass p => Outputable (Kind (CsPass p))
-instance IsPass p => Outputable (MonoKind (CsPass p))
+instance HasPass p p' => Outputable (Type (CsPass p'))
+instance HasPass p p' => Outputable (Kind (CsPass p'))
+instance HasPass p p' => Outputable (MonoKind (CsPass p'))
 instance Data p => Data (MonoKind p)
 instance Data FunKiFlag
 instance Outputable FunKiFlag
 
 mkNakedTyConTy :: TyCon p -> Type p
+
+mkTyConApp :: TyCon p -> [Type p] -> Type p

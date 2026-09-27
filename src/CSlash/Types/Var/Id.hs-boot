@@ -1,3 +1,5 @@
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE RoleAnnotations #-}
 
@@ -17,7 +19,7 @@ instance (Typeable p) => Data (Id p)
 instance Eq (Id p)
 instance Ord (Id p)
 instance IsVar (Id p) 
-instance IsPass p => Outputable (Id (CsPass p)) 
+instance HasPass p p' => Outputable (Id (CsPass p')) 
 instance Uniquable (Id p) 
 
 isLocalId :: Id p -> Bool

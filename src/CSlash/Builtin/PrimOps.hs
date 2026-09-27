@@ -5,7 +5,7 @@ module CSlash.Builtin.PrimOps where
 import CSlash.Cs.Pass
 
 -- import {-# SOURCE #-} CSlash.Core.Opt.ConstantFold (primOpRules)
-import CSlash.Core.Opt.ConstantFold (primOpRules)
+import {-# SOURCE #-} CSlash.Core.Opt.ConstantFold (primOpRules)
 import CSlash.Core.FVs (mkRuleInfo)
 
 import CSlash.Builtin.Types.Prim

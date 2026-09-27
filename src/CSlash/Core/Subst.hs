@@ -1,3 +1,5 @@
+{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -134,7 +136,7 @@ type CoreTvSubstEnv = TvSubstEnv Zk Zk
 type CoreKCvSubstEnv = KCvSubstEnv Zk Zk
 type CoreKvSubstEnv = KvSubstEnv Zk Zk
 
-instance IsPass p' => Outputable (Subst p (CsPass p')) where
+instance HasPass p' p'' => Outputable (Subst p (CsPass p'')) where
   ppr Subst {..} = vcat [ text "<<IdInScope =" <+> ppIS id_in_scope
                         , text "IdSubst =" <+> ppr id_env <> char '>'
                         , text "<TCvInScope =" <+> ppIS tcv_in_scope
@@ -283,7 +285,7 @@ getTermSubstInScope Subst{..} = ( id_in_scope
 --          in-scope set containing range fvs and type-changed dom fvs
 -- Used when we have Subst Zk Tc (e.g. for instantiating builtins during type checking)
 mkEmptySubst
-  :: (HasPass p' pass, SubstP p p')
+  :: (HasPass p pass, HasPass p' pass', SubstP p p')
   => (TyVarSet p, KiCoVarSet p, KiVarSet p)    -- domain FVs
   -> (TyVarSet p', KiCoVarSet p', KiVarSet p') -- range FVs
   -> Subst p p'
@@ -335,7 +337,9 @@ bindFreeDomKv subst@(Subst {..}) dom_var
                           , kv_env = extendVarEnv kv_env dom_var (mkKiVarKi range_var)
                           , .. }
 
-bindFreeDomKCv :: (HasPass p' pass, SubstP p p') => Subst p p' -> KiCoVar p -> Subst p p'
+bindFreeDomKCv
+  :: (HasPass p pass, HasPass p' pass', SubstP p p')
+  => Subst p p' -> KiCoVar p -> Subst p p'
 bindFreeDomKCv subst@(Subst {..}) dom_var
   = case lookupInScope_Directly kcv_in_scope (varUnique dom_var) of
       Just range_var -> Subst { kcv_env = extendVarEnv kcv_env dom_var (mkKiCoVarCo range_var)
@@ -346,7 +350,9 @@ bindFreeDomKCv subst@(Subst {..}) dom_var
                           , kcv_env = extendVarEnv kcv_env dom_var (mkKiCoVarCo range_var)
                           , .. }
 
-bindFreeDomTv :: (HasPass p' pass, SubstP p p') => Subst p p' -> TyVar p -> Subst p p'
+bindFreeDomTv
+  :: (HasPass p pass, HasPass p' pass', SubstP p p')
+  => Subst p p' -> TyVar p -> Subst p p'
 bindFreeDomTv subst@(Subst {..}) dom_var
   = case lookupInScope_Directly tv_in_scope (varUnique dom_var) of
       Just range_var -> Subst { tv_env = extendVarEnv tv_env dom_var (mkTyVarTy range_var), .. }
@@ -588,7 +594,9 @@ checkValidSubst subst@(Subst {..}) a
 *                                                                       *
 ********************************************************************** -}
 
-substKi :: (HasDebugCallStack, HasPass p' pass, SubstP p p') => Subst p p' -> Kind p -> Kind p'
+substKi
+  :: (HasDebugCallStack, HasPass p pass, HasPass p' pass', SubstP p p')
+  => Subst p p' -> Kind p -> Kind p'
 substKi subst ki = checkValidSubst subst $
                    subst_ki subst ki
 
@@ -604,33 +612,39 @@ substRow subst (RowTySig nm ty) = RowTySig nm (substTy subst ty)
 substRow subst (RowKiSig nm ki) = RowKiSig nm (substMonoKi subst ki)
 
 substMonoKi
-  :: (HasDebugCallStack, HasPass p' pass, SubstP p p')
+  :: (HasDebugCallStack, HasPass p pass, HasPass p' pass', SubstP p p')
   => Subst p p' -> MonoKind p -> MonoKind p'
 substMonoKi subst ki = checkValidSubst subst $
                        subst_mono_ki subst ki
 
 substMonoKis
-  :: (HasDebugCallStack, HasPass p' pass, SubstP p p')
+  :: (HasDebugCallStack, HasPass p pass, HasPass p' pass', SubstP p p')
   => Subst p p' -> [MonoKind p] -> [MonoKind p']
 substMonoKis subst kis = checkValidSubst subst $
                          map (subst_mono_ki subst) kis
 
 substKiUnchecked
-  :: (HasDebugCallStack, HasPass p' pass, SubstP p p') => Subst p p' -> Kind p -> Kind p'
+  :: (HasDebugCallStack, HasPass p pass, HasPass p' pass', SubstP p p')
+  => Subst p p' -> Kind p -> Kind p'
 substKiUnchecked subst ki = subst_ki subst ki
 
 substMonoKiUnchecked
-  :: (HasDebugCallStack, HasPass p' pass, SubstP p p') => Subst p p' -> MonoKind p -> MonoKind p'
+  :: (HasDebugCallStack, HasPass p pass, HasPass p' pass', SubstP p p')
+  => Subst p p' -> MonoKind p -> MonoKind p'
 substMonoKiUnchecked subst ki = subst_mono_ki subst ki
 
-subst_ki :: (HasDebugCallStack, HasPass p' pass, SubstP p p') => Subst p p' -> Kind p -> Kind p'
+subst_ki
+  :: (HasDebugCallStack, HasPass p pass, HasPass p' pass', SubstP p p')
+  => Subst p p' -> Kind p -> Kind p'
 subst_ki subst ki = go ki
   where
     go (Mono ki) = Mono $! subst_mono_ki subst ki
     go (ForAllKi kv ki) = case substKiVarBndr subst kv of
                             (subst', kv') -> (ForAllKi $! kv') $! (subst_ki subst' ki)
 
-subst_mono_ki :: (HasDebugCallStack, HasPass p' pass) => Subst p p' -> MonoKind p -> MonoKind p'
+subst_mono_ki
+  :: (HasDebugCallStack, HasPass p pass, HasPass p' pass')
+  => Subst p p' -> MonoKind p -> MonoKind p'
 subst_mono_ki subst ki = go ki
   where
     go (KiVarKi kv) = substKiVar subst kv
@@ -645,11 +659,15 @@ subst_mono_ki subst ki = go ki
       in (mkKiPredApp $! pred) k1' k2'
     go _ = panic "subst kiconapp"
 
-substKiVar :: (HasDebugCallStack, HasPass p' pass) => Subst p p' -> KiVar p -> MonoKind p'
+substKiVar
+  :: (HasDebugCallStack, HasPass p pass, HasPass p' pass')
+  => Subst p p' -> KiVar p -> MonoKind p'
 substKiVar subst@(Subst { kv_env = env }) kv
   = lookupVarEnv env kv `orElse` pprPanic "substKiVar" (ppr kv $$ ppr subst)
 
-substKiVarBndr :: (HasPass p' pass, SubstP p p') => Subst p p' -> KiVar p -> (Subst p p', KiVar p')
+substKiVarBndr
+  :: (HasPass p pass, HasPass p' pass', SubstP p p')
+  => Subst p p' -> KiVar p -> (Subst p p', KiVar p')
 substKiVarBndr subst@(Subst {..}) old_var
   = assertPpr no_capture (ppr old_var $$ ppr new_var $$ ppr subst) $
     ( Subst { kv_in_scope = kv_in_scope `extendInScopeSet` new_var
@@ -800,7 +818,7 @@ subst_ty subst ty = go ty
     go (CastTy ty kco) = (mkCastTy $! (go ty)) $! subst_kco subst kco
     go co@(KindCoercion kco) = KindCoercion $! subst_kco subst kco
 
-    go_set_row (SetRowVal name) = SetRowVal $! name
+    go_set_row (SetRowVal name e ty) = panic "SetRowVal $! name "
     go_set_row (SetRowTy name ty) = (SetRowTy $! name) $! go ty
 
 substTyVar :: (HasPass p pass, HasPass p' pass') => Subst p p' -> TyVar p -> Type p'

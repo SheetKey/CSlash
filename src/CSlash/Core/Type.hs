@@ -92,8 +92,6 @@ import Control.Monad ((>=>))
 
 type PredType = Type
 
-type KnotTied ty = ty
-
 {- *********************************************************************
 *                                                                      *
                       TyVarTy
@@ -735,7 +733,7 @@ typeMonoKind (SetRowsTy base rows)
   = KiConApp $ KiCon Nothing (typeMonoKind base) (rowSigOfRow <$> rows)
 
 rowSigOfRow :: HasPass p pass => SetRow p -> RowSig p
-rowSigOfRow (SetRowVal nm) = RowTySig nm (panic "rowSigOfRow")
+rowSigOfRow (SetRowVal nm _ ty) = RowTySig nm ty
 rowSigOfRow (SetRowTy nm ty) = RowKiSig nm (typeMonoKind ty)
 
 handle_non_mono :: Kind p -> (Kind p -> SDoc) -> MonoKind p

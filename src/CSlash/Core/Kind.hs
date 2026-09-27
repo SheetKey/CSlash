@@ -1,3 +1,4 @@
+{-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -103,7 +104,7 @@ lookupRowEnv (RowEnv env) nm =
       new_occ = setOccNameSpace new_ns occ
   in lookupOccEnv env new_occ
 
-instance IsPass p => Outputable (RowEnv (CsPass p)) where
+instance HasPass p p' => Outputable (RowEnv (CsPass p')) where
   ppr (RowEnv env) = ppr env
 
 rowSigName :: RowSig p -> Name

@@ -25,7 +25,7 @@ import CSlash.Utils.Outputable
 import CSlash.Utils.Panic
 import CSlash.Types.SrcLoc
 import CSlash.Types.SourceText
-import CSlash.Core.Type
+import {-# SOURCE #-} CSlash.Core.Rep
 
 import CSlash.Data.Bag
 import CSlash.Data.Maybe

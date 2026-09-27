@@ -9,7 +9,7 @@ module CSlash.Core.Type.FVs where
 import CSlash.Cs.Pass
 
 import {-# SOURCE #-} CSlash.Core.Type
-import CSlash.Core.Folder
+import {-# SOURCE #-} CSlash.Core.Folder
 import {-# SOURCE #-} CSlash.Core.Mapper
 
 import Data.Monoid as DM ( Endo(..), Any(..) )

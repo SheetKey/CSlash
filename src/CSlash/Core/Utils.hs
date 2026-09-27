@@ -1,3 +1,5 @@
+{-# LANGUAGE FlexibleContexts #-}
+
 module CSlash.Core.Utils where
 
 import Prelude hiding ((<>))

@@ -1,3 +1,5 @@
+{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiWayIf #-}
@@ -265,13 +267,13 @@ pprArg (Kind ki) = ppUnlessOption sdocSuppressTypeApplications
 pprArg (KiCo co) = braces (char '~' <+> pprOptKiCo co)
 pprArg expr = pprParendExpr expr
 
-instance IsPass p => Outputable (CoreBndrP (CsPass p)) where
+instance HasPass p p' => Outputable (CoreBndrP (CsPass p')) where
   ppr (Core.Id id) = ppr id
   ppr (Tv v) = ppr v
   ppr (KCv v) = ppr v
   ppr (Kv v) = ppr v
 
-instance IsPass p => OutputableBndr (CoreBndrP (CsPass p)) where
+instance HasPass p p' => OutputableBndr (CoreBndrP (CsPass p')) where
   pprBndr = pprCoreBinder
 
   pprInfixOcc (Core.Id id) = pprInfixOcc id
@@ -293,25 +295,25 @@ instance (OutputableBndr b, Outputable t) => OutputableBndr (TaggedBndr b t) whe
   pprPrefixOcc b = ppr b
   bndrIsJoin_maybe (TB b _) = bndrIsJoin_maybe b
 
-instance IsPass p => OutputableBndr (Id (CsPass p)) where
+instance HasPass p p' => OutputableBndr (Id (CsPass p')) where
   pprBndr b v = pprCoreBinder b (Core.Id v)
   pprInfixOcc = pprInfixName . varName
   pprPrefixOcc = pprPrefixName . varName
   bndrIsJoin_maybe = idJoinPointHood
 
-instance IsPass p => OutputableBndr (TyVar (CsPass p)) where
+instance HasPass p p' => OutputableBndr (TyVar (CsPass p')) where
   pprBndr b v = pprCoreBinder b (Tv v)
   pprInfixOcc = pprInfixName . varName
   pprPrefixOcc = pprPrefixName . varName
   bndrIsJoin_maybe _ = NotJoinPoint
 
-instance IsPass p => OutputableBndr (KiCoVar (CsPass p)) where
+instance HasPass p p' => OutputableBndr (KiCoVar (CsPass p')) where
   pprBndr b v = pprCoreBinder b (KCv v)
   pprInfixOcc = pprInfixName . varName
   pprPrefixOcc = pprPrefixName . varName
   bndrIsJoin_maybe _ = NotJoinPoint
 
-instance IsPass p => OutputableBndr (KiVar (CsPass p)) where
+instance HasPass p p' => OutputableBndr (KiVar (CsPass p')) where
   pprBndr b v = pprCoreBinder b (Kv v)
   pprInfixOcc = pprInfixName . varName
   pprPrefixOcc = pprPrefixName . varName

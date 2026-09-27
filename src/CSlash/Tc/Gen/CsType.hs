@@ -5,6 +5,9 @@ module CSlash.Tc.Gen.CsType where
 
 import Prelude hiding ((<>))
 
+import {-# SOURCE #-} CSlash.Tc.Gen.Bind (tcFunBind)
+import CSlash.Tc.Types.Evidence (isIdCsWrapper)
+
 import CSlash.Cs
 import CSlash.Rename.Utils
 import CSlash.Tc.Gen.CsKind
@@ -301,10 +304,9 @@ tc_arrow (CsArrow _ (L _ ki)) = tcArrow ki
 ********************************************************************* -}
 
 tcSetRows :: RowEnv Tc -> LCsSetRows Rn -> TcM ([SetRow Tc], [RowSig Tc])
-tcSetRows env rn_ty@(L _ (SetRows _ lrows)) = do
+tcSetRows env rn_ty@(L _ (SetRows _ rows)) = do
   traceTc "tcSetRows env" (ppr env $$ ppr_set_rows rn_ty)
-  let rows = unLoc <$> lrows
-      pairs = map (\r -> (lookupRow r, r)) rows
+  let pairs = map (\r -> (lookupRow (unLoc r), r)) rows
   traceTc "pairs" (ppr (fst <$> pairs))
   mapAndUnzipM (uncurry tcSetRow) pairs
   where
@@ -313,13 +315,53 @@ tcSetRows env rn_ty@(L _ (SetRows _ lrows)) = do
 
     lookupRow row = lookupRowEnv env (rowName row)
 
-tcSetRow :: Maybe (RowSig Tc) -> CsSetRow Rn -> TcM (SetRow Tc, RowSig Tc)
+tcSetRow :: Maybe (RowSig Tc) -> LCsSetRow Rn -> TcM (SetRow Tc, RowSig Tc)
 tcSetRow (Just sig) = tcCheckSetRow sig
 tcSetRow Nothing = tcInferSetRow 
 
-tcCheckSetRow :: RowSig Tc -> CsSetRow Rn -> TcM (SetRow Tc, RowSig Tc)
-tcCheckSetRow (RowTySig nm ty) (SetRow _ row_nm row_expr) = panic "tcCheckSetRow SetRow"
-tcCheckSetRow (RowKiSig nm ki) (SetTyRow _ row_nm row_type) = do
+tcCheckSetRow :: RowSig Tc -> LCsSetRow Rn -> TcM (SetRow Tc, RowSig Tc)
+tcCheckSetRow row_sig@(RowTySig nm ty) (L loc (SetRow _ row_nm row_expr)) = do
+  {- Basically
+       tcTopBinds NotTopLevel -> tcValBinds -> tcBindGroups -> tc_group NonRecursive
+       -> tc_single (do not extend let env) -> tcPolyBinds -> tcPolyCheck
+     However, this is the check, so we already have a type sig.
+     So, no 'decideGeneralizationPlan' or 'isClosedBndrGroup'.
+     In particular, we're like the 'one_funbind_with_sig' case of 'decidegeneralisationplan'
+
+     Within 'tcPolyCheck':
+     1. We don't need to extend the binder stack with the mono_id: rows can't be recursively defined? We could extend with a dummy id that would throw "Recursive row declaration error"
+
+     2. The really important call is 'tcFunBind' inside 'tcSkolemizeCompleteSig'
+  -}
+  traceTc "tcCheckSetRow0"
+    $ vcat [ text "nm:" <+> ppr nm
+           , text "ty:" <+> ppr ty
+           , text "row_nm:" <+> ppr row_nm
+           , text "row_expr:" <+> ppr row_expr ]
+
+  let ctxt = SetRowCtxt (unLoc row_nm)
+  (wrap_gen, (wrap_res, res)) <- tcSkolemizeExpectedType ty $ \invis_pat_tys rho_ty ->
+    setSrcSpanA loc $
+    tcFunBind ctxt (unLoc row_nm) row_expr invis_pat_tys (mkCheckExpType rho_ty)
+
+  traceTc "tcCheckSetRow1"
+    $ vcat [ text "nm:" <+> ppr nm
+           , text "wrap_gen:" <+> ppr wrap_gen
+           , text "wrap_res:" <+> ppr wrap_res
+           , text "res:" <+> ppr res ]
+
+  massertPpr (isIdCsWrapper wrap_gen)
+    (text "Non-identity wrapper in row:" <+> ppr wrap_gen)
+
+  massertPpr (isIdCsWrapper wrap_res)
+    (text "Non-identity wrapper in row:" <+> ppr wrap_res)
+
+  let set_row = SetRowVal (unLoc row_nm) (unLoc res) ty -- Is this the right ty?
+
+  return (set_row, row_sig)
+
+
+tcCheckSetRow (RowKiSig nm ki) (L _ (SetTyRow _ row_nm row_type)) = do
   -- Need to instantiate the kvs of 'ki'
   -- This gives us a 'MonoKind Tc'
   -- Similar to 'tcInferKiCon_instantiate'?
@@ -350,9 +392,9 @@ tcCheckSetRow (RowKiSig nm ki) (SetTyRow _ row_nm row_type) = do
     , RowKiSig (unLoc row_nm) ki) -- TODO: which name? Doesn't matter?
     
 
-tcInferSetRow :: CsSetRow Rn -> TcM (SetRow Tc, RowSig Tc)
-tcInferSetRow (SetRow kv_nms row_nm row_expr) = panic "tcInferSetRow SetRow"
-tcInferSetRow (SetTyRow kv_nms row_nm row_type) = panic "tcInferSetRow SetTyRow"
+tcInferSetRow :: LCsSetRow Rn -> TcM (SetRow Tc, RowSig Tc)
+tcInferSetRow (L _ (SetRow kv_nms row_nm row_expr)) = panic "tcInferSetRow SetRow"
+tcInferSetRow (L _ (SetTyRow kv_nms row_nm row_type)) = panic "tcInferSetRow SetTyRow"
 
 {- *********************************************************************
 *                                                                      *

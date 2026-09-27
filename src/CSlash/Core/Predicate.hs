@@ -1,3 +1,5 @@
+{-# LANGUAGE FlexibleContexts #-}
+
 module CSlash.Core.Predicate where
 
 import CSlash.Cs.Pass

@@ -1,3 +1,5 @@
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -265,7 +267,7 @@ isMonoTcTyCon (TyCon { tyConDetails = details })
   | TcTyCon { tctc_is_poly = is_poly } <- details = not is_poly
   | otherwise = False
 
-monoTcTyConKind :: TyCon Tc -> Maybe (MonoKind Tc)
+monoTcTyConKind :: HasPass Tc 'Typechecked => TyCon Tc -> Maybe (MonoKind Tc)
 monoTcTyConKind tc@(TyCon { tyConDetails = details })
   | TcTyCon { tctc_is_poly = False, tcTyConKind = kind } <- details
   = case kind of
@@ -527,7 +529,7 @@ instance Outputable (TyCon p) where
                               then text "[tc]"
                               else empty
 
-pprTyConKind :: TyCon p -> SDoc
+pprTyConKind :: (HasPass p p', HasPass Zk 'Zonked) => TyCon p -> SDoc
 pprTyConKind tc = case tyConDetails tc of
   TcTyCon { tcTyConKind = kind } -> ppr kind
   other -> ppr $ tyConKind other

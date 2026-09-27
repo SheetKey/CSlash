@@ -10,6 +10,7 @@ import CSlash.Language.Syntax.Module.Name
 import CSlash.Builtin.Types.Prim
 import CSlash.Core.Type as Type
 import CSlash.Core.Kind
+import CSlash.Core.Rep
 import CSlash.Core.TyCon
 import {-# SOURCE #-} CSlash.Types.TyThing
 import CSlash.Types.SourceText

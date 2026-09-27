@@ -2,6 +2,24 @@
 {-# LANGUAGE RoleAnnotations #-}
 
 module CSlash.Core.Kind where
+
+import {-# SOURCE #-} CSlash.Core.Rep
+import CSlash.Types.Var.KiVar
+
+class SKC kind where
+  mkKiVarKi :: KiVar p -> kind p
+  mkKiVarKis :: [KiVar p] -> [kind p]
+  mkKiVarKis = map mkKiVarKi
+
+instance SKC MonoKind
+
+instance SKC Kind 
+
+class SKG kind where
+  getKiVar_maybe :: kind p -> Maybe (KiVar p)
+
+instance SKG Kind 
+instance SKG MonoKind 
 {-
 import CSlash.Cs.Pass
 

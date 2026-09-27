@@ -47,8 +47,7 @@ import CSlash.Utils.Outputable
 import CSlash.Utils.Panic
 import CSlash.Types.Name.Reader (RdrName)
 import CSlash.Core.ConLike
-import CSlash.Core.Type
-import CSlash.Core.Kind
+import {-# SOURCE #-} CSlash.Core.Rep 
 import CSlash.Types.Name (Name)
 import Data.Data
 

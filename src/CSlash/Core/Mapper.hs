@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE BangPatterns #-}
@@ -12,6 +13,8 @@ import CSlash.Core.Type
 import CSlash.Core.Kind
 
 import CSlash.Types.Var
+
+import CSlash.Utils.Panic
 
 data CoreMapper p p' env m = CoreMapper
   { cm_kv :: env -> KiVar p -> m (MonoKind p')
@@ -125,7 +128,7 @@ mapCoreX CoreMapper{..}
     go_ty !env (LocalTyRow nm ki) = LocalTyRow nm <$> go_mki env ki
     go_ty !env (SetRowsTy ty rs) = SetRowsTy <$> go_ty env ty <*> go_set_rows env rs
 
-    go_set_row !env (SetRowVal nm) = return $ SetRowVal nm
+    go_set_row !env (SetRowVal nm _ _) = return $ panic "SetRowVal nm"
     go_set_row !env (SetRowTy nm ty) = SetRowTy nm <$> go_ty env ty
 
     go_tco !env (TyRefl ty) = TyRefl <$> go_ty env ty

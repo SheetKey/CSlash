@@ -1,3 +1,6 @@
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeAbstractions #-}
@@ -15,6 +18,7 @@ import {-# SOURCE #-} CSlash.Core.Rep (Type, MonoKind)
 import {-# SOURCE #-} CSlash.Tc.Utils.TcType (TcVarDetails, pprTcVarDetails, vanillaSkolemVarUnk)
 
 import CSlash.Cs.Pass
+-- import CSlash.Cs.Extension
 
 import CSlash.Types.Var.KiVar
 import CSlash.Types.Var.CoVar
@@ -83,7 +87,7 @@ instance TcVar TcTyVar where
 
   tcVarDetails = tc_tv_details
 
-instance IsPass p => Outputable (TyVar (CsPass p)) where
+instance HasPass p p' => Outputable (TyVar (CsPass p')) where
   ppr (TcTyVar tv) = ppr tv
   ppr TyVar {..} = docWithStyle ppr_code ppr_normal
     where
@@ -95,7 +99,7 @@ instance IsPass p => Outputable (TyVar (CsPass p)) where
            then parens (ppr tv_name <> ppr_var <+> colon <+> ppr tv_kind)
            else ppr tv_name <> ppr_var
 
-instance Outputable TcTyVar where
+instance HasPass Tc 'Typechecked => Outputable TcTyVar where
   ppr TcTyVar' {..} = docWithStyle ppr_code ppr_normal
     where
       ppr_code = ppr tc_tv_name
@@ -205,7 +209,7 @@ data PiTyBinder p
   -- AnonTy probably also needs to record the function kind as in 'a -k> res'
   -- deriving Data
 
-instance IsPass p => Outputable (PiTyBinder (CsPass p)) where
+instance HasPass p p' => Outputable (PiTyBinder (CsPass p')) where
   ppr (AnonTy ty) = ppr ty
   ppr (NamedTy v) = ppr v
   ppr (NamedKiCo v) = ppr v

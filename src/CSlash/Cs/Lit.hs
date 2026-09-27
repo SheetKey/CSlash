@@ -11,7 +11,7 @@ module CSlash.Cs.Lit
 
 import CSlash.Types.Basic
 import CSlash.Types.SourceText
-import CSlash.Core.Type
+import {-# SOURCE #-} CSlash.Core.Rep (Type)
 import CSlash.Utils.Outputable
 import CSlash.Cs.Extension
 import CSlash.Language.Syntax.Expr (CsExpr)

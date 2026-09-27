@@ -1,7 +1,7 @@
 module CSlash.Core.ConLike where
 
 import CSlash.Core.DataCon
-import CSlash.Core.Type (mkTyConApp)
+import {-# SOURCE #-} CSlash.Core.Rep (mkTyConApp)
 import CSlash.Types.Unique
 import CSlash.Types.Name
 import CSlash.Types.Name.Reader

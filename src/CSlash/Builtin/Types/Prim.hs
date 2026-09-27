@@ -1,15 +1,16 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RankNTypes #-}
 
 module CSlash.Builtin.Types.Prim where
 
 import {-# SOURCE #-} CSlash.Types.TyThing (mkATyCon)
 import {-# SOURCE #-} CSlash.Core.Type (buildSynTyCon, typeKind)
-import CSlash.Core.Rep (mkTyConApp)
+import CSlash.Core.Rep
+import CSlash.Core.Kind
 
 import CSlash.Cs.Pass
 
 import CSlash.Core.TyCon
-import CSlash.Core.Kind
 
 import CSlash.Types.Var
 import CSlash.Types.Name
@@ -104,19 +105,19 @@ mkTemplateFunKindVars i
 mkTemplateTyConKindFromRes :: HasPass p pass => Int -> MonoKind p -> Kind p
 mkTemplateTyConKindFromRes arity res_kind
   = let kind_vars = mkTemplateKindVars arity
-        kinds = KiVarKi <$> kind_vars
+        kinds = mkKiVarKis kind_vars
         constraints = (flip (KiPredApp LTEQKi) res_kind) <$> kinds
         full_kind_no_constraints = foldr (FunKi FKF_K_K) res_kind kinds
         full_kind = foldr (FunKi FKF_C_K) full_kind_no_constraints constraints
-        res_kind_var = case res_kind of
-                         KiVarKi var -> [var]
+        res_kind_var = case getKiVar_maybe res_kind of
+                         Just var -> [var]
                          _ -> []
         q_full_kind = foldr ForAllKi (Mono full_kind) (kind_vars ++ res_kind_var)
     in pprTrace "mkTemplateTyConKindFromRes" (ppr q_full_kind) q_full_kind
 
 mkTemplateTyConKind :: HasPass p pass => Int -> Kind p
 mkTemplateTyConKind arity
-  = let res_kind = KiVarKi $ mkKiVar (mk_kv_name arity ('k' : show arity))
+  = let res_kind = mkKiVarKi $ mkKiVar (mk_kv_name arity ('k' : show arity))
     in mkTemplateTyConKindFromRes arity res_kind
 
 -- TODO: do KiCoVars need their own version of 'mkAlphaKiVarUnique'/'mkFunKiVarUnique'?
@@ -223,8 +224,8 @@ eqTyCon = mkPrimTyCon eqTyConName kind 2
     kind = ForAllKi k1
            $ ForAllKi k2
            $ Mono
-           $ FunKi FKF_K_K (KiVarKi k1)
-           $ FunKi FKF_K_K (KiVarKi k2)
+           $ FunKi FKF_K_K (mkKiVarKi k1)
+           $ FunKi FKF_K_K (mkKiVarKi k2)
            $ BIKi UKd
 
 {- See note in BuiltIn.Types
@@ -269,4 +270,4 @@ ioTyCon
 
     kind = ForAllKi kva $
            ForAllKi kvb $
-           Mono $ FunKi FKF_K_K (KiVarKi kva) (KiVarKi kvb)
+           Mono $ FunKi FKF_K_K (mkKiVarKi kva) (mkKiVarKi kvb)

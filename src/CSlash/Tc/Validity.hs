@@ -1,3 +1,5 @@
+{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 
 module CSlash.Tc.Validity where
@@ -140,7 +142,7 @@ data ValidityEnv p = ValidityEnv
   { ve_tidy_env :: TidyEnv p
   , ve_ctxt :: UserTypeCtxt }
 
-instance IsPass p => Outputable (ValidityEnv (CsPass p)) where
+instance HasPass p p' => Outputable (ValidityEnv (CsPass p')) where
   ppr (ValidityEnv { ve_tidy_env = env
                    , ve_ctxt = ctxt })
     = hang (text "ValidityEnv")

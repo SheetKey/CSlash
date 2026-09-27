@@ -1,3 +1,5 @@
+{-# LANGUAGE FlexibleContexts #-}
+
 module CSlash.Builtin.Types where
 
 import CSlash.Cs.Pass

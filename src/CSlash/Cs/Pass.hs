@@ -9,10 +9,20 @@
 module CSlash.Cs.Pass where
 
 import CSlash.Utils.Panic 
+import CSlash.Utils.Outputable
+import CSlash.Language.Syntax.Extension
+import CSlash.Types.SrcLoc
 
 import Data.Data
 
-type HasPass p p' = (p ~ CsPass p', IsPass p')
+type HasPass p p' =
+  ( p ~ CsPass p'
+  , IsPass p'
+  , OutputableBndr (IdP p)
+  , OutputableBndr (IdP (CsPass (NoCsTcPass p')))
+  , Outputable (GenLocated (Anno (IdP p)) (IdP p))
+  , Outputable (GenLocated (Anno (IdP (CsPass (NoCsTcPass p')))) (IdP (CsPass (NoCsTcPass p'))))
+  )
 
 data CsPass (c :: Pass) where
   Ps :: CsPass 'Parsed

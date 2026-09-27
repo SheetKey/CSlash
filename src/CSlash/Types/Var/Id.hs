@@ -1,3 +1,5 @@
+{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -64,7 +66,7 @@ instance IsVar (Id p) where
 
   isTcVar _ = False
 
-instance IsPass p => Outputable (Id (CsPass p)) where
+instance HasPass p p' => Outputable (Id (CsPass p')) where
   ppr Id {..} = docWithStyle ppr_code ppr_normal
     where
       ppr_code = ppr id_name

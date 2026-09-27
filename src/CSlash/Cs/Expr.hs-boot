@@ -5,7 +5,10 @@
 
 {-# OPTIONS_GHC -Wno-orphans #-} -- Outputable
 
-module CSlash.Cs.Expr where
+module CSlash.Cs.Expr
+  ( module CSlash.Cs.Expr
+  , LCsExpr, CsExpr
+  ) where
 
 import CSlash.Utils.Outputable ( SDoc, Outputable )
 import CSlash.Language.Syntax.Expr
