@@ -9,6 +9,8 @@ import CSlash.Core.Rep
 
 import CSlash.Types.Var
 
+import CSlash.Utils.Panic
+
 data CoreFolder p env a = CoreFolder
   { cf_ty_view :: Type p -> Maybe (Type p)
   , cf_fa_kv :: env -> KiVar p -> env
@@ -56,6 +58,9 @@ foldCore CoreFolder{..} env
     go_kcos _ [] = mempty
     go_kcos env (c:cs) = go_kco env c `mappend` go_kcos env cs
 
+    go_set_rows _ [] = mempty
+    go_set_rows env (r:rs) = go_set_row env r `mappend` go_set_rows env rs
+
     go_ty env ty | Just ty' <- cf_ty_view ty = go_ty env ty'
     go_ty env (TyVarTy tv) = cf_tv env tv
     go_ty env (AppTy t1 t2) = go_ty env t1 `mappend` go_ty env t2
@@ -82,6 +87,11 @@ foldCore CoreFolder{..} env
     go_ty env (CastTy ty kco)
       = go_ty env ty `mappend` go_kco env kco
     go_ty env (KindCoercion kco) = go_kco env kco
+    go_ty env (LocalTyRow nm ki) = go_mki env ki
+    go_ty env (SetRowsTy ty rows) = go_ty env ty `mappend` go_set_rows env rows
+
+    go_set_row env (SetRowVal nm e ty) = panic "Folder go_set_row setrowval"
+    go_set_row env (SetRowTy _ ty) = go_ty env ty
 
     go_tco env (TyRefl ty) = go_ty env ty
     go_tco env (AppCo c1 c2) = go_tco env c1 `mappend` go_tco env c2
