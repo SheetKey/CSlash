@@ -1050,7 +1050,7 @@ uKind env kc orig_ki1 orig_ki2 = do
 
     ------------------
     go_rows rs1 rs2 = do
-      let (l, r, z) = zipRowEnvs rs1 rs2
+      let (l, r, z) = zipRowSigEnvs rs1 rs2
           l' = rowEnvElts l
           r' = rowEnvElts r
           pairs = rowEnvElts z
