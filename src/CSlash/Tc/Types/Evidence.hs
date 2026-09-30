@@ -16,7 +16,7 @@ import CSlash.Types.Var
 -- import GHC.Types.Id( idScaledType )
 -- import GHC.Core.Coercion.Axiom
 -- import GHC.Core.Coercion
-import {-# SOURCE #-} CSlash.Core.Ppr ()   -- Instance OutputableBndr TyVar
+import {-# SOURCE #-} CSlash.Core.Ppr ()   -- Instance OutputableBndr 
 -- import CSlash.Tc.Utils.TcType
 import CSlash.Core.Type
 import CSlash.Core.Kind
@@ -186,7 +186,20 @@ pprCsWrapper wrap pp_thing_inside =
       add_parens ((parens (text "\\(x" <> colon <> ppr ty1 <> text ")."
                            <+> help (\_ -> it True <+> text "x") f2 False))
                    <+> colon <+> ppr fki)
-    help it _ = panic "pprCsWrapper"
+    help it (WpCast tco) = add_parens $ sep [ it False
+                                            , nest 2 (text "|>" <+> parens (ppr tco)) ]
+    help it (WpTyApp ty) = no_parens $ sep [ it True , braces (ppr ty) ]
+    help it (WpKiCoApp kco) = no_parens $ sep [ it True , braces (ppr kco) ]
+    help it (WpKiApp ki) = no_parens $ sep [ it True, braces (ppr ki) ]
+    help it (WpTyLam v) = add_parens $ sep [ text "/\\" <> pprBndr LambdaBind v <> dot
+                                           , it False ]
+    help it (WpKiCoLam v) = add_parens $ sep [ text "/\\" <> pprBndr LambdaBind v <> dot
+                                             , it False ]
+    help it (WpKiLam v) = add_parens $ sep [ text "/\\" <> pprBndr LambdaBind v <> dot
+                                           , it False ]
+    help it (WpMultCoercion kco) = add_parens $ sep [ it False
+                                                    , nest 2 (text "<mult co>" <+>
+                                                              parens (ppr kco)) ]
 
 add_parens :: SDoc -> Bool -> SDoc
 add_parens d True = parens d
