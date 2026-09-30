@@ -244,6 +244,7 @@ tcFunBind ctxt fun_name (L loc body) invis_pat_tys exp_ty =
                 
            tc_body e = (idCsWrapper, ) <$> tcPolyExpr e exp_ty
        (wrap, body') <- tc_body body
+       traceTc "tcFunBind done" (ppr wrap <+> ppr body')
        return (wrap, L loc body')
 
 tcPolyBinds
