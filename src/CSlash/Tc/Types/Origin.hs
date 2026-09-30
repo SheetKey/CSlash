@@ -50,7 +50,8 @@ data UserTypeCtxt
   | TyVarBndrKindCtxt Name
   | TySynKindCtxt Name
   | RowSigCtxt Name ReportRedundantConstraints
-  | SetRowCtxt Name
+  | SetRowValCtxt Name
+  | SetRowTyCtxt Name
   deriving (Eq)
 
 data ReportRedundantConstraints
@@ -65,6 +66,8 @@ reportRedundantConstraints (WantRRC {}) = True
 pprUserTypeCtxt :: UserTypeCtxt -> SDoc
 pprUserTypeCtxt (FunSigCtxt n _) = text "the type signature for" <+> quotes (ppr n)
 pprUserTypeCtxt (RowSigCtxt n _) = text "the type signature for the row" <+> quotes (ppr n) 
+pprUserTypeCtxt (SetRowValCtxt n) = text "the expression assigned to the row" <+> quotes (ppr n)
+pprUserTypeCtxt (SetRowTyCtxt n) = text "the type assigned to the row" <+> quotes (ppr n)
 pprUserTypeCtxt (InfSigCtxt n) = text "the inferred type for" <+> quotes (ppr n)
 pprUserTypeCtxt (ExprSigCtxt _) = text "an expression type signature"
 pprUserTypeCtxt KindSigCtxt = text "a kind signature"
