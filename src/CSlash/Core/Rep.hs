@@ -472,7 +472,16 @@ expand_syn rhs arg_tys
   | null arg_tys = panic "closedType rhs"
   | otherwise = go rhs empty_subst arg_tys
   where
-    empty_subst = mkEmptySubst (noDomFVs rhs (varsOfType rhs)) (varsOfTypes arg_tys)
+    {- empty_subst = mkEmptySubst (noDomFVs rhs (varsOfType rhs)) (varsOfTypes arg_tys)
+       The above empty_subst is wrong:
+       There can be free dom fvs!
+       The example that caught with issue was rows.
+       The broader issue is something like
+         forall {a:k}. ((\b:k -> b) a)
+       This is contrived, but things like this can occur: local type functions
+       that mention outer ki-vars. There is no reason they couldn't also mention outer tyvars.
+    -}
+    empty_subst = mkEmptySubst (varsOfType rhs) (varsOfTypes arg_tys)
 
     go (TyLamTy _ _) _ [] = pprPanic "expand_syn" (ppr rhs $$ ppr arg_tys)
     go (BigTyLamTy _ _) _ [] = pprPanic "expand_syn" (ppr rhs $$ ppr arg_tys)
