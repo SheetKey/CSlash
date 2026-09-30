@@ -66,7 +66,8 @@ foldCore CoreFolder{..} env
     go_ty env (AppTy t1 t2) = go_ty env t1 `mappend` go_ty env t2
     go_ty env (TyLamTy tv ty)
       = let !env' = cf_lam_tv env tv
-        in go_ty env' ty
+        in go_mki env (varKind tv) `mappend`
+           go_ty env' ty
     go_ty env (BigTyLamTy kv ty)
       = let !env' = cf_lam_kv env kv
         in go_ty env' ty
