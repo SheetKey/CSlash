@@ -45,7 +45,7 @@ isUnboundName :: Name -> Bool
 isUnboundName name = name `hasKey` unboundKey
 
 selfName :: Name
-selfName = mkUnboundName (mkOccName TcName "self")
+selfName = mkUnboundName (mkOccName (TcRowName (fsLit "")) "self")
 
 {- *********************************************************************
 *                                                                      *
