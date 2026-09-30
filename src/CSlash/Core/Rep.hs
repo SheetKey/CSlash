@@ -77,6 +77,10 @@ data SetRow p where
   SetRowVal :: Name -> (CsExpr (CsPass p)) -> (Type (CsPass p)) -> SetRow (CsPass p)
   SetRowTy :: Name -> (Type p) -> SetRow p
 
+setRowTyPair :: SetRow p -> (Name, Type p)
+setRowTyPair (SetRowTy nm ty) = (nm, ty)
+setRowTyPair _ = panic "setRowTyPair"
+
 instance Data.Typeable p => Data.Data (SetRow p)
 
 {- **********************************************************************
