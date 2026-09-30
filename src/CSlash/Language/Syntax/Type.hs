@@ -109,3 +109,7 @@ type LCsSetRow p = XRec p (CsSetRow p)
 data CsSetRow p
   = SetRow (XSetRow p) (LIdP p) (LCsExpr p)
   | SetTyRow (XSetTyRow p) (LIdP p) (LCsType p)
+
+isSetCsTyRow :: CsSetRow p -> Bool
+isSetCsTyRow SetRow{} = False
+isSetCsTyRow SetTyRow{} = True
