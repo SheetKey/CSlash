@@ -55,31 +55,37 @@ import Data.Maybe (isJust)
 *                                                                       *
 ********************************************************************** -}
 
-type RowEnv p = RowEnv' (RowSig p)
-type ZipRowEnv p = RowEnv' (RowSig p, RowSig p)
+type RowSigEnv p = RowEnv' (RowSig p)
+type ZipRowSigEnv p = RowEnv' (RowSig p, RowSig p)
+type TyRowEnv p = RowEnv' (Type p)
 newtype RowEnv' a = RowEnv (OccEnv a)
+
+mkTyRowEnv :: [(Name, Type p)] -> TyRowEnv p
+mkTyRowEnv pairs = RowEnv $ extendOccEnvList emptyOccEnv pairs'
+  where
+    pairs' = mapFst (setOccNameSpace (TcRowName (fsLit "")) . nameOccName) pairs
 
 rowEnvElts :: RowEnv' a -> [a]
 rowEnvElts (RowEnv e) = nonDetOccEnvElts e
 
-flattenKiCon :: KiCon p -> (MonoKind p, RowEnv p)
+flattenKiCon :: KiCon p -> (MonoKind p, RowSigEnv p)
 flattenKiCon = go (RowEnv emptyOccEnv) . KiConApp
   where
     go env (KiConApp (KiCon _ base rows))
-      = go (mkRowEnvFromSig rows `plusRowEnv` env) base
+      = go (mkRowSigEnvFromSig rows `plusRowEnv` env) base
     go env base = (base, env)
 
 -- Looks deeply through kicons.
-mkRowEnv :: MonoKind p -> RowEnv p
-mkRowEnv (KiConApp (KiCon _ base rows))
-  = mkRowEnv base `plusRowEnv` mkRowEnvFromSig rows
-mkRowEnv _ = RowEnv emptyOccEnv
+mkRowSigEnv :: MonoKind p -> RowSigEnv p
+mkRowSigEnv (KiConApp (KiCon _ base rows))
+  = mkRowSigEnv base `plusRowEnv` mkRowSigEnvFromSig rows
+mkRowSigEnv _ = RowEnv emptyOccEnv
  
-plusRowEnv :: RowEnv p -> RowEnv p -> RowEnv p
+plusRowEnv :: RowEnv' a -> RowEnv' a -> RowEnv' a
 plusRowEnv (RowEnv env1) (RowEnv env2) = RowEnv $ env1 `plusOccEnv` env2
 
-mkRowEnvFromSig :: [RowSig p] -> RowEnv p
-mkRowEnvFromSig rows
+mkRowSigEnvFromSig :: [RowSig p] -> RowSigEnv p
+mkRowSigEnvFromSig rows
   = RowEnv $ extendOccEnvList emptyOccEnv pairs
   where
     pairs = mkPair <$> rows
@@ -87,24 +93,24 @@ mkRowEnvFromSig rows
     mkPair r@(RowTySig nm _) = (setOccNameSpace (RowName (fsLit "")) (nameOccName nm), r)
     mkPair r@(RowKiSig nm _) = (setOccNameSpace (TcRowName (fsLit "")) (nameOccName nm), r)
 
-zipRowEnvs :: RowEnv p -> RowEnv p -> (RowEnv p, RowEnv p, ZipRowEnv p)
-zipRowEnvs (RowEnv a) (RowEnv b) =
+zipRowSigEnvs :: RowSigEnv p -> RowSigEnv p -> (RowSigEnv p, RowSigEnv p, ZipRowSigEnv p)
+zipRowSigEnvs (RowEnv a) (RowEnv b) =
   let l = a `minusOccEnv` b
       r = b `minusOccEnv` a
       z = intersectOccEnv_C (,) a b
   in (RowEnv l, RowEnv r, RowEnv z)
 
-lookupRowEnv :: RowEnv p -> Name -> Maybe (RowSig p)
+lookupRowEnv :: RowEnv' a -> Name -> Maybe a
 lookupRowEnv (RowEnv env) nm =
   let occ = nameOccName nm
       new_ns = case occNameSpace occ of
                  RowName _ -> RowName (fsLit "")
                  TcRowName _ -> TcRowName (fsLit "")
-                 _ -> pprPanic "unreachable" (ppr nm)
+                 _ -> pprPanic "lookupRowEnv" (ppr nm) -- This means a namespace was set incorrectly elsewhere!
       new_occ = setOccNameSpace new_ns occ
   in lookupOccEnv env new_occ
 
-instance HasPass p p' => Outputable (RowEnv (CsPass p')) where
+instance Outputable a => Outputable (RowEnv' a) where
   ppr (RowEnv env) = ppr env
 
 rowSigName :: RowSig p -> Name
