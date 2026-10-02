@@ -23,6 +23,8 @@ import {-# SOURCE #-} CSlash.Core.Type.FVs
 import {-# SOURCE #-} CSlash.Core.Subst
 import CSlash.Core.TyCon
 
+import {-# SOURCE #-} CSlash.Tc.Types.Evidence (CsWrapper, pprCsWrapper)
+
 import CSlash.Types.Var.TyVar
 import CSlash.Types.Var.KiVar
 import CSlash.Types.Var.CoVar
@@ -74,7 +76,8 @@ data Type p
   deriving Data.Data
 
 data SetRow p where
-  SetRowVal :: Name -> (CsExpr (CsPass p)) -> (Type (CsPass p)) -> SetRow (CsPass p)
+  SetRowVal
+    :: Name -> (CsExpr (CsPass p), CsWrapper (CsPass p)) -> (Type (CsPass p)) -> SetRow (CsPass p)
   SetRowTy :: Name -> (Type p) -> SetRow p
 
 setRowTyPair :: SetRow p -> (Name, Type p)
@@ -716,7 +719,8 @@ debug_ppr_ty _ (SetRowsTy base rows)
     (fsep (punctuate comma (map debug_ppr_set_row rows)))
 
 debug_ppr_set_row :: HasPass p pass => SetRow p -> SDoc
-debug_ppr_set_row (SetRowVal nm expr _) = ppr nm <+> equals <+> pprExpr expr
+debug_ppr_set_row (SetRowVal nm (expr, wrap) _)
+  = ppr nm <+> equals <+> pprCsWrapper wrap (const (pprExpr expr))
 debug_ppr_set_row (SetRowTy nm ty) = ppr nm <+> equals <+> ppr ty
 
 -- * Kinds
