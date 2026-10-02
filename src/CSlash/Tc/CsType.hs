@@ -13,7 +13,7 @@ import CSlash.Cs
 
 import CSlash.Tc.Errors.Types
 -- import GHC.Tc.TyCl.Build
-import CSlash.Tc.Solver ( pushLevelAndSolveKindCoercions, pushLevelAndSolveKindCoercionsX
+import CSlash.Tc.Solver ( pushLevelAndSolveCoercions, pushLevelAndSolveCoercionsX
                         {-, reportUnsolvedEqualities-} )
 import CSlash.Tc.Utils.Monad
 import CSlash.Tc.Utils.Env
@@ -202,7 +202,7 @@ tcKiD (L loc bind@(KiRowBind (kv_names, _) (L _ name) base_kind rows))
 
   skol_info <- mkSkolemInfo (KiConSkol name)
   (spec_kvs, full_mono_kind) <-
-    pushLevelAndSolveKindCoercions (KiConSkol name) [] $
+    pushLevelAndSolveCoercions (KiConSkol name) [] $
     bindImplicitKBndrs_Q_Skol skol_info kv_names $ do
       base_mono_kind <- checkNoErrs $ tcLCsKind base_kind
       traceTc "base_mono_kind0" (ppr base_mono_kind)
@@ -266,7 +266,7 @@ tcTyRowD :: LRowDecl Rn Rn -> RnM (Name, MonoKind Tc)
 tcTyRowD (L loc (RowTySigD _ (L _ name) kind)) = do
   mono_kind <- addErrCtxt (text "In the kind signature" <+> quotes (ppr kind)
                            <+> text "for the row" <+> quotes (ppr name))
-               $ pushLevelAndSolveKindCoercions (RowKiSigSkol name) []
+               $ pushLevelAndSolveCoercions (RowKiSigSkol name) []
                $ tcLCsKind kind
                       
   traceTc "tcTyRowD0" (ppr mono_kind)
@@ -285,7 +285,7 @@ tcValRowD (L loc (RowSigD _ (L _ name) ty)) = do
   ty
     <- addErrCtxt (text "In the type signature" <+> quotes (ppr ty)
                    <+> text "for the row" <+> quotes (ppr name)) $
-       pushLevelAndSolveKindCoercions (RowTySigSkol name) [] $ do
+       pushLevelAndSolveCoercions (RowTySigSkol name) [] $ do
          ctxt_kind <- getInitialCtxtKind ctxt ty
          exp_kind <- newExpectedKind ctxt_kind
          tcLCsType ty exp_kind
@@ -318,7 +318,7 @@ kcTyGroup kindless_decls = do
 
   let kindless_names = mkNameSet $ map (tydName . unLoc) kindless_decls
 
-  inferred_tcs <- pushLevelAndSolveKindCoercions unkSkolAnon [] $ do
+  inferred_tcs <- pushLevelAndSolveCoercions unkSkolAnon [] $ do
     mono_tcs <- inferInitialKinds kindless_decls
 
     traceTc "kcTyGroup: initial kinds" $ ppr_tc_kinds mono_tcs
@@ -646,7 +646,7 @@ tcTyFunRhs tc_name cs_ty = bindTyConKiVars tc_name
 
   let skol_info = TyConSkol TypeFunFlavor tc_name
 
-  rhs_ty <- pushLevelAndSolveKindCoercions skol_info tc_ki_bndrs
+  rhs_ty <- pushLevelAndSolveCoercions skol_info tc_ki_bndrs
             $ tcCheckLCsType cs_ty (TheMonoKind rhs_kind)
 
   kvs <- candidateQKiVarsOfType rhs_ty

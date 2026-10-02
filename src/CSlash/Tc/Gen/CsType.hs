@@ -6,7 +6,7 @@ module CSlash.Tc.Gen.CsType where
 import Prelude hiding ((<>))
 
 import {-# SOURCE #-} CSlash.Tc.Gen.Bind (tcFunBind)
-import CSlash.Tc.Types.Evidence (isIdCsWrapper)
+import CSlash.Tc.Types.Evidence (isIdCsWrapper, (<.>))
 
 import CSlash.Cs
 import CSlash.Rename.Utils
@@ -69,7 +69,7 @@ import CSlash.Data.Bag( unitBag )
 import Data.Function ( on )
 import Data.List.NonEmpty ( NonEmpty(..), nonEmpty )
 import qualified Data.List.NonEmpty as NE
-import Data.List ( mapAccumL )
+import Data.List ( mapAccumL, partition )
 import Control.Monad
 import Data.Tuple( swap )
 
@@ -129,7 +129,7 @@ tc_lcs_sig_type ctxt skol_info full_cs_ty@(L loc (CsSig { sig_ext = kv_nms
   = setSrcSpanA loc $ do
   ctxt_kind <- getInitialCtxtKind ctxt cs_ty
   (tc_lvl, wanted, (kv_bndrs, (exp_kind, ty)))
-    <- pushLevelAndSolveKindCoercionsX "tc_lcs_sig_type"
+    <- pushLevelAndSolveCoercionsX "tc_lcs_sig_type"
        $ tcImplicitKiBndrs skol_info kv_nms $ do
          exp_kind <- newExpectedKind ctxt_kind
          stuff <- tcLCsType cs_ty exp_kind
@@ -253,8 +253,8 @@ tc_cs_type rn_ty@(CsTupleTy _ tup_args) exp_kind
 tc_cs_type rn_ty@(CsSetRows _ base rows) exp_kind = do
   base_ki <- newMetaKindVar
   base' <- tc_lcs_type base base_ki
-  let row_env = mkRowEnv exp_kind
-  (rows', rowsig) <- tcSetRows row_env rows
+  let row_env = mkRowSigEnv exp_kind
+  (rows', rowsig) <- tcSetRows (selfName, base') row_env rows
   let full_kind = KiConApp $ KiCon Nothing base_ki rowsig
       ty = SetRowsTy base' rows'
   checkExpectedKind rn_ty ty full_kind exp_kind
@@ -303,24 +303,32 @@ tc_arrow (CsArrow _ (L _ ki)) = tcArrow ki
 *                                                                      *
 ********************************************************************* -}
 
-tcSetRows :: RowEnv Tc -> LCsSetRows Rn -> TcM ([SetRow Tc], [RowSig Tc])
-tcSetRows env rn_ty@(L _ (SetRows _ rows)) = do
+tcSetRows :: (Name, Type Tc) -> RowSigEnv Tc -> LCsSetRows Rn -> TcM ([SetRow Tc], [RowSig Tc])
+tcSetRows self env rn_ty@(L _ (SetRows _ rows)) = do
   traceTc "tcSetRows env" (ppr env $$ ppr_set_rows rn_ty)
-  let pairs = map (\r -> (lookupRow (unLoc r), r)) rows
-  traceTc "pairs" (ppr (fst <$> pairs))
-  mapAndUnzipM (uncurry tcSetRow) pairs
+  let (ts, es) = partition (isSetCsTyRow . unLoc) rows
+      t_pairs = map (\r -> (lookupRow (unLoc r), r)) ts
+      e_pairs = map (\r -> (lookupRow (unLoc r), r)) es
+  traceTc "t_pairs" (ppr (fst <$> t_pairs))
+  traceTc "e_pairs" (ppr (fst <$> e_pairs))
+  (t_sets, t_sigs) <- mapAndUnzipM (uncurry (tcSetRow Nothing)) t_pairs
+  let pairs = self : (setRowTyPair <$> t_sets)
+      ty_env = mkTyRowEnv pairs
+  traceTc "ty_env" (ppr ty_env)
+  (e_sets, e_sigs) <- mapAndUnzipM (uncurry (tcSetRow (Just ty_env))) e_pairs
+  return (t_sets ++ e_sets, t_sigs ++ e_sigs)
   where
     rowName (SetRow _ nm _) = unLoc nm
     rowName (SetTyRow _ nm _) = unLoc nm
 
     lookupRow row = lookupRowEnv env (rowName row)
 
-tcSetRow :: Maybe (RowSig Tc) -> LCsSetRow Rn -> TcM (SetRow Tc, RowSig Tc)
-tcSetRow (Just sig) = tcCheckSetRow sig
-tcSetRow Nothing = tcInferSetRow 
+tcSetRow :: Maybe (TyRowEnv Tc) -> Maybe (RowSig Tc) -> LCsSetRow Rn -> TcM (SetRow Tc, RowSig Tc)
+tcSetRow e (Just sig) = tcCheckSetRow e sig
+tcSetRow e Nothing = tcInferSetRow 
 
-tcCheckSetRow :: RowSig Tc -> LCsSetRow Rn -> TcM (SetRow Tc, RowSig Tc)
-tcCheckSetRow row_sig@(RowTySig nm ty) (L loc (SetRow _ row_nm row_expr)) = do
+tcCheckSetRow :: Maybe (TyRowEnv Tc) -> RowSig Tc -> LCsSetRow Rn -> TcM (SetRow Tc, RowSig Tc)
+tcCheckSetRow (Just env) row_sig@(RowTySig nm r_ty) (L loc (SetRow _ row_nm row_expr)) = do
   {- Basically
        tcTopBinds NotTopLevel -> tcValBinds -> tcBindGroups -> tc_group NonRecursive
        -> tc_single (do not extend let env) -> tcPolyBinds -> tcPolyCheck
@@ -333,13 +341,15 @@ tcCheckSetRow row_sig@(RowTySig nm ty) (L loc (SetRow _ row_nm row_expr)) = do
 
      2. The really important call is 'tcFunBind' inside 'tcSkolemizeCompleteSig'
   -}
+  let ty = tcSubstTyRows env r_ty
   traceTc "tcCheckSetRow0"
     $ vcat [ text "nm:" <+> ppr nm
+           , text "r_ty:" <+> ppr r_ty
            , text "ty:" <+> ppr ty
            , text "row_nm:" <+> ppr row_nm
            , text "row_expr:" <+> ppr row_expr ]
 
-  let ctxt = SetRowCtxt (unLoc row_nm)
+  let ctxt = SetRowValCtxt (unLoc row_nm)
   (wrap_gen, (wrap_res, res)) <- tcSkolemizeExpectedType ty $ \invis_pat_tys rho_ty ->
     setSrcSpanA loc $
     tcFunBind ctxt (unLoc row_nm) row_expr invis_pat_tys (mkCheckExpType rho_ty)
@@ -350,18 +360,12 @@ tcCheckSetRow row_sig@(RowTySig nm ty) (L loc (SetRow _ row_nm row_expr)) = do
            , text "wrap_res:" <+> ppr wrap_res
            , text "res:" <+> ppr res ]
 
-  massertPpr (isIdCsWrapper wrap_gen)
-    (text "Non-identity wrapper in row:" <+> ppr wrap_gen)
-
-  massertPpr (isIdCsWrapper wrap_res)
-    (text "Non-identity wrapper in row:" <+> ppr wrap_res)
-
-  let set_row = SetRowVal (unLoc row_nm) (unLoc res) ty -- Is this the right ty?
+  let wrap = wrap_gen <.> wrap_res
+      set_row = SetRowVal (unLoc row_nm) (unLoc res, wrap) ty -- Is this the right ty?
 
   return (set_row, row_sig)
 
-
-tcCheckSetRow (RowKiSig nm ki) (L _ (SetTyRow _ row_nm row_type)) = do
+tcCheckSetRow Nothing (RowKiSig nm ki) (L _ (SetTyRow _ row_nm row_type)) = do
   -- Need to instantiate the kvs of 'ki'
   -- This gives us a 'MonoKind Tc'
   -- Similar to 'tcInferKiCon_instantiate'?
@@ -380,7 +384,7 @@ tcCheckSetRow (RowKiSig nm ki) (L _ (SetTyRow _ row_nm row_type)) = do
            , ppr row_nm <+> equals <+> ppr row_type ]
 
   let skol_info = TyRowImplSkol (unLoc row_nm)
-  row_type <- pushLevelAndSolveKindCoercions skol_info [] $
+  row_type <- pushLevelAndSolveCoercions skol_info [] $
     tcCheckLCsType row_type (TheMonoKind ki)
 
   traceTc "tcCheckSetRow"
@@ -390,11 +394,33 @@ tcCheckSetRow (RowKiSig nm ki) (L _ (SetTyRow _ row_nm row_type)) = do
   return
     ( SetRowTy (unLoc row_nm) row_type
     , RowKiSig (unLoc row_nm) ki) -- TODO: which name? Doesn't matter?
-    
+
+tcCheckSetRow _ _ _ = panic "tcCheckSetRow bad args"
 
 tcInferSetRow :: LCsSetRow Rn -> TcM (SetRow Tc, RowSig Tc)
 tcInferSetRow (L _ (SetRow kv_nms row_nm row_expr)) = panic "tcInferSetRow SetRow"
 tcInferSetRow (L _ (SetTyRow kv_nms row_nm row_type)) = panic "tcInferSetRow SetTyRow"
+
+tcSubstTyRows :: TyRowEnv Tc -> Type Tc -> Type Tc
+tcSubstTyRows env init_ty = go init_ty
+  where
+    go ty@TyVarTy{} = ty
+    go (AppTy t1 t2) = mkAppTy (go t1) (go t2)
+    go (TyLamTy tv ty) = TyLamTy tv $ go ty
+    go (BigTyLamTy kv ty) = BigTyLamTy kv $ go ty
+    go (TyConApp tc tys) = mkTyConApp tc $ go <$> tys
+    go (ForAllTy tv ty) = ForAllTy tv $ go ty
+    go (ForAllKiCo kcv ty) = ForAllKiCo kcv $ go ty
+    go (FunTy k t1 t2) = FunTy k (go t1) (go t2)
+    go ty@(LocalTyRow nm ki)
+      | Just ty <- lookupRowEnv env nm
+      = ty
+      | otherwise
+      = ty
+    go (SetRowsTy ty rows) = panic "tcSubstTyRows currently unreachable" -- SetRowsTy (go ty) (go_row <$> rows)
+    go (CastTy ty kco) = mkCastTy (go ty) kco
+    go ty@Embed{} = ty
+    go ty@KindCoercion{} = ty
 
 {- *********************************************************************
 *                                                                      *

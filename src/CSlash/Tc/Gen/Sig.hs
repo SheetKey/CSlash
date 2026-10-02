@@ -10,7 +10,7 @@ import CSlash.Cs
 import CSlash.Tc.Errors.Types ( TcRnMessage(..) )
 import CSlash.Tc.Gen.CsType
 import CSlash.Tc.Types
-import CSlash.Tc.Solver( pushLevelAndSolveKindCoercionsX, reportUnsolvedKiCos )
+import CSlash.Tc.Solver( pushLevelAndSolveCoercionsX, reportUnsolvedKiCos )
 import CSlash.Tc.Utils.Monad
 import CSlash.Tc.Zonk.Type
 import CSlash.Tc.Types.Origin
