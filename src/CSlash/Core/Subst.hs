@@ -21,6 +21,7 @@ import CSlash.Core.Ppr
 import {-# SOURCE #-} CSlash.Core.Ppr ()
 import CSlash.Core.Type
 import CSlash.Core.Kind
+import CSlash.Core.Kind.Compare
 
 import CSlash.Core.TyCon
 import CSlash.Core.Kind.FVs
@@ -786,7 +787,9 @@ substTyUnchecked
   :: (HasPass p pass, HasPass p' pass', SubstP p p') => Subst p p' -> Type p -> Type p'
 substTyUnchecked subst ty = subst_ty subst ty
 
-subst_ty :: (HasPass p pass, HasPass p' pass', SubstP p p') => Subst p p' -> Type p -> Type p'
+subst_ty
+  :: (HasDebugCallStack, HasPass p pass, HasPass p' pass', SubstP p p')
+  => Subst p p' -> Type p -> Type p'
 subst_ty subst ty = go ty
   where
     go (TyVarTy tv) = substTyVar subst tv
@@ -1141,3 +1144,52 @@ substBind subst (Rec pairs)
     (bndrs, rhss) = unzip pairs
     (subst', bndrs') = substLetRecBndrs subst bndrs
     rhss' = map (substExpr subst') rhss
+
+{- *********************************************************************
+*                                                                      *
+        RowTyValEnv Subst
+*                                                                      *
+********************************************************************* -}
+{-
+-- Needs to be more complex (and in Gen.CsType):
+-- We need to instantiate the row as if it were a tycon! (Which it is!)
+-- We should be able to manage with code reuse, calling inst_nosat or related!
+-- NEWEST: We actually DON'T need to instantiate! The call of a local ty row
+-- will have already be instantiated! So the subst alone suffices
+TODO
+substTyRows :: HasPass p pass => TyRowEnv p -> Type p -> Type p
+substTyRows env init_ty = go init_ty
+  where
+    go ty@TyVarTy{} = ty
+    go (AppTy t1 t2) = mkAppTy (go t1) (go t2)
+    go (TyLamTy tv ty) = TyLamTy tv $ go ty
+    go (BigTyLamTy kv ty) = BigTyLamTy kv $ go ty
+    go (TyConApp tc tys) = mkTyConApp tc $ go <$> tys
+    go (ForAllTy tv ty) = ForAllTy tv $ go ty
+    go (ForAllKiCo kcv ty) = ForAllKiCo kcv $ go ty
+    go (FunTy k t1 t2) = FunTy k (go t1) (go t2)
+    go ty@(LocalTyRow nm ki)
+      | Just ty <- lookupRowEnv env nm
+      = -- assertPpr (typeMonoKind ty `eqMonoKind` ki) (text "substTyRows bad kind") $
+          -- We can't assert here since this is called during type checking: unzonked, yet unfilled vars, etc
+        ty
+      | otherwise
+      = ty
+    go (SetRowsTy ty rows) = panic "substTyRows currently unreachable" -- SetRowsTy (go ty) (go_row <$> rows)
+    go (CastTy ty kco) = mkCastTy (go ty) kco
+    go ty@Embed{} = ty
+    go ty@KindCoercion{} = ty
+
+    -- go_row (SetRowVal nm e ty) = SetRowVal nm (go_expr e) (go ty)
+    -- go_row (SetRowTy nm ty) = SetRowTy nm (go ty)
+
+    -- go_expr e@Var{} = e
+    -- go_expr e@Lit{} = e
+    -- go_expr (App e1 e2) = App (go_expr e1) (go_expr e2)
+    -- go_expr (Lam b k e) = Lam b k (go_expr e)
+    -- go_expr (Let b e) = Let (go_bind b) (go_expr e)
+    -- go_expr (Case e b t a) = Case (go_expr e) b (go t)
+    -- go_expr
+    -- go_expr
+    -- go_expr
+-}
