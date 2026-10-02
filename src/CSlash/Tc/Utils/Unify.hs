@@ -744,16 +744,19 @@ unifyKind thing kc ki1 ki2 = unifyKindAndEmit origin kc ki1 ki2
 
 unifyKindAndEmit :: CtOrigin -> KiPredCon -> MonoKind Tc -> MonoKind Tc -> TcM (KindCoercion Tc)
 unifyKindAndEmit orig kc ki1 ki2 = do
+  ty_ref <- newTcRef emptyBag
   ki_ref <- newTcRef emptyBag
   loc <- getCtLocM orig (Just KindLevel)
   let env = UE { u_loc = loc
                , u_ki_rewriters = emptyKiRewriterSet
                , u_ki_defer = ki_ref
                , u_ki_unified = Nothing
-               , u_ty_rewriters = panic "unifyKindAndEmit u_ty_rewriters"
-               , u_ty_defer = panic "unifyKindAndEmit u_ty_defer"
-               , u_ty_unified = panic "unifyKindAndEmit u_ty_unified" }
+               , u_ty_rewriters = emptyTyRewriterSet
+               , u_ty_defer = ty_ref
+               , u_ty_unified = Nothing }
   co <- uKind env kc ki1 ki2
+  ty_cts <- readTcRef ty_ref
+  unless (null ty_cts) (emitTySimples ty_cts)
   ki_cts <- readTcRef ki_ref
   unless (null ki_cts) (emitKiSimples ki_cts)
   return co
