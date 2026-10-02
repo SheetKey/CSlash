@@ -89,24 +89,26 @@ simplifyTop wanteds = do
 
   reportUnsolved final_wc
 
-pushLevelAndSolveKindCoercions :: SkolemInfoAnon -> [TcKiVar] -> TcM a -> TcM a
-pushLevelAndSolveKindCoercions skol_info_anon tcbs thing_inside = do
-  (tclvl, wanted, res) <- pushLevelAndSolveKindCoercionsX
-                          "pushLevelAndSolveKindCoercions" thing_inside
+pushLevelAndSolveCoercions :: SkolemInfoAnon -> [TcKiVar] -> TcM a -> TcM a
+pushLevelAndSolveCoercions skol_info_anon tcbs thing_inside = do
+  (tclvl, wanted, res) <- pushLevelAndSolveCoercionsX
+                          "pushLevelAndSolveCoercions" thing_inside
   report_unsolved_kicos skol_info_anon tcbs tclvl wanted
   return res
 
-pushLevelAndSolveKindCoercionsX :: String -> TcM a -> TcM (TcLevel, WantedKiConstraints, a)
-pushLevelAndSolveKindCoercionsX callsite thing_inside = do
-  traceTc "pushLevelAndSolveKindCoercionsX {" (text "Called from" <+> text callsite)
+pushLevelAndSolveCoercionsX :: String -> TcM a -> TcM (TcLevel, WantedKiConstraints, a)
+pushLevelAndSolveCoercionsX callsite thing_inside = do
+  traceTc "pushLevelAndSolveCoercionsX {" (text "Called from" <+> text callsite)
   (tclvl, (wanted, res)) <- pushTcLevelM $ do
     (res, wanted) <- captureConstraints thing_inside
-    wanted <- case onlyWantedKiConstraints_maybe wanted of
-                Just w -> return w
-                _ -> pprPanic "pushLevelAndSolveKindCoercionsX type constraints" (ppr wanted)
-    wanted <- runTcSKindCoercions (simplifyTopKiWanteds wanted)
+    wanted <- runTcS (simplifyTopWanteds wanted)
     return (wanted, res)
-  traceTc "pushLevelAndSolveKindCoercionsX }" (vcat [ text "Residual:" <+> ppr wanted
+
+  wanted <- case onlyWantedKiConstraints_maybe wanted of
+              Just w -> return w
+              _ -> pprPanic "pushLevelAndSolveCoercionsX type constraints" (ppr wanted)
+
+  traceTc "pushLevelAndSolveCoercionsX }" (vcat [ text "Residual:" <+> ppr wanted
                                                     , text "Level:" <+> ppr tclvl ])
   return (tclvl, wanted, res)
 
