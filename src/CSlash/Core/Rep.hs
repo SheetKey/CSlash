@@ -250,6 +250,9 @@ data FunSel = SelArg | SelRes
 instance HasPass p p' => Outputable (Type (CsPass p')) where
   ppr = pprType
 
+instance HasPass p p' => Outputable (SetRow (CsPass p')) where
+  ppr = debug_ppr_set_row
+
 instance Outputable (TypeCoercion p) where
   ppr = const $ text "[TyCo]"
 
