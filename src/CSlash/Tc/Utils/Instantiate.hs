@@ -1,3 +1,4 @@
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE BangPatterns #-}
 
 module CSlash.Tc.Utils.Instantiate where
@@ -65,6 +66,7 @@ import Data.List ( mapAccumL )
 import qualified Data.List.NonEmpty as NE
 import Control.Monad( when, unless )
 import Data.Function ( on )
+import Control.Arrow (first, second)
 
 {- *********************************************************************
 *                                                                      *
@@ -260,6 +262,39 @@ tcInstSkolTyVarsX skol_info subs vars = do
   massert (null kivars)
   massert (null kicovars)
   pure (subst', tyvars)
+
+tcInstSkolTyKiCoVarsX
+  :: SkolemInfo
+  -> Subst Tc Tc
+  -> [Either (TyVar Tc) (KiCoVar Tc)]
+  -> TcM (Subst Tc Tc, [Either TcTyVar TcKiCoVar])
+tcInstSkolTyKiCoVarsX skol_info subs vars = do
+  let (tvis, kcvis) = indexed_unzip vars
+      (tvs, tidxs) = unzip tvis
+      (kcvs, kcidxs) = unzip kcvis
+  (subst', kivars, kicovars, tyvars)
+    <- tcInstSkolVarsX skol_info subs [] kcvs tvs
+  massert (null kivars)
+  let vars' = indexed_zip (zip tyvars tidxs) (zip kicovars kcidxs)
+  pure (subst', vars')
+  where
+    indexed_unzip :: [Either a b] -> ([(a, Int)], [(b, Int)])
+    indexed_unzip l
+      = let ind_l = zip l [0..]
+            left i = (first . (:)) . (, i)
+            right i = (second . (:)) . (, i)
+        in foldr (\(it, i) -> either (left i) (right i) it) ([], []) ind_l
+
+    indexed_zip :: [(a, Int)] -> [(b, Int)] -> [Either a b]
+    indexed_zip = go []
+      where
+        go acc [] [] = reverse acc
+        go acc as@((a, i):arest) bs@((b, j):brest)
+          | i < j = go (Left a : acc) arest bs
+          | j < i = go (Right b : acc) as brest
+        go acc ((a, _):arest) [] = go (Left a : acc) arest []
+        go acc [] ((b, _):brest) = go (Right b : acc) [] brest 
+        go _ _ _ = panic "indexed_zip"
 
 tcInstSkolVarBndrsX
   :: SkolemInfo
