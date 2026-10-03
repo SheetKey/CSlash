@@ -243,6 +243,11 @@ rewrite_one_ty (Embed mki) = do
   redn <- rewrite_one_ki mki
   return $ embedKiRedn redn
 
+rewrite_one_ty ty@LocalTyRow{}
+  -- = pprPanic "rewrite_one_ty LocalTyRow (not allowed in rewriter)"
+  --   (ppr ty)
+  = return $ mkReflRednTy ty
+
 rewrite_one_ty other = pprPanic "rewrite_one_ty other" (ppr other)
 
 rewrite_kco :: KindCoercion Tc -> RewriteM (KindCoercion Tc)
