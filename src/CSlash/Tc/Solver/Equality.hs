@@ -347,6 +347,9 @@ can_ty_eq_nc rewritten _ ev ty1 _ ty2 _
 can_ty_eq_nc _ _ ev s1@ForAllTy{} _ s2@ForAllTy{} _
   = can_ty_eq_nc_forall ev s1 s2
 
+can_ty_eq_nc _ _ ev s1@ForAllKiCo{} _ s2@ForAllKiCo{} _
+  = can_ty_eq_nc_forall ev s1 s2
+
 can_ty_eq_nc True _ ev ty1 _ ty2 _
   | Just (t1, s1) <- tcSplitAppTy_maybe ty1
   , Just (t2, s2) <- tcSplitAppTy_maybe ty2
@@ -407,47 +410,63 @@ can_ty_eq_nc_forall ev s1 s2
                  let empty_subst1 = mkEmptySubst
                                     (varsOfTypes [s1, s2])
                                     (emptyVarSet, emptyVarSet, emptyVarSet)
+                 traceTcS "empty_subst1" (ppr empty_subst1)
                  skol_info <- mkSkolemInfo (UnifyForAllSkol phi1)
-                 (subst1, skol_tvs) <- tcInstSkolTyVarsX skol_info empty_subst1
+                 (subst1, skol_vs) <- tcInstSkolTyKiCoVarsX skol_info empty_subst1
                                        $ binderVars bndrs1
-
+                 traceTcS "subst1" (ppr subst1)
                  let phi1' = substTy subst1 phi1
 
                      go :: UnifyEnv
-                        -> [TcTyVar]
+                        -> [Either TcTyVar TcKiCoVar]
                         -> Subst Tc Tc
-                        -> [ForAllBinder (TyVar Tc)]
-                        -> [ForAllBinder (TyVar Tc)]
+                        -> [ForAllBinder (Either (TyVar Tc) (KiCoVar Tc))]
+                        -> [ForAllBinder (Either (TyVar Tc) (KiCoVar Tc))]
                         -> TcM.TcM (TypeCoercion Tc)
-                     go uenv (skol_tv:skol_tvs) subst2
-                       (bndr1:bndrs1) (bndr2:bndrs2) = do
-                       let tv2 = binderVar bndr2
-                           vis1 = binderFlag bndr1
-                           vis2 = binderFlag bndr2
+                     go uenv (Left skol_tv : skol_vs) subst2
+                       (Bndr (Left _) vis1 : bndrs1) (Bndr (Left tv2) vis2 : bndrs2) = do
                        kco <- uKind uenv EQKi (varKind skol_tv)
                               (substMonoKi subst2 (varKind tv2))
 
                        let subst2' = extendTvSubstAndInScope subst2 tv2
                                      (mkCastTy (mkTyVarTy $ TcTyVar skol_tv) kco)
 
-                       co <- go uenv skol_tvs subst2' bndrs1 bndrs2
+                       co <- go uenv skol_vs subst2' bndrs1 bndrs2
 
-                       return $ panic "mkNakedForAllCo skol_tv vis1 vis2 kco co"
+                       return $ mkNakedForAllCo (TcTyVar skol_tv) vis1 vis2 kco co
 
-                     go uenv [] subst2 bndr1 bndr2
-                       = assert (null bndrs1 && null bndrs2)
+                     go uenv (Right skol_kcv : skol_vs) subst2
+                       (Bndr (Right _) Inferred : bndrs1) (Bndr (Right kcv2) Inferred : bndrs2) = do
+                       kco <- uKind uenv EQKi (varKind skol_kcv)
+                              (substMonoKi subst2 (varKind kcv2))
+
+                       massertPpr (isReflKiCo kco)
+                         $ vcat [ text "can_ty_eq_nc_forall"
+                                , text "KCv kco is not reflexive"
+                                , text "skol_kcv" <+> ppr skol_kcv
+                                , text "kcv2" <+> ppr kcv2
+                                , text "kco" <+> ppr kco ]
+
+                       let subst2' = extendKCvSubst subst2 kcv2 (mkKiCoVarCo $ TcCoVar skol_kcv)
+
+                       co <- go uenv skol_vs subst2' bndrs1 bndrs2
+
+                       return $ mkNakedForAllCoCo (TcCoVar skol_kcv) kco co
+
+                     go uenv [] subst2 bndrs1 bndrs2
+                       = assertPpr (null bndrs1 && null bndrs2) (ppr bndrs1 $$ ppr bndrs2)
                          $ uType uenv phi1' (substTyUnchecked subst2 phi2)
 
                      go _ _ _ _ _ = panic "can_ty_eq_nc_forall"
 
                      init_subst2 = zapSubst subst1
 
-                 (lvl, (all_co, wanteds)) <- pushLevelNoWorkList (ppr skol_info)
-                                             $ panic "unifyForAllBody ev"
-                                             $ \uenv ->
-                                                 go uenv skol_tvs init_subst2 bndrs1 bndrs2
+                 (lvl, (all_co, tywanteds, kiwanteds))
+                   <- pushLevelNoWorkList (ppr skol_info)
+                      $ unifyForAllBody ev
+                      $ \uenv -> go uenv skol_vs init_subst2 bndrs1 bndrs2
                                                                       
-                 emitTvImplicationTcS lvl (getSkolemInfo skol_info) skol_tvs wanteds
+                 emitTvImplicationTcS lvl (getSkolemInfo skol_info) skol_vs tywanteds kiwanteds
 
                  setWantedTyCo orig_dest all_co
                  stopWith ev "Deferred polytype equality"
@@ -456,15 +475,20 @@ can_ty_eq_nc_forall ev s1 s2
          $ pprEq s1 s2
        stopWith ev "Discard given polytype equality"
   where
-    split_foralls
+    split_foralls -- TODO: may need to split BigTyLamTy KiVars here too
       :: Type Tc
       -> Type Tc
-      -> ([ForAllBinder (TyVar Tc)], Type Tc, [ForAllBinder (TyVar Tc)], Type Tc)
+      -> ( [ForAllBinder (Either (TyVar Tc) (KiCoVar Tc))], Type Tc
+         , [ForAllBinder (Either (TyVar Tc) (KiCoVar Tc))], Type Tc)
     split_foralls  s1 s2
       | Just (bndr1, s1') <- splitForAllForAllTyBinder_maybe s1
       , Just (bndr2, s2') <- splitForAllForAllTyBinder_maybe s2
       = let !(bndrs1, phi1, bndrs2, phi2) = split_foralls s1' s2'
-        in (bndr1:bndrs1, phi1, bndr2:bndrs2, phi2)
+        in (mapVarBinder Left bndr1 : bndrs1, phi1, mapVarBinder Left bndr2 : bndrs2, phi2)
+      | Just (bndr1, s1') <- splitForAllForAllKiCoBinder_maybe s1
+      , Just (bndr2, s2') <- splitForAllForAllKiCoBinder_maybe s2
+      = let !(bndrs1, phi1, bndrs2, phi2) = split_foralls s1' s2'
+        in (Bndr (Right bndr1) Inferred : bndrs1, phi1, Bndr (Right bndr2) Inferred : bndrs2, phi2)
     split_foralls s1 s2 = ([], s1, [], s2)
 
 can_ty_eq_app
