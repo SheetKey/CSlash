@@ -482,6 +482,18 @@ assertGoodForAllCo tv visL visR kind_co co = assertPpr (tv_kind `eqMonoKind` kin
                , text "kind_co_lkind" <+> ppr kind_co_lkind
                , text "body_co" <+> ppr co ]
 
+mkNakedForAllCo
+  :: HasPass p pass
+  => TyVar p -> ForAllFlag -> ForAllFlag -> KindCoercion p -> TypeCoercion p -> TypeCoercion p
+mkNakedForAllCo tv visL visR kco co
+  | Just ty <- isReflTyCo_maybe co
+  , isReflKiCo kco
+  , visL `eqForAllVis` visR
+  = mkReflTyCo (mkForAllTy (Bndr tv visL) ty)
+  | otherwise
+  = ForAllCo { tfco_tv = tv, tfco_visL = visL, tfco_visR = visR
+             , tfco_tv_kind_co = kco, tfco_body = co }
+
 mkForAllCoCo
   :: (HasDebugCallStack, HasPass p pass)
   => KiCoVar p -> KindCoercion p -> TypeCoercion p -> TypeCoercion p
@@ -524,6 +536,18 @@ assertGoodForAllCoCo kcv kind_co co =
                , text "kind_co:" <+> ppr kind_co
                , text "kind_co_lkind" <+> ppr kind_co_lkind
                , text "body_co" <+> ppr co ]
+
+mkNakedForAllCoCo
+  :: HasPass p pass
+  => KiCoVar p -> KindCoercion p -> TypeCoercion p -> TypeCoercion p
+mkNakedForAllCoCo kcv kco co
+  | Just ty <- isReflTyCo_maybe co
+  , isReflKiCo kco
+  = mkReflTyCo (mkForAllKiCo kcv ty)
+  | otherwise
+  = ForAllCoCo { tfcoco_kcv = kcv
+               , tfcoco_kcv_kind_co = kco
+               , tfcoco_body = co }
 
 {- *********************************************************************
 *                                                                      *
