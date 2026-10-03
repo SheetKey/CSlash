@@ -173,7 +173,7 @@ tc_infer_lcs_type (L span ty) = setSrcSpanA span $ tc_infer_cs_type ty
 tc_infer_cs_type_ek :: HasDebugCallStack => CsType Rn -> MonoKind Tc -> TcM (Type Tc)
 tc_infer_cs_type_ek cs_ty ek = do
   (ty, k) <- tc_infer_cs_type cs_ty
-  checkExpectedKind cs_ty ty k ek
+  checkExpectedKind (text "tc_infer_cs_type_ek") cs_ty ty k ek
 
 ---------------------------
 tc_infer_cs_type :: CsType Rn -> TcM (Type Tc, MonoKind Tc)
@@ -239,7 +239,7 @@ tc_cs_type rn_ty@(CsQualTy { cst_ctxt = ctxt, cst_body = body_ty }) exp_kind
 
        let final_ty = mkForAllKiCos (TcCoVar <$> coVars) ty'
            final_ki = mkInvisFunKis coVarKis body_ki
-       checkExpectedKind rn_ty final_ty final_ki exp_kind
+       checkExpectedKind (text "CsQualTy") rn_ty final_ty final_ki exp_kind
 
 tc_cs_type rn_ty@(CsTupleTy _ tup_args) exp_kind
   | all tyTupArgPresent tup_args
@@ -254,10 +254,18 @@ tc_cs_type rn_ty@(CsSetRows _ base rows) exp_kind = do
   base_ki <- newMetaKindVar
   base' <- tc_lcs_type base base_ki
   let row_env = mkRowSigEnv exp_kind
-  (rows', rowsig) <- tcSetRows (selfName, base') row_env rows
+  (ty_row_env, rows', rowsig) <- tcSetRows (selfName, base') row_env rows
   let full_kind = KiConApp $ KiCon Nothing base_ki rowsig
       ty = SetRowsTy base' rows'
-  checkExpectedKind rn_ty ty full_kind exp_kind
+      subst_exp_kind = tcSubstTyRowsMonoKind ty_row_env exp_kind
+  traceTc "tc_cs_type CsSetRows"
+    $ vcat [ text "base'" <+> ppr base'
+           , text "rows'" <+> ppr rows'
+           , text "ty" <+> ppr ty
+           , text "full_kind" <+> ppr full_kind
+           , text "subst_exp_kind" <+> ppr subst_exp_kind
+           ]
+  checkExpectedKind (text "CsSetRows") rn_ty ty full_kind subst_exp_kind
 
 -- TODO: move to '..infer_ek'
 tc_cs_type rn_ty@(CsSumTy _ cs_tys) exp_kind = do
@@ -266,7 +274,7 @@ tc_cs_type rn_ty@(CsSumTy _ cs_tys) exp_kind = do
   let sum_ty = tyConNullaryTy $ sumTyCon arity
   (ty, res_kind) <- tcInferTyApps (L (noAnnSrcSpan loc) rn_ty)
                     sum_ty (CsValArg noExtField <$> cs_tys)
-  checkExpectedKind rn_ty ty res_kind exp_kind
+  checkExpectedKind (text "CsSumTy") rn_ty ty res_kind exp_kind
 
 tc_cs_type ty@(CsTyLamTy _ matches) ek = tcTyLamMatches ty matches ek
 
@@ -290,7 +298,8 @@ tc_fun_type arr_kind ty1 ty2 exp_kind = do
   ty1' <- tc_lcs_type ty1 arg_k
   ty2' <- tc_lcs_type ty2 res_k
   arr_kind' <- tc_arrow arr_kind
-  checkExpectedKind (CsFunTy noExtField arr_kind ty1 ty2)
+  checkExpectedKind (text "tc_fun_type")
+                    (CsFunTy noExtField arr_kind ty1 ty2)
                     (tcMkFunTy arr_kind' ty1' ty2')
                     arr_kind' exp_kind
 
@@ -303,7 +312,11 @@ tc_arrow (CsArrow _ (L _ ki)) = tcArrow ki
 *                                                                      *
 ********************************************************************* -}
 
-tcSetRows :: (Name, Type Tc) -> RowSigEnv Tc -> LCsSetRows Rn -> TcM ([SetRow Tc], [RowSig Tc])
+tcSetRows
+  :: (Name, Type Tc)
+  -> RowSigEnv Tc
+  -> LCsSetRows Rn
+  -> TcM (TyRowEnv Tc, [SetRow Tc], [RowSig Tc])
 tcSetRows self env rn_ty@(L _ (SetRows _ rows)) = do
   traceTc "tcSetRows env" (ppr env $$ ppr_set_rows rn_ty)
   let (ts, es) = partition (isSetCsTyRow . unLoc) rows
@@ -316,7 +329,7 @@ tcSetRows self env rn_ty@(L _ (SetRows _ rows)) = do
       ty_env = mkTyRowEnv pairs
   traceTc "ty_env" (ppr ty_env)
   (e_sets, e_sigs) <- mapAndUnzipM (uncurry (tcSetRow (Just ty_env))) e_pairs
-  return (t_sets ++ e_sets, t_sigs ++ e_sigs)
+  return (ty_env, t_sets ++ e_sets, t_sigs ++ e_sigs)
   where
     rowName (SetRow _ nm _) = unLoc nm
     rowName (SetTyRow _ nm _) = unLoc nm
@@ -328,7 +341,7 @@ tcSetRow e (Just sig) = tcCheckSetRow e sig
 tcSetRow e Nothing = tcInferSetRow 
 
 tcCheckSetRow :: Maybe (TyRowEnv Tc) -> RowSig Tc -> LCsSetRow Rn -> TcM (SetRow Tc, RowSig Tc)
-tcCheckSetRow (Just env) row_sig@(RowTySig nm r_ty) (L loc (SetRow _ row_nm row_expr)) = do
+tcCheckSetRow (Just env) (RowTySig nm r_ty) (L loc (SetRow _ row_nm row_expr)) = do
   {- Basically
        tcTopBinds NotTopLevel -> tcValBinds -> tcBindGroups -> tc_group NonRecursive
        -> tc_single (do not extend let env) -> tcPolyBinds -> tcPolyCheck
@@ -362,6 +375,7 @@ tcCheckSetRow (Just env) row_sig@(RowTySig nm r_ty) (L loc (SetRow _ row_nm row_
 
   let wrap = wrap_gen <.> wrap_res
       set_row = SetRowVal (unLoc row_nm) (unLoc res, wrap) ty -- Is this the right ty?
+      row_sig = RowTySig (unLoc row_nm) ty
 
   return (set_row, row_sig)
 
@@ -419,8 +433,20 @@ tcSubstTyRows env init_ty = go init_ty
       = ty
     go (SetRowsTy ty rows) = panic "tcSubstTyRows currently unreachable" -- SetRowsTy (go ty) (go_row <$> rows)
     go (CastTy ty kco) = mkCastTy (go ty) kco
-    go ty@Embed{} = ty
-    go ty@KindCoercion{} = ty
+    go (Embed ki) = Embed $ tcSubstTyRowsMonoKind env ki
+    go ty@KindCoercion{} = ty -- TODO: may cause issue?
+
+tcSubstTyRowsMonoKind :: TyRowEnv Tc -> MonoKind Tc -> MonoKind Tc
+tcSubstTyRowsMonoKind env init_ki = go init_ki
+  where
+    go ki@KiVarKi{} = ki
+    go ki@BIKi{} = ki
+    go (KiPredApp kc k1 k2) = KiPredApp kc (go k1) (go k2)
+    go (FunKi f k1 k2) = FunKi f (go k1) (go k2)
+    go (KiConApp (KiCon nm base rows)) = KiConApp $ KiCon nm (go base) (go_row <$> rows)
+
+    go_row (RowTySig nm ty) = RowTySig nm (tcSubstTyRows env ty)
+    go_row (RowKiSig nm ki) = RowKiSig nm (go ki)
 
 {- *********************************************************************
 *                                                                      *
@@ -451,7 +477,7 @@ tc_tuple rn_ty@(CsTupleTy _ tup_args) exp_kind = do
   let arity = length tup_args
       tup_tycon = tupleTyCon arity
   (ty, res_kind) <- inst_tuple_tycon tup_tycon tup_args
-  checkExpectedKind rn_ty ty res_kind exp_kind
+  checkExpectedKind (text "tc_tuple") rn_ty ty res_kind exp_kind
 tc_tuple _ _ = panic "tc_tuple/unreachable"
 
 inst_tuple_tycon :: TyCon Tc -> [CsTyTupArg Rn] -> TcM (Type Tc, MonoKind Tc)
@@ -751,7 +777,7 @@ tcTyLamMatches cs_type (MG _
       act_kind = mkVisFunKis bndr_kinds inf_ki
       full_ty = mkTyLamTys (TcTyVar <$> bndrs) body_ty'
 
-  checkExpectedKind cs_type full_ty act_kind exp_kind
+  checkExpectedKind (text "tcTyLamMatches") cs_type full_ty act_kind exp_kind
 
 tcTyLamMatches _ _ _ = panic "unreachable"
 
@@ -763,13 +789,14 @@ tcTyLamMatches _ _ _ = panic "unreachable"
 
 checkExpectedKind
   :: HasDebugCallStack
-  => CsType Rn
+  => SDoc
+  -> CsType Rn
   -> Type Tc
   -> MonoKind Tc
   -> MonoKind Tc
   -> TcM (Type Tc)
-checkExpectedKind cs_ty ty act_kind exp_kind = do
-  traceTc "checkExpectedKind" (ppr ty $$ ppr act_kind)
+checkExpectedKind trace cs_ty ty act_kind exp_kind = do
+  traceTc "checkExpectedKind" (trace $$ ppr ty $$ ppr act_kind)
 
   let origin = KindCoOrigin { kco_actual = act_kind
                             , kco_expected = exp_kind
