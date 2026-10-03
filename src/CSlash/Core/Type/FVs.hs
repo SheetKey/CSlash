@@ -501,6 +501,12 @@ fvsVarBndrs vars fvs = foldr fvsVarBndr fvs vars
 fvsVarBndr :: TyVar p -> TyFV p -> TyFV p
 fvsVarBndr var fvs = liftKiFV (fvsOfMonoKind (varKind var)) `unionFV` delFV (In1 var) fvs
 
+fvsTyKiCoVarBndrs :: [Either (TyVar p) (KiCoVar p)] -> TyFV p -> TyFV p
+fvsTyKiCoVarBndrs vars fvs = foldr (either fvsVarBndr fvsKiCoVarBndr) fvs vars
+
+fvsKiCoVarBndrs :: [KiCoVar p] -> TyFV p -> TyFV p
+fvsKiCoVarBndrs vars fvs = foldr fvsKiCoVarBndr fvs vars
+
 fvsKiCoVarBndr :: KiCoVar p -> TyFV p -> TyFV p
 fvsKiCoVarBndr var fvs = liftKiFV (fvsOfMonoKind (varKind var)) `unionFV` delFV (In2 var) fvs
 
