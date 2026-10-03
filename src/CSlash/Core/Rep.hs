@@ -422,7 +422,14 @@ rewriterView (TyConApp tc tys)
   | isTypeSynonymTyCon tc
   , isForgetfulSynTyCon tc
   = expandSynTyConApp_maybe tc tys
-rewriterView ty@(AppTy{}) = expandTyLamApp_maybe ty isForgetfulTy
+rewriterView ty@(AppTy{}) = expandTyLamApp_maybe ty (const True) -- isForgetfulTy
+  {- The rewriter can't deal with type functions, even if they aren't forgetful, so we must expand them
+     We could change this in the rewriter, but it would require a 'mkHomoTyLamRedn'
+     similar to 'mkHomoForAllRedn'. This would in turn require expanding type coercions.
+     May not be terribly difficult, but this is easier and doesn't seem to have technical/correctness downsides
+     Probably less expressive error messages in some cases.
+  TODO: make changes as in the note.
+  -}
 rewriterView _ = Nothing
 {-# INLINE rewriterView #-}
 
@@ -446,6 +453,7 @@ core_full_view ty
 
 expandTyLamApp_maybe :: HasPass p pass => Type p -> (Type p -> Bool) -> Maybe (Type p)
 expandTyLamApp_maybe ty pred = case split ty [] of
+  (LocalTyRow{}, _) -> Nothing
   (fn, args)
     | let arity = tyFunArity fn
     , args `saturates` arity
@@ -563,6 +571,9 @@ isForgetfulTy (FunTy _ a b) = isForgetfulTy a || isForgetfulTy b
 isForgetfulTy (ForAllTy (Bndr tv _) ty)
   = (not $ tv `elemVarSet` (fstOf3 $ varsOfType ty)) || isForgetfulTy ty
 isForgetfulTy (TyLamTy tv ty) = (not $ tv `elemVarSet` (fstOf3 $ varsOfType ty)) || isForgetfulTy ty
+-- This is kind of a hack, but is necessary for rewriterView.
+-- Unfortunately, during rewriting we may not have instantiated the rows.
+isForgetfulTy LocalTyRow{} = False
 isForgetfulTy other = pprPanic "isForgetfulTy" (ppr other)
 
 -- * Kinds
