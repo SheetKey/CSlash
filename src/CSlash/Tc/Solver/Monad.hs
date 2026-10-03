@@ -84,6 +84,8 @@ import qualified Data.Semigroup as S
 import CSlash.Types.SrcLoc
 import CSlash.Rename.Env
 
+import Data.Either (partitionEithers)
+
 {- *********************************************************************
 *                                                                      *
                SolverStage and StopOrContinue
@@ -707,12 +709,15 @@ nestKiTcS (TcS thing_inside) = TcS $ \env@(TcSEnv { tcs_ki_inerts = ki_inerts_va
   thing_inside nest_env
 
 emitTvImplicationTcS
-  :: TcLevel -> SkolemInfoAnon -> [TcTyVar] -> TyCts -> TcS ()
-emitTvImplicationTcS new_tclvl skol_info skol_tvs wanteds = do
-  let wc = emptyWC { wtc_simple = wanteds }
+  :: TcLevel -> SkolemInfoAnon -> [Either TcTyVar TcKiCoVar] -> TyCts -> KiCts -> TcS ()
+emitTvImplicationTcS new_tclvl skol_info skol_vs tywanteds kiwanteds = do
+  let wc = emptyWC { wtc_simple = tywanteds
+                   , wtc_wkc = emptyWC { wkc_simple = kiwanteds } }
   imp <- wrapTcS $ do
     co_binds_var <- TcM.newTcTyCoBinds
     imp <- TcM.newImplication
+    let (skol_tvs, skol_kcvs) = partitionEithers skol_vs
+    TcM.traceTc "emitTvImplicationTcS dropping KCvs **************************" (ppr skol_kcvs)
     return $ imp { tic_tclvl = new_tclvl
                  , tic_skols = skol_tvs
                  , tic_wanted = wc
@@ -911,6 +916,14 @@ tcInstSkolTyVarsX
   :: SkolemInfo -> Subst Tc Tc -> [TyVar Tc] -> TcS (Subst Tc Tc, [TcTyVar])
 tcInstSkolTyVarsX skol_info subst tvs = wrapTcS $ TcM.tcInstSkolTyVarsX skol_info subst tvs
 
+tcInstSkolTyKiCoVarsX
+  :: SkolemInfo
+  -> Subst Tc Tc
+  -> [Either (TyVar Tc) (KiCoVar Tc)]
+  -> TcS (Subst Tc Tc, [Either TcTyVar TcKiCoVar])
+tcInstSkolTyKiCoVarsX skol_info subst tvs
+  = wrapTcS $ TcM.tcInstSkolTyKiCoVarsX skol_info subst tvs
+
 -- Creating and setting evidence variables and CtFlavors
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -1052,6 +1065,14 @@ solverDepthError loc ki = panic "solverDepthError"
               Unification
 *                                                                      *
 ********************************************************************* -}
+
+unifyForAllBody :: CtTyEvidence -> (UnifyEnv -> TcM a) -> TcS (a, TyCts, KiCts)
+unifyForAllBody ev unify_body = do
+  (res, tycts, kicts, tyunified, kiunified, _) <- wrapTyUnifierX ev unify_body
+  _ <- kickOutAfterTyUnification tyunified
+  _ <- kickOutAfterKiUnification kiunified
+
+  return (res, tycts, kicts)
 
 wrapTyUnifierTcS
   :: CtTyEvidence
