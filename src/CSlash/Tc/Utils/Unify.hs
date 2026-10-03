@@ -847,6 +847,14 @@ uType env orig_ty1 orig_ty2 = do
       | tc1 == tc2
       = return $ mkReflTyCo ty1
 
+    {- TODO: dubious
+    this should acutally be ok:
+    1. the kinds will be checked already (local row use is well kinded)
+    2. The substituted local rows will have already been check too (within the inference call
+    -}
+    -- go ty1@LocalTyRow{} ty2 = return $ mkReflTyCo ty2
+    -- go ty1 ty2@LocalTyRow{} = return $ mkReflTyCo ty1
+
     go ty1 ty2
       | Just ty1' <- coreView ty1 = go ty1' ty2
       | Just ty2' <- coreView ty2 = go ty1 ty2'
@@ -900,7 +908,11 @@ uType env orig_ty1 orig_ty2 = do
       where
         env_arg = env { u_loc = adjustCtLoc is_vis False (u_loc env) }                      
 
-    go_app vis ty1 s1 t1 ty2 s2 t2 = panic "go_app"
+    go_app vis ty1 s1 t1 ty2 s2 t2 = do
+      let env_arg = env { u_loc = adjustCtLoc vis False (u_loc env) }
+      co_t <- uType env_arg t1 t2
+      co_s <- uType env s1 s2
+      return $ mkAppCo co_s co_t
 
 {- *********************************************************************
 *                                                                      *
@@ -1072,8 +1084,16 @@ uKind env kc orig_ki1 orig_ki2 = do
       return (res, cos)
 
     go_row_pair (RowTySig nm ty1, RowTySig _ ty2) = do
-      co <- uType env ty1 ty2 -- TODO: change the 'CtLoc' to have a row related origin
-      return $ RowTySigCo nm co
+      --co <- uType env ty1 ty2 -- TODO: change the 'CtLoc' to have a row related origin
+
+      {- This is somewhat incorrect but should be fine:
+      ty1 and ty1 likely contain LocalTyRows.
+      Since these haven't been instantiated yet, we have no idea what they are.
+      So, here, we just go ahead.
+      The ~instantiated~ row sigs will be checked elsewhere.
+      TODO: any examples where this is incorrect?
+      -}
+      return $ RowTySigCo nm (mkReflTyCo ty1)
 
     go_row_pair (RowKiSig nm ki1, RowKiSig _ ki2) = do
       traceTc "go_row_pair ki" (ppr nm $$ ppr ki1 $$ ppr ki2)
