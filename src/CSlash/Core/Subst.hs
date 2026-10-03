@@ -663,8 +663,10 @@ subst_mono_ki subst ki = go ki
 substKiVar
   :: (HasDebugCallStack, HasPass p pass, HasPass p' pass')
   => Subst p p' -> KiVar p -> MonoKind p'
-substKiVar subst@(Subst { kv_env = env }) kv
-  = lookupVarEnv env kv `orElse` pprPanic "substKiVar" (ppr kv $$ ppr subst)
+substKiVar subst@(Subst { kv_env = env, kv_in_scope = is }) kv
+  = lookupVarEnv env kv `orElse`
+    (mkKiVarKi <$> lookupInScope_Directly is (varUnique kv)) `orElse`
+    pprPanic "substKiVar" (ppr kv $$ ppr subst)
 
 substKiVarBndr
   :: (HasPass p pass, HasPass p' pass', SubstP p p')
@@ -768,8 +770,10 @@ subst_kco subst co = go co
     --   = panic "h { kch_co_var = updateVarKind go_mki cv }"
 
 substKiCoVar :: (HasPass p pass, HasPass p' pass') => Subst p p' -> KiCoVar p -> KindCoercion p'
-substKiCoVar (Subst { kcv_env = env }) kcv
-  = lookupVarEnv env kcv `orElse` pprPanic "substKiCoVar" (ppr kcv $$ ppr env)
+substKiCoVar (Subst { kcv_env = env, kcv_in_scope = is }) kcv
+  = lookupVarEnv env kcv `orElse`
+    (mkKiCoVarCo <$> lookupInScope_Directly is (varUnique kcv)) `orElse`
+    pprPanic "substKiCoVar" (ppr kcv $$ ppr env)
 
 {- **********************************************************************
 *                                                                       *
@@ -826,7 +830,9 @@ subst_ty subst ty = go ty
 
 substTyVar :: (HasPass p pass, HasPass p' pass') => Subst p p' -> TyVar p -> Type p'
 substTyVar (Subst { tv_env = tenv, tv_in_scope = in_scope }) tv
-  = lookupVarEnv tenv tv `orElse` pprPanic "substTyVar" (ppr tv $$ ppr tenv $$ ppr in_scope)
+  = lookupVarEnv tenv tv `orElse`
+    (mkTyVarTy <$> lookupInScope_Directly in_scope (varUnique tv)) `orElse`
+    pprPanic "substTyVar" (ppr tv $$ ppr tenv $$ ppr in_scope)
 
 substTyVarBndr
   :: (HasDebugCallStack, HasPass p pass, HasPass p' pass', SubstP p p')
