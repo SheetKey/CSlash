@@ -754,9 +754,38 @@ collect_cand_qkvs_ty orig_ty cur_lvl (boundtvs, boundkcvs, boundkvs) dvs ty = go
       dv1 <- go_row dv r
       go_rows dv1 rs
 
-    go_row dv (SetRowVal _ e ty) = panic "return dv"
+    go_row dv (SetRowVal _ (e, wrap) ty) = do
+      traceTc "collect go_row SetVal"
+        $ vcat [ text "expr" <+> ppr e
+               , text "wrap" <+> ppr wrap
+               , text "type" <+> ppr ty ]
+      dv1 <- go_wrap dv wrap
+      go_e dv1 e
     go_row dv (SetRowTy _ ty) = go dv ty
 
+    go_wrap dv WpHole = return dv
+    go_wrap dv (WpCompose w1 w2) = foldM go_wrap dv [w1, w2]
+    go_wrap dv (WpFun w ki ty) = do
+      dv1 <- go_wrap dv w
+      dv2 <- collect_cand_qkvs (Mono ki) cur_lvl boundkvs dv1 (Mono ki)
+      go dv2 ty
+    go_wrap dv (WpCast co) =
+      panic "snd <$> collect_cand_qkvs_co co cur_lvl (boundkcvs, boundkvs) (emptyDVarSet, dv) co"
+    go_wrap dv (WpTyLam tv) =
+      collect_cand_qkvs (Mono $ varKind tv) cur_lvl boundkvs dv (Mono $ varKind tv)
+    go_wrap dv (WpKiCoLam kcv) =
+      collect_cand_qkvs (Mono $ varKind kcv) cur_lvl boundkvs dv (Mono $ varKind kcv)
+    go_wrap dv WpKiLam{} = return dv
+    go_wrap dv (WpTyApp ty) = go dv ty
+    go_wrap dv (WpKiCoApp co) =
+      snd <$> collect_cand_qkvs_co co cur_lvl (boundkcvs, boundkvs) (emptyDVarSet, dv) co
+    go_wrap dv (WpKiApp ki) = 
+      collect_cand_qkvs (Mono ki) cur_lvl boundkvs dv (Mono ki)
+    go_wrap dv (WpMultCoercion co) =
+      snd <$> collect_cand_qkvs_co co cur_lvl (boundkcvs, boundkvs) (emptyDVarSet, dv) co
+
+    go_e dv _ = return dv
+               
 candidateQKiVarsOfKind :: Kind Tc -> TcM DTcKiVarSet
 candidateQKiVarsOfKind ki = do
   cur_lvl <- getTcLevel
