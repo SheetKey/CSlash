@@ -1,3 +1,4 @@
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE RecursiveDo #-}
@@ -160,6 +161,27 @@ tcSkolemizeExpectedType exp_ty thing_inside
                   ++ (map (mkInvisExpPatKiCo . snd) kcv_prs)
                   ++ (map (mkInvisExpPatType . snd) tv_prs))
                  rho_ty
+
+tcSkolemizeRowSig
+  :: Name
+  -> SigmaType Tc
+  -> ([ExpPatType] -> RhoType Tc -> TcM result)
+  -> TcM (Type Tc, CsWrapper Tc, result)
+tcSkolemizeRowSig nm exp_ty thing_inside = do
+  (wrap, (res, ty)) <- tcSkolemizeGeneral (SetRowValCtxt nm) exp_ty exp_ty $
+    \kv_prs kcv_prs tv_prs rho_ty ->
+      let ty = mkBigLamTys ((TcKiVar . snd) <$> kv_prs) $
+               mkForAllKiCos ((TcCoVar . snd) <$> kcv_prs) $
+               mkForAllTys ((flip Bndr Specified . TcTyVar . snd) <$> tv_prs) $
+               rho_ty
+      in (, ty) <$>
+         thing_inside ((map (mkInvisExpPatKind . snd) kv_prs)
+                       ++ (map (mkInvisExpPatKiCo . snd) kcv_prs)
+                       ++ (map (mkInvisExpPatType . snd) tv_prs))
+         rho_ty
+  return (ty, wrap, res)
+       
+    
 
 tcSkolemize
   :: UserTypeCtxt
