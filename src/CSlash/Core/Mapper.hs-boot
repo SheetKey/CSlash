@@ -5,6 +5,8 @@
 module CSlash.Core.Mapper where
 
 import {-# SOURCE #-} CSlash.Core.Rep
+import {-# SOURCE #-} CSlash.Cs.Expr (CsExpr)
+import {-# SOURCE #-} CSlash.Tc.Types.Evidence (CsWrapper)
 import CSlash.Core.TyCon
 
 import CSlash.Cs.Pass
@@ -24,6 +26,7 @@ data CoreMapper p p' env (m :: * -> *) = CoreMapper
   , cm_fa_kcv :: forall r. env -> KiCoVar p -> (env -> KiCoVar p' -> m r) -> m r
   , cm_fa_tv :: forall r. env -> TyVar p -> ForAllFlag -> (env -> TyVar p' -> m r) -> m r
   , cm_tycon :: TyCon p -> m (TyCon p')
+  , cm_set_val_row :: env -> (CsExpr p, CsWrapper p) -> m (CsExpr p', CsWrapper p')
   }
 
 mapCore

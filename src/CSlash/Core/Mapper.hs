@@ -1,3 +1,4 @@
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE RankNTypes #-}
@@ -29,6 +30,7 @@ data CoreMapper p p' env m = CoreMapper
   , cm_fa_kcv :: forall r. env -> KiCoVar p -> (env -> KiCoVar p' -> m r) -> m r
   , cm_fa_tv :: forall r. env -> TyVar p -> ForAllFlag -> (env -> TyVar p' -> m r) -> m r
   , cm_tycon :: TyCon p -> m (TyCon p')
+  , cm_set_val_row :: env -> (CsExpr p, CsWrapper p) -> m (CsExpr p', CsWrapper p')
   }
 
 {-# INLINE mapCore #-}
@@ -128,7 +130,8 @@ mapCoreX CoreMapper{..}
     go_ty !env (LocalTyRow nm ki) = LocalTyRow nm <$> go_mki env ki
     go_ty !env (SetRowsTy ty rs) = SetRowsTy <$> go_ty env ty <*> go_set_rows env rs
 
-    go_set_row !env (SetRowVal nm _ _) = return $ panic "SetRowVal nm"
+    go_set_row !env (SetRowVal nm e_wrap ty) =
+      SetRowVal nm <$> cm_set_val_row env e_wrap <*> go_ty env ty -- look at zonkCoFn
     go_set_row !env (SetRowTy nm ty) = SetRowTy nm <$> go_ty env ty
 
     go_tco !env (TyRefl ty) = TyRefl <$> go_ty env ty
@@ -188,3 +191,14 @@ mapCoreX CoreMapper{..}
     go_kco !env (SymCo co) = mkSymKiCo <$> go_kco env co
     go_kco !env (TransCo c1 c2) = mkTransKiCo <$> go_kco env c1 <*> go_kco env c2
     go_kco !env (SelCo i co) = mkSelCo i <$> go_kco env co
+
+    -- go_wrap !env WpHole = return WpHole
+    -- go_wrap !env (WpCompose w1 w2) = WpCompose <$> go_wrap env w1 <*> go_wrap env w2
+    -- go_wrap !env (WpFun w ki ty)
+    --   = WpFun <$> go_wrap env w <*> go_mki env ki <*> go_ty env ty
+    -- go_wrap !env (WpCast tco) = WpCast <$> go_tco env tco
+    -- go_wrap !env (WpTyLam tv
+    -- go_wrap !env (Wp
+    -- go_wrap !env (Wp
+    -- go_wrap !env (Wp
+    -- go_wrap !env (Wp
