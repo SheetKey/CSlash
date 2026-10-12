@@ -363,18 +363,19 @@ tcCheckSetRow (Just env) (RowTySig nm r_ty) (L loc (SetRow _ row_nm row_expr)) =
            , text "row_expr:" <+> ppr row_expr ]
 
   let ctxt = SetRowValCtxt (unLoc row_nm)
-  (wrap_gen, (wrap_res, res)) <- tcSkolemizeExpectedType ty $ \invis_pat_tys rho_ty ->
+  (ty, wrap_gen, (wrap_res, res)) <- tcSkolemizeRowSig (unLoc row_nm) ty $ \invis_pat_tys rho_ty ->
     setSrcSpanA loc $
     tcFunBind ctxt (unLoc row_nm) row_expr invis_pat_tys (mkCheckExpType rho_ty)
 
   traceTc "tcCheckSetRow1"
     $ vcat [ text "nm:" <+> ppr nm
+           , text "ty:" <+> ppr ty
            , text "wrap_gen:" <+> ppr wrap_gen
            , text "wrap_res:" <+> ppr wrap_res
            , text "res:" <+> ppr res ]
 
   let wrap = wrap_gen <.> wrap_res
-      set_row = SetRowVal (unLoc row_nm) (unLoc res, wrap) ty -- Is this the right ty?
+      set_row = SetRowVal (unLoc row_nm) (unLoc res, wrap) ty
       row_sig = RowTySig (unLoc row_nm) ty
 
   return (set_row, row_sig)
