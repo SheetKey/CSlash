@@ -778,6 +778,8 @@ aexp1 :: { ETP }
   | aexp1 TIGHT_INFIX_DOT a_qcon { ETP $ unETP $1 >>= \ ($1 :: LCsKind Ps) ->
                                    etpFromKd' $ sLLa $1 $> $
                                    CsBasedKiCon (mu AnnDot $2) $1 (fmap unknownToKc $3) }
+  | aexp1 TIGHT_INFIX_DOT a_varid { ETP $ unETP $1 >>= \ ($1 :: LCsType Ps) ->
+                                      mkCsRowProjPV (comb2 $1 $>) $1 (mu AnnDot $2) $3 }
   | STRING { ETP $ mkCsOverLitPV (sL1a $1 $ mkCsIsString (getSTRINGs $1) (getSTRING $1)) }
   | INTEGER { ETP $ mkCsOverLitPV (sL1a $1 $ mkCsIntegral (getINTEGER $1)) }
   | RATIONAL { ETP $ mkCsOverLitPV (sL1a $1 $ mkCsFractional (getRATIONAL $1)) }

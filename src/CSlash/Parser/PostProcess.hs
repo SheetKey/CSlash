@@ -499,6 +499,7 @@ class (b ~ (Body b) Ps, AnnoBody b) => DisambETP b where
   mkCsPatListConsPV :: LocatedA b -> LocatedA b -> PV (LocatedA b)
   mkCsUnitSysConPV :: SrcSpan -> NameAnn -> PV (LocatedA b)
   mkCsTupleSysConPV :: SrcSpan -> NameAnn -> Int -> PV (LocatedA b)
+  mkCsRowProjPV :: SrcSpan -> LCsType Ps -> AddEpAnn -> LocatedN RdrName -> PV (LocatedA b)
 
 instance DisambETP (CsExpr Ps) where
   type Body (CsExpr Ps) = CsExpr
@@ -624,6 +625,10 @@ instance DisambETP (CsExpr Ps) where
     let rdrName = nameRdrName $ tupleDataConName arity
         lrdrName = L (EpAnn (spanAsAnchor l) an cs) rdrName
     return $ L (EpAnn (spanAsAnchor l) noAnn cs) (CsVar noExtField lrdrName)
+  mkCsRowProjPV l ty dotAnn var = do
+    !cs <- getCommentsFor l
+    return $ L (EpAnn (spanAsAnchor l) noAnn cs) 
+           $ CsRowProj dotAnn ty var
 
 instance DisambETP (CsType Ps) where
   type Body (CsType Ps) = CsType
