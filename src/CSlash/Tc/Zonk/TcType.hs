@@ -179,6 +179,7 @@ zonkKiCo :: KindCoercion Tc -> ZonkM (KindCoercion Tc)
       , cm_lam_tv = \_ tv k -> zonkVarKind tv >>= k ()
       , cm_lam_kv = \_ kv k -> k () kv
       , cm_tycon = zonkTcTyCon
+      , cm_set_val_row = const return -- TODO?
       }
 
 zonkTcTyCon :: TyCon Tc -> ZonkM (TyCon Tc)

@@ -731,4 +731,5 @@ closedMapper = CoreMapper
       let env' = (tcvs, extendVarSet tvs tv, kcvs, kvs)
       in f env' tv
   , cm_tycon = panic "closedMapper tycon"
+  , cm_set_val_row = panic "closedMapper set val row"
   }
