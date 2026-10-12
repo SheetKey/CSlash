@@ -11,6 +11,7 @@ import CSlash.Language.Syntax.Binds
 
 import CSlash.Types.Fixity
 import CSlash.Types.Name.Reader
+import CSlash.Types.Name.Occurrence
 
 type LCsExpr p = XRec p (CsExpr p)
 
@@ -19,7 +20,7 @@ type family SyntaxExpr p
 data CsExpr p
   = CsVar (XVar p) (LIdP p)
   | CsUnboundVar (XUnboundVar p) RdrName
-  | CsRowProj (XRowProj p) (LCsType p) (LIdP p)
+  | CsRowProj (XRowProj p) (LCsType p) OccName
   | CsOverLit (XOverLitE p) (CsOverLit p)
   | CsLit (XLitE p) (CsLit p)
   | CsLam (XLam p) (MatchGroup p (LCsExpr p))

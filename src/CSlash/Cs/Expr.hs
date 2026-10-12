@@ -87,7 +87,7 @@ type instance XUnboundVar Rn = NoExtField
 type instance XUnboundVar Tc = DataConCantHappen
 type instance XUnboundVar Zk = DataConCantHappen
 
-type instance XRowProj Ps = AddEpAnn -- the dot
+type instance XRowProj Ps = (AddEpAnn, SrcSpan) -- (the dot, loc of row name)
 type instance XRowProj Rn = NoExtField
 type instance XRowProj Tc = NoExtField
 type instance XRowProj Zk = NoExtField

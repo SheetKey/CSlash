@@ -627,8 +627,10 @@ instance DisambETP (CsExpr Ps) where
     return $ L (EpAnn (spanAsAnchor l) noAnn cs) (CsVar noExtField lrdrName)
   mkCsRowProjPV l ty dotAnn var = do
     !cs <- getCommentsFor l
-    return $ L (EpAnn (spanAsAnchor l) noAnn cs) 
-           $ CsRowProj dotAnn ty var
+    case var of
+      L occl (Unqual occ) -> return $ L (EpAnn (spanAsAnchor l) noAnn cs) 
+                             $ CsRowProj (dotAnn, (getHasLoc occl)) ty occ
+      _ -> panic "unreachable"
 
 instance DisambETP (CsType Ps) where
   type Body (CsType Ps) = CsType

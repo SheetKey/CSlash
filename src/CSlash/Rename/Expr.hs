@@ -71,6 +71,10 @@ rnExpr (CsVar _ (L l v)) = do
 
 rnExpr (CsUnboundVar _ v) = return (CsUnboundVar noExtField v, emptyFVs)
 
+rnExpr (CsRowProj _ ty nm) = do
+  (ty', fvs) <- rnLCsType CsTypeCtx ty
+  return (CsRowProj noExtField ty' nm, fvs)
+
 rnExpr (CsOverLit x lit) = do
   ((lit', mb_neg), fvs) <- rnOverLit lit
   case mb_neg of
