@@ -8,7 +8,10 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE BangPatterns #-}
 
-module CSlash.Core.Rep where
+module CSlash.Core.Rep
+  ( CsExpr, CsWrapper
+  , module CSlash.Core.Rep
+  ) where
 
 import Prelude hiding ((<>))
 
