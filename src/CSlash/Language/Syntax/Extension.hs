@@ -99,6 +99,7 @@ type family XCModule x
 
 type family XVar x
 type family XUnboundVar x
+type family XRowProj x
 type family XOverLitE x
 type family XLitE x
 type family XLam x

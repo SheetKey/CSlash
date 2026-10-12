@@ -87,6 +87,11 @@ type instance XUnboundVar Rn = NoExtField
 type instance XUnboundVar Tc = DataConCantHappen
 type instance XUnboundVar Zk = DataConCantHappen
 
+type instance XRowProj Ps = AddEpAnn -- the dot
+type instance XRowProj Rn = NoExtField
+type instance XRowProj Tc = NoExtField
+type instance XRowProj Zk = NoExtField
+
 type instance XOverLitE (CsPass _) = NoExtField
 type instance XLitE (CsPass _) = NoExtField
 type instance XApp (CsPass _) = NoExtField
@@ -297,6 +302,7 @@ ppr_expr
   -> SDoc
 ppr_expr (CsVar _ (L _ v)) = pprPrefixOcc v
 ppr_expr (CsUnboundVar _ uv) = pprPrefixOcc uv
+ppr_expr (CsRowProj _ ty v) = ppr ty <> dot <> ppr v
 ppr_expr (CsLit _ lit) = ppr lit
 ppr_expr (CsOverLit _ lit) = ppr lit
 ppr_expr (CsLam _ matches) = pprMatches matches

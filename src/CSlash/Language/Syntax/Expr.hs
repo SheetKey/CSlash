@@ -19,6 +19,7 @@ type family SyntaxExpr p
 data CsExpr p
   = CsVar (XVar p) (LIdP p)
   | CsUnboundVar (XUnboundVar p) RdrName
+  | CsRowProj (XRowProj p) (LCsType p) (LIdP p)
   | CsOverLit (XOverLitE p) (CsOverLit p)
   | CsLit (XLitE p) (CsLit p)
   | CsLam (XLam p) (MatchGroup p (LCsExpr p))
