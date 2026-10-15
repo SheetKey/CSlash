@@ -644,7 +644,7 @@ subst_ki subst ki = go ki
                             (subst', kv') -> (ForAllKi $! kv') $! (subst_ki subst' ki)
 
 subst_mono_ki
-  :: (HasDebugCallStack, HasPass p pass, HasPass p' pass')
+  :: (HasDebugCallStack, HasPass p pass, HasPass p' pass', SubstP p p')
   => Subst p p' -> MonoKind p -> MonoKind p'
 subst_mono_ki subst ki = go ki
   where
@@ -658,7 +658,7 @@ subst_mono_ki subst ki = go ki
       = let !k1' = go k1
             !k2' = go k2
       in (mkKiPredApp $! pred) k1' k2'
-    go _ = panic "subst kiconapp"
+    go (KiConApp kc) = KiConApp $ substKiCon subst kc
 
 substKiVar
   :: (HasDebugCallStack, HasPass p pass, HasPass p' pass')
@@ -742,12 +742,12 @@ instance SubstP p p where
 
   vacuous_tycon tc = tc
 
-substKiCo :: (HasPass p pass, HasPass p' pass') => Subst p p' -> KindCoercion p -> KindCoercion p'
+substKiCo :: (HasPass p pass, HasPass p' pass', SubstP p p') => Subst p p' -> KindCoercion p -> KindCoercion p'
 substKiCo subst co
 {-  | isEmptySubstKiCo subst = co
   | otherwise-} = checkValidSubst subst $ subst_kco subst co
 
-subst_kco :: (HasPass p pass, HasPass p' pass') => Subst p p' -> KindCoercion p -> KindCoercion p'
+subst_kco :: (HasPass p pass, HasPass p' pass', SubstP p p') => Subst p p' -> KindCoercion p -> KindCoercion p'
 subst_kco subst co = go co
   where
     go_mki = subst_mono_ki subst
