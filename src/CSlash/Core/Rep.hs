@@ -449,10 +449,25 @@ coreFullView ty@(AppTy{}) = core_full_view ty
 coreFullView ty = ty
 {-# INLINE coreFullView #-}
 
+coreMKView :: MonoKind p -> Maybe (MonoKind p)
+coreMKView (KiConApp (KiCon _ kc _)) = Just kc
+coreMKView _ = Nothing
+{-# INLINE coreMKView #-}
+
+coreMKFullView :: MonoKind p -> MonoKind p
+coreMKFullView ki@KiConApp{} = core_mk_full_view ki
+coreMKFullView ki = ki
+{-# INLINE coreMKFullView #-}
+
 core_full_view :: HasPass p pass => Type p -> Type p
 core_full_view ty
   | Just ty' <- coreView ty = core_full_view ty'
   | otherwise = ty
+
+core_mk_full_view :: MonoKind p -> MonoKind p
+core_mk_full_view ki
+  | Just ki' <- coreMKView ki = core_mk_full_view ki'
+  | otherwise = ki
 
 expandTyLamApp_maybe :: HasPass p pass => Type p -> (Type p -> Bool) -> Maybe (Type p)
 expandTyLamApp_maybe ty pred = case split ty [] of
@@ -465,6 +480,7 @@ expandTyLamApp_maybe ty pred = case split ty [] of
   _ -> Nothing
   where
     split (AppTy ty arg) args = split ty (arg:args)
+    split (SetRowsTy ty _) args = split ty args
     split ty args = (ty, args)
 
 tyFunArity :: Type p -> Arity
@@ -472,6 +488,7 @@ tyFunArity = go 0
   where
     go i (TyLamTy _ ty) = go (i + 1) ty
     go i (BigTyLamTy _ ty) = go (i + 1) ty
+    go i (SetRowsTy ty _) = go i ty -- look through setting rows
     go i _ = i
 
 expandSynTyConApp_maybe :: HasPass p pass => TyCon p -> [Type p] -> Maybe (Type p)
@@ -490,7 +507,7 @@ saturates (_:tys) n = assert (n >= 0) $ saturates tys (n-1)
 {-# NOINLINE expand_syn #-}
 expand_syn :: (HasPass p p1, HasPass p' p2, SubstP p p') => Type p -> [Type p'] -> Type p'
 expand_syn rhs arg_tys
-  | null arg_tys = panic "closedType rhs"
+  | null arg_tys = pprPanic "closedType rhs" (ppr rhs)
   | otherwise = go rhs empty_subst arg_tys
   where
     {- empty_subst = mkEmptySubst (noDomFVs rhs (varsOfType rhs)) (varsOfTypes arg_tys)
@@ -511,6 +528,7 @@ expand_syn rhs arg_tys
     go (BigTyLamTy kv ty) subst (arg:args)
       | Embed ki <- arg = go ty (extendKvSubst subst kv ki) args
       | otherwise = pprPanic "expand_syn" (ppr rhs $$ ppr arg_tys)
+    go (SetRowsTy ty _) subst args = go ty subst args -- dubious. (Maybe we need another orig_ty arg?)
     go ty subst args = mkAppTys (substTy subst ty) args
 
 {- **********************************************************************
