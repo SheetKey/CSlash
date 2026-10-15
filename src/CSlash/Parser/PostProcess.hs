@@ -629,7 +629,8 @@ instance DisambETP (CsExpr Ps) where
     !cs <- getCommentsFor l
     case var of
       L occl (Unqual occ) -> return $ L (EpAnn (spanAsAnchor l) noAnn cs) 
-                             $ CsRowProj (dotAnn, (getHasLoc occl)) ty occ
+                             $ CsRowProj (dotAnn, (getHasLoc occl)) ty
+                               (setOccNameSpace (RowName (fsLit "")) occ)
       _ -> panic "unreachable"
 
 instance DisambETP (CsType Ps) where
