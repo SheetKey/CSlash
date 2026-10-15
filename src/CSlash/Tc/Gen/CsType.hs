@@ -449,6 +449,15 @@ tcSubstTyRowsMonoKind env init_ki = go init_ki
     go_row (RowTySig nm ty) = RowTySig nm (tcSubstTyRows env ty)
     go_row (RowKiSig nm ki) = RowKiSig nm (go ki)
 
+tcCsRowProjType :: LCsType Rn -> TcM (Type Tc, RowSigEnv Tc)
+tcCsRowProjType cs_ty = do
+  ek <- newExpectedKind AnyMonoKind
+  ty' <- tcLCsType cs_ty ek
+  ek' <- liftZonkM $ zonkTcMonoKind ek
+  let env = mkRowSigEnv ek'
+  traceTc "tcCsRowProjType" (ppr ty' $$ ppr ek' $$ ppr env)
+  return (ty', env)
+
 {- *********************************************************************
 *                                                                      *
                 Tuples
