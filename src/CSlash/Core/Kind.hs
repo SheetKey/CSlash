@@ -101,12 +101,16 @@ zipRowSigEnvs (RowEnv a) (RowEnv b) =
   in (RowEnv l, RowEnv r, RowEnv z)
 
 lookupRowEnv :: RowEnv' a -> Name -> Maybe a
-lookupRowEnv (RowEnv env) nm =
+lookupRowEnv env nm =
   let occ = nameOccName nm
-      new_ns = case occNameSpace occ of
+  in lookupRowEnvOcc env occ
+
+lookupRowEnvOcc :: RowEnv' a -> OccName -> Maybe a
+lookupRowEnvOcc (RowEnv env) occ =
+  let new_ns = case occNameSpace occ of
                  RowName _ -> RowName (fsLit "")
                  TcRowName _ -> TcRowName (fsLit "")
-                 _ -> pprPanic "lookupRowEnv" (ppr nm) -- This means a namespace was set incorrectly elsewhere!
+                 _ -> pprPanic "lookupRowEnvOcc" (ppr occ) -- This means a namespace was set incorrectly elsewhere!
       new_occ = setOccNameSpace new_ns occ
   in lookupOccEnv env new_occ
 
@@ -496,21 +500,27 @@ isFunKi ki = case ki of
 
 {-# INLINE splitFunKi_maybe #-}
 splitFunKi_maybe :: Kind kv -> Maybe (FunKiFlag, MonoKind kv, MonoKind kv)
-splitFunKi_maybe ki = case ki of
-  (Mono (FunKi f arg res)) -> Just (f, arg, res)
-  _ -> Nothing
+splitFunKi_maybe ki
+  | Mono mki <- ki
+  , FunKi f arg res <- coreMKFullView mki
+  = Just (f, arg, res)
+  | otherwise
+  = Nothing
 
 {-# INLINE splitMonoFunKi_maybe #-}
 splitMonoFunKi_maybe :: MonoKind kv -> Maybe  (FunKiFlag, MonoKind kv, MonoKind kv)
-splitMonoFunKi_maybe ki = case ki of
-  FunKi f arg res -> Just (f, arg, res)
-  _ -> Nothing
+splitMonoFunKi_maybe ki
+  | FunKi f arg res <- coreMKFullView ki
+  = Just (f, arg, res)
+  | otherwise
+  = Nothing
 
 splitMonoFunKis :: MonoKind kv -> ([MonoKind kv], MonoKind kv)
-splitMonoFunKis ki = split [] ki
+splitMonoFunKis ki = split ki ki []
   where
-    split args (FunKi _ arg res) = split (arg : args) res
-    split args res = (reverse args, res)
+    split _ (FunKi _ arg res) args = split res res (arg : args)
+    split orig_ki ki args | Just ki' <- coreMKView ki = split orig_ki ki' args
+    split orig_ki _ args = (reverse args, orig_ki)
 
 mkKiPredApp :: KiPredCon -> MonoKind kv -> MonoKind kv -> MonoKind kv
 mkKiPredApp = KiPredApp
@@ -540,7 +550,8 @@ splitPiKi_maybe
   -> Maybe (Either (KiVar p, Kind p) (FunKiFlag, MonoKind p, MonoKind p))
 splitPiKi_maybe ki = case ki of
   ForAllKi kv ki -> Just $ Left (kv, ki)
-  Mono (FunKi { fk_f = af, fk_arg = arg, fk_res = res }) -> Just $ Right (af, arg, res)
+  Mono mki -> case coreMKFullView mki of
+    FunKi { fk_f = af, fk_arg = arg, fk_res = res } -> Just $ Right (af, arg, res)
   _ -> Nothing
 
 isMonoFunKi :: MonoKind p -> Bool
@@ -556,23 +567,26 @@ invisibleKiBndrCount :: MonoKind kv -> Int
 invisibleKiBndrCount ki = length (fst (splitInvisFunKis ki))
 
 splitFunKis :: MonoKind kv -> ([MonoKind kv], MonoKind kv)
-splitFunKis ki = split ki []
+splitFunKis ki = split ki ki []
   where
-    split (FunKi { fk_arg = arg, fk_res = res }) bs = split res (arg:bs)
-    split ki bs = (reverse bs, ki)
+    split _ (FunKi { fk_arg = arg, fk_res = res }) bs = split res res (arg:bs)
+    split orig_ki ki bs | Just ki' <- coreMKView ki = split orig_ki ki' bs
+    split orig_ki _ bs = (reverse bs, orig_ki)
 
 splitMonoPiKis :: MonoKind kv -> ([PiKiBinder kv], MonoKind kv)
-splitMonoPiKis ki = split ki []
+splitMonoPiKis ki = split ki ki []
   where
-    split (FunKi af arg res) bs = split res (Anon arg af : bs)
-    split res bs = (reverse bs, res)
+    split _ (FunKi af arg res) bs = split res res (Anon arg af : bs)
+    split orig_ki ki bs | Just ki' <- coreMKView ki = split orig_ki ki' bs
+    split orig_ki _ bs = (reverse bs, orig_ki)
 
 splitInvisFunKis :: MonoKind kv -> ([MonoKind kv], MonoKind kv)
-splitInvisFunKis ki = split ki []
+splitInvisFunKis ki = split ki ki []
   where
-    split (FunKi { fk_f = f, fk_arg = arg, fk_res = res }) bs
-      | isInvisibleKiFunArg f = split res (arg:bs)
-    split ki bs = (reverse bs, ki)
+    split _ (FunKi { fk_f = f, fk_arg = arg, fk_res = res }) bs
+      | isInvisibleKiFunArg f = split res res (arg:bs)
+    split orig_ki ki bs | Just ki' <- coreMKView ki = split orig_ki ki' bs
+    split orig_ki _ bs = (reverse bs, orig_ki)
 
 mkForAllKis :: [KiVar p] -> Kind p -> Kind p
 mkForAllKis kis ki = foldr ForAllKi ki kis
