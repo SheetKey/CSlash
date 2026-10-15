@@ -200,6 +200,7 @@ data CtOrigin -- DOUBLE CHECK PATTERN MATCHES IF YOU ADD 'AmbiguityCheckOrigin' 
                  }
   | BasedKiCoOrigin (MonoKind Tc) (MonoKind Tc) (Maybe Name) (CsKind Rn)
   | LiteralOrigin (CsOverLit Rn)
+  | RowProjOf OccName
   | SectionOrigin
   | ExprSigOrigin
   | TupleTyOrigin
@@ -238,6 +239,7 @@ exprCtOrigin (CsVar _ (L _ name)) = OccurrenceOf name
 exprCtOrigin (CsUnboundVar {}) = Shouldn'tHappenOrigin "unbound variable"
 exprCtOrigin (CsOverLit _ lit) = LiteralOrigin lit
 exprCtOrigin (CsLit {}) = Shouldn'tHappenOrigin "concrete literal"
+exprCtOrigin (CsRowProj _ _ occ) = RowProjOf occ
 exprCtOrigin (CsLam _ ms) = matchesCtOrigin ms
 exprCtOrigin (CsTyLam _ ms) = matchesCtOrigin ms
 exprCtOrigin (CsApp _ e1 _) = lexprCtOrigin e1
@@ -313,6 +315,7 @@ pprCtOrigin simple_origin = ctoHerald <+> pprCtO simple_origin
 
 pprCtO :: HasCallStack => CtOrigin -> SDoc
 pprCtO (OccurrenceOf name) = hsep [text "a use of", quotes (ppr name)]
+pprCtO (RowProjOf occ) = hsep [text "projection of", quotes (ppr occ)]
 
 pprCtO TupleTyOrigin = text "a tuple type"
 pprCtO PatSigOrigin = text "a pattern type signature"
