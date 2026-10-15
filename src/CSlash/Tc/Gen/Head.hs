@@ -38,6 +38,7 @@ import CSlash.Core.ConLike( ConLike(..) )
 import CSlash.Core.DataCon
 import CSlash.Core.TyCon
 import CSlash.Core.Type
+import CSlash.Core.Kind
 
 import CSlash.Types.Var.Id
 import CSlash.Types.Var
@@ -236,6 +237,12 @@ tcInferAppHead_maybe fun = case fun of
   CsVar _ (L _ nm) -> Just <$> tcInferId nm
   ExprWithTySig _ e cs_ty -> Just <$> tcExprWithSig e cs_ty
   CsOverLit _ lit -> Just <$> tcInferOverLit lit
+  CsRowProj _ cs_ty occ -> do
+    (ty, row_env) <- tcCsRowProjType cs_ty
+    case lookupRowEnvOcc row_env occ of
+      Just (RowTySig _ ty) -> do traceTc "tcInferAppHead_maybe row" (ppr occ $$ ppr ty)
+                                 return (Just (CsRowProj ty cs_ty occ, ty))
+      _ -> panic "tcInferAppHead_maybe row not found"
   _ -> return Nothing
 
 addHeadCtxt :: AppCtxt -> TcM a -> TcM a 
