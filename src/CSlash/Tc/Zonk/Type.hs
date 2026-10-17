@@ -564,6 +564,10 @@ zonkExpr (CsApp x e1 e2) = do
   new_e2 <- zonkLExpr e2
   return $ CsApp x new_e1 new_e2
 
+zonkExpr (CsPar x e) = do
+  new_e <- zonkLExpr e
+  return (CsPar x new_e)
+
 zonkExpr (ExplicitTuple x tup_args) = do
   new_tup_args <- mapM zonk_tup_arg tup_args
   return (ExplicitTuple x new_tup_args)
@@ -589,6 +593,15 @@ zonkExpr (CsLet x binds expr) = runZonkBndrT (zonkLocalBinds binds) $ \new_binds
   new_expr <- zonkLExpr expr
   return (CsLet x new_binds new_expr)
 
+zonkExpr (CsRowProj ty cs_ty occ) = do
+  lift $ traceTc "zonkExpr CsRowProj" (ppr ty)
+  ty' <- zonkTcTypeToTypeX ty
+  return (CsRowProj ty' cs_ty occ)
+
+zonkExpr (ExprWithTySig _ e ty) = do
+  e' <- zonkLExpr e
+  return (ExprWithTySig noExtField e' ty)
+
 zonkExpr (XExpr (WrapExpr co_fn expr))
   = runZonkBndrT (zonkCoFn co_fn) $ \new_co_fn -> do
       new_expr <- zonkExpr expr
@@ -600,7 +613,7 @@ zonkExpr (XExpr (ExpandedThing thing expr)) = do
 
 zonkExpr (XExpr (ConLike con)) = return $ XExpr $ ConLike con
 
-zonkExpr other = pprPanic "zonkExpr" (ppr other)
+zonkExpr other = pprPanic "zonkExpr other" (ppr other)
 
 zonkCoFn :: CsWrapper Tc -> ZonkBndrTcM (CsWrapper Zk)
 zonkCoFn WpHole = return WpHole
