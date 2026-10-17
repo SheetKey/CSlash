@@ -702,8 +702,10 @@ mkAppTyM fun arg
   | TyConApp tc args <- fun
   , isTypeSynonymTyCon tc
   , args `lengthIs` (tyConArity tc - 1)
-  = do (arg':args') <- liftZonkM $ panic "zonkTcTypes (arg:args)"
-       return $ panic "mkTyConApp tc (args' ++ [arg'])"
+  = do (arg':args') <- liftZonkM $ zonkTcTypes (arg:args)
+       return $ mkTyConApp tc (args' ++ [arg'])
+
+-- TODO: Need to teal with anon type funs here too
 
 mkAppTyM fun arg = return $ mk_app_ty fun arg
 
