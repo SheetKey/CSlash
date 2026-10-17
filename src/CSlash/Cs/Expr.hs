@@ -302,7 +302,10 @@ ppr_expr
   -> SDoc
 ppr_expr (CsVar _ (L _ v)) = pprPrefixOcc v
 ppr_expr (CsUnboundVar _ uv) = pprPrefixOcc uv
-ppr_expr (CsRowProj _ ty v) = ppr ty <> dot <> ppr v
+ppr_expr (CsRowProj ext cs_ty v) = case csPass @p of
+  Tc -> ppr ext <> dot <> ppr v
+  Zk -> ppr ext <> dot <> ppr v
+  _ -> ppr cs_ty <> dot <> ppr v
 ppr_expr (CsLit _ lit) = ppr lit
 ppr_expr (CsOverLit _ lit) = ppr lit
 ppr_expr (CsLam _ matches) = pprMatches matches
