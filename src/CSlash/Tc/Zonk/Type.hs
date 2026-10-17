@@ -166,6 +166,7 @@ zonkTyVarOcc (TcTyVar tctv) = f_tc tctv
 zonkTyVarOcc tv = do
   lift $ traceTc "TyVar in the type checker *********************************" (ppr tv)
   -- This case shouldn't(?) happen. Right now it happens on row-projections
+  -- They may occur elsewhere. Don't see any need to do away with this?
   ZonkEnv { ze_tv_env = tv_env } <- getZonkEnv
   case lookupVarEnv_Directly tv_env (varUnique tv) of
     Nothing -> panic "zonkTyVarOcc bad skolem"
