@@ -203,6 +203,7 @@ deepFvFolder @p @pass =
   	, cf_khole = \is hole -> case csPass @pass of
   	    Tc -> cf_kcv folder is (TcCoVar $ coHoleCoVar hole)
             _ -> panic "deepFvFolder cf_khole unreachable"
+        , cf_set_val_row = \_ _ -> mempty -- TODO: error prone
   	}
   in folder
 
@@ -301,6 +302,7 @@ shallowFvFolder @p @pass =
   	, cf_khole = \is hole -> case csPass @pass of
   	    Tc -> cf_kcv folder is (TcCoVar $ coHoleCoVar hole)
             _ -> panic "shallowFvFolder cf_khole unreachable"
+        , cf_set_val_row = panic "set_row_val shallowfvfolder"
   	}
   in folder
 
@@ -405,6 +407,7 @@ deepCoVarFolder @p @pass =
         , cf_lam_kv = \is _ -> is
         , cf_lam_tv = \is _ -> is
         , cf_fa_kcv = \(tacc, kacc) k -> (tacc, extendVarSet kacc k)
+        , cf_set_val_row = panic "set_row_val deepcovarfolder"
         }
   in folder
 
@@ -659,6 +662,7 @@ afvFolder f_tcv f_tv f_kcv f_kv = CoreFolder
   , cf_fa_tv = \(tcvs, tvs, kcvs, kvs) v _ -> (tcvs, extendVarSet tvs v, kcvs, kvs)
   , cf_lam_kv = \(tcvs, tvs, kcvs, kvs) v -> (tcvs, tvs, kcvs, extendVarSet kvs v)
   , cf_lam_tv = \(tcvs, tvs, kcvs, kvs) v -> (tcvs, extendVarSet tvs v, kcvs, kvs)
+  , cf_set_val_row = panic "set_row_val afvfolder"
   }
 
 {- *********************************************************************

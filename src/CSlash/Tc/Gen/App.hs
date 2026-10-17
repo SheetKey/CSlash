@@ -441,6 +441,7 @@ foldQLInstVars check_tv ty = do_ty ty
                         , cf_fa_kv = \_ _ -> ()
                         , cf_lam_tv = \_ _ -> ()
                         , cf_lam_kv = \_ _ -> ()
+                        , cf_set_val_row = panic "foldqlinstvars"
                         }
 
     do_hole _ hole = do_ty (varType (tyCoHoleCoVar hole))
