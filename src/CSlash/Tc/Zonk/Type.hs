@@ -162,7 +162,16 @@ zonkTyVarOcc (TcTyVar tctv) = f_tc tctv
             Just ty -> return ty
             Nothing -> do mtv_details <- readTcRef ref
                           zonk_meta ref mtv_details
-zonkTyVarOcc tv = pprPanic "TyVar in the type checker" (ppr tv)
+
+zonkTyVarOcc tv = do
+  lift $ traceTc "TyVar in the type checker *********************************" (ppr tv)
+  -- This case shouldn't(?) happen. Right now it happens on row-projections
+  ZonkEnv { ze_tv_env = tv_env } <- getZonkEnv
+  case lookupVarEnv_Directly tv_env (varUnique tv) of
+    Nothing -> panic "zonkTyVarOcc bad skolem"
+      -- mkTyVarTy <$> updateVarKindM zonkTcMonoKindToMonoKindX tv
+    Just tv' -> return $ mkTyVarTy tv'  
+-- zonkTyVarOcc tv = pprPanic "TyVar in the type checker" (ppr tv)
 
 extendMetaTvEnv :: TcTyVar -> Type Zk -> ZonkTcM ()
 extendMetaTvEnv tv ty = ZonkT $ \ (ZonkEnv { ze_meta_tv_env = mtv_env_ref }) ->
