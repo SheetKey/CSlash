@@ -24,6 +24,7 @@ data CoreFolder p env a = CoreFolder
   , cf_tcv :: env -> TyCoVar p -> a
   , cf_thole :: env -> TypeCoercionHole -> a
   , cf_khole :: env -> KindCoercionHole -> a
+  , cf_set_val_row :: env -> (CsExpr p, CsWrapper p) -> a
   }
 
 {-# INLINE foldCore #-}
@@ -91,7 +92,8 @@ foldCore CoreFolder{..} env
     go_ty env (LocalTyRow nm ki) = go_mki env ki
     go_ty env (SetRowsTy ty rows) = go_ty env ty `mappend` go_set_rows env rows
 
-    go_set_row env (SetRowVal nm e ty) = panic "Folder go_set_row setrowval"
+    go_set_row env (SetRowVal nm e ty) =
+      cf_set_val_row env e `mappend` go_ty env ty
     go_set_row env (SetRowTy _ ty) = go_ty env ty
 
     go_tco env (TyRefl ty) = go_ty env ty
