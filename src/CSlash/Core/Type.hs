@@ -288,6 +288,8 @@ monoPiKiResultTys ki [] = ki
 monoPiKiResultTys ki orig_args@(arg:args)
   | FunKi { fk_res = res } <- ki
   = monoPiKiResultTys res args
+  | Just ki' <- coreMKView ki
+  = monoPiKiResultTys ki' orig_args 
   | otherwise
   = pprPanic "monoPiKiResultTys1" (ppr ki $$ ppr orig_args)
 
