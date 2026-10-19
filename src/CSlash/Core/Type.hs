@@ -838,7 +838,10 @@ mkTyConAppCo tc cos
   | Just co <- tyConAppFunCo_maybe tc cos
   = co
   | ExpandsSyn tv_co_prs rhs_ty leftover_cos <- expandSynTyCon_maybe tc cos
-  = panic "mkAppCos (liftTyCoSubst (mkTyLiftingContext tv_co_prs) rhs_ty) leftover_cos"
+  = pprPanic "mkAppCos (liftTyCoSubst (mkTyLiftingContext tv_co_prs) rhs_ty) leftover_cos"
+    $ vcat [ text "tv_co_prs" <+> ppr tv_co_prs
+           , text "rhs_ty" <+> ppr rhs_ty
+           , text "leftover_cos" <+> ppr leftover_cos ]
   | Just tys <- traverse isReflTyCo_maybe cos
   = mkReflTyCo (mkTyConApp tc tys)
   | otherwise
