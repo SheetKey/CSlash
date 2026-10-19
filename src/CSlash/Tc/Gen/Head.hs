@@ -240,8 +240,9 @@ tcInferAppHead_maybe fun = case fun of
   CsRowProj _ cs_ty occ -> do
     (ty, row_env) <- tcCsRowProjType cs_ty
     case lookupRowEnvOcc row_env occ of
-      Just (RowTySig _ ty) -> do traceTc "tcInferAppHead_maybe row" (ppr occ $$ ppr ty)
-                                 return (Just (CsRowProj ty cs_ty occ, ty))
+      Just (RowTySig _ row_ty) -> do traceTc "tcInferAppHead_maybe row"
+                                       (ppr ty $$ ppr occ $$ ppr row_ty)
+                                     return (Just (CsRowProj ty cs_ty occ, ty))
       _ -> panic "tcInferAppHead_maybe row not found"
   _ -> return Nothing
 
