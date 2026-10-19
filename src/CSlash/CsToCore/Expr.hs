@@ -100,6 +100,10 @@ dsExpr (CsLam (_, fun_kis) mg) = do
 
 dsExpr (CsTyLam {}) = panic "CsTyLam"
 
+dsExpr e@(CsRowProj ty _ occ) = do
+  traceIf (text "dsExpr CsRowProj" $$ ppr e)
+  panic "unfinished dsExpr rowproj"
+
 dsExpr other = pprPanic "dsExpr" (ppr other)
 
 {- *********************************************************************
