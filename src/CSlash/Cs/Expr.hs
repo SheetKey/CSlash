@@ -89,8 +89,8 @@ type instance XUnboundVar Zk = DataConCantHappen
 
 type instance XRowProj Ps = (AddEpAnn, SrcSpan) -- (the dot, loc of row name)
 type instance XRowProj Rn = NoExtField
-type instance XRowProj Tc = Type Tc -- type of the row field
-type instance XRowProj Zk = Type Zk -- type of the row field
+type instance XRowProj Tc = Type Tc -- the type being projected (NOT the type of the row)
+type instance XRowProj Zk = Type Zk -- the type being projected (NOT the type of the row)
 
 type instance XOverLitE (CsPass _) = NoExtField
 type instance XLitE (CsPass _) = NoExtField
@@ -303,9 +303,9 @@ ppr_expr
 ppr_expr (CsVar _ (L _ v)) = pprPrefixOcc v
 ppr_expr (CsUnboundVar _ uv) = pprPrefixOcc uv
 ppr_expr (CsRowProj ext cs_ty v) = case csPass @p of
-  Tc -> ppr ext <> dot <> ppr v
-  Zk -> ppr ext <> dot <> ppr v
-  _ -> ppr cs_ty <> dot <> ppr v
+  Tc -> parens (ppr ext) <> dot <> ppr v
+  Zk -> parens (ppr ext) <> dot <> ppr v
+  _ -> parens (ppr cs_ty) <> dot <> ppr v
 ppr_expr (CsLit _ lit) = ppr lit
 ppr_expr (CsOverLit _ lit) = ppr lit
 ppr_expr (CsLam _ matches) = pprMatches matches
