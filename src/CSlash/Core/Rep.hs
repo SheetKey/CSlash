@@ -595,6 +595,7 @@ isForgetfulTy (TyLamTy tv ty) = (not $ tv `elemVarSet` (fstOf3 $ varsOfType ty))
 -- This is kind of a hack, but is necessary for rewriterView.
 -- Unfortunately, during rewriting we may not have instantiated the rows.
 isForgetfulTy LocalTyRow{} = False
+isForgetfulTy (SetRowsTy ty _) = isForgetfulTy ty
 isForgetfulTy other = pprPanic "isForgetfulTy" (ppr other)
 
 -- * Kinds
