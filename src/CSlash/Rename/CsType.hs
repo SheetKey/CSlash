@@ -141,10 +141,10 @@ rnCsTy env (CsUnboundTyVar _ v) = return (CsUnboundTyVar noExtField v, emptyFVs)
 
 rnCsTy _ (CsSelf x) = dataConCantHappen x
 
-rnCsTy env (CsSetRows _ (L l ty) rows) = setSrcSpanA l $ do
+rnCsTy env (CsSetRowsTy _ (L l ty) rows) = setSrcSpanA l $ do
   (ty', ty_fvs) <- rnCsTy env ty
   (rows, row_fvs) <- rnCsSetRows env rows -- TODO: set namespace here?
-  return (CsSetRows noExtField (L l ty') rows, ty_fvs `plusFV` row_fvs)
+  return (CsSetRowsTy noExtField (L l ty') rows, ty_fvs `plusFV` row_fvs)
 
 rnCsTy env (CsAppTy _ ty1 ty2) = do
   (ty1', fvs1) <- rnLCsTy env ty1
@@ -226,7 +226,7 @@ rnTyVar _ rdr_name = lookupTypeOccRn rdr_name
 ***************************************************** -}
 
 rnCsSetRows :: RnTyEnv -> LCsSetRows Ps -> RnM (LCsSetRows Rn, FreeVars)
-rnCsSetRows env (L loc (SetRows _ rows)) = case rows of
+rnCsSetRows env (L loc (CsSetRows _ rows)) = case rows of
   [] -> panic "rnCsSetRows empty"
   _ : _ -> do
     let dup_lbls :: [NE.NonEmpty RdrName]
@@ -238,7 +238,7 @@ rnCsSetRows env (L loc (SetRows _ rows)) = case rows of
     -- Not needed?: possible_parents
 
     (rows', fvs) <- rn_rows rows
-    return (L loc (SetRows noExtField rows'), fvs)
+    return (L loc (CsSetRows noExtField rows'), fvs)
   where
     rn_rows :: [LCsSetRow Ps] -> RnM ([LCsSetRow Rn], FreeVars)
     rn_rows [] = return ([], emptyFVs)

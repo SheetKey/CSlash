@@ -60,6 +60,11 @@ type ZipRowSigEnv p = RowEnv' (RowSig p, RowSig p)
 type TyRowEnv p = RowEnv' (Type p)
 newtype RowEnv' a = RowEnv (OccEnv a)
 
+instance Data.Typeable a => Data.Data (RowEnv' a)
+
+emptyRowEnv :: RowEnv' a
+emptyRowEnv = RowEnv emptyOccEnv
+
 mkTyRowEnv :: [(Name, Type p)] -> TyRowEnv p
 mkTyRowEnv pairs = RowEnv $ extendOccEnvList emptyOccEnv pairs'
   where
@@ -116,6 +121,16 @@ lookupRowEnvOcc (RowEnv env) occ =
 
 instance Outputable a => Outputable (RowEnv' a) where
   ppr (RowEnv env) = ppr env
+
+extendRowEnv :: RowEnv' a -> Name -> a -> RowEnv' a
+extendRowEnv (RowEnv env) nm a = RowEnv (extendOccEnv env occ a)
+  where
+    new_ns = case occNameSpace occ of
+      RowName _ -> RowName (fsLit "")
+      TcRowName _ -> TcRowName (fsLit "")
+      _ -> pprPanic "extendRowEnv" (ppr old_occ)
+    old_occ = nameOccName nm
+    occ = setOccNameSpace new_ns old_occ
 
 rowSigName :: RowSig p -> Name
 rowSigName (RowTySig nm _) = nm

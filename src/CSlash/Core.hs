@@ -54,7 +54,13 @@ data Expr bLam bLet
   | Type (Type Zk)
   | KiCo (KindCoercion Zk)
   | Kind (MonoKind Zk)
+  -- Rows
+  | RowProj (Type Zk) OccName
+  | SetRows (Type Zk) (DsRowEnv bLam bLet)
   deriving Data
+
+type DsRowEnv bLam bLet = RowEnv' (Either (Type Zk) (Expr bLam bLet))
+type CoreDsRowEnv = DsRowEnv CoreBndr CoreId
 
 type Arg = Expr 
 

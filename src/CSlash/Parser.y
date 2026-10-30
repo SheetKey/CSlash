@@ -415,8 +415,8 @@ rowdecl :: { LRowDecl Ps Ps }
                                  (fmap unknownToTc $2) $4 }
 
 set_rows :: { LCsSetRows Ps }
-  : '.{' rowdefns '}' {% amsA' (sLL $1 $> (SetRows [ mu AnnOpenDotC $1
-                                                   , mu AnnCloseC $> ]
+  : '.{' rowdefns '}' {% amsA' (sLL $1 $> (CsSetRows [ mu AnnOpenDotC $1
+                                                     , mu AnnCloseC $> ]
                                            $2)) }
 
 rowdefns :: { [LCsSetRow Ps] }
@@ -619,7 +619,7 @@ quant_exp :: { ETP }
   | fun_exp %shift { $1 }
   | aexp1 set_rows {% runPV (unETP $1) >>= \($1 :: LCsType Ps) ->
                       fmap etpFromTy (amsA' $ sLL $1 $> $
-                      CsSetRows noExtField $1 $2) }
+                      CsSetRowsTy noExtField $1 $2) }
 
 forall_telescope :: { Located (CsForAllTelescope Ps) }
   : 'forall' tv_bndrs '.' {% acs (comb2 $1 $>) (\loc cs -> (L loc $

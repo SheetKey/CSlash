@@ -250,7 +250,7 @@ tc_cs_type rn_ty@(CsTupleTy _ tup_args) exp_kind
     tyTupArgPresent (TyPresent {}) = True
     tyTupArgPresent (TyMissing {}) = False
 
-tc_cs_type rn_ty@(CsSetRows _ base rows) exp_kind = do
+tc_cs_type rn_ty@(CsSetRowsTy _ base rows) exp_kind = do
   base_ki <- newMetaKindVar
   base' <- tc_lcs_type base base_ki
   let row_env = mkRowSigEnv exp_kind
@@ -258,14 +258,14 @@ tc_cs_type rn_ty@(CsSetRows _ base rows) exp_kind = do
   let full_kind = KiConApp $ KiCon Nothing base_ki rowsig
       ty = SetRowsTy base' rows'
       subst_exp_kind = tcSubstTyRowsMonoKind ty_row_env exp_kind
-  traceTc "tc_cs_type CsSetRows"
+  traceTc "tc_cs_type CsSetRowsTy"
     $ vcat [ text "base'" <+> ppr base'
            , text "rows'" <+> ppr rows'
            , text "ty" <+> ppr ty
            , text "full_kind" <+> ppr full_kind
            , text "subst_exp_kind" <+> ppr subst_exp_kind
            ]
-  checkExpectedKind (text "CsSetRows") rn_ty ty full_kind subst_exp_kind
+  checkExpectedKind (text "CsSetRowsTy") rn_ty ty full_kind subst_exp_kind
 
 -- TODO: move to '..infer_ek'
 tc_cs_type rn_ty@(CsSumTy _ cs_tys) exp_kind = do
@@ -317,7 +317,7 @@ tcSetRows
   -> RowSigEnv Tc
   -> LCsSetRows Rn
   -> TcM (TyRowEnv Tc, [SetRow Tc], [RowSig Tc])
-tcSetRows self env rn_ty@(L _ (SetRows _ rows)) = do
+tcSetRows self env rn_ty@(L _ (CsSetRows _ rows)) = do
   traceTc "tcSetRows env" (ppr env $$ ppr_set_rows rn_ty)
   let (ts, es) = partition (isSetCsTyRow . unLoc) rows
       t_pairs = map (\r -> (lookupRow (unLoc r), r)) ts

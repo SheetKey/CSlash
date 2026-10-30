@@ -101,8 +101,14 @@ dsExpr (CsLam (_, fun_kis) mg) = do
 dsExpr (CsTyLam {}) = panic "CsTyLam"
 
 dsExpr e@(CsRowProj ty _ occ) = do
-  traceIf (text "dsExpr CsRowProj" $$ ppr e)
-  panic "unfinished dsExpr rowproj"
+  traceIf (text "dsExpr CsRowProj" $$ ppr e $$ ppr ty)
+  ty' <- dsType ty
+  case ty' of
+    Type ty -> return $ RowProj ty occ
+    SetRows ty env -> case lookupRowEnvOcc env occ of
+      Just (Right e) -> return e
+      _ -> return $ RowProj ty occ
+    _ -> panic "dsExpr unreachable"
 
 dsExpr other = pprPanic "dsExpr" (ppr other)
 
@@ -156,7 +162,9 @@ ds_app_finish fun_id core_args = return $ mkCoreApps (Var fun_id) core_args
 splitCsWrapperArgs :: CsWrapper Zk -> [CoreArg] -> DsM (CsWrapper Zk, [CoreArg])
 splitCsWrapperArgs wrap args = go wrap args
   where
-    go (WpTyApp ty) args = return (WpHole, Type ty : args)
+    go (WpTyApp ty) args = do
+      ty' <- dsType ty
+      return (WpHole, ty' : args)
     go (WpKiCoApp kco) args = return (WpHole, KiCo kco : args)
     go (WpKiApp ki) args = return (WpHole, Kind ki : args)
     go (WpCompose w1 w2) args = do

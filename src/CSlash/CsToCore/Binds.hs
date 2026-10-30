@@ -6,7 +6,7 @@ import CSlash.Driver.DynFlags
 import CSlash.Driver.Config
 import CSlash.Unit.Module
 
-import {-# SOURCE #-} CSlash.CsToCore.Expr  ( dsLExpr )
+import {-# SOURCE #-} CSlash.CsToCore.Expr  ( dsExpr, dsLExpr )
 -- import {-# SOURCE #-} GHC.HsToCore.Match ( matchWrapper )
 
 -- import GHC.HsToCore.Pmc.Utils( tracePm )
@@ -194,7 +194,9 @@ ds_cs_wrapper :: CsWrapper Zk -> ((CoreExpr -> CoreExpr) -> DsM a) -> DsM a
 ds_cs_wrapper wrap = go wrap
   where
     go WpHole k = k $ \e -> e
-    go (WpTyApp ty) k = k $ \e -> App e (Type ty)
+    go (WpTyApp ty) k = do
+      ty' <- dsType ty
+      k $ \e -> App e ty'
     go (WpKiCoApp kco) k = k $ \e -> App e (KiCo kco)
     go (WpKiApp ki) k = k $ \e -> App e (Kind ki)
     go (WpTyLam tv) k = k $ Lam (Tv tv) Nothing
@@ -210,3 +212,31 @@ ds_cs_wrapper wrap = go wrap
       go c_res $ \w_res ->
         let app f a = mkCoreApp (text "dsCsWrapper") f a
         in k $ \e -> Lam (Core.Id x) (Just ki_fun) (w_res (app e (Var x)))
+
+{-**********************************************************************
+*                                                                      *
+           Desugaring rows
+*                                                                      *
+**********************************************************************-}
+
+dsType :: Type Zk -> DsM CoreExpr
+dsType ty
+  | SetRowsTy ty1 rows <- coreFullView ty
+  = do ty2 <- dsType ty1
+       env1 <- dsSetRows rows
+       case ty2 of
+         Type ty3 -> return $ SetRows ty3 env1
+         SetRows ty3 env2 -> return $ SetRows ty3 (plusRowEnv env2 env1) -- bindings in env1 shadow those in env2
+         _ -> panic "dsType unreachable"
+
+  | otherwise
+  = return $ Type ty
+
+dsSetRows :: [SetRow Zk] -> DsM CoreDsRowEnv
+dsSetRows = foldM go emptyRowEnv
+  where
+    go :: CoreDsRowEnv -> SetRow Zk -> DsM CoreDsRowEnv
+    go env (SetRowTy nm ty) = return $ extendRowEnv env nm (Left ty)
+    go env (SetRowVal nm (e, co_fn) _) = dsCsWrapper co_fn $ \core_wrap -> do
+      e' <- dsExpr e
+      return $ extendRowEnv env nm (Right (core_wrap e'))

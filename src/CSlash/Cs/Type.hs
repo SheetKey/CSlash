@@ -332,11 +332,11 @@ ppr_mono_ty (TySectionR _ op ty)
                              , text "x_" ])
                         4 (pp_ty <> rparen)
     pp_infixly v = sep [v, pp_ty]
-ppr_mono_ty (CsSetRows _ ty rows)
+ppr_mono_ty (CsSetRowsTy _ ty rows)
   = hang (ppr_mono_lty ty) 2 (ppr_set_rows rows)
 
 ppr_set_rows :: OutputableBndrId p => LCsSetRows (CsPass p) -> SDoc
-ppr_set_rows (L _ (SetRows _ rows))
+ppr_set_rows (L _ (CsSetRows _ rows))
   = dot <> (braces (fsep (punctuate comma (map ppr_set_row rows))))
 
 ppr_set_row :: OutputableBndrId p => LCsSetRow (CsPass p) -> SDoc
@@ -367,7 +367,7 @@ csTyNeedsParens prec = go
     go (CsTyVar{}) = False
     go (CsUnboundTyVar{}) = False
     go (CsSelf{}) = False
-    go (CsSetRows{}) = False
+    go (CsSetRowsTy{}) = False
     go (CsTyLamTy{}) = prec > topPrec
     go (CsAppTy{}) = prec >= appPrec
     go (CsOpTy{}) = prec >= opPrec

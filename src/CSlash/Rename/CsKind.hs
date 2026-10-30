@@ -246,14 +246,14 @@ extractCsTyRdrKindVars (L _ ty) = case ty of
   CsTyLamTy _ mg -> extractCsTyMGKindVars mg
   TySectionL _ ty1 ty2 -> extractCsTyRdrKindVars ty1 ++ extractCsTyRdrKindVars ty2
   TySectionR _ ty1 ty2 -> extractCsTyRdrKindVars ty1 ++ extractCsTyRdrKindVars ty2
-  CsSetRows _ ty rows -> extractCsTyRdrKindVars ty ++ extractCsSetRowsRdrKindVars rows
+  CsSetRowsTy _ ty rows -> extractCsTyRdrKindVars ty ++ extractCsSetRowsRdrKindVars rows
 
   CsTyVar{} -> []
   CsUnboundTyVar{} -> []
   CsSelf{} -> []
 
 extractCsSetRowsRdrKindVars :: LCsSetRows Ps -> FreeKiVars
-extractCsSetRowsRdrKindVars (L _ (SetRows _ rows)) = concatMap extractCsSetRowRdrKindVars rows
+extractCsSetRowsRdrKindVars (L _ (CsSetRows _ rows)) = concatMap extractCsSetRowRdrKindVars rows
 
 extractCsSetRowRdrKindVars :: LCsSetRow Ps -> FreeKiVars
 extractCsSetRowRdrKindVars (L _ set) = case set of
