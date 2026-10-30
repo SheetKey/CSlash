@@ -256,13 +256,13 @@ instance HasPass p p' => Outputable (Type (CsPass p')) where
 instance HasPass p p' => Outputable (SetRow (CsPass p')) where
   ppr = debug_ppr_set_row
 
-instance Outputable (TypeCoercion p) where
-  ppr = const $ text "[TyCo]"
+instance HasPass p p' => Outputable (TypeCoercion (CsPass p')) where
+  ppr = pprTyCo
 
 instance Outputable TypeCoercionHole where
-  ppr = const $ text "[TyCoHole]"
+  ppr (TypeCoercionHole { tch_co_var = cv }) = braces (ppr cv)
 
-instance Outputable (MTypeCoercion p) where
+instance HasPass p p' => Outputable (MTypeCoercion (CsPass p')) where
   ppr MRefl = text "MRefl"
   ppr (MCo co) = text "MCo" <+> ppr co
 
@@ -449,25 +449,44 @@ coreFullView ty@(AppTy{}) = core_full_view ty
 coreFullView ty = ty
 {-# INLINE coreFullView #-}
 
-coreMKView :: MonoKind p -> Maybe (MonoKind p)
-coreMKView (KiConApp (KiCon _ kc _)) = Just kc
-coreMKView _ = Nothing
-{-# INLINE coreMKView #-}
+class RowView thing where
+  rowView :: thing p -> Maybe (thing p)
 
-coreMKFullView :: MonoKind p -> MonoKind p
-coreMKFullView ki@KiConApp{} = core_mk_full_view ki
-coreMKFullView ki = ki
-{-# INLINE coreMKFullView #-}
+  do_full :: thing p -> Bool
+
+instance RowView MonoKind where
+  rowView (KiConApp (KiCon _ kc _)) = Just kc
+  rowView _ = Nothing
+  {-# INLINE rowView #-}
+
+  do_full KiConApp{} = True
+  do_full _ = False
+  {-# INLINE do_full #-}
+
+instance RowView Type where
+  rowView (SetRowsTy ty _) = Just ty
+  rowView _ = Nothing
+  {-# INLINE rowView #-}
+
+  do_full SetRowsTy{} = True
+  do_full _ = False
+  {-# INLINE do_full #-}
+
+row_full_view :: RowView thing => thing p -> thing p
+row_full_view thing
+  | Just thing' <- rowView thing = row_full_view thing'
+  | otherwise = thing
+
+rowFullView :: RowView thing => thing p -> thing p
+rowFullView thing
+  | do_full thing = row_full_view thing
+  | otherwise = thing
+{-# INLINE rowFullView #-}
 
 core_full_view :: HasPass p pass => Type p -> Type p
 core_full_view ty
   | Just ty' <- coreView ty = core_full_view ty'
   | otherwise = ty
-
-core_mk_full_view :: MonoKind p -> MonoKind p
-core_mk_full_view ki
-  | Just ki' <- coreMKView ki = core_mk_full_view ki'
-  | otherwise = ki
 
 expandTyLamApp_maybe :: HasPass p pass => Type p -> (Type p -> Bool) -> Maybe (Type p)
 expandTyLamApp_maybe ty pred = case split ty [] of
@@ -583,6 +602,19 @@ splitBigLamTyBinders ty = split ty ty []
     split orig_ty ty bs | Just ty' <- coreView ty = split orig_ty ty' bs
     split orig_ty _ bs = (reverse bs, orig_ty)
 {-# INLINE splitBigLamTyBinders #-}
+
+splitNPiTys :: HasPass p pass => Arity -> Type p -> Maybe ([PiTyBinder p], Type p)
+splitNPiTys n ty = split n ty ty []
+  where
+    split 0 orig_ty _ bs = Just (reverse bs, orig_ty)
+    split n _ (TyLamTy b res) bs = split (n - 1) res res (NamedTyLam b : bs)
+    split n _ (ForAllTy b res) bs = split (n - 1) res res (NamedTy b : bs)
+    split n _ (ForAllKiCo b res) bs = split (n - 1) res res (NamedKiCo b : bs)
+    split n _ (BigTyLamTy b res) bs = split (n - 1) res res (NamedKi b : bs)
+    split n _ (FunTy { ft_arg = arg, ft_res = res }) bs = split (n - 1) res res (AnonTy arg : bs)
+    split n orig_ty ty bs | Just ty' <- coreView ty = split n orig_ty ty' bs
+    split n orig_ty ty bs | Just ty' <- rowView ty = split n orig_ty ty' bs
+    split _ _ _ _ = Nothing
 
 isForgetfulTy :: HasPass p pass => Type p -> Bool
 isForgetfulTy (TyVarTy _) = False
@@ -758,6 +790,48 @@ debug_ppr_set_row :: HasPass p pass => SetRow p -> SDoc
 debug_ppr_set_row (SetRowVal nm (expr, wrap) _)
   = ppr nm <+> equals <+> pprCsWrapper wrap (const (pprExpr expr))
 debug_ppr_set_row (SetRowTy nm ty) = ppr nm <+> equals <+> ppr ty
+
+pprTyCo :: HasPass p pass => TypeCoercion p -> SDoc
+pprTyCo = pprPrecTyCo topPrec
+
+pprPrecTyCo :: HasPass p pass => PprPrec -> TypeCoercion p -> SDoc
+pprPrecTyCo = pprPrecTyCoX emptyTidyEnv
+
+pprPrecTyCoX
+  :: HasPass p pass
+  => TidyEnv p
+  -> PprPrec
+  -> TypeCoercion p
+  -> SDoc
+pprPrecTyCoX _ prec co = getPprStyle $ \sty ->
+                       getPprDebug $ \debug ->
+                       if debug
+                       then debug_ppr_ty_co prec co
+                       else panic "pprPrecTyCoX"
+
+debug_ppr_ty_co :: HasPass p pass => PprPrec -> TypeCoercion p -> SDoc
+debug_ppr_ty_co _ (TyRefl ty) = angleBrackets (ppr ty)
+debug_ppr_ty_co prec (GRefl ty co) = angleBrackets $
+  sep [ ppr ty, text "|>", ppr co ]
+debug_ppr_ty_co prec (TyFunCo kco co1 co2)
+  = maybeParen prec funPrec
+    $ sep (debug_ppr_ty_co funPrec co1 : ppr_fun_tail kco co2)
+  where
+    ppr_fun_tail kco1 (TyFunCo kco co1 co2)
+      = (ppr_arrow kco1 <+> debug_ppr_ty_co funPrec co1)
+        : ppr_fun_tail kco co2
+    ppr_fun_tail kco other = [ ppr_arrow kco <+> ppr other ]
+    ppr_arrow kco = text "-" <> debug_ppr_ki_co topPrec kco <> text ">"
+debug_ppr_ty_co prec (TySymCo co) = maybeParen prec appPrec $ sep [ text "Sym"
+                                                                  , nest 4 (ppr co) ]
+debug_ppr_ty_co prec (TyTransCo co1 co2)
+  = let ppr_trans (TyTransCo c1 c2) = semi <+> debug_ppr_ty_co topPrec c1 : ppr_trans c2
+        ppr_trans c = [semi <+> debug_ppr_ty_co opPrec c]
+  in maybeParen prec opPrec
+     $ vcat (debug_ppr_ty_co topPrec co1 : ppr_trans co2)
+debug_ppr_ty_co _ (TyHoleCo co) = ppr co
+debug_ppr_ty_co _ (TyCoVarCo cv) = ppr cv
+debug_ppr_ty_co _ _ = panic "debug_ppr_ty_co"
 
 -- * Kinds
 

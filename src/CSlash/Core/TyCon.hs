@@ -9,7 +9,7 @@ module CSlash.Core.TyCon where
 
 import Prelude hiding ((<>))
 
-import {-# SOURCE #-} CSlash.Core.Rep (Type, Kind(Mono), MonoKind, mkNakedTyConTy)
+import {-# SOURCE #-} CSlash.Core.Rep (Type, Kind(Mono), MonoKind, mkNakedTyConTy, splitNPiTys)
 import {-# SOURCE #-} CSlash.Core.DataCon (DataCon, dataConFullSig, dataConArity)
 import {-# SOURCE #-} CSlash.Core.Kind.Compare (tcEqKind)
 
@@ -281,21 +281,24 @@ monoTcTyConKind tc@(TyCon { tyConDetails = details })
 
 data ExpandSynResult p tyco
   = NoExpansion
-  | ExpandsSyn [tyco] (Type Zk) [tyco]
+  | ExpandsSyn [(PiTyBinder Zk, tyco)] (Type Zk) [tyco]
 
-expandSynTyCon_maybe :: TyCon p -> [tyco] -> ExpandSynResult p tyco
-expandSynTyCon_maybe (TyCon { tyConArity = arity, tyConDetails = details }) cos
-  | SynonymTyCon { synTcRhs = rhs } <- details
-  = if arity == 0
-    then ExpandsSyn [] rhs cos
-    else case cos `listLengthCmp` arity of
-           GT -> ExpandsSyn cos_1 rhs cos_2
-           EQ -> ExpandsSyn cos_1 rhs cos_2
-           LT -> NoExpansion
+expandSynTyCon_maybe :: HasPass Zk pass => TyCon p -> [tyco] -> ExpandSynResult p tyco
+expandSynTyCon_maybe TyCon{ tyConArity = arity, tyConDetails = details } cos
+  | SynonymTyCon{ synTcRhs = rhs } <- details
+  = let (cos_1, cos_2) = splitAt arity cos
+
+        exp_res = case splitNPiTys arity rhs of
+          Just (bndrs, rhs) -> ExpandsSyn (bndrs `zip` cos_1) rhs cos_2
+          Nothing -> pprPanic "expandSynTyCon_maybe" (ppr arity $$ ppr rhs)
+    in if arity == 0
+       then ExpandsSyn [] rhs cos
+       else case cos `listLengthCmp` arity of
+              GT -> exp_res
+              EQ -> exp_res
+              LT -> NoExpansion
   | otherwise
   = NoExpansion
-  where
-    (cos_1, cos_2) = splitAt arity cos
 
 {- *********************************************************************
 *                                                                      *

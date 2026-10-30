@@ -213,67 +213,6 @@ unzipRedns = foldr accRedn (TyReductions [] [])
 *                                                                      *
 ********************************************************************* -}
 
-data LiftingContext p = LC (Subst p Tc) (LiftCoEnv p)
-
-instance Outputable (LiftingContext p) where
-  ppr (LC _ env) = hang (text "LiftingContext:") 2 (ppr env)
-
-type LiftCoEnv p = VarEnv (KiVar p) (KindCoercion Tc)
-
-emptyLiftingContext :: HasPass p pass => KiVarSet p -> LiftingContext p
-emptyLiftingContext is
-  = LC (mkEmptySubst (emptyVarSet, emptyVarSet, is) (emptyVarSet, emptyVarSet, emptyVarSet))
-       emptyVarEnv
-
-liftCoSubst
-  :: (HasDebugCallStack, HasPass p pass)
-  => LiftingContext p -> MonoKind p -> KindCoercion Tc
-{-# INLINE liftCoSubst #-}
-liftCoSubst lc@(LC subst env) ki
-  | isEmptyVarEnv env = mkReflKiCo (substMonoKi subst ki)
-  | otherwise = ki_co_subst lc ki
-
-extendLiftingContext
-  :: LiftingContext p
-  -> KiVar p
-  -> KindCoercion Tc
-  -> LiftingContext p
-extendLiftingContext  (LC subst env) kv kco
-  | Just ki <- isReflKiCo_maybe kco
-  = LC (extendKvSubst subst kv ki) env
-  | otherwise
-  = LC subst (extendVarEnv env kv kco)
-
-extendLiftingContextAndInScope
-  :: LiftingContext p
-  -> KiVar p
-  -> KindCoercion Tc
-  -> LiftingContext p
-extendLiftingContextAndInScope (LC subst env) kv kco
-  = extendLiftingContext
-    (LC (extendSubstInScopeSetsSets subst $
-          (\(kcv, kv) -> (emptyVarSet, kcv, kv)) (varsOfKiCo kco))
-        env) kv kco
-
-zapLiftingContext :: LiftingContext p -> LiftingContext p
-zapLiftingContext (LC subst _) = LC (zapSubst subst) emptyVarEnv
-
-ki_co_subst :: forall p pass. HasPass p pass => LiftingContext p -> MonoKind p -> KindCoercion Tc
-ki_co_subst @p !lc ki = go ki
-  where
-    go :: MonoKind p -> KindCoercion Tc
-    go (KiVarKi kv) = liftKiCoSubstKiVar lc kv
-    go (FunKi af k1 k2) = mkFunKiCo af (go k1) (go k2)
-    go (BIKi bi) = mkReflKiCo $ BIKi bi
-    go other = pprPanic "ki_co_subst" (ppr other)
-
-liftKiCoSubstKiVar :: HasPass p pass => LiftingContext p -> KiVar p -> KindCoercion Tc
-liftKiCoSubstKiVar (LC subst env) kv
-  | Just co_arg <- lookupVarEnv env kv
-  = co_arg
-  | otherwise
-  = mkReflKiCo (substKiVar subst kv)
-
 data ArgsReductions
   = ArgsReductions {-# UNPACK #-} !TyReductions !(Maybe (KindCoercion Tc))
 
@@ -308,7 +247,7 @@ simplifyArgsWorker @p orig_ki_binders orig_inner_ki orig_fvs orig_simplified_arg
   where
     orig_lc = emptyLiftingContext orig_fvs
 
-    go :: LiftingContext p
+    go :: LiftingContext p Tc
        -> [PiKiBinder p]
        -> MonoKind p
        -> [TyReduction]

@@ -205,6 +205,7 @@ data PiTyBinder p
   = NamedTy (ForAllBinder (TyVar p)) -- forall tv. res
   | NamedKiCo (KiCoVar p)            -- forall kcv . res
   | NamedKi (KiVar p)                -- forall kv. res
+  | NamedTyLam (TyVar p)             -- \tv -> res
   | AnonTy (Type p)                  -- a -> res
   -- AnonTy probably also needs to record the function kind as in 'a -k> res'
   -- deriving Data
@@ -214,10 +215,12 @@ instance HasPass p p' => Outputable (PiTyBinder (CsPass p')) where
   ppr (NamedTy v) = ppr v
   ppr (NamedKiCo v) = ppr v
   ppr (NamedKi v) = ppr v
+  ppr (NamedTyLam v) = ppr v
 
 isInvisiblePiTyBinder :: PiTyBinder p -> Bool
 isInvisiblePiTyBinder (NamedTy (Bndr _ vis)) = isInvisibleForAllFlag vis
 isInvisiblePiTyBinder (AnonTy _) = False
+isInvisiblePiTyBinder (NamedTyLam _) = False
 isInvisiblePiTyBinder _ = True
 
 isVisiblePiTyBinder :: PiTyBinder p -> Bool

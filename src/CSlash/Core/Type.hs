@@ -1,3 +1,4 @@
+{-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE ExplicitForAll #-}
 {-# LANGUAGE TypeAbstractions #-}
 {-# LANGUAGE TypeApplications #-}
@@ -58,6 +59,7 @@ import CSlash.Types.Var.Class
 import CSlash.Types.Var.Env
 import CSlash.Types.Var.Set
 import CSlash.Types.Unique.Set
+import CSlash.Types.Unique.FM
 
 import CSlash.Core.TyCon
 import CSlash.Builtin.Types.Prim
@@ -288,7 +290,7 @@ monoPiKiResultTys ki [] = ki
 monoPiKiResultTys ki orig_args@(arg:args)
   | FunKi { fk_res = res } <- ki
   = monoPiKiResultTys res args
-  | Just ki' <- coreMKView ki
+  | Just ki' <- rowView ki
   = monoPiKiResultTys ki' orig_args 
   | otherwise
   = pprPanic "monoPiKiResultTys1" (ppr ki $$ ppr orig_args)
@@ -837,11 +839,8 @@ mkTyConAppCo
 mkTyConAppCo tc cos
   | Just co <- tyConAppFunCo_maybe tc cos
   = co
-  | ExpandsSyn tv_co_prs rhs_ty leftover_cos <- expandSynTyCon_maybe tc cos
-  = pprPanic "mkAppCos (liftTyCoSubst (mkTyLiftingContext tv_co_prs) rhs_ty) leftover_cos"
-    $ vcat [ text "tv_co_prs" <+> ppr tv_co_prs
-           , text "rhs_ty" <+> ppr rhs_ty
-           , text "leftover_cos" <+> ppr leftover_cos ]
+  | ExpandsSyn prs rhs_ty leftover_cos <- expandSynTyCon_maybe tc cos
+  = mkAppCos (liftTyCoSubst (mkTyLiftingContext prs) rhs_ty)  leftover_cos
   | Just tys <- traverse isReflTyCo_maybe cos
   = mkReflTyCo (mkTyConApp tc tys)
   | otherwise
@@ -933,12 +932,12 @@ ty_con_app_fun_maybe tc args
     
 -- Given 'ty : k1', 'kco : k1 ~ k2', 'co : ty ~ ty2',
 -- produces 'co' : (ty |> kco) ~ ty2'
-mkCoherenceLeftCo :: Type p -> KindCoercion p -> TypeCoercion p -> TypeCoercion p
+mkCoherenceLeftCo :: HasPass p p' => Type p -> KindCoercion p -> TypeCoercion p -> TypeCoercion p
 mkCoherenceLeftCo ty kco co
   | isReflKiCo kco = co
   | otherwise = (mkSymTyCo $ mkGReflCo ty kco) `mkTyTransCo` co
 
-mkCoherenceRightCo :: Type p -> KindCoercion p -> TypeCoercion p -> TypeCoercion p
+mkCoherenceRightCo :: HasPass p p' => Type p -> KindCoercion p -> TypeCoercion p -> TypeCoercion p
 mkCoherenceRightCo ty kco co
   | isReflKiCo kco = co
   | otherwise = co `mkTyTransCo` mkGReflCo ty kco
@@ -952,7 +951,7 @@ mkGReflRightMCo ty Nothing = mkReflTyCo ty
 mkGReflRightMCo ty (Just kco) = mkGReflRightCo ty kco
 
 mkCoherenceRightMCo
-  :: Type p -> Maybe (KindCoercion p) -> TypeCoercion p -> TypeCoercion p
+  :: HasPass p p' => Type p -> Maybe (KindCoercion p) -> TypeCoercion p -> TypeCoercion p
 mkCoherenceRightMCo _ Nothing co2 = co2
 mkCoherenceRightMCo ty (Just kco) co2 = mkCoherenceRightCo ty kco co2
 
@@ -970,7 +969,7 @@ mkSymTyCo (TySymCo co) = co
 mkSymTyCo (LiftKCo kco) = LiftKCo $ mkSymKiCo kco
 mkSymTyCo co = TySymCo co
 
-mkTyTransCo :: TypeCoercion p -> TypeCoercion p -> TypeCoercion p
+mkTyTransCo :: HasPass p p' => TypeCoercion p -> TypeCoercion p -> TypeCoercion p
 mkTyTransCo co1 co2
   | LiftKCo kco1 <- co1
   = case co2 of
@@ -1033,7 +1032,8 @@ setTyCoHoleCoVar :: TypeCoercionHole -> TcTyCoVar -> TypeCoercionHole
 setTyCoHoleCoVar h cv = h { tch_co_var = cv }
 
 castCoercionKind2
-  :: TypeCoercion p
+  :: HasPass p p'
+  => TypeCoercion p
   -> Type p -> Type p
   -> KindCoercion p -> KindCoercion p
   -> TypeCoercion p
@@ -1047,6 +1047,279 @@ castCoercionKind1 g t1 t2 h
       TyRefl {} -> mkReflTyCo (mkCastTy t2 h)
       GRefl _ kco -> mkGReflCo (mkCastTy t1 h) (mkSymKiCo h `mkTransKiCo` kco `mkTransKiCo` h)
       _ -> castCoercionKind2 g t1 t2 h h
+
+castCoercionKind
+  :: HasPass p p'
+  => TypeCoercion p
+  -> KindCoercion p
+  -> KindCoercion p
+  -> TypeCoercion p
+castCoercionKind g h1 h2
+  = castCoercionKind2 g t1 t2 h1 h2
+  where
+    (Pair t1 t2) = tycoercionTypes g
+
+{- *********************************************************************
+*                                                                      *
+              Lifting Coercions
+*                                                                      *
+********************************************************************* -}
+
+data TyLiftingContext p1 p2 = TLC (Subst p1 p2) (LiftTyCoEnv p1 p2)
+
+instance HasPass p2 pass => Outputable (TyLiftingContext p1 p2) where
+  ppr (TLC _ env) = hang (text "TyLiftingContext:") 2 (ppr env)
+
+type LiftTyCoEnv p1 p2 = ( VarEnv (TyVar p1) (TypeCoercion p2)
+                         , VarEnv (KiCoVar p1) (TypeCoercion p2)
+                         , VarEnv (KiVar p1) (KindCoercion p2)
+                         )
+
+mkTyLiftingContext
+  :: (HasPass p1 pass1, HasPass p2 pass2, SubstP p1 p2)
+  => [(PiTyBinder p1, TypeCoercion p2)] -> TyLiftingContext p1 p2
+mkTyLiftingContext pairs
+  = TLC (mkEmptySubst (emptyVarSet, emptyVarSet, emptyVarSet)
+         (varsOfTyCos (map snd pairs)))
+    (mkVarEnv tv_prs, mkVarEnv kcv_prs, mkVarEnv kv_prs)
+  where
+    (tv_prs, kcv_prs, kv_prs) = go ([], [], []) pairs
+      where
+        go acc [] = acc
+        go (tvs, kcvs, kvs) ((NamedTyLam tv, tco):rest) = 
+          go ((tv, tco):tvs, kcvs, kvs) rest
+        go (tvs, kcvs, kvs) ((NamedTy (Bndr tv _), tco):rest) =
+          go ((tv, tco):tvs, kcvs, kvs) rest
+        go (tvs, kcvs, kvs) ((NamedKiCo kcv, tco):rest) =
+          go (tvs, (kcv, tco):kcvs, kvs) rest
+        go (tvs, kcvs, kvs) ((NamedKi kv, LiftKCo kco):rest) =
+          go (tvs, kcvs, (kv, kco):kvs) rest
+        go _ (other:_) = pprPanic "mkTyLiftingContext bad pair" (ppr other)
+
+
+liftTyCoSubst
+  :: (HasDebugCallStack, HasPass p1 pass1, HasPass p2 pass2, SubstP p1 p2)
+  => TyLiftingContext p1 p2 -> Type p1 -> TypeCoercion p2
+{-# INLINE liftTyCoSubst #-}
+liftTyCoSubst lc@(TLC subst (env1, env2, env3)) ty
+  | isEmptyVarEnv env1 && isEmptyVarEnv env2 && isEmptyVarEnv env3
+  = mkReflTyCo (substTy subst ty)
+  | otherwise = ty_co_subst lc ty
+
+ty_co_subst
+  :: forall p1 pass1 p2 pass2. (HasPass p1 pass1, HasPass p2 pass2, SubstP p1 p2)
+  => TyLiftingContext p1 p2 -> Type p1 -> TypeCoercion p2
+ty_co_subst @p1 @_ @p2 @_ !lc@(TLC subst (_, _, kenv)) ty = go ty
+  where
+    go :: Type p1 -> TypeCoercion p2
+    go ty | Just ty' <- coreView ty = go ty'
+    go (TyVarTy tv) = liftCoSubstTyVar lc tv
+    go (AppTy ty1 ty2) = mkAppCo (go ty1) (go ty2)
+    go (TyConApp tc tys) = panic "mkTyConAppCo tc (go <$> tys)"
+    go (FunTy k t1 t2) = mkTyFunCo (ki_co_subst (LC subst kenv) k)
+                         (go t1) (go t2)
+    go t@(ForAllTy (Bndr tv vis) ty)
+      = let (lc', v', h) = liftCoSubstTyVarBndr lc tv
+            body_co = ty_co_subst lc' ty
+        in mkForAllCo v' vis vis h body_co
+
+    go t@(ForAllKiCo kcv ty)
+      = let (lc', v', h) = liftCoSubstKiCoVarBndr lc kcv
+            body_co = ty_co_subst lc' ty
+        in if almostDevoidKiCoVarOfTyCo v' body_co
+           then mkForAllCoCo v' h body_co
+           else pprPanic "ty_co_subst: covar is not almost devoid" (ppr t)
+
+    go t@BigTyLamTy{} = pprPanic "ty_co_subst: bigtylamty (should have been eliminated by coreView" (ppr ty $$ ppr t)
+
+    go (CastTy ty kco) = castCoercionKind (go ty)
+                         (substLeftCo (LC subst kenv) kco)
+                         (substRightCo (LC subst kenv) kco)
+
+    go (KindCoercion kco)
+      | isReflKiCo kco = mkReflTyCo (KindCoercion (substLeftCo (LC subst kenv) kco))
+      | otherwise = pprPanic "ty_co_subst non-refl kico" (ppr kco $$ ppr ty)
+
+    go other = pprPanic "ty_co_subst other" (ppr other)
+
+liftCoSubstTyVar
+  :: (HasPass p1 pass1, HasPass p2 pass2)
+  => TyLiftingContext p1 p2 -> TyVar p1 -> TypeCoercion p2
+liftCoSubstTyVar (TLC subst (env, _, _)) v
+  | Just co_arg <- lookupVarEnv env v
+  = co_arg
+  | otherwise
+  = mkReflTyCo (substTyVar subst v)
+
+liftCoSubstTyVarBndr
+  :: (HasPass p1 pass1, HasPass p2 pass2, SubstP p1 p2)
+  => TyLiftingContext p1 p2 -> TyVar p1 -> (TyLiftingContext p1 p2, TyVar p2, KindCoercion p2)
+liftCoSubstTyVarBndr = liftCoSubstTyVarBndrUsing id ki_co_subst 
+
+liftCoSubstKiCoVarBndr
+  :: (HasPass p1 pass1, HasPass p2 pass2, SubstP p1 p2)
+  => TyLiftingContext p1 p2 -> KiCoVar p1 -> (TyLiftingContext p1 p2, KiCoVar p2, KindCoercion p2)
+liftCoSubstKiCoVarBndr = liftCoSubstKiCoVarBndrUsing id ki_co_subst 
+
+liftCoSubstTyVarBndrUsing
+  :: (HasPass p1 pass1, HasPass p2 pass2, SubstP p1 p2)
+  => (r -> KindCoercion p2)
+  -> (LiftingContext p1 p2 -> MonoKind p1 -> r)
+  -> TyLiftingContext p1 p2
+  -> TyVar p1
+  -> (TyLiftingContext p1 p2, TyVar p2, r)
+liftCoSubstTyVarBndrUsing view_co fun (TLC subst (tenv, kcenv, kenv)) old_var =
+  ( TLC (subst `extendTvSubstInScope` new_var) (new_tenv, kcenv, kenv)
+  , new_var
+  , stuff )
+  where
+    old_kind = varKind old_var
+    stuff = fun (LC subst kenv) old_kind
+    eta = view_co stuff
+    k1 = kicoercionLKind eta
+    new_var = uniqAway (tv_in_scope subst) (vacuous_set_tv_kind k1 old_var)
+
+    lifted = mkGReflRightCo (TyVarTy new_var) eta
+
+    new_tenv = extendVarEnv tenv old_var lifted
+
+liftCoSubstKiCoVarBndrUsing
+  :: (HasPass p1 pass1, HasPass p2 pass2, SubstP p1 p2)
+  => (r -> KindCoercion p2)
+  -> (LiftingContext p1 p2 -> MonoKind p1 -> r)
+  -> TyLiftingContext p1 p2
+  -> KiCoVar p1
+  -> (TyLiftingContext p1 p2, KiCoVar p2, r)
+liftCoSubstKiCoVarBndrUsing view_co fun (TLC subst (tenv, kcenv, kenv)) old_var
+  = ( TLC (subst `extendKCvSubstInScope` new_var) (tenv, new_kcenv, kenv)
+    , new_var
+    , stuff )
+  where
+    old_kind = varKind old_var
+    stuff = fun (LC subst kenv) old_kind
+    eta = view_co stuff
+    k1 = kicoercionLKind eta
+    new_var = uniqAway (kcv_in_scope subst) (vacuous_set_kcv_kind k1 old_var)
+
+    co1 = mkKiCoVarCo new_var
+    lifted | isReflKiCo eta = mkReflTyCo (KindCoercion co1)
+           | otherwise = pprPanic "liftCoSubstKiCoVarBndrUsing non-refl coercion coercion" (ppr eta)
+
+    new_kcenv = extendVarEnv kcenv old_var lifted
+
+substLeftCo
+  :: (HasPass p1 pass1, HasPass p2 pass2, SubstP p1 p2)
+  => LiftingContext p1 p2 -> KindCoercion p1 -> KindCoercion p2
+substLeftCo lc kco = substKiCo (lcSubstLeft lc) kco
+
+substRightCo
+  :: (HasPass p1 pass1, HasPass p2 pass2, SubstP p1 p2)
+  => LiftingContext p1 p2 -> KindCoercion p1 -> KindCoercion p2
+substRightCo lc kco = substKiCo (lcSubstRight lc) kco
+
+lcSubstLeft
+  :: (HasPass p1 pass1, HasPass p2 pass2)
+  => LiftingContext p1 p2 -> Subst p1 p2
+lcSubstLeft (LC subst lc_env) = liftEnvSubstLeft subst lc_env
+
+lcSubstRight
+  :: (HasPass p1 pass1, HasPass p2 pass2)
+  => LiftingContext p1 p2 -> Subst p1 p2 
+lcSubstRight (LC subst lc_env) = liftEnvSubstRight subst lc_env
+
+liftEnvSubstLeft
+  :: (HasPass p1 pass1, HasPass p2 pass2)
+  => Subst p1 p2 -> LiftCoEnv p1 p2 -> Subst p1 p2
+liftEnvSubstLeft = liftEnvSubst pFst
+
+liftEnvSubstRight
+  :: (HasPass p1 pass1, HasPass p2 pass2)
+  => Subst p1 p2 -> LiftCoEnv p1 p2 -> Subst p1 p2
+liftEnvSubstRight = liftEnvSubst pSnd
+
+-- Will need to change to TyLiftingContext and TyLiftCoEnv if we ever apply the subst to types or type coercions. Now, we only use it on KindCoercions in CastTy or in empbeded KindCoercion.
+liftEnvSubst
+  :: forall p1 pass1 p2 pass2.
+    (HasPass p1 pass1, HasPass p2 pass2)
+  => (forall a. Pair a -> a) -> Subst p1 p2 -> LiftCoEnv p1 p2 -> Subst p1 p2
+liftEnvSubst @_ @_ @p2 @_ selector subst lc_env
+  = composeKvSubst (mkInScopeSet (varsOfMonoKinds (map snd kpairs))) kenv subst
+  where
+    pairs = nonDetUFMToList lc_env
+    kpairs :: [(Unique, MonoKind p2)]
+    kpairs = (\(u, kco) -> (u, selector (snd (kiCoercionParts kco)))) <$> pairs
+
+    kenv :: KvSubstEnv p2 p2
+    kenv = mkVarEnv_Directly kpairs
+
+data LiftingContext p1 p2 = LC (Subst p1 p2) (LiftCoEnv p1 p2)
+
+instance HasPass p2 pass2 => Outputable (LiftingContext p1 p2) where
+  ppr (LC _ env) = hang (text "LiftingContext:") 2 (ppr env)
+
+type LiftCoEnv p1 p2 = VarEnv (KiVar p1) (KindCoercion p2)
+
+emptyLiftingContext
+  :: (HasPass p1 pass1, HasPass p2 pass2, SubstP p1 p2)
+  => KiVarSet p1 -> LiftingContext p1 p2
+emptyLiftingContext is
+  = LC (mkEmptySubst (emptyVarSet, emptyVarSet, is) (emptyVarSet, emptyVarSet, emptyVarSet))
+       emptyVarEnv
+
+liftCoSubst
+  :: (HasDebugCallStack, HasPass p1 pass1, HasPass p2 pass2, SubstP p1 p2)
+  => LiftingContext p1 p2 -> MonoKind p1 -> KindCoercion p2
+{-# INLINE liftCoSubst #-}
+liftCoSubst lc@(LC subst env) ki
+  | isEmptyVarEnv env = mkReflKiCo (substMonoKi subst ki)
+  | otherwise = ki_co_subst lc ki
+
+extendLiftingContext
+  :: LiftingContext p1 p2
+  -> KiVar p1
+  -> KindCoercion p2
+  -> LiftingContext p1 p2
+extendLiftingContext  (LC subst env) kv kco
+  | Just ki <- isReflKiCo_maybe kco
+  = LC (extendKvSubst subst kv ki) env
+  | otherwise
+  = LC subst (extendVarEnv env kv kco)
+
+extendLiftingContextAndInScope
+  :: (HasPass p1 pass1, HasPass p2 pass2)
+  => LiftingContext p1 p2
+  -> KiVar p1
+  -> KindCoercion p2
+  -> LiftingContext p1 p2
+extendLiftingContextAndInScope (LC subst env) kv kco
+  = extendLiftingContext
+    (LC (extendSubstInScopeSetsSets subst $
+          (\(kcv, kv) -> (emptyVarSet, kcv, kv)) (varsOfKiCo kco))
+        env) kv kco
+
+zapLiftingContext :: LiftingContext p1 p2 -> LiftingContext p1 p2
+zapLiftingContext (LC subst _) = LC (zapSubst subst) emptyVarEnv
+
+ki_co_subst
+  :: forall p1 pass1 p2 pass2. (HasPass p1 pass1, HasPass p2 pass2)
+  => LiftingContext p1 p2 -> MonoKind p1 -> KindCoercion p2
+ki_co_subst @p1 @_ @p2 !lc ki = go ki
+  where
+    go :: MonoKind p1 -> KindCoercion p2
+    go ki | Just ki' <- rowView ki = go ki'
+    go (KiVarKi kv) = liftKiCoSubstKiVar lc kv
+    go (FunKi af k1 k2) = mkFunKiCo af (go k1) (go k2)
+    go (BIKi bi) = mkReflKiCo $ BIKi bi
+    go other = pprPanic "ki_co_subst" (ppr other)
+
+liftKiCoSubstKiVar
+  :: (HasPass p1 pass1, HasPass p2 pass2)
+  => LiftingContext p1 p2 -> KiVar p1 -> KindCoercion p2
+liftKiCoSubstKiVar (LC subst env) kv
+  | Just co_arg <- lookupVarEnv env kv
+  = co_arg
+  | otherwise
+  = mkReflKiCo (substKiVar subst kv)
 
 {- *********************************************************************
 *                                                                      *

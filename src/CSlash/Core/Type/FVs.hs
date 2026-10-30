@@ -113,6 +113,9 @@ varsOfMonoKinds tys = runVarsForKi (deep_mkis tys)
 varsOfTyCo :: HasPass p p' => TypeCoercion p -> (TyVarSet p, KiCoVarSet p, KiVarSet p)
 varsOfTyCo co = runVarsForTy (deep_tco co)
 
+varsOfTyCos :: HasPass p p' => [TypeCoercion p] -> (TyVarSet p, KiCoVarSet p, KiVarSet p)
+varsOfTyCos co = runVarsForTy (deep_tcos co)
+
 varsOfKiCo :: HasPass p p' => KindCoercion p -> (KiCoVarSet p, KiVarSet p)
 varsOfKiCo co = runVarsForKiCo (deep_kco co)
 

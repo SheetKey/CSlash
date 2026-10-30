@@ -8,6 +8,7 @@
 module CSlash.Core.Rep where
 
 import {-# SOURCE #-} CSlash.Core.TyCon (TyCon)
+import {-# SOURCE #-} CSlash.Types.Var.TyVar (PiTyBinder)
 import {-# SOURCE #-} CSlash.Types.Var.KiVar (KiVar)
 
 import CSlash.Cs.Pass
@@ -50,3 +51,5 @@ instance Outputable FunKiFlag
 mkNakedTyConTy :: TyCon p -> Type p
 
 mkTyConApp :: TyCon p -> [Type p] -> Type p
+
+splitNPiTys :: HasPass p pass => Int -> Type p -> Maybe ([PiTyBinder p], Type p)

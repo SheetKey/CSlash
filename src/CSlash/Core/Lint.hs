@@ -882,7 +882,7 @@ lintTySynApp report_unsat ty tc tys
   = failWithL (hang (text "Un-saturated type application") 2 (ppr ty))
 
   | ExpandsSyn args rhs tys' <- expandSynTyCon_maybe tc tys
-  , let expanded_ty = mkAppTys (piResultTys {-maybe wrong function name-} rhs args) tys'
+  , let expanded_ty = panic "mkAppTys (piResultTys {-maybe wrong function name-} rhs args) tys'"
   = do tys' <- panic "setReportUnsat False (mapM lintType tys)"
        when report_unsat $ do
          _ <- lintType expanded_ty

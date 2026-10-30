@@ -54,6 +54,7 @@ import Data.Kind (Constraint)
 
 import Data.Functor.Identity (Identity (..))
 import Data.List (mapAccumL)
+import Data.Coerce (coerce)
 
 {- **********************************************************************
 *                                                                       *
@@ -271,6 +272,43 @@ emptySubst = Subst { id_in_scope = emptyInScopeSet
                    , kcv_env = emptyVarEnv
                    , kv_in_scope = emptyInScopeSet
                    , kv_env = emptyVarEnv }
+
+composeKvSubst
+  :: (HasPass p pass, HasPass p' pass')
+  => InScopeSet (KiVar p') -> KvSubstEnv p' p' -> Subst p p' -> Subst p p'
+composeKvSubst is env = composeSubst (emptySubst { kv_in_scope = is, kv_env = env })
+
+composeSubst
+  :: (HasPass p pass, HasPass p' pass')
+  => Subst p' p' -> Subst p p' -> Subst p p'
+composeSubst subst1@(Subst ids1 idenv1 tcvs1 tcvenv1 tvs1 tvenv1 kcvs1 kcvenv1 kvs1 kvenv1)
+  (Subst ids2 idenv2 tcvs2 tcvenv2 tvs2 tvenv2 kcvs2 kcvenv2 kvs2 kvenv2)
+  = assertPpr (isEmptyInScopeSet ids1
+               && isEmptyVarEnv idenv1
+               && isEmptyInScopeSet ids2
+               && isEmptyVarEnv idenv2)
+    (vcat [ text "composeSubst contains ids"
+          , text "ids1" <+> ppr ids1
+          , text "idenv1" <+> ppr idenv1
+          , text "ids2" <+> ppr ids2
+          , text "idenv2" <+> ppr idenv2 ]) $
+    Subst
+    (ids1 `unionInScope` ids2)
+    (panic "should be unused")
+    (tcvs1 `unionInScope` tcvs2)
+    (coerce tcvenv1 `plusVarEnv` panic "mapVarEnv (substTyCo extended_subst1) tcvenv2")
+    (tvs1 `unionInScope` tvs2)
+    (coerce tvenv1 `plusVarEnv` mapVarEnv (substTy extended_subst1) tvenv2)
+    (kcvs1 `unionInScope` kcvs2)
+    (coerce kcvenv1 `plusVarEnv` mapVarEnv (substKiCo extended_subst1) kcvenv2)
+    (kvs1 `unionInScope` kvs2)
+    (coerce kvenv1 `plusVarEnv` mapVarEnv (substMonoKi extended_subst1) kvenv2)
+  where
+    extended_subst1 = subst1 { id_in_scope = ids1 `unionInScope` ids2
+                             , tcv_in_scope = tcvs1 `unionInScope` tcvs2
+                             , tv_in_scope = tvs1 `unionInScope` tvs2
+                             , kcv_in_scope = kcvs1 `unionInScope` kcvs2
+                             , kv_in_scope = kvs1 `unionInScope` kvs2 }
 
 getTermSubstInScope :: CoreSubst -> TermSubstInScope
 getTermSubstInScope Subst{..} = ( id_in_scope

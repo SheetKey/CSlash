@@ -31,6 +31,9 @@ instance (NamedThing a, Outputable a) => Outputable (InScopeSet a) where
 emptyInScopeSet :: InScopeSet a
 emptyInScopeSet = InScope emptyVarSet
 
+isEmptyInScopeSet :: InScopeSet a -> Bool
+isEmptyInScopeSet (InScope vs) = isEmptyVarSet vs
+
 getInScopeVars :: InScopeSet a -> VarSet a
 getInScopeVars (InScope vs) = vs
 
@@ -248,6 +251,9 @@ type KiVarEnv p elt = VarEnv (KiVar p) elt
 mkVarEnv :: Uniquable var => [(var, a)] -> VarEnv var a
 mkVarEnv = listToUFM
 
+mkVarEnv_Directly :: [(Unique, a)] -> VarEnv var a
+mkVarEnv_Directly = listToUFM_Directly
+
 mapVarEnv :: (a -> b) -> VarEnv var a -> VarEnv var b
 mapVarEnv = mapUFM
 
@@ -265,6 +271,9 @@ isEmptyVarEnv = isNullUFM
 
 elemVarEnv :: Uniquable v => v -> VarEnv v a -> Bool
 elemVarEnv = elemUFM
+
+unionInScope :: InScopeSet v -> InScopeSet v -> InScopeSet v
+unionInScope (InScope s1) (InScope s2) = InScope (s1 `unionVarSet` s2)
 
 varSetInScope :: VarSet v -> InScopeSet v -> Bool
 varSetInScope vars (InScope s1) = vars `subVarSet` s1

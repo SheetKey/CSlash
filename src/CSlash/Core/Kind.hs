@@ -502,7 +502,7 @@ isFunKi ki = case ki of
 splitFunKi_maybe :: Kind kv -> Maybe (FunKiFlag, MonoKind kv, MonoKind kv)
 splitFunKi_maybe ki
   | Mono mki <- ki
-  , FunKi f arg res <- coreMKFullView mki
+  , FunKi f arg res <- rowFullView mki
   = Just (f, arg, res)
   | otherwise
   = Nothing
@@ -510,7 +510,7 @@ splitFunKi_maybe ki
 {-# INLINE splitMonoFunKi_maybe #-}
 splitMonoFunKi_maybe :: MonoKind kv -> Maybe  (FunKiFlag, MonoKind kv, MonoKind kv)
 splitMonoFunKi_maybe ki
-  | FunKi f arg res <- coreMKFullView ki
+  | FunKi f arg res <- rowFullView ki
   = Just (f, arg, res)
   | otherwise
   = Nothing
@@ -519,7 +519,7 @@ splitMonoFunKis :: MonoKind kv -> ([MonoKind kv], MonoKind kv)
 splitMonoFunKis ki = split ki ki []
   where
     split _ (FunKi _ arg res) args = split res res (arg : args)
-    split orig_ki ki args | Just ki' <- coreMKView ki = split orig_ki ki' args
+    split orig_ki ki args | Just ki' <- rowView ki = split orig_ki ki' args
     split orig_ki _ args = (reverse args, orig_ki)
 
 mkKiPredApp :: KiPredCon -> MonoKind kv -> MonoKind kv -> MonoKind kv
@@ -550,7 +550,7 @@ splitPiKi_maybe
   -> Maybe (Either (KiVar p, Kind p) (FunKiFlag, MonoKind p, MonoKind p))
 splitPiKi_maybe ki = case ki of
   ForAllKi kv ki -> Just $ Left (kv, ki)
-  Mono mki -> case coreMKFullView mki of
+  Mono mki -> case rowFullView mki of
     FunKi { fk_f = af, fk_arg = arg, fk_res = res } -> Just $ Right (af, arg, res)
   _ -> Nothing
 
@@ -570,14 +570,14 @@ splitFunKis :: MonoKind kv -> ([MonoKind kv], MonoKind kv)
 splitFunKis ki = split ki ki []
   where
     split _ (FunKi { fk_arg = arg, fk_res = res }) bs = split res res (arg:bs)
-    split orig_ki ki bs | Just ki' <- coreMKView ki = split orig_ki ki' bs
+    split orig_ki ki bs | Just ki' <- rowView ki = split orig_ki ki' bs
     split orig_ki _ bs = (reverse bs, orig_ki)
 
 splitMonoPiKis :: MonoKind kv -> ([PiKiBinder kv], MonoKind kv)
 splitMonoPiKis ki = split ki ki []
   where
     split _ (FunKi af arg res) bs = split res res (Anon arg af : bs)
-    split orig_ki ki bs | Just ki' <- coreMKView ki = split orig_ki ki' bs
+    split orig_ki ki bs | Just ki' <- rowView ki = split orig_ki ki' bs
     split orig_ki _ bs = (reverse bs, orig_ki)
 
 splitInvisFunKis :: MonoKind kv -> ([MonoKind kv], MonoKind kv)
@@ -585,7 +585,7 @@ splitInvisFunKis ki = split ki ki []
   where
     split _ (FunKi { fk_f = f, fk_arg = arg, fk_res = res }) bs
       | isInvisibleKiFunArg f = split res res (arg:bs)
-    split orig_ki ki bs | Just ki' <- coreMKView ki = split orig_ki ki' bs
+    split orig_ki ki bs | Just ki' <- rowView ki = split orig_ki ki' bs
     split orig_ki _ bs = (reverse bs, orig_ki)
 
 mkForAllKis :: [KiVar p] -> Kind p -> Kind p
