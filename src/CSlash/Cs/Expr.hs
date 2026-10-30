@@ -89,8 +89,8 @@ type instance XUnboundVar Zk = DataConCantHappen
 
 type instance XRowProj Ps = (AddEpAnn, SrcSpan) -- (the dot, loc of row name)
 type instance XRowProj Rn = NoExtField
-type instance XRowProj Tc = Type Tc -- the type being projected (NOT the type of the row)
-type instance XRowProj Zk = Type Zk -- the type being projected (NOT the type of the row)
+type instance XRowProj Tc = (Type Tc, Type Tc) -- (ty being projected, type of row)
+type instance XRowProj Zk = (Type Zk, Type Zk) -- (ty being projected, type of row)
 
 type instance XOverLitE (CsPass _) = NoExtField
 type instance XLitE (CsPass _) = NoExtField

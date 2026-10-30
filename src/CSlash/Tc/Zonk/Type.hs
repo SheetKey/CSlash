@@ -603,10 +603,11 @@ zonkExpr (CsLet x binds expr) = runZonkBndrT (zonkLocalBinds binds) $ \new_binds
   new_expr <- zonkLExpr expr
   return (CsLet x new_binds new_expr)
 
-zonkExpr (CsRowProj ty cs_ty occ) = do
+zonkExpr (CsRowProj (ty, row_ty) cs_ty occ) = do
   lift $ traceTc "zonkExpr CsRowProj" (ppr ty)
   ty' <- zonkTcTypeToTypeX ty
-  return (CsRowProj ty' cs_ty occ)
+  row_ty' <- zonkTcTypeToTypeX row_ty
+  return (CsRowProj (ty', row_ty') cs_ty occ)
 
 zonkExpr (ExprWithTySig _ e ty) = do
   e' <- zonkLExpr e

@@ -83,9 +83,11 @@ exprType (Tick _ e) = exprType e
 exprType (Lam bndr mki expr) = mkLamType bndr mki (exprType expr)
 exprType e@(App _ _) = case collectArgs e of
                         (fun, args) -> applyTypeToArgs (pprCoreExpr e) (exprType fun) args
+exprType (RowProj (_, row_ty) _) = row_ty
 exprType (Type ty) = pprPanic "exprType" (ppr ty)
 exprType (KiCo kco) = pprPanic "exprType" (ppr kco)
 exprType (Kind ki) = pprPanic "exprType" (ppr ki)
+exprType (SetRows ty env) = pprPanic "exprType" (ppr ty $$ ppr env)
 
 mkLamTypes :: [(CoreBndr, Maybe CoreMonoKind)] -> CoreType -> CoreType
 mkLamTypes vs ty = foldr (uncurry mkLamType) ty vs 

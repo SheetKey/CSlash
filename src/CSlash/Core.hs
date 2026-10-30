@@ -55,7 +55,7 @@ data Expr bLam bLet
   | KiCo (KindCoercion Zk)
   | Kind (MonoKind Zk)
   -- Rows
-  | RowProj (Type Zk) OccName
+  | RowProj (Type Zk, Type Zk) OccName -- (type being projected, type of row)
   | SetRows (Type Zk) (DsRowEnv bLam bLet)
   deriving Data
 
