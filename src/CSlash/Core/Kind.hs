@@ -65,6 +65,9 @@ instance Data.Typeable a => Data.Data (RowEnv' a)
 emptyRowEnv :: RowEnv' a
 emptyRowEnv = RowEnv emptyOccEnv
 
+isEmptyRowEnv :: RowEnv' a -> Bool
+isEmptyRowEnv (RowEnv env) = isEmptyOccEnv env
+
 mkTyRowEnv :: [(Name, Type p)] -> TyRowEnv p
 mkTyRowEnv pairs = RowEnv $ extendOccEnvList emptyOccEnv pairs'
   where

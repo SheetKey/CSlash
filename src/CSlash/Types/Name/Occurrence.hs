@@ -255,6 +255,9 @@ newtype OccEnv a = MkOccEnv (FastStringEnv (UniqFM NameSpace a))
 emptyOccEnv :: OccEnv a
 emptyOccEnv = MkOccEnv emptyFsEnv
 
+isEmptyOccEnv :: OccEnv a -> Bool
+isEmptyOccEnv (MkOccEnv env) = isNullUFM env
+
 unitOccEnv :: OccName -> a -> OccEnv a
 unitOccEnv (OccName ns s) a = MkOccEnv $ unitFsEnv s (unitUFM ns a)
 
