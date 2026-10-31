@@ -10,7 +10,7 @@ import CSlash.Core.FVs
 import CSlash.Core.Unfold
 import CSlash.Core.Unfold.Make
 import CSlash.Core.Make ( FloatBind(..), mkCoreLams, mkWildValBinder )
-import CSlash.Core.Opt.OccurAnal( occurAnalyzeExpr, occurAnalyzePgm{-, zapLambdaBndrs-} )
+import CSlash.Core.Opt.OccurAnal( occurAnalyzeExpr, occurAnalyzePgm, zapLambdaBndrs )
 import CSlash.Core.DataCon
 import CSlash.Core.Opt.Coercion
 import CSlash.Core.Type
@@ -222,7 +222,7 @@ simple_app env (App e1 e2) as
   = simple_app env e1 ((env, e2) : as)
 
 simple_app env e@(Lam {}) as@(_:_)
-  = do_beta env (panic "zapLambdaBndrs e n_args") as
+  = do_beta env (zapLambdaBndrs e n_args) as
   where
     n_args = length as
 
