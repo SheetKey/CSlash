@@ -227,7 +227,7 @@ dsType ty
        env1 <- dsSetRows rows
        case ty2 of
          Type ty3 -> return $ SetRows ty3 env1
-         SetRows ty3 env2 -> return $ SetRows ty3 (plusRowEnv env2 env1) -- bindings in env1 shadow those in env2
+         SetRows ty3 env2 -> return $ SetRows ty3 $! plusRowEnv env2 env1 -- bindings in env1 shadow those in env2
          _ -> panic "dsType unreachable"
 
   | otherwise
