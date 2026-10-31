@@ -43,6 +43,7 @@ import CSlash.Utils.Outputable
 import CSlash.Utils.Misc
 import CSlash.Utils.Panic
 import CSlash.Utils.FV
+import CSlash.Utils.Trace
 
 import CSlash.Data.FastString
 import CSlash.Data.Pair
@@ -549,6 +550,65 @@ expand_syn rhs arg_tys
       | otherwise = pprPanic "expand_syn" (ppr rhs $$ ppr arg_tys)
     go (SetRowsTy ty _) subst args = go ty subst args -- dubious. (Maybe we need another orig_ty arg?)
     go ty subst args = mkAppTys (substTy subst ty) args
+
+{-
+The unsaturated views are used in the desugarer.
+We expand partial type applications, since unsaturated type funs may have set rows.
+We may eventually need to do similar in the type checker.
+In that case, we can change type sig to 'HasPass p pass => Type p -> [Type p] -> Type p'
+for unsat_expand_syn. Less general than the saturated version, but good enough!
+-}
+unsatCoreView :: Type Zk -> Maybe (Type Zk)
+unsatCoreView (TyConApp tc tys) = Just $ unsatExpandSynTyConApp tc tys
+unsatCoreView ty@AppTy{} = unsatExpandTyLamApp_maybe ty
+unsatCoreView _ = Nothing
+{-# INLINE unsatCoreView #-}
+
+unsatCoreFullView :: Type Zk -> Type Zk
+unsatCoreFullView ty@(TyConApp tc _)
+  | isTypeSynonymTyCon tc = unsat_core_full_view ty
+unsatCoreFullView ty@AppTy{} = unsat_core_full_view ty
+unsatCoreFullView ty = ty
+{-# INLINE unsatCoreFullView #-}
+
+unsat_core_full_view :: Type Zk -> Type Zk
+unsat_core_full_view ty
+  | Just ty' <- unsatCoreView ty = core_full_view ty'
+  | otherwise = ty
+
+unsatExpandTyLamApp_maybe :: Type Zk -> Maybe (Type Zk)
+unsatExpandTyLamApp_maybe input = case split input input [] of
+  (LocalTyRow{}, _) -> Nothing
+  (_, []) -> Nothing
+  (fun, args) -> Just $! unsat_expand_syn fun args
+  _ -> Nothing
+  where
+    split _ (AppTy ty arg) args = split ty ty (arg:args)
+    split orig_ty (SetRowsTy ty _) args = split orig_ty ty args
+    split orig_ty _ args = (orig_ty, args)
+
+unsatExpandSynTyConApp :: TyCon Zk -> [Type Zk] -> Type Zk
+unsatExpandSynTyConApp tc args
+  | Just rhs <- synTyConDefn_maybe tc
+  = unsat_expand_syn rhs args
+  | otherwise
+  = panic "unsatExpandSynTyConApp not a syn"
+
+{-# NOINLINE unsat_expand_syn #-}
+unsat_expand_syn :: Type Zk -> [Type Zk] -> Type Zk
+unsat_expand_syn orig_fun orig_args
+  | null orig_args = orig_fun
+  | otherwise = go orig_fun orig_fun empty_subst orig_args
+  where
+    empty_subst = mkEmptySubst (varsOfType orig_fun) (varsOfTypes orig_args)
+
+    go orig_ty _ subst [] = substTy subst orig_ty
+    go _ (TyLamTy tv ty) subst (arg:args) = go ty ty (extendTvSubst subst tv arg) args
+    go _ (BigTyLamTy kv ty) subst (arg:args)
+      | Embed ki <- arg = go ty ty (extendKvSubst subst kv ki) args
+      | otherwise = pprPanic "unsat_expand_syn" (ppr orig_fun $$ ppr orig_args)
+    go orig_ty (SetRowsTy ty _) subst args = go orig_ty ty subst args
+    go orig_ty _ subst args = mkAppTys (substTy subst orig_ty) args
 
 {- **********************************************************************
 *                                                                       *

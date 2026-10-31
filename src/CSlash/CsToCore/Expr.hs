@@ -101,8 +101,8 @@ dsExpr (CsLam (_, fun_kis) mg) = do
 dsExpr (CsTyLam {}) = panic "CsTyLam"
 
 dsExpr e@(CsRowProj (ty, row_ty) _ occ) = do
-  traceIf (text "dsExpr CsRowProj" $$ ppr e $$ ppr ty)
   ty' <- dsType ty
+  traceIf (text "dsExpr CsRowProj" $$ ppr e $$ ppr ty $$ ppr ty')
   case ty' of
     Type ty -> return $ RowProj (ty, row_ty) occ
     SetRows ty env -> case lookupRowEnvOcc env occ of

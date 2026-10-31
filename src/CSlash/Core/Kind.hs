@@ -125,7 +125,7 @@ instance Outputable a => Outputable (RowEnv' a) where
 extendRowEnv :: RowEnv' a -> Name -> a -> RowEnv' a
 extendRowEnv (RowEnv env) nm a = RowEnv (extendOccEnv env occ a)
   where
-    new_ns = case occNameSpace occ of
+    new_ns = case occNameSpace old_occ of
       RowName _ -> RowName (fsLit "")
       TcRowName _ -> TcRowName (fsLit "")
       _ -> pprPanic "extendRowEnv" (ppr old_occ)

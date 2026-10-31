@@ -736,6 +736,9 @@ occAnal env expr@(Var _) = occAnalApp env (expr, [], [])
 occAnal _ expr@(Type ty) = WUD emptyDetails expr
 occAnal _ expr@(KiCo kco) = WUD emptyDetails expr
 occAnal _ expr@(Kind ki) = WUD emptyDetails expr
+occAnal _ expr@(SetRows{}) = WUD emptyDetails expr
+
+occAnal _ expr@(RowProj{}) = pprPanic "occAnal RowProj should be eliminated by now" (ppr expr)
 
 occAnal env (Tick tickish body) = WUD usage' (Tick tickish body')
   where

@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE TupleSections #-}
 
 module CSlash.CsToCore.Binds where
@@ -221,7 +222,7 @@ ds_cs_wrapper wrap = go wrap
 
 dsType :: Type Zk -> DsM CoreExpr
 dsType ty
-  | SetRowsTy ty1 rows <- coreFullView ty
+  | SetRowsTy ty1 rows <- unsatCoreFullView ty
   = do ty2 <- dsType ty1
        env1 <- dsSetRows rows
        case ty2 of
@@ -236,7 +237,7 @@ dsSetRows :: [SetRow Zk] -> DsM CoreDsRowEnv
 dsSetRows = foldM go emptyRowEnv
   where
     go :: CoreDsRowEnv -> SetRow Zk -> DsM CoreDsRowEnv
-    go env (SetRowTy nm ty) = return $ extendRowEnv env nm (Left ty)
-    go env (SetRowVal nm (e, co_fn) _) = dsCsWrapper co_fn $ \core_wrap -> do
+    go !env (SetRowTy nm ty) = return $! extendRowEnv env nm (Left ty)
+    go !env (SetRowVal nm (e, co_fn) _) = dsCsWrapper co_fn $ \core_wrap -> do
       e' <- dsExpr e
-      return $ extendRowEnv env nm (Right (core_wrap e'))
+      return $! extendRowEnv env nm (Right (core_wrap e'))

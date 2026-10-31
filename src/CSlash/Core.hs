@@ -56,6 +56,10 @@ data Expr bLam bLet
   | Kind (MonoKind Zk)
   -- Rows
   | RowProj (Type Zk, Type Zk) OccName -- (type being projected, type of row)
+    -- rowproj are eliminated in dsExpr when possible.
+    -- Often we'll have '/\a -> \x:a -> a.row x'.
+    -- The specializer will spec a, bringing row terms into scope.
+    -- simplOpt then inlines the rows. This happens early in core2core.
   | SetRows (Type Zk) (DsRowEnv bLam bLet)
   deriving Data
 
