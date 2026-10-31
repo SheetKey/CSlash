@@ -78,6 +78,8 @@ exprStats :: CoreExpr -> CoreStats
 exprStats (Var {}) = oneTM
 exprStats (Lit {}) = oneTM
 exprStats (Type t) = tyStats t
+exprStats (SetRows{}) = zeroCS -- TODO
+exprStats (RowProj{}) = oneTM -- TODO
 exprStats (KiCo c) = kiCoStats c
 exprStats (Kind k) = kiStats k
 exprStats (App f a) = exprStats f `plusCS` exprStats a
