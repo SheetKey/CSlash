@@ -578,6 +578,7 @@ data PrimRep
   | AddrRep
   | FloatRep
   | DoubleRep
+  | FunAddrRep
   deriving (Data.Data, Eq, Ord, Show)
 
 data PrimOrVoidRep = VoidRep | NVRep PrimRep

@@ -29,7 +29,7 @@ import CSlash.Core.DataCon
 import CSlash.Types.Var.Id
 import CSlash.Builtin.PrimOps
 import CSlash.Core.TyCon
-import CSlash.Types.RepType ( isZeroBitTy{-, countConRepArgs, mightBeFunTy-} )
+import CSlash.Types.RepType ( isZeroBitTy{-, countConRepArgs-}, mightBeFunTy )
 -- import GHC.Types.CostCentre ( CostCentreStack, currentCCS )
 import CSlash.Types.Tickish
 import CSlash.Data.Maybe

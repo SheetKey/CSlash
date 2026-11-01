@@ -80,6 +80,14 @@ mkLFReEntrant
 mkLFReEntrant _ [] = pprPanic "mkLFReEntrant" empty
 mkLFReEntrant top args = LFReEntrant top (length args) False
 
+mkLFConst :: Type Zk -> TopLevelFlag -> Bool -> LambdaFormInfo
+mkLFConst ty top is_join
+  = assertPpr (not (mightBeFunTy ty))
+    (vcat [ text "mkLFConst migh be fun ty"
+          , text "ty" <+> ppr ty ]) $
+    LFConst top is_join
+   
+
 -----------------------------------------------------------------------------
 --              Data types for function information
 -----------------------------------------------------------------------------

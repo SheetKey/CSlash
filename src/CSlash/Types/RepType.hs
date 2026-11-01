@@ -194,7 +194,7 @@ typePrimRep_maybe ty
   -- Function types
   | Just (tc, _) <- splitTyConApp_maybe ty
   , tc `hasKey` fUNTyConKey
-  = Just [AddrRep] -- TODO: runtime rep of functions???
+  = Just [FunAddrRep] -- TODO: runtime rep of functions???
 
   -- Builtins (can have kind and coercion args, but no type args)
   | Just (tc, tys) <- splitTyConApp_maybe ty
@@ -203,7 +203,7 @@ typePrimRep_maybe ty
          -> Just [IntRep 1]
        | tc `hasKey` realWorldTyConKey
          -> Just []
-       -- if 'tc `hasKey` fUNTyConKey' then should we return 'AddrRep'?
+       -- if 'tc `hasKey` fUNTyConKey' then should we return 'FunAddrRep'?
        | otherwise
          -> pprPanic "typePrimRep unknown TyCon" (ppr tc $$ ppr tys)
 
@@ -244,3 +244,11 @@ isKindOrCoArg _ = False
 
 primRepToType :: PrimRep -> Type Zk
 primRepToType = panic "primRepToType"
+
+-- TODO: double check this
+mightBeFunTy :: Type Zk -> Bool
+mightBeFunTy ty
+  | [FunAddrRep] <- typePrimRep ty
+  = True
+  | otherwise
+  = False

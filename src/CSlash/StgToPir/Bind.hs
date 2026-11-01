@@ -116,7 +116,8 @@ mkFunctionLFInfo
   -> [CgId]
   -> LambdaFormInfo
 mkFunctionLFInfo platform bndr top is_join args
-  | null args = panic "mkFunctionLFInfo null args"
+  | null args
+  = mkLFConst (varType bndr) top is_join
   | otherwise
   = mkLFReEntrant top args -- (mkArgDescr platform args)
 
@@ -131,14 +132,18 @@ functionCodeBody
   -> [CgId]
   -> CgStgExpr
   -> FCode ()
-functionCodeBody top_lvl bndr fn_info [] body = panic "functionCodeBody no args"
+functionCodeBody top_lvl bndr fn_info [] body =
+  let lf_info = functionLFInfo fn_info
+  in emitFunctionProc top_lvl bndr lf_info (functionLabel fn_info) [] $
+     \_ -> constCode fn_info body
 
 functionCodeBody top_lvl bndr fn_info args@(arg0:_) body =
   let nv_args = nonVoidIds args
       arity = length args
-  in {-withNewTickyCounterFun (isOneShotBndr arg0) (functionName fn_info) nv_args $-} do -- TODO
-    let lf_info = functionLFInfo fn_info
+      {-withNewTickyCounterFun (isOneShotBndr arg0) (functionName fn_info) nv_args $-} -- TODO
+      lf_info = functionLFInfo fn_info
 
+  in 
     {- NOTE/TODO nodeMustPointToIt
        we assume this is always False. Should be ok since no GC or lazy eval
     -}
@@ -182,6 +187,10 @@ emitFunction platform lbl args body = do
   (_, blks) <- getCodeScoped body
   let entry_lbl = toEntryLbl platform lbl
   emitProc entry_lbl args blks
+
+constCode :: FunctionInfo -> CgStgExpr -> FCode ()
+constCode fn_info body = do
+  void $ cgExpr body
 
 ------------------------------------------------------------------------
 --              Profiling

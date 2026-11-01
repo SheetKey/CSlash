@@ -25,6 +25,9 @@ data LambdaFormInfo
     !RepArity
     !Bool
     -- !ArgDescr
+  | LFConst
+    !TopLevelFlag
+    !Bool -- is_join
   | LFCon
     !(DataCon Zk)
   | LFUnknown
