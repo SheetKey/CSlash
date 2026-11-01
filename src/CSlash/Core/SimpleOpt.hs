@@ -241,7 +241,7 @@ simple_app env e@(Lam {}) as@(_:_)
 
       | otherwise
       = let (env'', mb_pr) = simple_lam_bind_pair env' b (Just b') a NotTopLevel
-        in panic "wrapLet"
+        in wrapLamLet mb_pr $ do_beta env'' body as
 
       where (env', b', k') = subst_opt_bndr env b k
 
@@ -540,9 +540,14 @@ add_info env old_bndr top_level new_rhs new_bndr
     unfolding_from_rhs = mkUnfolding uf_opts VanillaSrc
                          (isTopLevel top_level) False False new_rhs Nothing
 
--- wrapLet :: Maybe (Id Zk, CoreExpr) -> CoreExpr -> CoreExpr
--- wrapLet Nothing body = body
--- wrapLet (Just (b, r)) body = Let (NonRec b r) body
+wrapLet :: Maybe (CoreId, CoreExpr) -> CoreExpr -> CoreExpr
+wrapLet Nothing body = body
+wrapLet (Just (b, r)) body = Let (NonRec b r) body
+
+wrapLamLet :: Maybe (CoreBndr, CoreExpr) -> CoreExpr -> CoreExpr
+wrapLamLet Nothing body = body
+wrapLamLet (Just (Core.Id b, r)) body = Let (NonRec b r) body
+wrapLamLet other body = pprPanic "wrapLamLet" (ppr other $$ ppr body)
 
 joinPointBinding_maybe :: InId -> InExpr -> Maybe (InId, InExpr)
 joinPointBinding_maybe bndr rhs
