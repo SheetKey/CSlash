@@ -16,9 +16,11 @@ import CSlash.Types.Fixity (LexicalFixity(..))
 
 instance (OutputableBndr b1, OutputableBndr b2) => Outputable (Expr b1 b2)
 
+instance HasPass p p' => Outputable (CoreBndrP (CsPass p')) where
 instance HasPass p p' => OutputableBndr (Id (CsPass p'))
 instance HasPass p p' => OutputableBndr (TyVar (CsPass p')) 
 instance HasPass p p' => OutputableBndr (KiCoVar (CsPass p')) 
 instance HasPass p p' => OutputableBndr (KiVar (CsPass p')) 
+instance HasPass p p' => OutputableBndr (CoreBndrP (CsPass p')) where
 
 pprOcc :: OutputableBndr a => LexicalFixity -> a -> SDoc

@@ -731,9 +731,11 @@ collect_cand_qkvs_ty orig_ty cur_lvl (boundtvs, boundkcvs, boundkvs) dvs ty = go
 
     go dv (LocalTyRow {}) = return dv
 
-    go dv (SetRowsTy ty rows) = do
+    go dv (SetRowsTy ty (Left rows)) = do
       dv1 <- go dv ty
       go_rows dv1 rows
+
+    go _ (SetRowsTy _ (Right _)) = panic "collect_cand_qkvs_ty Right row env"
 
     go _ other = pprPanic "collect_cand_qkvs_ty" (ppr other)
 

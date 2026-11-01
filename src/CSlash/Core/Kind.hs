@@ -58,9 +58,6 @@ import Data.Maybe (isJust)
 type RowSigEnv p = RowEnv' (RowSig p)
 type ZipRowSigEnv p = RowEnv' (RowSig p, RowSig p)
 type TyRowEnv p = RowEnv' (Type p)
-newtype RowEnv' a = RowEnv (OccEnv a)
-
-instance Data.Typeable a => Data.Data (RowEnv' a)
 
 emptyRowEnv :: RowEnv' a
 emptyRowEnv = RowEnv emptyOccEnv
@@ -122,9 +119,6 @@ lookupRowEnvOcc (RowEnv env) occ =
       new_occ = setOccNameSpace new_ns occ
   in lookupOccEnv env new_occ
 
-instance Outputable a => Outputable (RowEnv' a) where
-  ppr (RowEnv env) = ppr env
-
 extendRowEnv :: RowEnv' a -> Name -> a -> RowEnv' a
 extendRowEnv (RowEnv env) nm a = RowEnv (extendOccEnv env occ a)
   where
@@ -134,6 +128,9 @@ extendRowEnv (RowEnv env) nm a = RowEnv (extendOccEnv env occ a)
       _ -> pprPanic "extendRowEnv" (ppr old_occ)
     old_occ = nameOccName nm
     occ = setOccNameSpace new_ns old_occ
+
+strictMapRowEnv :: (a -> b) -> RowEnv' a -> RowEnv' b
+strictMapRowEnv f (RowEnv as) = RowEnv $ strictMapOccEnv f as
 
 rowSigName :: RowSig p -> Name
 rowSigName (RowTySig nm _) = nm

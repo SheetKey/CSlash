@@ -104,10 +104,11 @@ dsExpr e@(CsRowProj (ty, row_ty) _ occ) = do
   ty' <- dsType ty
   traceIf (text "dsExpr CsRowProj" $$ ppr e $$ ppr ty $$ ppr ty')
   case ty' of
+    Type (SetRowsTy ty (Right env))
+      | Just (Right e) <- lookupRowEnvOcc env occ 
+        -> return e
+    Type (SetRowTy _ (Left _)) -> panic "Left row env after dsType"
     Type ty -> return $ RowProj (ty, row_ty) occ
-    SetRows ty env -> case lookupRowEnvOcc env occ of
-      Just (Right e) -> return e
-      _ -> return $ RowProj (ty, row_ty) occ
     _ -> panic "dsExpr unreachable"
 
 dsExpr other = pprPanic "dsExpr" (ppr other)

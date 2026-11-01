@@ -60,11 +60,8 @@ data Expr bLam bLet
     -- Often we'll have '/\a -> \x:a -> a.row x'.
     -- The specializer will spec a, bringing row terms into scope.
     -- simplOpt then inlines the rows. This happens early in core2core.
-  | SetRows (Type Zk) (DsRowEnv bLam bLet)
+  --  | SetRows (Type Zk) (DsRowEnv bLam bLet) -- now just a part of Type
   deriving Data
-
-type DsRowEnv bLam bLet = RowEnv' (Either (Type Zk) (Expr bLam bLet))
-type CoreDsRowEnv = DsRowEnv CoreBndr CoreId
 
 type Arg = Expr 
 

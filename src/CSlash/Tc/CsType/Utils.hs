@@ -129,7 +129,8 @@ synonymTyConsOfType ty = nonDetNameEnvElts (go ty)
     go (CastTy ty _) = go ty
     go (Embed _) = emptyNameEnv
     go (KindCoercion _) = emptyNameEnv
-    go (SetRowsTy ty rs) = go ty `plusNameEnv` go_rows rs
+    go (SetRowsTy ty (Left rs)) = go ty `plusNameEnv` go_rows rs
+    go (SetRowsTy _ (Right _)) = panic "synonymTyConsOfType Right row env"
 
     go_tc tc | isTypeSynonymTyCon tc = unitNameEnv (tyConName tc) tc
              | otherwise = emptyNameEnv

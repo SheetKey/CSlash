@@ -156,7 +156,6 @@ ppr_id_occ add_par id
 ppr_expr :: (OutputableBndr a, OutputableBndr b) => (SDoc -> SDoc) -> Expr a b -> SDoc
 ppr_expr add_par (Var id) = ppr_id_occ add_par id
 ppr_expr add_par (Type ty) = add_par (text "TYPE:" <+> ppr ty)
-ppr_expr add_par (SetRows ty env) = add_par (text "SETROWS:" <+> ppr ty <+> ppr env)
 ppr_expr add_par (Kind ki) = add_par (text "KIND:" <+> ppr ki)
 ppr_expr add_par (KiCo kco) = add_par (text "KCO:" <+> ppr kco)
 ppr_expr add_par (RowProj (ty, _) occ) = add_par (parens (ppr ty) <> dot <> ppr occ)

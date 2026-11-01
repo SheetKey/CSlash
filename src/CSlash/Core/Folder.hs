@@ -59,8 +59,9 @@ foldCore CoreFolder{..} env
     go_kcos _ [] = mempty
     go_kcos env (c:cs) = go_kco env c `mappend` go_kcos env cs
 
-    go_set_rows _ [] = mempty
-    go_set_rows env (r:rs) = go_set_row env r `mappend` go_set_rows env rs
+    go_set_rows _ (Left []) = mempty
+    go_set_rows env (Left (r:rs)) = go_set_row env r `mappend` go_set_rows env (Left rs)
+    go_set_rows env (Right _) = panic "folder Right row env"
 
     go_ty env ty | Just ty' <- cf_ty_view ty = go_ty env ty'
     go_ty env (TyVarTy tv) = cf_tv env tv

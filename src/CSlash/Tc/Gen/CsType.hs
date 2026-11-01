@@ -256,7 +256,7 @@ tc_cs_type rn_ty@(CsSetRowsTy _ base rows) exp_kind = do
   let row_env = mkRowSigEnv exp_kind
   (ty_row_env, rows', rowsig) <- tcSetRows (selfName, base') row_env rows
   let full_kind = KiConApp $ KiCon Nothing base_ki rowsig
-      ty = SetRowsTy base' rows'
+      ty = SetRowsTy base' (Left rows')
       subst_exp_kind = tcSubstTyRowsMonoKind ty_row_env exp_kind
   traceTc "tc_cs_type CsSetRowsTy"
     $ vcat [ text "base'" <+> ppr base'

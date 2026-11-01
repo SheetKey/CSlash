@@ -17,6 +17,8 @@ import CSlash.Types.Var
 
 import CSlash.Utils.Panic
 
+import Data.Bifunctor (bimap)
+
 data CoreMapper p p' env m = CoreMapper
   { cm_kv :: env -> KiVar p -> m (MonoKind p')
   , cm_kcv :: env -> KiCoVar p -> m (KindCoercion p')
@@ -92,8 +94,11 @@ mapCoreX CoreMapper{..}
     go_kcos !_ [] = return []
     go_kcos !env (x:xs) = (:) <$> go_kco env x <*> go_kcos env xs
     
-    go_set_rows !_ [] = return []
-    go_set_rows !env (r:rs) = (:) <$> go_set_row env r <*> go_set_rows env rs
+    go_set_rows !_ (Left []) = return (Left [])
+    go_set_rows !env (Left (r:rs)) = (flip bimap (panic "unreachabe") . (:)) <$>
+                                     go_set_row env r <*>
+                                     go_set_rows env (Left rs)
+    go_set_rows !env (Right _) = panic "mapper Right row env"
 
     go_row_sigs !_ [] = return []
     go_row_sigs !env (r:rs) = (:) <$> go_row_sig env r <*> go_row_sigs env rs

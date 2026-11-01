@@ -1,3 +1,5 @@
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeAbstractions #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -832,7 +834,7 @@ substTyUnchecked subst ty = subst_ty subst ty
 subst_ty
   :: (HasDebugCallStack, HasPass p pass, HasPass p' pass', SubstP p p')
   => Subst p p' -> Type p -> Type p'
-subst_ty subst ty = go ty
+subst_ty @_ @pass @_ @pass' subst ty = go ty
   where
     go (TyVarTy tv) = substTyVar subst tv
     go (AppTy fun arg) = (mkAppTy $! (go fun)) $! (go arg)
@@ -856,8 +858,10 @@ subst_ty subst ty = go ty
     go (ForAllKiCo kcv ty)
       = case substKiCoVarBndr subst kcv of
           (subst', kcv') -> (ForAllKiCo $! kcv') $! (subst_ty subst' ty)
-    go (SetRowsTy ty rows)
-      = (SetRowsTy $! go ty) $! strictMap go_set_row rows
+    go (SetRowsTy ty (Left rows))
+      = (SetRowsTy $! go ty) $! Left $! strictMap go_set_row rows
+    go (SetRowsTy ty (Right rows))
+      = (SetRowsTy $! go ty) $! Right $! strictMapRowEnv go_set_ds_row rows
     go (LocalTyRow nm ki) = (LocalTyRow $! nm) $! substMonoKi subst ki
     go (Embed mki) = Embed $! substMonoKi subst mki
     go (CastTy ty kco) = (mkCastTy $! (go ty)) $! subst_kco subst kco
@@ -865,6 +869,11 @@ subst_ty subst ty = go ty
 
     go_set_row (SetRowVal name e ty) = panic "SetRowVal $! name "
     go_set_row (SetRowTy name ty) = (SetRowTy $! name) $! go ty
+
+    go_set_ds_row it = case (it, csPass @pass, csPass @pass') of
+      (Left ty, Zk, Zk) -> Left $! go ty
+      (Right e, Zk, Zk) -> Right $! substExpr subst e
+      _ -> panic "go_set_ds_row"
 
 substTyVar :: (HasPass p pass, HasPass p' pass') => Subst p p' -> TyVar p -> Type p'
 substTyVar (Subst { tv_env = tenv, tv_in_scope = in_scope }) tv

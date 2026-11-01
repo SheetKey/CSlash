@@ -222,21 +222,24 @@ ds_cs_wrapper wrap = go wrap
 
 dsType :: Type Zk -> DsM CoreExpr
 dsType ty
-  | SetRowsTy ty1 rows <- unsatCoreFullView ty
+  | SetRowsTy ty1 (Left rows) <- unsatCoreFullView ty
   = do ty2 <- dsType ty1
        env1 <- dsSetRows rows
        case ty2 of
-         Type ty3 -> return $ SetRows ty3 env1
-         SetRows ty3 env2 -> return $ SetRows ty3 $! plusRowEnv env2 env1 -- bindings in env1 shadow those in env2
+         Type (SetRowsTy ty3 (Right env2))
+           -> return $ Type $ SetRowsTy ty3 $ Right $! plusRowEnv env2 env1
+              -- bindings in env1 shadow those in env2
+         Type ty3 -> return $ Type $ SetRowsTy ty3 (Right env1)
          _ -> panic "dsType unreachable"
-
+  | SetRowsTy _ (Right _) <- unsatCoreFullView ty
+  = panic "dsType already Right env"
   | otherwise
   = return $ Type ty
 
-dsSetRows :: [SetRow Zk] -> DsM CoreDsRowEnv
+dsSetRows :: [SetRow Zk] -> DsM CoreRowEnv
 dsSetRows = foldM go emptyRowEnv
   where
-    go :: CoreDsRowEnv -> SetRow Zk -> DsM CoreDsRowEnv
+    go :: CoreRowEnv -> SetRow Zk -> DsM CoreRowEnv
     go !env (SetRowTy nm ty) = return $! extendRowEnv env nm (Left ty)
     go !env (SetRowVal nm (e, co_fn) _) = dsCsWrapper co_fn $ \core_wrap -> do
       e' <- dsExpr e

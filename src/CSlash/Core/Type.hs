@@ -757,8 +757,9 @@ typeMonoKind ty@(Embed _) = pprPanic "typeMonoKind" (ppr ty)
 typeMonoKind (CastTy _ co) = kicoercionRKind co
 typeMonoKind (KindCoercion kco) = kiCoercionKind kco
 typeMonoKind (LocalTyRow _ ki) = ki
-typeMonoKind (SetRowsTy base rows)
+typeMonoKind (SetRowsTy base (Left rows))
   = KiConApp $ KiCon Nothing (typeMonoKind base) (rowSigOfRow <$> rows)
+typeMonoKind (SetRowsTy base (Right _)) = panic "typeMonoKind Right row env"
 
 rowSigOfRow :: HasPass p pass => SetRow p -> RowSig p
 rowSigOfRow (SetRowVal nm _ ty) = RowTySig nm ty

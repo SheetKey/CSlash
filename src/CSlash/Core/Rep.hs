@@ -22,6 +22,7 @@ import {-# SOURCE #-} CSlash.Cs.Instances ()
 
 import {-# SOURCE #-} CSlash.Core.Ppr
 
+import {-# SOURCE #-} CSlash.Core (CoreExpr)
 import {-# SOURCE #-} CSlash.Core.Type.FVs
 import {-# SOURCE #-} CSlash.Core.Subst
 import CSlash.Core.TyCon
@@ -73,11 +74,13 @@ data Type p
     , ft_res :: Type p
     }
   | LocalTyRow Name (MonoKind p)
-  | SetRowsTy (Type p) [SetRow p]
+  | SetRowsTy (Type p) (Either [SetRow p] CoreRowEnv) -- Should really add a new CsPass 'Ds'
   | CastTy (Type p) (KindCoercion p)
   | Embed (MonoKind p) -- for application to a 'BigTyLamTy
   | KindCoercion (KindCoercion p) -- embed a kind coercion (evidence stuff)
   deriving Data.Data
+
+type CoreRowEnv = RowEnv' (Either (Type Zk) CoreExpr)
 
 data SetRow p where
   SetRowVal
@@ -192,6 +195,13 @@ data FunKiFlag
   = FKF_K_K -- Kind -> Kind
   | FKF_C_K -- Constraint -> Kind
   deriving (Eq, Ord, Data.Data)
+
+newtype RowEnv' a = RowEnv (OccEnv a)
+
+instance Data.Typeable a => Data.Data (RowEnv' a)
+
+instance Outputable a => Outputable (RowEnv' a) where
+  ppr (RowEnv env) = ppr env
 
 {- **********************************************************************
 *                                                                       *
@@ -842,9 +852,12 @@ debug_ppr_ty _ (KindCoercion co) = text "[KiCo]" <+> (ppr co)
 
 debug_ppr_ty _ (LocalTyRow nm _) = ppr nm
 
-debug_ppr_ty _ (SetRowsTy base rows)
+debug_ppr_ty _ (SetRowsTy base (Left rows))
   = ppr base <+> dot <> braces
     (fsep (punctuate comma (map debug_ppr_set_row rows)))
+
+debug_ppr_ty _ (SetRowsTy base (Right rows))
+  = ppr base <+> dot <> braces (ppr rows)
 
 debug_ppr_set_row :: HasPass p pass => SetRow p -> SDoc
 debug_ppr_set_row (SetRowVal nm (expr, wrap) _)
