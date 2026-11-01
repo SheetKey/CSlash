@@ -252,6 +252,10 @@ class HasOccName name where
 newtype OccEnv a = MkOccEnv (FastStringEnv (UniqFM NameSpace a))
   deriving Functor
 
+strictMapOccEnv :: (a -> b) -> OccEnv a -> OccEnv b
+strictMapOccEnv f (MkOccEnv as) =
+  MkOccEnv $ strictMapFsEnv (strictMapUFM f) as
+
 emptyOccEnv :: OccEnv a
 emptyOccEnv = MkOccEnv emptyFsEnv
 
