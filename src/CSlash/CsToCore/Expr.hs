@@ -107,7 +107,7 @@ dsExpr e@(CsRowProj (ty, row_ty) _ occ) = do
     Type (SetRowsTy ty (Right env))
       | Just (Right e) <- lookupRowEnvOcc env occ 
         -> return e
-    Type (SetRowTy _ (Left _)) -> panic "Left row env after dsType"
+    Type (SetRowsTy _ (Left _)) -> panic "Left row env after dsType"
     Type ty -> return $ RowProj (ty, row_ty) occ
     _ -> panic "dsExpr unreachable"
 
