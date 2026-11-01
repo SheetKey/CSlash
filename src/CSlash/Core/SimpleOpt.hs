@@ -36,6 +36,7 @@ import CSlash.Utils.Encoding
 import CSlash.Utils.Outputable
 import CSlash.Utils.Panic
 import CSlash.Utils.Misc
+import CSlash.Utils.Trace
 
 import CSlash.Data.Maybe       ( orElse )
 import CSlash.Data.Graph.UnVar
@@ -80,9 +81,13 @@ simpleOptPgm
   -> CoreProgram
   -> [CoreRule]
   -> (CoreProgram, [CoreRule], CoreProgram)
-simpleOptPgm opts this_mod binds rules@[] = (reverse binds', rules', occ_anald_binds)
+simpleOptPgm opts this_mod binds rules@[] =
+  pprTrace "simpleOptPgm binds" (ppr binds) $
+  pprTrace "simpleOptPgm occ_anald_binds" (ppr occ_anald_binds) $
+  pprTrace "simpleOptPgm binds'" (ppr (reverse binds')) $
+  (reverse binds', rules', occ_anald_binds)
   where
-    occ_anald_binds = occurAnalyzePgm this_mod (const True) (\_ -> False) rules binds
+    occ_anald_binds = occurAnalyzePgm this_mod (const True) (const False) rules binds
 
     (final_env, binds') = foldl' do_one (emptyEnv opts, []) occ_anald_binds
 
@@ -140,7 +145,7 @@ simple_opt_clo in_scope (e_env, e)
   = simple_opt_expr (soeSetInScope in_scope e_env) e
 
 simple_opt_expr :: HasDebugCallStack => SimpleOptEnv -> InExpr -> OutExpr
-simple_opt_expr env expr = go expr
+simple_opt_expr env expr = pprTrace "simple_opt_expr" (ppr expr) $ go expr
   where
     rec_ids = soe_rec_ids env
     subst = soe_subst env
@@ -152,6 +157,8 @@ simple_opt_expr env expr = go expr
       = simple_opt_clo in_scope clo
       | otherwise
       = lookupIdSubst subst v
+    go (RowProj (ty, row_ty) occ)
+      = panic "RowProj (substTyUnchecked subst ty, substTyUnchecked row_ty) occ"
     go (App e1 e2) = simple_app env e1 [(env, e2)]
     go (Type ty) = Type (substTyUnchecked subst ty)
     go (KiCo kco) = KiCo (go_kco kco)
@@ -232,10 +239,9 @@ simple_app env e@(Lam {}) as@(_:_)
       = let a' = simple_opt_clo (soeInScope env) a
         in panic "mkDefaultCase a' b' $ do_beta env' body as"
 
-      | Core.Id b <- b
-      , Core.Id b' <- b'
-      , (env'', mb_pr) <- simple_bind_pair env' b (Just b') a NotTopLevel
-      = panic "wrapLet"
+      | otherwise
+      = let (env'', mb_pr) = simple_lam_bind_pair env' b (Just b') a NotTopLevel
+        in panic "wrapLet"
 
       where (env', b', k') = subst_opt_bndr env b k
 
@@ -339,6 +345,44 @@ simple_bind_pair env@(SOE { soe_inl = inl_env, soe_subst = subst })
       | not active = False
       | not (safe_to_inline occ) = False
       | otherwise = True
+
+simple_lam_bind_pair
+  :: SimpleOptEnv
+  -> InBndr
+  -> Maybe OutBndr
+  -> SimpleClo
+  -> TopLevelFlag
+  -> (SimpleOptEnv, Maybe (OutBndr, OutExpr))
+simple_lam_bind_pair env@(SOE { soe_inl = inl_env, soe_subst = subst })
+                     in_bndr mb_out_bndr clo@(rhs_env, in_rhs) top_level
+  | Core.Id ib <- in_bndr
+  , Nothing <- mb_out_bndr
+  = case simple_bind_pair env ib Nothing clo top_level of
+      (env, Nothing) -> (env, Nothing)
+      (env, Just (b, e)) -> (env, Just (Core.Id b, e))
+  | Core.Id ib <- in_bndr
+  , Just (Core.Id ob) <- mb_out_bndr
+  = case simple_bind_pair env ib (Just ob) clo top_level of
+      (env, Nothing) -> (env, Nothing)
+      (env, Just (b, e)) -> (env, Just (Core.Id b, e))
+
+  | Type ty <- in_rhs
+  , Tv b <- in_bndr
+  = let out_ty = substTyUnchecked (soe_subst rhs_env) ty
+    in (env { soe_subst = extendTvSubst subst b out_ty }, Nothing)
+
+  | KiCo kco <- in_rhs
+  , KCv b <- in_bndr
+  = let out_kco = optKiCoercion (so_co_opts (soe_opts env)) (soe_subst rhs_env) kco
+    in (env { soe_subst = extendKCvSubst subst b out_kco }, Nothing)
+
+  | Kind ki <- in_rhs
+  , Kv b <- in_bndr
+  = let out_ki = substMonoKiUnchecked (soe_subst rhs_env) ki
+    in (env { soe_subst = extendKvSubst subst b out_ki }, Nothing)
+
+  | otherwise
+  = panic "simple_lam_bind_pair mismatch"
 
 safe_to_inline :: OccInfo -> Bool
 safe_to_inline IAmALoopBreaker{} = False
