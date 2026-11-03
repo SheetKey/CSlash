@@ -188,7 +188,7 @@ coreToStgApp f args ticks = do
                                then StgConApp dc NoNumber args' (sumPrimReps args)
                                else StgConApp dc NoNumber args' []
 
-              -- PrimOpId TODO
+              PrimOpId op -> StgOpApp (StgPrimOp op) args' res_ty
 
               -- FCallId TODO
 

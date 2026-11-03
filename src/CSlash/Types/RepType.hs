@@ -48,6 +48,8 @@ unwrapType ty = inner_ty
 
     go t | Just t' <- coreView t = go t'
     go (ForAllTy _ t) = go t
+    go (ForAllKiCo _ t) = go t
+    go (BigTyLamTy _ t) = go t
     go (CastTy t _) = go t
     go t = t
 

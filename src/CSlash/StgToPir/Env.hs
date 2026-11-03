@@ -6,6 +6,7 @@ module CSlash.StgToPir.Env
 import CSlash.Platform
 import CSlash.StgToPir.Monad
 import CSlash.StgToPir.Function
+import CSlash.Stg.Syntax
 
 import CSlash.Pir.PLabel
 
@@ -15,7 +16,8 @@ import CSlash.Pir.Expr
 import CSlash.Pir.Graph
 import CSlash.Types.Var.Id
 import CSlash.Types.Var.Class
-import CSlash.Types.Name
+import CSlash.Types.Name hiding (varName)
+import CSlash.Types.RepType
 import CSlash.Core.Type
 import CSlash.Core.Type.Compare( eqType )
 import CSlash.Builtin.Types.Prim
@@ -43,6 +45,21 @@ litIdInfo platform id lf lit
              , cg_lf = lf
              , cg_loc = PirLoc (PirLit lit) }
 
+idInfoToAmode :: CgIdInfo -> PirExpr
+idInfoToAmode CgIdInfo { cg_loc = PirLoc e } = e
+idInfoToAmode cg_info = pprPanic "idInfoToAmode" (ppr (cg_id cg_info))
+
+-------------------------------------------------------------------------
+--        Amodes for arguments
+-------------------------------------------------------------------------
+
+getArgAmode :: NonVoid StgArg -> FCode PirExpr
+getArgAmode (NonVoid (StgVarArg var)) = idInfoToAmode <$> getCgIdInfo var
+getArgAmode (NonVoid (StgLitArg lit)) = panic "cgLit lit"
+
+getNonVoidArgAmodes :: [StgArg] -> FCode [PirExpr]
+getNonVoidArgAmodes args = mapM getArgAmode (nonVoidStgArgs args)
+
 ---------------------------------------------------------
 --        The binding environment
 ---------------------------------------------------------
@@ -51,6 +68,24 @@ addBindC :: CgIdInfo -> FCode ()
 addBindC stuff_to_bind = do
   binds <- getBinds
   setBinds $ extendVarEnv binds (cg_id stuff_to_bind) stuff_to_bind
+
+getCgIdInfo :: CgId -> FCode CgIdInfo
+getCgIdInfo id = do
+  platform <- getPlatform
+  local_binds <- getBinds
+  case lookupVarEnv local_binds id of
+    Just info -> return info
+    Nothing -> do
+      let name = varName id
+      if isExternalName name then
+        let ext_lbl
+              | [FunAddrRep] <- typePrimRep (varType id)
+              = mkFunctionLabel name $ idCafInfo id
+              | otherwise
+              = pprPanic "getCgIdInfo unfinished" (ppr id)
+        in return $ litIdInfo platform id (importedIdLFInfo id) (PirLabel ext_lbl)
+
+        else pprPanic "getCgIdInfo non-local non-external" (ppr id)
 
 ------------------------------------------------------------------------
 --        Interface functions for binding and re-binding names

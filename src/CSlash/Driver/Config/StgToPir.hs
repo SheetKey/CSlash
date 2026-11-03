@@ -19,6 +19,7 @@ initStgToPirConfig dflags mod = StgToPirConfig
   , stgToPirTmpDir = tmpDir dflags
   , stgToPirContext = initSDocContext dflags defaultDumpStyle
   , stgToPirEmitDebugInfo = debugLevel dflags > 0
+  , stgToPirMaxInlAllocSize = 128 -- TODO: maxInlineAllocSize dflags
   ------------------------------ Ticky Options ----------------------------------
   , stgToPirDoTicky = False -- gopt Opt_Ticky dflags
   ---------------------------------- Flags --------------------------------------

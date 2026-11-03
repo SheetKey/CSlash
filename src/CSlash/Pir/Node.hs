@@ -35,7 +35,17 @@ import CSlash.Utils.Constants (debugIsOn)
 data PirNode e x where
   PirEntry :: {-# UNPACK #-} !Label -> PirNode C O
 
+  PirAssign :: !LocalReg -> !PirExpr -> PirNode O O
+
   PirBranch :: {-# UNPACK #-} !Label -> PirNode O C
+
+  PirCall ::
+    { pir_target :: PirExpr
+    , pir_cont :: Maybe Label
+    , pir_args :: [PirExpr]
+    } -> PirNode O C
+
+  PirReturn :: Maybe PirExpr -> PirNode O C
 
 instance OutputableP Platform (PirNode e x) where
   pdoc = pprNode
@@ -51,11 +61,32 @@ pprNode platform node = pp_node <+> pp_debug
 
       PirBranch ident -> text "goto" <+> ppr ident <> semi
 
+      PirCall tgt k args ->
+        hcat [ text "call", space
+             , pprFun tgt, parens (interpp'SP' (pdoc platform) args), space
+             , returns
+             , semi ]
+        where pprFun f@PirLit{} = pdoc platform f
+              pprFun f = parens (pdoc platform f)
+
+              returns
+                | Just r <- k = text "returns to" <+> ppr r
+                | otherwise = empty
+      PirReturn mb_ret ->
+        hcat [ text "ret", space
+             , case mb_ret of
+                 Just ret -> pdoc platform ret
+                 Nothing -> empty
+             , semi ]
+                 
+
     pp_debug :: SDoc
     pp_debug = if not debugIsOn then empty else
       case node of
         PirEntry{} -> empty
         PirBranch{} -> text "  // PirBranch"
+        PirCall {} -> text "   // PirCall"
+        PirReturn {} -> text "   // PirReturn"
 
 instance OutputableP Platform (Block PirNode C C) where
     pdoc = pprBlock
@@ -104,6 +135,10 @@ deriving instance Eq (PirNode e x)
 
 instance NonLocal PirNode where
   entryLabel (PirEntry l) = l
+
+  successors (PirBranch l) = [l]
+  successors (PirCall { pir_cont = l }) = maybeToList l
+  successors (PirReturn {}) = []
 
 --------------------------------------------------
 -- Various helper types

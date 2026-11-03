@@ -176,8 +176,8 @@ spec_import env callers cis@(CIS fn _)
 
 canSpecImport :: DynFlags -> CoreId -> Maybe CoreExpr
 canSpecImport dflags fn
-  | isDataConId fn -- TODO: maybe ok to spec since all ours are workers?
-  = Nothing
+  -- | isDataConId fn -- TODO: maybe ok to spec since all ours are workers?
+  -- = Nothing
   | CoreUnfolding { uf_tmpl = rhs } <- unf
   , isAnyInlinePragma (idInlinePragma fn)
   = Just rhs

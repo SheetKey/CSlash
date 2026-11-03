@@ -24,6 +24,7 @@ import CSlash.Cs.Pass
 import CSlash.Types.Var.Class
 import CSlash.Types.Var.Id.Info
 
+import CSlash.Types.RepType
 import CSlash.Types.Name hiding (varName)
 import CSlash.Types.Unique
 import CSlash.Types.Unique.Supply
@@ -305,6 +306,9 @@ infixl 1 `setIdCallArity`
 setIdCallArity :: Id p -> Arity -> Id p
 setIdCallArity id arity = modifyIdInfo (`setCallArityInfo` arity) id
 
+idFunRepArity :: Id Zk -> RepArity
+idFunRepArity x = countFunRepArgs (idArity x) (varType x)
+
 isDeadEndId :: Id p -> Bool
 isDeadEndId id = isDeadEndSig (idDmdSig id)
 
@@ -376,6 +380,12 @@ setIdSpecialization id spec_info = modifyIdInfo (`setRuleInfo` spec_info) id
 -- CAF INFO
 idCafInfo :: Id p -> CafInfo
 idCafInfo = cafInfo . idInfo
+
+---------------------------------
+-- Lambda form info
+
+idLFInfo_maybe :: Id p -> Maybe LambdaFormInfo
+idLFInfo_maybe = lfInfo . idInfo
 
 ---------------------------------
 -- Occurrence INFO

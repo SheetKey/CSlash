@@ -357,11 +357,13 @@ library
                     , CSlash.StgToPir
                     , CSlash.StgToPir.Bind
                     , CSlash.StgToPir.CgUtils
-                    , CSlash.StgToPir.Function
                     , CSlash.StgToPir.Config
                     , CSlash.StgToPir.Env
                     , CSlash.StgToPir.Expr
+                    , CSlash.StgToPir.Function
+                    , CSlash.StgToPir.Layout
                     , CSlash.StgToPir.Monad
+                    , CSlash.StgToPir.Prim
                     , CSlash.StgToPir.Sequel
                     , CSlash.StgToPir.Types
 

@@ -4,6 +4,7 @@
 module CSlash.StgToPir.Monad
   ( module CSlash.StgToPir.Monad
   , module CSlash.StgToPir.Sequel
+  , StgToPirConfig(..), CgState(..)
   ) where
 
 import CSlash.Cs.Pass
@@ -184,6 +185,12 @@ withSelfLoop self_loop code = do
   withFCodeState code (fstate { fcs_selfloop = Just self_loop })
 
 -- ----------------------------------------------------------------------------
+-- Get/set the end-of-block info
+
+getSequel :: FCode Sequel
+getSequel = fcs_sequel <$> getFCodeState
+
+-- ----------------------------------------------------------------------------
 -- Config related helpers
 
 getStgToPirConfig :: FCode StgToPirConfig
@@ -230,6 +237,19 @@ getCodeScoped fcode = do
 
 -- ----------------------------------------------------------------------------
 -- Combinators for emitting code
+
+emitCgStmt :: CgStmt -> FCode ()
+emitCgStmt stmt = do
+  state <- getState
+  setState $ state { cgs_stmts = cgs_stmts state `snocOL` stmt }
+
+emitAssign :: LocalReg -> PirExpr -> FCode ()
+emitAssign l r = emitCgStmt (CgStmt (PirAssign l r))
+
+emit :: PirAGraph -> FCode ()
+emit ag = do
+  state <- getState
+  setState $ state { cgs_stmts = cgs_stmts state <:> ag }
 
 emitProc :: PLabel -> [PirFormal] -> PirAGraph -> FCode ()
 emitProc lbl args blocks = do

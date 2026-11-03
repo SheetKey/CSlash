@@ -7,7 +7,10 @@
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE DataKinds #-}
 
-module CSlash.Stg.Syntax where
+module CSlash.Stg.Syntax
+  ( module CSlash.Stg.Syntax
+  , CoreType
+  ) where
 
 import Prelude hiding ((<>))
 
@@ -18,7 +21,7 @@ import CSlash.Stg.Lift.Types
 
 import CSlash.Core ( AltCon, CoreId, CoreType, CoreDataCon )
 import CSlash.Core.DataCon
-import CSlash.Core.TyCon ( PrimRep(..){-, PrimOrVoidRep(..)-}, TyCon )
+import CSlash.Core.TyCon ( PrimRep(..), PrimOrVoidRep(..), TyCon )
 import CSlash.Core.Type ( Type )
 import CSlash.Core.Ppr ({- instances -})
 
@@ -69,6 +72,9 @@ stgArgType (StgLitArg lit) = literalType lit
 
 stgArgRep :: StgArg -> [PrimRep]
 stgArgRep = typePrimRep . stgArgType
+
+stgArgRep1 :: StgArg -> PrimOrVoidRep
+stgArgRep1 = typePrimRep1 . stgArgType 
 
 stgArgRepU :: StgArg -> PrimRep
 stgArgRepU ty = typePrimRepU (stgArgType ty)
@@ -354,7 +360,7 @@ pprStgAlt opts indent GenStgAlt{ alt_con, alt_bndrs, alt_rhs }
                           , text "->" ]
 
 pprStgOp :: StgOp -> SDoc
-pprStgOp = panic "pprStgOp"
+pprStgOp (StgPrimOp op) = ppr op
 
 instance Outputable StgOp where
   ppr = pprStgOp

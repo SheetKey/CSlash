@@ -23,7 +23,7 @@ data LambdaFormInfo
   = LFReEntrant
     !TopLevelFlag
     !RepArity
-    !Bool
+    !Bool -- No fvs (always true for us?)
     -- !ArgDescr
   | LFConst
     !TopLevelFlag

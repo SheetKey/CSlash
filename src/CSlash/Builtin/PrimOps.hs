@@ -1,3 +1,4 @@
+{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module CSlash.Builtin.PrimOps where
@@ -13,7 +14,7 @@ import CSlash.Builtin.Types
 import CSlash.Builtin.Uniques (mkPrimOpIdUnique{-, mkPrimOpWrapperUnique-} )
 import CSlash.Builtin.Names ( cSLASH_PRIM )
 
--- import CSlash.Core.TyCon    ( isPrimTyCon, isUnboxedTupleTyCon, PrimRep(..) )
+import CSlash.Core.TyCon    ( isPrimTyCon, isTupleTyCon, PrimRep(..) )
 import CSlash.Core.Type
 import CSlash.Core.Kind
 
@@ -23,9 +24,10 @@ import CSlash.Types.Demand
 import CSlash.Types.Var.Id
 import CSlash.Types.Var.Id.Info
 import CSlash.Types.Var.Class
+import CSlash.Types.Var.Set
 import CSlash.Types.TyThing
-import CSlash.Types.Name
--- import GHC.Types.RepType ( tyConPrimRep )
+import CSlash.Types.Name hiding (varName)
+import CSlash.Types.RepType ( typePrimRep )
 import CSlash.Types.Basic
 import CSlash.Types.Fixity ( Fixity(..), FixityDirection(..) )
 import CSlash.Types.SrcLoc ( wiredInSrcSpan )
@@ -58,7 +60,7 @@ data PrimOp
   | IntToUInt Int Int
   | UIntToInt Int Int
   | UIntToUInt Int Int
-  deriving Eq
+  deriving (Eq, Show)
 
 allThePrimOps :: (Int, [(Int, PrimOp)])
 allThePrimOps =
@@ -86,6 +88,9 @@ instance Enum PrimOp where
 primOpTag :: PrimOp -> Int
 primOpTag = fromEnum
 
+instance Outputable PrimOp where
+  ppr op = pprPrimOp op
+
 data PrimOpInfo = PrimOpInfo
   PrimOpId
   PrimOpEffect
@@ -95,6 +100,7 @@ data PrimOpInfo = PrimOpInfo
   PrimOpWorkFree
   PrimOpCheap
   PrimOpFixity
+  PrimOpIdInfo
 
 type PrimOpId = Id Zk
 
@@ -149,22 +155,60 @@ primOpOkToDiscard op
 
 primOpIsWorkFree :: PrimOp -> Bool
 primOpIsWorkFree op = case primOpInfo op of
-  PrimOpInfo _ _ _ _ _ f _ _ -> f
+  PrimOpInfo _ _ _ _ _ f _ _ _ -> f
 
 primOpIsCheap :: PrimOp -> Bool
 primOpIsCheap op = case primOpInfo op of
-  PrimOpInfo _ _ _ _ _ _ c _ -> c
+  PrimOpInfo _ _ _ _ _ _ c _ _ -> c
 
 primOpEffect :: PrimOp -> PrimOpEffect
 primOpEffect op = case primOpInfo op of
-  PrimOpInfo _ e _ _ _ _ _ _ -> e
+  PrimOpInfo _ e _ _ _ _ _ _ _ -> e
 
 primOpImpl :: PrimOp -> PrimOpImpl
 primOpImpl op = case primOpInfo op of
-  PrimOpInfo _ _ i _ _ _ _ _ -> i
+  PrimOpInfo _ _ i _ _ _ _ _ _ -> i
+
+primOpIdInfo :: PrimOp -> PrimOpIdInfo
+primOpIdInfo op = case primOpInfo op of
+  PrimOpInfo _ _ _ _ _ _ _ _ i -> i
 
 primOpIsDiv :: PrimOp -> Bool
 primOpIsDiv op = panic "primOpIsDiv"
+
+{- *********************************************************************
+*                                                                      *
+               PrimOp types
+*                                                                      *
+********************************************************************* -}
+
+primOpResultType :: PrimOp -> Type Zk
+primOpResultType op = case primOpIdInfo op of
+  GenPrimOpIdInfo _ _ _ _ _ res -> res
+
+primOpOcc :: PrimOp -> OccName
+primOpOcc op = case primOpInfo op of
+  PrimOpInfo id _ _ _ _ _ _ _ _ -> nameOccName (varName id)
+
+data PrimOpResultInfo
+  = ReturnsVoid
+  | ReturnsPrim PrimRep
+  | ReturnsTuple
+  | ReturnsPoly
+
+getPrimOpResultInfo :: PrimOp -> PrimOpResultInfo
+getPrimOpResultInfo op = case primOpIdInfo op of
+  GenPrimOpIdInfo _ _ _ _ _ res
+    | Just tc <- tyConAppTyCon_maybe res
+    , isTupleTyCon tc -> ReturnsTuple
+    | case varsOfType res of
+        (tvs, _, _) -> not (isEmptyVarSet tvs)
+      ->  ReturnsPoly
+    | Just tc <- tyConAppTyCon_maybe res
+    , isPrimTyCon tc -> case typePrimRep res of
+                          [] -> ReturnsVoid
+                          [rep] -> ReturnsPrim rep
+                          _ -> pprPanic "getPrimOpResultInfo" (ppr op $$ ppr tc)
 
 -------------------------------------------------------------
 -- Cache of PrimOp Info and Ids
@@ -176,12 +220,12 @@ primOpInfos = listToArray (fst allThePrimOps) fst (mkPrimOpInfo . snd) (snd allT
 
 primOpIds :: SmallArray PrimOpId
 {-# NOINLINE primOpIds #-}
-primOpIds = mapSmallArray (\(PrimOpInfo id _ _ _ _ _ _ _) -> id) primOpInfos
+primOpIds = mapSmallArray (\(PrimOpInfo id _ _ _ _ _ _ _ _) -> id) primOpInfos
 
 mkPrimOpInfo :: PrimOp -> PrimOpInfo
 mkPrimOpInfo op = case op of
   -- IO
-  ReturnIO -> PrimOpInfo (mkPrimOpId op) NoEffect POI_Pir False 0 True True Nothing
+  ReturnIO -> PrimOpInfo (mkPrimOpId op) NoEffect POI_Pir False 0 True True Nothing (mkPrimOpIdInfo op)
 
   _ -> panic "primOpInfo"
 
@@ -231,3 +275,8 @@ mkPrimOpId prim_op = case mkPrimOpIdInfo prim_op of
   where
     mk_pred :: (MonoKind Zk, KiPredCon, MonoKind Zk) -> MonoKind Zk
     mk_pred (kl, pred, kr) = KiPredApp pred kl kr
+
+pprPrimOp :: IsLine doc => PrimOp -> doc
+pprPrimOp op = pprOccName (primOpOcc op)
+{-# SPECIALIZE pprPrimOp :: PrimOp -> SDoc #-}
+{-# SPECIALIZE pprPrimOp :: PrimOp -> HLine #-}

@@ -18,6 +18,7 @@ import CSlash.Data.OrdList
 -- import GHC.Runtime.Heap.Layout (ByteOff)
 import CSlash.Types.Unique.DSM
 import CSlash.Utils.Constants (debugIsOn)
+import CSlash.Utils.Outputable
 import CSlash.Utils.Panic
 
 -----------------------------------------------------------------------------
@@ -71,6 +72,9 @@ flattenPirAGraph id stmts_t =
 (<:>) :: PirAGraph -> PirAGraph -> PirAGraph
 (<:>) = appOL
 
+mkLast :: PirNode O C -> PirAGraph
+mkLast last = unitOL (CgLast last)
+
 labelAGraph :: BlockId -> PirAGraph -> DPirGraph
 labelAGraph lbl ag = flattenPirAGraph lbl ag
 
@@ -78,3 +82,45 @@ labelAGraph lbl ag = flattenPirAGraph lbl ag
 
 mkNop :: PirAGraph
 mkNop = nilOL
+
+---------- Control transfer
+
+mkJump :: Profile -> PirExpr -> [PirExpr] -> PirAGraph
+mkJump profile e actuals
+  = -- lastWithArgs profile Jump actuals $
+    toCall e Nothing actuals
+
+mkReturn :: Profile -> [PirExpr] -> PirAGraph
+mkReturn profile actuals
+  | [actual] <- actuals
+  = mkLast $ PirReturn (Just actual)
+  | [] <- actuals
+  = mkLast $ PirReturn Nothing
+  | otherwise
+  = pprPanic "mkReturn tuple" (pdoc (profilePlatform profile) actuals)
+
+-- data Transfer = Jump deriving Eq
+
+-- copyOutOflow
+--   :: Profile
+--   -> Transfer
+--   -> [PirExpr]
+--   -> ([], PirAGraph)
+-- copyOutOflow profile transfer actuals  = (regs, graph)
+--   where
+--     platform = profilePlatform profile
+--     (regs, graph) = foldr co ([], mkNop) (
+
+-- lastWithArgs
+--   :: Profile
+--   -> Transfer
+--   -> [PirExpr]
+--   -> ([] -> PirAGraph)
+--   -> PirAGraph
+-- lastWithArgs profile transfer actuals last =
+--   copies <:> last regs
+--   where
+--     (regs, copies) = copyOutOflow profile transfer actuals
+
+toCall :: PirExpr -> Maybe BlockId -> [PirExpr] -> PirAGraph
+toCall e cont args = mkLast $ PirCall e cont args

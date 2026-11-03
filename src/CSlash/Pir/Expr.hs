@@ -31,7 +31,13 @@ data PirExpr
 
   | PirReg {-# UNPACK #-} !LocalReg
 
-instance OutputableP Platform PirExpr
+instance Eq PirExpr -- where
+  -- PirLit l1 == PirLit l2 = l1 == l2
+  -- PirReg r1 == PirReg r2 == r1 == r2
+  -- _ == _ = False
+
+instance OutputableP Platform PirExpr where
+  pdoc = pprExpr
 
 data PirLit
   = PirLabel PLabel
@@ -39,3 +45,44 @@ data PirLit
 instance OutputableP Platform PirLit
 
 instance Outputable PirLit
+
+-- --------------------------------------------------------------------------
+-- Pretty-printing expressions
+-- --------------------------------------------------------------------------
+
+pprExpr :: Platform -> PirExpr -> SDoc
+pprExpr platform e = case e of
+  PirLit lit -> pprLit platform lit
+  _ -> pprExpr1 platform e
+
+pprExpr1 :: Platform -> PirExpr -> SDoc
+-- pprExpr1 platform (PirMachOp op [x, y])
+pprExpr1 platform e = pprExpr7 platform e
+
+pprExpr7 :: Platform -> PirExpr -> SDoc
+-- pprExpr7 platform (PirMachOp
+pprExpr7 platform e = pprExpr8 platform e
+
+pprExpr8 :: Platform -> PirExpr -> SDoc
+-- pprExpr8 platform (PirMachOp
+pprExpr8 platform e = pprExpr9 platform e
+
+pprExpr9 :: Platform -> PirExpr -> SDoc
+pprExpr9 platform e = case e of
+  PirLit lit -> pprLit1 platform lit
+  PirReg reg -> ppr reg
+
+-- --------------------------------------------------------------------------
+-- Pretty-printing literals
+--
+--  To minimise line noise we adopt the convention that if the literal
+--  has the natural machine word size, we do not append the type
+-- --------------------------------------------------------------------------
+
+pprLit :: Platform -> PirLit -> SDoc
+pprLit platform lit = case lit of
+  PirLabel plbl -> pdoc platform plbl
+
+pprLit1 :: Platform -> PirLit -> SDoc
+-- pprLit1 platfoorm lit@PirLabelOff{}
+pprLit1 platform lit = pprLit platform lit

@@ -14,7 +14,7 @@ import CSlash.Stg.Syntax
 import CSlash.Pir
 -- import CSlash.Pir.Utils
 import CSlash.StgToPir.Types
--- import GHC.StgToCmm.Sequel
+import CSlash.StgToPir.Sequel
 
 -- import GHC.Types.CostCentre
 import CSlash.Pir.BlockId
@@ -69,9 +69,17 @@ instance (Outputable a) => Outputable (NonVoid a) where
 nonVoidIds :: [Id Zk] -> [NonVoid (Id Zk)]
 nonVoidIds ids = [NonVoid id | id <- ids, not (isZeroBitTy (varType id))]
 
+nonVoidStgArgs :: [StgArg] -> [NonVoid StgArg]
+nonVoidStgArgs args = [NonVoid arg | arg <- args, not (null (stgArgRep arg))]
+
 ------------------------------------------------------
 --                Building LambdaFormInfo
 ------------------------------------------------------
+
+mkLFArgument :: Id Zk -> LambdaFormInfo
+mkLFArgument id
+  | mightBeFunTy (varType id) = LFUnknown True
+  | otherwise = LFUnknown False
 
 mkLFReEntrant
   :: TopLevelFlag
@@ -86,7 +94,15 @@ mkLFConst ty top is_join
     (vcat [ text "mkLFConst migh be fun ty"
           , text "ty" <+> ppr ty ]) $
     LFConst top is_join
-   
+
+importedIdLFInfo :: Id Zk -> LambdaFormInfo
+importedIdLFInfo id = case idLFInfo_maybe id of
+  Just lf_info -> lf_info
+  Nothing -> let arity = idFunRepArity id
+    in if arity > 0
+       then LFReEntrant TopLevel arity True
+       else assert (isNothing (isDataConId_maybe id)) $
+            mkLFArgument id
 
 -----------------------------------------------------------------------------
 --              Data types for function information
@@ -117,6 +133,51 @@ mkFunctionInfo profile id lf_info val_descr
   where
     prof = mkProfilingInfo profile id val_descr
     lbl = mkFunctionLabel (varName id) (idCafInfo id)
+
+-----------------------------------------------------------------------------
+--                getCallMethod
+-----------------------------------------------------------------------------
+
+data CallMethod
+  = ReturnIt
+  | DirectEntry PLabel RepArity
+
+instance Outputable CallMethod where
+  ppr ReturnIt = text "ReturnIt"
+  ppr DirectEntry{} = text "DirectEntry"
+
+getCallMethod
+  :: StgToPirConfig
+  -> Name
+  -> Id Zk
+  -> LambdaFormInfo
+  -> RepArity
+  -> CgLoc
+  -> Maybe SelfLoopInfo
+  -> CallMethod
+getCallMethod cfg _ id _ n_args _ (Just self_loop) = panic "getCallMethod 1"
+
+getCallMethod cfg name id (LFReEntrant _ arity _) n_args _ _ 
+  | n_args == 0
+    && not (profileIsProfiling (stgToPirProfile cfg))
+  = assert (arity /= 0) ReturnIt
+  | n_args < arity = panic "getCallMethod SlowCall"
+  | otherwise = DirectEntry (enterIdLabel (stgToPirPlatform cfg) name (idCafInfo id)) arity
+
+getCallMethod _ _ _ (LFCon _) n_args _ _ = panic "getCallMethod 3"
+
+getCallMethod cfg name id (LFConst _ is_join) n_args _ _ = panic "getCallMethod 4"
+
+getCallMethod cfg name id (LFUnknown might_be_a_function) n_args _ _ = panic "getCallMethod 5"
+
+--------------------------------------
+--   Label generation
+--------------------------------------
+
+enterIdLabel :: Platform -> Name -> CafInfo -> PLabel
+enterIdLabel platform id c
+  -- | platformTablesNextToCode platform = panic "mkInfoTableLabel id c"
+  | otherwise = mkEntryLabel id c
 
 --------------------------------------
 --   Profiling

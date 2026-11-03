@@ -18,6 +18,7 @@ data StgToPirConfig = StgToPirConfig
   , stgToPirTmpDir :: !TempDir
   , stgToPirContext :: !SDocContext
   , stgToPirEmitDebugInfo :: !Bool
+  , stgToPirMaxInlAllocSize :: !Int
   ------------------------------ Ticky Options ----------------------------------
   , stgToPirDoTicky :: !Bool
   ---------------------------------- Flags --------------------------------------

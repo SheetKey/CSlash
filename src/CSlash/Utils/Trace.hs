@@ -31,3 +31,10 @@ warnPprTraceM b s doc = withFrozenCallStack warnPprTrace b s doc (pure ())
 traceCallStackDoc :: HasCallStack => SDoc
 traceCallStackDoc = hang (text "Call stack:")
                          4 (vcat $ map text $ lines (prettyCallStack callStack))
+
+pprTraceUserWarning :: HasCallStack => SDoc -> a -> a
+pprTraceUserWarning msg x
+  | unsafeHasNoDebugOutput = x
+  | otherwise = pprDebugAndThen traceSDocContext trace (text "WARNING:")
+                (msg $$ withFrozenCallStack traceCallStackDoc)
+                x
