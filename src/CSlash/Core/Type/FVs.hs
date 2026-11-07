@@ -469,6 +469,21 @@ fvsOfType (KindCoercion kco) f bound_vars acc = fvsOfKiCo kco f bound_vars acc
 
 fvsOfType (Embed ki) f bound_vars acc = liftKiFV (fvsOfMonoKind ki) f bound_vars acc
 
+fvsOfType (LocalTyRow _ k) f bound_vars acc = liftKiFV (fvsOfMonoKind k) f bound_vars acc
+
+fvsOfType (SetRowsTy ty (Left rows)) f bound_vars acc
+  = (fvsOfType ty `unionFV` fvsOfSetRows rows)
+    f bound_vars acc
+
+fvsOfSetRows :: [SetRow p] -> TyFV p
+fvsOfSetRows [] fv_cand in_scope acc = emptyFV fv_cand in_scope acc
+fvsOfSetRows (r:rs) fv_cand in_scope acc
+  = (fvsOfSetRow r `unionFV` fvsOfSetRows rs) fv_cand in_scope acc
+
+fvsOfSetRow :: SetRow p -> TyFV p 
+fvsOfSetRow (SetRowVal {}) = panic "fvsOfSetRow rowval"
+fvsOfSetRow (SetRowTy _ ty) = fvsOfType ty
+
 fvsOfKiCo :: KindCoercion p -> TyFV p
 fvsOfKiCo (Refl ki) f bound_vars acc = liftKiFV (fvsOfMonoKind ki) f bound_vars acc
 fvsOfKiCo BI_U_A f bound_vars acc = acc
