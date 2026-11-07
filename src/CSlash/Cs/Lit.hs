@@ -1,3 +1,5 @@
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -9,14 +11,22 @@ module CSlash.Cs.Lit
   , module CSlash.Cs.Lit
   ) where
 
+import Prelude hiding ((<>))
+
+import {-# SOURCE #-} CSlash.Cs.Expr (pprExpr)
+
 import CSlash.Types.Basic
+import CSlash.Types.Name
 import CSlash.Types.SourceText
-import {-# SOURCE #-} CSlash.Core.Rep (Type)
+import CSlash.Types.Var.KiVar
+import {-# SOURCE #-} CSlash.Core.Rep (Type, KiCon)
 import CSlash.Utils.Outputable
 import CSlash.Cs.Extension
 import CSlash.Language.Syntax.Expr (CsExpr)
 import CSlash.Language.Syntax.Extension
 import CSlash.Language.Syntax.Lit
+
+import CSlash.Builtin.Types.Prim (fromIntegerKiCon)
 
 import CSlash.Utils.Panic
 
@@ -25,19 +35,21 @@ type instance XCsString (CsPass _) = SourceText
 type instance XCsInt (CsPass _) = NoExtField
 type instance XCsDouble (CsPass _) = NoExtField
 
-data OverLitRn = OverLitRn
-  { ol_from_fun :: LIdP Rn
-  }
-
 data OverLitP p = OverLitP
-  { ol_witness :: CsExpr p
+  { ol_proj :: Name
   , ol_type :: Type p
   }
 
 type instance XOverLit Ps = NoExtField
-type instance XOverLit Rn = OverLitRn
+type instance XOverLit Rn = NoExtField
 type instance XOverLit Tc = OverLitP Tc
 type instance XOverLit Zk = OverLitP Zk
+
+pprXOverLit :: OutputableBndrId p => CsPass p -> XOverLit (CsPass p) -> SDoc
+pprXOverLit Ps noExt = ppr noExt
+pprXOverLit Rn noExt = ppr noExt
+pprXOverLit Tc (OverLitP n t) = ppr t <> dot <> ppr n
+pprXOverLit Zk (OverLitP n t) = ppr t <> dot <> ppr n
 
 csOverLitNeedsParens :: PprPrec -> CsOverLit x -> Bool
 csOverLitNeedsParens p (OverLit { ol_val = olv }) = go olv
@@ -59,6 +71,11 @@ convertLit :: CsLit (CsPass p1) -> CsLit (CsPass p2)
 convertLit (CsChar a x) = CsChar a x
 convertLit _ = panic "convertLit"
 
+overLitFromKiCon :: OverLitVal -> ([KiVar Zk], KiCon Zk, Name)
+overLitFromKiCon CsIntegral{} = fromIntegerKiCon
+overLitFromKiCon CsFractional{} = panic "CsFractional kicon"
+overLitFromKiCon CsIsString{} = panic "CsIsString kicon"
+
 instance Outputable (CsLit (CsPass p)) where
   ppr (CsChar st c) = pprWithSourceText st (pprCsChar c)
   ppr (CsString st s) = pprWithSourceText st (pprCsString s)
@@ -66,4 +83,9 @@ instance Outputable (CsLit (CsPass p)) where
   ppr (CsDouble _ d) = ppr d
 
 instance OutputableBndrId p => Outputable (CsOverLit (CsPass p)) where
-  ppr = undefined
+  ppr (OverLit ext val) = ppr val <+> (whenPprDebug (parens (pprXOverLit (csPass @p) ext)))
+
+instance Outputable OverLitVal where
+  ppr (CsIntegral i) = pprWithSourceText (il_text i) (integer (il_value i))
+  ppr (CsFractional f) = ppr f
+  ppr (CsIsString st s) = pprWithSourceText st (pprCsString s)

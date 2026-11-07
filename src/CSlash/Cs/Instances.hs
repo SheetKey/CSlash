@@ -154,7 +154,6 @@ deriving instance Data (CsOverLit Rn)
 deriving instance Data (CsOverLit Tc)
 deriving instance Data (CsOverLit Zk)
 
-deriving instance Data OverLitRn
 deriving instance Data (OverLitP Tc) 
 deriving instance Data (OverLitP Zk)
 

@@ -37,6 +37,9 @@ data MonoKind p
 type role KindCoercion nominal
 data KindCoercion kv
 
+type role KiCon nominal
+data KiCon p
+
 data KindCoercionHole
 
 data FunKiFlag

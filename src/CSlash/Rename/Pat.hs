@@ -233,15 +233,13 @@ rnPatAndThen _ mk (LitPat x lit) = do
   return (LitPat x (convertLit lit))
 
 rnPatAndThen _ mk (NPat x (L l lit) mb_neg _) = do
-  (lit', mb_neg') <- liftCpsFV $ rnOverLit lit
+  lit' <- liftCpsFV $ rnOverLit lit
   mb_neg' <- let negative = do (neg, fvs) <- lookupSyntax negateName
                                return (Just neg, fvs)
                  positive = return (Nothing, emptyFVs)
-             in liftCpsFV $ case (mb_neg, mb_neg') of
-                              (Nothing, Just _) -> negative
-                              (Just _, Nothing) -> negative
-                              (Nothing, Nothing) -> positive
-                              (Just _, Just _) -> positive
+             in liftCpsFV $ case mb_neg of
+                              Just _ -> negative
+                              Nothing -> positive
   return (NPat x (L l lit') mb_neg' noSyntaxExpr)
 
 rnPatAndThen bindkvs mk (SigPat _ pat sig) = do
@@ -293,23 +291,17 @@ isNegativeZeroOverLit lit = case ol_val lit of
   CsFractional fl -> 0 == fl_signi fl && fl_neg fl
   _ -> False
 
-csOverLitName :: OverLitVal -> Name
-csOverLitName (CsIntegral {}) = panic "fromIntegerName"
-csOverLitName (CsFractional {}) = panic "fromRationalName"
-csOverLitName (CsIsString {}) = panic "fromStringName"
-
-rnOverLit :: forall t. CsOverLit t -> RnM ((CsOverLit Rn, Maybe (CsExpr Rn)), FreeVars)
+rnOverLit :: forall t. CsOverLit t -> RnM (CsOverLit Rn, FreeVars)
 rnOverLit origLit = do
   let lit :: CsOverLit t
       lit@(OverLit { ol_val = val }) = origLit { ol_val = generalizeOverLitVal (ol_val origLit) }
-      std_name = csOverLitName val
-  (from_thing_name, fvs1) <- lookupSyntaxName std_name
-  loc <- getSrcSpanM
-  let lit' = lit { ol_ext = OverLitRn { ol_from_fun = L (noAnnSrcSpan loc) from_thing_name } }
+
+      lit' = lit { ol_ext = noExtField }
 
   if isNegativeZeroOverLit lit'
-    then do (negate_name, fvs2) <- lookupSyntaxExpr negateName
-            return ( ( lit' { ol_val = negateOverLitVal val }
-                     , Just negate_name )
-                   , fvs1 `plusFV` fvs2 )
-    else return ((lit', Nothing), fvs1)
+    then -- do (negate_name, fvs2) <- lookupSyntaxExpr negateName
+         --    return ( ( lit' { ol_val = negateOverLitVal val }
+         --             , Just negate_name )
+         --           , fvs1 `plusFV` fvs2 )
+    panic "rnOverLit give better error message about -0 in source code"
+    else return (lit', emptyFVs)

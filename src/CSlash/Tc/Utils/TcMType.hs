@@ -377,6 +377,11 @@ isFilledMetaTyVar_maybe tv
 newFlexiTyVar :: MonoKind Tc -> TcM TcTyVar
 newFlexiTyVar kind = newAnonMetaTyVar TauVar kind
 
+newFlexiTyVarTy :: MonoKind Tc -> TcM (Type Tc)
+newFlexiTyVarTy kind = do
+  tv <- newFlexiTyVar kind
+  return $ mkTyVarTy $ TcTyVar tv
+
 newOpenFlexiTyVarTy :: TcM (Type Tc)
 newOpenFlexiTyVarTy = do
   tv <- newOpenFlexiTyVar

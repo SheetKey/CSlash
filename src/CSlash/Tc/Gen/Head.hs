@@ -16,6 +16,7 @@ import CSlash.Cs as Cs
 -- import CSlash.Cs.Syn.Type
 
 import CSlash.Tc.Gen.CsType
+import CSlash.Tc.Gen.CsKind
 -- import GHC.Tc.Gen.Bind( chooseInferredQuantifiers )
 import CSlash.Tc.Gen.Sig( tcUserTypeSig )
 import CSlash.Tc.Utils.Monad
@@ -62,7 +63,7 @@ import CSlash.Rename.Unbound (WhatLooking(WL_Anything))
 
 {- *********************************************************************
 *                                                                      *
-              HsExprArg: auxiliary data type
+              CsExprArg: auxiliary data type
 *                                                                      *
 ********************************************************************* -}
 
@@ -284,10 +285,15 @@ tcExprSig expr sig = do
 *                                                                      *
 ********************************************************************* -}
 
+-- Desugar "3" to (a.fromInteger (3 : Integer)) where
+-- "a" is a fresh tv with kind (kv.{ fromInteger : Integer -*> self })
 tcInferOverLit :: CsOverLit Rn -> TcM (CsExpr Tc, SigmaType Tc)
-tcInferOverLit lit@(OverLit { ol_val = val
-                            , ol_ext = OverLitRn { ol_from_fun = L loc from_name } })
-  = panic "tcInferOverLit"
+tcInferOverLit lit@(OverLit { ol_val = val }) = do
+  let (kvs, con, proj_name) = overLitFromKiCon val
+  kind <- tcInferKiCon_instantiate kvs con
+  ty_to_proj <- newFlexiTyVarTy kind
+  let lit' = lit { ol_ext = OverLitP proj_name ty_to_proj }
+  return (CsOverLit noExtField lit', ty_to_proj)
 
 {- *********************************************************************
 *                                                                      *

@@ -69,6 +69,9 @@ kvName = KvName
 tcName :: NameSpace
 tcName = TcName
 
+kcName :: NameSpace
+kcName = KcName
+
 dataName :: NameSpace
 dataName = DataName
 
@@ -226,6 +229,9 @@ mkTcOcc = mkOccName tcName
 
 mkTcOccFS :: FastString -> OccName
 mkTcOccFS = mkOccNameFS tcName
+
+mkKcOccFS :: FastString -> OccName
+mkKcOccFS = mkOccNameFS kcName
 
 mkUnknownOcc :: String -> OccName
 mkUnknownOcc = mkOccName UNKNOWN_NS

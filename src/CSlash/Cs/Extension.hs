@@ -74,3 +74,5 @@ pprIfTc :: forall p. IsPass p => (p ~ 'Typechecked => SDoc) -> SDoc
 pprIfTc pp = case csPass @p of Tc -> pp
                                _ -> empty
 
+instance Outputable NoExtField where
+  ppr _ = text "NoExtField"

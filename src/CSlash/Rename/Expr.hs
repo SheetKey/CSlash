@@ -76,10 +76,8 @@ rnExpr (CsRowProj _ ty nm) = do
   return (CsRowProj noExtField ty' nm, fvs)
 
 rnExpr (CsOverLit x lit) = do
-  ((lit', mb_neg), fvs) <- rnOverLit lit
-  case mb_neg of
-    Nothing -> return (CsOverLit x lit', fvs)
-    Just neg -> return (CsApp noExtField (noLocA neg) (noLocA (CsOverLit x lit')), fvs)
+  (lit', fvs) <- rnOverLit lit
+  return (CsOverLit x lit', fvs)
 
 rnExpr (CsLit x lit) = do
   rnLit lit

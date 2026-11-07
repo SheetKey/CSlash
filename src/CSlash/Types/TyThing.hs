@@ -24,6 +24,7 @@ data TyThing p
   | AConLike (ConLike p)
   | ATyCon (TyCon p)
   | AKiCon ([KiVar p], KiCon p)
+  | ARow
 
 -- Wire-in TyThing 
 type WITyThing = TyThing Zk
@@ -39,6 +40,12 @@ instance NamedThing (TyThing p) where
 
 mkATyCon :: TyCon p -> TyThing p
 mkATyCon = ATyCon
+
+mkAKiCon :: ([KiVar p], KiCon p) -> TyThing p
+mkAKiCon = AKiCon
+
+aRow :: TyThing p
+aRow = ARow
 
 mkAnId :: Id p -> TyThing p
 mkAnId = AnId

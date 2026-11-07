@@ -258,7 +258,7 @@ tc_cs_type rn_ty@(CsSetRowsTy _ base rows) exp_kind = do
   let full_kind = KiConApp $ KiCon Nothing base_ki rowsig
       ty = SetRowsTy base' (Left rows')
       subst_exp_kind = tcSubstTyRowsMonoKind ty_row_env exp_kind
-  traceTc "tc_cs_type CsSetRowsTy"
+  traceTc "tc_cs_type CsSetRowsTy" -- TODO: we probably aren't dealing with self properly
     $ vcat [ text "base'" <+> ppr base'
            , text "rows'" <+> ppr rows'
            , text "ty" <+> ppr ty

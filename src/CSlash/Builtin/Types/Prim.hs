@@ -3,7 +3,7 @@
 
 module CSlash.Builtin.Types.Prim where
 
-import {-# SOURCE #-} CSlash.Types.TyThing (mkATyCon)
+import {-# SOURCE #-} CSlash.Types.TyThing (mkATyCon, mkAKiCon, aRow)
 import {-# SOURCE #-} CSlash.Core.Type (buildSynTyCon, typeKind)
 import CSlash.Core.Rep
 import CSlash.Core.Kind
@@ -43,6 +43,25 @@ mkGenPrimTc built_in_syntax occ key tycon
                   key
                   (mkATyCon tycon)
                   built_in_syntax
+
+mkPrimKc :: FastString -> Unique -> (forall p. ([KiVar p], KiCon p)) -> Name
+mkPrimKc = mkGenPrimKc UserSyntax
+
+mkGenPrimKc :: BuiltInSyntax -> FastString -> Unique -> (forall p. ([KiVar p], KiCon p)) -> Name
+mkGenPrimKc built_in_syntax occ key kicon
+  = mkWiredInName cSLASH_PRIM
+    (mkKcOccFS occ)
+    key
+    (mkAKiCon kicon)
+    built_in_syntax
+
+mkPrimRow :: FastString -> FastString -> Unique -> Name
+mkPrimRow con row key
+  = mkWiredInName cSLASH_PRIM
+    (mkRowOccFS con row)
+    key
+    aRow
+    UserSyntax
 
 {- *********************************************************************
 *                                                                      *
@@ -271,3 +290,43 @@ ioTyCon
     kind = ForAllKi kva $
            ForAllKi kvb $
            Mono $ FunKi FKF_K_K (mkKiVarKi kva) (mkKiVarKi kvb)
+
+{- *********************************************************************
+*                                                                      *
+              OverLits
+*                                                                      *
+********************************************************************* -}
+
+first2 :: (a, b, c) -> (a, b)
+first2 (a, b, _) = (a, b)
+
+fromIntegerKiConName :: Name
+fromIntegerKiConName = mkPrimKc (fsLit "FromInteger") fromIntegerKiConKey (first2 fromIntegerKiCon)
+
+fromIntegerRowName :: Name
+fromIntegerRowName = mkPrimRow (fsLit "FromInteger") (fsLit "fromInteger") fromIntegerRowKey
+
+fromIntegerKiCon :: ([KiVar p], KiCon p, Name)
+fromIntegerKiCon =
+  let kv = mkTemplateKindVar
+
+      row_ty = FunTy (BIKi UKd)
+               (TyConApp integerTyCon [Embed (BIKi UKd)])
+               (LocalTyRow selfName (mkKiVarKi kv)) -- should be 'KiConApp fromIntegerKiCon'?
+
+      sig = RowTySig fromIntegerRowName row_ty
+
+      con = KiCon (Just fromIntegerKiConName) (mkKiVarKi kv) [sig]
+
+  in ([kv], con, fromIntegerRowName)
+
+integerTyConName :: Name
+integerTyConName = mkPrimTc (fsLit "Integer") integerTyConKey integerTyCon
+
+integerTyCon :: TyCon p
+integerTyCon = mkPrimTyCon integerTyConName kind arity
+  where
+    arity = 0
+
+    kv = mkTemplateKindVar
+    kind = ForAllKi kv $ Mono $ mkKiVarKi kv

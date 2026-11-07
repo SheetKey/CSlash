@@ -118,6 +118,9 @@ mkPrimOpIdUnique i = mkUniqueInt '9' (2 * i)
 mkWiredInMiscIdUnique :: Int -> Unique
 mkWiredInMiscIdUnique i = mkUniqueInt '0' i
 
+mkWiredInMiscRowUnique :: Int -> Unique
+mkWiredInMiscRowUnique i = mkUniqueInt '8' i
+
 mkBuiltinUnique :: Int -> Unique
 mkBuiltinUnique i = mkUniqueInt 'B' i
 
@@ -153,10 +156,24 @@ initExitJoinUnique = mkUnique 's' 0
 
 -- renamed from mkPreludeTyConUnique
 mkWiredInTyConUnique :: Int -> Unique
-mkWiredInTyConUnique i = mkUniqueInt '3' (2*i)
+mkWiredInTyConUnique i = mkUniqueInt '3' i
+
+mkWiredInKiConUnique :: Int -> Unique
+mkWiredInKiConUnique i = mkUniqueInt '5' i
 
 mkWiredInDataConUnique :: Int -> Unique
 mkWiredInDataConUnique i = mkUniqueInt '6' (3*i)
 
 dataConUnique :: Unique -> Unique
 dataConUnique u = incrUnique u
+
+-- Row ids. 
+
+fromIntegerRowKey :: Unique
+fromIntegerRowKey = mkWiredInMiscRowUnique 1
+
+fromIntegerKiConKey :: Unique
+fromIntegerKiConKey = mkWiredInKiConUnique 1
+
+integerTyConKey :: Unique
+integerTyConKey = mkWiredInTyConUnique 24
