@@ -87,9 +87,12 @@ writeMetaTyVarRef tyvar ref ty
                              $$ ppr tyvar $$ ppr ty $$ ppr zonked_ty
            kind_check_ok = zonked_ty_kind `eqKind` Mono zonked_tv_kind
            kind_msg = hang (text "Ill-kinded update to meta tyvar")
-                           2 (ppr tyvar <+> colon <+> (ppr tv_kind $$ ppr zonked_tv_kind)
-                              <+> text ":="
-                              <+> ppr ty <+> colon <+> (ppr zonked_ty_kind))
+                           2 $ vcat [ ppr tyvar <+> colon
+                                    , (ppr tv_kind)
+                                    , text "zonked:" <+> ppr zonked_tv_kind
+                                    , text ":="
+                                    , ppr ty <+> colon
+                                    , ppr zonked_ty_kind ]
        traceZonk "writeMetaTyVar" (ppr tyvar <+> text ":=" <+> ppr ty)
 
        massertPpr (isFlexi meta_details) (double_upd_msg meta_details)
