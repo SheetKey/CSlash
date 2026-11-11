@@ -20,6 +20,7 @@ import CSlash.Types.Var.Set
 import CSlash.Utils.Outputable
 import CSlash.Utils.Misc
 import CSlash.Utils.Panic
+import CSlash.Utils.Trace
 import CSlash.Data.Pair
 import CSlash.Data.Maybe
 
@@ -148,12 +149,19 @@ inline_generic_eq_type_x syn_flag mb_env
                 Nothing -> generic_eq_type_x syn_flag (Just (initRnEnv t1 t2)) t1 t2
                 Just env
                   | vis1 == vis2
-                    -> eqMonoKind (varKind tv1) (varKind tv2)
+                    -> generic_eq_mono_kind_x mb_env (varKind tv1) (varKind tv2)
                        && generic_eq_type_x syn_flag (Just (rnTvBndr2 env tv1 tv2)) body1 body2
                   | otherwise
-                    -> False
+                    -> pprTrace "non-equal vis" (ppr vis1 $$ ppr vis2) False
 
-         _ -> False
+         (LocalTyRow n1 k1, LocalTyRow n2 k2)
+           | n1 == n2
+             -> generic_eq_mono_kind_x mb_env k1 k2
+
+         (Embed k1, Embed k2) -> generic_eq_mono_kind_x mb_env k1 k2
+
+         -- TODO: Handle other cases!
+         other -> pprTrace "eq_type_x False" (ppr other) False
 
 {-# INLINE inline_generic_eq_kind_x #-}
 inline_generic_eq_kind_x
@@ -167,7 +175,7 @@ inline_generic_eq_kind_x mb_env = \k1 k2 -> k1 `seq` k2 `seq`
          -> case mb_env of
               Nothing -> generic_eq_kind_x (Just (initKvRnEnv k1 k2)) k1 k2
               Just env -> generic_eq_kind_x (Just (rnKvBndr2 env kv1 kv2)) body1 body2
-       _ -> False
+       other -> pprTrace "eq_kind_x False" (ppr other) False
 
 {-# NOINLINE generic_eq_mono_kind_x #-}
 generic_eq_mono_kind_x
@@ -185,8 +193,6 @@ inline_generic_eq_mono_kind_x mb_env = \k1 k2 -> k1 `seq` k2 `seq`
        (KiPredApp p1 ka1 kb1, KiPredApp p2 ka2 kb2)
          | p1 == p2
            -> go ka1 ka2 && go kb1 kb2
-         | otherwise
-           -> False
 
        (BIKi k1, BIKi k2) -> k1 == k2
            
@@ -204,11 +210,11 @@ inline_generic_eq_mono_kind_x mb_env = \k1 k2 -> k1 `seq` k2 `seq`
                (k2, env2) = flattenKiCon kc2
          , go k1 k2
            -> let (leftover1, leftover2, zipped) = zipRowSigEnvs env1 env2
-              in if not (isEmptyRowEnv env1 && isEmptyRowEnv env2)
-                 then False
+              in if not (isEmptyRowEnv leftover1 && isEmptyRowEnv leftover2)
+                 then pprTrace "kiconapp leftover rows" (ppr leftover1 $$ ppr leftover2) False
                  else nonDetFoldRowEnv (\pair b -> b && eq_row_sig mb_env pair) True zipped
 
-       _ -> False
+       other -> pprTrace "eq_mono_kind_x False" (ppr other) False
 
 eq_row_sig :: HasPass p pass => Maybe (EqEnv p) -> (RowSig p, RowSig p) -> Bool
 eq_row_sig env (RowTySig _ t1, RowTySig _ t2) = generic_eq_type_x ExpandSynonyms env t1 t2
