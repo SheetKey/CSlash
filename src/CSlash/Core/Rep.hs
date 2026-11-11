@@ -850,7 +850,8 @@ debug_ppr_ty _ (Embed ki) = ppr ki
 
 debug_ppr_ty _ (KindCoercion co) = text "[KiCo]" <+> (ppr co)
 
-debug_ppr_ty _ (LocalTyRow nm _) = ppr nm
+debug_ppr_ty prec (LocalTyRow nm ki) = maybeParen prec appPrec $
+  ppr nm <+> colon <+> ppr ki
 
 debug_ppr_ty _ (SetRowsTy base (Left rows))
   = ppr base <+> dot <> braces
