@@ -71,7 +71,6 @@ library
                     , CSlash.Core.Folder
                     , CSlash.Core.FVs
                     , CSlash.Core.Kind
-                    , CSlash.Core.Kind.Compare
                     , CSlash.Core.Kind.FVs
                     , CSlash.Core.Lint
                     , CSlash.Core.Make

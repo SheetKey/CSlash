@@ -14,7 +14,7 @@ import CSlash.Core.TyCon
 import CSlash.Core.DataCon
 import CSlash.Core.Type
 import CSlash.Core.Kind
-import CSlash.Core.Kind.Compare
+import CSlash.Core.Type.Compare
 import CSlash.Builtin.Types
 import CSlash.Core.ConLike
 import CSlash.Types.Unique.Set

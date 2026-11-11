@@ -11,7 +11,7 @@ import Prelude hiding ((<>))
 
 import {-# SOURCE #-} CSlash.Core.Rep (Type, Kind(Mono), MonoKind, mkNakedTyConTy, splitNPiTys)
 import {-# SOURCE #-} CSlash.Core.DataCon (DataCon, dataConFullSig, dataConArity)
-import {-# SOURCE #-} CSlash.Core.Kind.Compare (tcEqKind)
+-- import {-# SOURCE #-} CSlash.Core.Type.Compare (tcEqKind)
 
 import CSlash.Cs.Pass
 

@@ -18,7 +18,6 @@ import CSlash.Core.Type.Compare
 import CSlash.Core.Type.FVs
 import CSlash.Core.TyCon
 import CSlash.Core.Kind
-import CSlash.Core.Kind.Compare
 import CSlash.Core.Kind.FVs
 import CSlash.Core.Subst
 import CSlash.Utils.FV( FV, fvVarAcc )

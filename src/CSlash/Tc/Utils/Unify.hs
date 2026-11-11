@@ -23,13 +23,12 @@ import CSlash.Tc.Types.BasicTypes
 import CSlash.Tc.Zonk.TcType
 
 import CSlash.Core.Type
-import CSlash.Core.Type.Compare (tcEqType)
+import CSlash.Core.Type.Compare 
 import CSlash.Core.Type.FVs
 import CSlash.Core.TyCon
 -- import GHC.Core.Coercion
 import CSlash.Core.Kind
 import CSlash.Core.Kind.FVs
-import CSlash.Core.Kind.Compare (tcEqKind, tcEqMonoKind)
 import CSlash.Core.Reduction
 
 import CSlash.Builtin.Types

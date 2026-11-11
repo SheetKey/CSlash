@@ -20,7 +20,7 @@ module CSlash.Core.Kind
 import Prelude hiding ((<>))
 
 import {-# SOURCE #-} CSlash.Types.Var
-import {-# SOURCE #-} CSlash.Core.Kind.Compare (eqMonoKind)
+import {-# SOURCE #-} CSlash.Core.Type.Compare (eqMonoKind)
 
 import CSlash.Core.Rep
 import {-# SOURCE #-} CSlash.Core.Mapper
@@ -98,12 +98,16 @@ mkRowSigEnvFromSig rows
     mkPair r@(RowTySig nm _) = (setOccNameSpace (RowName (fsLit "")) (nameOccName nm), r)
     mkPair r@(RowKiSig nm _) = (setOccNameSpace (TcRowName (fsLit "")) (nameOccName nm), r)
 
+-- Could probably defined a more performant version directly using 'mergeA' from Word64Map
 zipRowSigEnvs :: RowSigEnv p -> RowSigEnv p -> (RowSigEnv p, RowSigEnv p, ZipRowSigEnv p)
 zipRowSigEnvs (RowEnv a) (RowEnv b) =
   let l = a `minusOccEnv` b
       r = b `minusOccEnv` a
       z = intersectOccEnv_C (,) a b
   in (RowEnv l, RowEnv r, RowEnv z)
+
+nonDetFoldRowEnv :: (a -> b -> b) -> b -> RowEnv' a -> b
+nonDetFoldRowEnv f b0 (RowEnv env) = nonDetFoldOccEnv f b0 env
 
 lookupRowEnv :: RowEnv' a -> Name -> Maybe a
 lookupRowEnv env nm =

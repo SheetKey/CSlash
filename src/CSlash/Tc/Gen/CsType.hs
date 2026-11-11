@@ -31,7 +31,7 @@ import CSlash.Tc.Zonk.TcType
 import CSlash.Core.Type
 import CSlash.Core.Type.FVs
 import CSlash.Core.Kind
-import CSlash.Core.Kind.Compare
+import CSlash.Core.Type.Compare
 import CSlash.Core.Subst
 import CSlash.Core.Kind.FVs
 

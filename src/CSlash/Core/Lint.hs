@@ -25,9 +25,8 @@ import CSlash.Core.Ppr
 import CSlash.Core.Type as Type
 import CSlash.Core.Predicate( isTyCoVarType )
 import CSlash.Core.Kind
-import CSlash.Core.Kind.Compare
 import CSlash.Core.UsageEnv
-import CSlash.Core.Type.Compare ( eqType{-, eqTypes, eqTypeIgnoringMultiplicity, eqForAllVis-} )
+import CSlash.Core.Type.Compare
 import CSlash.Core.Subst
 import CSlash.Core.Type.FVs
 import CSlash.Core.TyCon as TyCon

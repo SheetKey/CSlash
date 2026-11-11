@@ -23,7 +23,7 @@ import CSlash.Core.Ppr
 import {-# SOURCE #-} CSlash.Core.Ppr ()
 import CSlash.Core.Type
 import CSlash.Core.Kind
-import CSlash.Core.Kind.Compare
+import CSlash.Core.Type.Compare
 
 import CSlash.Core.TyCon
 import CSlash.Core.Kind.FVs

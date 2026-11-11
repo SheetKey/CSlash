@@ -34,7 +34,6 @@ import CSlash.Core.Type
 import CSlash.Core.Type.FVs
 import CSlash.Core.Kind
 import CSlash.Core.Kind.FVs
-import CSlash.Core.Kind.Compare
 -- import GHC.Core.Coercion
 import CSlash.Core.Predicate
 

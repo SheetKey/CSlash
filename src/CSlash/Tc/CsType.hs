@@ -46,7 +46,7 @@ import CSlash.Builtin.Names (selfName)
 -- import GHC.Core.Coercion
 import CSlash.Core.Type
 import CSlash.Core.Kind
-import CSlash.Core.Kind.Compare
+import CSlash.Core.Type.Compare
 -- import GHC.Core.Class
 -- import GHC.Core.Coercion.Axiom
 import CSlash.Core.TyCon

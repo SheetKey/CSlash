@@ -13,7 +13,7 @@ import CSlash.Core.Type.Compare
 import CSlash.Core.Type.FVs
 -- import CSlash.Core.Subst
 import CSlash.Core.Kind
-import CSlash.Core.Kind.Compare
+import CSlash.Core.Type.Compare
 import CSlash.Core.Kind.FVs
 import CSlash.Types.Var
 import CSlash.Types.Var.Set

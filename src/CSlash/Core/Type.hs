@@ -49,7 +49,7 @@ import CSlash.Core.Rep
 import CSlash.Core.Type.FVs
 
 import CSlash.Core.Kind
-import CSlash.Core.Kind.Compare
+import {-# SOURCE #-} CSlash.Core.Type.Compare
 -- import CSlash.Core.Kind.FVs
 
 import CSlash.Types.Var.TyVar

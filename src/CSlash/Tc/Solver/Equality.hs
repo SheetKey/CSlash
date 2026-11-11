@@ -24,7 +24,6 @@ import CSlash.Core.Type.Compare
 import CSlash.Core.Type.FVs
 import CSlash.Core.Subst
 import CSlash.Core.Kind
-import CSlash.Core.Kind.Compare
 import CSlash.Core.Predicate
 -- import GHC.Core.Class
 import CSlash.Core.DataCon ( dataConName )

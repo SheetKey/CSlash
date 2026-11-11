@@ -51,7 +51,7 @@ import CSlash.Core.Type.FVs
 import CSlash.Core.Type.Tidy
 import CSlash.Core.Kind
 import CSlash.Core.Kind.FVs
-import CSlash.Core.Kind.Compare
+import CSlash.Core.Type.Compare
 -- import GHC.Core.Coercion
 -- import GHC.Core.InstEnv
 import CSlash.Core.TyCon

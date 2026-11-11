@@ -25,7 +25,7 @@ import CSlash.Tc.Types.BasicTypes
 -- import CSlash.Core( hasSomeUnfolding )
 import CSlash.Core.Type ( typeKind )
 import CSlash.Core.Kind
-import CSlash.Core.Kind.Compare (eqMonoKind)
+import CSlash.Core.Type.Compare (eqMonoKind)
 
 import CSlash.Types.Var ( TyVar, varKind, varName, binderVars )
 import CSlash.Types.Var.Id  ( Id, mkLocalId )
