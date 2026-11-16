@@ -14,7 +14,7 @@ import CSlash.Core.Kind.FVs (varsOfKindList, varsOfMonoKindList, varsOfMonoKinds
 import CSlash.Types.Name hiding (varName)
 import CSlash.Types.Var
 import CSlash.Types.Var.Env
-import CSlash.Utils.Misc (strictMap)
+import CSlash.Utils.Misc
 import CSlash.Utils.Trace
 import CSlash.Utils.Outputable
 import CSlash.Utils.Panic
@@ -60,8 +60,8 @@ tidyKiVarBndr tidy_env@(occ_env, tsubst, kcsubst, subst) var
 tidyTyVarBndrs :: TidyEnv p -> [TyVar p] -> (TidyEnv p, [TyVar p])
 tidyTyVarBndrs env tvs = mapAccumL tidyTyVarBndr (avoidNameClashes tvs env) tvs
 
-tidyKKiCoVarBndrs :: TidyEnv p -> [KiCoVar p] -> (TidyEnv p, [KiCoVar p])
-tidyKKiCoVarBndrs env kcvs = mapAccumL tidyKiCoVarBndr (avoidNameClashes kcvs env) kcvs
+tidyKiCoVarBndrs :: TidyEnv p -> [KiCoVar p] -> (TidyEnv p, [KiCoVar p])
+tidyKiCoVarBndrs env kcvs = mapAccumL tidyKiCoVarBndr (avoidNameClashes kcvs env) kcvs
 
 tidyKiVarBndrs :: TidyEnv p -> [KiVar p] -> (TidyEnv p, [KiVar p])
 tidyKiVarBndrs tidy_env vs = mapAccumL tidyKiVarBndr (avoidNameClashes vs tidy_env) vs
@@ -107,6 +107,11 @@ tidyFreeTyVarX :: TidyEnv p -> TyVar p -> (TidyEnv p, TyVar p)
 tidyFreeTyVarX env@(_, subst, _, _) tv = case lookupVarEnv subst tv of
                                         Just tyvar' -> (env, tyvar')
                                         Nothing -> tidyTyVarBndr env tv
+
+tidyTyVarOcc :: TidyEnv p -> TyVar p -> TyVar p
+tidyTyVarOcc env@(_, subst, _, _) tv = case lookupVarEnv subst tv of
+  Just tv' -> tv'
+  Nothing -> updateVarKind (tidyMonoKind env) tv
 
 tidyTcTyVarOcc :: TidyEnv Tc -> TcTyVar -> TcTyVar
 tidyTcTyVarOcc env@(_, subst, _, _) tv = case lookupVarEnv subst (TcTyVar tv) of
@@ -157,10 +162,106 @@ tidyKiVarOcc :: TidyEnv p -> KiVar p -> KiVar p
 tidyKiVarOcc env@(_, _, _, subst) v = case lookupVarEnv subst v of
                                         Nothing -> v
                                         Just v' -> v'
+
+tidyTcKiVarOcc :: TidyEnv Tc -> TcKiVar -> TcKiVar
+tidyTcKiVarOcc env@(_, _, _, subst) kv = case lookupVarEnv subst (TcKiVar kv) of
+  Just kv -> case kv of
+    TcKiVar tckv -> tckv
+    _ -> pprPanic "tidyTcKiVarOcc" (ppr env $$ ppr kv)
+  Nothing -> kv
+
 ----------------
+tidyTypes :: TidyEnv p -> [Type p] -> [Type p]
+tidyTypes env tys = strictMap (tidyType env) tys
 
 tidyType :: TidyEnv p -> Type p -> Type p
-tidyType _ ty = warnPprTrace True "tidyType" (text "NOT TIDYING THE TYPE") ty
+tidyType env (TyVarTy tv) = TyVarTy $! tidyTyVarOcc env tv
+tidyType _ t@(TyConApp _ []) = t
+tidyType env (TyConApp tycon tys) = TyConApp tycon $! tidyTypes env tys
+tidyType env (AppTy fun arg) = (AppTy $! (tidyType env fun)) $! (tidyType env arg)
+tidyType env (CastTy ty kco) = (CastTy $! tidyType env ty) $! (tidyKiCo env kco)
+tidyType env (KindCoercion kco) = KindCoercion $! tidyKiCo env kco
+tidyType env ty@(FunTy ki arg res)
+  = let !ki' = tidyMonoKind env ki
+        !arg' = tidyType env arg
+        !res' = tidyType env res
+    in FunTy ki' arg' res'
+tidyType env ty@ForAllTy{} = tidyForAllType env ty
+tidyType env ty@ForAllKiCo{} = tidyForAllType env ty
+tidyType env ty@BigTyLamTy{} = tidyForAllType env ty
+tidyType env ty@TyLamTy{} = tidyTyLamTy env ty
+tidyType env (Embed ki) = Embed $! tidyMonoKind env ki
+tidyType env other = warnPprTrace True "tidyType" (text "***************NOT TIDYING THE TYPE") other
+
+tidyForAllType :: TidyEnv p -> Type p -> Type p
+tidyForAllType env ty
+  = (mkBigLamTys' $! kvs') $!
+    (mkForAllKiCos' $! kcvs') $!
+    (mkForAllTys' $! (zip tvs' vis)) $!
+    tidyType body_env body_ty
+  where
+    (kvs, kcvs, tvs, vis, body_ty) = splitForAllBindersVis ty
+    (env1, kvs') = tidyKiVarBndrs env kvs
+    (env2, kcvs') = tidyKiCoVarBndrs env1 kcvs
+    (body_env, tvs') = tidyTyVarBndrs env2 tvs
+
+tidyTyLamTy :: TidyEnv p -> Type p -> Type p
+tidyTyLamTy env ty
+  = (mkTyLamTys' $! tvs') $! tidyType body_env body_ty
+  where
+    (tvs, body_ty) = splitTyLamTyBinders' ty
+    (body_env, tvs') = tidyTyVarBndrs env tvs
+
+splitTyLamTyBinders' :: Type p -> ([TyVar p], Type p)
+splitTyLamTyBinders' ty = go ty []
+  where
+    go (TyLamTy tv ty) tvs = go ty (tv:tvs)
+    go ty tvs = (reverse tvs, ty)
+
+splitForAllBindersVis :: Type p -> ([KiVar p], [KiCoVar p], [TyVar p], [ForAllFlag], Type p)
+splitForAllBindersVis ty
+  = let (kvs, ty1) = splitBigLamTyBinders' ty
+        (kcvs, ty2) = splitForAllKiCoVars' ty1
+        (tvs, vis, ty3) = splitForAllForAllTyBinders' ty2
+    in (kvs, kcvs, tvs, vis, ty3)
+
+splitBigLamTyBinders' :: Type p -> ([KiVar p], Type p)
+splitBigLamTyBinders' ty = go ty []
+  where
+    go (BigTyLamTy kv ty) kvs = (kv:kvs, ty)
+    go ty kvs = (reverse kvs, ty)
+
+splitForAllKiCoVars' :: Type p -> ([KiCoVar p], Type p)
+splitForAllKiCoVars' ty = go ty []
+  where
+    go (ForAllKiCo kcv ty) kcvs = (kcv:kcvs, ty)
+    go ty kcvs = (reverse kcvs, ty)
+
+splitForAllForAllTyBinders' :: Type p -> ([TyVar p], [ForAllFlag], Type p)
+splitForAllForAllTyBinders' ty = go ty [] []
+  where
+    go (ForAllTy (Bndr tv vis) ty) tvs viss = go ty (tv:tvs) (vis:viss)
+    go ty tvs viss = (reverse tvs, reverse viss, ty)
+
+mkTyLamTys' :: [TyVar p] -> Type p -> Type p
+mkTyLamTys' kvs ty = foldr strictMkTyLamTy ty kvs
+  where
+    strictMkTyLamTy tv ty = (TyLamTy $! tv) $! ty
+
+mkForAllTys' :: [(TyVar p, ForAllFlag)] -> Type p -> Type p
+mkForAllTys' tvvs ty = foldr strictMkForAllTy ty tvvs
+  where
+    strictMkForAllTy (tv, vis) ty = (ForAllTy $! ((Bndr $! tv) $! vis)) $! ty
+    
+mkForAllKiCos' :: [KiCoVar p] -> Type p -> Type p
+mkForAllKiCos' kvs ty = foldr strictMkForAllTy ty kvs
+  where
+    strictMkForAllTy kv ty = (ForAllKiCo $! kv) $! ty
+    
+mkBigLamTys' :: [KiVar p] -> Type p -> Type p
+mkBigLamTys' kvs ty = foldr strictMkForAllTy ty kvs
+  where
+    strictMkForAllTy kv ty = (BigTyLamTy $! kv) $! ty
 
 tidyKind :: TidyEnv p -> Kind p -> Kind p
 tidyKind env (Mono mki) = Mono $ tidyMonoKind env mki
