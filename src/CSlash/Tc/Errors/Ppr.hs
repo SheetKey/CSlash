@@ -659,19 +659,37 @@ pprArising ct_loc
 **********************************************************************-}
 
 tidySkolemInfoAnon :: TidyEnv Tc -> SkolemInfoAnon -> SkolemInfoAnon
-tidySkolemInfoAnon env (SigSkol cx ty kv_prs kcv_prs tv_prs) = panic "tidySigSkol env cx ty tv_prs"
+tidySkolemInfoAnon env (SigSkol cx ty kv_prs kcv_prs tv_prs)
+  = tidySigSkol env cx ty kv_prs kcv_prs tv_prs
 tidySkolemInfoAnon env (InferSkol ids) = InferSkol (mapSnd (tidyType env) ids)
 tidySkolemInfoAnon env (UnifyForAllSkol ty) = UnifyForAllSkol (tidyType env ty)
 tidySkolemInfoAnon _ info = info
 
-tidySigSkol :: TidyEnv Tc -> UserTypeCtxt -> Type Tc -> [(Name, TcTyVar)] -> SkolemInfoAnon
-tidySigSkol env cx ty tv_prs = panic "SigSkol cx (tidy_ty env ty) tv_prs'"
+tidySigSkol
+  :: TidyEnv Tc
+  -> UserTypeCtxt
+  -> Type Tc
+  -> [(Name, TcKiVar)]
+  -> [(Name, TcKiCoVar)]
+  -> [(Name, TcTyVar)]
+  -> SkolemInfoAnon
+tidySigSkol env cx ty kv_prs kcv_prs tv_prs = SigSkol cx (tidy_ty env ty) kv_prs' kcv_prs' tv_prs'
   where
+    kv_prs' = mapSnd (tidyTcKiVarOcc env) kv_prs
+    kcv_prs' = mapSnd (tidyTcKiCoVarOcc env) kcv_prs
     tv_prs' = mapSnd (tidyTcTyVarOcc env) tv_prs
     inst_env = mkNameEnv tv_prs'
+    kcinst_env = mkNameEnv kcv_prs'
+    kinst_env = mkNameEnv kv_prs'
 
     tidy_ty env (ForAllTy (Bndr tv vis) ty) = ForAllTy (Bndr tv' vis) (tidy_ty env' ty)
       where (env', tv') = tidy_tv_bndr env tv
+
+    tidy_ty env (ForAllKiCo kcv ty) = ForAllKiCo kcv' (tidy_ty env' ty)
+      where (env', kcv') = tidy_kcv_bndr env kcv
+
+    tidy_ty env (BigTyLamTy kv ty) = BigTyLamTy kv' (tidy_ty env' ty)
+      where (env', kv') = tidy_kv_bndr env kv
 
     tidy_ty env ty@(FunTy { ft_arg = arg, ft_res = res })
       = ty { ft_arg = tidyType env arg, ft_res = tidy_ty env res }
@@ -684,6 +702,20 @@ tidySigSkol env cx ty tv_prs = panic "SigSkol cx (tidy_ty env ty) tv_prs'"
       = ((occ_env, extendVarEnv subst tv (TcTyVar tv'), kcsubst, ksubst), TcTyVar tv')
       | otherwise
       = tidyTyVarBndr env tv
+
+    tidy_kcv_bndr :: TidyEnv Tc -> KiCoVar Tc -> (TidyEnv Tc, KiCoVar Tc)
+    tidy_kcv_bndr env@(occ_env, subst, kcsubst, ksubst) kcv
+      | Just kcv' <- lookupNameEnv kcinst_env (varName kcv)
+      = ((occ_env, subst, extendVarEnv kcsubst kcv (TcCoVar kcv'), ksubst), TcCoVar kcv')
+      | otherwise
+      = tidyKiCoVarBndr env kcv
+
+    tidy_kv_bndr :: TidyEnv Tc -> KiVar Tc -> (TidyEnv Tc, KiVar Tc)
+    tidy_kv_bndr env@(occ_env, subst, kcsubst, ksubst) kv
+      | Just kv' <- lookupNameEnv kinst_env (varName kv)
+      = ((occ_env, subst, kcsubst, extendVarEnv ksubst kv (TcKiVar kv')), TcKiVar kv')
+      | otherwise
+      = tidyKiVarBndr env kv
 
 pprSkols :: SolverReportErrCtxt -> [(SkolemInfoAnon, [KiVar Tc])] -> SDoc
 pprSkols ctxt zonked_ki_vars
