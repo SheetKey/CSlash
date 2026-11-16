@@ -317,10 +317,14 @@ checkArgCounts (MG { mg_alts = L _ (match1:matches) })
 
 lambdaMatchNeedsConstraint :: MatchGroup Tc (LCsExpr Tc) -> [Bool]
 lambdaMatchNeedsConstraint MG { mg_alts = L _ [L _ Match { m_pats = L _ pats }] }
-  = go <$> pats
+  = (go . unLoc) <$> pats
   where
-    go (L _ WildPat {}) = False
-    go (L _ (ParPat _ p)) = go p
-    go (L _ (SigPat _ p _)) = go p
+    go :: Pat Tc -> Bool
+    go (WildPat {}) = False
+    go (ParPat _ p) = go (unLoc p)
+    go (SigPat _ p _) = go (unLoc p)
+    go (XPat (CoPat _ p _)) = go p
+    go (XPat (ExpansionPat _ p)) = go p
+    go (XPat (TyPat{})) = False
     go _ = True
 lambdaMatchNeedsConstraint _ = panic "lambdaMatchNeedsConstraint"
