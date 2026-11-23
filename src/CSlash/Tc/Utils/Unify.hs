@@ -1046,6 +1046,12 @@ uKind env kc orig_ki1 orig_ki2 = do
            traceTc "base_co" (ppr ki1 $$ ppr ki2 $$ ppr base_co)
            return $ mkKiRowCo base_co row_cos
 
+    -- -- Its ok to drop actual rows if the expected kind doesn't have rows.
+    -- go (KiConApp kc1) k2 = do
+    --   let (k1, _) = flattenKiCon kc1
+    --   traceTc "go KiConApp k2 dropping actual rows" (ppr kc1 $$ ppr kc $$ ppr k2)
+    --   go k1 k2
+
     go k1@(KiPredApp p1 ka1 kb1) k2@(KiPredApp p2 ka2 kb2) 
       | p1 == p2
       , EQKi <- kc -- TODO: maybe this should be an assert

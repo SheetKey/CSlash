@@ -16,6 +16,7 @@ import CSlash.Core.ConLike ( ConLike(..) )
 import CSlash.Core.DataCon
 -- import GHC.Core.Class
 import CSlash.Core.TyCon
+import CSlash.Core.Kind
 
 import CSlash.Types.Avail
 import CSlash.Types.Var (TyVar, KiVar, varName)
@@ -36,6 +37,7 @@ import CSlash.Utils.Constants (debugIsOn)
 import CSlash.Unit.Module.ModIface (IfaceExport)
 
 import CSlash.Data.List.SetOps
+import qualified Data.List.NonEmpty as NE
 
 import Control.Applicative ((<|>))
 import Data.List        ( find )
@@ -55,6 +57,7 @@ knownKeyNames
     all_names =
       concat [ concatMap wired_tycon_kk_names primTyCons
              , concatMap wired_tycon_kk_names wiredInTyCons
+             , concatMap wired_kicon_kk_names primKiCons
              , map varName wiredInIds
              , map varName allThePrimOpIds
              , basicKnownKeyNames
@@ -63,11 +66,16 @@ knownKeyNames
     wired_tycon_kk_names tc = tyConName tc : implicits
       where implicits = concatMap thing_kk_names (implicitTyConThings tc)
 
+    wired_kicon_kk_names :: ([KiVar Zk], KiCon Zk) -> [Name]
+    wired_kicon_kk_names (_, kc) = kiConName kc : rows
+      where rows = NE.toList $ kiConRowNames kc
+
     wired_datacon_kk_names :: DataCon Zk -> [Name]
     wired_datacon_kk_names dc = [dataConName dc]
 
     thing_kk_names :: TyThing Zk -> [Name]
     thing_kk_names (ATyCon tc) = wired_tycon_kk_names tc
+    thing_kk_names (AKiCon kc) = wired_kicon_kk_names kc
     thing_kk_names (AConLike (RealDataCon dc)) = wired_datacon_kk_names dc
     thing_kk_names thing = [getName thing]
 
@@ -136,6 +144,10 @@ cslBuiltInExports
   = [ AvailTC n [n]
     | tc <- builtInPrimTyCons
     , let n = tyConName tc ] ++
+    [ AvailKC n (n:rows)
+    | (_, kc) <- builtInPrimKiCons
+    , let n = kiConName kc
+          rows = NE.toList (kiConRowNames kc) ] ++
     [ AvailTC n (n : (dataConName <$> tyConDataCons tc))
     | tc <- wiredInTyCons
     , let n = tyConName tc ]

@@ -23,6 +23,7 @@ import qualified Data.Semigroup as S
 data AvailInfo
   = Avail Name
   | AvailTC Name [Name]
+  | AvailKC Name [Name]
   deriving Data
 
 type Avails = [AvailInfo]
@@ -31,11 +32,17 @@ availExportsDecl :: AvailInfo -> Bool
 availExportsDecl (AvailTC ty_name names)
   | n : _ <- names = ty_name == n
   | otherwise = False
+availExportsDecl (AvailKC ki_name names)
+  | n : _ <- names = ki_name == n
+  | otherwise = False
 availExportsDecl _ = True
 
 availSubordinateNames :: AvailInfo -> [Name]
 availSubordinateNames (Avail{}) = []
 availSubordinateNames avail@(AvailTC _ ns)
+  | availExportsDecl avail = tail ns
+  | otherwise = ns
+availSubordinateNames avail@(AvailKC _ ns)
   | availExportsDecl avail = tail ns
   | otherwise = ns
 
@@ -49,10 +56,12 @@ availsToNameSet avails = foldr add emptyNameSet avails
 availName :: AvailInfo -> Name
 availName (Avail n) = n
 availName (AvailTC n _) = n
+availName (AvailKC n _) = n
 
 availNames :: AvailInfo -> [Name]
 availNames (Avail n) = [n]
 availNames (AvailTC _ cs) = cs
+availNames (AvailKC _ cs) = cs
 
 -- -----------------------------------------------------------------------------
 -- Printing
@@ -63,6 +72,7 @@ instance Outputable AvailInfo where
 pprAvail :: AvailInfo -> SDoc
 pprAvail (Avail n) = ppr n
 pprAvail (AvailTC n ns) = ppr n <> braces (pprWithCommas ppr ns)
+pprAvail (AvailKC n ns) = ppr n <> braces (pprWithCommas ppr ns)
 
 instance Binary AvailInfo where
   put_ bh (Avail aa) = do
@@ -72,10 +82,15 @@ instance Binary AvailInfo where
     putByte bh 1
     put_ bh ab
     put_ bh ac
+  put_ bh (AvailTC ab ac) = do
+    putByte bh 2
+    put_ bh ab
+    put_ bh ac
 
   get bh = do
     h <- getByte bh
     case h of
       0 -> Avail <$> get bh
       1 -> AvailTC <$> get bh <*> get bh
+      2 -> AvailKC <$> get bh <*> get bh
       _ -> panic "invalid byte"

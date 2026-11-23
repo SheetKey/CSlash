@@ -23,7 +23,7 @@ module CSlash.Types.Name
     pprFullName, pprTickyName,
 
     isSystemName, isInternalName, isExternalName,
-    isTyVarName, isKiVarName, isTyConName,
+    isTyVarName, isKiVarName, isTyConName, isKiConName,
     isDataConName,
     isValName, isVarName,
     -- isDynLinkName, isFieldName,
@@ -223,6 +223,9 @@ isKiVarName name = isKvOcc (nameOccName name)
 
 isTyConName :: Name -> Bool
 isTyConName name = isTcOcc (nameOccName name)
+
+isKiConName :: Name -> Bool
+isKiConName name = isKcOcc (nameOccName name)
 
 isDataConName :: Name -> Bool
 isDataConName name = isDataOcc (nameOccName name)

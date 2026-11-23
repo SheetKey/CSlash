@@ -82,7 +82,14 @@ primPrimTyCons = []
 -- PrimTyCons in CSL.BuiltIn
 builtInPrimTyCons :: [TyCon p]
 builtInPrimTyCons
-  = [ fUNTyCon, ioTyCon ]
+  = [ fUNTyCon, ioTyCon, integerTyCon ]
+
+primKiCons :: [([KiVar p], KiCon p)]
+primKiCons = builtInPrimKiCons
+
+builtInPrimKiCons :: [([KiVar p], KiCon p)]
+builtInPrimKiCons
+  = [ case fromIntegerKiCon of (a, b, _) -> (a, b) ]
 
 {- *********************************************************************
 *                                                                      *

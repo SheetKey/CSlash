@@ -908,7 +908,15 @@ can_ki_co_nc _ _ ev kc (FunKi f1 ki1a ki1b) (FunKi f2 ki2a ki2b)
   = canDecomposableFunKi ev kc f1 (ki1a, ki1b) (ki2a, ki2b)
 
 can_ki_co_nc _ _ ev kc (KiPredApp kc1 ka1 kb1) (KiPredApp kc2 ka2 kb2)
-  = panic "canKiConApp ev kc kc1 kis1 kc2 kis2" -- this souldn't really happen (need to refactor kind to prevent this)
+  = panic "canKiPredApp ev kc kc1 kis1 kc2 kis2" -- this souldn't really happen (need to refactor kind to prevent this)
+
+can_ki_co_nc _ _ ev kc (KiConApp kc1) (KiConApp kc2) = panic "can_ki_co_ns kiconapp"
+
+can_ki_co_nc False rdr_env ev kc (KiConApp kc1) ki2 = do
+  -- TODO: perhaps we want something like SelCo or LRCo, so we don't literally discard the rows and can properly reconstruct the types/kinds we want
+  let (ki1, _) = flattenKiCon kc1
+  traceTcS "can_ki_co_nc KiConApp no rhs" (ppr kc1 $$ ppr ki1 $$ ppr ki2)
+  can_ki_co_nc False rdr_env ev kc ki1 ki2
 
 ------------------
 -- Can't decompose

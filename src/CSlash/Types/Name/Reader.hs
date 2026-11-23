@@ -403,6 +403,8 @@ mkParent :: Name -> AvailInfo -> Parent
 mkParent _ (Avail _) = NoParent
 mkParent n (AvailTC m _) | n == m = NoParent
                          | otherwise = ParentIs m
+mkParent n (AvailKC m _) | n == m = NoParent
+                         | otherwise = ParentIs m
 
 greParent_maybe :: GlobalRdrEltX info -> Maybe Name
 greParent_maybe gre = case gre_par gre of
@@ -435,6 +437,9 @@ gresToAvailInfo gres = nonDetNameEnvElts avail_env
     comp gre (AvailTC m ns) = case gre_par gre of
       NoParent -> AvailTC m (greName gre : ns)
       ParentIs {} -> AvailTC m (insertChildIntoChildren m ns (greName gre))
+    comp gre (AvailKC m ns) = case gre_par gre of
+      NoParent -> AvailKC m (greName gre : ns)
+      ParentIs {} -> AvailKC m (insertChildIntoChildren m ns (greName gre))
 
     insertChildIntoChildren _ [] k = [k]
     insertChildIntoChildren p (n:ns) k
@@ -443,10 +448,15 @@ gresToAvailInfo gres = nonDetNameEnvElts avail_env
 
 availFromGRE :: GlobalRdrEltX info -> AvailInfo
 availFromGRE (GRE { gre_name = child, gre_par = parent }) = case parent of
-  ParentIs p -> AvailTC p [child]
+  ParentIs p
+    | isTyConName p -> AvailTC p [child]
+    | isKiConName p -> AvailKC p [child]
+    | otherwise -> panic "availFromGRE"
   NoParent
     | isTyConName child
       -> AvailTC child [child]
+    | isKiConName child
+      -> AvailKC child [child]
     | otherwise
       -> Avail child
 

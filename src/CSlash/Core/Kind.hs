@@ -55,6 +55,9 @@ import Data.Maybe (isJust)
 *                                                                       *
 ********************************************************************** -}
 
+rowSigNames :: [RowSig p] -> [Name]
+rowSigNames = map rowSigName
+
 type RowSigEnv p = RowEnv' (RowSig p)
 type ZipRowSigEnv p = RowEnv' (RowSig p, RowSig p)
 type TyRowEnv p = RowEnv' (Type p)
