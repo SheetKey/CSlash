@@ -221,10 +221,12 @@ zonk_mapper = CoreMapper
   , cm_lam_kv = \env kv k -> flip runZonkT env $ runZonkBndrT (zonkKiBndrX kv)
                                     $ \kv' -> ZonkT $ \env' -> (k env' kv')
   , cm_tycon = \tc -> zonkTcTyConToTyCon tc
-  , cm_set_val_row = \env (e, co_fn) ->
-      flip runZonkT env $ runZonkBndrT (zonkCoFn co_fn) $ \new_co_fn -> do
-        new_e <- zonkExpr e
-        return (new_e, new_co_fn)
+  , cm_set_val_row = \env e -> case e of
+      Left (e, co_fn) -> 
+        flip runZonkT env $ runZonkBndrT (zonkCoFn co_fn) $ \new_co_fn -> do
+          new_e <- zonkExpr e
+          return $ Right (new_e, new_co_fn)
+      Right stuff -> return $ Right stuff
   }
 
 zonkTcTyConToTyCon :: TyCon Tc -> TcM (TyCon Zk)

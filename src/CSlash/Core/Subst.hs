@@ -859,7 +859,9 @@ subst_ty @_ @pass @_ @pass' subst ty = go ty
       = case substKiCoVarBndr subst kcv of
           (subst', kcv') -> (ForAllKiCo $! kcv') $! (subst_ty subst' ty)
     go (SetRowsTy ty (Left rows))
-      = (SetRowsTy $! go ty) $! Left $! strictMap go_set_row rows
+      = assertPpr (isEmptyInScopeSet (id_in_scope subst) && isEmptyVarEnv (id_env subst))
+        (text "SetRowsTy Left id is" $$ ppr (id_in_scope subst) $$ ppr (id_env subst)) $
+        (SetRowsTy $! go ty) $! Left $! strictMap go_set_row rows
     go (SetRowsTy ty (Right rows))
       = (SetRowsTy $! go ty) $! Right $! strictMapRowEnv go_set_ds_row rows
     go (LocalTyRow nm ki) = (LocalTyRow $! nm) $! substMonoKi subst ki
@@ -867,7 +869,8 @@ subst_ty @_ @pass @_ @pass' subst ty = go ty
     go (CastTy ty kco) = (mkCastTy $! (go ty)) $! subst_kco subst kco
     go co@(KindCoercion kco) = KindCoercion $! subst_kco subst kco
 
-    go_set_row (SetRowVal name e ty) = panic "SetRowVal $! name "
+    go_set_row (SetRowValTc name (e, wrap) ty) = SetRowValTc name (e, wrap) $! go ty
+    go_set_row (SetRowValZk name (e, wrap) ty) = SetRowValZk name (e, wrap) $! go ty
     go_set_row (SetRowTy name ty) = (SetRowTy $! name) $! go ty
 
     go_set_ds_row it = case (it, csPass @pass, csPass @pass') of
@@ -952,7 +955,6 @@ lookupIdSubst_maybe Subst{ id_env = ids } v
 
 substTickish :: CoreSubst -> CoreTickish -> CoreTickish
 substTickish _ t@(CpcTick{}) = t
-
 
 {- *********************************************************************
 *                                                                      *

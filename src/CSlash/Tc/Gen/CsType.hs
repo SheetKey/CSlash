@@ -375,7 +375,7 @@ tcCheckSetRow (Just env) (RowTySig nm r_ty) (L loc (SetRow _ row_nm row_expr)) =
            , text "res:" <+> ppr res ]
 
   let wrap = wrap_gen <.> wrap_res
-      set_row = SetRowVal (unLoc row_nm) (unLoc res, wrap) ty
+      set_row = SetRowValTc (unLoc row_nm) (unLoc res, wrap) ty
       row_sig = RowTySig (unLoc row_nm) ty
 
   return (set_row, row_sig)

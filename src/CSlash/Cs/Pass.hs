@@ -30,6 +30,12 @@ data CsPass (c :: Pass) where
   Tc :: CsPass 'Typechecked
   Zk :: CsPass 'Zonked
 
+instance Outputable (CsPass (c :: Pass)) where
+  ppr Ps = text "Ps"
+  ppr Rn = text "Rn"
+  ppr Tc = text "Tc"
+  ppr Zk = text "Zk"
+
 instance Typeable p => Data (CsPass p) where
   gunfold _ _ _ = panic "instance Data CsPass"
   toConstr _ = panic "instance Data CsPass"

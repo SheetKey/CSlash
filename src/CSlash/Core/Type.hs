@@ -762,7 +762,8 @@ typeMonoKind (SetRowsTy base (Left rows))
 typeMonoKind (SetRowsTy base (Right _)) = panic "typeMonoKind Right row env"
 
 rowSigOfRow :: HasPass p pass => SetRow p -> RowSig p
-rowSigOfRow (SetRowVal nm _ ty) = RowTySig nm ty
+rowSigOfRow (SetRowValTc nm _ ty) = RowTySig nm ty
+rowSigOfRow (SetRowValZk nm _ ty) = RowTySig nm ty
 rowSigOfRow (SetRowTy nm ty) = RowKiSig nm (typeMonoKind ty)
 
 handle_non_mono :: Kind p -> (Kind p -> SDoc) -> MonoKind p

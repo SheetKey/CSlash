@@ -83,8 +83,14 @@ data Type p
 type CoreRowEnv = RowEnv' (Either (Type Zk) CoreExpr)
 
 data SetRow p where
-  SetRowVal
-    :: Name -> (CsExpr (CsPass p), CsWrapper (CsPass p)) -> (Type (CsPass p)) -> SetRow (CsPass p)
+  SetRowValTc
+    :: Name -> (CsExpr Tc, CsWrapper Tc) -> (Type p) -> SetRow p
+  SetRowValZk
+    :: Name -> (CsExpr Zk, CsWrapper Zk) -> (Type p) -> SetRow p
+    -- If the row is already zonked, no need to turn it back to Tc with a subst.
+    -- This happens with types frequently during type checking due to coreView
+    -- We won't do anything with a zonked row val until desugarer so this is more efficient and
+    -- easier!
   SetRowTy :: Name -> (Type p) -> SetRow p
 
 setRowTyPair :: SetRow p -> (Name, Type p)
@@ -863,7 +869,9 @@ debug_ppr_ty _ (SetRowsTy base (Right rows))
   = ppr base <+> dot <> braces (ppr rows)
 
 debug_ppr_set_row :: HasPass p pass => SetRow p -> SDoc
-debug_ppr_set_row (SetRowVal nm (expr, wrap) _)
+debug_ppr_set_row (SetRowValTc nm (expr, wrap) _)
+  = ppr nm <+> equals <+> pprCsWrapper wrap (const (pprExpr expr))
+debug_ppr_set_row (SetRowValZk nm (expr, wrap) _)
   = ppr nm <+> equals <+> pprCsWrapper wrap (const (pprExpr expr))
 debug_ppr_set_row (SetRowTy nm ty) = ppr nm <+> equals <+> ppr ty
 

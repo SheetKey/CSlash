@@ -3,6 +3,8 @@
 
 module CSlash.Core.Folder where
 
+import CSlash.Cs.Pass
+
 import CSlash.Core.Rep
 -- import CSlash.Core.Type
 -- import CSlash.Core.Kind
@@ -24,7 +26,7 @@ data CoreFolder p env a = CoreFolder
   , cf_tcv :: env -> TyCoVar p -> a
   , cf_thole :: env -> TypeCoercionHole -> a
   , cf_khole :: env -> KindCoercionHole -> a
-  , cf_set_val_row :: env -> (CsExpr p, CsWrapper p) -> a
+  , cf_set_val_row :: env -> Either (CsExpr Tc, CsWrapper Tc) (CsExpr Zk, CsWrapper Zk) -> a
   }
 
 {-# INLINE foldCore #-}
@@ -93,8 +95,10 @@ foldCore CoreFolder{..} env
     go_ty env (LocalTyRow nm ki) = go_mki env ki
     go_ty env (SetRowsTy ty rows) = go_ty env ty `mappend` go_set_rows env rows
 
-    go_set_row env (SetRowVal nm e ty) =
-      cf_set_val_row env e `mappend` go_ty env ty
+    go_set_row env (SetRowValTc nm e ty) =
+      cf_set_val_row env (Left e) `mappend` go_ty env ty
+    go_set_row env (SetRowValZk nm e ty) =
+      cf_set_val_row env (Right e) `mappend` go_ty env ty
     go_set_row env (SetRowTy _ ty) = go_ty env ty
 
     go_tco env (TyRefl ty) = go_ty env ty

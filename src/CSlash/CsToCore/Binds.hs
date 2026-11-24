@@ -241,6 +241,7 @@ dsSetRows = foldM go emptyRowEnv
   where
     go :: CoreRowEnv -> SetRow Zk -> DsM CoreRowEnv
     go !env (SetRowTy nm ty) = return $! extendRowEnv env nm (Left ty)
-    go !env (SetRowVal nm (e, co_fn) _) = dsCsWrapper co_fn $ \core_wrap -> do
+    go !_ SetRowValTc{} = panic "dsSetRows SetRowValTc"
+    go !env (SetRowValZk nm (e, co_fn) _) = dsCsWrapper co_fn $ \core_wrap -> do
       e' <- dsExpr e
       return $! extendRowEnv env nm (Right (core_wrap e'))

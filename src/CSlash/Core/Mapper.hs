@@ -32,7 +32,10 @@ data CoreMapper p p' env m = CoreMapper
   , cm_fa_kcv :: forall r. env -> KiCoVar p -> (env -> KiCoVar p' -> m r) -> m r
   , cm_fa_tv :: forall r. env -> TyVar p -> ForAllFlag -> (env -> TyVar p' -> m r) -> m r
   , cm_tycon :: TyCon p -> m (TyCon p')
-  , cm_set_val_row :: env -> (CsExpr p, CsWrapper p) -> m (CsExpr p', CsWrapper p')
+  , cm_set_val_row
+    :: env
+    -> Either (CsExpr Tc, CsWrapper Tc) (CsExpr Zk, CsWrapper Zk)
+    -> m (Either (CsExpr Tc, CsWrapper Tc) (CsExpr Zk, CsWrapper Zk))
   }
 
 {-# INLINE mapCore #-}
@@ -135,8 +138,17 @@ mapCoreX CoreMapper{..}
     go_ty !env (LocalTyRow nm ki) = LocalTyRow nm <$> go_mki env ki
     go_ty !env (SetRowsTy ty rs) = SetRowsTy <$> go_ty env ty <*> go_set_rows env rs
 
-    go_set_row !env (SetRowVal nm e_wrap ty) =
-      SetRowVal nm <$> cm_set_val_row env e_wrap <*> go_ty env ty -- look at zonkCoFn
+    go_set_row !env (SetRowValTc nm e_wrap ty) = do
+      thing <- cm_set_val_row env (Left e_wrap)
+      case thing of
+        Left e_wrap' -> SetRowValTc nm e_wrap' <$> go_ty env ty
+        Right e_wrap' -> SetRowValZk nm e_wrap' <$> go_ty env ty
+    go_set_row !env (SetRowValZk nm e_wrap ty) = do
+      thing <- cm_set_val_row env (Right e_wrap)
+      case thing of
+        Left e_wrap' -> SetRowValTc nm e_wrap' <$> go_ty env ty
+        Right e_wrap' -> SetRowValZk nm e_wrap' <$> go_ty env ty
+
     go_set_row !env (SetRowTy nm ty) = SetRowTy nm <$> go_ty env ty
 
     go_tco !env (TyRefl ty) = TyRefl <$> go_ty env ty

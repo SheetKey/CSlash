@@ -26,7 +26,10 @@ data CoreMapper p p' env (m :: * -> *) = CoreMapper
   , cm_fa_kcv :: forall r. env -> KiCoVar p -> (env -> KiCoVar p' -> m r) -> m r
   , cm_fa_tv :: forall r. env -> TyVar p -> ForAllFlag -> (env -> TyVar p' -> m r) -> m r
   , cm_tycon :: TyCon p -> m (TyCon p')
-  , cm_set_val_row :: env -> (CsExpr p, CsWrapper p) -> m (CsExpr p', CsWrapper p')
+  , cm_set_val_row
+    :: env
+    -> Either (CsExpr Tc, CsWrapper Tc) (CsExpr Zk, CsWrapper Zk)
+    -> m (Either (CsExpr Tc, CsWrapper Tc) (CsExpr Zk, CsWrapper Zk))
   }
 
 mapCore

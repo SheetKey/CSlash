@@ -139,7 +139,8 @@ synonymTyConsOfType ty = nonDetNameEnvElts (go ty)
 
     go_rows = foldr (plusNameEnv . go_row) emptyNameEnv
 
-    go_row (SetRowVal _ e ty) = emptyNameEnv -- TODO: could cause bugs
+    go_row (SetRowValTc _ e ty) = emptyNameEnv -- TODO: could cause bugs
+    go_row (SetRowValZk _ e ty) = emptyNameEnv -- TODO: could cause bugs
     go_row (SetRowTy _ ty) = go ty
 
 {- *********************************************************************

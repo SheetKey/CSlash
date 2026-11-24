@@ -761,13 +761,14 @@ collect_cand_qkvs_ty orig_ty cur_lvl (boundtvs, boundkcvs, boundkvs) dvs ty = go
       dv1 <- go_row dv r
       go_rows dv1 rs
 
-    go_row dv (SetRowVal _ (e, wrap) ty) = do
+    go_row dv (SetRowValTc _ (e, wrap) ty) = do
       traceTc "collect go_row SetVal"
         $ vcat [ text "expr" <+> ppr e
                , text "wrap" <+> ppr wrap
                , text "type" <+> ppr ty ]
       dv1 <- go_wrap dv wrap
       go_e dv1 e
+    go_row _ SetRowValZk{} = panic "collect_cand_qkvs_ty SetRowZk"
     go_row dv (SetRowTy _ ty) = go dv ty
 
     go_wrap dv WpHole = return dv

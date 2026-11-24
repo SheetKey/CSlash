@@ -481,7 +481,8 @@ fvsOfSetRows (r:rs) fv_cand in_scope acc
   = (fvsOfSetRow r `unionFV` fvsOfSetRows rs) fv_cand in_scope acc
 
 fvsOfSetRow :: SetRow p -> TyFV p 
-fvsOfSetRow (SetRowVal {}) = panic "fvsOfSetRow rowval"
+fvsOfSetRow (SetRowValTc {}) = panic "fvsOfSetRow rowval"
+fvsOfSetRow (SetRowValZk {}) = panic "fvsOfSetRow rowval"
 fvsOfSetRow (SetRowTy _ ty) = fvsOfType ty
 
 fvsOfKiCo :: KindCoercion p -> TyFV p

@@ -1,5 +1,7 @@
 module CSlash.Core.Folder where
 
+import CSlash.Cs.Pass
+
 import {-# SOURCE #-} CSlash.Core.Rep
 import {-# SOURCE #-} CSlash.Cs.Expr (CsExpr)
 import {-# SOURCE #-} CSlash.Tc.Types.Evidence (CsWrapper)
@@ -21,7 +23,7 @@ data CoreFolder p env a = CoreFolder
   , cf_tcv :: env -> TyCoVar p -> a
   , cf_thole :: env -> TypeCoercionHole -> a
   , cf_khole :: env -> KindCoercionHole -> a
-  , cf_set_val_row :: env -> (CsExpr p, CsWrapper p) -> a
+  , cf_set_val_row :: env -> Either (CsExpr Tc, CsWrapper Tc) (CsExpr Zk, CsWrapper Zk) -> a
   }
 
 foldCore
