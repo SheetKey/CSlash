@@ -652,7 +652,9 @@ zonkCoFn (WpKiCoApp kco) = WpKiCoApp <$> noBinders (zonkKiCoToCo kco)
 zonkCoFn (WpMultCoercion co) = WpMultCoercion <$> noBinders (zonkKiCoToCo co)
 
 zonkOverLit :: CsOverLit Tc -> ZonkTcM (CsOverLit Zk)
-zonkOverLit = panic "zonkOverLit"
+zonkOverLit OverLit{ ol_ext = OverLitP nm ty, ol_val = val } = do
+  ty' <- zonkTcTypeToTypeX ty
+  return $ OverLit { ol_ext = OverLitP nm ty', ol_val = val }
 
 zonkStmts
   :: ( Anno (StmtLR Tc Tc (LocatedA (body Tc))) ~ SrcSpanAnnA
