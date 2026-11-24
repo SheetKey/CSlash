@@ -1070,6 +1070,32 @@ usageToKind Many = UKd
 
 {- *********************************************************************
 *                                                                      *
+         Short-cuts for overloaded numeric literals
+*                                                                      *
+********************************************************************* -}
+
+-- TODO
+
+-- tcShortCutLit :: CsOverLit Rn -> ExpRhoType -> TcM (Maybe (CsOverLit Tc))
+-- tcShortCutLit lit@OverLit{ ol_val = val } exp_res_ty
+--   | Just res_ty <- checkingExpType_maybe exp_res_ty
+--   = do dflags <- getDynFlags
+--        let platform = targetPlatform dflags
+
+-- -- Unlike GHC, we don't check for concrete types and whether the val is in range.
+-- -- Instead, we check if the incoming type already has the required row, in which case
+-- -- we don't need to infer a type and generate constraints as in tcApp.
+-- -- The row vals are required to check in range requirements.
+-- -- We are carefule about /how/ we check for the row
+-- shortCutLit :: Platform -> OverLitVal -> Type Tc -> Bool
+-- shortCutLit platform val res_ty = case val of
+--   CsIntegral int_lit -> go_integral int_lit
+--   _ -> panic "shortCutLit"
+--   where
+--     go_integral
+
+{- *********************************************************************
+*                                                                      *
               Promotion
 *                                                                      *
 ********************************************************************* -}

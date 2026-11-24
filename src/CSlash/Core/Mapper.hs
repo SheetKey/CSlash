@@ -135,7 +135,9 @@ mapCoreX CoreMapper{..}
     go_ty !env (Embed ki) = Embed <$> go_mki env ki
     go_ty !env (CastTy ty kco) = mkCastTy <$> go_ty env ty <*> go_kco env kco
     go_ty !env (KindCoercion kco) = KindCoercion <$> go_kco env kco
-    go_ty !env (LocalTyRow nm ki) = LocalTyRow nm <$> go_mki env ki
+    go_ty !env (LocalTyRow nm ki Nothing) = flip (LocalTyRow nm) Nothing <$> go_mki env ki
+    go_ty !env (LocalTyRow nm ki (Just ty))
+      = LocalTyRow nm <$> go_mki env ki <*> (Just <$> go_ty env ty)
     go_ty !env (SetRowsTy ty rs) = SetRowsTy <$> go_ty env ty <*> go_set_rows env rs
 
     go_set_row !env (SetRowValTc nm e_wrap ty) = do

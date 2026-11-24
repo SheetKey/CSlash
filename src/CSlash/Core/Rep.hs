@@ -73,7 +73,7 @@ data Type p
     , ft_arg :: Type p
     , ft_res :: Type p
     }
-  | LocalTyRow Name (MonoKind p)
+  | LocalTyRow Name (MonoKind p) (Maybe (Type p)) -- When we subst local rows, we retain the local name for equality checking.
   | SetRowsTy (Type p) (Either [SetRow p] CoreRowEnv) -- Should really add a new CsPass 'Ds'
   | CastTy (Type p) (KindCoercion p)
   | Embed (MonoKind p) -- for application to a 'BigTyLamTy
@@ -456,6 +456,7 @@ rewriterView _ = Nothing
 coreView :: HasPass p pass => Type p -> Maybe (Type p)
 coreView (TyConApp tc tys) = expandSynTyConApp_maybe tc tys
 coreView ty@(AppTy{}) = expandTyLamApp_maybe ty (const True)
+coreView (LocalTyRow _ _ mty) = mty
 coreView _ = Nothing
 {-# INLINE coreView #-}
 
@@ -506,8 +507,8 @@ core_full_view ty
   | otherwise = ty
 
 expandTyLamApp_maybe :: HasPass p pass => Type p -> (Type p -> Bool) -> Maybe (Type p)
-expandTyLamApp_maybe ty pred = case split ty [] of
-  (LocalTyRow{}, _) -> Nothing
+expandTyLamApp_maybe ty pred = case split ty ty [] of
+  (LocalTyRow _ _ Nothing, _) -> Nothing
   (fn, args)
     | let arity = tyFunArity fn
     , args `saturates` arity
@@ -515,9 +516,10 @@ expandTyLamApp_maybe ty pred = case split ty [] of
       -> Just $! (expand_syn fn args)
   _ -> Nothing
   where
-    split (AppTy ty arg) args = split ty (arg:args)
-    split (SetRowsTy ty _) args = split ty args
-    split ty args = (ty, args)
+    split _ (AppTy ty arg) args = split ty ty (arg:args)
+    split orig_ty (SetRowsTy ty _) args = split orig_ty ty args
+    split orig_ty (LocalTyRow _ _ (Just ty)) args = split orig_ty ty args
+    split orig_ty _ args = (orig_ty, args)
 
 tyFunArity :: Type p -> Arity
 tyFunArity = go 0
@@ -567,6 +569,7 @@ expand_syn rhs arg_tys
       | Embed ki <- arg = go ty (extendKvSubst subst kv ki) args
       | otherwise = pprPanic "expand_syn" (ppr rhs $$ ppr arg_tys)
     go (SetRowsTy ty _) subst args = go ty subst args -- dubious. (Maybe we need another orig_ty arg?) maybe use rowView TODO
+    go (LocalTyRow _ _ (Just ty)) subst args = go ty subst args
     go ty subst args = mkAppTys (substTy subst ty) args
 
 {-
@@ -596,13 +599,14 @@ unsat_core_full_view ty
 
 unsatExpandTyLamApp_maybe :: Type Zk -> Maybe (Type Zk)
 unsatExpandTyLamApp_maybe input = case split input input [] of
-  (LocalTyRow{}, _) -> Nothing
+  (LocalTyRow _ _ Nothing, _) -> Nothing
   (_, []) -> Nothing
   (fun, args) -> Just $! unsat_expand_syn fun args
   _ -> Nothing
   where
     split _ (AppTy ty arg) args = split ty ty (arg:args)
     split orig_ty (SetRowsTy ty _) args = split orig_ty ty args
+    split orig_ty (LocalTyRow _ _ (Just ty)) args = split orig_ty ty args
     split orig_ty _ args = (orig_ty, args)
 
 unsatExpandSynTyConApp :: TyCon Zk -> [Type Zk] -> Type Zk
@@ -702,6 +706,7 @@ isForgetfulTy (FunTy _ a b) = isForgetfulTy a || isForgetfulTy b
 isForgetfulTy (ForAllTy (Bndr tv _) ty)
   = (not $ tv `elemVarSet` (fstOf3 $ varsOfType ty)) || isForgetfulTy ty
 isForgetfulTy (TyLamTy tv ty) = (not $ tv `elemVarSet` (fstOf3 $ varsOfType ty)) || isForgetfulTy ty
+isForgetfulTy (LocalTyRow _ _ (Just ty)) = isForgetfulTy ty
 -- This is kind of a hack, but is necessary for rewriterView.
 -- Unfortunately, during rewriting we may not have instantiated the rows.
 isForgetfulTy LocalTyRow{} = False
@@ -858,8 +863,11 @@ debug_ppr_ty _ (Embed ki) = ppr ki
 
 debug_ppr_ty _ (KindCoercion co) = text "[KiCo]" <+> (ppr co)
 
-debug_ppr_ty prec (LocalTyRow nm ki) = maybeParen prec appPrec $
+debug_ppr_ty prec (LocalTyRow nm ki Nothing) = maybeParen prec appPrec $
   ppr nm <+> colon <+> ppr ki
+
+debug_ppr_ty prec (LocalTyRow nm ki (Just ty)) = maybeParen prec appPrec $
+  ppr nm <> angleBrackets (ppr ty) <+> colon <+> ppr ki
 
 debug_ppr_ty _ (SetRowsTy base (Left rows))
   = ppr base <+> dot <> braces

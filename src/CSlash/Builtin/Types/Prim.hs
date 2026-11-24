@@ -319,7 +319,7 @@ fromIntegerKiCon =
 
       row_ty = FunTy (BIKi UKd)
                (TyConApp integerTyCon [Embed (BIKi UKd)])
-               (LocalTyRow selfName (mkKiVarKi kv)) -- should be 'KiConApp fromIntegerKiCon'?
+               (LocalTyRow selfName (mkKiVarKi kv) Nothing) -- should be 'KiConApp fromIntegerKiCon'?
 
       sig = RowTySig fromIntegerRowName row_ty
 

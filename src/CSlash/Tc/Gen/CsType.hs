@@ -416,6 +416,7 @@ tcInferSetRow :: LCsSetRow Rn -> TcM (SetRow Tc, RowSig Tc)
 tcInferSetRow (L _ (SetRow kv_nms row_nm row_expr)) = panic "tcInferSetRow SetRow"
 tcInferSetRow (L _ (SetTyRow kv_nms row_nm row_type)) = panic "tcInferSetRow SetTyRow"
 
+-- TODO: this may cause major issues if we have nested rows!
 tcSubstTyRows :: TyRowEnv Tc -> Type Tc -> Type Tc
 tcSubstTyRows env init_ty = go init_ty
   where
@@ -427,11 +428,12 @@ tcSubstTyRows env init_ty = go init_ty
     go (ForAllTy tv ty) = ForAllTy tv $ go ty
     go (ForAllKiCo kcv ty) = ForAllKiCo kcv $ go ty
     go (FunTy k t1 t2) = FunTy k (go t1) (go t2)
-    go ty@(LocalTyRow nm ki)
+    go ty@(LocalTyRow nm ki Nothing)
       | Just ty <- lookupRowEnv env nm
-      = ty
+      = (LocalTyRow nm ki (Just ty))
       | otherwise
       = ty
+    go (LocalTyRow nm ki (Just ty)) = pprPanic "LocalTyRow already set" (ppr nm $$ ppr ki $$ ppr ty)
     go (SetRowsTy ty rows) = panic "tcSubstTyRows currently unreachable" -- SetRowsTy (go ty) (go_row <$> rows)
     go (CastTy ty kco) = mkCastTy (go ty) kco
     go (Embed ki) = Embed $ tcSubstTyRowsMonoKind env ki
@@ -835,7 +837,7 @@ tcTyVar name = do
   case thing of
     ATyVar _ tv -> return $ mkTyVarTy tv
     (tcTyThingTyCon_maybe -> Just tc) -> return $ mkTyConTy tc
-    ATcTyRow row_ki -> return $ LocalTyRow name row_ki
+    ATcTyRow row_ki -> return $ LocalTyRow name row_ki Nothing
 
     _ -> wrongThingErr WrongThingType thing name
 

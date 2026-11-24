@@ -868,6 +868,10 @@ uType env orig_ty1 orig_ty2 = do
       | tc1 == tc2
       = return $ mkReflTyCo ty1
 
+    -- -- Maybe this should just be pushed into coreView?
+    -- go (LocalTyRow _ _ (Just ty1)) ty2 = go ty1 ty2
+    -- go ty1 (LocalTyRow _ _ (Just ty2)) = go ty1 ty2
+
     {- TODO: dubious
     this should acutally be ok:
     1. the kinds will be checked already (local row use is well kinded)

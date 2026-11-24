@@ -139,7 +139,12 @@ tcExpr e@(OpApp {}) res_ty = tcApp e res_ty
 tcExpr e@(ExprWithTySig {}) res_ty = tcApp e res_ty
 tcExpr e@(CsRowProj {}) res_ty = tcApp e res_ty
 -- rest
-tcExpr e@(CsOverLit _ lit) res_ty = panic "tcExpr CsOverLit"
+tcExpr e@(CsOverLit _ lit) res_ty = do
+  -- TODO: mb_res <- tcShortCutLit lit res_ty
+  -- case mb_res of
+  --   Just lit' -> return (CsOverLit noExtField lit')
+  --   Nothing -> tcApp e res_ty
+  tcApp e res_ty
 
 tcExpr e@(CsLit x lit) res_ty = panic "tcExpr CsLit"
 

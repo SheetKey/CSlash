@@ -92,7 +92,8 @@ foldCore CoreFolder{..} env
     go_ty env (CastTy ty kco)
       = go_ty env ty `mappend` go_kco env kco
     go_ty env (KindCoercion kco) = go_kco env kco
-    go_ty env (LocalTyRow nm ki) = go_mki env ki
+    go_ty env (LocalTyRow nm ki Nothing) = go_mki env ki
+    go_ty env (LocalTyRow nm ki (Just ty)) = go_mki env ki `mappend` go_ty env ty
     go_ty env (SetRowsTy ty rows) = go_ty env ty `mappend` go_set_rows env rows
 
     go_set_row env (SetRowValTc nm e ty) =

@@ -864,7 +864,9 @@ subst_ty @_ @pass @_ @pass' subst ty = go ty
         (SetRowsTy $! go ty) $! Left $! strictMap go_set_row rows
     go (SetRowsTy ty (Right rows))
       = (SetRowsTy $! go ty) $! Right $! strictMapRowEnv go_set_ds_row rows
-    go (LocalTyRow nm ki) = (LocalTyRow $! nm) $! substMonoKi subst ki
+    go (LocalTyRow nm ki Nothing) = ((LocalTyRow $! nm) $! substMonoKi subst ki) $! Nothing
+    go (LocalTyRow nm ki (Just ty))
+      = ((LocalTyRow $! nm) $! substMonoKi subst ki) $! (Just $! go ty)
     go (Embed mki) = Embed $! substMonoKi subst mki
     go (CastTy ty kco) = (mkCastTy $! (go ty)) $! subst_kco subst kco
     go co@(KindCoercion kco) = KindCoercion $! subst_kco subst kco

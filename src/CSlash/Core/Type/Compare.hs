@@ -116,6 +116,22 @@ inline_generic_eq_type_x syn_flag mb_env
            | tc1 == tc2, not (isForgetfulSynTyCon tc1)
              -> gos tys1 tys2
 
+         -- Row stuff must go before coreView here, since we do compare names
+         -- in cases where one is set and the other isn't.
+         (LocalTyRow n1 k1 (Just t1), LocalTyRow n2 k2 (Just t2))
+           | n1 == n2
+             -> go t1 t2
+
+         (LocalTyRow n1 k1 _, LocalTyRow n2 k2 _)
+           | n1 == n2
+             -> generic_eq_mono_kind_x mb_env k1 k2
+
+         (LocalTyRow _ _ (Just t1), t2)
+           -> go t1 t2
+
+         (t1, LocalTyRow _ _ (Just t2))
+           -> go t1 t2
+
          _ | ExpandSynonyms <- syn_flag, Just t1' <- coreView t1 -> go t1' t2
            | ExpandSynonyms <- syn_flag, Just t2' <- coreView t2 -> go t1 t2'
 
@@ -153,10 +169,6 @@ inline_generic_eq_type_x syn_flag mb_env
                        && generic_eq_type_x syn_flag (Just (rnTvBndr2 env tv1 tv2)) body1 body2
                   | otherwise
                     -> pprTrace "non-equal vis" (ppr vis1 $$ ppr vis2) False
-
-         (LocalTyRow n1 k1, LocalTyRow n2 k2)
-           | n1 == n2
-             -> generic_eq_mono_kind_x mb_env k1 k2
 
          (Embed k1, Embed k2) -> generic_eq_mono_kind_x mb_env k1 k2
 

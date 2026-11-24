@@ -469,7 +469,10 @@ fvsOfType (KindCoercion kco) f bound_vars acc = fvsOfKiCo kco f bound_vars acc
 
 fvsOfType (Embed ki) f bound_vars acc = liftKiFV (fvsOfMonoKind ki) f bound_vars acc
 
-fvsOfType (LocalTyRow _ k) f bound_vars acc = liftKiFV (fvsOfMonoKind k) f bound_vars acc
+fvsOfType (LocalTyRow _ k Nothing) f bound_vars acc = liftKiFV (fvsOfMonoKind k) f bound_vars acc
+
+fvsOfType (LocalTyRow _ k (Just ty)) f bound_vars acc
+  = (liftKiFV (fvsOfMonoKind k) `unionFV` fvsOfType ty) f bound_vars acc
 
 fvsOfType (SetRowsTy ty (Left rows)) f bound_vars acc
   = (fvsOfType ty `unionFV` fvsOfSetRows rows)

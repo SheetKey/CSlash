@@ -63,7 +63,8 @@ tcLambdaMatches e matches invis_pat_tys res_ty = do
 
   let herald = ExpectedFunTyLam e
   (wrapper, fun_kis, mg)
-    <- matchExpectedFunTys herald GenSigCtxt arity res_ty $ \pat_tys rhs_ty ->
+    <- matchExpectedFunTys herald GenSigCtxt arity res_ty $ \pat_tys rhs_ty -> do
+       traceTc "tcLambdaMatches 1" (ppr pat_tys $$ ppr rhs_ty)
        tcMatches tcBody (invis_pat_tys ++ pat_tys) rhs_ty matches
 
   -- Now we ensure fun rhs is well kinded.
