@@ -201,7 +201,10 @@ patNeedsParens p = go @p
         ExpansionPat pat _ -> go pat
         CoPat _ inner _ -> go inner
         TyPat pat _ _ -> go pat
-      Zk -> panic "patNeedsParens Zk"
+      Zk -> case ext of
+        ExpansionPat pat _ -> go pat
+        CoPat _ inner _ -> go inner
+        TyPat pat _ _ -> go pat
 
 conPatNeedsParens :: PprPrec -> CsConDetails t a -> Bool
 conPatNeedsParens p = go
@@ -224,7 +227,9 @@ pprPat (ConPat { pat_con = con, pat_args = details, pat_con_ext = ext }) =
     Tc -> sdocOption sdocPrintTypecheckerElaboration $ \case
       False -> pprUserCon (unLoc con) details
       True -> error "pprPat"
-    Zk -> panic "pprPat Zk"
+    Zk -> sdocOption sdocPrintTypecheckerElaboration $ \case
+      False -> pprUserCon (unLoc con) details
+      True -> error "pprPat"
 pprPat (LitPat _ s) = ppr s
 pprPat (NPat _ l Nothing _) = ppr l
 pprPat (NPat _ l (Just _) _) = char '-' <> ppr l
@@ -240,7 +245,12 @@ pprPat (XPat ext) = case csPass @p of
                                                    then pprParendPat appPrec pat
                                                    else pprPat pat
     TyPat orig _ _ -> pprPat orig
-  Zk -> panic "pprPat Zk"
+  Zk -> case ext of
+    ExpansionPat orig _ -> pprPat orig
+    CoPat co pat _ -> pprCsWrapper co $ \parens -> if parens
+                                                   then pprParendPat appPrec pat
+                                                   else pprPat pat
+    TyPat orig _ _ -> pprPat orig
 
 pprUserCon
   :: (OutputableBndr con, OutputableBndrId p, Outputable (Anno (IdCsP p)))
