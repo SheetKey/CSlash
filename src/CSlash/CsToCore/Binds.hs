@@ -186,7 +186,7 @@ makeCorePair dflags gbl_id rhs
  
 dsCsWrapper :: CsWrapper Zk -> ((CoreExpr -> CoreExpr) -> DsM a) -> DsM a
 dsCsWrapper cs_wrap thing_inside
-  = ds_cs_wrapper cs_wrap $ \core_wrap ->
+  = pprTrace "dsCsWrapper" (ppr cs_wrap) $ ds_cs_wrapper cs_wrap $ \core_wrap ->
     -- TODO: Do I need to add KiCo preds to the PhiCt context??
                               thing_inside core_wrap
 
@@ -204,7 +204,7 @@ ds_cs_wrapper wrap = go wrap
     go (WpKiCoLam kcv) k = k $ Lam (KCv kcv) Nothing
     go (WpKiLam kv) k = k $ Lam (Kv kv) Nothing
     go (WpCast co) k = k $ \e -> mkCastDs e co
-    go (WpMultCoercion kco) k = pprPanic "ds_cs_wrapper WpMultCoercion" (ppr kco)
+    go (WpMultCoercion kco) k = pprTrace "ds_cs_wrapper WpMultCoercion" (ppr kco) $ k $ \e -> e
     go (WpCompose c1 c2) k = go c1 $ \w1 ->
                              go c2 $ \w2 ->
                              k (w1 . w2)
