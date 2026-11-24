@@ -25,6 +25,8 @@ module CSlash.Cs.Pat
   , pprParendLPat
 
   , isBoringCsPat
+
+  , csPatType
   ) where
 
 import Prelude hiding ((<>))
@@ -40,6 +42,7 @@ import CSlash.Cs.Type
 import CSlash.Cs.Kind
 import CSlash.Types.Basic
 import CSlash.Types.SrcLoc
+import CSlash.Types.Var.Class
 
 import CSlash.Tc.Types.Evidence
 
@@ -277,3 +280,27 @@ isBoringCsPat = panic "goL"
 type instance Anno (Pat (CsPass p)) = SrcSpanAnnA
 type instance Anno (CsOverLit (CsPass p)) = EpAnnCO
 type instance Anno (ConLike (CsPass p)) = SrcSpanAnnN
+
+{- *********************************************************************
+*                                                                      *
+    TODO: Move to standalone module
+*                                                                      *
+********************************************************************* -}
+
+csPatType :: Pat Zk -> Type Zk
+csPatType (WildPat ty) = ty
+csPatType (VarPat _ lvar) = varType (unLoc lvar)
+csPatType TyVarPat{} = panic "csPatType TyVarPat"
+csPatType (AsPat _ lvar _) = varType (unLoc lvar)
+csPatType (ParPat _ lpat) = csPatType (unLoc lpat)
+csPatType (TuplePat{}) = panic "csPatType tuple"
+csPatType (SumPat{}) = panic "csPatType sum"
+csPatType (ConPat{}) = panic "csPatType con"
+csPatType (LitPat{}) = panic "csPatType lit"
+csPatType (NPat{}) = panic "csPatType npat"
+csPatType (SigPat ty _ _) = ty
+csPatType (KdSigPat{}) = panic "csPatType kdsigpat"
+csPatType (ImpPat{}) = panic "csPatType imppat"
+csPatType (XPat ext) = case ext of
+  CoPat _ _ ty -> ty
+  ExpansionPat _ pat -> csPatType pat

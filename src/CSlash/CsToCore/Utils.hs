@@ -52,7 +52,7 @@ selectMatchVar (AsPat _ var _) = assert (idKind (unLoc var) `eqKind` Mono (BIKi 
                                  return (localizeId (unLoc var))
 selectMatchVar (TyVarPat{}) = panic "selectMatchVar TyVarPat"
 selectMatchVar (ImpPat{}) = panic "selectMatchVar ImpPat"
-selectMatchVar pat = newSysLocalDs (panic "csPatType pat")
+selectMatchVar pat = newSysLocalDs (csPatType pat)
 
 {-**********************************************************************
 *                                                                      *
